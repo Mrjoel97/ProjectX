@@ -357,16 +357,33 @@ test.each([
   // The way to say "may be absent" is a NULLABLE-and-required field (`type: ["string","null"]`),
   // normalized back off after the call. This scan holds that line for every jsonSchema in llm.ts.
   const src = readSource(file);
-  const schemas = [...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => m[1]);
+  // TWO IDIOMS, and the second is why this scan needs to know about both. `jsonSchema<T>({...})`
+  // writes the schema INLINE; `const X: JSONSchema7 = {...}` hoists it so a test can assert the
+  // OBJECT rather than its source text (29-04's grammar locks are pinned that way, because a
+  // `toContain` over a whole schema block is satisfied by one occurrence and cannot see a lock
+  // dropped from a nested object). A hoisted schema opened a hole here the first time it landed:
+  // the old regex still matched `= jsonSchema<`, sliced a block with no `properties:` in it, and
+  // the anti-vacuity guard below is the only reason that was loud rather than silent.
+  const schemas: { name: string; start: number; close: string }[] = [
+    ...[...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => ({
+      name: m[1] as string,
+      start: m.index as number,
+      close: "\n});",
+    })),
+    ...[...src.matchAll(/const (\w*(?:SCHEMA|Schema)): JSONSchema7 = \{/g)].map((m) => ({
+      name: m[1] as string,
+      start: m.index as number,
+      close: "\n};",
+    })),
+  ];
   expect(
     schemas.length,
     "no jsonSchema definitions found — has the idiom changed?",
   ).toBeGreaterThan(0);
 
-  for (const name of schemas) {
-    const start = src.indexOf(`const ${name} = jsonSchema<`);
+  for (const { name, start, close } of schemas) {
     const rest = src.slice(start);
-    const end = rest.indexOf("\n});");
+    const end = rest.indexOf(close);
     const block = rest.slice(0, end >= 0 ? end : undefined);
     let checked = 0;
 
@@ -404,8 +421,12 @@ test.each([
     // the `properties:` object it is checking, so a schema written `required` FIRST (blueprint.ts's
     // ordering) matches zero pairs and passes without examining anything. That is not hypothetical
     // — it is how a scan reads green over a broken schema. Fail loudly instead.
+    // A `jsonSchema<T>(HOISTED_CONST)` wrapper has no `properties:` of its own — the object it
+    // names is a separate entry above and IS checked. Everything else matching zero pairs is the
+    // silent-vacuity case this guard exists for.
+    const isWrapper = close === "\n});" && !block.includes("properties:");
     expect(
-      checked,
+      isWrapper ? 1 : checked,
       `${name}: the strict-mode scan matched NO properties/required pair — put \`required\` AFTER ` +
         `\`properties\` in each object, or this scan is checking nothing at all.`,
     ).toBeGreaterThan(0);

@@ -1,5 +1,61 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — SIX GUARDS IN `knowledgeLlm.ts`
+> THAT COULD NOT FAIL, AND ONE ERROR THAT CARRIED PROVIDER PROSE.**
+>
+> **THE TWO SCHEMAS ARE NOW EXPORTED VALUES**, `KNOWLEDGE_PLAN_JSON_SCHEMA` and
+> `KNOWLEDGE_SYNTHESIS_JSON_SCHEMA`, and `SEARCHABLE_SOURCES` / `plannerPrompt` are exported
+> beside them — the `synthesisPrompt` precedent. Everything below turns on that: a schema you
+> can only scan as TEXT is pinned by `toContain` over a whole block, which ONE occurrence
+> satisfies, so `additionalProperties: false` could be dropped from the synthesizer's INNER
+> `claims` object with the suite green. That is the grammar lock making a model-authored
+> `authority`/`confidence` key unspellable rather than ignored, and a live strict-mode call
+> would have rejected the schema outright on every input. The new test WALKS the object and
+> checks all four object nodes, closed and fully required.
+>
+> **The headline claim now has a test.** "A source with no adapter is not in the grammar" was
+> covered only by a source scan for the identifier at the enum site: replacing the derivation
+> with `() => true` admitted `support-desk` into both the enum AND the prompt, and deleting the
+> prompt's source list told the model nothing about which sources exist. Both were green. The
+> enum, the prompt's list and `SEARCHABLE_SOURCES` are now asserted against LITERALS.
+>
+> **The POST-call spend ledger is covered per HANDLER.** One whole-file
+> `toContain("internal.guardrails.recordSpend")` was satisfied by the planner's copy alone, so
+> the synthesizer's whole `priceUsage` + `recordSpend` block could be deleted and an unbilled
+> synthesis would never accumulate against the tenant's daily budget. `preCall` is the PRE-call
+> gate and cannot see what a call cost. The two correlation prefixes are pinned as distinct
+> literals.
+>
+> **`runId` is proved per-EXECUTION** (two identical plan runs, different ids; a plan id is
+> never a synthesis id) and **`fallbackPlan`'s truncation is proved at the boundary** — without
+> it a question over 200 characters degrades to an EMPTY plan while still reporting
+> `fallback: true`, which is the "we searched everything and found nothing" outcome the branch
+> exists to prevent.
+>
+> **The injection test used to be unfailable.** It asserted four tables were `[]` after a
+> synthesis — true after ANY synthesis, since the module writes to no table, which the
+> structural scan already proves by construction. It now searches every governance row for the
+> injected SUBSTRING and then PLANTS one to prove the scanner works.
+>
+> **The synthesizer's provider error is contained.** The planner caught and dropped its error
+> ("it can hold provider prose"); the synthesizer — whose prompt is mail bodies, Drive file
+> names and CRM records — rethrew verbatim, and an AI SDK `TypeValidationError` embeds the
+> model's raw output, which a scheduled caller puts into `deadLetters.payload` (§4). It is a
+> content-free RETHROW, not the planner's degradation, and the asymmetry is deliberate: a plan
+> with fewer sources is still honest, a synthesis with no model is made up.
+>
+> **⚠ `llmRedaction.test.ts`'s strict-mode scan LEARNED THE SECOND IDIOM.** It discovered
+> schemas by `const X = jsonSchema<`, so a hoisted `const X: JSONSchema7 = {...}` sliced a
+> block with no `properties:` in it. Its own anti-vacuity guard is the only reason that was
+> loud. It now scans both forms, and a `jsonSchema<T>(HOISTED)` wrapper is exempted from the
+> guard because the object it names is a separate, checked entry.
+>
+> **HOW TO VERIFY:** `cd packages/backend && pnpm vitest run knowledgeLlm llmRedaction`.
+> Mutations that MUST go red: the `SEARCHABLE_SOURCES` filter to `() => true`; the prompt's
+> source-list line deleted; the inner `additionalProperties: false` dropped; the synthesizer's
+> spend block deleted; `runId` a constant; `fallbackPlan`'s `.slice` removed; the synthesizer's
+> catch rethrowing `error`; a key dropped from a hoisted `required[]`.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — THE CRM ADAPTER STOPS OVERRIDING THE
 > CONNECTOR LAYER, AND STOPS PUTTING THE MONEY IN PROSE.**
 >

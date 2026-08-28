@@ -72,7 +72,7 @@ import {
 } from "@pikar/core";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
-import { generateObject, jsonSchema } from "ai";
+import { generateObject, type JSONSchema7, jsonSchema } from "ai";
 import { type VLiteral, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
@@ -110,8 +110,16 @@ const SMOKE_FAIL = "FAIL";
 const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
-/** Sources with a landed adapter. DERIVED — a source that gains one becomes plannable by itself. */
-const SEARCHABLE_SOURCES: readonly KnowledgeSource[] = KNOWLEDGE_SOURCES.filter(
+/**
+ * Sources with a landed adapter. DERIVED — a source that gains one becomes plannable by itself.
+ *
+ * EXPORTED for the test that pins it against LITERALS. The module's headline claim is that a
+ * source with no adapter "is not merely discouraged, it is not in the grammar", and the only
+ * coverage was a source scan for the variable NAME at the enum site — so the derivation could be
+ * replaced by `() => true` (admitting `support-desk` into the schema enum AND the prompt) with the
+ * whole suite green. A private constant behind a spelling check is a claim with nothing to check.
+ */
+export const SEARCHABLE_SOURCES: readonly KnowledgeSource[] = KNOWLEDGE_SOURCES.filter(
   (source) => !(NOT_LANDED_SOURCES as readonly string[]).includes(source),
 );
 
@@ -155,7 +163,7 @@ export type KnowledgePlanResult =
  * this file for that, because OpenAI structured outputs reject the schema outright otherwise and
  * no mocked test can see it).
  */
-const knowledgePlanSchema = jsonSchema<{ searches: { source: string; query: string }[] }>({
+export const KNOWLEDGE_PLAN_JSON_SCHEMA: JSONSchema7 = {
   type: "object",
   properties: {
     searches: {
@@ -173,9 +181,19 @@ const knowledgePlanSchema = jsonSchema<{ searches: { source: string; query: stri
   },
   required: ["searches"],
   additionalProperties: false,
-});
+};
 
-function plannerPrompt(question: string): string {
+const knowledgePlanSchema = jsonSchema<{ searches: { source: string; query: string }[] }>(
+  KNOWLEDGE_PLAN_JSON_SCHEMA,
+);
+
+/**
+ * Exported with the schema above, for the same reason `synthesisPrompt` is: the prompt never
+ * leaves this module, so a caller-visible assertion is impossible and a source scan would only
+ * prove the spelling. The per-run SOURCE LIST handed to the model is a grammar boundary, and it
+ * had no test that could fail — deleting this line entirely left the suite green.
+ */
+export function plannerPrompt(question: string): string {
   return [
     "SEARCHABLE SOURCES — the complete list for this run. Use these ids exactly.",
     ...SEARCHABLE_SOURCES.map((source) => `- ${source}: ${PACK_SOURCE_LABEL[source]}`),
@@ -386,16 +404,7 @@ const SUMMARY_CHAR_CAP = 1_200;
  * rejects a schema with an optional property, so "may be absent" has to be spelled this way and
  * normalized back off after the call (03.7-05 — the `deadline` defect).
  */
-const knowledgeSynthesisSchema = jsonSchema<{
-  summary: string;
-  claims: {
-    text: string;
-    evidenceIds: string[];
-    excerpt: string | null;
-    conflictEvidenceIds: string[] | null;
-  }[];
-  unanswered: string[];
-}>({
+export const KNOWLEDGE_SYNTHESIS_JSON_SCHEMA: JSONSchema7 = {
   type: "object",
   properties: {
     summary: { type: "string" },
@@ -417,7 +426,26 @@ const knowledgeSynthesisSchema = jsonSchema<{
   },
   required: ["summary", "claims", "unanswered"],
   additionalProperties: false,
-});
+};
+
+/**
+ * EXPORTED as a VALUE, not scanned as text. The containment scan matched one
+ * `additionalProperties: false` per schema BLOCK, so it could be dropped from the INNER `claims`
+ * object — the exact grammar lock that makes a model-authored `authority` or `confidence` key
+ * unspellable rather than ignored — with the suite green. A real OpenAI strict-mode call would
+ * reject the schema outright, so no mocked test could tell a working schema from a broken one.
+ * Asserting the object walks EVERY object node instead.
+ */
+const knowledgeSynthesisSchema = jsonSchema<{
+  summary: string;
+  claims: {
+    text: string;
+    evidenceIds: string[];
+    excerpt: string | null;
+    conflictEvidenceIds: string[] | null;
+  }[];
+  unanswered: string[];
+}>(KNOWLEDGE_SYNTHESIS_JSON_SCHEMA);
 
 /** The two characters a fence marker is built from. Removed from everything interpolated. */
 const FENCE_CHARS = /[<>]/g;
@@ -594,14 +622,40 @@ export const synthesizeKnowledge = internalAction({
     if (question.includes(SMOKE_SYNTH_PREFIX)) {
       raw = smokeSynthesisFixture(question, question, evidence);
     } else {
-      const { object, usage } = await generateObject({
-        model: resolveModel(DEFAULT_MODEL),
-        schema: knowledgeSynthesisSchema,
-        system: skill.body,
-        prompt: safePrompt,
-        abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
-      });
+      // THE PROVIDER'S ERROR NEVER LEAVES THIS FUNCTION, and this is the call that needed it most.
+      // The planner already dropped its error with the reason spelled out — "it can hold provider
+      // prose, and nothing downstream may branch on it" — while the synthesizer, whose prompt is
+      // built from MAIL BODIES, DRIVE FILE NAMES AND CRM RECORDS, rethrew verbatim. An AI SDK
+      // `TypeValidationError` / `NoObjectGeneratedError` embeds the model's raw output, which is
+      // derived from that untrusted text, and a scheduled caller puts a thrown message straight
+      // into `deadLetters.payload` — refs, hashes, ids and counts ONLY (CLAUDE.md §4).
+      //
+      // It is a content-free RETHROW rather than the planner's degradation, and the asymmetry is
+      // deliberate: a plan with fewer sources is still an honest plan, whereas a synthesis with no
+      // model is not a shorter answer, it is a made-up one. The caller must see the failure.
+      let object: {
+        summary: string;
+        claims: {
+          text: string;
+          evidenceIds: string[];
+          excerpt: string | null;
+          conflictEvidenceIds: string[] | null;
+        }[];
+        unanswered: string[];
+      };
+      let usage: Parameters<typeof priceUsage>[1];
+      try {
+        ({ object, usage } = await generateObject({
+          model: resolveModel(DEFAULT_MODEL),
+          schema: knowledgeSynthesisSchema,
+          system: skill.body,
+          prompt: safePrompt,
+          abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+          maxRetries: 1,
+        }));
+      } catch {
+        throw new Error("knowledgeLlm: synthesis call failed");
+      }
       const priced = priceUsage(DEFAULT_MODEL, usage);
       if (priced.ok) {
         await ctx.runMutation(internal.guardrails.recordSpend, {
