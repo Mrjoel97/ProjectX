@@ -204,10 +204,17 @@ the Subscription Update API. (3) Convex action retries AND Stripe webhook retrie
 structural idempotency — a `stripeEvents` table keyed on `event.id`, plus an idempotency key on every
 POST. (4) `convex/tenantDelete.ts` says nothing about billing and would leave a deleted tenant’s
 subscription still charging a card.
-**Plans:** 0 plans
+**Plans:** 8 plans in 8 waves
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 28.1 to break down)
+- [ ] 28.1-01-PLAN.md — Webhook receiver + `billingStripeEvents` idempotency table (Wave 1) — no live key needed
+- [ ] 28.1-02-PLAN.md — Stripe Dashboard configuration and credentials — **CHECKPOINT, `autonomous: false`** (Wave 2)
+- [ ] 28.1-03-PLAN.md — Pure domain: honest tax posture + Stripe-event-to-ledger-phase mapping (Wave 3)
+- [ ] 28.1-04-PLAN.md — Outbound Stripe transport + hosted Checkout and Customer Portal (Wave 4)
+- [ ] 28.1-05-PLAN.md — Tenant↔Stripe-customer mapping and the dead-letter refusal to auto-provision (Wave 5)
+- [ ] 28.1-06-PLAN.md — The `billingEvents` book of record and the money-event wiring (Wave 6)
+- [ ] 28.1-07-PLAN.md — Scheduled programmatic invoice rollup with a durable period claim (Wave 7)
+- [ ] 28.1-08-PLAN.md — Tenant-deletion billing arm and phase seal (Wave 8)
 
 ### Phase 29: Unified Knowledge and Routines
 
