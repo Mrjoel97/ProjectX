@@ -59,6 +59,17 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
   `Figure<V>`/`MoneyFigure`, `Coverage`, the closed `FINANCE_CONFIDENCES` set with
   `CONFIDENCE_RANK`, `DECISION_SUPPORT_NOTICE`, and the `Invoice`/`Payment`/`Obligation` shapes.
   **A capped read is `partial`, never `ready` — a prefix of reality is not a total.**
+- `packages/revenue/src/providers/shared.ts` — the three provider-AGNOSTIC helpers every rail needs:
+  `boundedWindow` (refuses anything wider than `CAPS.maxWindowDays`, so nobody can ask for "since
+  forever" and present a capped answer as complete), `normalizeAll` (returns a reject COUNT beside
+  the rows, because a row that silently vanished understates what a tenant is owed and leaves
+  nothing to say so) and `separateByCurrency` (the "separate" half of reject-or-separate: other
+  currencies are NAMED, never dropped and never totalled in). Written for QuickBooks in 28-06,
+  hoisted here by 28-07 when Stripe became the second rail to need them, and re-exported from
+  `providers/quickbooks.ts` so existing imports still resolve. **It belongs to THIS playbook, not to
+  any one connector's** — a per-lane copy is how the item cap, the reject count and the
+  mixed-currency rule stop meaning the same thing in three files. Nothing provider-specific may
+  enter it: no URL, no verb, no vendor field name.
 - `packages/revenue/src/index.ts`, `package.json`, `tsconfig.json`, `vitest.config.ts` — the package
   boundary.
 

@@ -332,6 +332,7 @@
     "packages/revenue/src/contracts",
     "packages/revenue/src/credential",
     "packages/revenue/src/reminders",
+    "packages/revenue/src/providers/shared",
     "packages/backend/convex/connector",
     "packages/backend/convex/providerGates",
     "packages/backend/convex/revenueTools",

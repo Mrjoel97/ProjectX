@@ -58,7 +58,11 @@ as LITERALS once, because a constant the tests import cannot be pinned by mutati
 was silent over). Backend 2913/2913 in 108 files, revenue 265/265. The non-zero backend exit is the
 PRE-EXISTING worker-teardown `process is not defined`; a `media.test.ts` failure seen once was an
 order-dependent FLAKE -- green alone and green on a clean re-run, and `git diff --stat` proves 28-07
-never touched it. `check-playbooks` STDOUT empty. `git diff --stat HEAD -- \"*.ts\"` empty after
+never touched it. **THE STOP HOOK CAUGHT WHAT MY OWN `check-playbooks` RUN DID NOT:** `providers/shared.ts` was a
+new code file no playbook watched. Running that script by hand gives exit 0 and EMPTY STDOUT and
+that is NOT a pass -- it is the standing no-op-that-reads-green. Registered under
+`revenue-connectors.md` in `watch.json` (it is provider-agnostic, so it belongs to the shared
+playbook, not to any one connector). `git diff --stat HEAD -- \"*.ts\"` empty after
 committing.
 `requirements-completed: []` -- **REVN-03 STAYS PENDING**: it needs 28-24's live gate, so
 `requirements mark-complete` was deliberately NOT called.

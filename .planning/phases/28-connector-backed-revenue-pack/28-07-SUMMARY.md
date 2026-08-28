@@ -256,6 +256,20 @@ owner action.
 `providers/quickbooks.ts` to `providers/shared.ts` and re-exported (no behaviour change), before
 PayPal made them a third copy. `connector-quickbooks.md` was bumped in the same phase.
 
+**6. [Rule 3 — Blocking] The new `providers/shared.ts` was covered by no playbook**
+
+- **Found by:** the Stop hook, NOT by my own run of the same script.
+- **Issue:** CLAUDE.md §9 forbids finishing with a new code file under `packages/` that no playbook
+  watches. `providers/shared.ts` was new and unregistered.
+- **Why my verification missed it:** I ran `check-playbooks.mjs < /dev/null`, read an empty STDOUT
+  and recorded it as a pass. That script **always exits 0** and produces nothing when fed no stdin —
+  it is precisely the no-op gate that reads green this repo has a standing note about. An empty
+  STDOUT from it is not evidence of anything.
+- **Fix:** `packages/revenue/src/providers/shared` registered under `revenue-connectors.md` in
+  `watch.json` (it is provider-agnostic, so it belongs to the shared playbook rather than to any one
+  connector), and the playbook now documents the three helpers and the rule that nothing
+  provider-specific may enter them.
+
 ## Verification
 
 | Check | Result |
@@ -269,7 +283,8 @@ PayPal made them a third copy. `connector-quickbooks.md` was bumped in the same 
 | `smoke-stripe-read.mjs --verify-evidence <stub>` | accepts it **and** prints "THIS FILE IS A STUB, NOT A LIVE PASS" |
 | `smoke-stripe-read.mjs` (bare) | exit **2**, `LIVE_EVIDENCE_NOT_PRODUCED` |
 | `check-provider-lane.mjs --provider stripe` | `consistent`, 1 row pending — **not passed** |
-| `check-playbooks.mjs` | exit 0, STDOUT empty |
+| `check-playbooks.mjs` (manual) | exit 0, STDOUT empty — **and that was NOT a pass** |
+| Stop-hook playbook check | **caught `providers/shared.ts` uncovered**; fixed in `watch.json` + `revenue-connectors.md` |
 | `git diff --stat HEAD -- "*.ts"` | empty after committing |
 
 A single `media.test.ts` failure appeared in one whole-suite run. It is an order-dependent **flake**:
