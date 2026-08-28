@@ -1,36 +1,40 @@
-> Last verified: 2026-08-28 (**WAVE-3 CLEANUP FIX — THE COPY-DRIFT GUARD IS DECIDED. It is a CHANNEL
-> guard over provider IMPORTS, it is no longer claimed to be more than that, and the block below is
-> corrected in place where it overstated.**
+> Last verified: 2026-08-29 (**WAVE-3 FINAL — THE COPY-DRIFT GUARD IS DELETED. Copy-drift is
+> UNGUARDED, and this entry exists so nobody reads a green `lib/models.test.ts` as protection.**
 >
-> Iteration 4 was escapable too, and by a real shape: `@ai-sdk/openai/internal` is a DOCUMENTED
-> subpath export shipping the raw `OpenAIChatLanguageModel` class. `PROVIDER_PACKAGE` anchored on the
-> closing quote, so any `/subpath` tail was invisible, and the capitalised class name also dodged the
-> call scan's callee alternation — a planted module holding a full private route table left the suite
-> **17/17 GREEN**. The regex now matches the package ROOT plus an optional subpath tail and accepts
-> backtick specifiers. The export-surface pin no longer enumerates spellings (`export default`,
-> `export async function`, `export let` and `export class` all walked through the old one): every
-> line starting `export` must reduce to one of the three allowed names or it fails carrying its own
-> text.
+> `lib/models.test.ts` carried a source-text scan meant to prove that no module under `convex/`
+> keeps its own `resolveModel`. It went through FIVE iterations and was defeated on every one, each
+> escape RUN as a real module planted under `convex/` that left the whole suite green:
 >
-> **THE ABSOLUTE CLAIM IS DELETED, NOT RE-WORDED, AND THE TWO ESCAPES A REGEX CANNOT CLOSE ARE NAMED
-> IN THE TEST:** (i) a NON-LITERAL specifier — `await import("@ai-sdk/" + "openai")`; (ii) RAW HTTP,
-> which needs no provider package at all — **and this repo does exactly that on a landed path**:
-> `vaultRag.ts`'s `embeddingV2` (~:230-270) picks provider label, env-key NAME and endpoint URL from
-> a runtime decision and calls `fetch`, holding zero provider imports, and nothing pins it to
-> `lib/models.ts`. So "no module can even hold a provider" was never true of this codebase. A real
-> guard needs an AST pass; that is the upgrade path, and copy-drift through raw HTTP is UNGUARDED
-> today. The test name is now "no module under convex/ IMPORTS a model provider…", and the scope
-> over-claim is fixed too — the glob sees `convex/` only, not `packages/`.
+> | # | Escape | What it beat |
+> | - | ------ | ------------ |
+> | 1 | `const pickModel = (id) => openai(...)` | the NAME scan (it grepped for `resolveModel(`) |
+> | 2 | `createOpenAI({…})(id)` and `const P = createOpenAI({…}); P(id)` | the CALL-SHAPE scan (hardcoded callee spellings; the char before `(` is `)`) |
+> | 3 | `import { OpenAIChatLanguageModel } from "@ai-sdk/openai/internal"` | the IMPORT scan (a documented subpath export; the regex anchored on the closing quote) |
+> | 4 | `export default openai;` | the export-surface pin (it enumerated the export spellings it feared) |
+> | 5 | leading whitespace before `export` | the rewritten export pin (anchored `^export`) |
 >
-> Mutations OBSERVED red this pass, then reverted (each a real file planted under `convex/`, not a
-> string): subpath-import route table; aliased-factory route table; template-literal dynamic import;
-> and six appended export spellings on `lib/models.ts` (`export default` / `export async function` /
-> `export let` / `export {` / `export *` / `export class`), each failing the laundering pin. Plus an
-> over-greedy `@ai-sdk[a-z0-9/-]+` regex → the "a package that merely starts the same way" pin red.
+> **A sixth regex was not written.** A pattern over source text cannot decide this question: a
+> provider is reachable through a renamed binding, an arbitrary subpath specifier, a non-literal
+> specifier (`import("@ai-sdk/" + "openai")`), any export spelling, and — with no provider package at
+> all — RAW HTTP. This repo already does the last one on a landed path: `vaultRag.ts`'s `embeddingV2`
+> (~:230-270) picks provider label, env-key NAME and endpoint URL at runtime and calls `fetch`,
+> holding zero provider imports. So "no module holds a private route table" was never true of this
+> codebase, and no regex was going to make it true.
 >
-> **Also on this module:** the offline-fixture consent test moved to `lib/env.ts`
-> `isOfflineFixtureConsent` and is now shared with the readiness screen, which had its own rule.
-> `PIKAR_OFFLINE_FIXTURES=on` used to report a LIVE fabrication seam over a fixture that was OFF.)
+> **WHAT REMAINS IN `lib/models.test.ts`:** the behavioural tests only — `resolveModel` routes `or/`
+> and `stealth/` ids to the OpenRouter provider with the right `modelId`, bare/`openai/` ids to
+> OpenAI, `google/` throws, and `resolveModel(DEFAULT_MODEL)` lands on OpenRouter. Those assert
+> `.provider`/`.modelId`, the values the AI SDK actually sends with. They say where THIS table
+> routes; they say nothing about who else routes.
+>
+> **THE GAP, STATED:** an eighth copy of the route table can be written under `convex/` and no test
+> will see it. Closing it needs an AST or type-level pass (or a lint rule) that resolves bindings —
+> not a pattern. Recorded with the same five escapes in
+> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.
+>
+> The offline-fixture consent test is unaffected and still tested: `lib/env.ts`
+> `isOfflineFixtureConsent` is called by both `offlineSeamAvailable()` and the readiness screen, and
+> `models.test.ts` runs a table of literal values through both.)
 
 > Last verified: 2026-08-28 (**29-06 REMEDIATION — COMMENT-ONLY CHANGE TO `llm.ts`, CORRECTING A
 > FALSE INVARIANT.** `runAgentLoop`'s skill loader carried "only the three `USER_AUTHORABLE_SKILLS`
@@ -42,75 +46,11 @@
 > `ownerMutation` — but do not reason from "only three names are affected" when changing this
 > loader. The authoritative membership is the literal in `@pikar/contracts/skill`. No behaviour
 > changed in this file; no cockpit test changed.)
->
-> Last verified: 2026-08-28 (**WAVE-3 CLEANUP — THE COPY-DRIFT GUARD WAS DEFEATED AGAIN, ON ITS
-> THIRD ITERATION, AND THE ENTRY DIRECTLY BELOW WAS THE FALSE CLAIM.**
->
-> The block below says the guard "DETECTS THE SHAPE, NOT THE NAME" and that a rename cannot get past
-> it. **That was proven false by running it.** `DYNAMIC_MODEL_ROUTE` hardcodes the provider CALLEE
-> SPELLINGS (`openai|createOpenAI|createOpenRouter|.chat`) and requires an identifier immediately
-> after `(`. Both of these walk straight through:
->
-> ```ts
-> createOpenAI({ apiKey })(id.replace(/^openai\//, ""))  // the char before `(` is `)`
-> const P = createOpenAI({ apiKey }); P(id.slice(7))     // the provider under a local alias
-> ```
->
-> A module holding BOTH, planted at `convex/zzAliasCopy.ts` in this pass, left the whole suite
-> **14/14 GREEN**. A tripwire that reads as protection and is not is worse than an acknowledged gap.
->
-> **THE REPLACEMENT DOES NOT READ THE CALL AT ALL.** To route with an AI-SDK provider a module must
-> first IMPORT one, and the specifier is a string no rename touches. (⚠ THIS SENTENCE ORIGINALLY
-> READ "the ONLY way to get one is the provider package's MODULE SPECIFIER". **It was false and it
-> is corrected in the entry at the top of this playbook** — a subpath specifier beat the regex, and
-> raw `fetch` needs no provider package at all.) So
-> `lib/models.test.ts` now scans for `@ai-sdk/*` and `@openrouter/ai-sdk-provider` and pins the five
-> files allowed to hold one, as LITERALS: `lib/models.ts` (the table), `llm.ts` (the Node-only
-> `google/` branch), and `intake.ts` / `vaultExtract.ts` / `vaultTranscribe.ts` (ONE FIXED model id
-> each — they route nothing, so nothing can drift). Adding a sixth is a deliberate act.
->
-> Two supporting tests, both non-vacuity as a VALUE rather than a promise: the planted module's exact
-> text is asserted to pass the call scan and fail the import scan (if that ever flips, the guard has
-> stopped being able to fail); and `lib/models.ts`'s own export surface is pinned to
-> `NODE_ONLY_MODEL_PREFIX` / `offlineSeamAvailable` / `resolveModel` with no `export {` or `export *`,
-> which closes ONE hole — laundering a provider through the file every converted module already
-> imports. (⚠ "the one remaining hole" was the overstatement; and as written that pin missed
-> `export default`, `export async function`, `export let` and `export class`. See the top entry.)
->
-> ⚠ **THE CALL SCAN IS KEPT, AS THE WEAKER SECOND NET, AND ITS CEILING IS NOW STATED IN THE TEST.**
-> Inside those five files a provider IS legitimately in scope, so the import guard says nothing there
-> and the shape scan is all that remains — and the two escapes above still beat it. **Do not read a
-> green shape scan as proof that those five hold no private route table.**
->
-> Mutations OBSERVED red in this pass, then reverted: blind `PROVIDER_PACKAGE` (prefix its literal
-> with `zzz`) → "NO MODULE CAN EVEN HOLD A PROVIDER" and "THE IMPORT GUARD IS NOT VACUOUS" both red;
-> append `export { openai };` to `lib/models.ts` → "the provider cannot be laundered through this
-> file's exports" red; plant `convex/zzAliasCopy.ts` → the import guard names it (the OLD guard did
-> not).
->
-> **Also on this module:** `offlineSeamAvailable()` gained a POSITIVE operator opt-in
-> (`PIKAR_OFFLINE_FIXTURES === "1"` AND-ed with "neither model key"), because the credential-only
-> version made a deployment that merely LOST its keys fabricate output unconditionally. Full
-> reasoning in `docs/playbooks/vault.md`'s wave-3 block and
-> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`. The stale docstring at
-> `lib/models.ts:27` pointing at `voiceDoc.ts` for that predicate is fixed — `96c4700` moved it here
-> and `voiceDoc.ts` defines it zero times.)
 
-> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS — THE COPY-DRIFT GUARD WAS DEFEATED BY A RENAME,
-> AND THE ENTRY BELOW HAD GONE FALSE.**
+> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS.**
 >
-> **(1) `lib/models.test.ts` DETECTS THE SHAPE, NOT THE NAME.** The old guard only examined a module
-> if its source contained the string `resolveModel(`, so a private route table called `pickModel`
-> was INVISIBLE to it — the repo's own recorded lesson (deletion-only mutation is blind to renaming)
-> walked straight back in. Verified: a module holding
-> `const pickModel = (id) => openai(id.startsWith("openai/") ? id.slice(7) : id)` passed BOTH old
-> scans (the name scan and the naive `openai(x.replace(` scan) and fails the new one. The signal is
-> now a provider factory called with a MODEL ARGUMENT THAT IS NOT A STRING LITERAL — which is what a
-> route table IS, whatever it is named. A fixed id (`openai("gpt-4o-mini")` in `intake.ts` and
-> `vaultExtract.ts`, both priced on the matching `openai/gpt-4o-mini` key) is deliberately legal:
-> it routes nothing, so it cannot drift. The detector has its own test over four renamed-copy
-> fixtures and two legitimate ones, so `[]` from the file scan is a checked claim rather than a
-> hopeful one.
+> **(1) The copy-drift guard's second iteration.** Superseded — the guard is DELETED; see the entry
+> at the top of this playbook for the five escapes and the gap that is now open.
 >
 > **(2) `offlineSeamAvailable()` LIVES HERE NOW**, in `lib/models.ts`, beside the table that decides
 > WHICH key is spent. `voiceDoc.ts` and `vaultDigest.ts` both need the identical "this deployment

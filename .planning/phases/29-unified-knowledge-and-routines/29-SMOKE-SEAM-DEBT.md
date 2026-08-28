@@ -247,3 +247,56 @@ is the cleaner end state, but it is a much larger change and it moves the E2E's 
 - Add one scan test asserting that no `SMOKE::`-style gate reads a value that came from a document,
   a request argument or a tool argument — otherwise the next one walks straight back in, exactly as
   it did between rounds 2 and 3.
+
+---
+
+## Second debt, same shape: COPY-DRIFT OF THE MODEL ROUTE TABLE IS UNGUARDED (29-FIN-W2, 2026-08-29)
+
+Not a `SMOKE::` seam, but it lives here because it is the same class of entry: a hazard this phase
+decided NOT to close, recorded so the next reader does not mistake a green suite for protection.
+
+**The hazard.** `resolveModel` existed as SEVEN private copies across `convex/`, and only `llm.ts`'s
+ever grew the `or/` branch, so every other copy handed the OpenRouter route id `DEFAULT_MODEL`
+(`or/openai/gpt-4o-mini`) to the OpenAI provider — a different endpoint with a different key, failing
+silently wherever the caller catches. All seven were converted to `convex/lib/models.ts` on
+2026-08-28. **Nothing prevents an eighth copy being written tomorrow.**
+
+**What was tried, and what beat it.** `lib/models.test.ts` carried a source-text scan through five
+iterations. Every one was defeated, and every escape was RUN as a real module planted under
+`convex/` that left the whole suite green:
+
+| # | The guard | The escape that beat it |
+|---|---|---|
+| 1 | grep the source for `resolveModel(` | `const pickModel = (id) => openai(...)` — a rename |
+| 2 | a call-shape regex over provider callee spellings | `createOpenAI({…})(id)` (the char before `(` is `)`) and `const P = createOpenAI({…}); P(id)` (a local alias) |
+| 3 | a provider-package IMPORT regex anchored on the closing quote | `import { OpenAIChatLanguageModel } from "@ai-sdk/openai/internal"` — a DOCUMENTED subpath export shipping the raw model class |
+| 4 | an export-surface pin enumerating the export spellings it feared | `export default openai;` (also `export async function`, `export let`, `export class`) |
+| 5 | the rewritten export pin, `/^export\b/` per line | LEADING WHITESPACE before `export` |
+
+**Why a sixth was not written.** The question "does any module hold a private route table?" is not
+decidable by a pattern over source text. A provider is reachable through a renamed binding, an
+arbitrary subpath specifier, a non-literal specifier (`import("@ai-sdk/" + "openai")`), any export
+spelling — and, needing no provider package at all, RAW HTTP. This repo already does the last one on
+a fully landed path: `vaultRag.ts`'s `embeddingV2` (~:230-270) picks provider label, env-key NAME and
+endpoint URL from a runtime decision and calls `fetch`, holding zero provider imports. So "no module
+holds a private route table" was never true of this codebase, and no regex was going to make it true.
+
+**What was done instead.** The scan tests were DELETED (29-FIN-W2). `lib/models.test.ts` keeps only
+behavioural assertions — that `resolveModel` routes `or/` and `stealth/` to the OpenRouter provider
+with the right `modelId`, bare/`openai/` ids to OpenAI, and throws on `google/` — plus the
+offline-fixture consent table. Those assert `.provider`/`.modelId`, the values the AI SDK sends with.
+
+**THE GAP, STATED:** an eighth private copy of the route table can be added under `convex/` and no
+test will see it. The behavioural tests say where THIS table routes; they say nothing about who else
+routes. An acknowledged gap is worth more than a tripwire that reads as protection and is not.
+
+**What closing it would take:** an AST or type-level pass (or a lint rule) that RESOLVES BINDINGS —
+"which module-level value does this call expression ultimately reference, and is it a provider
+export?" — rather than a pattern over text. That is the upgrade path; it was not in this phase's
+budget. The same ceiling applies to the "one scan test" proposed in the section above: a source scan
+can pin a gate it can SEE, and this register now holds five worked examples of gates it could not.
+
+**Re-verified for this entry (2026-08-29):** `vaultRag.ts:390` still reads
+`if (safeText.startsWith(SMOKE_PREFIX)) return { entryId: \`smoke::${doc.contentHash}\`, costUsd: 0 };`
+with `SMOKE_PREFIX = "SMOKE::"` defined at `:368`, and `vaultRag.ts` contains no reference to
+`offlineSeamAvailable` or `PIKAR_OFFLINE_FIXTURES`. Instance #3 above is accurate and remains **LIVE**.

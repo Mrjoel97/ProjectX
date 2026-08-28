@@ -1,5 +1,16 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-29 (**COMMENT-ONLY CORRECTION IN `convex/lib/env.ts`; NO READINESS
+> BEHAVIOUR CHANGED.** `missingEnv`'s comment above `fixturesActive` claimed the screen "cannot
+> announce a seam that is off (or stay quiet about one that is on)". **That was false**, and its own
+> pinning test says so: the screen reports the FLAG, while `lib/models.ts` `offlineSeamAvailable()`
+> ANDs the flag with "neither model key is set", so on a keyed deployment the screen reports
+> `PIKAR_OFFLINE_FIXTURES` ACTIVE while the seam is inert. The comment now states the shared half
+> (one value test, `isOfflineFixtureConsent`) and the deliberate asymmetry separately, and the entry
+> below is corrected where it generalised the `"1"` rule to every fixture-tier name — only
+> `PIKAR_OFFLINE_FIXTURES` is routed through the shared predicate. This entry does NOT discharge the
+> separate bump this playbook owes for Phase 28's `lib/env.ts` change.)
+
 > Last verified: 2026-08-28 (**THE READINESS SCREEN NO LONGER DECIDES "IS THIS FIXTURE SEAM ON?" FOR
 > ITSELF.** `missingEnv().fixturesActive` reported any fixture-tier name whose value was non-blank,
 > while its one consumer, `lib/models.ts` `offlineSeamAvailable()`, required the literal `"1"`. So
@@ -7,11 +18,19 @@
 > all three of: a readiness screen announcing a LIVE fabrication seam, a fixture that was silently
 > OFF, and an unexplained `OPENROUTER_API_KEY is not set`. The value test is now ONE exported
 > predicate, `lib/env.ts` `isOfflineFixtureConsent`, called by both sites, and `lib/models.test.ts`
-> runs a table of literal values through both so they cannot diverge again. **Only
-> `PIKAR_OFFLINE_FIXTURES` is routed through it**; every other fixture-tier name keeps the non-blank
-> test, because no consumer of those disagrees with it. Behaviour change, stated plainly: a
-> fixture-tier value that is not `"1"` (`on`, `true`) now reads as OFF in the readiness screen as
-> well as at the seam. The manifest row's `whatBreaks` string is the operator-facing spec for that.
+> runs a table of literal values through both. **Only `PIKAR_OFFLINE_FIXTURES` is routed through
+> it**; every other fixture-tier name keeps the non-blank test, because no consumer of those
+> disagrees with it. Behaviour change, stated plainly and scoped to that ONE name: a
+> `PIKAR_OFFLINE_FIXTURES` value that is not `"1"` (`on`, `true`, `""`) now reads as OFF in the
+> readiness screen as well as at the seam. Other fixture-tier names are unchanged — any non-blank
+> value still reports them active. The manifest row's `whatBreaks` string is the operator-facing
+> spec for that.
+>
+> The two sites still differ on one thing, deliberately: the screen reports the FLAG, while
+> `offlineSeamAvailable()` ANDs the flag with "neither model key is set". On a keyed deployment the
+> screen reports the flag active while the seam is inert. That asymmetry is pinned by the same
+> table.
+>
 > This entry does NOT discharge the separate bump this playbook owes for Phase 28's `lib/env.ts`
 > change.)
 

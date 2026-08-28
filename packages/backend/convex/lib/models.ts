@@ -14,13 +14,21 @@
  * Nothing pinned the copies together, and every test drives the offline `SMOKE::` seam, so no test
  * could see it.
  *
- * ALL SEVEN ARE NOW CONVERTED (the last five on 2026-08-28: business-blueprint derivation,
- * onboarding extraction + the conversational turn, folder digests, the graph extractor / document
- * classifier, and the voice-doc reviewer — every one of them live, and every one of them naming a
- * model OpenAI does not know on every real call). `lib/models.test.ts` pins the END STATE: its
- * allow-list is EMPTY, so a new module that resolves a model without importing this table is red,
- * and so is a naive `openai(id.replace(...))` written anywhere under `convex/` — including inside a
- * module that also imports this one.
+ * ALL SEVEN WERE CONVERTED on 2026-08-28 (the last five: business-blueprint derivation, onboarding
+ * extraction + the conversational turn, folder digests, the graph extractor / document classifier,
+ * and the voice-doc reviewer — every one of them live, and every one of them naming a model OpenAI
+ * does not know on every real call).
+ *
+ * ⚠ NOTHING GUARDS THAT AN EIGHTH COPY IS NOT WRITTEN. `lib/models.test.ts` carried a source-text
+ * scan for a second route table through five iterations and five verified escapes (a renamed const,
+ * a renamed callee, the `@ai-sdk/openai/internal` subpath specifier, `export default openai;`, and
+ * leading whitespace against an anchored `^export` match); it was DELETED rather than iterated a
+ * sixth time, because a regex over source text cannot see a provider reached through a renamed
+ * binding, a subpath specifier, an arbitrary export spelling or raw `fetch` — `vaultRag.ts`'s
+ * `embeddingV2` already routes three providers by `fetch` with zero provider imports. The gap and
+ * its upgrade path (an AST/type-level pass or a lint rule) are recorded in
+ * `docs/playbooks/cockpit.md` and `29-SMOKE-SEAM-DEBT.md`. The behavioural tests that remain assert
+ * where `resolveModel` actually routes; they say nothing about who else routes.
  *
  * ⚠ A CONSEQUENCE WORTH KNOWING BEFORE YOU TOUCH A CALLER: converting a module moves the credential
  * it actually spends from `OPENAI_API_KEY` to `OPENROUTER_API_KEY`. Any guard phrased as "this
@@ -141,18 +149,21 @@ export const NODE_ONLY_MODEL_PREFIX = "google/";
  * `resolveModel(DEFAULT_MODEL)` reaches `openRouter()`, which throws `OPENROUTER_API_KEY is not
  * set`. Loud, and the caller's dead-letter/retry path sees it. Do not add a keyless fallback.
  *
- * ⚠ NOT EVERY `SMOKE::` SEAM IS CLOSED. `vaultLlm.extractGraph` / `identifyDoc`, `vaultRag.embedDoc`
- * and `gmail.ts`'s tool-argument gate still select on content, and they are coupled to each other
- * and to a landed Playwright E2E that drives the sentinels against a REAL KEYED deployment — so
- * they cannot be converted one at a time. See
+ * ⚠ OTHER `SMOKE::` SEAMS ARE STILL OPEN. `vaultLlm.extractGraph` / `identifyDoc`,
+ * `vaultRag.embedDoc` and `gmail.ts`'s tool-argument gate still select on content. They share
+ * fixtures with each other and with a landed Playwright E2E that drives the sentinels against a
+ * REAL KEYED deployment, so converting one moves the others. See
  * `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.
  */
 export const offlineSeamAvailable = (): boolean =>
   // The LITERAL "1", not merely "set": `convex env set PIKAR_OFFLINE_FIXTURES ""` and a leftover
   // `PIKAR_OFFLINE_FIXTURES=0` are both the operator saying NO, and a `!== undefined` check reads
-  // them as yes. Same class of mistake as the one this whole predicate exists to fix. The rule
-  // lives in `lib/env.ts` so the readiness screen cannot answer it differently; the READ stays a
-  // literal `process.env.X` here, because `env.test.ts`'s dead-entry scan only sees literal reads.
+  // them as yes. Same class of mistake as the one this whole predicate exists to fix. The VALUE
+  // rule lives in `lib/env.ts` and both sites call it — `models.test.ts` runs a table of literal
+  // values through the seam and the readiness screen and fails if they diverge. (They still differ
+  // DELIBERATELY on the credential conjunct: on a keyed deployment the screen reports the flag and
+  // the seam is false. That asymmetry is pinned by the same test.) The READ stays a literal
+  // `process.env.X` here, because `env.test.ts`'s dead-entry scan only sees literal reads.
   isOfflineFixtureConsent(process.env.PIKAR_OFFLINE_FIXTURES) &&
   !process.env.OPENAI_API_KEY &&
   !process.env.OPENROUTER_API_KEY;

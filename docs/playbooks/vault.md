@@ -1,18 +1,35 @@
+> Last verified: 2026-08-29 (**WAVE-3 FINAL — THE COPY-DRIFT GUARD IS DELETED; `vaultDigest.ts`'s
+> SEAM COMMENT NOW CITES THE TESTS BEHIND ITS ABSOLUTES. Comment/test-only; no behaviour changed.**
+>
+> **1. The copy-drift guard is GONE, and copy-drift is now UNGUARDED.** `lib/models.test.ts`'s
+> source-text scan for a second `resolveModel` was defeated on all five of its iterations — a
+> renamed const, a renamed callee, the `@ai-sdk/openai/internal` subpath specifier, `export default
+> openai;`, and finally LEADING WHITESPACE against an anchored `^export` match — each escape RUN as
+> a planted module that left the suite green. A sixth regex was not written: a provider is reachable
+> through a renamed binding, a non-literal specifier and raw `fetch`, and this repo already uses the
+> last of those on a landed path (`vaultRag.ts`'s `embeddingV2`, ~:230-270, picks provider label,
+> env-key NAME and URL at runtime with zero provider imports). Only the BEHAVIOURAL tests remain —
+> where `resolveModel` routes each prefix. An eighth private copy of the route table would not be
+> caught by any test; closing that needs an AST/type-level pass or a lint rule. Full account in
+> `docs/playbooks/cockpit.md`'s top entry and `29-SMOKE-SEAM-DEBT.md`. THE ENTRY BELOW IS THE
+> EARLIER, SUPERSEDED ACCOUNT OF THAT GUARD.
+>
+> **2. `vaultDigest.ts`'s offline-seam comment now names its tests.** "Selected by the deployment
+> and by nothing else" cites the `"the offline seam is selected by the DEPLOYMENT, never by
+> content"` block, which attacks the member TEXT, the member TITLE and the folder NAME channels.
+> "On any deployment with a key the fixture is unreachable by construction" is replaced by what the
+> code does — `offlineSeamAvailable()` ANDs the operator flag with "neither model key" — plus the
+> two keyed tests that pin it. The old wording named neither.
+>
+> **3. `lib/env.ts`'s `fixturesActive` comment claimed the screen "cannot announce a seam that is
+> off".** False: the screen reports the FLAG, the seam ANDs it with "neither key", so a keyed
+> deployment reports ACTIVE over an inert seam. Corrected there; see `production-beta.md`.)
+
 > Last verified: 2026-08-28 (**WAVE-3 CLEANUP FIX — THE DRIFT GUARD WAS DECIDED, THE FIXTURE FLAG
 > STOPPED BEING DECIDED TWICE, AND THREE FALSE COMMENTS THE PREVIOUS ROUND LEFT BEHIND WERE FIXED.**
 >
-> **1. The copy-drift guard is a CHANNEL guard now, and says so.** `lib/models.test.ts`'s provider
-> scan claimed "the ONLY way to get a provider is the provider package's MODULE SPECIFIER". False,
-> and it was the fourth escapable iteration: `@ai-sdk/openai/internal` is a DOCUMENTED subpath
-> shipping the raw `OpenAIChatLanguageModel`, and a planted module holding a full private route
-> table through it left the suite 17/17 green. The regex now matches the package ROOT plus any
-> subpath tail and backtick specifiers, and the export-surface pin no longer enumerates spellings
-> (`export default`, `export async function`, `export let`, `export class` all walked through it).
-> **The absolute claim is DELETED, not re-worded**, and the two escapes a regex cannot close are
-> named in the test: a non-literal specifier (`import("@ai-sdk/" + "openai")`), and RAW HTTP — which
-> this repo DOES on a landed path, `vaultRag.ts`'s `embeddingV2` (~:230-270) picks provider, env-key
-> name and URL at runtime and calls `fetch` with zero provider imports. Nothing pins that adapter to
-> `lib/models.ts`, and an AST pass is what a real guard would need.
+> **1. The copy-drift guard is a CHANNEL guard now.** SUPERSEDED — the guard is deleted; see the
+> entry above.
 >
 > **2. "Is the fixture seam on?" had two answers.** `lib/env.ts`'s `fixturesActive` used non-blank,
 > `lib/models.ts` used the literal `"1"`, so `PIKAR_OFFLINE_FIXTURES=on` (the spelling every other

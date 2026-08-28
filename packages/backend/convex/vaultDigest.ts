@@ -152,7 +152,10 @@ function digestPrompt(folderName: string, members: readonly MemberMeta[]): strin
 //
 // convex-test and a local backend must drive synthesis deterministically and offline, with no model
 // credentials. That fixture is selected by `offlineSeamAvailable()` — a fact about the DEPLOYMENT —
-// and by nothing else.
+// and by nothing else. DRIVEN, not asserted: `vaultDigest.test.ts`'s "the offline seam is selected
+// by the DEPLOYMENT, never by content" block attacks all three content channels — "a MEMBER DOCUMENT
+// carrying the sentinel", "a MEMBER TITLE...", "A FOLDER NAME..." — and asserts the LIVE model path
+// is taken; reverting this gate to `folder.name.includes(...)` turns the folder-name test RED.
 //
 // ⚠ IT USED TO BE SELECTED BY CONTENT, TWICE, AND BOTH CHANNELS WERE REACHABLE BY A THIRD PARTY.
 // First `safePrompt.includes("SMOKE::digest::")` over the whole ASSEMBLED prompt: a single ingested
@@ -175,8 +178,11 @@ function digestPrompt(folderName: string, members: readonly MemberMeta[]): strin
 // while being invisible to search, which is debt instance #3 in that register, not retrieval
 // poisoning. Same channel as the first version, one hop further away.
 //
-// So: no sentinel. On any deployment with a key the fixture is unreachable by construction, whatever
-// anyone names anything.
+// So: no sentinel. A deployment holding either model key takes the model path whatever anyone names
+// anything — `offlineSeamAvailable()` ANDs the operator flag with "neither key", pinned by
+// `lib/models.test.ts`'s "a key still closes the seam even WITH the opt-in" and by
+// `vaultDigest.test.ts`'s "the opt-in does NOT re-open the seam on a deployment that still holds a
+// key" / "OPENROUTER_API_KEY ALONE closes the seam".
 
 /**
  * The offline digest. Deterministic, derived from the SAME projected metadata the real prompt

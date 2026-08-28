@@ -329,9 +329,15 @@ export function missingEnv(read: (name: string) => string | undefined): {
     missingRequired: REQUIRED_ENV.filter(unset),
     missingFeature: FEATURE_ENV.filter(unset),
     // Reported because a fixture seam left on in production silently FAKES a provider — a failure
-    // that looks like success, which is the worst kind to leave undetectable. REPORTED ACTIVE MUST
-    // MEAN ACTIVE: the offline-fixture flag is read through the SAME predicate its consumer uses,
-    // so this screen cannot announce a seam that is off (or stay quiet about one that is on).
+    // that looks like success, which is the worst kind to leave undetectable.
+    //
+    // `PIKAR_OFFLINE_FIXTURES` is read through `isOfflineFixtureConsent`, the SAME value test its
+    // consumer `offlineSeamAvailable()` uses, so the two agree on WHETHER THE VALUE IS CONSENT.
+    // They still differ deliberately on one thing: this screen reports the flag alone, while the
+    // seam ANDs it with "neither model key is set". On a keyed deployment the screen therefore
+    // reports the flag ACTIVE while the seam is inert — a fixture warning louder than the seam is
+    // the safe direction. Both halves are pinned by the literal-value table in `models.test.ts`.
+    // Every OTHER fixture-tier name keeps the generic non-blank test below.
     fixturesActive: ENV_MANIFEST.filter((e) =>
       e.tier !== "fixture"
         ? false
