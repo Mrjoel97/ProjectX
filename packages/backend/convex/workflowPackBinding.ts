@@ -143,15 +143,21 @@ const packArgs = {
   /** 27-08: the eval runner MUST be able to pin the exact candidate, or a run certifies the ACTIVE
    *  body while the evidence row names the candidate. `internalAction` ⇒ never model-supplied. */
   skillVersions: v.optional(v.record(v.string(), v.number())),
-  /** 29-05: the TENANT twin of the pin above, and the hop that makes a tenant pack candidate
-   *  evaluable at all. `<name>@<version>` cannot name a row once two tenants each own version 2, so
-   *  a tenant candidate is pinned by ROW ID (`skills.getTenantSkillVersion`, resolved inside
-   *  `runSpecialistTurn`). Without this hop a tenant candidate would run the tenant's EFFECTIVE body
-   *  while evidence named the candidate — 16-09's defect, one registry scope down — and, because
-   *  `activateTenantCandidate` demands evidence pinning the exact row, a schema-driven pack
-   *  customization could never leave `candidate` at all. Validated as `v.id("tenantSkills")`, never
-   *  a string, and reachable only from an `internalAction`.
-   *  NEITHER OF THOSE IS THE ISOLATION ARGUMENT — a valid id is still a valid id for SOMEONE ELSE'S
+  /** 29-05: the TENANT twin of the pin above, and the hop that runs a tenant pack candidate BODY.
+   *  `<name>@<version>` cannot name a row once two tenants each own version 2, so a tenant candidate
+   *  is pinned by ROW ID (`skills.getTenantSkillVersion`, resolved inside `runSpecialistTurn`).
+   *  Without this hop the run would take the tenant's EFFECTIVE body while the caller believed it
+   *  had pinned the candidate — 16-09's defect, one registry scope down.
+   *
+   *  It is also the door a published customization reaches a model THROUGH: since the 29-05
+   *  remediation `planTenantActivation` throws `PACK_GATE` for every name in
+   *  `WORKFLOW_PACK_SKILL_NAMES`, so such a row does not go active and `loadEffectiveSkill` keeps
+   *  serving the global body — `skills.test.ts`
+   *  ("a pack-named TENANT candidate ... is still REFUSED") asserts exactly that pair. A pinned run
+   *  changes nothing that outlives it — no status patch, no evidence write — and the tool grant
+   *  still comes from `toolsForWorkflowPack`. Validated as `v.id("tenantSkills")`, never a string,
+   *  and declared only on the two `internalAction`s below.
+   *  NONE OF THAT IS THE ISOLATION ARGUMENT — a valid id is still a valid id for SOMEONE ELSE'S
    *  row. The tenant comparison is in `runPackTurn`, before `preCall`. */
   tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
 };
@@ -197,12 +203,14 @@ async function runPackTurn(
   //
   // Refused BEFORE `preCall` and before any event is recorded: a mis-wired harness costs $0 and
   // leaves no run row behind. Throws rather than returning a governed refusal because there is no
-  // user-facing state here to render — every caller of `tenantSkillIds` is trusted server code
-  // (`internalAction` only), so a foreign id is a BUG, not an outcome.
+  // user-facing state here to render — both entry points that declare `tenantSkillIds` here
+  // (`runWorkflowPack`, `__runWorkflowPackWithScript`, below) are `internalAction`s, so a foreign id
+  // is a BUG, not an outcome.
   //
-  // ponytail: the ONE unscoped read is `skills.getTenantSkillVersion` itself, and the root fix is a
-  // required `tenantId` arg on it — that changes `llm.ts:4988`, which this wave does not own. Named
-  // as a follow-up in the 29-05 FIX summary; this closes the caller surface 29-05 added.
+  // ponytail: the unscoped read is `skills.getTenantSkillVersion` itself, and the root fix is a
+  // required `tenantId` arg on it — that also changes the pin resolution in `runSpecialistTurn`
+  // (llm.ts), which this wave does not own. Named as a follow-up in the 29-05 FIX summary; this
+  // closes the caller surface 29-05 added.
   for (const candidateId of Object.values(args.tenantSkillIds ?? {})) {
     const row = await ctx.runQuery(internal.skills.getTenantSkillVersion, { candidateId });
     if (row.tenantId !== tenantId) {

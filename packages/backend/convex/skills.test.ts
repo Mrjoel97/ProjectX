@@ -4206,9 +4206,14 @@ describe("workflow-pack candidate lifecycle", () => {
   });
 
   // THE OVERLAY BYPASS, closed by assertion. The pack gate guards the GLOBAL `skills` table, but
-  // `loadEffectiveSkill` prefers a tenant's active `tenantSkills` row over the global one — so a
-  // pack name that could ever reach a tenant overlay would run a body that never passed the gate.
-  // Both overlay doors refuse before any read today; this is what keeps that true.
+  // `loadEffectiveSkill` prefers a tenant's ACTIVE `tenantSkills` row over the global one — so a
+  // pack name reaching a tenant overlay as an active row would run a body that never passed the
+  // gate. This pins the two ALLOW-LIST doors, `publishUserCandidate` and `publishAgentCandidate`.
+  //
+  // It is not the whole story, and the 29-05 remediation is why: `publishPackCustomization` is a
+  // THIRD door that accepts pack names on purpose and mints `candidate`. What stops that row going
+  // active is `planTenantActivation`'s `PACK_GATE` throw, driven by "a pack-named TENANT candidate
+  // with Phase-21 evidence is still REFUSED" below — not by this test.
   // MUTATION that must turn this RED: add a pack name to USER_AUTHORABLE_SKILLS.
   test("no pack name is user- or agent-authorable — the overlay cannot bypass the pack gate", () => {
     for (const id of WORKFLOW_PACK_IDS) {

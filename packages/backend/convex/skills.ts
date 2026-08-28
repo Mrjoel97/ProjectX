@@ -268,7 +268,7 @@ async function planGlobalActivation(
 }
 
 /**
- * The TENANT overlay's plan (21-04). Two things differ from the global scope and only two:
+ * The TENANT overlay's plan (21-04). Differences from the global scope:
  *
  *  1. **The exemption is a COLUMN, not a status.** Globally, `archived`/`rolled_back` prove prior
  *     activation because nothing else can produce those statuses in the `skills` table. In
@@ -279,6 +279,8 @@ async function planGlobalActivation(
  *     the code-owned core.
  *  2. **Evidence names the ROW.** `hasPassingTenantEvidence` compares candidateId, registryTenantId,
  *     name AND version, because two tenants can each own `offer-architect@2` (21-02/21-03).
+ *  3. **A workflow-pack name never reaches either of those** (29-05) — the branch below throws
+ *     before any evidence is read. Its reasoning is on that branch.
  *
  * Owner authorization is deliberately NOT here. This helper is also the identity-free path for
  * internal callers, and `requireOwner` lives on the public wrapper — two independent gates
@@ -302,16 +304,21 @@ async function planTenantActivation(
   // comment names as the thing the pack gate exists to refuse. Same body class, same deployment,
   // two different gates.
   //
-  // This is NOT "the same three planes here". It cannot be: `tenantSkills` has no `provenance` and
-  // no `browserEvidence` COLUMN (schema.ts), so two of the three planes have nowhere to be written
-  // and `hasPassingPackEvalEvidence` has no tenant-scoped runner to satisfy it. Rather than run a
-  // weaker subset and call it the gate, a pack-named tenant row cannot be activated AT ALL — by any
-  // mode, including rollback, because nothing pack-named can ever have been live to roll back to.
-  // A pack body changes at GLOBAL scope, through the three-plane gate, or it does not change.
+  // This is NOT "the same three planes here": `tenantSkills` has no `provenance` and no
+  // `browserEvidence` COLUMN (schema.ts), so two of the three planes have nowhere to be written and
+  // `hasPassingPackEvalEvidence` has no tenant-scoped runner to satisfy it. Rather than run a
+  // weaker subset and call it the gate, the throw sits ahead of the mode switch, so activate-user,
+  // activate-agent and rollback all take it. Rollback is included for the same reason it is safe to
+  // include: the single `status: "active"` patch in this module (`transitionSkillActivation`, whose
+  // uniqueness `skills.test.ts` counts) routes every tenant target through here, so a name this
+  // branch always throws on has no live version to restore. A pack body changes at GLOBAL scope,
+  // through the three-plane gate.
   //
-  // Publishing is untouched: a tenant may still mint the candidate, and it stays dark. When a
-  // tenant pack lane is genuinely wanted, the work is the two evidence columns plus a tenant-scoped
-  // pack eval runner — not deleting this branch.
+  // Publishing is untouched: a tenant may still mint the candidate, and it stays a candidate. It is
+  // NOT unreachable — the `tenantSkillIds` pin rail runs a candidate body by row id (see
+  // `publishPackCustomization`'s docstring for that door and what governs it). When a tenant pack
+  // lane is genuinely wanted, the work is the two evidence columns plus a tenant-scoped pack eval
+  // runner — not deleting this branch.
   if (isWorkflowPackSkill(row.name)) {
     throw new Error(
       `${PACK_GATE_ERROR}: ${row.name} is a workflow pack — the tenant overlay carries no provenance or browser evidence, so a tenant pack candidate cannot be activated at any scope`,
@@ -1418,7 +1425,9 @@ async function insertTenantUserCandidate(
     version,
     body,
     authoredBody: authored,
-    // CANDIDATE, always. There is no code path from this function to an activation function.
+    // A LITERAL, not a variable and not an argument — neither channel can choose the status it
+    // publishes at. The module-wide guarantee is one level up: `skills.test.ts` counts exactly one
+    // `status: "active"` patch in this file and pins it inside `transitionSkillActivation`.
     status: "candidate",
     author: "user",
     // Provenance from the AUTHENTICATED context, never from an argument.
@@ -1538,13 +1547,25 @@ export type PackCustomizationResult =
  *     people editing one workflow's thresholds cannot both be satisfied, and silent last-write-wins
  *     is the version of that failure nobody notices.
  *
- * NOTHING HERE ACTIVATES ANYTHING, AND — AS OF THE 29-05 REMEDIATION — NOTHING ELSE DOES EITHER.
- * `planTenantActivation` refuses every `pack-*` name outright, because the tenant overlay has no
- * `provenance` and no `browserEvidence` column to satisfy the three-plane pack gate with. So a row
- * minted here is DARK BY CONSTRUCTION: it can be listed, inspected and superseded, and it can never
- * become the body a specialist runs. That is a real code gate, not a posture — `skills.test.ts`
- * proves a `pack-*` tenant candidate carrying Phase-21-shaped evidence is still refused. This
- * mutation never touches the ADR-003 global `skills` table.
+ * NOTHING HERE ACTIVATES, AND ACTIVATION IS REFUSED DOWNSTREAM. `planTenantActivation` throws
+ * `PACK_GATE` for any name `isWorkflowPackSkill` accepts — membership in `WORKFLOW_PACK_SKILL_NAMES`,
+ * not a `pack-` prefix — ahead of its mode switch, because the tenant overlay has no `provenance`
+ * and no `browserEvidence` column to satisfy the three-plane pack gate with. `skills.test.ts` ("a
+ * pack-named TENANT candidate with Phase-21 evidence is still REFUSED") drives that with evidence
+ * that would otherwise have passed, and asserts `loadEffectiveSkill` still serves the global body.
+ *
+ * A ROW MINTED HERE IS STILL RUNNABLE, AND AN EARLIER VERSION OF THIS COMMENT DENIED IT. The
+ * `tenantSkillIds` rail pins a `tenantSkills` row BY ID into `runSpecialistTurn`, and a `pack-*` row
+ * resolves through it like any other — `workflowPackBinding.test.ts` ("the pinned CANDIDATE body
+ * runs, not the tenant's effective one") runs one and reads the candidate's version back. What
+ * governs that door: the pin is declared only on `internalAction`s; `runPackTurn` compares
+ * `row.tenantId` to the run's tenant before `preCall`; `runSpecialistTurn` refuses a row whose
+ * `name` is not the skill being run; the tool grant comes from `toolsForWorkflowPack`, so the pinned
+ * body has no vote on it; and the run patches no status. `cockpit.ts`, the only production caller of
+ * `runWorkflowPack`, passes `skillVersions` (a global preview pin) and no `tenantSkillIds` — so what
+ * a tenant publishes here is inert until some caller pins it. Recorded in the playbook, not closed.
+ *
+ * This mutation never touches the ADR-003 global `skills` table.
  */
 export const publishPackCustomization = tenantMutation({
   args: {

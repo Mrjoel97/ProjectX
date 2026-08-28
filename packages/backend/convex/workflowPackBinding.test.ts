@@ -594,12 +594,19 @@ describe("the binding stays a binding", () => {
 // ── 29-05 (ROUT-01): the tenant candidate pin reaches the loop ────────────────────────────────
 //
 // A tenant's schema-driven pack customization is minted `candidate` by
-// `skills.publishPackCustomization` and — since the 29-05 remediation — it STAYS a candidate
-// forever: `planTenantActivation` refuses every `pack-*` name, because the tenant overlay has no
-// provenance or browser-evidence column to satisfy the three-plane pack gate with. That makes this
-// pin rail the ONLY way a tenant's customized body can ever execute, which is what stops the whole
-// channel from being a form that writes a row nobody can use. It runs the body under the registry's
-// own tool grant, for a run the tenant asked for, and changes nothing that outlives the run.
+// `skills.publishPackCustomization`, and since the 29-05 remediation it stays one:
+// `planTenantActivation` throws `PACK_GATE` for every name `isWorkflowPackSkill` accepts, because
+// the tenant overlay has no provenance or browser-evidence column to satisfy the three-plane pack
+// gate with. So the row does not go active, `loadEffectiveSkill` keeps serving the global body
+// (asserted in `skills.test.ts`), and this pin rail is the door the customized body reaches a
+// model through: under the registry's own tool grant, for a run the
+// caller asked for, changing nothing that outlives the run.
+//
+// THE DOOR IS OPEN AND THESE TESTS ARE WHAT KEEPS IT HONEST. Adding a `pack-*` refusal to the pin
+// rail turns the first test below RED — that is the intended alarm, not a nuisance: it is a
+// governance change, and `docs/playbooks/skill-registry.md` states what governs the door today.
+// No production caller uses it yet (`cockpit.ts` passes `skillVersions` only), so what a tenant
+// publishes is inert until one does; that gap is in the playbook.
 //
 // A param threaded through the pure half and not through the caller is the defect class this repo
 // has already shipped once (the clock plane, phase 18) — these tests drive the real action.
@@ -642,6 +649,16 @@ describe("a tenant pack candidate can be RUN before it is activated (29-05)", ()
     // The global fixture row is version 1 and no tenant row is ACTIVE, so an unpinned run resolves
     // version 1. Reading 7 back is only possible if the pin reached the loader.
     expect(pinned.ok && pinned.skillVersion).toBe(7);
+
+    // RUNNABLE IS NOT ACTIVATABLE. Running a pinned candidate must not become the back door into the
+    // status `planTenantActivation` refuses it: the row is untouched afterwards — same status, no
+    // evidence, no `rollbackEligible` flip — so a run moves it no closer to being the tenant's
+    // effective body.
+    // MUTATION that must turn this RED: patch the pinned row in `runPackTurn`.
+    const after = await t.run((ctx) => ctx.db.get(candidateId));
+    expect(after?.status).toBe("candidate");
+    expect(after?.evidence).toBeUndefined();
+    expect(after?.rollbackEligible).toBe(false);
 
     const unpinned = await t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
       ...runArgs(planId, "business-pulse"),

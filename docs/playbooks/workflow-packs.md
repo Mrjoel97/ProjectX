@@ -1,6 +1,19 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-28 (29-05 REMEDIATION — **THE PIN IS NOW TENANT-SCOPED, AND THE GRANT TEST
+> Last verified: 2026-08-29 (29-FIN-05 PROSE SWEEP — **THE PIN DOOR IS OPEN ON PURPOSE, AND THE
+> COMMENTS THAT DENIED IT ARE GONE.** `skills.ts` said a pack customization row was "DARK BY
+> CONSTRUCTION" and could "never become the body a specialist runs"; the `tenantSkillIds` rail runs
+> one, and the 29-05 tests always showed it. Those absolutes are deleted from `skills.ts` and
+> `workflowPackBinding.ts`; `docs/playbooks/skill-registry.md` gained "The pin door IS open, and
+> this is what governs it" — internal-only, tenant-scoped, name-scoped, no grant, no state. One
+> assertion was ADDED here: the pinned run re-reads the row and proves it patched no status, wrote
+> no evidence and flipped no `rollbackEligible` (mutation: patch the row in `runPackTurn` -> RED).
+> Also recorded, because it is the real state of the channel: **no production caller passes
+> `tenantSkillIds` for a pack.** `cockpit.ts` is the only caller of `runWorkflowPack` and it passes
+> `skillVersions` (a global preview pin) only, so what a tenant publishes through the customization
+> form is inert until someone decides who may pin it. No behaviour changed.)
+>
+> Previously verified: 2026-08-28 (29-05 REMEDIATION — **THE PIN IS NOW TENANT-SCOPED, AND THE GRANT TEST
 > NOW REACHES ITS OWN SCENARIO.** Two corrections to the bump below it:
 >
 > 1. **`TENANT_SKILL_PIN_FOREIGN`.** `skills.getTenantSkillVersion` resolves a `tenantSkills` row BY
@@ -16,10 +29,10 @@
 >    passing. It now asserts `skillVersion === 7` on every probe chunk, which is only readable if the
 >    pinned candidate reached the loader. The claim below is true again, and now enforced.
 >
-> Also: a tenant pack candidate can now NEVER be activated (`planTenantActivation` refuses every
-> `pack-*` name — the three-plane pack gate has no tenant lane). That makes this pin rail the ONLY
-> way a tenant's customized pack body can execute at all. See docs/playbooks/skill-registry.md
-> "THE PACK GATE HAS NO TENANT LANE".)
+> Also: `planTenantActivation` throws `PACK_GATE` for any name `isWorkflowPackSkill` accepts, ahead
+> of its mode switch, so a tenant pack candidate does not go active and `loadEffectiveSkill` keeps
+> serving the global body. The pin rail is how that candidate body reaches a model instead. See
+> docs/playbooks/skill-registry.md "THE PACK GATE HAS NO TENANT LANE" and "The pin door IS open".)
 >
 > Previously verified: 2026-08-28 (29-05: `packArgs` gained `tenantSkillIds` — the tenant twin of the
 > `skillVersions` pin, forwarded to `runSpecialistTurn` so a tenant's schema-driven pack

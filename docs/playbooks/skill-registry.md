@@ -1,6 +1,17 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-28 (29-05 REMEDIATION: **THE PACK GATE HAD NO TENANT LANE, SO THE TENANT
+> Last verified: 2026-08-29 (29-FIN-05 PROSE SWEEP: **A TENANT PACK CANDIDATE IS NOT "DARK" — IT IS
+> UNACTIVATABLE AND STILL RUNNABLE UNDER A PIN.** `planTenantActivation`'s `PACK_GATE` throw is real
+> and driven, but the `tenantSkillIds` rail resolves a `pack-*` row into `runSpecialistTurn` and the
+> 29-05 tests always showed it. The absolutes that denied it are DELETED from `skills.ts`,
+> `workflowPackBinding.ts` and this file; "The pin door IS open" below states what bounds that door,
+> and records the gap that no production caller pins one. Also corrected: `invalid_values` DOES echo
+> the caller's submitted keys (clamped to 64 bytes), so "none of them carries user text" was false;
+> the activation refusal is list membership (`isWorkflowPackSkill`), not a `pack-` prefix; the
+> golden-runner refusal is proven by a source-text SCAN whose ceiling is now stated. No behaviour
+> changed except one added assertion that a pinned run patches nothing.)
+>
+> Previously verified: 2026-08-28 (29-05 REMEDIATION: **THE PACK GATE HAD NO TENANT LANE, SO THE TENANT
 > LANE NOW FAILS CLOSED.** `publishPackCustomization` was the first production writer that could mint
 > a `pack-*` row in `tenantSkills`, and `planTenantActivation` had no pack branch — so a tenant's own
 > pack prompt went LIVE on the generic Phase-21 evidence predicate, bypassing the three-plane gate the
@@ -2445,10 +2456,13 @@ nested object has no shape to arrive in either.
 6. `stale_base_version` — optimistic concurrency against the tenant's newest row. No merge: two
    people editing one workflow's thresholds cannot both be satisfied.
 
-All six come back as DATA (`{ok: false, reason}`), never as a throw, and none of them carries user
-text — the caller already knows what it sent, and an error string is the one place stray content
-reaches a log. (The count is load-bearing: the previous version of this list said "all five" while a
-sixth path threw.)
+All six come back as DATA (`{ok: false, reason}`), never as a throw. Five of them carry no caller
+bytes at all; `invalid_values` carries the submitted KEYS — each rejection is `{key, reason}`, and
+`key` is the caller's own string clamped to `CUSTOMIZATION_CAPS.keyMaxBytes` (64). No submitted
+VALUE is ever echoed. That is the property to preserve when adding a seventh: a reason code, not a
+sentence about what arrived. (An earlier version of this paragraph said "none of them carries user
+text", which the `unknown_field` rows falsify. The count is load-bearing too: the version before
+that said "all five" while a sixth path threw.)
 
 ### What did NOT change, and must not
 
@@ -2494,8 +2508,8 @@ the pin is a row id and not `<name>@<version>` — so a name check cannot be the
 and neither can "it is validated as `v.id(...)`": a valid id is still a valid id for someone else's
 row. `runPackTurn` compares `row.tenantId` to the run's tenant BEFORE `preCall` and before any event
 is recorded, and throws `TENANT_SKILL_PIN_FOREIGN`. **Open follow-up:** the root fix is a required
-`tenantId` arg on `getTenantSkillVersion` itself, which also closes the dispatch pin surface
-(`llm.ts` ~L4988, pre-existing since 21-03). That file was owned by a sibling plan this wave; the
+`tenantId` arg on `getTenantSkillVersion` itself, which also closes the dispatch pin surface (the
+pin resolution in `runSpecialistTurn`, llm.ts — pre-existing since 21-03). That file was owned by a sibling plan this wave; the
 change is one argument and one comparison.
 
 ### THE PACK GATE HAS NO TENANT LANE — and the tenant lane FAILS CLOSED
@@ -2515,18 +2529,56 @@ gate". That was PROSE, not code, and it was wrong twice over:
    the tenant body to `runSpecialistTurn`. The identical body at GLOBAL scope was refused with
    `PACK_GATE`. Same deployment, same body class, two different gates.
 
-**What the code now does.** `planTenantActivation` refuses EVERY `pack-*` name outright, in every
-mode including rollback, with `PACK_GATE`. This is deliberately NOT "the same three planes here",
+**What the code now does.** `planTenantActivation` throws `PACK_GATE` for any name
+`isWorkflowPackSkill` accepts — membership in `WORKFLOW_PACK_SKILL_NAMES`, NOT a `pack-` prefix
+match — from a branch ahead of its mode switch, so activate-user, activate-agent and rollback all
+take it. This is deliberately NOT "the same three planes here",
 and the distinction matters to anyone tempted to soften it: `tenantSkills` has no `provenance` and
 no `browserEvidence` COLUMN, so two of the three planes have nowhere to be written and
 `hasPassingPackEvalEvidence` has no tenant-scoped runner to satisfy it. Running a weaker subset and
-calling it the gate is the failure this whole section is about. Rollback is included because nothing
-pack-named can ever have been live, so no incident-time recovery is blocked. `run-eval-golden.mjs`
-refuses a `pack-` row as a `--tenant-skill` target for the same reason, at $0.
+calling it the gate is the failure this whole section is about. Rollback is included because the one
+`status: "active"` patch in `skills.ts` routes every tenant target through `planTenantActivation`,
+so a name it always throws on has no live version to restore.
 
-**So what IS a tenant pack customization?** A DARK, immutable, reviewable candidate that can be
-listed, inspected, superseded and RUN under a pin — and never becomes the body a specialist resolves
-by default. That is the honest posture.
+`run-eval-golden.mjs` refuses a `pack-` row as a `--tenant-skill` target for the same reason, at $0.
+**Know the ceiling on that one.** The script has zero exports and runs `main` on import, so there is
+nothing a test can call; `skills.test.ts` ("the golden runner refuses a pack row as a --tenant-skill
+target") is a SOURCE-TEXT SCAN and proves SPELLING, not behaviour — a short-circuit above the check
+that preserved the scanned substring would neutralise it while the test stayed green. The
+behavioural gate for that hazard is `planTenantActivation`, which IS driven end to end. Treat the
+scan as drift detection on a $0 convenience, never as the gate.
+
+**So what IS a tenant pack customization?** An immutable, reviewable candidate that can be listed,
+inspected, superseded, and RUN when a caller pins it by row id — and that never becomes the body
+`loadEffectiveSkill` resolves. "Dark" is the wrong word for it, and this playbook and three comments
+in the code used it until the wave-3 sweep; see the next subsection for the door that is open.
+
+#### The pin door IS open, and this is what governs it
+
+`tenantSkillIds` (name → `tenantSkills` row id) resolves a candidate row's body into
+`runSpecialistTurn`, and a `pack-*` row goes through it like any other — `workflowPackBinding.test.ts`
+("the pinned CANDIDATE body runs, not the tenant's effective one") runs one and reads the
+candidate's version back off the result. That is deliberate: since activation is refused, a pin is
+how a published customization reaches a model at all. What bounds it:
+
+- **Internal only.** Every entry point declaring the arg is an `internalAction` (`runWorkflowPack`,
+  `__runWorkflowPackWithScript`, `dispatchArgs`' four, `runCockpitAgent`). No client-callable
+  surface and no model output can name a row.
+- **Tenant-scoped.** `runPackTurn` compares `row.tenantId` to the run's tenant BEFORE `preCall` and
+  throws `TENANT_SKILL_PIN_FOREIGN`; two-tenant test in `workflowPackBinding.test.ts`.
+- **Name-scoped.** `runSpecialistTurn` throws `TENANT_SKILL_PIN_MISMATCH` if the row's `name` is not
+  the skill being run.
+- **No grant.** The tool list comes from `toolsForWorkflowPack(packId)`; the pinned body has no vote,
+  proven behaviourally against the real loop with a body that asks in prose for every banned tool.
+- **No state.** The run patches no status, writes no evidence and flips no `rollbackEligible` — the
+  pinned test re-reads the row afterwards and asserts all three. A run is not a route to activation.
+
+**The gap, stated plainly:** no production caller passes `tenantSkillIds` for a pack. `cockpit.ts`
+is the only caller of `runWorkflowPack` and it passes `skillVersions` (a GLOBAL preview pin) only.
+So today the customization form writes a row that production never reads. Closing that means
+deciding who is allowed to pin — most likely the tenant's own newest candidate on their own run —
+and it is a product decision, not a comment fix. Until then, do not describe the channel as
+end-to-end.
 
 **To open a real tenant pack lane** the work is: two evidence columns on `tenantSkills`, a
 tenant-scoped mode in `run-workflow-pack-evals.mjs` (it still has no `--tenant-skill` mode — it pins
