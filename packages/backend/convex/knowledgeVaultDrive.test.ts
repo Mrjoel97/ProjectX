@@ -16,6 +16,7 @@
 import { readFileSync } from "node:fs";
 import {
   AGENT_AUTHORED_ORIGINS,
+  authorityFor,
   type BusinessBlueprint,
   serializeBlueprint,
 } from "@pikar/core";
@@ -182,6 +183,56 @@ describe("the vault adapter returns cited, bounded, tenant-owned evidence", () =
 
     const { evidence } = await searchVault(t, `SMOKE::${digest}`);
     expect(evidence[0]?.authority).toBe("agent_authored");
+  });
+
+  // ── The three writers that ingest agent prose with NO `origin` at all ────────────────────────
+
+  test.each([
+    // `evaluations.ts:1150` persistNextStepMemo — `text: plan.body`, which `plans.ts:169` records
+    // as "the specialist's output is the only body this plan will ever carry". `startIngest` at
+    // :1167, so the row IS retrievable.
+    ["next_step_memo", "evaluation", "evaluations.ts:1150"],
+    // `voice.ts:349` persistBrief — markdown from `internal.llm.draftVoiceBrief`. startIngest :363.
+    ["brief", "voice", "voice.ts:349"],
+    // `onboarding.ts:492` — PROFILE_KIND is "business_profile". startIngest :506.
+    ["business_profile", "agent", "onboarding.ts:492"],
+  ])("AGENT PROSE WITH NO ORIGIN (%s, from %s) IS NOT CITED AS THE OWNER'S OWN WORD", async (kind, source, _site) => {
+    // `authorityFor` decided "the tenant wrote it" from the ABSENCE of an `origin`, and these
+    // three landed writers store none — so the agent's own memo, brief and onboarding profile
+    // were each cited at `tenant_owned`, the STRONGEST class. Driven through the REAL adapter
+    // rather than the pure function, because that is the path production takes.
+    const t = harness();
+    const docId = await seedDoc(t, {
+      title: "What the agent wrote",
+      kind,
+      source,
+      category: "workspace-docs",
+      mimeType: "text/markdown",
+      text: "The business should raise prices to $60 per seat.",
+    });
+
+    const { evidence } = await searchVault(t, `SMOKE::${docId}`);
+    // The text is still retrievable and still cited — the fix is the CLASS, not suppression.
+    expect(evidence[0]?.text).toContain("raise prices");
+    expect(evidence[0]?.authority).not.toBe("tenant_owned");
+    // MUTATION: put `docKind === "web_research"` back in `authorityFor` -> all three RED.
+    expect(evidence[0]?.authority).toBe("third_party_research");
+  });
+
+  test("THE VAULT AND DRIVE PLANES DISAGREE ABOUT AN IMPORTED STRANGER-SHARED FILE, on purpose", () => {
+    // `vaultDrive.ts:1169`'s folder import stores a Drive file as `kind: "upload"`,
+    // `source: "google"` with NO origin, so the SAME file a stranger shared in is
+    // `third_party_research` on the Drive plane (proven by `ownedByMe`) and `tenant_owned` once
+    // imported. The search plane cannot tell that row from a real upload: `vaultGroundHydrated`
+    // carries `kinds` and `origins` and NOT `source`, and dropping `"upload"` from
+    // `TENANT_AUTHORED_DOC_KINDS` would downgrade every genuine upload — a bigger untruth than the
+    // one it fixes. Pinned as a VALUE so the asymmetry is a recorded decision rather than drift.
+    //
+    // FOLLOW-UP, and it is `vaultDrive.ts`'s to make (not this plan's file): give the import a
+    // distinguishable `kind`, or carry `source` through `vaultGroundHydrated`. Either one lets this
+    // assertion flip to `third_party_research` on BOTH planes and this test says so.
+    expect(authorityFor("vault", { docKind: "upload" })).toBe("tenant_owned");
+    expect(authorityFor("drive", { ownedByMe: false })).toBe("third_party_research");
   });
 
   test("EVERY origin schema.ts allows has an authority decision behind it", () => {
@@ -847,9 +898,7 @@ describe("untrusted vault and Drive content has NO path to a governance plane", 
     vi.useFakeTimers();
     await seedGrant(t, FULL_SCOPE);
     stubDrive({
-      files: [
-        { id: "file1", name: `Q3 ${INJECTION}`, mimeType: "text/plain", ownedByMe: false },
-      ],
+      files: [{ id: "file1", name: `Q3 ${INJECTION}`, mimeType: "text/plain", ownedByMe: false }],
     });
 
     const { evidence } = await searchDrive(t, "forecast");

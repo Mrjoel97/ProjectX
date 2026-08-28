@@ -310,13 +310,22 @@ const SOURCE_AUTHORITY: Readonly<Record<KnowledgeSource, AuthorityClass>> = {
 /**
  * EVERY `vaultDocuments.origin` value, and every one of them means THE AGENT WROTE THE PROSE.
  *
- * A row with NO origin is a tenant upload. A row WITH one is not: `agent_promoted` is the agent's
- * output that the owner promoted (26-11, ADR-025), `agent` is agent-written working material, and
- * `folder_digest` is `vaultDigest.ts`'s MODEL-WRITTEN summary of a folder — which is retrievable,
- * because that insert calls `startIngest`, so up to `evidenceTextCharCap` characters of the model's
- * own prose reached a citation stamped `tenant_owned`, the STRONGEST class. Only `agent_promoted`
- * was listed here, so the digest read back as the owner's own word: the provenance-laundering door
- * this class exists to close, standing open on the very table it names.
+ * `agent_promoted` is the agent's output that the owner promoted (26-11, ADR-025), `agent` is
+ * agent-written working material, and `folder_digest` is `vaultDigest.ts`'s MODEL-WRITTEN summary
+ * of a folder — which is retrievable, because that insert calls `startIngest`, so up to
+ * `evidenceTextCharCap` characters of the model's own prose reached a citation stamped
+ * `tenant_owned`, the STRONGEST class. Only `agent_promoted` was listed here, so the digest read
+ * back as the owner's own word: the provenance-laundering door this class exists to close,
+ * standing open on the very table it names.
+ *
+ * ⚠ A ROW WITH NO `origin` IS **NOT** PROOF OF A TENANT UPLOAD, AND THIS DOCSTRING SAID IT WAS.
+ * `schema.ts:1971`'s "ABSENT ⇒ user-supplied (every row that exists today)" was true when `origin`
+ * landed in Phase 18, because agent rows were then structurally never ingested. It stopped being
+ * true when three later writers began ingesting LLM prose with NO origin at all:
+ * `evaluations.ts:1150` (`persistNextStepMemo`, `text: plan.body`), `voice.ts:349` (`persistBrief`,
+ * markdown from `internal.llm.draftVoiceBrief`) and `onboarding.ts:492` (the profile document).
+ * Absence of an origin is now an ABSENCE OF EVIDENCE, so authorship is established POSITIVELY from
+ * `TENANT_AUTHORED_DOC_KINDS` below instead, and an unrecognised kind fails to the weaker class.
  *
  * EXPORTED because `@pikar/core` cannot see `schema.ts`. `knowledgeVaultDrive.test.ts` reads the
  * `origin` union off disk and fails if a value lands there without a decision here — the same
@@ -352,10 +361,55 @@ export const AGENT_AUTHORED_ORIGINS: readonly string[] = [
 ];
 
 /**
+ * THE ONLY `vaultDocuments.kind` VALUES THAT ESTABLISH THE TENANT AS THE AUTHOR. A CLOSED
+ * ALLOWLIST THAT FAILS TO THE WEAKER CLASS, not a denylist of the agent kinds.
+ *
+ * The direction is the whole point. `kind` is `v.string()` and `schema.ts` records that it "grows
+ * every phase", so a denylist is a list somebody has to remember to extend — and the cost of
+ * forgetting is a NEW agent writer's prose being cited as the owner's own word, which is the
+ * defect class this repo has now paid for three times. An allowlist that fails weak costs a
+ * DOWNGRADE when somebody forgets, and understating authority is the safe direction (the same
+ * argument `authorityFor` already makes for Drive's `ownedByMe`).
+ *
+ * These three are every retrievable kind a TENANT-SUPPLIED path writes today: `upload`
+ * (`vault.ts:265` direct upload and `vault.ts:1174` attachment), `brain_dump` (`vault.ts:186`, the
+ * user's own pasted or dictated words) and `document` (`smoke.ts:1196`, the seeded stand-in for an
+ * upload — listed so the seam keeps behaving exactly like the path it stands in for).
+ *
+ * ⚠ KNOWN IMPRECISION, STATED RATHER THAN HIDDEN. An unrecognised kind lands at
+ * `third_party_research` — "material the tenant did not author" — which is TRUE of an agent memo
+ * but is one rank stronger than `agent_authored`, the class that names the author. It is not
+ * `agent_authored` because that would be a different lie for `web_research` and for any future
+ * kind holding somebody else's material. The exact fix is not in this package: the three writers
+ * above should each store `origin: "agent"`, at which point they land at `agent_authored` through
+ * the origin rule and this allowlist goes back to being a backstop.
+ */
+export const TENANT_AUTHORED_DOC_KINDS: readonly string[] = ["upload", "brain_dump", "document"];
+
+/**
  * The fixed adapter mapping, plus the downgrades. The model supplies none of this.
  *
  * `docKind` is `vaultDocuments.kind` and `origin` is `vaultDocuments.origin` — both server facts
- * already carried on the row and already surfaced by `vaultGroundHydrated`'s `origins` array.
+ * already carried on the row and already surfaced by `vaultGroundHydrated`'s `kinds` / `origins`
+ * arrays.
+ *
+ * VAULT AUTHORSHIP IS ESTABLISHED POSITIVELY, FROM `docKind`. `tenant_owned` is now reachable only
+ * for a kind in `TENANT_AUTHORED_DOC_KINDS`; every other kind — including one this file has never
+ * heard of — is `third_party_research` or weaker. The old rule read the ABSENCE of an `origin` as
+ * proof of a tenant upload, and three landed writers ingest LLM prose with no origin, so the
+ * agent's own memos, voice briefs and onboarding profile were cited as the owner's own word.
+ *
+ * ⚠ ONE ASYMMETRY THIS CANNOT REACH, AND IT IS NOT AN OVERSIGHT. `vaultDrive.ts:1169`'s folder
+ * import stores a Drive file as `kind: "upload"`, `source: "google"`, with no origin — so a file a
+ * stranger shared into the tenant's Drive is `third_party_research` on the DRIVE plane (proven by
+ * `ownedByMe`) and `tenant_owned` once imported into the vault. The search plane cannot tell that
+ * row from a real upload: `vaultGroundHydrated` carries `kinds` and `origins` and NOT `source`,
+ * and dropping `"upload"` from the allowlist to close it would downgrade every genuine upload —
+ * a much larger untruth than the one it fixes. The defensible reading is that an import is a
+ * deliberate tenant act and `tenant_owned` means "in the tenant's own store" (authorship is what
+ * `AGENT_AUTHORED_ORIGINS` answers), but the two planes DO disagree about one document and
+ * `knowledgeVaultDrive.test.ts` pins that disagreement so it cannot drift unnoticed. The fix is a
+ * distinguishable `kind` (or a `source`) at the import site, which is `vaultDrive.ts`'s to make.
  *
  * `ownedByMe` is Drive's own `files.get` field, and its DEFAULT IS A DOWNGRADE. Drive search runs
  * with `includeItemsFromAllDrives`, so a file a stranger shared into the tenant's Drive matches;
@@ -380,7 +434,10 @@ export function authorityFor(
   },
 ): AuthorityClass {
   const candidates: AuthorityClass[] = [SOURCE_AUTHORITY[source]];
-  if (source === "vault" && meta.docKind === "web_research")
+  // Subsumes the old `docKind === "web_research"` special case: `web_research` is not in the
+  // allowlist, so a stored web page is still third-party research wherever it is stored — and so
+  // is every OTHER kind nobody has decided about, which is what the special case could not do.
+  if (source === "vault" && !TENANT_AUTHORED_DOC_KINDS.includes(meta.docKind ?? ""))
     candidates.push("third_party_research");
   if (meta.origin !== undefined && AGENT_AUTHORED_ORIGINS.includes(meta.origin))
     candidates.push("agent_authored");

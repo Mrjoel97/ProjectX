@@ -124,12 +124,18 @@ export const searchVaultKnowledge = internalAction({
         sourceRef: docId,
         label: titles[i] ?? "",
         text,
-        // From the row's own facts, never from the model: a `web_research` document is third-party
-        // research wherever it is stored, and ANY row carrying an `origin` is the agent's own word
-        // — including a `folder_digest`, which is `vaultDigest.ts`'s MODEL-WRITTEN summary and is
-        // retrievable because that insert calls `startIngest`. `authorityFor` only downgraded
-        // `agent_promoted`, so up to 1,500 characters of the model's own prose were cited at
-        // `tenant_owned` while the comment on this very line claimed the opposite.
+        // From the row's own facts, never from the model. ANY row carrying an `origin` is the
+        // agent's own word — including a `folder_digest`, which is `vaultDigest.ts`'s MODEL-WRITTEN
+        // summary and is retrievable because that insert calls `startIngest`.
+        //
+        // ⚠ AND THE ABSENCE OF AN `origin` PROVES NOTHING. `authorityFor` used to read it as proof
+        // of a tenant upload, but `evaluations.ts:1150` (`persistNextStepMemo`), `voice.ts:349`
+        // (`persistBrief`) and `onboarding.ts:492` all ingest LLM prose with no origin at all, so
+        // the agent's memo, brief and profile were cited at `tenant_owned` — the strongest class,
+        // the owner's own word. Authorship is now established POSITIVELY from `docKind` against
+        // `TENANT_AUTHORED_DOC_KINDS`, and an unrecognised kind fails to the weaker class. The
+        // real fix is an explicit `origin: "agent"` at those three write sites, which are three
+        // other modules' to change.
         authority: authorityFor("vault", { docKind: kinds[i], origin: origins[i] }),
         ...(typeof updated === "number" ? { sourceUpdatedAt: updated } : {}),
         retrievedAt: now,

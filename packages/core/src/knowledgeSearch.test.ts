@@ -30,6 +30,7 @@ import {
   SEARCH_CAPS,
   searchConfidence,
   settleRead,
+  TENANT_AUTHORED_DOC_KINDS,
   unavailableRead,
   validateSourceRef,
   validateSynthesis,
@@ -170,6 +171,27 @@ describe("the source registry is closed and code-owned", () => {
 // ── Caps ───────────────────────────────────────────────────────────────────────────────────
 
 describe("caps are owned by this repo, not by a provider cursor or a model", () => {
+  test("EVERY CAP VALUE IS PINNED TO A LITERAL — a raised bound is a decision, not a drift", () => {
+    // Trap (b). Every OTHER assertion over a cap reads `SEARCH_CAPS.x`, so the oracle moves with
+    // the subject and the NUMBER can be raised silently: `maxClaims` 12 -> 40 and `excerptCharCap`
+    // 300 -> 3000 each left `@pikar/core` (115) and the four backend knowledge suites (201) green.
+    // A whole-object equality also fails when a NEW cap lands with no literal behind it, which a
+    // per-key list would not.
+    expect({ ...SEARCH_CAPS }).toEqual({
+      maxSources: 5,
+      maxQueriesPerSource: 1,
+      queryCharCap: 200,
+      maxEvidencePerSource: 8,
+      maxEvidenceTotal: 24,
+      evidenceTextCharCap: 1500,
+      totalEvidenceCharCap: 8000,
+      excerptCharCap: 300,
+      maxClaims: 12,
+      labelCharCap: 200,
+      refCharCap: 128,
+    });
+  });
+
   test("every cap is a positive finite number", () => {
     for (const [k, v] of Object.entries(SEARCH_CAPS)) {
       expect(typeof v, k).toBe("number");
@@ -425,7 +447,7 @@ describe("authority is a fixed mapping, never a model output", () => {
   });
 
   test("each source maps to its adapter's class", () => {
-    expect(authorityFor("vault", {})).toBe("tenant_owned");
+    expect(authorityFor("vault", { docKind: "upload" })).toBe("tenant_owned");
     // Drive's base class is `tenant_owned`, but it is only REACHED with proven ownership — see
     // the shared-file test below. `{}` is the unproven case and it is a downgrade.
     expect(authorityFor("drive", { ownedByMe: true })).toBe("tenant_owned");
@@ -439,17 +461,45 @@ describe("authority is a fixed mapping, never a model output", () => {
   });
 
   test("an AGENT-PROMOTED vault doc never reads as the owner's own word (26-11 origins)", () => {
-    expect(authorityFor("vault", { origin: "agent_promoted" })).toBe("agent_authored");
+    expect(authorityFor("vault", { origin: "agent_promoted", docKind: "upload" })).toBe(
+      "agent_authored",
+    );
   });
 
   test("EVERY vault origin is agent-written, including the model-written FOLDER DIGEST", () => {
     // `folder_digest` is `vaultDigest.ts`'s own LLM output and it is retrievable (that insert calls
     // `startIngest`), so it was being cited at `tenant_owned` — the strongest class — while the
-    // adapter's comment claimed the opposite. A row with NO origin is the tenant's upload.
-    expect(authorityFor("vault", { origin: "folder_digest" })).toBe("agent_authored");
-    expect(authorityFor("vault", { origin: "agent" })).toBe("agent_authored");
+    // adapter's comment claimed the opposite.
+    expect(authorityFor("vault", { origin: "folder_digest", docKind: "upload" })).toBe(
+      "agent_authored",
+    );
+    expect(authorityFor("vault", { origin: "agent", docKind: "upload" })).toBe("agent_authored");
     expect([...AGENT_AUTHORED_ORIGINS]).toEqual(["agent", "agent_promoted", "folder_digest"]);
-    expect(authorityFor("vault", {})).toBe("tenant_owned");
+  });
+
+  test("A ROW WITH NO ORIGIN IS NOT PROOF OF A TENANT UPLOAD — authorship is established, not assumed", () => {
+    // The docstring on `AGENT_AUTHORED_ORIGINS` used to assert "a row with NO origin is a tenant
+    // upload", and `authorityFor` decided the STRONGEST class from that absence alone. Three
+    // landed writers ingest LLM prose with no `origin` at all — `evaluations.ts:1150`
+    // (`persistNextStepMemo`), `voice.ts:349` (`persistBrief`) and `onboarding.ts:492` — so the
+    // agent's own memo, brief and profile were each cited as the owner's own word. These are their
+    // EXACT stored `kind` values; `knowledgeVaultDrive.test.ts` drives the same three through the
+    // real adapter.
+    for (const docKind of ["next_step_memo", "brief", "business_profile"]) {
+      expect(authorityFor("vault", { docKind }), docKind).not.toBe("tenant_owned");
+    }
+    // And a kind nobody has decided about — the case a denylist could never cover — fails WEAK
+    // rather than strong. MUTATION: swap `!TENANT_AUTHORED_DOC_KINDS.includes(...)` back to
+    // `docKind === "web_research"` and every line in this test is RED.
+    expect(authorityFor("vault", { docKind: "a_kind_invented_in_phase_31" })).toBe(
+      "third_party_research",
+    );
+    expect(authorityFor("vault", {})).toBe("third_party_research");
+    // The allowlist is CLOSED and its members are the ones that keep the strongest class.
+    expect([...TENANT_AUTHORED_DOC_KINDS]).toEqual(["upload", "brain_dump", "document"]);
+    for (const docKind of TENANT_AUTHORED_DOC_KINDS) {
+      expect(authorityFor("vault", { docKind }), docKind).toBe("tenant_owned");
+    }
   });
 
   test("A DRIVE FILE SOMEBODY ELSE OWNS IS NOT THE TENANT'S OWN DOCUMENT", () => {
@@ -460,7 +510,7 @@ describe("authority is a fixed mapping, never a model output", () => {
     expect(authorityFor("drive", {})).toBe("third_party_research");
     expect(authorityFor("drive", { ownedByMe: true })).toBe("tenant_owned");
     // The downgrade is DRIVE-scoped: it must not silently weaken a vault or CRM row.
-    expect(authorityFor("vault", { ownedByMe: false })).toBe("tenant_owned");
+    expect(authorityFor("vault", { docKind: "upload", ownedByMe: false })).toBe("tenant_owned");
   });
 
   test("THE CONNECTOR LAYER'S OWN AUTHORITY IS HONOURED, and it can only ever downgrade", () => {
