@@ -167,17 +167,30 @@ describe("document-classifier gating (15.3-08)", () => {
   });
 });
 
-// Phase 29 (KNOW-01). The OPPOSITE direction from the four blocks above, and deliberately so: the
-// planner's containment is behavioural in exactly the half `clampSearchPlan` cannot see, and the
-// synthesizer ingests untrusted third-party content from several planes at once — the
-// `inbox-digest` criterion. See the reachability warning on each constant in `../skill.ts`: this
-// gate is clearable only once plan 29-06 lands a golden fixture that drives a knowledge search.
-describe("knowledge planner/synthesizer gating (29-04)", () => {
+// Phase 29 (KNOW-01), REVERSED by the wave-2 remediation (2026-08-28). 29-04 gated these two and
+// added the assertion below in its `true` form, into THIS file, directly under four blocks
+// recording the opposite decision on the same mechanism. Both halves of that were wrong:
+//
+//  1. THE DEADLOCK the four blocks above describe applies here word for word. `run-eval-golden.mjs`
+//     derives `SKILL_NAMES` from `GATED_SKILLS` and drives `llm:runCockpitAgent`, which cannot
+//     reach a TOOLLESS knowledge call, so a gated body is stranded at v1 on its first edit.
+//
+//  2. WORSE, THE GATE WAS FALSELY CLEARABLE. `shouldRecordEvidence` is `allGreen && casesTotal > 0
+//     && filters.length === 0` — it never checks that the pinned skill was EXERCISED — and gating
+//     is what made `--skill knowledge-synthesizer@N` a valid pin in the first place. An ordinary
+//     green cockpit run would therefore have written a `pass: true` evidence row certifying a body
+//     it never loaded. A gate that manufactures a certificate is worse than no gate at all.
+//
+// The protection these two need is a HELD-OUT corpus that drives a knowledge search (29-06/29-07),
+// not membership in a list. `skills.test.ts` carries the forward tripwire that fails the moment the
+// runner CAN drive one, so the re-gate cannot be forgotten. A future "tidy up the gate list" edit
+// must fail HERE, not in production.
+describe("knowledge planner/synthesizer gating (29-04, reversed 2026-08-28)", () => {
   test.each([
     KNOWLEDGE_QUERY_PLANNER_SKILL,
     KNOWLEDGE_SYNTHESIZER_SKILL,
-  ])("%s is GATED — a candidate body may only activate on recorded eval evidence", (name) => {
-    expect(isGatedSkill(name)).toBe(true);
+  ])("%s is DELIBERATELY UNGATED — a gate that cannot be honestly cleared is not protection", (name) => {
+    expect(isGatedSkill(name)).toBe(false);
   });
 });
 

@@ -1,5 +1,38 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION — THE TWO KNOWLEDGE BODIES ARE UNGATED, AND
+> THE GATE THEY WERE IN IS FALSELY CLEARABLE.** This REVERSES 29-04.
+>
+> **THE DECISION.** `knowledge-query-planner` and `knowledge-synthesizer` are OUT of
+> `GATED_SKILLS`. 29-04 put them in, in the same test file that already recorded four
+> DELIBERATELY-UNGATED decisions on the identical mechanism (`business-blueprint` 17.1-02,
+> `media-director` 20-03, `folder-digest` 15.3-06, `document-classifier` 15.3-08).
+>
+> **REASON 1 — the deadlock.** `run-eval-golden.mjs` derives `SKILL_NAMES` from
+> `GATED_SKILLS` and drives `llm:runCockpitAgent`. It cannot reach a TOOLLESS knowledge call,
+> so a gated body is stranded at v1 the moment somebody edits it, with no runner able to clear
+> the gate. That is the same argument the four precedents make.
+>
+> **REASON 2 — and this one is worse than a deadlock: THE GATE WAS FALSELY CLEARABLE.**
+> `shouldRecordEvidence` is `allGreen && casesTotal > 0 && filters.length === 0`. It never
+> checks that the PINNED SKILL WAS EXERCISED — and gating is precisely what makes a name a
+> valid `--skill` pin. So an ordinary green cockpit run, pinning a body the run never loaded,
+> would have written a `pass: true` evidence row for it. That is a certificate manufactured
+> for work that did not happen — this repo's named provenance-laundering shape — and a gate
+> that produces one is strictly worse than no gate, because the ROW is what the next reader
+> believes. The hazard is now written on `shouldRecordEvidence` itself; it is harmless for
+> every name still in the list, because all of them ARE driven by the cockpit path.
+>
+> **WHAT THESE TWO ACTUALLY NEED** is a held-out eval corpus that drives a knowledge search
+> (29-06/29-07), not membership in a list. Until it exists, saying so plainly is the honest
+> position; leaving a gate that looks like protection and is not, is the dishonest one.
+>
+> **RE-GATE IS AN OBLIGATION, NOT A HOPE.** `skills.test.ts` reads `run-eval-golden.mjs` off
+> disk and FAILS the moment it names a knowledge verb while these two are ungated, naming what
+> to do. `pnpm vitest run skills.test` in `packages/backend` and `pnpm vitest run skillBodies`
+> in `packages/contracts`. Mutations that MUST go red: put either name back into
+> `GATED_SKILLS`; add a knowledge verb to the runner.)
+
 > Last verified: 2026-08-28 against **plan 29-04** (KNOW-01). Two new registry rows —
 > `knowledge-query-planner` and `knowledge-synthesizer`, seeded LAST in `SEEDS`, both **GATED**.
 > Three things a reader needs from this bump:

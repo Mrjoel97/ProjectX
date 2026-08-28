@@ -1234,6 +1234,24 @@ function configuredDeployment() {
  * An over-cap or governed stop never reaches here at all: `abortEnv` exits(2) from inside the case
  * loop. `--self-check` asserts that ORDERING against the source, because a rule that is only true
  * because of where it sits is a rule one refactor away from being false.
+ *
+ * ⚠ WHAT THIS RULE DOES NOT CHECK, AND IT IS A REAL HAZARD (recorded 2026-08-28, wave-2
+ * remediation, NOT fixed here). It never asks whether the PINNED SKILL WAS ACTUALLY EXERCISED by
+ * the run. `SKILL_NAMES` is derived from `GATED_SKILLS`, so every gated name is a valid `--skill`
+ * pin — including one this runner structurally cannot reach, because it drives
+ * `llm:runCockpitAgent` and nothing else. For such a skill a green, unfiltered, non-empty run
+ * writes a `pass: true` evidence row certifying a body it never loaded: a certificate
+ * manufactured for work that did not happen, which is exactly the provenance-laundering shape
+ * this repo has paid for before.
+ *
+ * It is harmless for every name currently in `GATED_SKILLS` — all of them ARE driven by the
+ * cockpit path, and `filters.length === 0` forces the full suite — and it is why two Phase-29
+ * bodies were REMOVED from that list rather than left behind a gate that looks like protection.
+ * See their constants in `@pikar/contracts/skill`.
+ *
+ * THE FIX, when a skill the cockpit path cannot reach genuinely needs gating: attribute per case
+ * which skills were loaded, and record evidence for a pin only if that pin appears. That is real
+ * plumbing and it needs a paid run to verify, so it is written down here rather than guessed at.
  */
 function shouldRecordEvidence({ allGreen, casesTotal, filters }) {
   return allGreen === true && casesTotal > 0 && filters.length === 0;

@@ -211,23 +211,40 @@ export const DOCUMENT_CLASSIFIER_SKILL = "document-classifier" as const;
  * Registry name of the knowledge QUERY PLANNER (Phase 29, KNOW-01) — the toolless call that turns
  * one business question into `{source, query}` pairs over a CODE-SUPPLIED source list.
  *
- * GATED. The body's whole value is behavioural — does it stay inside the supplied source list,
- * does it write a search phrase rather than a provider operator or a URL, does it decline to name
- * a source it has no reason to search — which is exactly what an eval corpus can assert and what
- * code cannot. The code half is already closed (`clampSearchPlan` re-checks the enum, the length,
- * the duplicate rule and the remote-address ban, and the JSON schema's `source` enum is built from
- * `KNOWLEDGE_SOURCES`), so gating buys the half code cannot reach, and nothing else.
+ * DELIBERATELY UNGATED — do NOT add to GATED_SKILLS (wave-2 remediation, 2026-08-28). This
+ * REVERSES 29-04, which gated both knowledge bodies, and the reversal is the honest answer rather
+ * than the comfortable one.
  *
- * ⚠ REACHABILITY, STATED PLAINLY BECAUSE THE DEADLOCK IS REAL (29-04). `seedSkills` lands a NEW
- * name at v1 `active` through its `rows.length === 0` branch, so nothing is blocked today. The
- * FIRST BODY EDIT mints a candidate that `activateSkill`'s EVAL_GATE will refuse until a green
- * `pnpm eval:golden --skill knowledge-query-planner@N` run records evidence — and that run drives
- * `llm:runCockpitAgent`, so it can only reach this call once plan 29-06 lands the cockpit-side
- * knowledge tool AND threads `skillVersions` down to `knowledgeLlm`. Half of that is done here:
- * both `knowledgeLlm` actions take a `skillVersion` pin and load the EXACT version when given one
- * (`knowledgeLlm.test.ts` proves the pinned body is what reaches the call). The other half —
- * a golden fixture that drives a knowledge search — is 29-06's, and is recorded in
- * `docs/playbooks/knowledge-search-routines.md`. Do NOT edit either body before it lands.
+ * THE CASE FOR GATING IS REAL AND IS NOT DISPUTED. The body's whole value is behavioural — does it
+ * stay inside the supplied source list, does it write a search phrase rather than a provider
+ * operator, does it decline to name a source it has no reason to search — which is what an eval
+ * corpus can assert and code cannot.
+ *
+ * IT IS UNGATED ANYWAY, FOR TWO REASONS, AND THE SECOND IS WHY IT IS NOT MERELY A DEADLOCK.
+ *
+ *  1. THE DEADLOCK, which four recorded precedents already answered the same way:
+ *     `business-blueprint` (17.1-02), `media-director` (20-03), `folder-digest` (15.3-06) and
+ *     `document-classifier` (15.3-08) are all UNGATED because `run-eval-golden.mjs` derives its
+ *     `--skill` list from `GATED_SKILLS` and drives `llm:runCockpitAgent`, which structurally
+ *     cannot reach their call. It cannot reach a TOOLLESS knowledge call either. Gating strands
+ *     the body at v1 on its first edit with no runner able to clear the gate.
+ *
+ *  2. THE GATE IS FALSELY CLEARABLE, WHICH IS WORSE THAN NO GATE. `run-eval-golden.mjs` records
+ *     passing evidence for ANY `--skill` pin whenever the run is green, non-empty and unfiltered
+ *     (`shouldRecordEvidence`) — it never checks that the pinned body was EXERCISED. Because
+ *     `SKILL_NAMES` is derived from `GATED_SKILLS`, gating made
+ *     `--skill knowledge-query-planner@N` a VALID pin, so an ordinary green cockpit run would
+ *     write a `pass: true` evidence row certifying a body it never loaded. That is this repo's
+ *     named provenance-laundering shape: a certificate manufactured for work that did not happen.
+ *     A gate that produces a false certificate is strictly worse than an absent one, because the
+ *     row is what the next reader believes.
+ *
+ * RE-GATE WHEN, AND NOT BEFORE: plan 29-06 lands a golden fixture that actually drives a knowledge
+ * search (the `skillVersion` pin half is already done — both `knowledgeLlm` actions load the EXACT
+ * version when given one, and `knowledgeLlm.test.ts` proves the pinned body is what reaches the
+ * call). `skills.test.ts` carries the forward tripwire: it FAILS the moment `run-eval-golden.mjs`
+ * names a knowledge verb while these two are still ungated, so the re-gate cannot be forgotten.
+ * Recorded in `docs/playbooks/skill-registry.md`.
  */
 export const KNOWLEDGE_QUERY_PLANNER_SKILL = "knowledge-query-planner" as const;
 
@@ -235,17 +252,23 @@ export const KNOWLEDGE_QUERY_PLANNER_SKILL = "knowledge-query-planner" as const;
  * Registry name of the knowledge SYNTHESIZER (Phase 29, KNOW-01) — the toolless call that answers
  * one question from fenced evidence blocks and cites the block ids it used.
  *
- * GATED, and this is the strongest gating case since `inbox-digest`: its input is untrusted
- * third-party content from several planes at once (mail bodies, Drive documents, CRM records), and
- * its output is prose a person reads as their own business's answer. The four rules that matter
- * most ARE code — `validateSynthesis` deletes an invented id, verifies an excerpt against the
- * blocks THAT CLAIM cited, keeps conflicts and attaches authority/freshness from the table — but
- * "did it obey an instruction embedded in a customer's email", "did it flatten a $40/$60
- * disagreement into one confident number" and "did it answer from memory when the blocks say
- * nothing" are behavioural and only an eval corpus can assert them.
+ * DELIBERATELY UNGATED — do NOT add to GATED_SKILLS (wave-2 remediation, 2026-08-28), and this is
+ * the one it hurts to say. On the merits this is the strongest gating case since `inbox-digest`:
+ * its input is untrusted third-party content from several planes at once (mail bodies, Drive
+ * documents, CRM records) and its output is prose a person reads as their own business's answer.
+ * The four rules that matter most ARE code — `validateSynthesis` deletes an invented id, verifies
+ * an excerpt against the blocks THAT CLAIM cited, keeps conflicts, and attaches authority and
+ * freshness from the table — but "did it obey an instruction embedded in a customer's email",
+ * "did it flatten a $40/$60 disagreement into one confident number" and "did it answer from memory
+ * when the blocks say nothing" are behavioural, and only an eval corpus can assert them.
  *
- * Same reachability caveat as `KNOWLEDGE_QUERY_PLANNER_SKILL` above — read it before editing this
- * body.
+ * IT IS UNGATED FOR THE SAME TWO REASONS AS `KNOWLEDGE_QUERY_PLANNER_SKILL` — read them there. The
+ * short version: the golden runner cannot drive a toolless knowledge call, so the gate deadlocks
+ * the body at v1, AND it is falsely clearable, so an ordinary green cockpit run would record
+ * `pass: true` evidence for a body it never loaded. A gate that manufactures a certificate is
+ * worse than no gate. **The protection this skill actually needs is a HELD-OUT eval corpus that
+ * drives a knowledge search, not a list membership** — that is 29-06/29-07's, and this constant
+ * stays out of `GATED_SKILLS` until it exists.
  */
 export const KNOWLEDGE_SYNTHESIZER_SKILL = "knowledge-synthesizer" as const;
 
@@ -308,13 +331,12 @@ export const GATED_SKILLS: readonly string[] = [
   // what an eval corpus can assert and code cannot. Bootstrap v1 still activates ungated via
   // seedSkills' `rows.length === 0` path, so the gate costs nothing until the first edit.
   RESEARCH_SPECIALIST_SKILL,
-  // Phase 29 (KNOW-01): the two toolless knowledge calls. The synthesizer is the second-strongest
-  // case in this list after `inbox-digest` — untrusted third-party content from several planes at
-  // once — and the planner's containment is behavioural in exactly the half `clampSearchPlan`
-  // cannot see. Both land at v1 `active` through seedSkills' `rows.length === 0` branch, so the
-  // gate costs nothing until the first body edit; see the reachability warning on each constant.
-  KNOWLEDGE_QUERY_PLANNER_SKILL,
-  KNOWLEDGE_SYNTHESIZER_SKILL,
+  // DELIBERATELY ABSENT (wave-2 remediation, 2026-08-28): `knowledge-query-planner` and
+  // `knowledge-synthesizer`. 29-04 added them here; this REVERSES that. The golden runner cannot
+  // drive a toolless knowledge call (four precedents already answered that the same way), AND
+  // `shouldRecordEvidence` certifies any `--skill` pin on a green unfiltered run without ever
+  // checking that the pinned body ran — so membership here made a FALSE certificate reachable,
+  // which is worse than no gate. Full reasoning and the re-gate condition are on each constant.
 ];
 
 /** Whether activation of a candidate version of this skill requires eval evidence. */

@@ -873,6 +873,64 @@ describe("activateCandidate + candidatesForReview — ops panel (IMPR-02/03)", (
   });
 });
 
+describe("the knowledge bodies stay ungated only while the runner cannot certify them", () => {
+  // THE FORWARD TRIPWIRE FOR A DELIBERATE, TEMPORARY DECISION (wave-2 remediation, 2026-08-28).
+  //
+  // `knowledge-query-planner` and `knowledge-synthesizer` were removed from `GATED_SKILLS` for two
+  // reasons, both recorded on the constants in `@pikar/contracts/skill`: `run-eval-golden.mjs`
+  // drives `llm:runCockpitAgent` and structurally cannot reach a TOOLLESS knowledge call (the
+  // `business-blueprint` / `media-director` / `folder-digest` / `document-classifier` deadlock),
+  // and — worse — `shouldRecordEvidence` certifies ANY `--skill` pin on a green unfiltered run
+  // without checking that the pinned body was exercised, so gating made a FALSE `pass: true`
+  // certificate reachable for a body no run ever loaded.
+  //
+  // The second reason is a property of the runner, and it will stop being true. This test is what
+  // makes the re-gate an obligation rather than a hope: the moment the golden runner learns to
+  // drive a knowledge search, it goes RED and says so. A comment could not do that.
+  const runner = readFileSync(
+    fileURLToPath(new URL("../scripts/run-eval-golden.mjs", import.meta.url)),
+    "utf8",
+  );
+
+  test("the runner was really read — positive control", () => {
+    expect(runner).toContain("shouldRecordEvidence");
+    expect(runner).toContain("llm:runCockpitAgent");
+  });
+
+  test("EVIDENCE IS STILL RECORDED WITHOUT CHECKING THE PIN RAN — the reason for the ungating", () => {
+    // If this stops being true, the false-clearability half of the decision is gone and the
+    // deadlock half should be re-read on its own merits.
+    expect(runner).toContain(
+      "return allGreen === true && casesTotal > 0 && filters.length === 0;",
+    );
+  });
+
+  test("RE-GATE THESE TWO the moment the runner can drive a knowledge search", () => {
+    // A knowledge verb appearing in the runner means 29-06/29-07 landed the fixture that makes the
+    // gate honestly clearable. When this fails: put both names back into `GATED_SKILLS`, flip
+    // `skillBodies.test.ts`'s block back to `true`, and delete this test.
+    for (const verb of [
+      "planKnowledgeSearch",
+      "synthesizeKnowledge",
+      "knowledgeLlm",
+      "knowledge-query-planner",
+      "knowledge-synthesizer",
+    ]) {
+      expect(
+        runner.includes(verb),
+        `run-eval-golden.mjs now names \`${verb}\`. If it can drive a knowledge search, the ` +
+          `ungating of knowledge-query-planner / knowledge-synthesizer has expired — re-gate them.`,
+      ).toBe(false);
+    }
+    // …and until then, neither is gated. Asserted HERE as well as in the contracts package,
+    // because this is the file that owns the condition the decision rests on.
+    expect(isGatedSkill("knowledge-query-planner")).toBe(false);
+    expect(isGatedSkill("knowledge-synthesizer")).toBe(false);
+    // Non-vacuity: the gate list is not empty, and a genuinely gated skill still reads gated.
+    expect(isGatedSkill("inbox-digest")).toBe(true);
+  });
+});
+
 describe("no hardcoded agent prompts in convex/", () => {
   test.each([
     ["executive-agent.classifier.md", executiveAgentClassifierSkillBody],
