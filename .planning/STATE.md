@@ -3,9 +3,57 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 8 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail) -- 28 IN PROGRESS
+current_plan: 9 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail, 28-06 read-only QuickBooks rail) -- 28 IN PROGRESS
 status: executing
-stopped_at: "28-05 SEALED (`ccb0281` rail, `362dee8` smoke+docs, `0dca7bd` env manifest), on top of 28-26's `1bb8b3b`/`40047f3`.
+stopped_at: "28-06 SEALED (`e19af8b` normalizer, `d18a70e` OAuth, `e842993` reads, `3905c23` gate+docs).
+**THE ACCOUNTING RAIL EXISTS AND IT HAS NEVER SPOKEN TO INTUIT.**
+`node scripts/check-provider-lane.mjs --provider quickbooks` reads `consistent` -- decision,
+evidence life, absence, adapter, read-only, allow-list and parity all OK, open condition `PEND`.
+CONSISTENT IS NOT PASSED. 163 tests added (73 revenue + 90 backend), every one offline at $0.
+**TASK 3 COULD NOT RUN: THERE IS NO INTUIT CREDENTIAL IN THIS DEPLOYMENT.** The owner's 2026-08-27
+attestation that Pikar holds Intuit production credentials is TESTIMONY, not a grant -- `.env` holds
+OPENAI/UNSUBSCRIBE/FOGLAMP/OPENROUTER only. So the plan built the gate instead of faking one:
+`scripts/smoke-quickbooks-read.mjs --self-test` assembles a stub through the SAME builder a live run
+uses, fires all 22 validator guards, and PRINTS IN ITS OWN OUTPUT \"THIS IS NOT A LIVE PASS\"; the stub
+is stamped `mode: self-test` and `--verify-evidence` prints \"THIS FILE IS A STUB, NOT A LIVE PASS\";
+a bare run exits 2 with `LIVE_EVIDENCE_NOT_PRODUCED`. The validator refuses any file claiming the
+open condition resolved AND any file asserting an App Partner Program tier -- Builder's 500,000
+CorePlus calls/workspace/month is a ceiling for ONE tier, not this app's entitlement, and the tier
+is still unknown. `partner-tier-and-poll-budget` STAYS UNCLEARED; the lane row stays `parked`;
+REVN-02/REVN-05 STAY PENDING; 28-23 owns the seal.
+**BEFORE A LIVE RUN the owner must `npx convex env set` (from packages/backend):**
+`QUICKBOOKS_CLIENT_ID`, `QUICKBOOKS_CLIENT_SECRET`, `QUICKBOOKS_REDIRECT_URI` (must match the
+registered Intuit URI EXACTLY or the exchange is refused before the browser moves), optional
+`QUICKBOOKS_HOME_CURRENCY` (unset MISLABELS a non-USD company's money as USD rather than failing),
+and `CONNECTOR_CREDENTIAL_KEY_V1`. A live run ALSO needs the `/quickbooks/callback` route, which does
+not exist -- `handleCallback` is an `internalAction` with NO caller (28-09).
+**THERE IS NO READ-ONLY ACCOUNTING SCOPE, so the compile-time allow-list is the ONLY write boundary.**
+`com.intuit.quickbooks.accounting` grants the whole Accounting API including writes; what holds it is
+NO request-method parameter, NO path parameter and NO entity create/update export -- a caller names an
+entity from a CLOSED UNION of four and the path is built from a pinned template plus the realm read
+out of the CIPHERTEXT. Enforced twice: the lane checker AND a mirrored source scan in the test file.
+**REFRESH: lease + revision fence + exactly ONE attempt on every failure class.** Intuit revokes the
+whole grant when two refreshes race the rolling refresh token, so a retry does not degrade the
+connection, it KILLS it. Lease, fence and one-attempt each observed refusing ALONE.
+**A DEFECT FOUND AND FIXED IN-PLAN -- THE GATE WAS CIRCULAR.** The prior session checked
+`providerGates` inside the SHARED read, but a lane only becomes `passed` once a live read and revoke
+are observed THROUGH that read, so the only way to ever seal QuickBooks would have been to seal it
+FIRST and verify after -- publishing it into `availableProviders` for every tenant on evidence nobody
+has. The gate moved to the three TENANT actions (`gatedRead`); the new internal
+`quickbooksReadEvidence` keeps the same allow-list, caps and GET-only transport and skips ONLY the
+lane check. Two tests read the SAME unsealed state through each door and require OPPOSITE answers.
+28-05 had already reached this conclusion for HubSpot -- read the sibling lane before re-deciding.
+**A SECOND DEFECT: `convex/env.test.ts` WAS RED on four unclassified `QUICKBOOKS_*` names.** The
+filtered Task-1/2 runs never loaded that file, so the prior session's green was green OVER A RED ONE.
+This is 28-05's `0dca7bd` recurring one plan later: a new `process.env.X` literal needs an
+`ENV_MANIFEST` row in the same commit, and a filtered vitest run cannot tell you.
+Two non-deletion (RENAME) mutations observed RED then restored: gate literal `passed`->`parked` killed
+12 of 90 tests; validator `resolved !== false`->`!== null` failed the self-test.
+`tsc --noEmit` run SEPARATELY per package, both exit 0. Backend 2809/2809 (106 files; the 1 reported
+error is the PRE-EXISTING worker-teardown `process is not defined`), revenue 226/226,
+`check-playbooks` exit 0, `check-phase28-readiness` exit 0.
+NEXT: 28-07 (Stripe) / 28-08 (PayPal) are the remaining wave-6 rails."
+previous_stopped_at: "28-05 SEALED (`ccb0281` rail, `362dee8` smoke+docs, `0dca7bd` env manifest), on top of 28-26's `1bb8b3b`/`40047f3`.
 **THE FIRST PROVIDER RAIL EXISTS AND IT HAS NEVER SPOKEN TO HUBSPOT.**
 `node scripts/check-provider-lane.mjs --provider hubspot` reads `consistent` -- decision, evidence
 life, absence, adapter, read-only, allow-list and parity all OK, open condition `PEND`. CONSISTENT
@@ -66,76 +114,12 @@ before and after. Note 28-07 starts with `PROVIDER_READ_PATHS.stripe = []` by de
 module over an empty allow-list is a RED row, so the paths and the module must land together. Do NOT
 run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working
 branch feat/27-02-pack-contracts."
-previous_stopped_at: "28-26 SEALED (`1bb8b3b`, `40047f3`), on top of 28-04's `48f5ef0` and 28-03's `82d14a6`.
-**PROVIDER AVAILABILITY IS NOW ONE SERVER-OWNED ANSWER, AND THE TWO AXES ARE HELD APART BY CODE.**
-`admission` (the owner's suitability DECISION -- permission to start) and `lane` (whether a
-controlled LIVE read/revoke was observed) are separate `providerGates` fields, and
-`resolveProviderEligibility` in `@pikar/revenue` is the ONLY place they are ever combined. Do not add
-a convenience boolean, do not let a UI derive availability from `admission`, and do not let any tool
-read the stored `lane` -- read the passed-only `availableProviders` projection (provider +
-environment and NOTHING else; a surface that could see `reviewBy` would start rendering
-`expiring soon` and treating an admission as a status).
-**FIVE RESOLVED STATES OVER THREE STORED ONES, and the two extra ones CANNOT be stored.** `pending`
-is the ABSENCE of a row (a row saying pending would be a row claiming a judgment exists -- which is
-also why there is no `undecided` schema literal), and `expired` is resolved against `now` (a stored
-freshness flag is true when written and false an hour later). A `failed` lane OUTRANKS expiry: a
-lane that broke is an incident, one that never ran is silence.
-**THE COMPOSITE RULE, all six, refusal names EVERY axis that refused:** row exists; lane passed;
-`reviewBy > now`; admission permits that environment (approved_beta reaches sandbox ONLY);
-`readPathCount > 0`; and every `PROVIDER_OPEN_CONDITIONS[provider]` id present in the row's
-`clearedConditions`. **`readPathCount` is passed IN, not imported** -- that is what keeps the pure
-rule Convex-free AND makes it impossible to contradict `PROVIDER_READ_PATHS.stripe = []`, so Stripe
-cannot be made available today whatever the owner approved.
-**`sealGate` VALIDATES A PASS BY RUNNING THE SAME RESOLVER THE READERS RUN.** One rule, one
-implementation -- a pass can never be recorded that a reader would then refuse. Parking is NEVER
-blocked (a lane discovered broken must always be switchable off) and `recordLaneFailure` carries NO
-CAS on purpose (refusing to record a failure on a stale revision would leave a known-broken lane
-readable) but it DOES bump `revision`, so an owner seal already in flight fails rather than
-resurrecting the lane.
-**THE FOUR OPEN ADMISSION CONDITIONS ARE NOW LOAD-BEARING, NOT PROSE.** hubspot
-`revoke-cascades-to-access-tokens` (28-22), quickbooks `partner-tier-and-poll-budget` (28-23),
-stripe `platform-initiated-revocation` (28-24), paypal `no-documented-revoke-endpoint` (28-25).
-28-22..25 CANNOT seal a passed lane without naming theirs with evidence. Ids are pinned by a
-WRITTEN-OUT LITERAL in `contracts.test.ts` and the provider/plan mapping is parity-tested against
-the register's own markdown table.
-**SCHEMA: TWO ADDITIVE FIELDS on a table that had never held a row** -- `lane` widened with `failed`,
-`clearedConditions` optional. 28-03 stays the connector-schema owner; this was flagged, not assumed.
-**`node scripts/check-provider-lane.mjs --all` IS EXIT 0 TODAY WITH 13 PENDING ROWS AND ZERO GREEN
-LANES -- CONSISTENT IS NOT PASSED.** Three statuses because `not built` and `wrong` are different
-facts; at `--stage final` a pending IS red. `--seal-decision from-owner` resolves an ADMITTED
-provider to **park, always** -- an admission is permission to start, never a passed lane, and
-turning one into the other here is the laundering the register exists to prevent.
-**MUTATION: 9 non-deletion mutations, ALL RED, ZERO SURVIVORS**, plus 11 CLI row mutations and 9 seal
-combinations. All three known blind spots addressed: renames are non-substring
-(`passed`->`parked`, `failed`->`broken`) and the builder-import scan compares the WHOLE imported set
-rather than banning substrings; the CAS and composite guards were disabled INDEPENDENTLY (M8 -> 1
-test, no composite; M5 -> 7 tests, no CAS); and because a constant the test imports moves with its
-own mutation, the condition ids are pinned to LITERALS and M9 mutates the SCHEMA literal instead.
-**`tsc --noEmit` RUN SEPARATELY in both packages, exit 0 -- it caught 41 real errors under a fully
-green 24-test suite** (`readonly string[]`, and 40 `Property providerGates does not exist` because
-`npx convex codegen` needs a running backend and timed out; the two `_generated/api.d.ts` lines were
-added by hand exactly as codegen emits them). Backend full run: **104/104 files, 2668/2668 tests
-pass**. The `Errors 1 error` (`ReferenceError: process is not defined`, worker teardown) is
-PRE-EXISTING and was attributed BY EXCLUSION -- re-running with `--exclude providerGates.test.ts`
-reproduces it identically (103 files, 2644 tests, same 1 error).
-**FOUND INSIDE THIS PLAN: the CLI condition row and the runtime resolver disagreed** -- the CLI
-ignored `--clear-condition` so a pass could never be sealed, while the resolver clears via the row.
-Two mechanisms for one rule, exactly the drift class this plan closes. Fixed, and a self-test case
-now proves the pass path is REACHABLE (a gate that refuses everything is broken, not safe).
-`requirements-completed: []` -- REVN-01/02/03/05 STAY PENDING. No adapter, no callback route, no
-connections UI, no live read; all four open conditions survive untouched.
-**NEXT: Wave 6 (28-05..08 provider rails).** Each rail still runs `check-phase28-readiness.mjs`
-FIRST, unpiped, and should now ALSO run `check-provider-lane.mjs --provider <slug>` before and after
--- the `absence`/`adapter`/`read-only`/`allow-list` rows are about the module it is adding, and the
-read-only scan (playbook invariant 1) is ARMED BUT HAS NEVER BITTEN: there is no lane module in the
-tree for it to scan, so wave 6 is its first real test. Do NOT run any `gsd-tools state *` subcommand
-against this file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
-last_updated: "2026-08-27T23:10:00.000Z"
+last_updated: "2026-08-28T00:20:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 35
   total_plans: 413
-  completed_plans: 323
+  completed_plans: 324
   percent: 78
 ---
 
