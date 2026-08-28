@@ -90,7 +90,13 @@ export type KnowledgeAdapter = {
 
 export const KNOWLEDGE_ADAPTERS: Readonly<Record<KnowledgeSource, KnowledgeAdapter | null>> = {
   vault: { module: "packages/backend/convex/vaultGround.ts", read: "vaultGroundHydrated" },
-  drive: { module: "packages/backend/convex/vaultDrive.ts", read: "findInDrive" },
+  // `findInDriveForTenant`, NOT `findInDrive`. The two are different exports of the same module:
+  // `findInDrive` is the identity-BEARING `tenantAction` the cockpit tool loop calls, and the
+  // toolless plane structurally cannot use it (it runs without a live identity). Naming the wrong
+  // one anchored the filesystem tripwire on a verb the search plane never calls — so deleting the
+  // real one would have broken Drive knowledge search with the "every landed source names a real
+  // export" scan still green, on the very artifact the `crm-facts` landedness argument rests on.
+  drive: { module: "packages/backend/convex/vaultDrive.ts", read: "findInDriveForTenant" },
   inbox: { module: "packages/backend/convex/gmail.ts", read: "knowledgeQuery" },
   "crm-facts": { module: "packages/backend/convex/hubspot.ts", read: "readHubSpotDataset" },
   "support-desk": null,

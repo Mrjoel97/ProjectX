@@ -440,6 +440,46 @@ describe("a landed claim in @pikar/core has a real module behind it", () => {
     expect(checked).toBe(4);
   });
 
+  test("THE NAMED VERB IS THE ONE THE TOOLLESS PLANE ACTUALLY CALLS", () => {
+    // The scan above only asks whether SOMETHING by that name is exported, and that was not
+    // enough: `drive` named `findInDrive` — the identity-BEARING `tenantAction` the cockpit tool
+    // loop uses — while the search plane calls `findInDriveForTenant`, the identity-less
+    // `internalAction`, which is the only one it structurally can call. Both names are exported,
+    // so the forward scan passed on the wrong verb, and deleting the RIGHT one would have broken
+    // Drive knowledge search with this registry — the artifact the whole `crm-facts` landedness
+    // argument rests on — still certifying a landed adapter.
+    const plane = [
+      String(rawSources["./knowledgeVaultDrive.ts"] ?? ""),
+      String(rawSources["./knowledgeExternalSources.ts"] ?? ""),
+    ].join("\n");
+    // POSITIVE CONTROL: the two adapter modules really were read.
+    expect(plane).toContain("searchDriveKnowledge");
+    expect(plane).toContain("readCrmKnowledge");
+
+    let checked = 0;
+    for (const source of KNOWLEDGE_SOURCES) {
+      const adapter = KNOWLEDGE_ADAPTERS[source];
+      if (adapter === null) continue;
+      const base = adapter.module.replace("packages/backend/convex/", "").replace(/\.ts$/, "");
+      // Two legal call shapes, and nothing else: a Convex reference (`internal.<module>.<verb>`)
+      // or a direct import of a plain function from that module (`hubspot.readHubSpotDataset`).
+      // `\b` is load-bearing — without it `vaultDrive.findInDrive` matches
+      // `vaultDrive.findInDriveForTenant` and the wrong verb passes again.
+      const referenced = new RegExp(`\\b${base}\\.${adapter.read}\\b`).test(plane);
+      const imported =
+        new RegExp(`\\b${adapter.read}\\b`).test(plane) &&
+        new RegExp(`from "\\./${base}"`).test(plane);
+      expect(
+        referenced || imported,
+        `${source}: KNOWLEDGE_ADAPTERS names ${base}.${adapter.read}, but no toolless adapter ` +
+          `calls it. The registry is only falsifiable if the verb it names is the verb the ` +
+          `search plane uses.`,
+      ).toBe(true);
+      checked += 1;
+    }
+    expect(checked).toBe(4);
+  });
+
   test("A NOT-LANDED SOURCE NAMES NO ADAPTER, and support-desk is the only one", () => {
     expect([...NOT_LANDED_SOURCES]).toEqual(["support-desk"]);
     for (const source of NOT_LANDED_SOURCES) {

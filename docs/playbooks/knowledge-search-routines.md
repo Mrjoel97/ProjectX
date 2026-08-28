@@ -38,7 +38,16 @@
 > `cd packages/core && pnpm vitest run knowledgeSearch`. Mutations that MUST go red: drop
 > `providerAuthority` from the `authorityFor` call; put the amount back in `dealText`; revert
 > `cap: true`; collapse `evidenceId` to a constant; delete the recency `.sort`; make a reader a
-> `tenantAction`. Deleting a `CRM_UNAVAILABLE_REASON` member must fail `pnpm typecheck`.)
+> `tenantAction`. Deleting a `CRM_UNAVAILABLE_REASON` member must fail `pnpm typecheck`.
+
+**(6) `KNOWLEDGE_ADAPTERS.drive` NAMED THE WRONG VERB.** It pointed at `findInDrive`, the
+identity-BEARING `tenantAction` the cockpit tool loop calls; the toolless plane calls
+`findInDriveForTenant`, the identity-less `internalAction`, which is the only one it can call.
+Both are exported, so the "every landed source exports the named verb" scan passed on the wrong
+one and deleting the RIGHT one would have broken Drive knowledge search with the registry still
+green — on the artifact the whole `crm-facts` landedness argument rests on. A second scan now
+proves the named verb is the one a toolless adapter actually calls, matching on a word boundary
+because `vaultDrive.findInDrive` is a prefix of `vaultDrive.findInDriveForTenant`.)
 
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — `authorityFor` gained two downgrades
 > and one exported registry.**
