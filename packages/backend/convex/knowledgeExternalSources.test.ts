@@ -395,6 +395,30 @@ describe("the inbox adapter is bounded, and honest about what it could not read"
     expect(JSON.stringify(b)).not.toContain("private renewal");
   });
 
+  test("inbox evidence ids are UNIQUE per row, and the order is Gmail's own recency", async () => {
+    // The SAME hole as the CRM arm, in the sibling adapter: collapsing the per-row index to a
+    // constant left every adapter test green, yet `validateSynthesis` builds
+    // `new Map(evidence.map((e) => [e.evidenceId, e]))`, so duplicate ids collapse to the LAST row
+    // and an excerpt is then verified against the wrong message. Order matters for the same reason
+    // it does in the CRM arm: only the first `KNOWLEDGE_BODY_CAP` messages are hydrated, so WHICH
+    // ones survive is a substantive property of the answer.
+    const t = convexTest(schema, modules);
+    await seedGmail(t, TENANT_A);
+    mockMailbox([mail(1), mail(2), mail(3)]);
+
+    const out = await t.action(internal.knowledgeExternalSources.readInboxKnowledge, {
+      tenantId: TENANT_A,
+      query: "renewal",
+    });
+
+    expect(out.evidence.map((e) => e.evidenceId)).toEqual(["inbox:0", "inbox:1", "inbox:2"]);
+    expect(new Set(out.evidence.map((e) => e.evidenceId)).size).toBe(out.evidence.length);
+    // Gmail lists newest-first and the adapter preserves that: the ids pair with the messages in
+    // the provider's own order, so a dropped ref cannot silently re-index the rest onto the wrong
+    // message either.
+    expect(out.evidence.map((e) => e.sourceRef)).toEqual(["msg1", "msg2", "msg3"]);
+  });
+
   test("AN INJECTED INSTRUCTION lands in evidence text and NOWHERE else", async () => {
     const t = convexTest(schema, modules);
     await seedGmail(t, TENANT_A);

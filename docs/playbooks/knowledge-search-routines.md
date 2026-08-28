@@ -54,7 +54,14 @@
 > Mutations that MUST go red: the `SEARCHABLE_SOURCES` filter to `() => true`; the prompt's
 > source-list line deleted; the inner `additionalProperties: false` dropped; the synthesizer's
 > spend block deleted; `runId` a constant; `fallbackPlan`'s `.slice` removed; the synthesizer's
-> catch rethrowing `error`; a key dropped from a hoisted `required[]`.)
+> catch rethrowing `error`; a key dropped from a hoisted `required[]`.
+
+**AND THE SIBLING HALF OF THE evidenceId FINDING.** `inbox:${evidence.length}` was untested in
+the mailbox adapter exactly as `crm-facts:${evidence.length}` was in the CRM one — collapsing
+either to a constant left every adapter test green, while `validateSynthesis` builds
+`new Map(evidence.map((e) => [e.evidenceId, e]))`, so duplicates collapse to the LAST row and an
+excerpt is then verified against the wrong message. Both are pinned now, with Gmail's own
+recency order asserted beside the ids.)
 
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — THE CRM ADAPTER STOPS OVERRIDING THE
 > CONNECTOR LAYER, AND STOPS PUTTING THE MONEY IN PROSE.**
