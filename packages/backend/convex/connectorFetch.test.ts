@@ -106,10 +106,33 @@ describe("compile-time endpoint allow-list", () => {
     ]);
   });
 
-  test("a provider whose route is unsettled has an EMPTY list and can read nothing", () => {
-    expect(PROVIDER_READ_PATHS.stripe).toEqual([]);
-    expect(isAllowedRead("stripe", "/v1/charges")).toBe(false);
-    expect(() => buildReadUrl("stripe", "production", "/v1/charges")).toThrow(/allow-list/i);
+  test("Stripe's list is pinned to five list/retrieve paths", () => {
+    // This entry was `[]` BY DECISION from 28-04 until 28-07 settled the Stripe App route, and
+    // `providerGates` reads its LENGTH into the eligibility rule — so an empty list was a provider
+    // that could read nothing and failed closed on every call whatever the owner had approved.
+    // 28-07 filled it. The fail-closed MECHANISM is still proven by the next test and by
+    // `resolveProviderEligibility`'s `no_read_paths` cases in `contracts.test.ts`.
+    expect(PROVIDER_READ_PATHS.stripe).toEqual([
+      "/v1/balance",
+      "/v1/charges",
+      "/v1/invoices",
+      "/v1/payouts",
+      "/v1/disputes",
+    ]);
+  });
+
+  test("a path off a provider's list can read nothing, and building its URL throws", () => {
+    // The containment property, stated without depending on any provider's list being empty. A
+    // Stripe write path shares its URL with the read and differs only by verb, so the ones that
+    // exist ONLY to be written to must not be reachable at all.
+    for (const path of ["/v1/refunds", "/v1/charges/ch_1/refunds", "/v1/payment_intents"]) {
+      expect(`${path}:${isAllowedRead("stripe", path)}`).toBe(`${path}:false`);
+      expect(() => buildReadUrl("stripe", "production", path)).toThrow(/allow-list/i);
+    }
+    expect(isAllowedRead("quickbooks", "/v3/company/1/invoice")).toBe(false);
+    expect(() => buildReadUrl("hubspot", "production", "/crm/v3/objects/tickets")).toThrow(
+      /allow-list/i,
+    );
   });
 
   test("a template placeholder matches exactly ONE path segment", () => {

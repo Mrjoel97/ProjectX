@@ -9,6 +9,7 @@
  */
 import { describe, expect, test } from "vitest";
 import { CAPS } from "../contracts";
+import { boundedWindow, normalizeAll, separateByCurrency } from "./shared";
 import {
   normalizeCharge,
   normalizeDispute,
@@ -24,7 +25,6 @@ import {
   STRIPE_READ_PATHS,
   stripeWindowParams,
 } from "./stripe";
-import { boundedWindow, normalizeAll, separateByCurrency } from "./shared";
 
 const charge = (over: Record<string, unknown> = {}) => ({
   id: "ch_3PikarTest",
@@ -203,8 +203,11 @@ describe("parseBalance", () => {
 
   test("refuses a non-integer amount rather than rounding it", () => {
     expect(
-      parseBalance({ object: "balance", available: [{ amount: 10.5, currency: "usd" }], pending: [] })
-        .ok,
+      parseBalance({
+        object: "balance",
+        available: [{ amount: 10.5, currency: "usd" }],
+        pending: [],
+      }).ok,
     ).toBe(false);
   });
 });
@@ -378,7 +381,8 @@ describe("normalizeDispute", () => {
 
   test("an unknown dispute status is refused", () => {
     expect(
-      normalizeDispute({ id: "dp_1", amount: 1, currency: "usd", created: 1, status: "arguing" }).ok,
+      normalizeDispute({ id: "dp_1", amount: 1, currency: "usd", created: 1, status: "arguing" })
+        .ok,
     ).toBe(false);
   });
 

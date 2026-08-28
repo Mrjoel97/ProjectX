@@ -31,7 +31,6 @@
  */
 import { err, ok, type Result } from "@pikar/core/result";
 import {
-  CAPS,
   type Currency,
   type Invoice,
   type Money,
@@ -41,8 +40,7 @@ import {
   validateSourceRef,
 } from "../contracts";
 import { moneyFromNumber, normalizeCurrency } from "../money";
-
-const DAY_MS = 86_400_000;
+import type { ReadWindow } from "./shared";
 
 // ── The closed set of things this lane may read ───────────────────────────────────────────
 
@@ -118,20 +116,6 @@ export function parseQbDate(raw: unknown): number | null {
   if (!DATE_TEXT.test(day)) return null;
   const ms = Date.parse(`${day}T00:00:00.000Z`);
   return Number.isFinite(ms) ? ms : null;
-}
-
-export type ReadWindow = { startMs: number; endMs: number };
-
-/**
- * A bounded coverage window ending at `asOfMs`. Refuses anything wider than `CAPS.maxWindowDays`
- * so a caller cannot ask for "since forever" and then present a capped answer as complete.
- */
-export function boundedWindow(asOfMs: number, days: number): Result<ReadWindow, string> {
-  if (!Number.isFinite(asOfMs)) return err("A read window needs a valid as-of time.");
-  if (!Number.isSafeInteger(days) || days < 1 || days > CAPS.maxWindowDays) {
-    return err(`A QuickBooks read window must be 1..${CAPS.maxWindowDays} whole days.`);
-  }
-  return ok({ startMs: asOfMs - days * DAY_MS, endMs: asOfMs });
 }
 
 // ── The query text ────────────────────────────────────────────────────────────────────────
@@ -367,53 +351,17 @@ export function normalizeCashAccount(
   return ok({ ref: ref.value, balance: balance.value });
 }
 
-// ── Bulk normalization and currency separation ────────────────────────────────────────────
-
-export type Normalized<T> = {
-  rows: readonly T[];
-  /** How many rows would not normalize. A COUNT, never the row or the reason text (CLAUDE.md §4). */
-  rejected: number;
-};
-
-/**
- * Normalize a page's worth of rows, counting the ones that refuse.
- *
- * The count is what makes the projection honest: rows that silently vanished would understate a
- * receivables total and there would be nothing to say so.
- */
-export function normalizeAll<T>(
-  rows: readonly unknown[],
-  one: (raw: unknown) => Result<T, string>,
-): Normalized<T> {
-  const kept: T[] = [];
-  let rejected = 0;
-  for (const raw of rows) {
-    const result = one(raw);
-    if (result.ok) kept.push(result.value);
-    else rejected += 1;
-  }
-  return { rows: kept, rejected };
-}
-
-/**
- * The "SEPARATE" half of the phase's "reject or separate mixed currency" rule.
- *
- * Rows in the home currency are kept and every other currency is NAMED, so the caller reports a
- * `partial` projection that says which ledgers it could not include. Totalling them together is
- * impossible without an FX rate nobody supplied, and dropping them silently would understate the
- * business — naming them is the only answer that is neither.
- */
-export function separateByCurrency<T>(
-  rows: readonly T[],
-  currencyOfRow: (row: T) => Currency,
-  home: Currency,
-): { kept: readonly T[]; otherCurrencies: readonly Currency[] } {
-  const kept: T[] = [];
-  const otherCurrencies: Currency[] = [];
-  for (const row of rows) {
-    const currency = currencyOfRow(row);
-    if (currency === home) kept.push(row);
-    else if (!otherCurrencies.includes(currency)) otherCurrencies.push(currency);
-  }
-  return { kept, otherCurrencies: [...otherCurrencies].sort() };
-}
+// ── Provider-agnostic helpers, hoisted to `shared.ts` (28-07) ─────────────────────────────
+//
+// `boundedWindow`, `normalizeAll` and `separateByCurrency` were written here and are not
+// QuickBooks-specific: Stripe is the second rail to need them and PayPal will be the third. They
+// moved to `./shared` and are re-exported so every existing import keeps resolving. There is one
+// definition of each — copying them per lane is how the item cap and the mixed-currency rule stop
+// meaning the same thing in three files.
+export {
+  boundedWindow,
+  type Normalized,
+  normalizeAll,
+  type ReadWindow,
+  separateByCurrency,
+} from "./shared";

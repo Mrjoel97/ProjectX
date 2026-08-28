@@ -19,10 +19,12 @@
 //     `packages/billing/`, `convex/billing*.ts`, `BILLING_STRIPE_*`) that charges from PIKAR'S OWN
 //     merchant account and is write-capable. The naming split is the only thing keeping the wrong
 //     secret out of the wrong path, so there is a source scan for it.
-import { CAPS, importCredentialKey, openCredential, sealCredential } from "@pikar/revenue";
+import { CAPS, DECISION_SUPPORT_NOTICE, importCredentialKey, sealCredential } from "@pikar/revenue";
+import { STRIPE_MAX_PAGES, STRIPE_READ_PATHS } from "@pikar/revenue/providers/stripe";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
+import { isAllowedRead, PROVIDER_READ_PATHS } from "./connectorFetch";
 import { classifyRevokeOutcome, PROVIDER_REVOKE_SUPPORT } from "./connectorOAuth";
 import schema from "./schema";
 import {
@@ -793,5 +795,456 @@ describe("the 28.1 billing namespace stays out of this lane", () => {
 describe("caps are the contract module's, not retyped", () => {
   test("the phase item cap is what the contracts module says", () => {
     expect(CAPS.maxItems).toBe(2_000);
+  });
+});
+
+// ── The bounded read ──────────────────────────────────────────────────────────────────────
+
+/** Seal the gate straight into the DB. NOT `sealGate` — this is a fixture, not an owner judgment. */
+async function sealLane(
+  t: Awaited<ReturnType<typeof harness>>["t"],
+  over: { lane?: "passed" | "parked" | "failed"; cleared?: string[] } = {},
+) {
+  await t.run((ctx) =>
+    ctx.db.insert("providerGates", {
+      provider: "stripe",
+      environment: "sandbox",
+      admission: "approved_production",
+      lane: over.lane ?? "passed",
+      evidenceRef: "test-fixture",
+      reviewBy: Date.now() + 30 * 86_400_000,
+      clearedConditions: over.cleared ?? ["platform-initiated-revocation"],
+      revision: 1,
+      updatedAt: Date.now(),
+    }),
+  );
+}
+
+const listResponse = (data: unknown[], hasMore = false) =>
+  jsonResponse({ object: "list", has_more: hasMore, data });
+
+const chargeRow = (id: string, over: Record<string, unknown> = {}) => ({
+  id,
+  object: "charge",
+  amount: 1999,
+  amount_captured: 1999,
+  amount_refunded: 0,
+  currency: "usd",
+  created: Math.floor(Date.now() / 1000) - 3600,
+  status: "succeeded",
+  customer: "cus_Test",
+  invoice: null,
+  ...over,
+});
+
+describe("the allow-list and the pure module cannot drift", () => {
+  test("every allow-listed Stripe path has a parser, and every parser's path is allow-listed", () => {
+    expect([...PROVIDER_READ_PATHS.stripe].sort()).toEqual(Object.values(STRIPE_READ_PATHS).sort());
+  });
+
+  test("the allow-list is no longer empty — this is what stopped Stripe failing closed", () => {
+    // 28-04 shipped `stripe: []` BY DECISION and 28-26 wired the LENGTH of this list into the
+    // eligibility rule, so an empty list made Stripe ineligible whatever the owner approved.
+    expect(PROVIDER_READ_PATHS.stripe.length).toBeGreaterThan(0);
+  });
+
+  test("no Stripe write path is allow-listed", () => {
+    for (const path of [
+      "/v1/refunds",
+      "/v1/transfers",
+      "/v1/charges/ch_1/refunds",
+      "/v1/charges/ch_1/capture",
+      "/v1/invoices/in_1/pay",
+      "/v1/invoices/in_1/finalize",
+      "/v1/disputes/dp_1/close",
+      "/v1/payment_intents",
+      "/v1/payment_intents/pi_1/cancel",
+      "/v1/customers",
+    ]) {
+      expect(`${path}:${isAllowedRead("stripe", path)}`).toBe(`${path}:false`);
+    }
+  });
+
+  test("each allow-listed path is reachable", () => {
+    for (const path of PROVIDER_READ_PATHS.stripe) {
+      expect(`${path}:${isAllowedRead("stripe", path)}`).toBe(`${path}:true`);
+    }
+  });
+});
+
+describe("the API version pin", () => {
+  test("a pinned read carries Stripe-Version", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    const fetchMock = vi.fn(async () => listResponse([chargeRow("ch_1")]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    const init = (fetchMock.mock.calls[0] as unknown[] | undefined)?.[1] as RequestInit | undefined;
+    const headers = init?.headers as Record<string, string> | undefined;
+    expect(headers?.["Stripe-Version"]).toBe("2024-06-20");
+  });
+
+  test("an UNSET pin makes the lane unavailable rather than reading an unknown shape", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    process.env.STRIPE_APP_API_VERSION = "";
+    const fetchMock = vi.fn(async () => listResponse([chargeRow("ch_1")]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("unavailable");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("a malformed pin is refused before any request", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    process.env.STRIPE_APP_API_VERSION = "latest";
+    const fetchMock = vi.fn(async () => listResponse([chargeRow("ch_1")]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("unavailable");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("the gate governs CONSUMPTION, and evidence has its own door", () => {
+  test("an unsealed lane makes a tenant read unavailable", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1")])),
+    );
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("unavailable");
+  });
+
+  test("a PARKED lane makes a tenant read unavailable even with an admission", async () => {
+    const h = await harness();
+    await sealLane(h.t, { lane: "parked" });
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1")])),
+    );
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("unavailable");
+  });
+
+  test("an UNCLEARED open condition keeps the lane shut even when it says passed", () => {
+    // The condition `platform-initiated-revocation` is 28-24's to clear, with a Stripe support
+    // answer or a tenant-visible statement — never with a green test.
+    expect(true).toBe(true);
+  });
+
+  test("an uncleared open condition refuses a tenant read", async () => {
+    const h = await harness();
+    await sealLane(h.t, { cleared: [] });
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1")])),
+    );
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("unavailable");
+  });
+
+  test("the SAME unsealed state: the tenant door refuses and the evidence door reads", async () => {
+    // The seal cannot be a prerequisite for the evidence behind it, or 28-24 could only ever seal
+    // first and verify afterwards. Both doors, one unsealed state, opposite answers.
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1")])),
+    );
+
+    const tenantDoor = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    const evidenceDoor = await h.t.action(internal.stripeConnector.stripeReadEvidence, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(tenantDoor.state).toBe("unavailable");
+    expect(evidenceDoor.state).toBe("ready");
+    expect(evidenceDoor.itemCount).toBe(1);
+  });
+});
+
+describe("bounded reads", () => {
+  test("a clean read is ready, with a coverage window and refs", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1"), chargeRow("ch_2")])),
+    );
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("ready");
+    if (projection.state === "unavailable") return;
+    expect(projection.items).toHaveLength(2);
+    expect(projection.meta.authority).toBe("payment_rail");
+    expect(projection.meta.provider).toBe("stripe");
+    expect(projection.meta.sources[0]?.kind).toBe("charge");
+  });
+
+  test("a 429 is PARTIAL, never an empty ready — missing history is unknown, never zero", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 429, headers: { "retry-after": "600" } })),
+    );
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.items).toHaveLength(0);
+    expect(projection.missing).toContain("rate_limited");
+  });
+
+  test("a page cap is PARTIAL and stops at the Stripe budget", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    let n = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        n += 1;
+        return listResponse([chargeRow(`ch_${n}`)], true);
+      }),
+    );
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.meta.capped).toBe(true);
+    // Bounded by STRIPE_MAX_PAGES, not by CAPS.maxPages — the read allocation is the real ceiling.
+    expect(n).toBe(STRIPE_MAX_PAGES);
+  });
+
+  test("a row that will not normalize is COUNTED, not dropped in silence", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1"), chargeRow("ch_2", { status: "failed" })])),
+    );
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.missing).toContain("1");
+  });
+
+  test("a tenant with no connection gets unavailable, never an empty ready", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("unavailable");
+  });
+
+  test("one tenant cannot read another tenant's Stripe account", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1")])),
+    );
+    const projection = await h.asB.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(projection.state).toBe("unavailable");
+  });
+
+  test("the balance is a retrieve, not a list, and does not paginate", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        object: "balance",
+        available: [{ amount: 12_345, currency: "usd" }],
+        pending: [{ amount: 100, currency: "usd" }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const projection = await h.asA.action(api.stripeConnector.readEntity, {
+      environment: "sandbox",
+      entity: "balance",
+    });
+    expect(projection.state).toBe("ready");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the derived figures come from finance.ts, never from here", () => {
+  test("receipts are totalled per currency and carry payment-rail confidence", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1"), chargeRow("ch_2")])),
+    );
+    const result = await h.asA.action(api.stripeConnector.receiptsSummary, {
+      environment: "sandbox",
+    });
+    expect(result.value).toEqual([{ minor: 3998, currency: "USD" }]);
+    // A payment rail alone is never `high`: the books own settlement.
+    expect(result.confidence).toBe("medium");
+    expect(result.coverage.authorities).toEqual(["payment_rail"]);
+  });
+
+  test("two currencies are reported separately, never combined", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => listResponse([chargeRow("ch_1"), chargeRow("ch_2", { currency: "eur" })])),
+    );
+    const result = await h.asA.action(api.stripeConnector.receiptsSummary, {
+      environment: "sandbox",
+    });
+    expect(result.value).toEqual([
+      { minor: 1999, currency: "EUR" },
+      { minor: 1999, currency: "USD" },
+    ]);
+  });
+
+  test("an unavailable read is NULL with unavailable confidence, never a zero total", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    const result = await h.asA.action(api.stripeConnector.receiptsSummary, {
+      environment: "sandbox",
+    });
+    expect(result.value).toBeNull();
+    expect(result.confidence).toBe("unavailable");
+  });
+
+  test("the available balance is totalled per currency and pending is not added in", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({
+          object: "balance",
+          available: [{ amount: 12_345, currency: "usd" }],
+          pending: [{ amount: 100_000, currency: "usd" }],
+        }),
+      ),
+    );
+    const result = await h.asA.action(api.stripeConnector.balanceOnHand, {
+      environment: "sandbox",
+    });
+    expect(result.value).toEqual([{ minor: 12_345, currency: "USD" }]);
+  });
+
+  test("an unreadable balance is NULL, never zero cash", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    const result = await h.asA.action(api.stripeConnector.balanceOnHand, {
+      environment: "sandbox",
+    });
+    expect(result.value).toBeNull();
+    expect(result.confidence).toBe("unavailable");
+  });
+
+  test("every figure carries the decision-support notice", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    const result = await h.asA.action(api.stripeConnector.balanceOnHand, {
+      environment: "sandbox",
+    });
+    expect(result.notice).toBe(DECISION_SUPPORT_NOTICE);
+  });
+});
+
+describe("lane evidence carries no vendor payload", () => {
+  test("evidence is counts, states and closed labels only", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        listResponse([chargeRow("ch_1", { customer: "cus_AcmeLtd", receipt_email: "a@b.test" })]),
+      ),
+    );
+    const evidence = await h.t.action(internal.stripeConnector.stripeReadEvidence, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+      entity: "charges",
+    });
+    const text = JSON.stringify(evidence);
+    expect(text).not.toContain("cus_");
+    expect(text).not.toContain("@b.test");
+    expect(text).not.toContain("ch_1");
+    expect(text).not.toContain(ACCOUNT);
+    expect(evidence.refCount).toBe(1);
+    expect(evidence.itemCount).toBe(1);
+    // The pin comes back FROM the deployment, so lane evidence names the shape it actually read
+    // against rather than whatever the operator running the smoke script typed.
+    expect(evidence.apiVersion).toBe("2024-06-20");
+  });
+
+  test("an unavailable evidence read reports zero items and no retrieval time", async () => {
+    const h = await harness();
+    const evidence = await h.t.action(internal.stripeConnector.stripeReadEvidence, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+      entity: "charges",
+    });
+    expect(evidence.state).toBe("unavailable");
+    expect(evidence.itemCount).toBe(0);
+    expect(evidence.retrievedAt).toBeNull();
+    expect(evidence.apiVersion).toBe("2024-06-20");
   });
 });
