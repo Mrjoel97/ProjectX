@@ -4972,16 +4972,17 @@ export async function runSpecialistTurn(
   // global active row (skills.loadEffectiveSkill). `tenantId` here is trusted server state from the
   // dispatcher's authenticated envelope — never model-supplied.
   //
-  // ⚠ WHICH NAMES CAN HAVE AN OVERLAY ROW IS NO LONGER "the three USER_AUTHORABLE_SKILLS", and a
-  // comment here said so until 29-05 falsified it. Phase 29 widened `USER_AUTHORABLE_SKILLS` to
-  // admit the six `pack-*` workflow-pack skills, so a `pack-*` name reaching this loader CAN now
-  // resolve to a tenant candidate body instead of the global active row. That is the intended
-  // behaviour of pack customization, not a leak — every overlay row is still written by
-  // `skills.publishUserCandidate` from a SERVER-RENDERED body and can only be activated by an
-  // `ownerMutation` — but do not reason from "only three names are affected" when changing this.
-  // The authoritative membership is the literal in `@pikar/contracts/skill`, pinned by its own
-  // test. Deliberately NOT threaded into the cockpit, voice, inbox, reply, extraction or vault
-  // loaders: those names are not authorable.
+  // WHAT THE OVERLAY BRANCH READS: `loadEffectiveSkill` queries `tenantSkills` by
+  // `[tenantId, name, status: "active"]` and falls through to the global active row when there is
+  // no such row. It does not filter by NAME, so which names can carry an overlay row is a question
+  // about the publish channels (`skills.publishUserCandidate`, `skills.publishPackCustomization`),
+  // not about this line — check them rather than reasoning from a set named here.
+  // Activation of an overlay row is an `ownerMutation` (`skills.activateTenantCandidate`).
+  //
+  // (Two earlier versions of this comment asserted a closed set of affected names. The first was
+  // "only the three `USER_AUTHORABLE_SKILLS`"; the second said Phase 29 had widened that literal to
+  // admit the six `pack-*` names, which it did not — `USER_AUTHORABLE_SKILLS` still lists exactly
+  // three. Neither absolute is restated here.)
   // The exact-VERSION pin stays GLOBAL: `--skill name@version` names a `skills` row and must keep
   // doing so. 21-03's tenant pin is a SEPARATE argument (`tenantSkillIds`) for exactly that reason.
   const pin = skillVersions?.[skillName];

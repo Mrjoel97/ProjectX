@@ -61,13 +61,15 @@ const rateLimiterModules = import.meta.glob(
 );
 
 const TENANT = "tenant_onb";
-const FAKE_KEY = "sk-onboarding-test-key";
-
 // A TYPED instance is mandatory the moment a `t.run` body reads a USER index — an untyped
 // `ReturnType<typeof convexTest>` erases the schema generic and `withIndex("by_tenant", …)` resolves
 // against `SystemIndexes` (the 15-04 wall, re-hit by 15.1-02). Same reason it is used here.
+// 29-FIN-06: this used to plant `process.env.OPENAI_API_KEY = "sk-onboarding-test-key"` — a raw
+// assignment with no cleanup, so it leaked into every later file in the same worker. Nothing here
+// needs it (32/32 without it), and it is a claim about the DEPLOYMENT: `offlineSeamAvailable()`
+// requires NO model credential, so the fake key made `vaultGround.ts`'s offline seed resolve to
+// nothing and the three SMOKE-retrieval tests below fail.
 function setup(): TestConvex<typeof schema> {
-  process.env.OPENAI_API_KEY = FAKE_KEY;
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("workflow", workflowSchema, workflowModules);

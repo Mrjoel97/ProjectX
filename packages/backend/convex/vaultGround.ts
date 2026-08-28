@@ -13,6 +13,15 @@
 // embedding network) and instead resolves the given seed doc ids THROUGH the tenant-scoped
 // `ownedDocsMeta` — a cross-tenant seed resolves to nothing, mirroring how `namespace = tenantId`
 // would never surface it. The graph-expand + fuse path is then exercised deterministically.
+//
+// THE SEAM IS GATED ON THE OPERATOR, NOT ON THE QUERY (29-FIN-06). `query` is tenant-supplied —
+// `vaultGround` is a `tenantAction`, and `vaultGroundHydrated`'s query reaches here from the
+// cockpit tool loop, the blueprint prober, the evaluator and the knowledge coordinator, all of
+// which carry user text. So the sentinel alone no longer selects the fixture: `offlineSeamAvailable
+// ()` (`lib/models.ts` — `PIKAR_OFFLINE_FIXTURES=1` AND neither model credential set) must ALSO be
+// true, which on a keyed deployment it is not. Same predicate as `knowledgeLlm.ts`, `vaultDigest.ts`
+// and `voiceDoc.ts`; the fourth variant is deliberately not written. `vaultGround.test.ts`'s
+// "WITHOUT the operator's consent" test drives the ungated direction.
 import { fuse, GRAPH_HOP_CAP, type VectorHit } from "@pikar/vault";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
@@ -20,6 +29,7 @@ import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
+import { offlineSeamAvailable } from "./lib/models";
 import { rag } from "./vaultRag";
 
 const SMOKE_PREFIX = "SMOKE::";
@@ -45,7 +55,7 @@ async function runVaultGround(
   // matched chunk and still fall back to the doc-text slice.
   const matchedByDoc: Record<string, string> = {};
 
-  if (query.startsWith(SMOKE_PREFIX)) {
+  if (offlineSeamAvailable() && query.startsWith(SMOKE_PREFIX)) {
     // Offline: the seed doc ids ride in the sentinel; resolve them tenant-scoped (a cross-tenant
     // seed drops out exactly as namespace scoping would exclude it — no embedding call).
     //

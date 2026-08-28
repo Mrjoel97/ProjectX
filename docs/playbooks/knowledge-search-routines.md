@@ -1,5 +1,58 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-29 (**29-FIN-06 — TWO OPEN DOORS CLOSED, ONE FLAKE ROOT-CAUSED, AND A
+> FALSE CLAIM ABOUT ANOTHER MODULE DELETED RATHER THAN REWRITTEN.**
+>
+> (1) **`threadId` is bounded at 200 characters and refused as DATA** (`thread_id_invalid`), on the
+> same line of `knowledgeSearch.search` as the question cap and before the hash, so it costs $0.
+> `question` was capped one wave earlier while the arg beside it — tenant-supplied on the same
+> handler, stored VERBATIM on the content row and used as the `by_thread` INDEX KEY — was not.
+> An empty id is refused because it is the absence of a thread, not a thread. The cap is a LITERAL
+> in the test (importing it would move the oracle with the subject). **`listByThread` deliberately
+> has NO check of its own:** one was written, then deleted after mutating it away left the test
+> green — `search` refuses to store an id outside the cap, so such an id names no row and the index
+> read returns `[]` regardless. A guard that cannot be made to fail is not protection.
+>
+> (2) **`vaultGround.ts`'s `SMOKE::` seam is gated on `offlineSeamAvailable()`** — the same
+> predicate `knowledgeLlm.ts`, `vaultDigest.ts` and `voiceDoc.ts` use, not a fourth variant. It was
+> the last tenant-supplied string on the knowledge plane that could select an offline FABRICATION
+> path: `vaultGround` is a `tenantAction` and every `vaultGroundHydrated` caller (cockpit tool loop,
+> blueprint prober, evaluator, knowledge coordinator) passes user text. The cost of closing it was
+> real and is worth knowing: the suite-wide operator consent now lives in
+> `packages/backend/vitest.config.mts` (`env: { PIKAR_OFFLINE_FIXTURES: "1" }`) rather than in ~14
+> `beforeEach` blocks, and TWO test files were planting a FAKE MODEL CREDENTIAL, which is a claim
+> about the deployment and made `offlineSeamAvailable()` false. `knowledgeSearch.test.ts` now mocks
+> the model ROUTE (`vi.mock("./lib/models", … resolveModel)`) instead of stubbing
+> `OPENROUTER_API_KEY`, and `onboarding.test.ts`'s raw `process.env.OPENAI_API_KEY = FAKE_KEY` (no
+> cleanup, leaked into every later file in the worker) is deleted — nothing needed it, 32/32.
+>
+> (3) **The synthesis fence nonce is spelled with `_`, not `-`.** A test whose subject was the
+> per-run fence was nondeterministically red about 1 run in 450, and the cause was not the test:
+> `scanText` runs over the ASSEMBLED prompt and its card detector takes 13-19 digits with single
+> `-`/space separators plus a Luhn check, which a `crypto.randomUUID()` satisfies by spanning its own
+> dashes (measured over 2,000,000 ids: 2.18% reach a 13-digit run, 0.22% clear Luhn). Both fence
+> markers then read `[CARD_1]` — the run's unpredictable fence became a guessable constant. `_` is
+> not a separator that detector accepts. Driven by a test that pins the exact adversarial id as a
+> LITERAL and asserts the dashed spelling really is redactable, so the fixture cannot go vacuous.
+>
+> (4) **Deleted rather than restated:** `knowledgeSearch.ts`'s "THE ONE GOVERNANCE-PLANE WRITE"
+> heading (there are two `audit.log` sites, and the header two hundred lines above already said so);
+> "the ONLY UNCAPPED FREE TEXT ON THIS PLANE" and "every other free-text trust boundary in this repo
+> is bounded" (a repo-wide absolute, and false about the arg beside it); `@pikar/core`'s "zero
+> callers repo-wide" on `renderSourceGap` (`workflowPacks.test.ts` calls it) and on
+> `groundedSourceProps`; and `knowledgeLlm.test.ts`'s "only the tests in THE PROMPT THE HANDLER
+> ACTUALLY SENDS reach the mocked boundary".
+>
+> (5) **`llm.ts`'s overlay comment no longer names a closed set of skill names at all.** Its first
+> version said "only the three `USER_AUTHORABLE_SKILLS`"; the 29-06 FIX replaced it with "Phase 29
+> widened `USER_AUTHORABLE_SKILLS` to admit the six `pack-*` names", which is FALSE —
+> `contracts/src/skill.ts` still lists exactly `OFFER_ARCHITECT`, `MONEY_MODEL_DESIGNER` and
+> `LEAD_ENGINE`, and 29-05 added a separate channel (`skills.publishPackCustomization`) instead. It
+> mattered because it read as justification for removing a sibling's fail-closed gate. The comment
+> now describes what `loadEffectiveSkill` QUERIES (`[tenantId, name, status: "active"]`, falling
+> through to the global active row) and points at the publish channels for the membership question.
+> The same false sentence is corrected in `cockpit.md` and in the "Corrected claims" list below.)
+>
 > Last verified: 2026-08-28 (**29-06 REMEDIATION — THE PUBLIC ACTION MADE THREE WAVE-2 CLAIMS
 > FALSE, AND THE CALLER BECAME THE ATTACKER.** Five corrections, each with a mutation witness.
 > (1) **The `SMOKE::` fixture seam is now gated on `lib/models.offlineSeamAvailable()` AND the
@@ -643,7 +696,7 @@ plans 29-02 onward, and every recurrence live proof in 29-11.
 |---|---|
 | **Nothing writes `knowledgeSearches` yet.** The table, the contracts and the tests exist; the coordinator does not. | Plans 29-02 … 29-06. |
 | **THE EVAL GATE ON `knowledge-query-planner` AND `knowledge-synthesizer` IS NOT YET CLEARABLE.** Both are in `GATED_SKILLS`. `seedSkills`' `rows.length === 0` branch lands them at v1 `active`, so nothing is blocked today — but the FIRST BODY EDIT mints a candidate `activateSkill`'s EVAL_GATE holds until a green `pnpm eval:golden --skill <name>@N` run, and `run-eval-golden.mjs` drives `llm:runCockpitAgent` and nothing else. **Do not edit either body until 29-06 lands.** | **PLAN 29-06 OWES THIS**: a cockpit-side knowledge tool, `skillVersions` threaded into `knowledgeLlm`, and at least one golden fixture that drives a knowledge search. Half the rail is already built — both actions take a `skillVersion` pin and `knowledgeLlm.test.ts` proves the pinned body is what answers (invariant 31). Recorded on both constants in `packages/contracts/src/skill.ts`, on the `SEEDS` rows, and in `skill-registry.md`. |
-| **NOTHING CALLS `knowledgeLlm` YET.** The two actions, their schemas, their offline seams and 29 tests exist; there is no coordinator, no `knowledgeSearches` write and no UI. | Plan 29-06. |
+| ~~**NOTHING CALLS `knowledgeLlm` YET.**~~ CLOSED by 29-06: `knowledgeSearch.search` is the coordinator, it writes `knowledgeSearches`, and the offline seams are gated on `offlineSeamAvailable()`. The UI is still 29-09. | Plan 29-06 (landed); UI 29-09. |
 | **`knowledgeSearches.runId`'s comment overstates what 29-04 built.** It reads "the run correlation the toolless planner/synthesizer calls spent against", but each action MINTS ITS OWN per EXECUTION (`blueprint.ts:271`'s reasoning: re-entering an action re-runs the model call, so the second charge is real and needs its own ledger row; a stable correlation would put the ledger BELOW the limiter). So there are two spend correlations per search, `knowledge:plan:<runId>` and `knowledge:synth:<runId>`, and neither is the coordinator's own row id. | Both actions RETURN their `runId`. 29-06 should store the coordinator's own correlation in `knowledgeSearches.runId` and, if the join matters, keep the two returned ids beside it. `schema.ts` was not edited from here — it is 29-01's file and the repo's highest-collision one. |
 | `ponytail:` **`SUMMARY_CHAR_CAP` (1,200) lives in `knowledgeLlm.ts`, not in `SEARCH_CAPS`.** It is not a search bound — it is how much model prose may reach a stored row — and `@pikar/core`'s cap set is covered by a `NO CAP IS DEAD` scan that demands an enforcement site IN THAT PACKAGE. Ceiling: a cap outside the one registry of caps. | Enforced at the only place a summary is produced, and covered behaviourally (the offline fixture echoes the question so a 5,000-character input drives the cap; `1_200` is a literal). Upgrade path: move it into `SEARCH_CAPS` when `@pikar/core` gains a summary-shaping function to enforce it. |
 | `ponytail:` **`literals()` is a two-line copy of `schema.ts`'s private helper.** Ceiling: two identical validator helpers over one boundary. | Comment on the function. Upgrade path: export ONE from `convex/lib/` when a third caller appears — not from `schema.ts`. |
@@ -835,8 +888,9 @@ includes this module, so the reference closes a cycle. Measured — 0 `tsc` erro
 after, nearly all of them `implicitly has an 'any' type` in unrelated files. The registry uses a
 hand-written `FunctionReference<"action", "internal", {tenantId, query}, KnowledgeAdapterResult>`
 instead, which avoids the cycle — **and covers TWO of the three drifts, not three.** Measured:
-changing an adapter's return type, or RENAMING `query` to `q`, gives `TS2322` at
-`knowledgeSearch.ts:118`; ADDING a newly-required argument gives no error there at all, because the
+changing an adapter's return type, or RENAMING `query` to `q`, gives `TS2322` on the
+`KNOWLEDGE_ADAPTER_ACTIONS` assignment in `knowledgeSearch.ts` (a line number was cited here and had
+already drifted); ADDING a newly-required argument gives no error there at all, because the
 real reference stays assignable to the hand-written type. That third drift is closed by a source
 scan of the four adapters' `args:` blocks in `knowledgeSearch.test.ts`.
 *Mutations RED:* `extraRequired: v.string()` added to `searchVaultKnowledge` (the scan; typecheck
@@ -896,9 +950,11 @@ the request in front of it. The cap lives in the backend module, not `SEARCH_CAP
 - `@pikar/core`'s `renderSourceGap` and `groundedSourceProps` were described as wired. Both have
   ZERO callers repo-wide; 29-09's panel is the caller. Both docstrings now say so.
 - `llm.ts`'s "only the three USER_AUTHORABLE_SKILLS can have an overlay row at all, so every other
-  specialist name resolves exactly as before" — falsified by 29-05, which widened
-  `USER_AUTHORABLE_SKILLS` to admit the six `pack-*` names. Corrected in place; the authoritative
-  membership is the literal in `@pikar/contracts/skill`, pinned by its own test.
+  specialist name resolves exactly as before" — false once a second publish channel existed.
+  **The replacement written here was ALSO false** and is corrected in 29-FIN-06: 29-05 did NOT
+  widen `USER_AUTHORABLE_SKILLS`; it added `skills.publishPackCustomization` beside it, and the
+  literal in `@pikar/contracts/skill` still lists exactly three names. The comment now describes the
+  `loadEffectiveSkill` query instead of naming any closed set.
 
 **Not closed, deliberately:** `llmRedaction.test.ts`'s `KNOWLEDGE_CONTENT_FIELDS` is still a word
 blocklist over source text. It is kept as a cheap tripwire and its ceiling is now written into the

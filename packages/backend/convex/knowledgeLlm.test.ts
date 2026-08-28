@@ -26,6 +26,7 @@ import {
   NOT_LANDED_SOURCES,
   SEARCH_CAPS,
 } from "@pikar/core";
+import { scanText } from "@pikar/pii";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -58,10 +59,11 @@ import schema from "./schema";
  * `scanText`, the prompt assembly, `priceUsage` and the spend ledger. The assertions below read
  * the `prompt` and `system` the handler HANDED THE MODEL, never a value this file computed.
  *
- * Only the tests in "THE PROMPT THE HANDLER ACTUALLY SENDS" reach it: every other test in this
- * file drives the `SMOKE::` seam, and the two that need the live path to FAIL still do, because
- * `resolveModel(DEFAULT_MODEL)` throws on a missing `OPENROUTER_API_KEY` before `generateObject`
- * is ever called.
+ * Reaching it needs an `OPENROUTER_API_KEY`, which is stubbed per-describe rather than for the
+ * file: "THE PROMPT THE HANDLER ACTUALLY SENDS" and one test in "untrusted evidence cannot select a
+ * code path" stub it. Everything else drives the `SMOKE::` seam, and the tests that need the live
+ * path to FAIL still do, because `resolveModel(DEFAULT_MODEL)` throws on the missing key before
+ * `generateObject` is called.
  */
 const boundary = vi.hoisted(() => ({
   calls: [] as { system: string; prompt: string }[],
@@ -1041,6 +1043,7 @@ describe("THE PROMPT THE HANDLER ACTUALLY SENDS — asserted at the model bounda
   });
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks(); // the `crypto.randomUUID` spy below; the `ai` module mock is unaffected
   });
 
   const hostile = () =>
@@ -1102,6 +1105,36 @@ ${OPEN}`,
     // written yesterday would have to do to forge one.
     expect(b.prompt).not.toContain(`evidence:${first.runId}`);
     expect(b.prompt).toContain(`evidence:${second.runId}`);
+  });
+
+  // 29-FIN-06 — THE FLAKE, AND ITS CAUSE. The two tests above had their subject (the per-run fence
+  // nonce) redacted out from under them on roughly 1 run in 450: `scanText` runs over the ASSEMBLED
+  // prompt, and its card detector takes 13-19 digits with single `-`/space separators plus a Luhn
+  // check, which a `crypto.randomUUID()` satisfies by spanning its own dashes about 0.22% of the
+  // time. Both fence markers then read `[CARD_1]` — a constant, and a guessable one.
+  //
+  // The id below is exactly that case, pinned as a LITERAL so this is the same run every time.
+  // MUTATION OBSERVED RED: `crypto.randomUUID().replace(/-/g, "_")` -> `crypto.randomUUID()`.
+  test("A NONCE THAT LOOKS LIKE A CREDIT CARD still reaches the model as this run's fence", async () => {
+    const DASHED = "39524087-0499-4406-4379-140790585744";
+    // NON-VACUITY: the fixture really is redactable in its dashed spelling. Without this the test
+    // would still pass if `scanText` stopped treating the id as a card and the pin went decorative.
+    const dashedScan = scanText(`memo ${DASHED} end`);
+    expect(dashedScan.ok && dashedScan.value.safeText).not.toContain(DASHED);
+
+    vi.spyOn(crypto, "randomUUID").mockReturnValue(DASHED as ReturnType<typeof crypto.randomUUID>);
+    const t = makeTest();
+    await seedSkill(t, KNOWLEDGE_SYNTHESIZER_SKILL, 1, SYNTH_V1);
+    boundary.reply = { summary: "s", claims: [], unanswered: [] };
+
+    const out = okSynth(await synth(t, "what are our renewal terms?", [ev({ evidenceId: "v-1" })]));
+
+    const call = boundary.calls[0];
+    if (call === undefined) throw new Error("the handler never reached the model");
+    // The fence the MODEL saw carries the id the CALLER was given, both markers, unredacted.
+    expect(call.prompt).toContain(`<<<evidence:${out.runId} `);
+    expect(call.prompt).toContain(`<<</evidence:${out.runId}>>>`);
+    expect(call.prompt).not.toContain("[CARD_"); // the placeholder the old spelling produced
   });
 
   test("THE PLANNER'S CLOSED SOURCE LIST REACHES THE MODEL, and the not-landed source does not", async () => {

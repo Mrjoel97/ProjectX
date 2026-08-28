@@ -1,3 +1,30 @@
+> Last verified: 2026-08-29 (**29-FIN-06 — `vaultGround.ts`'s `SMOKE::` SEAM IS GATED ON THE
+> OPERATOR, NOT ON THE QUERY.** It was the last tenant-supplied string on the knowledge plane that
+> could select an offline fixture: `vaultGround` is a `tenantAction`, and every
+> `vaultGroundHydrated` caller — the cockpit `searchVault` tool, `blueprint.ts`, `evaluations.ts`,
+> `voiceDoc.ts`, `knowledgeVaultDrive.ts` — passes user text as `query`. The branch now needs
+> `offlineSeamAvailable()` (`lib/models.ts`: `PIKAR_OFFLINE_FIXTURES=1` AND neither model
+> credential) as well as the `SMOKE::` prefix. Same predicate as `knowledgeLlm.ts`, `vaultDigest.ts`
+> and `voiceDoc.ts` — a fourth variant was deliberately not written.
+>
+> **What closing it cost, because it is the reason the sibling seams stayed open.** ~14 test files
+> drive this seam. The operator consent moved to `packages/backend/vitest.config.mts`
+> (`env: { PIKAR_OFFLINE_FIXTURES: "1" }`) so no `beforeEach` had to be edited; a test that needs
+> the consent ABSENT stubs it off, which is what `vaultGround.test.ts`'s new "WITHOUT the operator's
+> consent" test does (mutation observed red: drop `offlineSeamAvailable() &&` and the seed resolves).
+> Two files then failed for a second reason: they planted a FAKE MODEL CREDENTIAL, which is a claim
+> about the deployment and makes `offlineSeamAvailable()` false. `knowledgeSearch.test.ts` now mocks
+> the model ROUTE instead, and `onboarding.test.ts`'s `process.env.OPENAI_API_KEY = FAKE_KEY` — a raw
+> assignment with no cleanup that leaked into every later file in the same worker — is deleted;
+> nothing needed it (32/32 without).
+>
+> **STILL OPEN, and named rather than implied:** `vault.ts`'s `vaultSearch` keeps an UNGATED
+> `SMOKE::` seam (`query.startsWith("SMOKE::")`, ~`:729`), because `apps/web/e2e/vault-redesign.
+> spec.ts` types those sentinels into the search box against a REAL KEYED deployment, where
+> `offlineSeamAvailable()` is false by construction. `vaultRag.embedDoc`, `vaultLlm.extractGraph` /
+> `identifyDoc` and `vaultRag.ts:390` are the other content-selected paths; see
+> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.)
+
 > Last verified: 2026-08-29 (**WAVE-3 FINAL — THE COPY-DRIFT GUARD IS DELETED; `vaultDigest.ts`'s
 > SEAM COMMENT NOW CITES THE TESTS BEHIND ITS ABSOLUTES. Comment/test-only; no behaviour changed.**
 >

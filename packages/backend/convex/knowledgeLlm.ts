@@ -611,7 +611,16 @@ export const synthesizeKnowledge = internalAction({
     ctx,
     { tenantId, question, rawEvidence, skillVersion },
   ): Promise<KnowledgeSynthesisResult> => {
-    const runId = crypto.randomUUID();
+    // `_` RATHER THAN `-`, AND THE SPELLING IS LOAD-BEARING (29-FIN-06). This id is interpolated
+    // into the evidence fence markers below, and the assembled prompt then goes through `scanText`,
+    // whose card detector matches 13-19 digits with optional single `-`/space separators followed
+    // by a Luhn check. A `crypto.randomUUID()` reaches a 13-digit run by spanning its own dashes
+    // about 2.2% of the time and clears Luhn on about 0.22% of ids (measured over 2,000,000), and
+    // when it did, BOTH markers were rewritten to `[CARD_1]` — the run's unpredictable fence became
+    // a constant, and the test that asserts the fence was nondeterministically red. `_` is not a
+    // separator the detector accepts, so a digit run cannot span groups and stops at the longest
+    // group (12). Driven by "A NONCE THAT LOOKS LIKE A CREDIT CARD" in `knowledgeLlm.test.ts`.
+    const runId = crypto.randomUUID().replace(/-/g, "_");
     // THE RUN-LEVEL ADMISSION BOUNDARY, and it belongs here because this is the first place the
     // UNION of every adapter's output exists: `maxEvidenceTotal` and `totalEvidenceCharCap` are
     // bounds on the RUN, and an adapter that cannot see the other four sources cannot spend a

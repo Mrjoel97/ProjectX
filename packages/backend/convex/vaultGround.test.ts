@@ -11,7 +11,7 @@
 // (listVaultDocs / vaultStats / vaultDownloadUrl / docEntities / vaultSearch).
 import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
@@ -166,6 +166,30 @@ describe("vaultGround (VALT-03 hybrid vector + hop-capped graph)", () => {
 
     expect(Object.keys(result).sort()).toEqual(["context", "docIds"]);
   });
+
+  // 29-FIN-06: the sentinel is TENANT-SUPPLIED (`vaultGround` is a `tenantAction`, and every
+  // `vaultGroundHydrated` caller passes user text), so it must not be able to select the offline
+  // fixture on its own. The suite-wide consent lives in `vitest.config.mts`; this test removes it
+  // and drives the same query that passes three tests above.
+  //
+  // MUTATION OBSERVED RED: drop `offlineSeamAvailable() &&` from `runVaultGround` — the seed
+  // resolves, `docIds` comes back with `docA` in it, and the expected rejection never happens.
+  test("WITHOUT the operator's consent the SMOKE:: seed is NOT a fixture — it reaches rag.search", async () => {
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "");
+    const t = convexTest(schema, modules);
+    const { docA } = await seedChain(t);
+
+    // The real retrieval path, which has no embedding credential in a test run. The failure is the
+    // proof: with the gate open this query returns docs without ever touching an embedding.
+    await expect(
+      asTenant(t).action(api.vaultGround.vaultGround, { query: `SMOKE::${docA}` }),
+    ).rejects.toThrow(/unset for embeddings/);
+    vi.unstubAllEnvs();
+  });
+
+  // ponytail: the CREDENTIAL half of `offlineSeamAvailable()` is NOT re-tested here. It belongs to
+  // the shared predicate and `lib/models.test.ts` drives it directly; the version of this test that
+  // stubbed a bogus `OPENROUTER_API_KEY` made a real outbound embedding request and took 7s.
 });
 
 describe("vaultGroundHydrated (identity-less internalAction — real titles + capped chunk text)", () => {

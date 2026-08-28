@@ -81,17 +81,17 @@ as that folder's digest**, carrying a `ragEntryId` that reads as groundable.
 > chain below and can be closed on its own.
 
 **SEVERITY, STATED ONCE, BECAUSE THE NUMBERING BELOW IS BY MODULE AND READS LIKE A RANKING.**
-**#1, #2, #3, #4 and #5 are LIVE AND COMPLETELY UNGATED on a fully keyed production deployment
-today** — every one of them selects its fixture from CONTENT with no operator flag anywhere in the
-handler, so `PIKAR_OFFLINE_FIXTURES` does not restrain any of them. That is the whole point of this
-register: the digest gate (converted) is the ONLY one an operator signal now governs. Within that,
-the ordering that matters is by channel, not by module:
+**#1, #2, #3 and #4 are LIVE AND COMPLETELY UNGATED on a fully keyed production deployment today**
+— each selects its fixture from CONTENT with no operator flag anywhere in the handler, so
+`PIKAR_OFFLINE_FIXTURES` does not restrain them. Converted so far: `vaultDigest.ts` and `voiceDoc.ts`
+(wave-3 cleanup), `knowledgeLlm.ts` (#6, 29-06 FIX) and `vaultGround.ts` (#5, 29-FIN-06). Within
+what remains, the ordering that matters is by channel, not by module:
 
 | | Instance | Channel | Reachable today |
 |---|---|---|---|
-| worst | #4 `gmail.ts:370`, #5 `vaultGround.ts:48` | a TOOL ARGUMENT the model composes, inside a tool-bearing loop whose context carries retrieved documents and inbox text — where prompt injection actually lives | yes, no id or setup needed |
+| worst | #4 `gmail.ts:370` (#5 `vaultGround.ts:48` was here and is **CLOSED**, 29-FIN-06) | a TOOL ARGUMENT the model composes, inside a tool-bearing loop whose context carries retrieved documents and inbox text — where prompt injection actually lives | yes, no id or setup needed |
 | then | #1 `extractGraph`, #2 `identifyDoc`, #3 `embedDoc` | the ingested document's OWN text, so any Drive file a stranger shared in | yes, position 0 only |
-| lowest | #6 `knowledgeLlm` | a `question` argument with no production caller **as of this commit** | not yet |
+| closed | #6 `knowledgeLlm` (29-06 FIX) | a `question` argument — and `knowledgeSearch.search`, a public `tenantAction`, IS the production caller now | no: gated on `offlineSeamAvailable()` |
 
 **#3 in particular is live and ungated on a fully landed path** (`d1e8826`, 2026-07-14 — six weeks
 older than this branch), and it is the one whose damage is an ABSENCE: a `ready` row with a
@@ -131,9 +131,31 @@ older than this branch), and it is the one whose damage is an ABSENCE: a `ready`
 | **What the attacker gets** | Two fabricated `HeaderRecord`s — `Sarah Smoke <sarah@example.com>` / `Sara Test <sara@example.org>` — presented to the agent as REAL mailbox evidence about who the user corresponds with, which then feeds contact resolution and therefore recipient selection. A `mailbox.searched` audit row is written for the fabricated result, so the log agrees it happened. |
 | **Why it is the worst of the four** | It is the only one selected from *inside* a tool-bearing loop, which is where prompt injection actually lives, and it is on the recipient-resolution path. |
 
-### 5. `packages/backend/convex/vaultGround.ts:48` — `runVaultGround`
+### 5. `packages/backend/convex/vaultGround.ts:48` — `runVaultGround` — **CLOSED 2026-08-29**
 
-> **RE-VERIFIED 2026-08-28 (wave-3 cleanup fix): this entry is accurate as written.** A model-composed
+> **CLOSED by 29-FIN-06.** The branch now reads
+> `if (offlineSeamAvailable() && query.startsWith(SMOKE_PREFIX))`, so a model-composed or
+> tenant-typed `SMOKE::` string no longer selects the fixture on a keyed deployment. Both halves
+> below (the silent denial of retrieval, and the model-written "matched passage" attached to a real
+> document) go with it. `vaultGround.test.ts`'s "WITHOUT the operator's consent" test drives the
+> ungated direction; mutation observed red: drop `offlineSeamAvailable() &&` and the seed resolves.
+>
+> **What it cost, which is why the siblings below are still open.** ~14 test files drive this seam.
+> The suite-wide consent moved to `packages/backend/vitest.config.mts`
+> (`env: { PIKAR_OFFLINE_FIXTURES: "1" }`) rather than into every `beforeEach`. Two files then failed
+> for a second reason: they planted a FAKE MODEL CREDENTIAL, which is a claim about the deployment
+> and makes `offlineSeamAvailable()` false. `knowledgeSearch.test.ts` mocks the model ROUTE instead;
+> `onboarding.test.ts`'s uncleaned `process.env.OPENAI_API_KEY = FAKE_KEY` is deleted. **Any future
+> conversion should expect that shape of collision, not a per-call one.**
+>
+> **NOT closed by this:** `vault.ts`'s `vaultSearch` keeps its own bare `query.startsWith("SMOKE::")`
+> (~`:729`), and it is E2E-coupled — `apps/web/e2e/vault-redesign.spec.ts` types those sentinels into
+> the search box against a REAL KEYED deployment, where `offlineSeamAvailable()` is false by
+> construction. It is the sibling instance this register's coupling warning is about.
+>
+> **The original entry, kept because the analysis is what made the case:**
+>
+> **RE-VERIFIED 2026-08-28 (wave-3 cleanup fix): this entry was accurate as written.** A model-composed
 > `SMOKE::` tool argument silently disables vault grounding for the turn — half (a) needs no valid id
 > and is reachable today; half (b) is still marked NOT VERIFIED and still is not.
 >

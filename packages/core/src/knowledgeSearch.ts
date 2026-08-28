@@ -1086,10 +1086,11 @@ const PARTIAL_SENTENCE: Readonly<Record<PartialReason, string>> = {
  * NOT-LANDED source also names its unlock from `MISSING_SOURCE_UNLOCK`, because naming a gap
  * without naming its unlock leaves the user with a complaint instead of a next step.
  *
- * ⚠ NOT WIRED YET. Zero callers repo-wide as of 29-06: the coordinator stores the raw
- * `KnowledgeSourceState[]` on `knowledgeSearches.sources` and 29-09's `KnowledgeSearchPanel` is
- * the renderer that will call this. It is covered by its own unit tests and nothing else. Do not
- * read a comment elsewhere describing it as live wiring — one did, and it was wrong.
+ * ⚠ NOT WIRED YET. The coordinator stores the raw `KnowledgeSourceState[]` on
+ * `knowledgeSearches.sources`; 29-09's `KnowledgeSearchPanel` is the renderer that will call this.
+ * Unit tests exercise it (`knowledgeSearch.test.ts`, and `workflowPacks.test.ts` pins the unlock
+ * sentence against `MISSING_SOURCE_UNLOCK`). Do not read a comment elsewhere describing it as live
+ * wiring — one did, and it was wrong.
  */
 export function renderSourceGap(state: KnowledgeSourceState): string | null {
   if (state.status === "available") return null;
@@ -1124,7 +1125,7 @@ export function renderSourceGap(state: KnowledgeSourceState): string | null {
  * component exactly the props it already takes. One card component serves both planes and no
  * caller writes its own translation.
  *
- * ⚠ AND IT IS NOT WIRED YET EITHER — zero callers repo-wide as of 29-06. The sentence above
+ * ⚠ AND IT IS NOT WIRED YET EITHER — unit tests are what exercise it. The sentence above
  * describes the mapping this function IMPLEMENTS, not a path anything currently walks; 29-09's
  * panel is the caller. `knowledgeSearch.ts`'s stored `StoredClaim.evidence` is a STORAGE shape and
  * is deliberately not this one, so nothing in the backend duplicates it.

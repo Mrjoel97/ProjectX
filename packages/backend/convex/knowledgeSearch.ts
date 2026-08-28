@@ -267,10 +267,15 @@ export const record = internalMutation({
  * The tenant's search results for one thread, newest first — the panel's re-render read (29-09).
  *
  * `tenantQuery`, so the tenant filter comes from the authenticated identity and the `by_thread`
- * index is `[tenantId, threadId]`. A caller cannot name another tenant's thread.
+ * index is `[tenantId, threadId]`. Driven by "tenant B sees NOTHING of tenant A", which runs both
+ * tenants against the SAME `threadId` and asserts they read different rows.
  */
 export const listByThread = tenantQuery({
   args: { threadId: v.string() },
+  // NO LENGTH CHECK HERE, and that is a decision rather than an omission: `search` refuses to STORE
+  // a thread id outside the cap, so an id this query could not have accepted matches no row and the
+  // index read already returns `[]`. A guard here was written and then deleted — mutating it away
+  // left the test green, which is the definition of a guard that guards nothing.
   handler: async (ctx, { threadId }): Promise<Doc<"knowledgeSearches">[]> =>
     await ctx.db
       .query("knowledgeSearches")
@@ -284,16 +289,42 @@ export const listByThread = tenantQuery({
 const LIST_LIMIT = 20;
 
 /**
- * THE CALLER'S OWN FIELD, AND THE ONLY UNCAPPED FREE TEXT ON THIS PLANE UNTIL NOW.
+ * THE OTHER CALLER-CONTROLLED FIELD ON `search`'s ARGS (29-FIN-06). `question` was capped and
+ * `threadId` beside it was not, although it is tenant-supplied on the same handler, is stored
+ * VERBATIM on the content row, and is an INDEX KEY — `by_thread` is `[tenantId, threadId]`, so the
+ * value is written into a range key on every search and read back on every panel render.
+ *
+ * 200 rather than the question's 2000: this is an OPAQUE HANDLE, not prose. A UUID is 36 and a
+ * Convex document id is 32, so 200 leaves room for a prefixed or composite id and still refuses a
+ * body of text pasted into the field.
+ *
+ * Empty is refused for a different reason than long: `""` is not a thread, it is the absence of
+ * one, and admitting it silently files every such search into a single unnamed bucket that the
+ * panel would then render as one conversation.
+ *
+ * ONE reason for both, because from the caller's side there is one sentence to render: the id it
+ * sent is not usable. Refused as DATA and before the hash, so it costs $0 — the same order the
+ * question cap uses.
+ */
+const THREAD_ID_CHAR_CAP = 200;
+
+/** One caller — `search`'s trust boundary. Named because the refusal reads better than the test. */
+const threadIdOk = (threadId: string): boolean =>
+  threadId.length > 0 && threadId.length <= THREAD_ID_CHAR_CAP;
+
+/**
+ * THE CALLER'S OWN FIELD, AND THE ONE THAT REACHES A PAID PROMPT.
  *
  * `question` is interpolated VERBATIM into both PAID prompts (`plannerPrompt`, `synthesisPrompt`)
- * and stored verbatim on the content row. Every other free-text trust boundary in this repo is
- * bounded — `SAVED_PROMPT_MAX_BYTES` 4000, `USER_SKILL_ADAPTATION_MAX_BYTES` 4000,
+ * and stored verbatim on the content row. It landed with no bound at all, beside bounded siblings
+ * — `SAVED_PROMPT_MAX_BYTES` 4000, `USER_SKILL_ADAPTATION_MAX_BYTES` 4000,
  * `SEARCH_CAPS.queryCharCap` 200, `evidenceTextCharCap` / `totalEvidenceCharCap`,
- * `SUMMARY_CHAR_CAP` — so the one field a user fully controls was the one with no bound at all.
- * `guardrails.preCall` reads ACCUMULATED spend before the call and cannot estimate a request's
- * size, so a single 300 KB question could exceed the daily budget in one shot (measured: a 300,005
- * character question did not return inside a 20-second timeout).
+ * `SUMMARY_CHAR_CAP`. `guardrails.preCall` reads ACCUMULATED spend before the call and cannot
+ * estimate a request's size, so a single 300 KB question could exceed the daily budget in one shot
+ * (measured: a 300,005 character question did not return inside a 20-second timeout).
+ *
+ * The other caller-controlled arg, `threadId`, is bounded by `THREAD_ID_CHAR_CAP` above; it was
+ * uncapped for one wave while this comment claimed `question` was the last unbounded field here.
  *
  * REFUSED, NOT TRUNCATED, and the refusal is DATA. Silently cutting the question would answer a
  * question the user did not ask and store it as if they had; the caller gets a reason it can show.
@@ -330,10 +361,10 @@ export type StoredClaim = {
 export type KnowledgeSearchResult =
   /**
    * A refusal, as DATA rather than a throw. The first three are `guardrails.preCall`'s own reason
-   * union (a governed stop, passed straight through). `question_too_long` is this module's own
-   * trust-boundary refusal and is deliberately in the SAME arm: from the caller's side both mean
-   * "no answer, here is why", and giving a validation failure its own shape would make every
-   * consumer handle two negative cases to render one sentence.
+   * union (a governed stop, passed straight through). `question_too_long` and `thread_id_invalid`
+   * are this module's own trust-boundary refusals and are deliberately in the SAME arm: from the
+   * caller's side all of them mean "no answer, here is why", and giving a validation failure its
+   * own shape would make every consumer handle two negative cases to render one sentence.
    */
   | {
       ok: false;
@@ -341,7 +372,8 @@ export type KnowledgeSearchResult =
         | "kill_switch"
         | "daily_budget_exhausted"
         | "deployment_budget_exhausted"
-        | "question_too_long";
+        | "question_too_long"
+        | "thread_id_invalid";
     }
   | {
       ok: true;
@@ -374,8 +406,10 @@ export const search = tenantAction({
   args: { threadId: v.string(), question: v.string() },
   handler: async (ctx, { threadId, question }): Promise<KnowledgeSearchResult> => {
     const tenantId = ctx.tenantId; // FROM THE AUTHENTICATED WRAPPER. Never an argument.
-    // THE TRUST BOUNDARY, FIRST. Before the hash, before the planner, before any spend.
+    // THE TRUST BOUNDARY, FIRST. Before the hash, before the planner, before any spend — and it is
+    // BOTH caller-controlled args, not just the one that reaches a prompt.
     if (question.length > QUESTION_CHAR_CAP) return { ok: false, reason: "question_too_long" };
+    if (!threadIdOk(threadId)) return { ok: false, reason: "thread_id_invalid" };
     const startedAt = Date.now();
     const runId = crypto.randomUUID();
     // §4: the log plane gets a fingerprint of the question, never the question.
@@ -469,8 +503,9 @@ export const search = tenantAction({
         question,
         rawEvidence: [...evidence],
       });
-      // ── A GOVERNED STOP *AFTER* THE READS. The second governance-plane write, and the only one
-      // on this branch. By here the mailbox, Drive and the CRM have ALREADY been read and the
+      // ── A GOVERNED STOP *AFTER* THE READS. One of the handler's two `audit.log` sites; this
+      // branch returns, so the completed-run event below is not also written for this run.
+      // By here the mailbox, Drive and the CRM have ALREADY been read and the
       // planner has ALREADY recorded spend, but there is no answer to store — so the
       // `knowledgeSearches` insert and the `knowledge.searched` event below are both skipped and
       // this run would otherwise leave NO trace at all. "We read your mailbox, your Drive and your
@@ -557,7 +592,11 @@ export const search = tenantAction({
       invalidCitationCount: invented.length,
     });
 
-    // ── THE ONE GOVERNANCE-PLANE WRITE (§4) ──────────────────────────────────────────────────
+    // ── THE COMPLETED-RUN GOVERNANCE-PLANE WRITE (§4) ────────────────────────────────────────
+    //
+    // The second of this handler's two `audit.log` sites, and the two are mutually exclusive: the
+    // branch above returns, so a run writes `knowledge.search_stopped` OR this `knowledge.searched`
+    // row. `knowledgeSearch.test.ts` counts the rows of each type per run.
     //
     // `redactedSearchEvent` is a PURE projection in `@pikar/core` precisely so the ban is testable
     // without a database: refs, hashes, ids, counts and closed enums. The fields added beside it

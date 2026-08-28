@@ -88,6 +88,18 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
+// THE ROUTE, NOT A CREDENTIAL (29-FIN-06). `generateObject` above is mocked, so the provider is
+// never called — but `resolveModel(DEFAULT_MODEL)` runs before it and throws without a key, and
+// this file used to satisfy that with a fake `OPENROUTER_API_KEY`. That fake key is a claim about
+// the DEPLOYMENT, and it made `offlineSeamAvailable()` false, which is the gate `vaultGround.ts`
+// now uses to keep a tenant-supplied `SMOKE::` string from selecting the vault fixture. Replacing
+// the route instead lets this file be what it actually is: a deployment with the operator's
+// fixture consent and NO model credential. `offlineSeamAvailable` is passed through untouched.
+vi.mock("./lib/models", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/models")>()),
+  resolveModel: () => ({}) as never,
+}));
+
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
@@ -258,7 +270,6 @@ beforeEach(() => {
   boundary.afterPlanner = null;
   boundary.plan = { searches: [] };
   boundary.synthesis = { summary: "", claims: [], unanswered: [] };
-  vi.stubEnv("OPENROUTER_API_KEY", "test-key-not-used");
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -873,7 +884,9 @@ describe("no source content reaches a governance plane", () => {
 
     const synthPrompt = boundary.calls.find((c) => c.system === SYNTH_BODY)?.prompt ?? "";
     expect(synthPrompt).toContain("IGNORE ALL PREVIOUS");
-    expect(synthPrompt).toMatch(/<<<evidence:[0-9a-f-]{36} id=vault-1/);
+    // `_` separators, not `-`: the run id is spelled so `scanText`'s card detector cannot eat it
+    // (`knowledgeLlm.ts`). This assertion was nondeterministically red while it could.
+    expect(synthPrompt).toMatch(/<<<evidence:[0-9a-f_]{36} id=vault-1/);
     // It never reaches the PLANNER (which runs before any evidence exists) …
     const planPrompt = boundary.calls.find((c) => c.system === PLANNER_BODY)?.prompt ?? "";
     expect(planPrompt).not.toContain("IGNORE ALL PREVIOUS");
@@ -980,6 +993,41 @@ describe("a governed stop is DATA, and a planner failure is not an empty busines
     expect(boundary.calls).toEqual([]);
     expect(await h.t.run((ctx) => ctx.db.query("knowledgeSearches").collect())).toHaveLength(1);
     expect(await auditRows(h)).toHaveLength(1);
+  });
+
+  test("AN UNUSABLE threadId IS REFUSED AS DATA, on the same boundary as the question", async () => {
+    // `question` was capped and the arg beside it was not, although `threadId` is tenant-supplied
+    // on the same handler, is stored VERBATIM on the content row, and is the `by_thread` INDEX KEY.
+    const h = await harness();
+    const docId = await seedDoc(h, h.tenantA, { title: "Doc", text: "The margin is 40 percent." });
+    planSearches({ source: "vault", query: `SMOKE::${docId}` });
+    synthesizeClaims([{ text: "A claim.", evidenceIds: ["vault-1"] }]);
+
+    // 200 is a LITERAL. Importing `THREAD_ID_CHAR_CAP` would move the oracle with the subject.
+    const accepted = await search(h, "margin?", "t".repeat(200));
+    expect(accepted.ok).toBe(true);
+    boundary.calls.length = 0;
+
+    // MUTATION OBSERVED RED: `threadId.length <= THREAD_ID_CHAR_CAP` -> `<`, and deleting the call.
+    expect(await search(h, "margin?", "t".repeat(201))).toEqual({
+      ok: false,
+      reason: "thread_id_invalid",
+    });
+    // An empty id is not a thread, it is the absence of one. MUTATION OBSERVED RED: drop
+    // `threadId.length > 0` from `threadIdOk`.
+    expect(await search(h, "margin?", "")).toEqual({ ok: false, reason: "thread_id_invalid" });
+
+    // $0, and no trace: no model call, no content row beyond the accepted one, no audit row.
+    expect(boundary.calls).toEqual([]);
+    expect(await h.t.run((ctx) => ctx.db.query("knowledgeSearches").collect())).toHaveLength(1);
+    expect(await auditRows(h)).toHaveLength(1);
+
+    // The id the write side ACCEPTED survives the round trip at the cap. `listByThread` carries no
+    // length check of its own — one was written and deleted, because mutating it away left this
+    // test green: an id `search` would refuse names no row, so the index read returns [] anyway.
+    expect(
+      await h.asA.query(api.knowledgeSearch.listByThread, { threadId: "t".repeat(200) }),
+    ).toHaveLength(1);
   });
 
   test("a planner failure falls back to the tenant's OWN documents, and says so", async () => {

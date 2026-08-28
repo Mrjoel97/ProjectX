@@ -36,16 +36,22 @@
 > `isOfflineFixtureConsent` is called by both `offlineSeamAvailable()` and the readiness screen, and
 > `models.test.ts` runs a table of literal values through both.)
 
-> Last verified: 2026-08-28 (**29-06 REMEDIATION — COMMENT-ONLY CHANGE TO `llm.ts`, CORRECTING A
-> FALSE INVARIANT.** `runAgentLoop`'s skill loader carried "only the three `USER_AUTHORABLE_SKILLS`
-> can have an overlay row at all, so every other specialist name resolves exactly as before". 29-05
-> widened `USER_AUTHORABLE_SKILLS` to admit the six `pack-*` workflow-pack skills, so a `pack-*`
-> name reaching this loader CAN now resolve to a tenant candidate body instead of the global active
-> row. That is the intended behaviour of pack customization — every overlay row is written by
-> `skills.publishUserCandidate` from a SERVER-RENDERED body and can only be activated by an
-> `ownerMutation` — but do not reason from "only three names are affected" when changing this
-> loader. The authoritative membership is the literal in `@pikar/contracts/skill`. No behaviour
-> changed in this file; no cockpit test changed.)
+> Last verified: 2026-08-29 (**29-FIN-06 — THE CORRECTION BELOW WAS ITSELF FALSE, AND IS NOW
+> DELETED RATHER THAN REWRITTEN A THIRD TIME.** Comment-only in `llm.ts`; no behaviour changed, no
+> cockpit test changed.
+>
+> `runAgentLoop`'s skill loader first carried "only the three `USER_AUTHORABLE_SKILLS` can have an
+> overlay row at all, so every other specialist name resolves exactly as before". The 29-06 FIX
+> replaced that with "29-05 widened `USER_AUTHORABLE_SKILLS` to admit the six `pack-*` workflow-pack
+> skills". **It did not.** `packages/contracts/src/skill.ts` still lists exactly
+> `OFFER_ARCHITECT_SKILL`, `MONEY_MODEL_DESIGNER_SKILL`, `LEAD_ENGINE_SKILL`; 29-05 added a SEPARATE
+> channel, `skills.publishPackCustomization`. The second claim mattered more than the first, because
+> it read as justification for removing a sibling plan's fail-closed gate.
+>
+> **No closed set of names is asserted at that line any more.** The comment now says what
+> `loadEffectiveSkill` QUERIES — `tenantSkills` by `[tenantId, name, status: "active"]`, falling
+> through to the global active row — and points at the publish channels for the membership question,
+> because that is where it is decided. Activation of an overlay row is an `ownerMutation`.)
 
 > Last verified: 2026-08-28 (**WAVE-2 FINAL PASS.**
 >
@@ -2127,9 +2133,11 @@
 >
 > **`llm.runSpecialistTurn`'s ordinary active-body read is now `internal.skills.getEffectiveSkill`
 > (tenant active overlay -> global active -> `NO_ACTIVE_SKILL`).** `tenantId` there is trusted
-> server state off the dispatcher's authenticated envelope, never model-supplied. Only the three
-> `USER_AUTHORABLE_SKILLS` can have an overlay row at all, so `research-specialist` and
-> `media-director` resolve exactly as before. **The exact-VERSION pin branch stays GLOBAL** — moving
+> server state off the dispatcher's authenticated envelope, never model-supplied. (This paragraph
+> used to add "only the three `USER_AUTHORABLE_SKILLS` can have an overlay row at all, so
+> `research-specialist` and `media-director` resolve exactly as before". Deleted 29-FIN-06: the
+> loader does not filter by name, and a second publish channel has since landed. Which names carry
+> an overlay row is decided at `skills.publishUserCandidate` / `skills.publishPackCustomization`.) **The exact-VERSION pin branch stays GLOBAL** — moving
 > it would silently re-point the eval runner's `--skill name@version` at a tenant row; tenant pins
 > are 21-03's. **Deliberately NOT threaded** into `runCockpitAgent`, voice, inbox, reply,
 > extraction, blueprint or vault loaders: those names are not authorable in v0, and every one of
