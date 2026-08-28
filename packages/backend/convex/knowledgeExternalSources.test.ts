@@ -658,6 +658,39 @@ describe("the CRM adapter maps the LANDED HubSpot projection honestly", () => {
     expect(out.evidence[0]?.text).toContain("pipeline default, stage closedwon");
   });
 
+  test("A CRM REF THAT IS CONTENT RATHER THAN AN ID IS DROPPED, AND THE DROP CHANGES THE STATE", async () => {
+    // THE THIRD `validateSourceRef` GUARD ON THIS PLANE, and the one round B's SUMMARY claimed was
+    // covered when it was not: the inbox `message.id` and `dealText`'s `key()` each had a test,
+    // this one had none. Mutating it to `if (false)` left all 44 tests green.
+    //
+    // It is genuinely drivable, not dead code. `deal.ref.id` is an unbounded provider string, and
+    // `@pikar/revenue`'s own `validateSourceRef` is a DENYLIST of quotes and control characters
+    // with no space class at all — so this id passes the provider layer, and only the ALLOWLIST
+    // (`SAFE_REF`, `@pikar/core`) refuses it. A "ref" carrying prose is how content reaches a plane
+    // that is allowed to store refs (CLAUDE.md §4).
+    const h = await crmHarness();
+    await connect(h, "asA");
+    stubProvider(() => dealPage(["5001", "a b c: not an id"]));
+
+    const out = await h.t.action(internal.knowledgeExternalSources.readCrmKnowledge, {
+      tenantId: h.a,
+      query: "open deals",
+    });
+
+    // Dropped, not repaired and not truncated.
+    expect(out.evidence.map((e) => e.sourceRef)).toEqual(["hubspot:deal:5001"]);
+    // AND REPORTED. `dropped > 0` is the only path to `provider_error` on this adapter — the
+    // windowed read is always `cap`, which the negative control below pins — so this is the
+    // `dropped > 0` arm as a VALUE. MUTATIONS OBSERVED RED: the guard -> `if (false)`; the
+    // `dropped > 0 ||` term -> `false ||` (both leave the state at `reason: "cap"`).
+    expect(out.state).toEqual({
+      status: "partial",
+      source: "crm-facts",
+      returned: 1,
+      reason: "provider_error",
+    });
+  });
+
   test("a connected CRM read is PARTIAL/cap, carries NO money, and honours HubSpot's OWN authority", async () => {
     const h = await crmHarness();
     await connect(h, "asA");
@@ -990,38 +1023,38 @@ describe("untrusted external content has NO path to a governance plane", () => {
     }
   });
 
-  test.each([["knowledgeExternalSources.ts"], ["knowledgeVaultDrive.ts"]])(
-    "%s IS INTERNAL-ONLY — its tenantId argument is never caller-supplied",
-    (file) => {
-      // Every adapter takes `tenantId: v.string()` as an ARGUMENT rather than from an
-      // authenticated wrapper. That is correct for an `internalAction` — it matches the landed
-      // `hubspotReadForTenant` — and catastrophic for anything a browser can name: the argument IS
-      // the tenant scope, so a `tenantAction` here would let any caller read any tenant. Nothing
-      // recorded that: not a test, not a type, not a comment. This is the record.
-      const src = (rawSources[`./${file}`] ?? "").replace(/\r\n/g, "\n");
-      const noComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-      // POSITIVE CONTROL: the module really was read, and it really does declare internal actions.
-      expect(noComments).toContain("= internalAction({");
-      expect(noComments).toContain("tenantId: v.string()");
-      for (const exposed of [
-        "tenantAction",
-        "tenantQuery",
-        "tenantMutation",
-        "ownerAction",
-        "= action(",
-        "= query(",
-        "= mutation(",
-        "httpAction",
-      ]) {
-        expect(
-          noComments.includes(exposed),
-          `${file} exposes a caller-reachable function (\`${exposed}\`) while taking tenantId ` +
-            `as an argument. The 29-06 coordinator must pass ctx.tenantId from a tenant wrapper; ` +
-            `a caller-supplied tenantId on a public function is a cross-tenant read.`,
-        ).toBe(false);
-      }
-    },
-  );
+  test.each([
+    ["knowledgeExternalSources.ts"],
+    ["knowledgeVaultDrive.ts"],
+  ])("%s IS INTERNAL-ONLY — its tenantId argument is never caller-supplied", (file) => {
+    // Every adapter takes `tenantId: v.string()` as an ARGUMENT rather than from an
+    // authenticated wrapper. That is correct for an `internalAction` — it matches the landed
+    // `hubspotReadForTenant` — and catastrophic for anything a browser can name: the argument IS
+    // the tenant scope, so a `tenantAction` here would let any caller read any tenant. Nothing
+    // recorded that: not a test, not a type, not a comment. This is the record.
+    const src = (rawSources[`./${file}`] ?? "").replace(/\r\n/g, "\n");
+    const noComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    // POSITIVE CONTROL: the module really was read, and it really does declare internal actions.
+    expect(noComments).toContain("= internalAction({");
+    expect(noComments).toContain("tenantId: v.string()");
+    for (const exposed of [
+      "tenantAction",
+      "tenantQuery",
+      "tenantMutation",
+      "ownerAction",
+      "= action(",
+      "= query(",
+      "= mutation(",
+      "httpAction",
+    ]) {
+      expect(
+        noComments.includes(exposed),
+        `${file} exposes a caller-reachable function (\`${exposed}\`) while taking tenantId ` +
+          `as an argument. The 29-06 coordinator must pass ctx.tenantId from a tenant wrapper; ` +
+          `a caller-supplied tenantId on a public function is a cross-tenant read.`,
+      ).toBe(false);
+    }
+  });
 
   test("this module BUILDS no source state — every one comes from @pikar/core", () => {
     // STRONGER than the scan this replaces, which sliced each `status: "..."` literal out of this

@@ -561,8 +561,17 @@ const vEvidence = v.object({
   sourceRef: v.string(),
   label: v.string(),
   text: v.string(),
-  // Code-owned, from `authorityFor` in the adapter. A caller cannot pass an unknown class, and the
-  // model has no field for one at all.
+  // WHAT THE CLOSED UNION ACTUALLY GUARANTEES, stated exactly: the MODEL has no field for an
+  // authority class at all (neither JSON schema carries one), and a CALLER cannot spell a class
+  // that does not exist. It does NOT guarantee the class is the one `authorityFor` minted for this
+  // row — any of the five valid classes is spellable here, including `tenant_owned`, and an
+  // earlier version of this comment claimed otherwise. It cannot be derived inside this module
+  // either: `authorityFor` needs `docKind`/`origin`/`ownedByMe`/`providerAuthority`, which are
+  // adapter-local facts that deliberately do not cross this boundary.
+  //
+  // ⚠ FOR PLAN 29-06, WHICH IS THE FIRST NON-TEST CALLER: carry each adapter's
+  // `KnowledgeAdapterResult.evidence` through UNMODIFIED, or re-derive via `authorityFor` at the
+  // merge point. Do not let a coordinator compute or choose this value.
   authority: literals(AUTHORITY_CLASSES as readonly [AuthorityClass, ...AuthorityClass[]]),
   sourceUpdatedAt: v.optional(v.number()),
   retrievedAt: v.number(),
