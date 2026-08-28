@@ -344,7 +344,10 @@ test("the digestInbox call is structurally TOOLLESS (generateObject, no tools:)"
   expect(block, "digestInbox does not load the inbox-digest skill").toMatch(/INBOX_DIGEST_SKILL/);
 });
 
-test("every generateObject schema is STRICT-mode legal (all properties required)", () => {
+test.each([
+  "llm.ts",
+  "knowledgeLlm.ts",
+])("%s: every generateObject schema is STRICT-mode legal (all properties required)", (file) => {
   // 03.7-05, found by a live eval run: OpenAI structured outputs run in STRICT mode, which
   // requires every key in `properties` to also appear in `required`. A merely-"optional" field
   // makes the API reject the SCHEMA — so the call throws 100% of the time, on every input. No
@@ -353,7 +356,7 @@ test("every generateObject schema is STRICT-mode legal (all properties required)
   // failed on every live briefing until this scan's fixture caught it.
   // The way to say "may be absent" is a NULLABLE-and-required field (`type: ["string","null"]`),
   // normalized back off after the call. This scan holds that line for every jsonSchema in llm.ts.
-  const src = readSource("llm.ts");
+  const src = readSource(file);
   const schemas = [...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => m[1]);
   expect(
     schemas.length,
@@ -365,6 +368,7 @@ test("every generateObject schema is STRICT-mode legal (all properties required)
     const rest = src.slice(start);
     const end = rest.indexOf("\n});");
     const block = rest.slice(0, end >= 0 ? end : undefined);
+    let checked = 0;
 
     // Each `properties: { ... }` object paired with the `required: [...]` that follows it.
     for (const m of block.matchAll(/properties:\s*\{/g)) {
@@ -389,13 +393,46 @@ test("every generateObject schema is STRICT-mode legal (all properties required)
       // Group 1 exists whenever the regex matched, which `!requiredMatch` above already guarded.
       const required = [...requiredMatch[1]!.matchAll(/["'](\w+)["']/g)].map((r) => r[1]);
       const missing = keys.filter((k) => !required.includes(k));
+      checked++;
       expect(
         missing,
         `${name}: ${missing.join(", ")} in properties but not in required — OpenAI strict mode ` +
           `REJECTS this schema, so the call throws on every input. Make it nullable-and-required.`,
       ).toEqual([]);
     }
+    // THE SCAN IS ORDER-DEPENDENT and silently vacuous otherwise: it looks for `required:` AFTER
+    // the `properties:` object it is checking, so a schema written `required` FIRST (blueprint.ts's
+    // ordering) matches zero pairs and passes without examining anything. That is not hypothetical
+    // — it is how a scan reads green over a broken schema. Fail loudly instead.
+    expect(
+      checked,
+      `${name}: the strict-mode scan matched NO properties/required pair — put \`required\` AFTER ` +
+        `\`properties\` in each object, or this scan is checking nothing at all.`,
+    ).toBeGreaterThan(0);
   }
+});
+
+test("knowledgeLlm.ts is structurally TOOLLESS — both knowledge calls, no tools: anywhere", () => {
+  // 29-04. The whole safety argument of the unified search: mail bodies, Drive text and CRM
+  // records reach a model that CANNOT act. This is a WHOLE-FILE ban, not a per-block one, because
+  // the module exists precisely so that untrusted content never sits beside a tool grant.
+  // Comments STRIPPED: the module header names `tools:` as the thing it must never do, and a
+  // scan that reads its own subject's prose fails on the documentation of the invariant it is
+  // enforcing. The `gmail.ts:229` idiom — prose may name a hazard, CODE may not.
+  const src = readSource("knowledgeLlm.ts")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  expect(src, "knowledgeLlm.ts does not use generateObject").toMatch(/generateObject/);
+  expect(src, "knowledgeLlm.ts is NO LONGER TOOLLESS — it passes tools to the model").not.toMatch(
+    /\btools\s*:/,
+  );
+  // Registry-loaded prompts (§5), never a hardcoded system string.
+  expect(src).toMatch(/system: skill\.body/);
+  expect(src).toMatch(/KNOWLEDGE_QUERY_PLANNER_SKILL/);
+  expect(src).toMatch(/KNOWLEDGE_SYNTHESIZER_SKILL/);
+  expect(src, "a hardcoded system prompt would bypass the skill registry (§5)").not.toMatch(
+    /system:\s*["'`]/,
+  );
 });
 
 test("no body-bearing identifier reaches the tool-bearing loop region of llm.ts (SC-2)", () => {

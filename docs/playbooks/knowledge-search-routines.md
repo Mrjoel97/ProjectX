@@ -1,6 +1,20 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
-> Last verified: 2026-08-28 against **plan 29-03** (the first EXTERNAL adapters land:
+> Last verified: 2026-08-28 against **plan 29-04** (the TWO TOOLLESS MODEL CALLS land:
+> `packages/backend/convex/knowledgeLlm.ts` plus the `knowledge-query-planner` and
+> `knowledge-synthesizer` registry rows, both GATED. Four things a reader needs:
+> **(a)** the calls live in a NEW module, not `llm.ts` — the plan text's "the existing sole Node
+> LLM module" premise is false (`blueprint.ts`, `vaultDigest.ts`, `vaultExtract.ts` and
+> `intake.ts` all call toollessly outside it), and putting untrusted mail/Drive/CRM text inside
+> the ~6,000-line tool-bearing loop would undo this feature's whole safety argument.
+> **(b)** invariant 27: a NOT-LANDED source is `not_landed` whether or not the planner named it —
+> `clampSearchPlan` can only mint that state for a source the MODEL proposed, so relying on it
+> alone made `support-desk` read as `unplanned` on every ordinary run. A test caught it.
+> **(c)** invariant 28: the RAW model object never leaves `knowledgeLlm.ts`.
+> **(d)** THE GATE ON BOTH BODIES IS NOT YET CLEARABLE — see "Known gaps". Plan 29-06 owes the
+> golden fixture. Do not edit either body before it lands.)
+>
+> PREVIOUS: 2026-08-28 against **plan 29-03** (the first EXTERNAL adapters land:
 > `packages/backend/convex/knowledgeExternalSources.ts` + `gmail.knowledgeQuery` + the HubSpot
 > CRM read. **`crm-facts` IS NOW SEARCHABLE** — the search plane got its own landedness
 > determination, `KNOWLEDGE_ADAPTERS`, and it deliberately disagrees with the pack plane; see
@@ -59,6 +73,9 @@ coordinator, no adapter, no UI and no Convex module yet.
 | `packages/core/src/tenantData.ts` | `knowledgeSearches: "tenant_owned"` — owned by `audit-dead-letter.md`, listed here because Phase 29 is why the row exists. |
 | `packages/backend/convex/knowledgeExternalSources.ts` | **29-03.** The EXTERNAL adapters: `EXTERNAL_KNOWLEDGE_READERS` (the code-owned reader registry), `readInboxKnowledge` (via `gmail.knowledgeQuery`), `readCrmKnowledge` (via the landed `hubspot.readHubSpotDataset`), `unavailableResult`/`answeredResult` (the only two state constructors) and `CRM_UNAVAILABLE_REASON` (the closed credential-reason map). Registered under this playbook in `watch.json`. |
 | `packages/backend/convex/knowledgeExternalSources.test.ts` | **29-03.** Two-tenant isolation, injected-instruction fixtures, the reader-registry drift scans and the structural containment scans. |
+| `packages/backend/convex/knowledgeLlm.ts` | **29-04.** The TWO toolless model calls: `planKnowledgeSearch` (question -> `{source, query}` pairs, over a code-supplied source list, re-checked by `clampSearchPlan`) and `synthesizeKnowledge` (fenced evidence -> claims, post-validated by `validateSynthesis`). Both take a `skillVersion` PIN. `SMOKE::knowledge-plan::` / `SMOKE::knowledge-synth::` are the offline seams, and they replace the `generateObject` call ONLY — the fixture's output still crosses the pure validators. Registered under this playbook in `watch.json`. |
+| `packages/backend/convex/knowledgeLlm.test.ts` | **29-04.** 29 tests: plan clamping by name, the plan-plus-gap totality property, the model-failure fallback, invented citations, cross-document excerpts, conflict survival, code-owned authority/freshness, the pin, and the structural containment scans. |
+| `packages/contracts/skills/knowledge-query-planner.md` + `.../knowledge-synthesizer.md` | **29-04.** The canonical bodies (with the derived `.ts` constants in `packages/contracts/src/skills/`). Owned by `skill-registry.md` — read that playbook's Last-verified block before editing either. |
 
 **Consumed, not owned** (their own playbooks apply — read those before touching them)
 
@@ -130,7 +147,10 @@ Landed today is only steps 0 and 8; the rest is the shape the later plans must b
 1. The user asks a question in the workspace.
 2. A **toolless** planner call (blueprint.ts `deriveCandidates` shape: `getActiveSkill` →
    `guardrails.preCall` → `scanText` → `generateObject` → `priceUsage` → `guardrails.recordSpend`)
-   proposes `{source, query}` pairs.
+   proposes `{source, query}` pairs. **LANDED as of 29-04:** `knowledgeLlm.planKnowledgeSearch`.
+   The `source` enum in its JSON schema is BUILT from `KNOWLEDGE_SOURCES` minus
+   `NOT_LANDED_SOURCES`, so an unadaptered source is not in the grammar — and `clampSearchPlan`
+   re-checks it anyway. A model-call failure falls back to a VAULT-ONLY plan (invariant 29).
 3. `clampSearchPlan` re-checks every pair in code: closed source enum, one query per source,
    length cap, no remote address. `crm-facts`/`support-desk` come back as ready-made
    `unavailable/not_landed` states rather than plan entries. There is deliberately no `source_cap`
@@ -149,7 +169,11 @@ Landed today is only steps 0 and 8; the rest is the shape the later plans must b
 5. `dedupeEvidence` collapses the same record read twice AND SAYING THE SAME THING, reports a ref
    that disagrees with itself as `conflicting`, and **cross-links** identical text from different
    records without deleting either.
-6. A second **toolless** call synthesizes claims citing evidence ids.
+6. A second **toolless** call synthesizes claims citing evidence ids. **LANDED as of 29-04:**
+   `knowledgeLlm.synthesizeKnowledge`, which takes FENCED evidence blocks and returns
+   `{summary, claims, unanswered}` and nothing else — there is no `authority`, `confidence`,
+   `probability`, `freshness` or `score` property in its schema and `additionalProperties: false`
+   forbids one, so those values are ABSENT rather than ignored (invariant 6, now structural).
 7. `validateSynthesis` drops invented ids (and counts them), substring-verifies excerpts against the
    evidence *that claim cited*, keeps conflicts, and attaches authority/freshness from the table.
 8. One `knowledgeSearches` row is written: answer + citations + source states, tenant-scoped.
@@ -191,6 +215,11 @@ Customization: form values → `validateCustomization` → `renderCustomization`
 | 25 | **THE EXTERNAL ADAPTERS WRITE NOTHING TO ANY GOVERNANCE PLANE.** No audit row, no telemetry row, no dead letter, no `agentSteps` row, no `payload:` literal, no direct `fetch`. | A unified search reads several sources and owes exactly ONE refs-only `knowledge.searched` event, owned by the 29-06 coordinator. Per-source events would let the log plane infer the shape of the question from how many rows appeared — and a subject line or a mail body in a payload is the §4 PII honeypot. | A source scan in `knowledgeExternalSources.test.ts` (the `briefings.ts` content-plane idiom), plus behavioural assertions that `audit`/`agentSteps`/`telemetry`/`deadLetters` are EMPTY after a read carrying a prompt injection. |
 | 26 | **AN UNREACHABLE OR PARTIAL EXTERNAL READ IS NAMED, NEVER SHRUNK.** `unavailableResult` is the only constructor of an unavailable state in the adapters and always returns zero rows with it; a further provider page, a hydration cap, a truncated body, a per-source evidence cap or a dropped malformed ref each produce `partial` with a reason. A provider's own `because`/`missing` string is NEVER forwarded onto the closed enum. | Presenting five of twenty-five messages, or eight of two hundred deals, as a complete read is the same lie as presenting an unreachable CRM as an empty one. `reason` reaches a stored row, so it must stay a code-owned enum (CLAUDE.md §4). | `knowledgeExternalSources.test.ts`. MUTATIONS OBSERVED RED: rewrite `unavailableResult` as `{available, returned: 0}`; force `lost` to `null`; narrow the partial condition; forward the credential layer's raw `revoked` onto the enum; remove the per-source slice. |
 
+| 27 | **A NOT-LANDED SOURCE IS `not_landed` WHETHER OR NOT THE PLANNER NAMED IT.** `settlePlan` decides the reason from the ADAPTER REGISTRY, never from what the model happened to say. | `clampSearchPlan` can only mint `not_landed` for a source the model PROPOSED, so relying on it alone made `support-desk` read as `unplanned` — "we chose not to look there" — on every ordinary run. That is a materially softer and different sentence from "this product cannot look there yet, and here is what would unlock it", and it silently erases the one honest-gap the phase's own owner ruling exists to preserve. Found by a test, not by review. | `knowledgeLlm.test.ts`, "EVERY source is accounted for exactly once across plan + skipped". MUTATION OBSERVED RED: hardcode `reason: "unplanned"` (2 tests). |
+| 28 | **THE RAW MODEL OBJECT NEVER LEAVES `knowledgeLlm.ts`.** Every path — live, offline fixture — converges on `validateSynthesis` before returning, and the planner's every path converges on `clampSearchPlan`. | A caller that could receive an unvalidated claim would eventually be written, and "the coordinator validates it" is a convention, not a guarantee. Making it structural means there is no unvalidated shape to hand out. | `knowledgeLlm.test.ts` drives invented ids, cross-document excerpts and conflicts THROUGH the action, not through the pure function. MUTATIONS OBSERVED RED: replace `validateSynthesis` with a pass-through (4 tests); bypass `clampSearchPlan` for the plan (6 tests). |
+| 29 | **A PLANNER FAILURE DEGRADES TO THE TENANT'S OWN DOCUMENTS, NEVER TO AN EMPTY SUCCESS.** The fallback is a vault-only plan carrying the user's own words, plus an honest `unplanned`/`not_landed` state for every other source, and `fallback: true` on the result. | "The planner errored, so we searched nothing, so there is nothing" is the same lie as an unreachable source with a zero count — one plane up. | `knowledgeLlm.test.ts`, "a planner FAILURE degrades to the tenant's OWN documents", driven through the REAL `catch` by the `SMOKE::knowledge-plan::FAIL` directive. MUTATION OBSERVED RED: return an empty plan from the fallback. |
+| 30 | **AUTHORITY, CONFIDENCE, FRESHNESS AND RESULT LIMITS HAVE NO SCHEMA FIELD.** Neither `jsonSchema` declares one and both objects carry `additionalProperties: false`. | Invariant 6 said the model "does not get to grade its own work", but it was enforced by nobody reading a field the model was free to emit. Absent-by-grammar is a different guarantee from ignored-by-convention, and it is the one that survives a body edit. | `knowledgeLlm.test.ts`, "NEITHER SCHEMA HAS A FIELD FOR AUTHORITY, CONFIDENCE OR A LIMIT" (comments stripped, with a positive control). MUTATION OBSERVED RED: add `confidence: { type: "number" }` to the synthesis schema. |
+| 31 | **BOTH KNOWLEDGE CALLS ARE PINNABLE, AND A BAD PIN FAILS RATHER THAN FALLING BACK.** `skillVersion` loads that EXACT version through `getSkillVersion`; a version that does not exist throws `NO_SUCH_SKILL_VERSION`. | This is the ONLY thing that can ever make the two GATED bodies certifiable: an eval run that silently measured the ACTIVE body while claiming to certify a candidate would record passing evidence for the wrong prompt. | `knowledgeLlm.test.ts`, "THE PIN REACHES THE LOAD" (both actions) and "a pin naming a version that does not exist FAILS". MUTATION OBSERVED RED: make the pinned branch load the active row. |
 ## How to change safely
 
 **Adding a source** (only when its adapter genuinely lands): add it to `workflowPacks.ts`'s
@@ -290,6 +319,12 @@ plans 29-02 onward, and every recurrence live proof in 29-11.
 | Gap | Where the upgrade path is recorded |
 |---|---|
 | **Nothing writes `knowledgeSearches` yet.** The table, the contracts and the tests exist; the coordinator does not. | Plans 29-02 … 29-06. |
+| **THE EVAL GATE ON `knowledge-query-planner` AND `knowledge-synthesizer` IS NOT YET CLEARABLE.** Both are in `GATED_SKILLS`. `seedSkills`' `rows.length === 0` branch lands them at v1 `active`, so nothing is blocked today — but the FIRST BODY EDIT mints a candidate `activateSkill`'s EVAL_GATE holds until a green `pnpm eval:golden --skill <name>@N` run, and `run-eval-golden.mjs` drives `llm:runCockpitAgent` and nothing else. **Do not edit either body until 29-06 lands.** | **PLAN 29-06 OWES THIS**: a cockpit-side knowledge tool, `skillVersions` threaded into `knowledgeLlm`, and at least one golden fixture that drives a knowledge search. Half the rail is already built — both actions take a `skillVersion` pin and `knowledgeLlm.test.ts` proves the pinned body is what answers (invariant 31). Recorded on both constants in `packages/contracts/src/skill.ts`, on the `SEEDS` rows, and in `skill-registry.md`. |
+| **NOTHING CALLS `knowledgeLlm` YET.** The two actions, their schemas, their offline seams and 29 tests exist; there is no coordinator, no `knowledgeSearches` write and no UI. | Plan 29-06. |
+| **`knowledgeSearches.runId`'s comment overstates what 29-04 built.** It reads "the run correlation the toolless planner/synthesizer calls spent against", but each action MINTS ITS OWN per EXECUTION (`blueprint.ts:271`'s reasoning: re-entering an action re-runs the model call, so the second charge is real and needs its own ledger row; a stable correlation would put the ledger BELOW the limiter). So there are two spend correlations per search, `knowledge:plan:<runId>` and `knowledge:synth:<runId>`, and neither is the coordinator's own row id. | Both actions RETURN their `runId`. 29-06 should store the coordinator's own correlation in `knowledgeSearches.runId` and, if the join matters, keep the two returned ids beside it. `schema.ts` was not edited from here — it is 29-01's file and the repo's highest-collision one. |
+| `ponytail:` **`SUMMARY_CHAR_CAP` (1,200) lives in `knowledgeLlm.ts`, not in `SEARCH_CAPS`.** It is not a search bound — it is how much model prose may reach a stored row — and `@pikar/core`'s cap set is covered by a `NO CAP IS DEAD` scan that demands an enforcement site IN THAT PACKAGE. Ceiling: a cap outside the one registry of caps. | Enforced at the only place a summary is produced, and covered behaviourally (the offline fixture echoes the question so a 5,000-character input drives the cap; `1_200` is a literal). Upgrade path: move it into `SEARCH_CAPS` when `@pikar/core` gains a summary-shaping function to enforce it. |
+| `ponytail:` **`literals()` is a two-line copy of `schema.ts`'s private helper.** Ceiling: two identical validator helpers over one boundary. | Comment on the function. Upgrade path: export ONE from `convex/lib/` when a third caller appears — not from `schema.ts`. |
+| **The planner fallback passes the question through UNSANITIZED** (truncated to `queryCharCap`). A question containing a URL is refused by `clampSearchPlan`'s remote-address rule, so the vault-only fallback returns an empty plan for it. Deliberate: the refusal is visible as a `remote_url` rejection instead of being silently repaired. | `ponytail:` comment on `fallbackPlan`. Upgrade path: strip addresses THERE, never inside `clampSearchPlan` — that function's job is to refuse, not to rewrite. |
 | **`support-desk` is `not_landed`** — nothing landed for it on either plane. `crm-facts` STOPPED being not-landed on 2026-08-28 when Phase 28's HubSpot rail merged. | `29-DEPENDENCY-EVIDENCE.md` §2, the post-merge addendum, and invariant 23. |
 | **The CRM read is HubSpot `deals` only, and it ignores the planner's query.** `HUBSPOT_READ_PATHS` has no search endpoint (CRM Search carries its own rate limit and needs its own decision, 28-05), so a CRM knowledge read is a 90-day windowed list of the 8 most recently updated deals and the synthesis model filters them. QuickBooks read, Stripe, PayPal and any support desk are absent. | `ponytail:` comments in `knowledgeExternalSources.ts`. Upgrade path: add CRM Search to the allow-list with its own budget, or add datasets, in a plan that owns `connectorFetch`. |
 | **The inbox adapter returns NO sender**, so an answer cannot say "Sarah said X". Deliberate: the landed toolless firewall is BODY-scoped, so senders and subjects already reach the tool-bearing briefing loop, and Phase 29 must not widen that. | `ponytail:` comment on `KnowledgeMailMessage`. Upgrade path: a server-side sender table addressed by index, the `buildRecipientView` idiom. |
