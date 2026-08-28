@@ -1,6 +1,8 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
-> Last verified: 2026-08-28 against 28-06 complete (OAuth, bounded reads, and the gate script)
+> Last verified: 2026-08-28 against 28-07 (`boundedWindow`, `normalizeAll` and
+> `separateByCurrency` hoisted from `providers/quickbooks.ts` to `providers/shared.ts` and
+> re-exported — no behaviour change), on top of 28-06 complete (OAuth, bounded reads, gate script)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-06, 28-23) · Related ADRs: none yet
 
 > **Status: BUILT AND OFFLINE-PROVEN. THE LANE HAS NOT RUN LIVE.** The normalizer, the OAuth
