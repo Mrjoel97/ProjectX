@@ -1,3 +1,39 @@
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — the two vault-plane honesty defects, and
+> the one that was reported fixed and was not.**
+>
+> **(1) `truncated` IS NOW MEASURED AGAINST THE DOCUMENT, NOT AGAINST WHAT WAS HYDRATED.**
+> `vaultGroundHydrated`'s chunk-precise path hydrates the passage that MATCHED, so
+> `slice.length < text.length` was comparing a passage against itself: a 38-character extract from
+> an 8,000-character contract reported `truncated: false`, and `knowledgeVaultDrive.ts` turned that
+> into `{status: "available"}` — a COMPLETE read of a document it had read one paragraph of. That
+> is verbatim the defect the flag was added to close. `ownedDocsMeta` now returns `textChars` (a
+> LENGTH, never the text — it already loaded the whole row, so this costs nothing and keeps the
+> refs-only contract), and the loop compares the slice against the document.
+>
+> **The branch was untestable, which is why it survived a green suite.** The `SMOKE::` seam never
+> populated `matchedByDoc`, so every offline test took the doc-text fallback where passage and
+> document are the same string. `SMOKE::<docId>|<passage>` now attaches a matched passage — the `|`
+> half is optional and every existing `SMOKE::<id>,<id>` sentinel keeps its exact meaning, and a
+> passage is attached only to a doc `ownedDocsMeta` returned, so the seam stays tenant-scoped.
+>
+> **(2) THE VAULT AND DRIVE ADAPTERS CAN NOW RETURN `unavailable`, AND THEY NEVER THROW.**
+> `searchVaultKnowledge` had NO unavailable arm at all: `vaultGroundHydrated` reaches OpenRouter for
+> embeddings and `vault.getDoc` for hydration, either can reject, and the rejection escaped the
+> internalAction instead of becoming a state. `searchDriveKnowledge` modelled four provider failures
+> but not a rejected `fetch`. Both are wrapped now, and both refuse a blank query up front —
+> `runDriveSearch` short-circuits a blank needle to `{ok: true, rows: []}` with ZERO network calls,
+> which used to surface as `available/0`, "we looked at your Drive and there is nothing".
+>
+> **(3) A VAULT HIT WITH NO TEXT IS `provider_error`, NOT `cap`.** Two different facts reached the
+> loop as `""`: the run budget ran out (`truncated: true`, a real cap) and the document simply has
+> no extracted text (`truncated: false`). Reporting the second as `cap` told the user a retrieval
+> limit was hit that never applied.
+>
+> **(4) THE RESULT CONTRACT MOVED TO `@pikar/core`.** `KnowledgeAdapterResult`, `settleRead` and
+> `unavailableRead` are defined once, beside `clampEvidence` and the closed state union;
+> `knowledgeVaultDrive.ts`'s private `settle` and `KnowledgeAdapterResult` are gone. See
+> `knowledge-search-routines.md` for why, and for the per-source vs per-run clamp split.)
+>
 > Last verified: 2026-08-28 (**DRIVE IS A KNOWLEDGE SOURCE, AND IT IS METADATA ONLY — BY
 > CONSTRUCTION, NOT BY POLICY** — Phase 29 plan 29-02 task 2).
 >

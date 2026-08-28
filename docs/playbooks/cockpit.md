@@ -1,3 +1,45 @@
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — a failed Gmail read was reported as an
+> empty successful one, and every model call in the repo was routed by one of seven copies of the
+> same function.**
+>
+> **(1) `gmail.knowledgeQuery` CHECKS ITS HTTP STATUS NOW, AND CATCHES ITS TRANSPORT.** Neither
+> `listRes.ok` nor the per-message `res.ok` was tested and nothing was caught, so a 500/429/403
+> parsed as `{}`, `messages` came back undefined, and the inbox adapter published
+> `{status: "available", source: "inbox", returned: 0}` — "we searched your mailbox and there is
+> nothing there" for a mailbox Gmail refused to show us. A refused BODY was worse: `{}` becomes two
+> empty strings and `Number(undefined ?? 0)` becomes 1970, i.e. an evidence row asserting that a
+> message exists and says nothing. A refused list is now `{ok: false, reason: "provider_error"}`;
+> a refused body is DROPPED and reported through the new `hydrationFailed` flag, which the adapter
+> turns into `partial/provider_error`.
+>
+> **The stub shape is load-bearing and the tests say so.** Gmail's error bodies are JSON, and a JSON
+> envelope PARSES — that is what hides a missing `res.ok`. An HTML error page throws on `.json()`
+> and gets caught, so a stub that only ever answers HTML cannot tell a module that checks the status
+> from one that does not; both mutations came back GREEN against the first version of these tests.
+>
+> **(2) THE EMPTY-QUERY THROW IS GONE, AND THE COMMENT THAT CALLED IT UNREACHABLE WAS FALSE.**
+> `clampSearchPlan` only requires one letter or digit, while `escapeGmailQuery` additionally drops
+> the bare boolean operators — so a planner emitting `"OR"`, `"AND"` or `"OR AND"` cleared the
+> boundary and made the adapter REJECT, under `Promise.allSettled`, where a rejection renders as
+> nothing. It returns `{ok: false, reason: "unplanned"}` now: no search of the mailbox happened,
+> which is neither Gmail's fault nor an empty result. The mirror claim in
+> `@pikar/core/knowledgeSearch` was corrected too — a guard justified by a claim about another
+> module is only as true as that claim.
+>
+> **(3) ONE MODEL ROUTE TABLE: `packages/backend/convex/lib/models.ts`.** `resolveModel` existed
+> SEVEN times and only `llm.ts`'s ever grew the `or/` branch, while `DEFAULT_MODEL` has been
+> `"or/openai/gpt-4o-mini"` since 845f4b1 — so every other copy hands an OpenRouter ROUTE id to the
+> OpenAI provider. `llm.ts` now delegates and keeps ONLY the `google/` branch, because
+> `@ai-sdk/google-vertex` is Node-only and `llm.ts` is the one `"use node"` module; the shared table
+> fails CLOSED on `google/` rather than silently routing it to OpenAI.
+>
+> **⚠ FIVE COPIES ARE STILL STALE AND STILL MISROUTING TODAY: `blueprint.ts`, `onboarding.ts`,
+> `vaultDigest.ts`, `vaultLlm.ts`, `voiceDoc.ts`.** That is a live defect in five landed subsystems,
+> deliberately NOT fixed inside a knowledge-plane remediation — changing which provider and which
+> key they talk to needs its own change and its own verification. `lib/models.test.ts` holds the
+> named list and fails both ways: if a SIXTH copy appears, and if a name is left there after its
+> copy is gone.)
+>
 > Last verified: 2026-08-28 (29-03 — **`gmail.ts` GAINS A FIFTH READ VERB, `knowledgeQuery`, AND
 > IT IS DELIBERATELY NOT `search`.** `search` resolves a CONTACT: it asks `from:/to:` about a name,
 > fetches `format=metadata` only and never touches a body. `knowledgeQuery` asks a free-text

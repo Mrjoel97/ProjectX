@@ -1,5 +1,70 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — three blockers, one reinvented contract,
+> and a cap with no enforcement site.**
+>
+> **(1) UNTRUSTED THIRD-PARTY CONTENT COULD SELECT THE OFFLINE SMOKE SEAM.** `synthesizeKnowledge`
+> tested `safePrompt.includes(SMOKE_SYNTH_PREFIX)`, and `safePrompt` is the rendering of the
+> question PLUS every evidence row's `text` and `label` — i.e. inbound mail BODIES and SUBJECT
+> LINES. Anyone who could email the tenant could put the sentinel in a message and replace the whole
+> synthesis with the code fixture: no model call, no spend, the real answer suppressed, and the
+> SENDER choosing which of the tenant's rows were cited and which were reported as conflicts,
+> through the `<citeIds>|<excerptFromId>|<conflictIds>` grammar. A remote party selected a code path
+> in the one module whose entire safety argument is that untrusted content steers nothing. **Both
+> seams now key on the `question` ARGUMENT alone.** `blueprint.ts` and `vaultDigest.ts` may scan
+> their whole prompt because theirs is built from the tenant's own profile; this one is not, and the
+> difference is a security boundary rather than a style choice.
+>
+> **(2) THE EVIDENCE FENCE WAS FORGEABLE, AND ITS JSDOC DENIED IT.** `synthesisPrompt` interpolated
+> `evidenceId`, `source`, `label` and `text` into the `<<<evidence ...>>>` markers with no escaping
+> and no nonce, while the docstring claimed a body containing the closing marker "cannot end a block
+> early". Its justification — "nothing downstream parses this string back" — is about the CODE
+> plane; the fence exists for the MODEL's view of the prompt. The markers now carry the run's nonce,
+> and `fenceSafe` strips `<` and `>` from every interpolated field, so a row can neither close its
+> own block nor mint a forged one claiming to be tenant-owned vault evidence. `synthesisPrompt` is
+> EXPORTED for the test that proves it: the prompt never leaves the module, so no caller-visible
+> assertion can reach it and a source scan would only prove the spelling.
+>
+> **(3) THE MODEL WAS MISROUTED ON BOTH LIVE CALLS.** The module copied `blueprint.ts`'s stale
+> private `resolveModel`, which has no `or/` branch, so both calls sent `or/openai/gpt-4o-mini` to
+> the OpenAI provider. Planner-side that failure is silent and permanent — the bad call lands in the
+> `catch` and degrades to the vault-only fallback on every production run, which is exactly the "we
+> searched everything and found nothing" outcome this module exists to prevent. It imports
+> `convex/lib/models.ts` now; see `cockpit.md` for the five stale copies still outstanding.
+>
+> **(4) THE RUN-LEVEL CAPS WERE ENFORCED NOWHERE, AND THE SYNTHESIZER BILLED AN UNBOUNDED CORPUS.**
+> `clampEvidence` is documented as THE admission boundary that applies every per-RUN bound once, and
+> its only production call site was inside a SINGLE-SOURCE adapter — so `maxEvidenceTotal: 24` and
+> `totalEvidenceCharCap: 8000` bounded nothing (five sources at their per-source cap is 40 rows and
+> ~40k characters). `clampEvidence` now takes a SCOPE: `"source"` applies the per-source and per-row
+> caps only, `"run"` (the DEFAULT, so a forgetful caller gets the tighter bounds) adds the two run
+> bounds. `settleRead` clamps at source scope; `synthesizeKnowledge` clamps the whole corpus at run
+> scope as the FIRST act of its handler, before the gate, the prompt and the model.
+>
+> **`ponytail:` ceiling, named rather than papered over:** the per-source `returned` counts the
+> adapters publish are minted BEFORE the union clamp, so a corpus cut at synthesis can leave a state
+> that overstates what reached it. Upgrade path: plan 29-06's coordinator clamps the union ONCE and
+> mints every state after it, and both ponytail comments come out when it does.
+>
+> **(5) ONE ADAPTER RESULT CONTRACT, IN `@pikar/core`.** `KnowledgeAdapterResult` and
+> `ExternalKnowledgeResult` were structurally identical types written three minutes apart in the
+> same wave, with nothing pinning them, and they had ALREADY drifted on who enforces admission — one
+> ran `clampEvidence`, the other relied on hand-written slices, so `evidenceTextCharCap` bound a
+> mail body and nothing at all bound a CRM row. `KnowledgeAdapterResult`, `unavailableRead` and
+> `settleRead` are now defined once beside `clampEvidence` and the closed state union, and all four
+> adapters use them. `knowledgeExternalSources.ts` no longer contains a single `status: "..."`
+> literal, which its own containment test asserts — a state carrying a subject line is not
+> discouraged there, it is unspellable.
+>
+> **(6) THE CRM EVIDENCE TEXT WAS NOT PROVIDER-STRING-FREE, AND THE HEADER SAID IT WAS.**
+> `deal.pipelineId` and `deal.stageId` are HubSpot's own `pipeline` and `dealstage` property values
+> — opaque keys in every real portal, unbounded provider strings on the wire — and they were
+> interpolated verbatim into text carrying `system_of_record` authority, with no cap on the CRM arm
+> at all. They go through `validateSourceRef` now, the same §4 ref-shape rule the `sourceRef` uses,
+> so a value that is not id-shaped is reported as `unknown` rather than repeated. The test that
+> claimed to prove containment planted its payload in `dealname`, a property the rail never
+> requests, so it proved a field was absent rather than that the requested fields were safe.)
+>
 > Last verified: 2026-08-28 against **plan 29-04** (the TWO TOOLLESS MODEL CALLS land:
 > `packages/backend/convex/knowledgeLlm.ts` plus the `knowledge-query-planner` and
 > `knowledge-synthesizer` registry rows, both GATED. Four things a reader needs:

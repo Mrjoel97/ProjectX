@@ -143,6 +143,7 @@
     "packages/backend/convex/agentSteps.test.ts",
     "packages/backend/convex/deliverApprovedPlan.ts",
     "packages/backend/convex/llm.ts",
+    "packages/backend/convex/lib/models",
     "packages/backend/convex/cockpitCapabilities.ts",
     "packages/backend/convex/cockpitCapabilities.test.ts",
     "packages/backend/convex/mediaIntent.ts",
