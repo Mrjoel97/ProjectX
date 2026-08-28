@@ -3,82 +3,90 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 10 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail, 28-06 read-only QuickBooks rail, 28-07 read-only Stripe rail) -- 28 IN PROGRESS
+current_plan: 11 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail, 28-06 read-only QuickBooks rail, 28-07 read-only Stripe rail, 28-08 read-only PayPal rail) -- 28 IN PROGRESS
 status: executing
-stopped_at: "28-07 SEALED (`1a37fa2` RED auth, `d9da40e` OAuth, `8f30d7c` RED normalizer, `f233cfd` reads+allow-list, `e68c9a4` gate+docs).
-**THE PAYMENT RAIL EXISTS AND IT HAS NEVER SPOKEN TO STRIPE.** `check-provider-lane --provider
-stripe` reads `consistent`, 1 row pending. CONSISTENT IS NOT PASSED. 125 tests added (39 revenue +
-86 backend), every one offline at $0.
-**THE PLAN'S ROUTE WAS DEAD AND THE BRIEF SAID SO: Connect Extensions are DEPRECATED** ('You can no
-longer build new Connect extensions'), and the Connect `read_only` scope can only be specified for
-extensions. So the plan's `oauth/deauthorize` / `Stripe-Account` / `read_only` key_link was NOT
-built. The route is a **Stripe App**: `marketplace.stripe.com/oauth/v2/authorize` +
-`POST api.stripe.com/v1/oauth/token`, manifest permissions ALL `*_read`. That is a STRONGER position
-than QuickBooks -- the token cannot express a write AT THE VENDOR, so the allow-list is the second
-boundary, not the only one. A source scan keeps `oauth/deauthorize` and `read_write` out of the lane.
-**THE FAIL-CLOSED HANDOFF IS DISCHARGED.** `PROVIDER_READ_PATHS.stripe` was `[]` BY DECISION from
-28-04 and 28-26 wired its LENGTH into the eligibility rule; it now holds five list/retrieve paths
-(`/v1/balance`, `/v1/charges`, `/v1/invoices`, `/v1/payouts`, `/v1/disputes`), each with a parser,
-compared against the pure module in BOTH directions. **Three lane rows moved PEND->OK: adapter,
-read-only, allow-list.** The open condition did NOT move.
-**REVOCATION IS IMPLEMENTED HONESTLY, NOT CLOSED.** `disconnect` makes ZERO upstream requests and
-records `revocation.upstream = \"unsupported\"`; `classifyRevokeOutcome` makes `confirmed`
-unreachable for stripe before it looks at a status code. The smoke validator REJECTS any other
-upstream state -- `confirmed`/`attempted_failed` are fabrications on a route with no endpoint, and
-`not_attempted` would claim one exists that we skipped. A local clear must also carry
-`grantRemainsLiveUpstream: true`. **`platform-initiated-revocation` stays UNCLEARED for 28-24.**
-**THE ADMISSION IS AN OWNER OVERRIDE and is never rendered as evidence-backed** -- the code, the
-docs and the smoke output all say so.
-**THE API VERSION PIN HAS NO DEFAULT, deliberately.** Unset or malformed `STRIPE_APP_API_VERSION`
--> the lane returns `unavailable` and makes NO request. This repo cannot verify a live Stripe
-version string offline and refuses to invent one; unset would silently read whichever version the
-CONNECTED ACCOUNT's dashboard is on. `readPages` gained ONE validated value (`stripeApiVersion` ->
-`Stripe-Version`), NOT a header map -- Stripe has no query-param form. **The evidence file names the
-pin the DEPLOYMENT reported with each read, and the smoke script has no `--api-version` flag**,
-because an operator-typed version is an unverified claim about a shape.
-**NAMESPACE BOUNDARY HELD:** nothing under `packages/billing/`, `convex/billing*.ts` or
-`BILLING_STRIPE_*` was touched. A source scan (comment-STRIPPED, so the guard does not catch its own
-warning) plus a `BILLING_STRIPE` forbidden substring in the evidence validator enforce it.
-**TASK 3 COULD NOT RUN: THERE IS NO STRIPE APP CREDENTIAL IN THIS DEPLOYMENT.** Same shape as 28-05
-and 28-06: `--self-test` fires 28 guards through the SAME builder a live run uses and prints 'THIS IS
-NOT A LIVE PASS'; `--verify-evidence` prints 'THIS FILE IS A STUB, NOT A LIVE PASS'; a bare run exits
-**2** with `LIVE_EVIDENCE_NOT_PRODUCED`. Env names for `npx convex env set` are in the record.
-**TWO TESTS ASSERTING STRIPE'S LIST WAS EMPTY had to change, and were replaced with the MECHANISM**
-rather than deleted: `connectorFetch.test.ts` now proves a path off ANY provider's list fails closed,
-and `providerGates.test.ts` proves `readPathCount: 0` yields `no_read_paths` against the PURE rule --
-which outlives the provider that happened to be empty.
-**9 NON-DELETION (rename/substitution) MUTATIONS, ALL RED, ALL RESTORED:** `stripe_apps`->`read_only`
-(11 red), `livemode === production`->`sandbox` (4), marketplace host->`connect.stripe.com` (1),
-`PROVIDER_REVOKE_SUPPORT.stripe`->`confirmed` (6), **`moneyFromMinor`->`moneyFromNumber` (8 red -- the
-double-conversion bug as a rename, invisible to a deletion-only mutator)**, `/v1/charges`->
-`/v1/payment_intents` (1+10), `gate.state !== passed`->`parked` (11), `balance.available`->`pending`
-(1), `Stripe-Version` header renamed (1). `STRIPE_GRANT_SCOPE` and the authorize host are ALSO pinned
-as LITERALS once, because a constant the tests import cannot be pinned by mutating it.
-`tsc --noEmit` run SEPARATELY per package, both exit 0 (it caught 2 real errors a green 76-test run
-was silent over). Backend 2913/2913 in 108 files, revenue 265/265. The non-zero backend exit is the
-PRE-EXISTING worker-teardown `process is not defined`; a `media.test.ts` failure seen once was an
-order-dependent FLAKE -- green alone and green on a clean re-run, and `git diff --stat` proves 28-07
-never touched it. **THE STOP HOOK CAUGHT WHAT MY OWN `check-playbooks` RUN DID NOT:** `providers/shared.ts` was a
-new code file no playbook watched. Running that script by hand gives exit 0 and EMPTY STDOUT and
-that is NOT a pass -- it is the standing no-op-that-reads-green. Registered under
-`revenue-connectors.md` in `watch.json` (it is provider-agnostic, so it belongs to the shared
-playbook, not to any one connector). `git diff --stat HEAD -- \"*.ts\"` empty after
-committing.
-`requirements-completed: []` -- **REVN-03 STAYS PENDING**: it needs 28-24's live gate, so
+stopped_at: "28-08 SEALED (`de37ee0` authorization model, `954f277` bounded reads, `5012171` lane gate+docs).
+**THE PAYPAL RAIL IS BUILT AND IT CANNOT CONNECT -- AND THAT IS THE DELIVERABLE.** 74 tests added
+(31 revenue + 43 backend), every one offline at $0. `check-provider-lane --provider paypal` reads
+`consistent`, 1 row pending; adapter and read-only moved PEND->OK. CONSISTENT IS NOT PASSED.
+**THE MODELLING ERROR WAS THE WHOLE PLAN.** A PayPal client-credentials token reads THE APP OWNER'S
+OWN account -- Pikar's. Model it as a per-tenant grant and you get a green suite, a working smoke run
+and PIKAR'S OWN payment data rendered to a tenant as theirs, because every gate in this phase checks
+that a read WORKED and not one checks WHOSE MONEY CAME BACK. Refused THREE times, each
+mutation-proven: `classifyGrantSubject` fails CLOSED to `app_owner` for a missing, malformed OR
+PARTNER-OWNED merchant id (inverting the partner comparison = 12 red); `PayPalCredential.merchantId`
+is required BY TYPE and `parsePayPalCredential` refuses a blob without one; and `paypalConnector`
+re-checks the subject AFTER decryption and refuses BEFORE the request leaves
+(`expect(fetchMock).not.toHaveBeenCalled()`). A FOURTH lives in the evidence plane: the smoke
+validator rejects any read that PRODUCED ROWS with `delegatedMerchant: false` -- a well-formed file
+recording a SUCCESSFUL read of Pikar's own account would otherwise have sealed the lane.
+**THE GAP IS RECORDED, NOT INVENTED.** The published spec declares a partner-only
+`partner-transactions` tag WITH NO PUBLISHED OPERATION, so the third-party read surface cannot be
+built from public docs. `PAYPAL_PARTNER_TRANSACTIONS_PATH = null` (the gap as a VALUE) +
+`PAYPAL_PARTNER_SURFACE_GAP` (one code-owned sentence shared by connector, beginConnect and smoke).
+No fixture asserts a partner response. **`beginConnect` RETURNS A REFUSAL, mints no state and calls
+nothing -- NO TENANT CAN CONNECT PAYPAL TODAY.** Deliberately NOT built: the Partner Referrals
+creation call, because the read-only feature package is not documented as self-serve and must be
+agreed with the partner manager first, and a bespoke POST in a lane module goes RED on
+check-provider-lane's write-verb scan.
+**NEW FINDING -- THE INVOICE HALF OF THE READ SURFACE WAS DROPPED.** PayPal's feature enum has NO
+read-only invoice member; the only one reaching an invoice is `INVOICE_READ_WRITE`, which also grants
+invoice dispatch. It is on `PAYPAL_REFUSED_FEATURES`, alongside PayPal's write-capable DEFAULT set
+(`PAYMENT`/`REFUND`/`DELAY_FUNDS_DISBURSEMENT`). **The rail is transactions and balances ONLY.**
+**MONEY IS DECIMAL STRINGS THROUGH `parseMoney` ONLY** -- `0.29` USD is exactly 29 (0.29*100 is
+28.999999999999996), `5000` JPY is 5000 minor units, `1.005` is REFUSED not rounded. **A NEGATIVE
+AMOUNT IS KEPT, the opposite of the Stripe rule on purpose:** PayPal reports a reversal as its own
+negative transaction while the gross charge stays, so refusing it would report money given back as
+money kept. `fee_amount` is NOT netted -- that would make `received` mean two different things across
+two rails that `reconcilePayments` compares.
+**BOUNDS ARE TWO KINDS OF FACT AND ARE KEPT APART.** PayPal's: 31-day max range (32 is refused),
+3-hour listing latency (**every coverage window ENDS THREE HOURS BACK**, so `ready` is TRUE rather
+than every read being permanently `partial`), 3-year history. THIS REPO'S: page size 100, page cap 5
+-- PayPal's rate-limit page renders nothing to a non-JS fetch, so NO figure is attributed to PayPal.
+`fields=transaction_info` is a PRIVACY bound (payer/cart/shipping carry names, emails, addresses),
+asserted on the OUTGOING URL not just the parsed shape.
+**REVOCATION STAYS OPEN.** No revoke endpoint is documented ANYWHERE for PayPal. `disconnect`
+attempts nothing and records `unsupported`; the validator rejects `confirmed`, `attempted_failed` AND
+`not_attempted`, and a local clear must carry `grantRemainsGrantedUpstream: true`.
+**`no-documented-revoke-endpoint` STAYS UNCLEARED for 28-25.**
+**SANDBOX NON-PROBATIVENESS IS IN THE GATE'S OWN OUTPUT.** `probativeForProduction` is DERIVED
+(`live && production`), never operator-typed, and the validator refuses any sandbox/self-test file
+claiming it; `--verify-evidence` prints a SANDBOX-NON-PROBATIVE banner. The `approved_production`
+marker is never rendered as verified -- code, playbook, suitability record and the evidence document
+all say OWNER ATTESTATION.
+**TASK 3 COULD NOT RUN LIVE and could not have** -- unlike 28-05/06/07 this lane lacks not a
+credential but a ROUTE TO OBTAIN ONE. Bare run exits **2**; `--self-test` fires 31 guards through the
+SAME builder and prints 'THIS IS NOT A LIVE PASS'. **ONLY TWO env names, NEITHER a credential family:
+`PAYPAL_PARTNER_MERCHANT_ID` (a public merchant id, the thing `classifyGrantSubject` compares against;
+unset = every read fails closed) and `CONNECTOR_CREDENTIAL_KEY_V1`.** There is deliberately no
+`PAYPAL_CLIENT_ID`/`_SECRET` because nothing here mints a PayPal token.
+**11 NON-DELETION MUTATIONS, ALL RED, ALL RESTORED** (snapshots diffed before AND after): partner
+comparison inverted (12), malformed id -> delegated (2), connector app-owner refusal disabled (2),
+consumption gate disabled independently (4), `REFUND`->`REFUNDS` (2), status `S`->`P` (7), 31->32 (2),
+3h->2h (1), `transaction_info`->`all` (1), offset sign flipped (1), cursor `page+1`->`page+2` (1).
+Imported bounds are ALSO pinned as LITERALS (31, 5, 100, 3*60*60*1000) -- 28-04's finding.
+`tsc --noEmit` run SEPARATELY per package, both exit 0 (it caught 2 real errors a green run was
+silent over). **Backend 2958/2958 in 109 files, revenue 296/296; baselined BY FAILURE COUNT against
+2913/2913 + the PRE-EXISTING worker-teardown `process is not defined` error.**
+**`check-playbooks.mjs` DID BLOCK mid-plan and named the file** -- so its zero-byte output at the end
+is a real pass, not the standing no-op. `npx convex codegen` CANNOT RUN HERE (no local backend on
+:3210); `_generated/api.d.ts` was hand-edited to register the two modules and `tsc` verifies it.
+`requirements-completed: []` -- **REVN-03 STAYS PENDING**: it needs 28-25's live gate, so
 `requirements mark-complete` was deliberately NOT called.
-**NEXT: 28-08 (read-only PayPal rail).** It should reuse `providers/shared.ts` rather than copying
-`boundedWindow`/`normalizeAll`/`separateByCurrency` a third time, and PayPal's revoke story is the
-same `unsupported` shape as Stripe's -- see `clearLocally` in `stripeAuth.ts`. **Also still open:
-`handleCallback` has NO caller** (no `/stripe/callback` route -- 28-09), and the Stripe App itself is
-not registered (an owner action; `STRIPE_APP_PERMISSIONS` documents what its manifest must contain).
+**NEXT: wave 6 is CLOSED. All four provider rails are built, none has ever spoken to its vendor, and
+all four lanes are `parked` with their open conditions intact.** Still open across the phase: no
+provider callback route or connections UI (28-09), nothing consumes any projection (28-12/28-13), and
+the wave-7 seals (28-22..25) each owe one live gate. For PayPal specifically, 28-25 must resolve TWO
+things with the partner manager, not one: the revocation story AND the unpublished third-party read
+surface -- and it must not seal on a sandbox run.
 Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
 Working branch feat/27-02-pack-contracts."
-last_updated: "2026-08-28T17:05:00.000Z"
+last_updated: "2026-08-28T18:40:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 35
   total_plans: 421
-  completed_plans: 326
+  completed_plans: 327
   percent: 77
 ---
 
