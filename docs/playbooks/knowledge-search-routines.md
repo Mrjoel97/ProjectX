@@ -1,5 +1,23 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-28 (**29-06 REMEDIATION — THE PUBLIC ACTION MADE THREE WAVE-2 CLAIMS
+> FALSE, AND THE CALLER BECAME THE ATTACKER.** Five corrections, each with a mutation witness.
+> (1) **The `SMOKE::` fixture seam is now gated on `lib/models.offlineSeamAvailable()` AND the
+> question** — wave 2 keyed it on the `question` argument alone and justified that with "the
+> question is the caller's own argument, so keying on it puts the seam back under the operator",
+> which stopped being true the moment `knowledgeSearch.search` shipped as a `tenantAction`: any
+> authenticated tenant could suppress the synthesizer's model call and steer a fabricated,
+> fully-cited answer into `knowledgeSearches`. (2) **`question` is capped at 2,000 characters at the
+> trust boundary** and refused as DATA — it was `v.string()` with no bound, interpolated verbatim
+> into both PAID prompts and the stored row. (3) **`searchedGapCount` now reports the TOTAL gap for
+> a run that searched nothing**, instead of 0, which read as its exact opposite. (4) **A governed
+> stop landing BETWEEN the fan-out and the synthesis writes `knowledge.search_stopped`** — that run
+> had already read the mailbox, Drive and the CRM and already charged for the planner, and left no
+> governance trace at all. (5) **The §4 guard is an ALLOWLIST of payload keys**, pinned against the
+> stored row and against `AUDIT_VIEWER_EVENTS`; the old word blocklist admitted every key it did not
+> name, and both a stray `rawQuestion` and a model-prose `unansweredList` passed it. See the
+> remediation section at the foot of this file.)
+>
 > Last verified: 2026-08-28 (**29-06 — THE COORDINATOR LANDS, AND THE RUN-LEVEL CLAMP WITH IT.**
 > `packages/backend/convex/knowledgeSearch.ts` is the one place a question becomes a search:
 > `tenantAction` -> `contentHash(question)` -> `planKnowledgeSearch` -> `Promise.allSettled` over
@@ -737,8 +755,13 @@ reachable driver today (all four adapters catch) and is exercised directly.
 
 **Invariant 41 — all-empty and all-unavailable are different rows.**
 `searchedGapCount` counts gaps among the sources a read was ACTUALLY attempted against, read off the
-re-minted states. Zero with sources present means "we looked and there is nothing"; three means
-"we could not look, and here is why for each". `renderSourceGap` turns each state into the sentence.
+re-minted states — **and a run that attempted NOTHING reports every source as a gap, not zero.**
+The exact invariant, and it is now enforced rather than described: *zero ⟺ at least one source was
+searched AND every searched source answered in full*. `renderSourceGap` is the pure function that
+turns each state into the user's sentence; **it has no caller yet** — 29-09's panel is the renderer.
+*(Corrected in remediation: reading the count off the attempted set alone returned 0 for an empty
+plan, i.e. five unavailable sources and nothing read, which is indistinguishable from "we looked
+everywhere and there is nothing" — the one pair the field exists to tell apart.)*
 
 **Invariant 42 — the tool-bearing loop cannot reach the knowledge plane AT ALL.**
 There is no cockpit tool. The user surface is 29-09's `KnowledgeSearchPanel`, which calls
@@ -750,15 +773,24 @@ A later plan that adds the tool must delete that test deliberately and replace i
 counts-only return assertion.
 *Mutation RED:* a `const _k = internal.knowledgeSearch;` line in `llm.ts`.
 
-**Invariant 43 — ONE governance write, and its payload is the whole §4 surface of this feature.**
-`knowledge.searched`, `actor: "system"`, `correlationId` = the coordinator's own run uuid, payload =
-`redactedSearchEvent` plus eight run refs/counts, registered in `AUDIT_VIEWER_EVENTS` with all 22
-keys. The question crosses as `questionHash` only. **The planner's REJECTED SOURCE NAMES are
-model-authored strings** ("notion", "http://evil.example") so only `rejectedPlanCount` crosses.
-Proven behaviourally — five unique needles in the question, a doc title, a doc body, a mail subject
-and a mail body, none of which appears in the serialized payload — and structurally by a payload
-scan with a vacuous-scan control.
-*Mutations RED:* `question` on the payload; a second `audit.log` site; the eventType anchor renamed
+**Invariant 43 — ONE governance write PER RUN, of TWO event types, and it is the whole §4 surface.**
+A completed run writes `knowledge.searched`, `actor: "system"`, `correlationId` = the coordinator's
+own run uuid, payload = `redactedSearchEvent` plus eight run refs/counts. A run stopped between the
+fan-out and the synthesis writes `knowledge.search_stopped` instead (Invariant 46). A stop BEFORE
+the planner writes neither — nothing was read and nothing was charged. The question crosses as
+`questionHash` only. **The planner's REJECTED SOURCE NAMES are model-authored strings** ("notion",
+"http://evil.example") so only `rejectedPlanCount` crosses.
+
+**The guard is an ALLOWLIST, and that is the load-bearing part.** `knowledgeSearch.test.ts` pins
+`Object.keys(payload)` of each STORED row to a literal set, asserts that set equals the event's row
+in `AUDIT_VIEWER_EVENTS`, and asserts every one of `redactedSearchEvent`'s 14 output keys is present.
+The five-needle test remains as the content check on top. **Do not rely on the word blocklist in
+`llmRedaction.test.ts`** — it is a cheap source-level tripwire and it admits every word it does not
+name, which is stated in the test itself.
+*Mutations RED:* `rawQuestion: question` on the payload (3 tests — this was a REAL stray mutation
+found live in the working tree, not synthetic); `unansweredList: [...unanswered]`, model prose over
+untrusted mail bodies, which the old blocklist passed (2 tests); deleting `"adapterCrashCount"` from
+`AUDIT_VIEWER_EVENTS`, which the whole repo passed before (1 test); the eventType anchor renamed
 (the control); `telemetry.` reachable from the coordinator; `telemetry.writeTerminal`'s
 `requestId: v.id("requests")` loosened to `v.string()`.
 
@@ -801,5 +833,75 @@ reason.
 the whole repo's type inference down with it: `internal` is derived from `fullApi`, which now
 includes this module, so the reference closes a cycle. Measured — 0 `tsc` errors before, **379**
 after, nearly all of them `implicitly has an 'any' type` in unrelated files. The registry uses a
-hand-written `FunctionReference<"action", "internal", {tenantId, query}, KnowledgeAdapterResult>`,
-which keeps the same compile-time contract over the four adapters' signatures without the cycle.
+hand-written `FunctionReference<"action", "internal", {tenantId, query}, KnowledgeAdapterResult>`
+instead, which avoids the cycle — **and covers TWO of the three drifts, not three.** Measured:
+changing an adapter's return type, or RENAMING `query` to `q`, gives `TS2322` at
+`knowledgeSearch.ts:118`; ADDING a newly-required argument gives no error there at all, because the
+real reference stays assignable to the hand-written type. That third drift is closed by a source
+scan of the four adapters' `args:` blocks in `knowledgeSearch.test.ts`.
+*Mutations RED:* `extraRequired: v.string()` added to `searchVaultKnowledge` (the scan; typecheck
+stays silent at the registry, which is the point).
+
+---
+
+## Plan 29-06 remediation — five findings, and what each one actually was (2026-08-28)
+
+**Invariant 46 — a run that SPENT and READ is never invisible to governance.**
+`if (!synthesized.ok)` used to `return` before both the `knowledgeSearches` insert and the single
+`audit.log` call, while the adapters had already run and the planner had already recorded spend. So
+"we read your mailbox, your Drive and your CRM, then the budget ran out" wrote nothing at all and
+was indistinguishable at the caller from the pre-read planner stop. It now writes
+`knowledge.search_stopped` — refs and counts only: `questionHash`, a code-owned `stoppedAt` stage
+token, `stopReason` (`guardrails.preCall`'s own closed enum, never a provider message),
+`evidenceCount` and the three coverage counts (which is what says the connectors were reached),
+`adapterCrashCount`, `rejectedPlanCount`, `plannerFallback`, `planRunRef`, `plannerSkillVersion`,
+`durationMs`. Still no content row: there is no answer to store.
+*Mutation RED:* restore the bare `if (!synthesized.ok) return {...}` (2 tests).
+*How the branch is driven at $0:* the mocked model boundary flips the kill switch after the planner
+call and before the fan-out, which is a real production ordering rather than a stubbed one.
+
+**Invariant 47 — the offline fixture seam needs the OPERATOR, not the caller.**
+`offlineSeamAvailable() && question.includes(SMOKE_*_PREFIX)` in both `knowledgeLlm.ts` handlers.
+`offlineSeamAvailable()` is `lib/models.ts`'s shared predicate — `PIKAR_OFFLINE_FIXTURES === "1"`
+AND no model credential — the same one `vaultDigest.ts` and `voiceDoc.ts` use; there is exactly one
+such predicate in the repo and a second must not be written. **Both conjuncts are load-bearing and
+they close different doors:** the operator flag closes the TENANT (whose typed `question` reaches
+the gate through the public `search` action), and keying on `question` rather than the assembled
+prompt closes the THIRD PARTY (whose mail body and subject line are interpolated into the synthesis
+prompt). `knowledgeLlm.test.ts` sets the flag for the whole file; the "PROMPT THE HANDLER ACTUALLY
+SENDS" block stubs a model key on top, which turns the predicate false again and is why those tests
+reach the live branch.
+*Mutations RED:* drop `offlineSeamAvailable() &&` from the synthesizer seam (2 tests: the source
+scan and the behavioural OPERATOR-OFF test); same from the planner seam (1 test).
+*Positive control:* the OPERATOR-ON test drives the SAME question string with the flag set and no
+credential and gets the fixture, so deleting the seam outright is also RED.
+
+**Invariant 48 — `question` is bounded at the trust boundary.**
+`QUESTION_CHAR_CAP = 2_000` in `knowledgeSearch.ts`, checked as the FIRST act of the handler, before
+the hash and before the planner, and REFUSED as `{ ok: false, reason: "question_too_long" }` rather
+than truncated — silently cutting it would answer a question the user did not ask and store it as if
+they had. It was the only uncapped free-text boundary in the repo, and it went verbatim into two paid
+prompts and the stored row; `guardrails.preCall` reads accumulated spend and cannot see the size of
+the request in front of it. The cap lives in the backend module, not `SEARCH_CAPS`, for
+`SUMMARY_CHAR_CAP`'s reason: `@pikar/core`'s cap set requires an enforcement site in that package.
+*Mutations RED:* delete the guard; `>` -> `>=`. The test pins 2000/2001 as LITERALS.
+
+**Corrected claims (each was true when written, and had stopped being true):**
+
+- `knowledgeLlm.ts`'s "the `question` is the caller's own argument, so keying on it puts the seam
+  back under the operator" — false once a public `tenantAction` supplied the question. Replaced with
+  the two-conjunct explanation above.
+- `knowledgeSearch.ts`'s `AdapterRef` "breaks the build here rather than at runtime" — two thirds
+  true. Now states which half the type holds and names the source scan that holds the other.
+- `@pikar/core`'s `renderSourceGap` and `groundedSourceProps` were described as wired. Both have
+  ZERO callers repo-wide; 29-09's panel is the caller. Both docstrings now say so.
+- `llm.ts`'s "only the three USER_AUTHORABLE_SKILLS can have an overlay row at all, so every other
+  specialist name resolves exactly as before" — falsified by 29-05, which widened
+  `USER_AUTHORABLE_SKILLS` to admit the six `pack-*` names. Corrected in place; the authoritative
+  membership is the literal in `@pikar/contracts/skill`, pinned by its own test.
+
+**Not closed, deliberately:** `llmRedaction.test.ts`'s `KNOWLEDGE_CONTENT_FIELDS` is still a word
+blocklist over source text. It is kept as a cheap tripwire and its ceiling is now written into the
+test; the real boundary is the behavioural key allowlist in `knowledgeSearch.test.ts`. Converting
+the other ~90 events in `AUDIT_VIEWER_EVENTS` to derived key sets is out of scope — only
+`knowledge.*` has an exported pure projection to derive from.

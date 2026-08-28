@@ -1,3 +1,14 @@
+> Last verified: 2026-08-28 (**29-06 REMEDIATION — COMMENT-ONLY CHANGE TO `llm.ts`, CORRECTING A
+> FALSE INVARIANT.** `runAgentLoop`'s skill loader carried "only the three `USER_AUTHORABLE_SKILLS`
+> can have an overlay row at all, so every other specialist name resolves exactly as before". 29-05
+> widened `USER_AUTHORABLE_SKILLS` to admit the six `pack-*` workflow-pack skills, so a `pack-*`
+> name reaching this loader CAN now resolve to a tenant candidate body instead of the global active
+> row. That is the intended behaviour of pack customization — every overlay row is written by
+> `skills.publishUserCandidate` from a SERVER-RENDERED body and can only be activated by an
+> `ownerMutation` — but do not reason from "only three names are affected" when changing this
+> loader. The authoritative membership is the literal in `@pikar/contracts/skill`. No behaviour
+> changed in this file; no cockpit test changed.)
+>
 > Last verified: 2026-08-28 (**WAVE-3 CLEANUP — THE COPY-DRIFT GUARD WAS DEFEATED AGAIN, ON ITS
 > THIRD ITERATION, AND THE ENTRY DIRECTLY BELOW WAS THE FALSE CLAIM.**
 >

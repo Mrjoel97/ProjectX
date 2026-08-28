@@ -24,20 +24,30 @@
 //  6. THE GOVERNANCE PLANE HOLDS NO CONTENT. The question, a doc title, a mail subject and a mail
 //     body each carry a unique needle; none of them reaches an audit payload.
 //  7. TWO TENANTS SHARE NOTHING — not evidence, not stored rows.
+
+import { AUDIT_VIEWER_EVENTS } from "@pikar/contracts/auditProjection";
 import { KNOWLEDGE_QUERY_PLANNER_SKILL, KNOWLEDGE_SYNTHESIZER_SKILL } from "@pikar/contracts/skill";
 import {
   KNOWLEDGE_ADAPTERS,
   KNOWLEDGE_SOURCES,
   NOT_LANDED_SOURCES,
+  redactedSearchEvent,
   SEARCH_CAPS,
 } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { adapterOutcome, KNOWLEDGE_ADAPTER_ACTIONS } from "./knowledgeSearch";
 import schema from "./schema";
+
+/** Raw sources for the containment scans. edge-runtime has no `node:fs` (the hubspot.test idiom). */
+const rawSources = import.meta.glob("./**/*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
 
 const PLANNER_BODY = "PLANNER BODY v1";
 const SYNTH_BODY = "SYNTHESIZER BODY v1";
@@ -56,6 +66,9 @@ const boundary = vi.hoisted(() => ({
   plan: { searches: [] as { source: string; query: string }[] } as unknown,
   synthesis: {} as unknown,
   plannerThrows: false,
+  /** Fires AFTER the planner call, BEFORE the fan-out — the only way to drive a governed stop that
+   *  lands between the reads and the synthesis, which is a real production ordering. */
+  afterPlanner: null as null | (() => Promise<unknown>),
 }));
 
 vi.mock("ai", async (importOriginal) => {
@@ -66,6 +79,7 @@ vi.mock("ai", async (importOriginal) => {
       boundary.calls.push({ system: options.system, prompt: options.prompt });
       const isPlanner = options.system === PLANNER_BODY;
       if (isPlanner && boundary.plannerThrows) throw new Error("planner unavailable");
+      if (isPlanner && boundary.afterPlanner !== null) await boundary.afterPlanner();
       return {
         object: isPlanner ? boundary.plan : boundary.synthesis,
         usage: { inputTokens: 3, outputTokens: 4 },
@@ -241,6 +255,7 @@ const auditRows = (h: Harness) =>
 beforeEach(() => {
   boundary.calls.length = 0;
   boundary.plannerThrows = false;
+  boundary.afterPlanner = null;
   boundary.plan = { searches: [] };
   boundary.synthesis = { summary: "", claims: [], unanswered: [] };
   vi.stubEnv("OPENROUTER_API_KEY", "test-key-not-used");
@@ -255,6 +270,44 @@ afterEach(() => {
 describe("only code-registered adapters can run", () => {
   test("the registry has exactly one entry per knowledge source, and no extra key", () => {
     expect(Object.keys(KNOWLEDGE_ADAPTER_ACTIONS).sort()).toEqual([...KNOWLEDGE_SOURCES].sort());
+  });
+
+  test("every adapter takes EXACTLY {tenantId, query} — the half the TYPE does not enforce", () => {
+    // MEASURED, not assumed. `AdapterRef` is a hand-written `FunctionReference`, and adding a NEW
+    // REQUIRED argument to an adapter leaves the reference assignable to it: `pnpm typecheck` with
+    // `extraRequired: v.string()` added to `searchVaultKnowledge` produced ONE error, in
+    // `knowledgeVaultDrive.test.ts`, and NOTHING in knowledgeSearch.ts. The drift would reach
+    // production, where `ctx.runAction(ref, { tenantId, query })` fails Convex arg validation, the
+    // promise rejects and `adapterOutcome` degrades that source to `provider_error` on EVERY
+    // search. (The other two thirds — a renamed argument, a changed return type — do break the
+    // build at the registry; those were confirmed as controls.)
+    const adapters = [
+      ["./knowledgeVaultDrive.ts", "searchVaultKnowledge"],
+      ["./knowledgeVaultDrive.ts", "searchDriveKnowledge"],
+      ["./knowledgeExternalSources.ts", "readInboxKnowledge"],
+      ["./knowledgeExternalSources.ts", "readCrmKnowledge"],
+    ] as const;
+    // The registry must actually reference every adapter this scan covers, or the scan is a list
+    // of names nobody calls.
+    expect(adapters).toHaveLength(
+      Object.values(KNOWLEDGE_ADAPTER_ACTIONS).filter((ref) => ref !== null).length,
+    );
+    for (const [file, name] of adapters) {
+      const src = rawSources[file];
+      expect(src, `${file} was not read — the scan would be vacuous`).toBeTruthy();
+      const from = (src ?? "").indexOf(`export const ${name} = internalAction(`);
+      expect(from, `${name} is not an internalAction in ${file}`).toBeGreaterThanOrEqual(0);
+      const argsLine = (src ?? "").slice(from).match(/args:\s*\{([^}]*)\}/)?.[1] ?? "";
+      const keys = argsLine
+        .split(",")
+        .map((entry) => entry.split(":")[0]?.trim() ?? "")
+        .filter((key) => key !== "");
+      // LITERALS. This is the shape `knowledgeSearch.ts` hard-codes at its one `ctx.runAction`.
+      expect(keys.sort(), `${name} no longer takes exactly {tenantId, query}`).toEqual([
+        "query",
+        "tenantId",
+      ]);
+    }
   });
 
   test("a source is null here EXACTLY when @pikar/core says it has no landed adapter", () => {
@@ -430,6 +483,34 @@ describe("an empty answer and an unreachable one are different answers", () => {
         .map((s) => (s.status === "unavailable" ? s.reason : s.status))
         .sort(),
     ).toEqual(["not_connected", "not_connected", "not_connected"]);
+  });
+
+  test("NOTHING WAS SEARCHED AT ALL: an empty plan is the TOTAL gap, not zero gaps", async () => {
+    // THE STATE THE DISCRIMINATOR COULD NOT DISCRIMINATE. `attempted` is derived from the PLAN, so
+    // when the planner names only a not-landed source (or only rejected ones) the plan is empty,
+    // `attempted` is empty, and a filter over it matches nothing — the field documented as "the
+    // all-empty / all-unavailable discriminator" returned 0 for a run in which all five sources
+    // are `unavailable` and NOT ONE was read. Identical, on every number the caller sees, to the
+    // ALL-EMPTY test above.
+    const h = await harness();
+    planSearches({ source: "support-desk", query: "tickets" });
+
+    const out = await search(h, "anything about tickets?");
+    if (!out.ok) throw new Error(out.reason);
+    expect(out.sources.every((s) => s.status === "unavailable")).toBe(true);
+    expect(out.evidenceCount).toBe(0);
+    expect(boundary.calls.map((c) => c.system)).toEqual([PLANNER_BODY]); // nothing was read
+
+    // 5 is a LITERAL: every knowledge source is a gap because none of them was searched.
+    // MUTATION OBSERVED RED: drop the `attempted.size === 0 ? states.length :` arm — this is 0.
+    expect(out.searchedGapCount).toBe(5);
+    // And the two runs are now OBSERVABLY different, which is the whole contract of the field.
+    expect(out.searchedGapCount).not.toBe(0);
+    expect(out.sources.find((s) => s.source === "support-desk")).toEqual({
+      source: "support-desk",
+      status: "unavailable",
+      reason: "not_landed",
+    });
   });
 
   test("NO MODEL IS PAID FOR AN ANSWER WITH NO EVIDENCE — the synthesizer is never called", async () => {
@@ -699,6 +780,88 @@ describe("no source content reaches a governance plane", () => {
     expect(payload.claimCount).toBe(1);
     expect(payload.requestedSources).toBe(KNOWLEDGE_SOURCES.length);
     expect(payload.confidence).toBe(out.confidence);
+
+    // ── AN ALLOWLIST, NOT A BLOCKLIST ────────────────────────────────────────────────────────
+    //
+    // The needle assertions above are a blocklist and a blocklist admits every word it does not
+    // name: a mutation adding `unansweredList` (free prose the synthesizer wrote OVER UNTRUSTED
+    // MAIL BODIES) to this payload passed the whole suite, and the executor's own stray
+    // `rawQuestion: question` survived in the working tree the same way. This is the exact key
+    // set, as LITERALS, so ANY new key on the governance plane is a deliberate act with a test to
+    // update — whatever it is called and whoever wrote its value.
+    expect(Object.keys(payload).sort()).toEqual(
+      [
+        "adapterCrashCount",
+        "availableSources",
+        "claimCount",
+        "collapsedCount",
+        "confidence",
+        "conflictCount",
+        "dedupeConflictCount",
+        "durationMs",
+        "evidenceCount",
+        "inventedCitationCount",
+        "partialSources",
+        "planRunRef",
+        "plannerFallback",
+        "plannerSkillVersion",
+        "questionHash",
+        "rejectedPlanCount",
+        "requestedSources",
+        "searchRunRef",
+        "synthRunRef",
+        "unavailableReasons",
+        "unavailableSources",
+        "unsupportedCount",
+      ].sort(),
+    );
+  });
+
+  test("THE WRITE SITE, @pikar/core's PROJECTION AND THE VIEWER ALLOWLIST ALL AGREE", async () => {
+    // Three copies of one closed key set, in three packages, pinned to each other rather than
+    // hand-listed three times. `AUDIT_VIEWER_EVENTS` fails CLOSED (a key it forgets is silently
+    // never shown to the governance viewer), so drift here is invisible in production and was:
+    // deleting `"adapterCrashCount"` from auditProjection.ts left contracts + backend fully green.
+    const h = await harness();
+    const docId = await seedDoc(h, h.tenantA, { title: "Doc", text: "The margin is 40 percent." });
+    planSearches({ source: "vault", query: `SMOKE::${docId}` });
+    synthesizeClaims([{ text: "A claim.", evidenceIds: ["vault-1"] }]);
+    await search(h, "margin?");
+
+    const payload = (await auditRows(h)).find((r) => r.eventType === "knowledge.searched")
+      ?.payload as Record<string, unknown>;
+    const allowed = AUDIT_VIEWER_EVENTS["knowledge.searched"] ?? [];
+
+    // (1) The viewer allowlist is EXACTLY what the write site emits — neither wider nor narrower.
+    // MUTATION OBSERVED RED: delete `"adapterCrashCount"` from auditProjection.ts.
+    expect([...allowed].sort()).toEqual(Object.keys(payload).sort());
+
+    // (2) Every key of the PURE projection reaches the row. `redactedSearchEvent` is mechanically
+    // derivable, so a key renamed there must not silently stop being audited.
+    const projected = Object.keys(
+      redactedSearchEvent({
+        searchRunRef: "r",
+        questionHash: "h",
+        coverage: {
+          requested: 0,
+          available: 0,
+          partial: 0,
+          unavailable: 0,
+          returned: 0,
+          states: [],
+          complete: false,
+          gaps: [],
+        },
+        claims: 0,
+        unsupported: 0,
+        conflicts: 0,
+        inventedEvidenceIds: 0,
+        confidence: "unsupported",
+        durationMs: 0,
+      }),
+    );
+    expect(projected.length).toBe(14); // LITERAL: the projection's own key count
+    for (const key of projected) expect(Object.keys(payload)).toContain(key);
   });
 
   test("the injected instruction DOES reach the synthesis prompt, fenced — and nowhere else", async () => {
@@ -736,6 +899,87 @@ describe("a governed stop is DATA, and a planner failure is not an empty busines
     expect(out.ok).toBe(false);
     expect(out.ok === false && out.reason).toBe("kill_switch");
     expect(await h.t.run((ctx) => ctx.db.query("knowledgeSearches").collect())).toEqual([]);
+  });
+
+  test("A STOP *AFTER* THE READS IS RECORDED — a run that spent is never invisible", async () => {
+    // The gap: the pre-read stop above and "we read your mailbox, your Drive and your CRM, then
+    // the budget ran out" were indistinguishable on the governance plane, because the second
+    // returned before BOTH the content-plane insert and the only audit write. The connectors write
+    // no audit rows of their own on this path, so those reads left no trace at all.
+    const h = await harness();
+    const docId = await seedDoc(h, h.tenantA, { title: "Doc", text: "The margin is 40 percent." });
+    planSearches({ source: "vault", query: `SMOKE::${docId}` });
+    // The stop lands BETWEEN the planner and the synthesizer — the fan-out has already run.
+    boundary.afterPlanner = () => h.t.mutation(internal.guardrails.setKillSwitch, { on: true });
+
+    const out = await search(h, "margin?");
+    expect(out.ok).toBe(false);
+    expect(out.ok === false && out.reason).toBe("kill_switch");
+    // No answer, so no content row — the same refusal the pre-read stop makes.
+    expect(await h.t.run((ctx) => ctx.db.query("knowledgeSearches").collect())).toEqual([]);
+
+    const rows = await auditRows(h);
+    expect(rows.filter((r) => r.eventType === "knowledge.searched")).toHaveLength(0);
+    const stopped = rows.filter((r) => r.eventType === "knowledge.search_stopped");
+    // MUTATION OBSERVED RED: restore the bare `if (!synthesized.ok) return {...}`.
+    expect(stopped).toHaveLength(1);
+    const payload = stopped[0]?.payload as Record<string, unknown>;
+    expect(payload.stopReason).toBe("kill_switch");
+    expect(payload.stoppedAt).toBe("synthesis");
+    // THE POINT OF THE ROW: it says the connectors were reached and the planner charged.
+    expect(payload.evidenceCount).toBe(1);
+    expect(payload.availableSources).toBe(1);
+    expect(payload.plannerFallback).toBe(false);
+    expect(String(payload.questionHash)).toMatch(/^[0-9a-f]{64}$/);
+    // §4 as an ALLOWLIST, same as the completed event. Literals.
+    expect(Object.keys(payload).sort()).toEqual(
+      [
+        "adapterCrashCount",
+        "availableSources",
+        "durationMs",
+        "evidenceCount",
+        "partialSources",
+        "planRunRef",
+        "plannerFallback",
+        "plannerSkillVersion",
+        "questionHash",
+        "rejectedPlanCount",
+        "stopReason",
+        "stoppedAt",
+        "unavailableSources",
+      ].sort(),
+    );
+    expect([...(AUDIT_VIEWER_EVENTS["knowledge.search_stopped"] ?? [])].sort()).toEqual(
+      Object.keys(payload).sort(),
+    );
+    // The question itself never crosses, only its hash.
+    expect(JSON.stringify(payload)).not.toContain("margin?");
+  });
+
+  test("AN OVER-LONG QUESTION IS REFUSED AS DATA, before the hash and before any spend", async () => {
+    // The only field the CALLER fully controls, and it went verbatim into two PAID prompts and the
+    // stored row with no bound anywhere. `preCall` reads ACCUMULATED spend and cannot see the size
+    // of the request in front of it, so one call could blow the daily budget.
+    const h = await harness();
+    const docId = await seedDoc(h, h.tenantA, { title: "Doc", text: "The margin is 40 percent." });
+    planSearches({ source: "vault", query: `SMOKE::${docId}` });
+    synthesizeClaims([{ text: "A claim.", evidenceIds: ["vault-1"] }]);
+
+    // 2000 is a LITERAL. Importing `QUESTION_CHAR_CAP` would move the oracle with the subject.
+    const atCap = "q".repeat(2000);
+    const overCap = "q".repeat(2001);
+
+    const accepted = await search(h, atCap);
+    expect(accepted.ok).toBe(true);
+    boundary.calls.length = 0;
+
+    const refused = await search(h, overCap);
+    // MUTATION OBSERVED RED: `question.length > QUESTION_CHAR_CAP` -> `>=`, and deleting the guard.
+    expect(refused).toEqual({ ok: false, reason: "question_too_long" });
+    // $0: no model call, no content row beyond the accepted one, no audit row for the refusal.
+    expect(boundary.calls).toEqual([]);
+    expect(await h.t.run((ctx) => ctx.db.query("knowledgeSearches").collect())).toHaveLength(1);
+    expect(await auditRows(h)).toHaveLength(1);
   });
 
   test("a planner failure falls back to the tenant's OWN documents, and says so", async () => {

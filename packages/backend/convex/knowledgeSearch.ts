@@ -1,6 +1,7 @@
 /**
- * Phase 29 (KNOW-01) — THE COORDINATOR. One authenticated question in; one cited, bounded, honestly
- * scoped answer out, plus one content-plane row and one refs-only audit event.
+ * Phase 29 (KNOW-01) — THE COORDINATOR. One authenticated question in (bounded by
+ * `QUESTION_CHAR_CAP`); one cited, bounded, honestly scoped answer out, plus one content-plane row
+ * and one refs-only audit event.
  *
  * A THIN adapter (CLAUDE.md §1). It owns no honesty rule of its own: every one of them —
  * `clampSearchPlan`, `dedupeEvidence`, `clampEvidence`, `validateSynthesis`, `authorityFor`,
@@ -40,6 +41,13 @@
  *     `redactedSearchEvent` — refs, hashes, ids, counts and closed enums — plus a handful of run
  *     REFS. The question is HASHED. No label, snippet, URL, sender, subject, excerpt, rejected
  *     source name or query text may ever appear there.
+ *
+ *     EXACTLY ONE audit event per run, and it is one of TWO event types. A run that completes
+ *     writes `knowledge.searched`. A run whose budget is exhausted BETWEEN the fan-out and the
+ *     synthesis — the connectors already read, the planner already charged, no answer to store —
+ *     writes `knowledge.search_stopped` instead, because a run that spent and read leaving no
+ *     governance trace at all is the gap this pair closes. A stop BEFORE the planner writes
+ *     neither: nothing was read and nothing was charged.
  *
  * ── WHAT IS DELIBERATELY ABSENT ───────────────────────────────────────────────────────────────
  *
@@ -92,9 +100,22 @@ import { contentHash } from "./lib/hash";
  * THE ONLY WAY A SOURCE BECOMES A CALL. Keyed by `KnowledgeSource`, so a key that is not a source
  * does not compile and a source with no key does not either.
  *
- * The value type is a HAND-WRITTEN `FunctionReference`, which makes the four adapters' signatures a
- * compile-time contract: an adapter that stopped taking `{tenantId, query}` or stopped returning
- * `KnowledgeAdapterResult` breaks the build here rather than at runtime.
+ * The value type is a HAND-WRITTEN `FunctionReference`. EXACTLY ONE HALF OF THAT IS A COMPILE-TIME
+ * CONTRACT, and the difference was measured rather than assumed:
+ *
+ *  - **RETURN TYPE — ENFORCED HERE.** An adapter that stops returning `KnowledgeAdapterResult`
+ *    fails at this table (`TS2322` on the `FunctionReference` assignment). Same for an adapter that
+ *    RENAMES an argument (`query` -> `q`).
+ *  - **A NEWLY *ADDED* REQUIRED ARGUMENT — NOT ENFORCED HERE.** The reference stays assignable to
+ *    this hand-written type, so `ctx.runAction(ref, { tenantId, query })` type-checks against the
+ *    hand-written shape and the drift reaches RUNTIME: Convex refuses the call on arg validation,
+ *    the promise rejects, and `adapterOutcome` degrades that source to `provider_error` on every
+ *    search. `knowledgeSearch.test.ts` closes that half with a SOURCE SCAN of the four adapters'
+ *    `args:` blocks, because the type system demonstrably will not. (An earlier version of this
+ *    comment claimed the build broke on all three; it breaks on two.)
+ *
+ * The runtime consequence is at least VISIBLE rather than silent: a rejection is counted into
+ * `adapterCrashCount` on the audit event.
  *
  * ⚠ IT IS NOT `typeof internal.knowledgeVaultDrive.searchVaultKnowledge`, and that is not a style
  * choice. `internal` is derived from `fullApi`, which now includes THIS module, so deriving a type
@@ -262,6 +283,28 @@ export const listByThread = tenantQuery({
  *  real thread stops fitting, which is a UI decision (29-09) rather than a backend one. */
 const LIST_LIMIT = 20;
 
+/**
+ * THE CALLER'S OWN FIELD, AND THE ONLY UNCAPPED FREE TEXT ON THIS PLANE UNTIL NOW.
+ *
+ * `question` is interpolated VERBATIM into both PAID prompts (`plannerPrompt`, `synthesisPrompt`)
+ * and stored verbatim on the content row. Every other free-text trust boundary in this repo is
+ * bounded — `SAVED_PROMPT_MAX_BYTES` 4000, `USER_SKILL_ADAPTATION_MAX_BYTES` 4000,
+ * `SEARCH_CAPS.queryCharCap` 200, `evidenceTextCharCap` / `totalEvidenceCharCap`,
+ * `SUMMARY_CHAR_CAP` — so the one field a user fully controls was the one with no bound at all.
+ * `guardrails.preCall` reads ACCUMULATED spend before the call and cannot estimate a request's
+ * size, so a single 300 KB question could exceed the daily budget in one shot (measured: a 300,005
+ * character question did not return inside a 20-second timeout).
+ *
+ * REFUSED, NOT TRUNCATED, and the refusal is DATA. Silently cutting the question would answer a
+ * question the user did not ask and store it as if they had; the caller gets a reason it can show.
+ * Checked BEFORE the hash and before the planner, so an over-long question costs $0.
+ *
+ * It lives here rather than in `SEARCH_CAPS` for `SUMMARY_CHAR_CAP`'s reason: `@pikar/core`'s cap
+ * set is covered by a "NO CAP IS DEAD" scan that requires an enforcement site IN THAT PACKAGE, and
+ * a question never crosses a pure function.
+ */
+const QUESTION_CHAR_CAP = 2_000;
+
 // ── The coordinator ─────────────────────────────────────────────────────────────────────────
 
 /** A stored claim, as it crosses back to the caller. Content plane. */
@@ -285,8 +328,21 @@ export type StoredClaim = {
 };
 
 export type KnowledgeSearchResult =
-  /** The governed stop, as DATA. Mirrors `guardrails.preCall`'s own reason union. */
-  | { ok: false; reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted" }
+  /**
+   * A refusal, as DATA rather than a throw. The first three are `guardrails.preCall`'s own reason
+   * union (a governed stop, passed straight through). `question_too_long` is this module's own
+   * trust-boundary refusal and is deliberately in the SAME arm: from the caller's side both mean
+   * "no answer, here is why", and giving a validation failure its own shape would make every
+   * consumer handle two negative cases to render one sentence.
+   */
+  | {
+      ok: false;
+      reason:
+        | "kill_switch"
+        | "daily_budget_exhausted"
+        | "deployment_budget_exhausted"
+        | "question_too_long";
+    }
   | {
       ok: true;
       searchId: Id<"knowledgeSearches">;
@@ -298,8 +354,16 @@ export type KnowledgeSearchResult =
       unanswered: readonly string[];
       /** Rows that reached synthesis, after dedupe and the run-level clamp. */
       evidenceCount: number;
-      /** Gaps among the sources that were ACTUALLY SEARCHED — the all-empty / all-unavailable
-       *  discriminator. Zero with sources present means "we looked and there is nothing". */
+      /**
+       * THE ALL-EMPTY / ALL-UNAVAILABLE DISCRIMINATOR, and the invariant is exactly this:
+       * **zero means at least one source WAS searched and every searched source answered in
+       * full** — "we looked and there is nothing". Anything else is non-zero.
+       *
+       * A run in which NOTHING was searched (the planner named only not-landed or rejected
+       * sources, so the plan is empty and every state is `unavailable`) reports the count of ALL
+       * sources, not zero. Reading it off the attempted set alone returned 0 there, which is the
+       * one state this field exists to tell apart reading as its exact opposite.
+       */
       searchedGapCount: number;
       unsupportedCount: number;
       invalidCitationCount: number;
@@ -310,6 +374,8 @@ export const search = tenantAction({
   args: { threadId: v.string(), question: v.string() },
   handler: async (ctx, { threadId, question }): Promise<KnowledgeSearchResult> => {
     const tenantId = ctx.tenantId; // FROM THE AUTHENTICATED WRAPPER. Never an argument.
+    // THE TRUST BOUNDARY, FIRST. Before the hash, before the planner, before any spend.
+    if (question.length > QUESTION_CHAR_CAP) return { ok: false, reason: "question_too_long" };
     const startedAt = Date.now();
     const runId = crypto.randomUUID();
     // §4: the log plane gets a fingerprint of the question, never the question.
@@ -365,10 +431,24 @@ export const search = tenantAction({
     // RE-MINTED states, because a source that was complete at its own adapter and lost rows to the
     // run budget acquires its gap HERE; taking this count from `reads` reported zero gaps over a
     // partial answer, which is the same before/after-the-clamp mistake `remintState` exists to fix.
+    //
+    // ⚠ AND A RUN THAT ATTEMPTED NOTHING IS THE TOTAL GAP, NOT ZERO GAPS. `reads` comes from
+    // `planned.plan`, so when the planner names only not-landed or rejected sources the plan is
+    // EMPTY, `attempted` is empty, and a filter over it matches nothing — reporting 0 for a run in
+    // which all five states are `unavailable` and NOTHING was read. That is indistinguishable from
+    // "we looked everywhere and there is nothing", which is the single pair this field exists to
+    // tell apart. The documented invariant now holds in code: zero ⟺ something was searched AND
+    // every searched source answered in full.
     const attempted = new Set(reads.map((read) => read.state.source));
-    const searchedGapCount = states.filter(
-      (state) => attempted.has(state.source) && state.status !== "available",
-    ).length;
+    const searchedGapCount =
+      attempted.size === 0
+        ? states.length
+        : states.filter((state) => attempted.has(state.source) && state.status !== "available")
+            .length;
+
+    // Computed HERE, before the synthesis branch, because the governed-stop audit row inside it
+    // needs the same read counts the completed row carries. It depends only on `states`.
+    const coverage = aggregateCoverage(states);
 
     let summary = "";
     let claims: readonly ValidatedClaim[] = [];
@@ -380,15 +460,47 @@ export const search = tenantAction({
 
     // NO EVIDENCE, NO PAID CALL. There is nothing to cite, so there is nothing a model could
     // honestly write — and an answer written without evidence is exactly the fabrication this
-    // feature exists to prevent. The stored row's source states carry the honest reason instead,
-    // and `@pikar/core`'s `renderSourceGap` turns each into the user's sentence.
+    // feature exists to prevent. The stored row's source states carry the honest reason instead;
+    // `@pikar/core`'s `renderSourceGap` is the pure function that will turn each into the user's
+    // sentence, and it has NO caller yet — 29-09's panel is where it gets wired.
     if (evidence.length > 0) {
       const synthesized = await ctx.runAction(internal.knowledgeLlm.synthesizeKnowledge, {
         tenantId,
         question,
         rawEvidence: [...evidence],
       });
-      if (!synthesized.ok) return { ok: false, reason: synthesized.reason };
+      // ── A GOVERNED STOP *AFTER* THE READS. The second governance-plane write, and the only one
+      // on this branch. By here the mailbox, Drive and the CRM have ALREADY been read and the
+      // planner has ALREADY recorded spend, but there is no answer to store — so the
+      // `knowledgeSearches` insert and the `knowledge.searched` event below are both skipped and
+      // this run would otherwise leave NO trace at all. "We read your mailbox, your Drive and your
+      // CRM, then the budget ran out" would have been indistinguishable, on the audit plane, from
+      // the pre-read stop above where nothing was touched. Refs and counts only (§4):
+      // `evidenceCount` and `availableSources` are what say the connectors were reached.
+      if (!synthesized.ok) {
+        await ctx.runMutation(internal.audit.log, {
+          tenantId,
+          correlationId: runId,
+          eventType: "knowledge.search_stopped",
+          actor: "system",
+          payload: {
+            questionHash,
+            stoppedAt: "synthesis", // code-owned literal: WHERE, not a provider message
+            stopReason: synthesized.reason, // `guardrails.preCall`'s closed enum
+            evidenceCount: evidence.length,
+            availableSources: coverage.available,
+            partialSources: coverage.partial,
+            unavailableSources: coverage.unavailable,
+            adapterCrashCount,
+            rejectedPlanCount: planned.rejected.length,
+            plannerFallback: planned.fallback,
+            planRunRef: planned.runId,
+            plannerSkillVersion: planned.skillVersion,
+            durationMs: Date.now() - startedAt,
+          },
+        });
+        return { ok: false, reason: synthesized.reason };
+      }
       summary = synthesized.summary;
       claims = synthesized.claims;
       unsupported = synthesized.unsupported;
@@ -398,7 +510,6 @@ export const search = tenantAction({
       synthRunRef = synthesized.runId;
     }
 
-    const coverage = aggregateCoverage(states);
     const confidence = searchConfidence({ claims, coverage, conflicts: conflictCount });
 
     // The citation rows the card renders. Authority comes off the evidence table (the adapter's

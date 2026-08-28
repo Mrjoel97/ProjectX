@@ -76,7 +76,7 @@ import { generateObject, type JSONSchema7, jsonSchema } from "ai";
 import { type VLiteral, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-import { resolveModel } from "./lib/models";
+import { offlineSeamAvailable, resolveModel } from "./lib/models";
 
 const CALL_TIMEOUT_MS = 45_000;
 
@@ -85,16 +85,27 @@ const CALL_TIMEOUT_MS = 45_000;
  * replaces the `generateObject` call and NOTHING ELSE — the fixture's output still crosses
  * `clampSearchPlan` / `validateSynthesis`, which is what makes the containment rules testable at $0.
  *
- * ⚠ THE SENTINEL IS LOOKED FOR IN THE `question` ARGUMENT ALONE, NEVER IN THE ASSEMBLED PROMPT, AND
- * THE DIFFERENCE IS A SECURITY BOUNDARY RATHER THAN A STYLE CHOICE. `blueprint.ts` and
- * `vaultDigest.ts` scan their whole prompt safely because their prompts are built from the tenant's
- * OWN profile and documents. This module's synthesis prompt embeds `Evidence.text` and
- * `Evidence.label` — an inbound email BODY and its SUBJECT LINE. Scanning that meant anyone who
- * could send the tenant a message could put `SMOKE::knowledge-synth::` in it and replace the real
- * synthesis with the code fixture, choosing which of the tenant's evidence rows were cited and
- * which were reported as conflicts, with no model call and no spend. A remote party selected a code
- * path in the one module whose entire purpose is that untrusted content steers nothing. The
- * `question` is the caller's own argument, so keying on it puts the seam back under the operator.
+ * ⚠ TWO CONDITIONS, AND NEITHER ONE ALONE IS ENOUGH. THIS IS A SECURITY BOUNDARY, NOT A STYLE
+ * CHOICE.
+ *
+ *  (a) **`offlineSeamAvailable()` — THE OPERATOR HALF.** `PIKAR_OFFLINE_FIXTURES=1` AND no model
+ *      credential on the deployment. Wave 2 keyed the seam on the `question` argument alone and
+ *      justified it with "the `question` is the caller's own argument, so keying on it puts the
+ *      seam back under the operator". THAT CLAIM WAS FALSE the moment a non-test caller landed:
+ *      29-06's `knowledgeSearch.search` is a `tenantAction` whose `question: v.string()` is
+ *      END-USER TYPED TEXT, so ANY authenticated tenant could suppress the synthesizer's model call
+ *      and steer a fabricated, fully-cited answer (`<citeIds>|<excerptFromId>|<conflictIds>`
+ *      chooses which rows are cited and which are declared conflicts) into `knowledgeSearches`.
+ *      The operator flag is the actual operator signal, and it is the `vaultDigest.ts` /
+ *      `voiceDoc.ts` shape verbatim.
+ *
+ *  (b) **THE `question` ARGUMENT ALONE, NEVER THE ASSEMBLED PROMPT.** `blueprint.ts` and
+ *      `vaultDigest.ts` scan their whole prompt safely because theirs is built from the tenant's
+ *      OWN profile and documents. This module's synthesis prompt embeds `Evidence.text` and
+ *      `Evidence.label` — an inbound email BODY and its SUBJECT LINE — so scanning that let anyone
+ *      who could send the tenant a message select this code path. (a) closes the tenant door and
+ *      (b) closes the third-party door; on an operator-flagged deployment (b) is still what keeps
+ *      a mail body from choosing the fixture.
  */
 const SMOKE_PLAN_PREFIX = "SMOKE::knowledge-plan::";
 const SMOKE_SYNTH_PREFIX = "SMOKE::knowledge-synth::";
@@ -330,7 +341,7 @@ export const planKnowledgeSearch = internalAction({
     // other shape first; a mutation that emptied the fallback left the whole suite green.)
     try {
       let raw: readonly unknown[];
-      if (question.includes(SMOKE_PLAN_PREFIX)) {
+      if (offlineSeamAvailable() && question.includes(SMOKE_PLAN_PREFIX)) {
         const fixture = smokePlanFixture(question, question);
         if (fixture === "fail") throw new Error("knowledgeLlm: SMOKE planner failure");
         raw = fixture;
@@ -634,7 +645,7 @@ export const synthesizeKnowledge = internalAction({
     const safePrompt = scan.value.safeText;
 
     let raw: SearchSynthesis;
-    if (question.includes(SMOKE_SYNTH_PREFIX)) {
+    if (offlineSeamAvailable() && question.includes(SMOKE_SYNTH_PREFIX)) {
       raw = smokeSynthesisFixture(question, question, evidence);
     } else {
       // THE PROVIDER'S ERROR NEVER LEAVES THIS FUNCTION, and this is the call that needed it most.

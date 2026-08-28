@@ -105,6 +105,18 @@ const TENANT = "tenant_knowledge_a";
 const PLANNER_V1 = "PLANNER BODY v1";
 const SYNTH_V1 = "SYNTHESIZER BODY v1";
 
+// THE OPERATOR OPT-IN, SET FOR THE WHOLE FILE. `offlineSeamAvailable()` is now half of both SMOKE
+// gates (`PIKAR_OFFLINE_FIXTURES=1` AND no model credential), so a suite that drives the sentinels
+// has to say out loud that it is an offline-fixture deployment. The nested "THE PROMPT THE HANDLER
+// ACTUALLY SENDS" block stubs `OPENROUTER_API_KEY` on top of this, which turns the predicate FALSE
+// again — which is why those tests reach the live branch even though the flag is set here.
+beforeEach(() => {
+  vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 async function seedSkill(
   t: ReturnType<typeof makeTest>,
   name: string,
@@ -780,19 +792,26 @@ describe("knowledgeLlm.ts is structurally toolless and code-owned", () => {
     }
   });
 
-  test("THE OFFLINE SEAM IS KEYED ON THE QUESTION, NOT ON THE ASSEMBLED PROMPT", () => {
-    // The blocker in one line of source: `safePrompt.includes(SMOKE_SYNTH_PREFIX)` scanned a string
-    // that embeds every evidence row's text and label, i.e. inbound mail bodies and subject lines.
-    // `blueprint.ts` and `vaultDigest.ts` may scan their whole prompt because theirs is built from
-    // the tenant's own profile; this module's is not.
+  test("THE OFFLINE SEAM NEEDS THE OPERATOR FLAG **AND** THE QUESTION, NOT EITHER ALONE", () => {
+    // Two doors, and the source has to close both in the SAME expression.
+    //  - `safePrompt.includes(...)` scanned a string embedding every evidence row's text and label,
+    //    i.e. inbound mail bodies and subject lines -> a THIRD PARTY chose the code path.
+    //  - `question.includes(...)` alone was end-user typed text once `knowledgeSearch.search`
+    //    landed as a public `tenantAction` -> the TENANT chose it, and steered a fabricated,
+    //    fully-cited answer into `knowledgeSearches`.
+    // The behavioural proof is two describes below; this scan is what stops the conjunct being
+    // dropped in a file nobody re-reads.
     for (const marker of ["planKnowledgeSearch", "synthesizeKnowledge"]) {
       const from = src.indexOf(`export const ${marker} = internalAction(`);
       const body = src.slice(from, src.indexOf("\n});", from));
-      const seam = body.slice(body.indexOf("SMOKE_") - 40, body.indexOf("SMOKE_"));
+      const seam = body.slice(body.indexOf("SMOKE_") - 80, body.indexOf("SMOKE_"));
       expect(
         seam,
         `${marker} selects its offline seam from something other than the question`,
       ).toContain("question.includes(");
+      expect(seam, `${marker} reaches its offline seam without the operator opt-in`).toContain(
+        "offlineSeamAvailable() &&",
+      );
       expect(body, `${marker} still tests the assembled prompt for the sentinel`).not.toContain(
         "safePrompt.includes(",
       );
@@ -850,6 +869,65 @@ describe("untrusted evidence cannot select a code path (the SMOKE seam)", () => 
     // the observable difference. Before the fix this returned the fixture:
     // `summary: "offline fixture for: what are our renewal terms?"` with a claim citing vault-1.
     expect(result.diverted).toBe(false);
+  });
+
+  // ── The 29-06 half of the same door: the CALLER, not a third party ────────────────────────
+  //
+  // `knowledgeSearch.search` is a public `tenantAction` whose `question` is end-user typed text, so
+  // "the question is the caller's own argument" stopped being an operator signal the day it landed.
+  // A tenant who could reach the fixture chooses `<citeIds>|<excerptFromId>|<conflictIds>` — which
+  // of their own rows are cited, which are declared conflicts, and what the summary says — with no
+  // model call and no spend, and it is stored as `actor: "system"` with nothing marking it a
+  // fixture. These two tests are the SAME question string against the two deployment states.
+  const sentinelQuestion = "SMOKE::knowledge-synth::vault-1||";
+
+  test("OPERATOR OFF (a model credential is present): the tenant's sentinel takes the LIVE path", async () => {
+    // The credential half of `offlineSeamAvailable()` alone is enough to refuse the fixture: this
+    // is the shape of a real deployment, where `PIKAR_OFFLINE_FIXTURES` is never "1".
+    vi.stubEnv("OPENROUTER_API_KEY", "test-key-not-used");
+    const t = makeTest();
+    await seedBoth(t);
+    boundary.calls.length = 0;
+    boundary.reply = {
+      summary: "the model wrote this",
+      claims: [
+        {
+          text: "a modelled claim",
+          evidenceIds: ["vault-1"],
+          excerpt: null,
+          conflictEvidenceIds: null,
+        },
+      ],
+      unanswered: [],
+    };
+
+    const out = okSynth(await synth(t, sentinelQuestion, [ev({ evidenceId: "vault-1" })]));
+
+    // MUTATION OBSERVED RED: drop `offlineSeamAvailable() &&` from the synthesizer's seam.
+    expect(boundary.calls).toHaveLength(1);
+    expect(out.summary).toBe("the model wrote this");
+    expect(out.claims[0]?.text).toBe("a modelled claim");
+    // The fixture's two signatures, which a tenant-steered answer would carry. Literals, not
+    // constants: the point is what the caller would have received.
+    expect(out.summary).not.toContain("offline fixture for:");
+    expect(out.claims.map((c) => c.text)).not.toContain("offline claim 0");
+  });
+
+  test("OPERATOR ON (`PIKAR_OFFLINE_FIXTURES=1`, no credential): the SAME question reaches the fixture", async () => {
+    // The positive control. Without it the test above would also pass if the seam were deleted
+    // outright, and the $0 suite that depends on it would be the thing that noticed.
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+    vi.stubEnv("OPENROUTER_API_KEY", undefined);
+    vi.stubEnv("OPENAI_API_KEY", undefined);
+    const t = makeTest();
+    await seedBoth(t);
+    boundary.calls.length = 0;
+
+    const out = okSynth(await synth(t, sentinelQuestion, [ev({ evidenceId: "vault-1" })]));
+
+    expect(boundary.calls).toHaveLength(0);
+    expect(out.summary).toBe(`offline fixture for: ${sentinelQuestion}`);
+    expect(out.claims[0]?.text).toBe("offline claim 0");
   });
 
   test("A FAILED MODEL CALL CARRIES NO PROVIDER PROSE OUT OF THE SYNTHESIZER", async () => {

@@ -1,5 +1,27 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-28 (29-06 REMEDIATION — **A SECOND KNOWLEDGE EVENT, AND THE FIRST
+> KEY-ALLOWLIST TEST IN THIS TABLE.**
+>
+> `knowledge.search_stopped` joins `knowledge.searched`, written by `convex/knowledgeSearch.ts` and
+> by nothing else. It fires when the budget is exhausted BETWEEN the fan-out and the synthesis — the
+> connectors have already been read and the planner has already charged, but there is no answer and
+> no `knowledgeSearches` row, so that run previously left NO governance trace at all. Refs and counts
+> only: `questionHash`, a code-owned `stoppedAt` stage token, `stopReason` (`guardrails.preCall`'s
+> closed enum, never a provider message), `evidenceCount` plus the three coverage counts (which is
+> what says the connectors were reached), `adapterCrashCount`, `rejectedPlanCount`,
+> `plannerFallback`, `planRunRef`, `plannerSkillVersion`, `durationMs`. **Exactly one of the two
+> events fires per run**; a stop before the planner writes neither.
+>
+> **AND `AUDIT_VIEWER_EVENTS` NOW HAS ONE ROW THAT IS TESTED RATHER THAN HAND-MAINTAINED.** Both
+> `knowledge.*` rows are pinned by `packages/backend/convex/knowledgeSearch.test.ts` against the
+> STORED payload — `Object.keys(payload)` must equal the allowlist row exactly, and every one of
+> `redactedSearchEvent`'s 14 output keys must be present. This table fails CLOSED (a forgotten key is
+> silently never shown), so drift here is invisible in production: deleting `"adapterCrashCount"`
+> from the `knowledge.searched` row previously left the ENTIRE contracts and backend suites green.
+> It is now RED. The other ~90 events remain hand-listed — only `knowledge.*` has an exported pure
+> projection to derive from, and the general fix is a write-site change, not a wider table.)
+>
 > Last verified: 2026-08-28 (29-06 — **ONE NEW AUDIT EVENT: `knowledge.searched`**, written by
 > `convex/knowledgeSearch.ts` and by nothing else. `actor: "system"`, `correlationId` = the
 > coordinator's own run uuid. The payload is `@pikar/core`'s `redactedSearchEvent` projection plus

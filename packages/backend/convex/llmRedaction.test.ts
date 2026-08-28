@@ -454,33 +454,57 @@ test.each([
 const KNOWLEDGE_CONTENT_FIELDS =
   /\b(question|query|summary|text|label|title|subject|sender|excerpt|sourceRef|snippet|body)\b/;
 
-test("knowledgeSearch.ts writes exactly ONE audit row and its payload is refs/counts-only (§4)", () => {
+test("knowledgeSearch.ts writes exactly TWO audit sites and both payloads are refs/counts-only (§4)", () => {
   // The coordinator is the only module in this feature that touches a governance plane at all
   // (`knowledgeVaultDrive.ts`, `knowledgeExternalSources.ts` and `knowledgeLlm.ts` write none, and
-  // their own suites scan for that). So this ONE payload is the whole §4 surface of unified search.
+  // their own suites scan for that). So these payloads are the whole §4 surface of unified search.
+  //
+  // TWO, not one: a run that completes writes `knowledge.searched`; a run whose budget is
+  // exhausted BETWEEN the fan-out and the synthesis — connectors already read, planner already
+  // charged — writes `knowledge.search_stopped`. Exactly one of the two fires per run.
+  //
+  // ⚠ CEILING OF THIS TEST, STATED RATHER THAN IMPLIED. `KNOWLEDGE_CONTENT_FIELDS` is a WORD
+  // BLOCKLIST over source text, and a blocklist admits every word it does not name — a mutation
+  // adding `unansweredList` (free prose the synthesizer wrote over untrusted mail bodies) to the
+  // payload passed this file and the whole backend suite. The ALLOWLIST that actually closes it is
+  // behavioural and lives in `knowledgeSearch.test.ts`: it reads the STORED payload of each event
+  // and pins `Object.keys(...)` to a literal set, so any new key of any name fails. This scan is
+  // kept as the cheap source-level tripwire in front of it, not as the boundary.
   const src = readSource("knowledgeSearch.ts")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/[^\n]*/g, "");
   expect(src.match(/audit\.log\b/g) ?? [], "knowledgeSearch.ts audit.log call sites").toHaveLength(
-    1,
+    2,
   );
-  const payload = payloadAfter(src, /eventType:\s*["']knowledge\.searched["']/);
-  // POSITIVE CONTROL — a scan that found no payload would pass every assertion below vacuously.
-  expect(payload, "the knowledge.searched audit payload was not found").not.toBe("");
-  expect(payload).toMatch(/questionHash/);
-  expect(payload).toMatch(/redactedSearchEvent/);
 
-  // `x.length` is a COUNT, not content (the briefing.created idiom), and so is `claims.length`.
-  const stripped = payload.replace(/\b[A-Za-z]\w*\.length\b/g, "COUNT");
-  expect(stripped, `knowledge.searched leaks source content: ${payload}`).not.toMatch(
-    KNOWLEDGE_CONTENT_FIELDS,
-  );
-  // The planner's rejected SOURCE NAMES are model-authored strings ("notion",
-  // "http://evil.example"). Only the count may cross.
-  expect(stripped).toMatch(/rejectedPlanCount/);
-  expect(stripped, "a model-authored rejection name reaches the log plane").not.toMatch(
-    /rejected(?!PlanCount)/,
-  );
+  const completed = payloadAfter(src, /eventType:\s*["']knowledge\.searched["']/);
+  // POSITIVE CONTROL — a scan that found no payload would pass every assertion below vacuously.
+  expect(completed, "the knowledge.searched audit payload was not found").not.toBe("");
+  expect(completed).toMatch(/questionHash/);
+  expect(completed).toMatch(/redactedSearchEvent/);
+
+  const stopped = payloadAfter(src, /eventType:\s*["']knowledge\.search_stopped["']/);
+  expect(stopped, "the knowledge.search_stopped audit payload was not found").not.toBe("");
+  expect(stopped).toMatch(/questionHash/);
+  // The stop reason is `guardrails.preCall`'s closed enum, never a provider message.
+  expect(stopped).toMatch(/stopReason:\s*synthesized\.reason/);
+
+  for (const [event, payload] of [
+    ["knowledge.searched", completed],
+    ["knowledge.search_stopped", stopped],
+  ] as const) {
+    // `x.length` is a COUNT, not content (the briefing.created idiom), and so is `claims.length`.
+    const scrubbed = payload.replace(/\b[A-Za-z]\w*\.length\b/g, "COUNT");
+    expect(scrubbed, `${event} leaks source content: ${payload}`).not.toMatch(
+      KNOWLEDGE_CONTENT_FIELDS,
+    );
+    // The planner's rejected SOURCE NAMES are model-authored strings ("notion",
+    // "http://evil.example"). Only the count may cross.
+    expect(scrubbed).toMatch(/rejectedPlanCount/);
+    expect(scrubbed, `${event}: a model-authored rejection name reaches the log plane`).not.toMatch(
+      /rejected(?!PlanCount)/,
+    );
+  }
 });
 
 test("knowledgeSearch.ts writes NO telemetry, NO dead letter and NO agentSteps row", () => {
@@ -527,8 +551,10 @@ test("the TOOL-BEARING loop cannot reach the knowledge search plane at all (SC-2
     "knowledgeVaultDrive",
     "knowledgeExternalSources",
   ])
-    expect(src, `llm.ts reaches ${module} — untrusted search content is one call from a tool grant`)
-      .not.toContain(module);
+    expect(
+      src,
+      `llm.ts reaches ${module} — untrusted search content is one call from a tool grant`,
+    ).not.toContain(module);
 });
 
 test("knowledgeLlm.ts is structurally TOOLLESS — both knowledge calls, no tools: anywhere", () => {

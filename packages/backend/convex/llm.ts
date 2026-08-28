@@ -4970,10 +4970,18 @@ export async function runSpecialistTurn(
   //
   // 21-02 (SKILL-01): the ORDINARY branch resolves the TENANT overlay first and falls back to the
   // global active row (skills.loadEffectiveSkill). `tenantId` here is trusted server state from the
-  // dispatcher's authenticated envelope — never model-supplied — and only the three
-  // USER_AUTHORABLE_SKILLS can have an overlay row at all, so every other specialist name resolves
-  // exactly as before. Deliberately NOT threaded into the cockpit, voice, inbox, reply, extraction
-  // or vault loaders: those names are not authorable in v0.
+  // dispatcher's authenticated envelope — never model-supplied.
+  //
+  // ⚠ WHICH NAMES CAN HAVE AN OVERLAY ROW IS NO LONGER "the three USER_AUTHORABLE_SKILLS", and a
+  // comment here said so until 29-05 falsified it. Phase 29 widened `USER_AUTHORABLE_SKILLS` to
+  // admit the six `pack-*` workflow-pack skills, so a `pack-*` name reaching this loader CAN now
+  // resolve to a tenant candidate body instead of the global active row. That is the intended
+  // behaviour of pack customization, not a leak — every overlay row is still written by
+  // `skills.publishUserCandidate` from a SERVER-RENDERED body and can only be activated by an
+  // `ownerMutation` — but do not reason from "only three names are affected" when changing this.
+  // The authoritative membership is the literal in `@pikar/contracts/skill`, pinned by its own
+  // test. Deliberately NOT threaded into the cockpit, voice, inbox, reply, extraction or vault
+  // loaders: those names are not authorable.
   // The exact-VERSION pin stays GLOBAL: `--skill name@version` names a `skills` row and must keep
   // doing so. 21-03's tenant pin is a SEPARATE argument (`tenantSkillIds`) for exactly that reason.
   const pin = skillVersions?.[skillName];

@@ -135,8 +135,12 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "guardrail.blocked": ["requestId", "reason"],
   "intake.extracted": ["artifactId", "kind", "charCount"],
   "intake.extraction_failed": ["artifactId", "kind", "reason"],
-  // Phase 29 (KNOW-01) — the ONE governance event a unified knowledge search writes, and every key
-  // here is a ref, a hash, a count, a boolean or a closed enum. What is deliberately ABSENT is the
+  // Phase 29 (KNOW-01) — the governance event a COMPLETED unified knowledge search writes (a run
+  // stopped after the reads writes `knowledge.search_stopped` instead, below; exactly one of the
+  // two fires per run). Every key here is a ref, a hash, a count, a boolean or a closed enum, and
+  // `knowledgeSearch.test.ts` pins this list against the STORED payload in both directions — a key
+  // added to the write site or renamed in `@pikar/core`'s `redactedSearchEvent` fails there rather
+  // than silently ceasing to reach the viewer. What is deliberately ABSENT is the
   // interesting half: the question (only `questionHash`), the summary, any claim text, label,
   // excerpt, sourceRef, subject, sender or file name — and the planner's REJECTED SOURCE NAMES,
   // which are model-authored strings, so only `rejectedPlanCount` crosses.
@@ -165,6 +169,26 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "planRunRef",
     "synthRunRef",
     "plannerSkillVersion",
+  ],
+  // The OTHER outcome of the same run: the budget was exhausted BETWEEN the fan-out and the
+  // synthesis, so the connectors were already read and the planner already charged, but there is no
+  // answer and no `knowledgeSearches` row. Without this event that run left no governance trace at
+  // all. `stoppedAt` and `stopReason` are code-owned closed tokens (a stage name and
+  // `guardrails.preCall`'s own reason union) — never a provider message.
+  "knowledge.search_stopped": [
+    "questionHash",
+    "stoppedAt",
+    "stopReason",
+    "evidenceCount",
+    "availableSources",
+    "partialSources",
+    "unavailableSources",
+    "adapterCrashCount",
+    "rejectedPlanCount",
+    "plannerFallback",
+    "planRunRef",
+    "plannerSkillVersion",
+    "durationMs",
   ],
   "llm.cache_hit": ["requestId", "safeTextHash", "model", "stage"],
   "llm.called": ["model", "skillVersion", "stage"],
