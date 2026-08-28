@@ -1025,6 +1025,34 @@ describe("gmail.knowledgeQuery — bounded, GET-only, never throwing on a govern
     expect(res.messages[0]?.bodyTruncated).toBe(true);
   });
 
+  test("THE SUBJECT LINE IS CAPPED TOO — and unlike the body there is no flag to notice it", async () => {
+    // An attacker-controlled subject with no bound flows straight into `Evidence.label`, which
+    // `synthesisPrompt` interpolates onto the fence line. The body cap has `bodyTruncated` to
+    // report the loss; the label cap has nothing, so removing the truncation left the whole suite
+    // green. The literal 200 is pinned beside the constant rather than read from it.
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1, { subject: "S".repeat(4000) })]);
+
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.messages[0]?.subject).toHaveLength(200);
+    expect(SEARCH_CAPS.labelCharCap).toBe(200);
+    // A SHORT subject is untouched — the negative control, so the cap is not just "always 240".
+    mockMailbox([mail(2, { subject: "Renewal terms" })]);
+    const short = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(short.ok).toBe(true);
+    if (!short.ok) return;
+    expect(short.messages[0]?.subject).toBe("Renewal terms");
+  });
+
   test("a further page of results is REPORTED, never silently dropped", async () => {
     const t = convexTest(schema, modules);
     await seedKqTokens(t);

@@ -28,7 +28,18 @@
 > `files_modified` and never touched it while `vaultDrive.ts` took a 142-line change; every
 > assertion about `findInDriveForTenant` lived in another plan's file. Five tests here now pin the
 > shared gate, the argument-supplied tenant, the two projections of one request, the `fields`
-> request itself and the blank-needle short-circuit.)
+> request itself and the blank-needle short-circuit.
+>
+> **(4) THE TWO TRIPWIRES THIS FILE OWED.** `knowledgeVaultDrive.test.ts` had no regression guard
+> that the adapters write NOTHING to audit / agentSteps / telemetry / deadLetters, and no
+> injected-instruction fixture — both of which the sibling module ships. It now has both
+> behaviourally (a hostile vault document, and a hostile third-party DRIVE FILE NAME, which is the
+> one that reaches evidence `text` unescaped) plus a structural scan, so a future edit adding a
+> `label`-bearing audit row is RED rather than green. The VAULT `validateSourceRef` guard is
+> pinned by a call-site count: its ref is a Convex id and is therefore always ref-shaped, so no
+> behavioural test can reach it and a source scan is the only instrument there is. The DRIVE one
+> has a real behavioural test — a content-shaped `row.id` is dropped and reported
+> `partial/provider_error`, the state that arm is the sole producer of.)
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — the two vault-plane honesty defects, and
 > the one that was reported fixed and was not.**
 >
