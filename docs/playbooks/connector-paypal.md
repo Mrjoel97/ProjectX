@@ -1,15 +1,18 @@
 # Playbook: PayPal connector (REVN-03)
 
-> Last verified: 2026-08-28 (28-08 Task 1 — the authorization model landed)
+> Last verified: 2026-08-28 (28-08 Tasks 1-2 — authorization model + bounded reads landed)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-08, 28-25) · Related ADRs: none yet
 
-> **Status: AUTHORIZATION MODEL LANDED, LANE PARKED, AND IT CANNOT CONNECT.** `paypalAuth.ts` exists
-> and is the *refusal*: PayPal publishes no third-party read surface (`partner-transactions` is named
+> **Status: BUILT, PARKED, AND UNABLE TO CONNECT — deliberately.** The normalizer, the bounded read
+> path and the authorization model all exist and are proven offline. What does NOT exist is a way to
+> obtain a credential: PayPal publishes no third-party read surface (`partner-transactions` is named
 > in the spec with no published operation), so `beginConnect` declines and names the gap rather than
-> offering the app's own client credentials as a tenant connection. No PayPal credential exists in
-> any deployment; nothing here has ever spoken to PayPal. Items still marked **[PLANNED]** are
-> contracts a later plan must satisfy. Shared credential, OAuth-state, fetch, telemetry and release
-> rules live in `revenue-connectors.md` and are not repeated here.
+> offering the app's own client credentials as a tenant connection. **That refusal is the deliverable,
+> not a shortfall** — the alternative, wiring an app token into a tenant connection so that something
+> reads, is the data-disclosure defect this lane exists to prevent. No PayPal credential exists in any
+> deployment; nothing here has ever spoken to PayPal, and the sandbox could not prove it if it had.
+> Items still marked **[PLANNED]** are contracts a later plan must satisfy. Shared credential,
+> OAuth-state, fetch, telemetry and release rules live in `revenue-connectors.md`.
 
 ## Purpose
 
@@ -20,16 +23,21 @@ merchant's** data.
 
 ## Key files
 
-**[PLANNED]**
-
-- `packages/revenue/src/providers/paypal.ts` (+ `.test.ts`) — pure normalization of transaction,
-  invoice and settlement payloads. No Convex imports.
+- `packages/revenue/src/providers/paypal.ts` (+ `.test.ts`) — **LANDED (28-08 Task 2).** Pure
+  normalization of Transaction Search and balance payloads. Decimal strings go through `parseMoney`
+  (BigInt/string arithmetic — no float ever holds an amount). Owns the two read paths, the page-number
+  pagination, PayPal's 31-day maximum range and its three-hour listing latency, and
+  `PAYPAL_PARTNER_TRANSACTIONS_PATH = null` — the gap as a value. No Convex imports.
 - `packages/backend/convex/paypalAuth.ts` — **LANDED (28-08 Task 1).** The authorization model:
   the exact read scopes, the read-only feature package and the write-capable set it refuses,
   `classifyGrantSubject` (the app-owner/delegated-merchant split), `parsePayPalCredential`, the
   `beginConnect` refusal, and a local-only `disconnect` recorded as `unsupported`. It mints no
   token: the only token this repo could mint reads Pikar's own account.
-- `packages/backend/convex/paypalConnector.ts` (+ `.test.ts`) — Node actions performing bounded reads.
+- `packages/backend/convex/paypalConnector.ts` (+ `.test.ts`) — **LANDED (28-08 Task 2).** Bounded
+  reads over the two allow-listed paths, gated on `providerGates` for tenant-facing callers and
+  ungated for `paypalReadEvidence` (the evidence door, so a seal is never a prerequisite for its own
+  evidence). Re-checks the grant subject AFTER decryption and refuses an app-owner credential before
+  any request leaves.
 - `scripts/smoke-paypal-read.mjs` — controlled live merchant read + revoke evidence for the lane gate.
 - `docs/connectors/paypal-suitability.md` — the suitability record (28-01 drafts, 28-25 decides).
 
@@ -85,7 +93,10 @@ third parties requires **partner status and partner-manager coordination**.
 ## Invariants — what must never break
 
 1. **Per-merchant binding, asserted on every read.** A projection is attributed only to the merchant
-   whose grant produced it. Never to "the app". *Enforced by:* [PLANNED] two-tenant test (28-08).
+   whose grant produced it. Never to "the app". *Enforced by:* `paypalConnector.accessTokenFor`,
+   which classifies the decrypted credential's subject and returns `unavailable` — **without issuing
+   the request** — for an app-owner credential or an unset `PAYPAL_PARTNER_MERCHANT_ID`. Two-tenant
+   and ciphertext-graft tests in `paypalConnector.test.ts`.
 2. **Client credentials are never treated as a tenant grant.** *Enforced by:* `paypalAuth.
    classifyGrantSubject`, which returns `app_owner` for a missing, malformed **or partner-owned**
    merchant id and can only ever return a delegated grant for a well-formed id that is somebody
@@ -102,10 +113,18 @@ third parties requires **partner status and partner-manager coordination**.
    `revocation.upstream = "unsupported"`; `classifyRevokeOutcome` makes `confirmed` unreachable for
    this provider even given a 200. A local ciphertext clear is not a revocation and must never be
    rendered as one. Open condition `no-documented-revoke-endpoint`, owed by 28-25.
-5. **Date and page bounds on Transaction Search.** PayPal's search windows are limited; a truncated
-   window is `partial`, never a complete period.
-6. **429/5xx is partial, not zero.** A missing period is unknown coverage.
-7. Plus every invariant in `revenue-connectors.md`.
+5. **Date and page bounds on Transaction Search.** PayPal's documented maximum range is **31 days**
+   and `paypalReadWindow` refuses more. Every coverage window **ends three hours back**, because
+   PayPal takes up to that long to list an executed transaction — a window ending at `now` would
+   claim coverage of a period PayPal had not finished populating. The page size (100) and page cap
+   (5) are **this repository's** conservative numbers, not PayPal's: its rate-limit page renders no
+   content to a non-JS fetch, so no limit could be sourced and none is attributed to PayPal.
+6. **429/5xx and a page cap are partial, not zero.** Rows already read are never discarded, and the
+   projection NAMES what is missing. A missing period is unknown coverage.
+7. **No payer, cart or shipping data is ever requested.** `fields=transaction_info` narrows the
+   response before it crosses the wire; those blocks carry a customer's name, email and address
+   (CLAUDE.md §4). Asserted on the outgoing URL, not only on the parsed shape.
+8. Plus every invariant in `revenue-connectors.md`.
 
 ## How to change safely
 
@@ -118,8 +137,8 @@ third parties requires **partner status and partner-manager coordination**.
 
 | Command | Proves | Needs |
 |---|---|---|
-| `cd packages/revenue && pnpm vitest run src/providers/paypal` [PLANNED] | Payload parsing, date/page bounds, partial states. | offline |
-| backend `pnpm test paypalConnector` [PLANNED] | Merchant binding, two-tenant isolation, revoke ordering. | offline |
+| `cd packages/revenue && npx vitest run paypal` | Payload parsing, money boundaries, date/page bounds, partial states. | offline |
+| `cd packages/backend && npx vitest run paypalConnector` | Merchant binding, two-tenant isolation, gate vs evidence doors, local-clear semantics. | offline |
 | `node scripts/smoke-paypal-read.mjs` [PLANNED] | Controlled live merchant read + revoke. Lane evidence. | live creds |
 | `node scripts/check-provider-lane.mjs paypal` [PLANNED] | `passed` or `parked`. | offline |
 
