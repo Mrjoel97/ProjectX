@@ -182,6 +182,22 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "Every Stripe read fails closed rather than running against an unpinned shape.",
   },
 
+  // ── The tenant's own PayPal merchant, READ-ONLY ─────────────────────────────────────────────
+  //
+  // ONE name, and it is not a credential. There is deliberately no `PAYPAL_CLIENT_ID`/`_SECRET`
+  // here because nothing in this repository mints a PayPal token: a client-credentials token reads
+  // PIKAR'S OWN PayPal account, and storing one against a tenant is the exact defect the lane
+  // exists to prevent. See `paypalAuth.ts`.
+  {
+    // Pikar's OWN merchant id — the account a bare client-credentials token would reach. It is what
+    // `classifyGrantSubject` compares against, so unset, the app's own account and a tenant's
+    // merchant become indistinguishable. Not a secret; it is a public payer id.
+    name: "PAYPAL_PARTNER_MERCHANT_ID",
+    tier: "feature",
+    whatBreaks:
+      "Every PayPal read fails closed rather than risk attributing Pikar's own transactions to a tenant.",
+  },
+
   // ── Governed delivery ───────────────────────────────────────────────────────────────────────
   {
     name: "UNSUBSCRIBE_SECRET",

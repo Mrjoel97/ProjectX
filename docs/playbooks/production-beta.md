@@ -1,6 +1,6 @@
 # Playbook: Production Beta Readiness (25-10)
 
-> Last verified: 2026-08-28 (28-05 HubSpot rail — **THREE NEW `feature`-TIER MANIFEST NAMES:**
+> Last verified: 2026-08-28 (28-08 PayPal rail; 28-05 HubSpot rail — **THREE NEW `feature`-TIER MANIFEST NAMES:**
 > `HUBSPOT_OAUTH_CLIENT_ID`, `HUBSPOT_OAUTH_CLIENT_SECRET`, `HUBSPOT_OAUTH_REDIRECT_URI`, added to
 > `ENV_MANIFEST` in `convex/lib/env.ts`. Caught the same way `PEXELS_API_KEY` was: `env.test.ts`
 > scans source for literal `process.env.X` and reds on any consumed name nobody classified.
@@ -19,8 +19,14 @@
 > in docs/playbooks/revenue-connectors.md; this playbook records only that the manifest does not
 > and will not cover them.
 >
-> Three more provider families (QuickBooks, Stripe, PayPal) will add their own names as 28-06..08
-> land. Nothing else in this playbook's scope was re-read against this change.)
+> QuickBooks and Stripe added their own `feature`-tier names as 28-06/28-07 landed. **28-08 adds
+> exactly ONE: `PAYPAL_PARTNER_MERCHANT_ID`** — and it is NOT a credential. It is Pikar's own
+> PayPal merchant id, the account a bare client-credentials token would reach, and
+> `paypalAuth.classifyGrantSubject` compares against it to tell the app's own account apart from a
+> tenant's merchant. Unset, every PayPal read fails closed rather than risk attributing Pikar's own
+> transactions to a tenant. There is deliberately **no `PAYPAL_CLIENT_ID`/`_SECRET`**: nothing in
+> this repository mints a PayPal token, because the only token it could mint reads Pikar's account.
+> Nothing else in this playbook's scope was re-read against this change.)
 
 > Last verified: 2026-08-26 (**ONE NEW `feature`-TIER MANIFEST NAME: `PEXELS_API_KEY`**, added to
 > `ENV_MANIFEST` in `convex/lib/env.ts` for the free stock-footage scenes. The row is mandatory
