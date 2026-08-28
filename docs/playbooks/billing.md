@@ -1,7 +1,8 @@
 # Playbook: Billing — Pikar's OWN merchant account (Phase 28.1)
 
-> Last verified: 2026-08-28 against 28.1-01 (the Stripe webhook receiver and the
-> `billingStripeEvents` idempotency table)
+> Last verified: 2026-08-28 against 28.1-02 (the Dashboard checklist, the code-owned config
+> mirror, and the tax / bank-transfer reality in Operations below; 28.1-01 shipped the webhook
+> receiver and the `billingStripeEvents` idempotency table)
 > Build history: `.planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/`
 > · Related ADRs: none yet
 
@@ -46,6 +47,17 @@ name or an env prefix:
   `SIGNATURE_TOLERANCE_S`. No `ctx`, no `fetch`, no Convex import (CLAUDE.md §1).
 - `packages/billing/src/events.ts` — `HANDLED_EVENT_TYPES` (the closed v1-snapshot list) and
   `classifyEvent`, whose default arm is `{ kind: "ignored" }`.
+- `packages/billing/src/config.ts` — the DASHBOARD mirrored as code-owned constants
+  (`STRIPE_API_VERSION`, `PRODUCT_TAX_CODE`, `HEAD_OFFICE_COUNTRY`, `BANK_TRANSFER_ENABLED`,
+  `TRIAL_DAYS`, `NONTAXABLE_TAX_CODE`, `STRIPE_API_BASE`). Products, prices, tax category, head
+  office, portal, Smart Retries and bank transfer have no API surface here by decision, so this
+  file is the only way the codebase can SEE them. Every pending value is `null` and
+  `CONFIG_CONFIRMED` is `false` until the owner reports (28.1-02 Task 3).
+
+**Docs**
+
+- `docs/billing/stripe-dashboard-setup.md` — the ordered owner checklist, each item naming what
+  breaks SILENTLY if it is wrong, plus an "As configured" table that a drift is diffed against.
 
 **Backend**
 
@@ -61,6 +73,10 @@ name or an env prefix:
 **Tests**
 
 - `packages/billing/src/signature.test.ts`, `packages/billing/src/events.test.ts` — pure, sub-second.
+- `packages/billing/src/config.test.ts` — the guard that outlives 28.1-02: `PRODUCT_TAX_CODE` is
+  never `txcd_00000000` in ANY state, and the config is wholly pending or wholly landed, never
+  half (a value that lands while `CONFIG_CONFIRMED` stays `false` would escape every format
+  check).
 - `packages/backend/convex/billingWebhook.test.ts` — the real route via `convexTest(...).fetch()`.
 
 ## Dependencies & blast radius
@@ -73,7 +89,8 @@ Run `graphify query "billing webhook"` for the current subgraph. Couplings graph
 - **`hmacHex`** is imported across modules from `convex/gmailAuth.ts`. Changing its encoding
   (hex → base64) silently breaks this route; `signature.test.ts` pins the law independently.
 - **Stripe Dashboard endpoint configuration** decides which event types are delivered and which API
-  version shapes them. Neither is code-owned yet (28.1-02).
+  version shapes them. `packages/billing/src/config.ts` is where that gets code-owned; its values
+  are still `null` pending the 28.1-02 checkpoint, so nothing downstream may assume a version yet.
 - **`SPEND_RAILS` is deliberately untouched.** Billing revenue does not join the spend ledger;
   `packages/core/src/spend.ts` and `convex/spendLedger.ts` must stay unmodified by this subsystem.
 
@@ -160,6 +177,77 @@ node scripts/check-playbooks.mjs < /dev/null     # READ ITS STDOUT — it always
 - The endpoint URL is the Convex **site** origin (`*.convex.site`), not the app origin.
 - Event ORDER is not guaranteed by Stripe. Do not build sequencing assumptions on arrival order.
 
+## Operations — owner duties that no code can do
+
+### Tax threshold monitoring is an OWNER duty, and the absence of a monitor is deliberate
+
+**There is ZERO threshold-monitoring code in this repo and there must never be any.** That is not
+an oversight; a monitor could never fire. Each of these is a verified Stripe fact:
+
+- **No webhook exists.** There is no `tax.threshold.*` event type at all — the only tax event
+  Stripe emits is `tax.settings.updated`. There is nothing to subscribe to.
+- **Live mode only.** *"Obligations are only monitored in live mode."* Nothing about monitoring
+  is observable in test mode, so no test in this repo can cover it and none pretends to.
+- **Notification is email + a Dashboard bell** to the account owner (from
+  `support+updates@stripe.com`). It never reaches the application by any channel.
+- **$10,000 USD of revenue in the previous year is a hard precondition**, alongside: opted into
+  Stripe Tax, notifications not disabled, no active live-mode registration for that location, and
+  no threshold notification in the past 7 days. **Pikar is below the $10k gate, so no
+  notification will fire today** — that silence proves nothing about obligations.
+- **The home jurisdiction is never monitored.** The head-office/origin address is what EXCLUDES
+  it, not merely what includes others.
+
+**Do not read the silence as safety.** A future reader finding no alerts and no monitor code must
+conclude "nobody is watching", not "there is nothing to watch".
+
+**Cadence:** the account owner checks **Dashboard → Tax → Monitoring** manually, **monthly**, and
+again within a week of any month where revenue steps up materially. Monitoring attributes a
+location per transaction once a day and new transactions surface within ~7 days, so a month is the
+smallest window that means anything.
+
+**What code DOES own** (BILL-05's buildable half, 28.1-03): the `taxability_reason`
+discrimination. `not_collecting` + a real product tax code = *not owed, unregistered*;
+`not_collecting` + `txcd_00000000` = *we declared it nontaxable*, a different claim entirely;
+`zero_rated` / `not_subject_to_tax` = *calculated as zero*. Because `not_collecting` is AMBIGUOUS
+on its own, `PRODUCT_TAX_CODE` in `packages/billing/src/config.ts` is **load-bearing for the
+signal, not cosmetic** — and `config.test.ts` refuses `txcd_00000000` in every state, asserted
+against the written-out literal so renaming the constant cannot make it pass vacuously.
+
+**Testing tax at all requires a sandbox registration.** Stripe Tax has SEPARATE settings for
+sandboxes and only calculates where a registration exists. With none, every sandbox calculation
+returns the same empty result and a broken tax path is indistinguishable from a correct one. Any
+such registration goes in `acct_1U9DJsV05pYaPPIE` (the sandbox), never in the live account.
+
+### Bank transfer is COUNTRY-GATED, and the answer is not in this repo
+
+Bank-transfer eligibility depends on the merchant's country, and **the account's country cannot be
+read from this codebase**. That makes it a blocking owner question, not an assumption:
+`BANK_TRANSFER_ENABLED` and `HEAD_OFFICE_COUNTRY` in `config.ts` stay `null` until answered.
+
+- **Answer `true`** → BILL-03's cash-balance path ships. `invoice.paid` is then NOT cash in hand:
+  money lands in the customer **cash balance** first (`funded` = arrival, `applied_to_payment` =
+  collection) and can be pulled back (`funding_reversed`).
+- **Answer `false`** → a legitimate outcome, not a failure. The cash-balance handlers stay as
+  **recorded dead code for this merchant**: their offline tests still prove the LAW — money in a
+  cash balance is not collected until it is applied — which is what makes them safe to keep
+  rather than delete, and what makes re-enabling after a country change a configuration change
+  instead of a rebuild. If it is `false`, `config.ts` names the country and the date on the
+  constant, so the answer carries its own expiry.
+
+To exercise bank transfer in test mode the invoice needs `collection_method: "send_invoice"` and
+`payment_settings[payment_method_types] = ["customer_balance"]`, then **Send** from the Dashboard
+— sending is what mints the customer's virtual bank account number.
+
+### The remaining `BILLING_*` env names are classified WITH their first consumer, never before
+
+`BILLING_STRIPE_SECRET_KEY` and `BILLING_STRIPE_PRICE_ID` are **deliberately not yet in**
+`ENV_MANIFEST`. `convex/env.test.ts` checks **both directions**: an unclassified consumer fails at
+line 82, and a **dead entry that no source reads fails at line 87** ("a name nothing reads is
+removed, not carried" — a stale row makes a readiness screen demand a key that does nothing).
+Adding a row today, before any `process.env.BILLING_STRIPE_SECRET_KEY` literal exists, was probed
+and turns `env.test.ts` **RED**. So each row lands in the SAME commit as its first literal read
+(28.1-04/05). `npx convex env set` does not affect this test either way — the scan reads source,
+not the deployment.
 ## Known gaps & deferred work
 
 - **The effect switch is empty.** Every verified event is recorded `ignored`. Ledger writes are

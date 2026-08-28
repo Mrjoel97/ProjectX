@@ -5,5 +5,6 @@
 //
 // The reserved Phase 28 names are deliberately not written out here: a source scan asserts this
 // package takes none of them, and a mention in a comment is indistinguishable from a use.
+export * from "./config";
 export * from "./events";
 export * from "./signature";
