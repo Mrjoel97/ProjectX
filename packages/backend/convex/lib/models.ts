@@ -101,6 +101,35 @@ const OX_ALPHA_SETTINGS = {} as const;
 /** The prefix every caller must handle for itself, because its provider is Node-only. */
 export const NODE_ONLY_MODEL_PREFIX = "google/";
 
+/**
+ * THE OFFLINE-SEAM OPERATOR SIGNAL. True only on a backend that could not make a model call at all.
+ *
+ * Every offline fixture in this repo used to be selected by an IN-BAND `SMOKE::` SENTINEL IN
+ * CONTENT — and content is authored by whoever authored the document. `vaultDigest.ts` gated on the
+ * assembled prompt (so any ingested Drive file or email could turn a real folder's digest into a
+ * fixture), then on the folder NAME — which reads as tenant-chosen but is a CLIENT-SUPPLIED
+ * argument to `vaultDrive.importDriveFolder`, populated by the browser from `listDriveFolders`,
+ * which lists SHARED folders whose names a THIRD PARTY chose. Same channel, one hop further away.
+ *
+ * This is the out-of-band replacement: a fact about the DEPLOYMENT that no request, no argument and
+ * no document can influence. It is not a new config knob — it is the exact precondition the seam
+ * exists for (convex-test / a local backend with no key), so the seam is structurally INERT on any
+ * real deployment.
+ *
+ * BOTH keys, never just `OPENAI_API_KEY`: `DEFAULT_MODEL` is `or/openai/gpt-4o-mini` and
+ * `resolveModel` routes it to OpenRouter, so `OPENROUTER_API_KEY` is the credential the caller
+ * would actually spend. A guard reading one key alone leaves the seam open on a deployment that
+ * carries the other.
+ *
+ * ⚠ NOT EVERY `SMOKE::` SEAM IS CLOSED. `vaultLlm.extractGraph` / `identifyDoc`, `vaultRag.embedDoc`
+ * and `gmail.ts`'s tool-argument gate still select on content, and they are coupled to each other
+ * and to a landed Playwright E2E that drives the sentinels against a REAL KEYED deployment — so
+ * they cannot be converted one at a time. See
+ * `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.
+ */
+export const offlineSeamAvailable = (): boolean =>
+  !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY;
+
 export const resolveModel = (id: string): LanguageModel => {
   // `.chat(...)`, NOT the bare callable — MEASURED 2026-08-25 and this is the load-bearing half.
   // The bare provider defaults to OpenAI's RESPONSES API, and two things went wrong there, both

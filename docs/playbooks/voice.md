@@ -1,5 +1,14 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-08-28 (**`offlineSeamAvailable` MOVED OUT OF THIS MODULE — same predicate,
+> one definition.** `vaultDigest.ts` needed the identical "this deployment holds no model
+> credential" check to close its own fabrication seam, and a second copy of a credential check is
+> exactly the copy-drift defect `resolveModel` was consolidated out of one commit earlier. It now
+> lives in `packages/backend/convex/lib/models.ts` beside the table that decides WHICH key is spent,
+> and `voiceDoc.ts` imports it. **NO BEHAVIOUR CHANGE**: same two keys, same call site
+> (`reviewSession`, the `SMOKE::docreview::` gate), same tests — `voiceDoc.test.ts` 31/31 unchanged,
+> including the two guard tests that prove either key alone makes the sentinel inert.)
+
 > Last verified: 2026-08-28 (**`voiceDoc.ts` WAS SENDING AN UNKNOWN MODEL ID, AND ITS SEAM GUARD
 > HAD TO WIDEN WITH THE FIX.** The module held a private
 > `resolveModel = id => openai(id.replace(/^openai\//, ""))`; the regex is anchored on `^openai/` and

@@ -1,3 +1,17 @@
+> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS — THE ROUND-3 DIGEST-SEAM FIX MOVED THE CHANNEL,
+> IT DID NOT CLOSE IT, AND THIS PLAYBOOK CERTIFIED THE MOVE.**
+>
+> Round 3 narrowed the folder-digest offline seam from the assembled prompt to `folder.name`, on the
+> stated grounds that a folder name is "the tenant's own, chosen at creation, and no member can write
+> it". `vaultDrive.importDriveFolder` takes `name: v.string()` FROM THE CLIENT and the browser
+> sources it from `listDriveFolders`, which lists SHARED folders named by a THIRD PARTY. The seam is
+> now `offlineSeamAvailable()` — no model credential on the deployment — and the suite drives that
+> instead of the attack channel. See `#### The offline seam` below. The OTHER four `SMOKE::` gates
+> (`vaultLlm.extractGraph`, `vaultLlm.identifyDoc`, `vaultRag.embedDoc`, `gmail.ts`) are STILL
+> content-selected and are deliberately NOT touched here: they are coupled to each other and to a
+> landed E2E that drives them against a keyed deployment. Recorded in
+> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, ROUND 3 — THE PROVENANCE FIX ONE ENTRY BELOW
 > CLOSED ONE DOOR OF FOUR, AND ITS OWN SUMMARY SENTENCE WAS FALSE.**
 >
@@ -1292,7 +1306,7 @@ Pure packages:
 Backend adapters (thin):
 - `packages/backend/convex/vaultRag.ts` — the single `rag` construction site (05-02).
 - `packages/backend/convex/vaultGraph.ts` — `upsertGraph` (cross-doc dedup on `(tenantId, type, normalizedName)` + degree bookkeeping) + `expand` (hop-capped tenant-scoped BFS delegating to `@pikar/vault` `bfsNeighbors`).
-- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. Holds a temporary `getDocText` reader; `internal.vault.getDoc` (05-04) is the canonical richer reader the embed step uses.
+- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. **Resolves its model through the shared `lib/models.ts` table** (it held one of the seven private `resolveModel` copies, so every real call named a model OpenAI does not know). ⚠ Its `SMOKE::graph::` / `SMOKE::identify::` gates STILL read the DOCUMENT'S OWN TEXT — unlike `vaultDigest.ts`, they are not yet operator-signalled; see `29-SMOKE-SEAM-DEBT.md`. Holds a temporary `getDocText` reader; `internal.vault.getDoc` (05-04) is the canonical richer reader the embed step uses.
 - `packages/backend/convex/vaultRag.embedDoc` (05-04) — the ingest embed step: reads the doc via `internal.vault.getDoc`, `scanText` fail-closed BEFORE `rag.add`, hash-dedups on `(namespace=tenantId, key=contentHash)`, `SMOKE::` bypass (no network). Returns `{entryId, costUsd}`.
 - `packages/backend/convex/vault.ts` (05-04/05-05) — the tenant ingest mutations (`vaultIngestText` paste/late-text seam + `vaultUpload` accept-but-defer, both hash-dedup), `deleteVaultDoc` cascade (row + rag chunks + graphEdges, orphan-node GC), the internal lifecycle (`getDoc`/`markReady`/`markFailed`), and (05-05) the READ plane: `listVaultDocs`/`vaultStats` (cheap, no vectors), `vaultDownloadUrl` (owner-only signed URL, bearer capability, never logged §4), `docEntities` (owner-guarded per-doc nodes/edges), `vaultSearch` (the `rag.search` hybrid primitive post-filtered to a category), and `ownedDocsMeta` (the tenant-scope resolve seam shared by grounding + search). Starts ingest ONLY via `vaultIngest.startIngest` (never a bare `workflow.start`).
 - `packages/backend/convex/vaultIngest.ts` (05-04; failure-handling 2026-07-20) — `ingestDoc = workflow.define(...)`: `preCall` gate (governed stop → `markFailed`, never a DLQ throw) → `embedDoc` → `extractGraph` → `upsertGraph` → `recordSpend` → `markReady`. Plus `startIngest` (the SOLE ingest starter — `workflow.start` + the `onComplete`), `onIngestComplete` (failed/canceled run → `markFailed`, so a dead run can never strand the doc at `processing`), and `retryStuckIngests` (re-queue stranded docs).
@@ -3223,12 +3237,29 @@ source set is exactly the READY members at build time.
 
 #### The offline seam
 
-`SMOKE::digest::` anywhere in the ASSEMBLED prompt (`.includes`, not `startsWith`) returns a
-deterministic fixture with NO model call. It may ride in the folder NAME, a member TITLE, or a
-member's TEXT — the name/title routes matter because a folder whose only member FAILED contributes
-no excerpt at all. **The fixture must start with `SMOKE::graph::`**: the digest is itself ingested,
-and that ingest's `vaultLlm.extractGraph` is only free when its text starts with that prefix at
-position 0 (`vaultRag.embedDoc` is free on any `SMOKE::`).
+**THE SEAM IS AN OPERATOR SIGNAL, NOT A SENTINEL.** `offlineSeamAvailable()` (`lib/models.ts`) —
+this deployment holds NEITHER `OPENAI_API_KEY` NOR `OPENROUTER_API_KEY` — is the whole gate, so
+nothing in any request, argument or document selects it and it is unreachable on a real deployment.
+`folder.name` is still the fixture's LABEL; it is data in the output, never the selector.
+
+⚠ **TWO EARLIER GATES FAILED HERE AND BOTH ARE WRITTEN DOWN BECAUSE THE SECOND ONE READ AS SAFE.**
+(a) `safePrompt.includes("SMOKE::digest::")` over the ASSEMBLED prompt — every member TITLE and a
+head slice of every member's TEXT, i.e. bytes a third party authored. (b) `folder.name.includes(...)`,
+justified in a comment as "the folder name is the tenant's own, chosen at creation". IT IS NOT:
+`vaultDrive.importDriveFolder` is a `tenantAction` whose `name: v.string()` comes from the CLIENT
+(`vaultDrive.ts:697`, stored verbatim at `:880`) and the browser fills it from `listDriveFolders`,
+which lists SHARED folders whose names A STRANGER CHOSE. Share a folder called `SMOKE::digest::x`,
+wait for the import, and the digest is fabricated — then STORED, EMBEDDED and served back through
+retrieval as a vault document saying "(offline fixture — no synthesis was performed)", with no model
+call, no spend and no trace that synthesis was skipped.
+
+**The fixture must still start with `SMOKE::graph::`**: the digest is itself ingested, and that
+ingest's `vaultLlm.extractGraph` is only free when its text starts with that prefix at position 0
+(`vaultRag.embedDoc` is free on any `SMOKE::`). **Those two are the OPEN half of this debt** —
+`extractGraph`, `identifyDoc`, `vaultRag.embedDoc` and `gmail.ts`'s tool-argument gate all still
+select a code path from content, they are coupled to each other and to a landed Playwright E2E that
+drives the sentinels against a REAL KEYED deployment, so they cannot be converted one at a time.
+Recorded in `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.
 
 #### Gotchas
 
@@ -3249,7 +3280,13 @@ position 0 (`vaultRag.embedDoc` is free on any `SMOKE::`).
 
 Five guarantees, one describe block each: groundability, non-recursion, staleness fires and clears,
 staleness is exact at folder scale, and part 3 is present. Plus a sixth test pinning the fail-closed
-skill load. All offline, zero spend — the folder NAME carries `SMOKE::digest::`.
+skill load, and a five-test seam block. All offline, zero spend — the suite's top-level `beforeEach`
+DELETES both model keys, which is what makes the seam available. It used to name every folder
+`SMOKE::digest:: …`, i.e. it drove the attack channel, which is exactly how a client-supplied string
+survived as a live model-path selector through three remediation rounds. The seam block asserts the
+three content channels (member TEXT, member TITLE, folder NAME) all reach the PROVIDER when a key
+exists (`fetch` is stubbed to throw, so reaching it is observable), with a keyless control proving
+the fixture is still alive and an `OPENROUTER_API_KEY`-alone test proving both keys are checked.
 
 **THE ONE SUITE IN THIS REPO THAT DRIVES THE INGEST WORKFLOW TO COMPLETION, and it has to.** Every
 other vault suite produces a `ready` row by calling `internal.vault.markReady` by hand

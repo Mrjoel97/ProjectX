@@ -43,7 +43,7 @@ import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { tenantAction, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
-import { resolveModel } from "./lib/models";
+import { offlineSeamAvailable, resolveModel } from "./lib/models";
 
 /**
  * Collect the passages of THIS session's document that match `query`. Returns `[]` — never
@@ -291,9 +291,9 @@ const docReviewSchema = jsonSchema<RawDocReview>({
 // deployment that carries the OpenRouter key alone.
 const SMOKE_REVIEW_PREFIX = "SMOKE::docreview::";
 
-/** True only where the seam is legitimate: a backend with no model credentials at all. */
-const offlineSeamAvailable = (): boolean =>
-  !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY;
+// The guard itself now lives in `lib/models.ts` beside the route table that decides WHICH key is
+// spent, because `vaultDigest.ts` needed the identical predicate and a second copy of a
+// credential check is the same copy-drift defect `resolveModel` was just consolidated out of.
 
 /** A quote the model "produced" that is NOT in the document — the rejected-excerpt path. */
 const SMOKE_ABSENT_EXCERPT = "This sentence appears nowhere in the report under discussion.";

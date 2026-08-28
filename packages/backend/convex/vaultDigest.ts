@@ -19,8 +19,9 @@
 //
 // §5: the prompt loads from the skill registry (`folder-digest`) and fails closed when unseeded —
 // never hardcoded. §4: the assembled manifest is scanned (fail-closed) BEFORE the model call.
-// A `SMOKE::digest::` sentinel in the FOLDER NAME returns a deterministic fixture with NO model
-// call (the offline convex-test path). Never in the prompt — see the seam note below.
+// The offline fixture is selected by an OPERATOR SIGNAL (`offlineSeamAvailable`: this deployment
+// holds no model credential at all), NEVER by anything in the request or in any document — see the
+// seam note below for the two content channels that used to select it.
 import { FOLDER_DIGEST_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
@@ -42,7 +43,7 @@ import {
 } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
-import { resolveModel } from "./lib/models";
+import { offlineSeamAvailable, resolveModel } from "./lib/models";
 import { startIngest } from "./vaultIngest";
 
 // Per-call wall-clock ceiling + one retry budget (mirrors llm.ts / vaultLlm.ts).
@@ -146,21 +147,25 @@ function digestPrompt(folderName: string, members: readonly MemberMeta[]): strin
   ].join("\n");
 }
 
-// ── Offline SMOKE seam ───────────────────────────────────────────────────────
-// convex-test and a dev-deployment smoke must drive synthesis deterministically and offline (no
-// model credentials on the local backend).
+// ── The offline seam, and why it is NOT a sentinel ───────────────────────────
 //
-// ⚠ THE SENTINEL IS MATCHED AGAINST THE FOLDER NAME ONLY, NEVER THE ASSEMBLED PROMPT. It used to
-// be `.includes` over the whole prompt (blueprint.ts's variant), which meant it could ride in any
-// member TITLE or any member's TEXT — and members are ingested Drive files and email, i.e. text a
-// third party authors. One document containing this string was enough to make a real folder's
-// digest a FIXTURE: the stored vault artifact, the thing the tenant then reads and grounds on,
-// silently stops being synthesis. The folder name is the tenant's own, chosen when the folder is
-// created, and it still reaches this point for the case the prompt match existed for — a folder
-// whose only member FAILED contributes no excerpt at all.
-// ponytail: content sentinel on ONE tenant-owned field, not an env flag — keeps the seam
-// per-request and out of shared deployment config. Remove once a mock-model vault smoke exists.
-const SMOKE_DIGEST_PREFIX = "SMOKE::digest::";
+// convex-test and a local backend must drive synthesis deterministically and offline, with no model
+// credentials. That fixture is selected by `offlineSeamAvailable()` — a fact about the DEPLOYMENT —
+// and by nothing else.
+//
+// ⚠ IT USED TO BE SELECTED BY CONTENT, TWICE, AND BOTH CHANNELS WERE REACHABLE BY A THIRD PARTY.
+// First `safePrompt.includes("SMOKE::digest::")` over the whole ASSEMBLED prompt: a single ingested
+// Drive file or email containing that string turned a real folder's digest into a fixture. The fix
+// moved the match to `folder.name`, justified as "the folder name is the tenant's own, chosen when
+// the folder is created". THAT JUSTIFICATION WAS FALSE. `vaultDrive.importDriveFolder` is a
+// `tenantAction` taking `name: v.string()` from the CLIENT (`vaultDrive.ts:697`), stored verbatim at
+// `vaultDrive.ts:880`, and the browser fills it in from `listDriveFolders` — which lists SHARED
+// folders whose names a THIRD PARTY chose. A stranger shares a folder called `SMOKE::digest::x`, the
+// tenant imports it, and the digest is fabricated — then STORED, EMBEDDED and served back through
+// retrieval as a vault document. Same channel as the first version, one hop further away.
+//
+// So: no sentinel. On any deployment with a key the fixture is unreachable by construction, whatever
+// anyone names anything.
 
 /**
  * The offline digest. Deterministic, derived from the SAME projected metadata the real prompt
@@ -361,7 +366,10 @@ export const buildFolderDigest = internalAction({
     const safePrompt = scan.value.safeText;
 
     let markdown: string;
-    if (folder.name.includes(SMOKE_DIGEST_PREFIX)) {
+    // THE OPERATOR SIGNAL, NOT THE CONTENT. Nothing a client or a third party can write reaches
+    // this branch; on a deployment with a model key it is unreachable. `folder.name` is still the
+    // fixture's LABEL — it is data in the output, never the selector.
+    if (offlineSeamAvailable()) {
       markdown = smokeDigestFixture(folder.name, members);
     } else {
       // `generateText`, not `generateObject`: the contract's three sections ARE markdown headings,

@@ -1,3 +1,25 @@
+> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS — THE COPY-DRIFT GUARD WAS DEFEATED BY A RENAME,
+> AND THE ENTRY BELOW HAD GONE FALSE.**
+>
+> **(1) `lib/models.test.ts` DETECTS THE SHAPE, NOT THE NAME.** The old guard only examined a module
+> if its source contained the string `resolveModel(`, so a private route table called `pickModel`
+> was INVISIBLE to it — the repo's own recorded lesson (deletion-only mutation is blind to renaming)
+> walked straight back in. Verified: a module holding
+> `const pickModel = (id) => openai(id.startsWith("openai/") ? id.slice(7) : id)` passed BOTH old
+> scans (the name scan and the naive `openai(x.replace(` scan) and fails the new one. The signal is
+> now a provider factory called with a MODEL ARGUMENT THAT IS NOT A STRING LITERAL — which is what a
+> route table IS, whatever it is named. A fixed id (`openai("gpt-4o-mini")` in `intake.ts` and
+> `vaultExtract.ts`, both priced on the matching `openai/gpt-4o-mini` key) is deliberately legal:
+> it routes nothing, so it cannot drift. The detector has its own test over four renamed-copy
+> fixtures and two legitimate ones, so `[]` from the file scan is a checked claim rather than a
+> hopeful one.
+>
+> **(2) `offlineSeamAvailable()` LIVES HERE NOW**, in `lib/models.ts`, beside the table that decides
+> WHICH key is spent. `voiceDoc.ts` and `vaultDigest.ts` both need the identical "this deployment
+> holds no model credential" predicate, and a second copy of a credential check is the same
+> copy-drift defect `resolveModel` was just consolidated out of. It checks BOTH keys, because
+> `DEFAULT_MODEL` is an `or/` route and OpenRouter is the credential these producers actually spend.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — a failed Gmail read was reported as an
 > empty successful one, and every model call in the repo was routed by one of seven copies of the
 > same function.**
@@ -33,12 +55,13 @@
 > `@ai-sdk/google-vertex` is Node-only and `llm.ts` is the one `"use node"` module; the shared table
 > fails CLOSED on `google/` rather than silently routing it to OpenAI.
 >
-> **⚠ FIVE COPIES ARE STILL STALE AND STILL MISROUTING TODAY: `blueprint.ts`, `onboarding.ts`,
-> `vaultDigest.ts`, `vaultLlm.ts`, `voiceDoc.ts`.** That is a live defect in five landed subsystems,
-> deliberately NOT fixed inside a knowledge-plane remediation — changing which provider and which
-> key they talk to needs its own change and its own verification. `lib/models.test.ts` holds the
-> named list and fails both ways: if a SIXTH copy appears, and if a name is left there after its
-> copy is gone.)
+> **ALL SEVEN COPIES ARE CONVERTED — `llm.ts`, `blueprint.ts`, `onboarding.ts`, `vaultDigest.ts`,
+> `vaultLlm.ts`, `voiceDoc.ts`, `knowledgeLlm.ts`.** (An earlier revision of this entry said five of
+> them were still stale and pointed the reader at a named list in `lib/models.test.ts`. Commit
+> 2e6f276 converted them in the SAME round, so both halves of that sentence were false the day they
+> were written. A playbook asserting a live falsehood is worse than a stale one, because it reads as
+> verified.) `lib/models.test.ts` pins the END STATE, not a shrinking list: its allow-list is EMPTY,
+> and it fails if any module under `convex/` routes a model id to a provider itself.)
 >
 > Last verified: 2026-08-28 (29-03 — **`gmail.ts` GAINS A FIFTH READ VERB, `knowledgeQuery`, AND
 > IT IS DELIBERATELY NOT `search`.** `search` resolves a CONTACT: it asks `from:/to:` about a name,
