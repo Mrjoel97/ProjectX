@@ -2,6 +2,86 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 10 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail, 28-06 read-only QuickBooks rail, 28-07 read-only Stripe rail) -- 28 IN PROGRESS
+status: executing
+stopped_at: "28-07 SEALED (`1a37fa2` RED auth, `d9da40e` OAuth, `8f30d7c` RED normalizer, `f233cfd` reads+allow-list, `e68c9a4` gate+docs).
+**THE PAYMENT RAIL EXISTS AND IT HAS NEVER SPOKEN TO STRIPE.** `check-provider-lane --provider
+stripe` reads `consistent`, 1 row pending. CONSISTENT IS NOT PASSED. 125 tests added (39 revenue +
+86 backend), every one offline at $0.
+**THE PLAN'S ROUTE WAS DEAD AND THE BRIEF SAID SO: Connect Extensions are DEPRECATED** ('You can no
+longer build new Connect extensions'), and the Connect `read_only` scope can only be specified for
+extensions. So the plan's `oauth/deauthorize` / `Stripe-Account` / `read_only` key_link was NOT
+built. The route is a **Stripe App**: `marketplace.stripe.com/oauth/v2/authorize` +
+`POST api.stripe.com/v1/oauth/token`, manifest permissions ALL `*_read`. That is a STRONGER position
+than QuickBooks -- the token cannot express a write AT THE VENDOR, so the allow-list is the second
+boundary, not the only one. A source scan keeps `oauth/deauthorize` and `read_write` out of the lane.
+**THE FAIL-CLOSED HANDOFF IS DISCHARGED.** `PROVIDER_READ_PATHS.stripe` was `[]` BY DECISION from
+28-04 and 28-26 wired its LENGTH into the eligibility rule; it now holds five list/retrieve paths
+(`/v1/balance`, `/v1/charges`, `/v1/invoices`, `/v1/payouts`, `/v1/disputes`), each with a parser,
+compared against the pure module in BOTH directions. **Three lane rows moved PEND->OK: adapter,
+read-only, allow-list.** The open condition did NOT move.
+**REVOCATION IS IMPLEMENTED HONESTLY, NOT CLOSED.** `disconnect` makes ZERO upstream requests and
+records `revocation.upstream = \"unsupported\"`; `classifyRevokeOutcome` makes `confirmed`
+unreachable for stripe before it looks at a status code. The smoke validator REJECTS any other
+upstream state -- `confirmed`/`attempted_failed` are fabrications on a route with no endpoint, and
+`not_attempted` would claim one exists that we skipped. A local clear must also carry
+`grantRemainsLiveUpstream: true`. **`platform-initiated-revocation` stays UNCLEARED for 28-24.**
+**THE ADMISSION IS AN OWNER OVERRIDE and is never rendered as evidence-backed** -- the code, the
+docs and the smoke output all say so.
+**THE API VERSION PIN HAS NO DEFAULT, deliberately.** Unset or malformed `STRIPE_APP_API_VERSION`
+-> the lane returns `unavailable` and makes NO request. This repo cannot verify a live Stripe
+version string offline and refuses to invent one; unset would silently read whichever version the
+CONNECTED ACCOUNT's dashboard is on. `readPages` gained ONE validated value (`stripeApiVersion` ->
+`Stripe-Version`), NOT a header map -- Stripe has no query-param form. **The evidence file names the
+pin the DEPLOYMENT reported with each read, and the smoke script has no `--api-version` flag**,
+because an operator-typed version is an unverified claim about a shape.
+**NAMESPACE BOUNDARY HELD:** nothing under `packages/billing/`, `convex/billing*.ts` or
+`BILLING_STRIPE_*` was touched. A source scan (comment-STRIPPED, so the guard does not catch its own
+warning) plus a `BILLING_STRIPE` forbidden substring in the evidence validator enforce it.
+**TASK 3 COULD NOT RUN: THERE IS NO STRIPE APP CREDENTIAL IN THIS DEPLOYMENT.** Same shape as 28-05
+and 28-06: `--self-test` fires 28 guards through the SAME builder a live run uses and prints 'THIS IS
+NOT A LIVE PASS'; `--verify-evidence` prints 'THIS FILE IS A STUB, NOT A LIVE PASS'; a bare run exits
+**2** with `LIVE_EVIDENCE_NOT_PRODUCED`. Env names for `npx convex env set` are in the record.
+**TWO TESTS ASSERTING STRIPE'S LIST WAS EMPTY had to change, and were replaced with the MECHANISM**
+rather than deleted: `connectorFetch.test.ts` now proves a path off ANY provider's list fails closed,
+and `providerGates.test.ts` proves `readPathCount: 0` yields `no_read_paths` against the PURE rule --
+which outlives the provider that happened to be empty.
+**9 NON-DELETION (rename/substitution) MUTATIONS, ALL RED, ALL RESTORED:** `stripe_apps`->`read_only`
+(11 red), `livemode === production`->`sandbox` (4), marketplace host->`connect.stripe.com` (1),
+`PROVIDER_REVOKE_SUPPORT.stripe`->`confirmed` (6), **`moneyFromMinor`->`moneyFromNumber` (8 red -- the
+double-conversion bug as a rename, invisible to a deletion-only mutator)**, `/v1/charges`->
+`/v1/payment_intents` (1+10), `gate.state !== passed`->`parked` (11), `balance.available`->`pending`
+(1), `Stripe-Version` header renamed (1). `STRIPE_GRANT_SCOPE` and the authorize host are ALSO pinned
+as LITERALS once, because a constant the tests import cannot be pinned by mutating it.
+`tsc --noEmit` run SEPARATELY per package, both exit 0 (it caught 2 real errors a green 76-test run
+was silent over). Backend 2913/2913 in 108 files, revenue 265/265. The non-zero backend exit is the
+PRE-EXISTING worker-teardown `process is not defined`; a `media.test.ts` failure seen once was an
+order-dependent FLAKE -- green alone and green on a clean re-run, and `git diff --stat` proves 28-07
+never touched it. `check-playbooks` STDOUT empty. `git diff --stat HEAD -- \"*.ts\"` empty after
+committing.
+`requirements-completed: []` -- **REVN-03 STAYS PENDING**: it needs 28-24's live gate, so
+`requirements mark-complete` was deliberately NOT called.
+**NEXT: 28-08 (read-only PayPal rail).** It should reuse `providers/shared.ts` rather than copying
+`boundedWindow`/`normalizeAll`/`separateByCurrency` a third time, and PayPal's revoke story is the
+same `unsupported` shape as Stripe's -- see `clearLocally` in `stripeAuth.ts`. **Also still open:
+`handleCallback` has NO caller** (no `/stripe/callback` route -- 28-09), and the Stripe App itself is
+not registered (an owner action; `STRIPE_APP_PERMISSIONS` documents what its manifest must contain).
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-28T17:05:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 421
+  completed_plans: 326
+  percent: 77
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 28.1
 current_plan: 1 of 8 executed (28.1-01 Stripe webhook receiver + billingStripeEvents) -- 28.1 IN PROGRESS
 status: executing
