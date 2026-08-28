@@ -1,6 +1,16 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
-> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION — a HAZARD recorded on `run-eval-golden.mjs`,
+> Last verified: 2026-08-28 (29-05 REMEDIATION — **`run-eval-golden.mjs` NO LONGER ACCEPTS A
+> WORKFLOW-PACK ROW AS A `--tenant-skill` TARGET.** `assertEvaluableCandidate` validated only the
+> row's AUTHOR and STATUS; it had no name predicate, so a tenant `pack-business-pulse` candidate was
+> an accepted target. The golden suite drives `llm:runCockpitAgent` and never runs a pack
+> specialist, and the evidence write is unconditional on whether the pinned body executed — so a
+> ~$0.4 run wrote a `pass: true` certificate (`skillVersions: {}`) for a body it never invoked. Same
+> shape as the `shouldRecordEvidence` hazard recorded below, one registry scope down. It now throws
+> at $0, before any seed or model call. The activation-side fix is in
+> docs/playbooks/skill-registry.md, "THE PACK GATE HAS NO TENANT LANE".)
+>
+> Previously verified: 2026-08-28 (**WAVE-2 REMEDIATION — a HAZARD recorded on `run-eval-golden.mjs`,
 > no behaviour changed.** `shouldRecordEvidence` never checks that the `--skill` pin it is about
 > to certify was actually EXERCISED by the run, and `SKILL_NAMES` is derived from
 > `GATED_SKILLS`, so every gated name is a valid pin — including one this runner structurally

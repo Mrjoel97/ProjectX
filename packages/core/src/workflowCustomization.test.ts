@@ -87,6 +87,7 @@ describe("the customization vocabulary is closed", () => {
       "forbidden_content",
       "out_of_range",
       "too_large",
+      "too_many_fields",
       "too_many_values",
       "unknown_field",
       "unknown_option",
@@ -290,6 +291,58 @@ describe("validateCustomization accepts only what the schema declared", () => {
     const out = validateCustomization(SCHEMA, { tone: "sarcastic", alertPct: 999, nope: "x" });
     expect(out.ok).toBe(false);
     if (!out.ok) expect(out.error).toHaveLength(3);
+  });
+
+  // ── The submitted MAP itself is untrusted, not just its values (29-05 remediation) ────────
+  //
+  // `values` reaches this function from a client-callable tenant mutation. Before these two caps
+  // the key COUNT and the key LENGTH were both unbounded, and every undeclared key came back
+  // verbatim in its own error row — a reproduced probe submitted 3_000 keys of 202 characters and
+  // got ~600 KB of its own text back out of one call. 24 and 64 ARE LITERALS here on purpose: this
+  // file imports `CUSTOMIZATION_CAPS`, so an expectation written in terms of the constant would
+  // move with it and could never fail when the cap is scaled.
+  test("too many submitted KEYS is one refusal that enumerates nothing", () => {
+    expect(CUSTOMIZATION_CAPS.maxSubmittedKeys).toBe(24);
+    const keys = (n: number) =>
+      Object.fromEntries(Array.from({ length: n }, (_, i) => [`k${i}`, "x"]));
+
+    // At the cap: still processed key by key, so 24 unknown keys give 24 rows.
+    const atCap = validateCustomization(SCHEMA, keys(24));
+    expect(atCap.ok).toBe(false);
+    expect(atCap.ok === false && atCap.error).toHaveLength(24);
+
+    // One over: ONE row, an empty key, and not a single submitted key name is echoed.
+    const over = validateCustomization(SCHEMA, keys(25));
+    expect(over.ok).toBe(false);
+    expect(over.ok === false && over.error).toEqual([{ key: "", reason: "too_many_fields" }]);
+
+    // The amplification case the cap exists for: nothing attacker-sized comes back.
+    const flood = Object.fromEntries(
+      Array.from({ length: 3_000 }, (_, i) => [`k${i}`.padEnd(202, "A"), "x"]),
+    );
+    const out = validateCustomization(SCHEMA, flood);
+    expect(out.ok).toBe(false);
+    expect(JSON.stringify(out.ok === false && out.error).length).toBeLessThan(120);
+  });
+
+  test("an over-long undeclared key is TRUNCATED in the rejection, never echoed whole", () => {
+    expect(CUSTOMIZATION_CAPS.keyMaxBytes).toBe(64);
+    const long = "A".repeat(5_000);
+    const out = validateCustomization(SCHEMA, { [long]: "x" });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.error).toHaveLength(1);
+    expect(out.error[0]!.reason).toBe("unknown_field");
+    expect(out.error[0]!.key).toBe("A".repeat(64));
+
+    // BYTES, not characters, and a DECLARED key is returned untouched.
+    const astral = "😀".repeat(40); // 160 bytes, 80 UTF-16 units
+    const wide = validateCustomization(SCHEMA, { [astral]: "x" });
+    expect(wide.ok === false && new TextEncoder().encode(wide.error[0]!.key).length).toBe(64);
+    const declared = validateCustomization(SCHEMA, { alertPct: 999 });
+    expect(declared.ok === false && declared.error).toEqual([
+      { key: "alertPct", reason: "out_of_range" },
+    ]);
   });
 });
 

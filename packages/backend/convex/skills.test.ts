@@ -41,7 +41,7 @@ import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusiness
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
-import { WORKFLOW_PACK_IDS, WORKFLOW_PACK_SKILL_NAMES } from "@pikar/core";
+import { packCustomizationFields, WORKFLOW_PACK_IDS, WORKFLOW_PACK_SKILL_NAMES } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
 // 21-02: `publishUserCandidate` writes ONE refs-only audit row, and `audit.log` mirrors every
@@ -4238,9 +4238,17 @@ describe("workflow-pack candidate lifecycle", () => {
 //
 // THE THIRD AUTHORING CHANNEL, and it is deliberately NARROWER than Phase 21's.
 // `publishUserCandidate` takes free-text bytes and gates them on `USER_AUTHORABLE_SKILLS`; this one
-// takes a CLOSED FORM against an approved pack template and renders the body server-side, so there
-// is no argument a tenant can spell that carries prose into a pack body. Both write through the
-// same insert, so a guard cannot be true on one and absent on the other.
+// takes a CLOSED FORM against an approved pack template and renders the body server-side. Both
+// write through the same insert, so a guard cannot be true on one and absent on the other.
+//
+// PROSE DOES REACH THE BODY, and this header used to say it did not. `business_terms` (400 bytes)
+// and `extra_guidance` (1200 bytes) are declared free-text fields and their content is rendered
+// verbatim under the adaptation marker — a probe put "Disregard earlier framing…" into a candidate
+// body through this channel. The property that is actually true, and that these tests hold, is
+// narrower: the prose is BOUNDED (1600 bytes across the two, against the free-text door's 4000),
+// CONTENT-SCANNED, and confined to keys the schema declared. A tenant chooses the words, never the
+// field, the size or the position — and since the pack gate has no tenant lane, the body they
+// compose can never become the one a specialist runs.
 describe("publishPackCustomization — schema-driven pack candidates (29-05)", () => {
   // High-entropy needles, for the same reason 21-02 uses them: content that leaks across a tenant
   // boundary or into an audit payload has to be findable by an exact string.
@@ -4690,13 +4698,15 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
       asA.mutation(api.skills.activateTenantCandidate, { candidateId: res.tenantSkillId }),
     ).rejects.toThrow();
 
-    // And the owner cannot activate it either, because nothing certified this exact row.
+    // And the owner cannot activate it either. Until the 29-05 remediation the blocker here was
+    // `EVAL_GATE` (nothing certified this exact row); it is now the STRICTER `PACK_GATE`, which
+    // fires on the NAME before evidence is looked at, so no evidence can move a pack tenant row.
     const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
     await expect(
       t
         .withIdentity({ subject: `${ownerId}|session_o` })
         .mutation(api.skills.activateTenantCandidate, { candidateId: res.tenantSkillId }),
-    ).rejects.toThrow(/EVAL_GATE/);
+    ).rejects.toThrow(/PACK_GATE/);
 
     const row = await t.run((ctx) => ctx.db.get(res.tenantSkillId));
     expect(row!.status).toBe("candidate");
@@ -4753,19 +4763,301 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
 
   test("the widest legal form still composes: the field caps fit inside the adaptation cap", async () => {
     const { t, userA, asA } = await harness();
-    const res = await publish(asA, {
-      values: {
-        business_terms: "t".repeat(400),
-        tone: "formal",
-        priority_count: 5,
-        preferred_sources: ["vault", "finance-inputs"],
-        extra_guidance: "g".repeat(1200),
-      },
-    });
-    expect(res.ok).toBe(true);
+    // THE INPUT IS DERIVED FROM THE SCHEMA, THE ORACLE IS A LITERAL. Hardcoding `"t".repeat(400)`
+    // verified ONE form rather than the widest form the schema declares legal: raising either
+    // field's `maxBytes` (the ceiling is `min(field.maxBytes, valueMaxBytes)` = up to 4000 each)
+    // left this green while the real widest submission became an uncaught 500 at
+    // `composeUserSkillBody`. Deriving the INPUT is not the vacuous-oracle problem — the oracle
+    // below is still the literal 4000 that `USER_SKILL_ADAPTATION_MAX_BYTES` fixes.
+    const widest: Record<string, string | number | string[]> = {};
+    for (const field of packCustomizationFields("business-pulse")) {
+      if (field.kind === "terminology" || field.kind === "instruction") {
+        // The BYTE cap the validator applies, filled to the byte with 1-byte characters.
+        widest[field.key] = "t".repeat(Math.min(field.maxBytes, 4_000));
+      } else if (field.kind === "tone") {
+        // The longest declared option — a tone is rendered verbatim into the body too.
+        widest[field.key] = [...field.options].sort((a, b) => b.length - a.length)[0]!;
+      } else if (field.kind === "threshold") {
+        widest[field.key] = field.max;
+      } else {
+        widest[field.key] = [...field.sources] as string[];
+      }
+    }
+    // Non-vacuity: the derivation really produced the free-text fields at their declared caps.
+    expect(String(widest.business_terms)).toHaveLength(400);
+    expect(String(widest.extra_guidance)).toHaveLength(1_200);
+
+    const res = await publish(asA, { values: widest });
+    expect(res.ok, JSON.stringify(res)).toBe(true);
     const candidate = (await rowsOfTenant(t, String(userA))).find((r) => r.version === 2)!;
     // `composeUserSkillBody` throws over 4000 bytes; the rendered body has to stay under it or the
-    // widest legal form is a 500.
-    expect(new TextEncoder().encode(candidate.authoredBody).length).toBeLessThan(4000);
+    // widest legal form is a 500. 4000 IS A LITERAL — importing the constant would move the oracle.
+    expect(new TextEncoder().encode(candidate.authoredBody).length).toBeLessThan(4_000);
+  });
+
+  // ── The derived registry name, on ALL SIX packs (29-05 remediation) ───────────────────────────
+  //
+  // The docstring above `publishPackCustomization` stakes the channel's whole authorization story
+  // on ONE line — `const name = \`pack-${customizationSchema.templateId}\`` — and the 14 tests above
+  // publish `templateId: "business-pulse"` and nothing else, so replacing that line with the
+  // constant `"pack-business-pulse"` left the entire suite green. It also meant five of six packs,
+  // and five of six per-pack threshold fields, never travelled through the handler at all: not
+  // through validation, not through the body composition, not through the lineage hash.
+  //
+  // MUTATION that must turn this RED: `const name = "pack-business-pulse";`.
+  describe("every pack travels the real handler, and the name is DERIVED", () => {
+    /** `[templateId, the registry name the handler must derive, that pack's own threshold key, a
+     *  legal value for it]`. ALL LITERALS — a computed expectation here would move with the
+     *  derivation and could never fail. */
+    const PACKS: readonly [string, string, string, number][] = [
+      ["business-pulse", "pack-business-pulse", "priority_count", 4],
+      ["campaign-plan", "pack-campaign-plan", "campaign_weeks", 6],
+      ["customer-complaint", "pack-customer-complaint", "reply_max_words", 120],
+      ["sales-call-prep", "pack-sales-call-prep", "brief_max_points", 7],
+      ["process-sop", "pack-process-sop", "sop_max_steps", 12],
+      ["brand-review", "pack-brand-review", "review_max_findings", 9],
+    ];
+
+    test("this table covers the whole closed pack set — no pack can be added past it", () => {
+      expect(PACKS.map(([id]) => id).sort()).toEqual([...WORKFLOW_PACK_IDS].sort());
+      expect(PACKS.map(([, name]) => name).sort()).toEqual([...WORKFLOW_PACK_SKILL_NAMES].sort());
+    });
+
+    /** Every pack seeded ACTIVE at TEMPLATE_VERSION, so the handler can be reached for all six. */
+    const sixPackHarness = async () => {
+      const t = convexTest(schema, modules);
+      t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+      for (const [, name] of PACKS) {
+        await t.run((ctx) =>
+          ctx.db.insert("skills", {
+            name,
+            version: TEMPLATE_VERSION,
+            body: `GLOBAL BODY FOR ${name}`,
+            status: "active",
+            createdAt: 0,
+          }),
+        );
+      }
+      const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+      return { t, userA, asA: t.withIdentity({ subject: `${userA}|session_a` }) };
+    };
+
+    test.each(
+      PACKS,
+    )("%s mints %s and validates its own threshold field %s", async (templateId, expectedName, thresholdKey, thresholdValue) => {
+      const { t, userA, asA } = await sixPackHarness();
+      const res = await asA.mutation(api.skills.publishPackCustomization, {
+        templateId,
+        templateVersion: TEMPLATE_VERSION,
+        baseCandidateVersion: null,
+        values: {
+          business_terms: `We say members. ${NEEDLE_A}`,
+          tone: "warm",
+          [thresholdKey]: thresholdValue,
+          extra_guidance: "Lead with the cash position.",
+        },
+      });
+      expect(res.ok, JSON.stringify(res)).toBe(true);
+      if (!res.ok) return;
+      // THE LITERAL. Not `\`pack-${templateId}\``.
+      expect(res.name).toBe(expectedName);
+
+      const rows = await t.run((ctx) =>
+        ctx.db
+          .query("tenantSkills")
+          .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", String(userA)))
+          .collect(),
+      );
+      // Only THIS pack's rows exist — the baseline and the candidate, both under the derived name.
+      expect(rows.map((r) => r.name)).toEqual([expectedName, expectedName]);
+      const candidate = rows.find((r) => r.version === 2)!;
+      expect(candidate.templateId).toBe(templateId);
+      // The pack's OWN number reached the rendered body, so the per-pack schema really travelled.
+      expect(candidate.authoredBody).toContain(String(thresholdValue));
+      expect(candidate.body).toContain(`GLOBAL BODY FOR ${expectedName}`);
+    });
+
+    test("a pack is offered ONLY its own threshold key — the other five are unknown_field", async () => {
+      const { t, asA } = await sixPackHarness();
+      for (const [templateId, , ownKey] of PACKS) {
+        for (const [, , foreignKey, foreignValue] of PACKS) {
+          if (foreignKey === ownKey) continue;
+          const res = await asA.mutation(api.skills.publishPackCustomization, {
+            templateId,
+            templateVersion: TEMPLATE_VERSION,
+            baseCandidateVersion: null,
+            values: { tone: "warm", [foreignKey]: foreignValue },
+          });
+          expect(res.ok, `${templateId} accepted ${foreignKey}`).toBe(false);
+          if (!res.ok && res.reason === "invalid_values") {
+            expect(res.errors).toContainEqual({ key: foreignKey, reason: "unknown_field" });
+          } else {
+            throw new Error(`${templateId}/${foreignKey}: ${JSON.stringify(res)}`);
+          }
+        }
+      }
+      // Nothing was written by any of the 30 refusals.
+      expect(await t.run((ctx) => ctx.db.query("tenantSkills").collect())).toHaveLength(0);
+    });
+  });
+
+  // ── The sixth refusal, as DATA (29-05 remediation) ────────────────────────────────────────────
+  test("a SEEDED BUT NOT YET ACTIVE pack is a governed refusal, not a 500", async () => {
+    // `seedPackCandidates` writes all six pack rows as `candidate`, and each becomes active only
+    // once the owner clears the three-plane gate for it — so this is an ordinary deployment state,
+    // not an exotic one. It used to reach `loadSkill` and throw `NO_ACTIVE_SKILL`, which is a 500
+    // in the tenant's customization form.
+    // MUTATION that must turn this RED: delete the `template_not_active` early return.
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: "pack-business-pulse",
+        version: TEMPLATE_VERSION,
+        body: GLOBAL_PULSE_BODY,
+        status: "candidate", // NOT active
+        createdAt: 0,
+      }),
+    );
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const res = await t
+      .withIdentity({ subject: `${userA}|session_a` })
+      .mutation(api.skills.publishPackCustomization, {
+        templateId: "business-pulse",
+        templateVersion: TEMPLATE_VERSION,
+        baseCandidateVersion: null,
+        values: VALUES_A,
+      });
+    expect(res).toEqual({ ok: false, reason: "template_not_active" });
+    expect(await allTenantSkillRows(t)).toHaveLength(0);
+    expect(await allAudit(t)).toHaveLength(0);
+  });
+
+  // ── THE PACK GATE HAS NO TENANT LANE (29-05 remediation, BLOCKER) ─────────────────────────────
+  //
+  // `publishPackCustomization` is the first production writer that can mint a `pack-*` row in
+  // `tenantSkills`. Without a pack branch in `planTenantActivation`, that row activated on
+  // `hasPassingTenantEvidence` — the generic Phase-21 predicate, which is exactly the suite-less
+  // `run-eval-golden.mjs` blob `assertPackActivationEvidence`'s own comment names as the thing the
+  // pack gate exists to refuse. Same body class, same deployment, two different gates.
+  //
+  // The tenant lane now FAILS CLOSED for pack names rather than running a weaker subset of the
+  // three planes: `tenantSkills` has no `provenance` and no `browserEvidence` column, so two of the
+  // three have nowhere to be written.
+  // MUTATION that must turn this RED: delete the `isWorkflowPackSkill(row.name)` throw.
+  test("a pack-named TENANT candidate with Phase-21 evidence is still REFUSED", async () => {
+    const { t, userA, asA } = await harness();
+    const res = await publish(asA);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    // Byte-for-byte the blob `run-eval-golden.mjs --tenant-skill` writes: a pass, a run id, the
+    // exact-row target — and NO suite, NO pack runner, NO provenance, NO browser evidence.
+    const target: EvalEvidenceTenantTarget = {
+      candidateId: String(res.tenantSkillId),
+      registryTenantId: String(userA),
+      name: "pack-business-pulse",
+      version: res.version,
+    };
+    await t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: res.tenantSkillId,
+      evidence: JSON.stringify({
+        runner: "eval:golden",
+        pass: true,
+        runId: "r1",
+        tenantTarget: target,
+      }),
+    });
+    // Non-vacuity: this evidence WOULD have satisfied the Phase-21 predicate. If it stops doing so,
+    // this test would pass for the wrong reason.
+    const row = await t.run((ctx) => ctx.db.get(res.tenantSkillId));
+    expect(hasPassingTenantEvidence(row!.evidence, target)).toBe(true);
+
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const asOwner = t.withIdentity({ subject: `${ownerId}|session_o` });
+    await expect(
+      asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: res.tenantSkillId }),
+    ).rejects.toThrow(/PACK_GATE/);
+
+    // Still dark, and the tenant still runs the GLOBAL body.
+    expect((await t.run((ctx) => ctx.db.get(res.tenantSkillId)))!.status).toBe("candidate");
+    const effective = await t.run((ctx) =>
+      loadEffectiveSkill(ctx, String(userA), "pack-business-pulse"),
+    );
+    expect(effective.scope).toBe("global");
+    expect(effective.body).toBe(GLOBAL_PULSE_BODY);
+
+    // Rollback is refused too, and for the same reason: nothing pack-named can ever have been live,
+    // so there is no incident-time recovery this blocks.
+    await expect(
+      asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: res.tenantSkillId }),
+    ).rejects.toThrow(/PACK_GATE/);
+  });
+
+  test("the Phase-21 tenant lane is UNCHANGED — a non-pack candidate still activates", async () => {
+    // The positive control for the refusal above: the new branch is scoped to pack NAMES and did
+    // not turn `planTenantActivation` into a blanket refusal. (The GLOBAL pack lane's own
+    // "activation succeeds once all three planes pin the exact version" test, earlier in this file,
+    // is the matching control for the global side.)
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: OFFER_ARCHITECT_SKILL,
+        version: 1,
+        body: "GLOBAL OFFER CORE",
+        status: "active",
+        createdAt: 0,
+      }),
+    );
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const asA = t.withIdentity({ subject: `${userA}|session_a` });
+    const pub = await asA.mutation(api.skills.publishUserCandidate, {
+      name: OFFER_ARCHITECT_SKILL,
+      authoredBody: "We sell to founders, not to enterprises.",
+    });
+    const target: EvalEvidenceTenantTarget = {
+      candidateId: String(pub.tenantSkillId),
+      registryTenantId: String(userA),
+      name: OFFER_ARCHITECT_SKILL,
+      version: pub.version,
+    };
+    await t.mutation(internal.skills.recordTenantEvalEvidence, {
+      candidateId: pub.tenantSkillId,
+      evidence: JSON.stringify({
+        runner: "eval:golden",
+        pass: true,
+        runId: "r1",
+        tenantTarget: target,
+      }),
+    });
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    await t
+      .withIdentity({ subject: `${ownerId}|session_o` })
+      .mutation(api.skills.activateTenantCandidate, { candidateId: pub.tenantSkillId });
+    expect((await t.run((ctx) => ctx.db.get(pub.tenantSkillId)))!.status).toBe("active");
+  });
+
+  test("the golden runner refuses a pack row as a --tenant-skill target", () => {
+    // The mitigation the playbook USED to claim ("a tenant pack candidate cannot be certified in
+    // practice") was prose: `assertEvaluableCandidate` checked author and status and had no name
+    // predicate at all, so a ~$0.4 run would happily write `skillVersions:{}` evidence certifying a
+    // body the golden suite never executes. The activation gate above is the real fix; this is the
+    // $0 half.
+    //
+    // A SOURCE SCAN, and it proves SPELLING, not behaviour: `run-eval-golden.mjs` is a standalone
+    // script with zero exports that runs its own `main` on import, so there is nothing to call. The
+    // behavioural gate is `planTenantActivation`, tested above.
+    const runner = readFileSync(
+      fileURLToPath(new URL("../scripts/run-eval-golden.mjs", import.meta.url)),
+      "utf8",
+    );
+    const fn = runner.slice(
+      runner.indexOf("function assertEvaluableCandidate("),
+      runner.indexOf("// ── --only fixture filter"),
+    );
+    expect(fn.length, "assertEvaluableCandidate not found — did it move?").toBeGreaterThan(200);
+    expect(fn).toContain('c.name.startsWith("pack-")');
+    expect(fn).toContain("is a workflow pack row");
   });
 });

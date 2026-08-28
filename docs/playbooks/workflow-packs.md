@@ -1,6 +1,27 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-28 (29-05: `packArgs` gained `tenantSkillIds` — the tenant twin of the
+> Last verified: 2026-08-28 (29-05 REMEDIATION — **THE PIN IS NOW TENANT-SCOPED, AND THE GRANT TEST
+> NOW REACHES ITS OWN SCENARIO.** Two corrections to the bump below it:
+>
+> 1. **`TENANT_SKILL_PIN_FOREIGN`.** `skills.getTenantSkillVersion` resolves a `tenantSkills` row BY
+>    ID and `runSpecialistTurn`'s only guard is `row.name !== skillName`. Two tenants can each own
+>    `pack-business-pulse` — that is exactly why the pin is a row id — so the name check was never
+>    the isolation argument, and neither was "validated as `v.id(...)`": a valid id is still a valid
+>    id for someone else's row. `runPackTurn` now compares `row.tenantId` to the run's tenant BEFORE
+>    `preCall` and before any event is written. Root fix (a required `tenantId` arg on
+>    `getTenantSkillVersion`, closing the dispatch surface too) is an open follow-up in `llm.ts`.
+> 2. **The grant test was vacuous.** "a tenant candidate body CANNOT widen the grant" stayed green
+>    when the pin was never forwarded — it could not tell "the tenant body ran and did not widen the
+>    grant" from "the tenant body never ran", so deleting the whole `tenantSkillIds` feature left it
+>    passing. It now asserts `skillVersion === 7` on every probe chunk, which is only readable if the
+>    pinned candidate reached the loader. The claim below is true again, and now enforced.
+>
+> Also: a tenant pack candidate can now NEVER be activated (`planTenantActivation` refuses every
+> `pack-*` name — the three-plane pack gate has no tenant lane). That makes this pin rail the ONLY
+> way a tenant's customized pack body can execute at all. See docs/playbooks/skill-registry.md
+> "THE PACK GATE HAS NO TENANT LANE".)
+>
+> Previously verified: 2026-08-28 (29-05: `packArgs` gained `tenantSkillIds` — the tenant twin of the
 > `skillVersions` pin, forwarded to `runSpecialistTurn` so a tenant's schema-driven pack
 > customization can be RUN before it is activated. Row ids (`v.id("tenantSkills")`),
 > `internalAction` only, never model-supplied. The tool grant is unchanged and still derived from

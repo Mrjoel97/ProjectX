@@ -24,9 +24,11 @@
 // the place to introduce a weaker one.
 import { err, ok, type Result } from "./result";
 import {
+  packPreflight,
   type PackSource,
+  REACHABLE_PACK_SOURCES,
+  type ReachablePackSource,
   resolveWorkflowPack,
-  WORKFLOW_PACKS,
   type WorkflowPackId,
 } from "./workflowPacks";
 
@@ -108,17 +110,32 @@ export type CustomizationValues = Readonly<Record<string, string | number | read
  * untrusted producer of a `CustomizationSchema`), and was read by nothing — not by
  * `validateCustomization`, not by a test. A cap the code never applies is a documented invariant
  * with no enforcement, which is worse than no cap: a later plan trusts the number. Deleted rather
- * than enforced. Both survivors below bound UNTRUSTED user input and are enforced in
- * `validateCustomization`.
+ * than enforced. Every cap below bounds UNTRUSTED user input — the submitted `values` map, never
+ * the schema — and every one is applied in `validateCustomization`.
  */
 export const CUSTOMIZATION_CAPS = {
   /** Entries in one source-preference list. */
   maxValuesPerField: 8,
   /** Absolute ceiling on any single value, matching `USER_SKILL_ADAPTATION_MAX_BYTES`. */
   valueMaxBytes: 4_000,
+  /**
+   * KEYS in one submission. `values` is the untrusted half — the SCHEMA is product-authored, the
+   * submitted map is not — and before this cap the key COUNT was unbounded: the widest declared
+   * schema has 5 fields, but a caller could send 3_000 undeclared keys and every one of them came
+   * back as its own `{key, reason:"unknown_field"}` row. 24 leaves room for a UI sending a few
+   * stale keys after a template revision and refuses volume.
+   */
+  maxSubmittedKeys: 24,
+  /**
+   * Longest key ECHOED BACK in a rejection. Declared keys are all far shorter, so this only ever
+   * truncates a key nobody declared — i.e. attacker-chosen text. Without it one call round-trips
+   * an arbitrary volume of chosen bytes through a client-callable tenant mutation.
+   */
+  keyMaxBytes: 64,
 } as const;
 
 export const CUSTOMIZATION_REJECTIONS = [
+  "too_many_fields",
   "unknown_field",
   "wrong_type",
   "too_large",
@@ -174,6 +191,20 @@ function byteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
+/**
+ * The key as it may appear in a REJECTION. A declared key is returned unchanged (every one is well
+ * under the cap); an undeclared key is truncated, because the only producer of a long one is the
+ * caller and the error result is the shortest path back out to them.
+ *
+ * A split multibyte sequence decodes to U+FFFD rather than throwing — the value is a label for a
+ * form field the schema never declared, so mangling it costs nothing.
+ */
+function clampKey(key: string): string {
+  const bytes = new TextEncoder().encode(key);
+  if (bytes.length <= CUSTOMIZATION_CAPS.keyMaxBytes) return key;
+  return new TextDecoder().decode(bytes.slice(0, CUSTOMIZATION_CAPS.keyMaxBytes));
+}
+
 // ── Validation ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -190,12 +221,23 @@ export function validateCustomization(
   const errors: CustomizationError[] = [];
   const accepted: Record<string, string | number | readonly string[]> = {};
 
-  for (const key of Object.keys(values)) {
+  const submitted = Object.keys(values);
+  // LAYER 0. The KEY COUNT, before any key is looked at or echoed. One rejection with an EMPTY key,
+  // deliberately: enumerating the offending keys is precisely the round-trip amplification the cap
+  // exists to stop. The widest declared schema has 5 fields, so nothing legitimate is near this.
+  if (submitted.length > CUSTOMIZATION_CAPS.maxSubmittedKeys) {
+    return err([{ key: "", reason: "too_many_fields" }]);
+  }
+
+  for (const key of submitted) {
     const field = byKey.get(key);
+    // Every rejection below echoes the CLAMPED key. A declared key is unchanged by this; an
+    // undeclared one is bounded, so the error result cannot carry back more than the cap allows.
+    const safeKey = clampKey(key);
     // LAYER 1. An undeclared key never reaches its value. `tools` is not a field, so it is not a
     // question of what `tools` contains.
     if (!field) {
-      errors.push({ key, reason: "unknown_field" });
+      errors.push({ key: safeKey, reason: "unknown_field" });
       continue;
     }
 
@@ -203,15 +245,15 @@ export function validateCustomization(
 
     if (field.kind === "threshold") {
       if (typeof raw !== "number" || !Number.isFinite(raw)) {
-        errors.push({ key, reason: "wrong_type" });
+        errors.push({ key: safeKey, reason: "wrong_type" });
         continue;
       }
       if (field.integer && !Number.isInteger(raw)) {
-        errors.push({ key, reason: "wrong_type" });
+        errors.push({ key: safeKey, reason: "wrong_type" });
         continue;
       }
       if (raw < field.min || raw > field.max) {
-        errors.push({ key, reason: "out_of_range" });
+        errors.push({ key: safeKey, reason: "out_of_range" });
         continue;
       }
       accepted[key] = raw;
@@ -220,19 +262,19 @@ export function validateCustomization(
 
     if (field.kind === "source_preference") {
       if (!Array.isArray(raw)) {
-        errors.push({ key, reason: "wrong_type" });
+        errors.push({ key: safeKey, reason: "wrong_type" });
         continue;
       }
       if (raw.length > CUSTOMIZATION_CAPS.maxValuesPerField) {
-        errors.push({ key, reason: "too_many_values" });
+        errors.push({ key: safeKey, reason: "too_many_values" });
         continue;
       }
       if (raw.some((s) => typeof s !== "string")) {
-        errors.push({ key, reason: "wrong_type" });
+        errors.push({ key: safeKey, reason: "wrong_type" });
         continue;
       }
       if (raw.some((s) => !(field.sources as readonly string[]).includes(s as string))) {
-        errors.push({ key, reason: "unknown_source" });
+        errors.push({ key: safeKey, reason: "unknown_source" });
         continue;
       }
       accepted[key] = raw as readonly string[];
@@ -240,13 +282,13 @@ export function validateCustomization(
     }
 
     if (typeof raw !== "string") {
-      errors.push({ key, reason: "wrong_type" });
+      errors.push({ key: safeKey, reason: "wrong_type" });
       continue;
     }
 
     if (field.kind === "tone") {
       if (!field.options.includes(raw)) {
-        errors.push({ key, reason: "unknown_option" });
+        errors.push({ key: safeKey, reason: "unknown_option" });
         continue;
       }
       accepted[key] = raw;
@@ -256,12 +298,12 @@ export function validateCustomization(
     // terminology | instruction — the free-text kinds.
     const cap = Math.min(field.maxBytes, CUSTOMIZATION_CAPS.valueMaxBytes);
     if (byteLength(raw) > cap) {
-      errors.push({ key, reason: "too_large" });
+      errors.push({ key: safeKey, reason: "too_large" });
       continue;
     }
     // LAYER 2.
     if (hasForbiddenContent(raw)) {
-      errors.push({ key, reason: "forbidden_content" });
+      errors.push({ key: safeKey, reason: "forbidden_content" });
       continue;
     }
     accepted[key] = raw;
@@ -428,13 +470,19 @@ const PACK_THRESHOLD_FIELD: Readonly<
  * become a checkbox the product cannot honour.
  */
 export function packReadableSources(templateId: WorkflowPackId): readonly PackSource[] {
-  const found: PackSource[] = [];
-  for (const op of WORKFLOW_PACKS[templateId].operations) {
-    if (op.state !== "existing") continue;
-    if (op.reads === null) continue;
-    if (!found.includes(op.reads)) found.push(op.reads);
-  }
-  return found;
+  // ponytail: `packPreflight` already walks `operations` with the same dedupe and the same manifest
+  // order — this used to hand-write a second copy of that traversal, which is one traversal to keep
+  // in step if `PackOperation` ever grows a fourth arm. An empty runtime map makes every reachable
+  // plane come back `unavailable`, which is irrelevant here: only the SOURCE identity is read. The
+  // filter is what drops the `missing` rows preflight keeps, because a missing operation's `reads`
+  // names a plane no tool can reach and offering it would be a checkbox the product cannot honour.
+  // Ceiling: if an `existing` operation ever reads a source outside `REACHABLE_PACK_SOURCES`, this
+  // would silently drop it — `workflowCustomization.test.ts` pins all six lists as literals.
+  return packPreflight(templateId, {})
+    .sources.map((s) => s.source)
+    .filter((s): s is ReachablePackSource =>
+      (REACHABLE_PACK_SOURCES as readonly string[]).includes(s),
+    );
 }
 
 /**

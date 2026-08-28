@@ -291,6 +291,33 @@ async function planTenantActivation(
   ownerUserId?: Id<"users">,
 ): Promise<ActivationPlan> {
   const row = await loadTenantCandidate(ctx, candidateId);
+
+  // THE PACK GATE HAS NO TENANT LANE, SO THE TENANT LANE FAILS CLOSED (29-05 remediation).
+  //
+  // `publishPackCustomization` is the first production writer that can mint a `pack-*` row in
+  // `tenantSkills`. Before it, every pack name was refused by `publishUserCandidate`
+  // (NOT_USER_AUTHORABLE) and by `publishAgentCandidate`, so this asymmetry was unreachable; after
+  // it, a tenant pack body would otherwise have activated on `hasPassingTenantEvidence` — which is
+  // exactly the suite-less `run-eval-golden.mjs` predicate `assertPackActivationEvidence`'s own
+  // comment names as the thing the pack gate exists to refuse. Same body class, same deployment,
+  // two different gates.
+  //
+  // This is NOT "the same three planes here". It cannot be: `tenantSkills` has no `provenance` and
+  // no `browserEvidence` COLUMN (schema.ts), so two of the three planes have nowhere to be written
+  // and `hasPassingPackEvalEvidence` has no tenant-scoped runner to satisfy it. Rather than run a
+  // weaker subset and call it the gate, a pack-named tenant row cannot be activated AT ALL — by any
+  // mode, including rollback, because nothing pack-named can ever have been live to roll back to.
+  // A pack body changes at GLOBAL scope, through the three-plane gate, or it does not change.
+  //
+  // Publishing is untouched: a tenant may still mint the candidate, and it stays dark. When a
+  // tenant pack lane is genuinely wanted, the work is the two evidence columns plus a tenant-scoped
+  // pack eval runner — not deleting this branch.
+  if (isWorkflowPackSkill(row.name)) {
+    throw new Error(
+      `${PACK_GATE_ERROR}: ${row.name} is a workflow pack — the tenant overlay carries no provenance or browser evidence, so a tenant pack candidate cannot be activated at any scope`,
+    );
+  }
+
   let ownerApproval: OwnerApproval | null = null;
 
   if (mode === "activate-user") {
@@ -1462,6 +1489,7 @@ export type PackCustomizationResult =
       customizationHash: string;
     }
   | { ok: false; reason: "unknown_template" }
+  | { ok: false; reason: "template_not_active" }
   | { ok: false; reason: "stale_template_version"; approvedVersion: number }
   | { ok: false; reason: "stale_base_version"; currentBaseVersion: number | null }
   | { ok: false; reason: "empty_customization" }
@@ -1471,9 +1499,18 @@ export type PackCustomizationResult =
  * Publish a tenant's WORKFLOW PACK customization as an immutable candidate (29-05, ROUT-01).
  *
  * THE ARGUMENT LIST IS THE WHOLE AUTHORIZATION STORY, and it is deliberately narrower than
- * `publishUserCandidate`'s: four fields, none of which is text that reaches a body. Convex's arg
- * validator rejects an extra key outright, so `authoredBody`, `body`, `tools` and `name` are refused
- * at the boundary rather than by a check — a tenant has no way to spell prose into a pack prompt.
+ * `publishUserCandidate`'s: four fields, and no field named `authoredBody`, `body`, `tools` or
+ * `name`. Convex's arg validator rejects an extra key outright, so those are refused at the boundary
+ * rather than by a check.
+ *
+ * PROSE DOES REACH THE BODY, and pretending otherwise is the failure mode this sentence exists to
+ * prevent. `business_terms` (400 bytes) and `extra_guidance` (1200 bytes) are declared free-text
+ * fields, and their trimmed content is rendered verbatim into `tenantSkills.body` under the
+ * adaptation marker. The defensible property is narrower and different: the prose is BOUNDED (1600
+ * bytes across the two, against the free-text door's 4000) and CONTENT-SCANNED
+ * (`FORBIDDEN_VALUE_PATTERNS`), and it arrives under a key the schema declared rather than in a
+ * caller-chosen shape. A pack candidate still needs prompt-content review; what a tenant cannot do
+ * is choose the field, the size or the position.
  *
  * THE REGISTRY NAME IS DERIVED, NOT SUPPLIED. `customizationSchemaFor` resolves `templateId` through
  * `resolveWorkflowPack`'s closed six-id registry (which uses `Object.hasOwn`, so `__proto__` and
@@ -1482,21 +1519,32 @@ export type PackCustomizationResult =
  * registry name outside `WORKFLOW_PACK_SKILL_NAMES`. `skills.test.ts` pins that set as literals and
  * proves the pack names are in NEITHER `USER_AUTHORABLE_SKILLS` nor `AGENT_AUTHORABLE_SKILLS`.
  *
- * FIVE REFUSALS, in this order, and the order is what makes the first two meaningful:
+ * SIX REFUSALS, in this order, and the order is what makes the first two meaningful. ALL SIX come
+ * back as DATA (`{ok:false, reason}`), never as a throw — a governed refusal is a form the UI can
+ * render, and a 500 is not:
  *  1. UNKNOWN TEMPLATE — before any read.
  *  2. INVALID VALUES — layer 1 refuses an undeclared KEY before its value is looked at, then layer 2
  *     content-scans the declared free-text fields (`validateCustomization`, @pikar/core).
  *  3. EMPTY FORM — an empty adaptation is not a customization; `composeUserSkillBody` would throw.
- *  4. STALE TEMPLATE VERSION — the form must have been rendered against the pack body that is LIVE.
+ *  4. TEMPLATE NOT ACTIVE — and this one is ORDINARY, not exotic: `seedPackCandidates` writes all
+ *     six pack rows as `candidate`, and each becomes active only once the owner clears the
+ *     three-plane pack gate for it. Checked HERE, before `readTenantPublishState`, because that
+ *     helper reaches `loadSkill`, which throws `NO_ACTIVE_SKILL` — so on any deployment where a
+ *     pack is seeded but not yet activated, the tenant's customization form would 500 rather than
+ *     say "not available yet". One extra indexed read on a path that is about to do several.
+ *  5. STALE TEMPLATE VERSION — the form must have been rendered against the pack body that is LIVE.
  *     A form built against an older template may no longer mean what the live body says it means.
- *  5. STALE BASE VERSION — optimistic concurrency against the tenant's newest row. No merge: two
+ *  6. STALE BASE VERSION — optimistic concurrency against the tenant's newest row. No merge: two
  *     people editing one workflow's thresholds cannot both be satisfied, and silent last-write-wins
  *     is the version of that failure nobody notices.
  *
- * Nothing here activates anything. The candidate leaves `candidate` only through
- * `activateTenantCandidate` — an `ownerMutation` that additionally demands passing eval evidence
- * pinning this EXACT row — and rollback is the same owner door. 29-05 added no status flip, and
- * never touches the ADR-003 global `skills` table.
+ * NOTHING HERE ACTIVATES ANYTHING, AND — AS OF THE 29-05 REMEDIATION — NOTHING ELSE DOES EITHER.
+ * `planTenantActivation` refuses every `pack-*` name outright, because the tenant overlay has no
+ * `provenance` and no `browserEvidence` column to satisfy the three-plane pack gate with. So a row
+ * minted here is DARK BY CONSTRUCTION: it can be listed, inspected and superseded, and it can never
+ * become the body a specialist runs. That is a real code gate, not a posture — `skills.test.ts`
+ * proves a `pack-*` tenant candidate carrying Phase-21-shaped evidence is still refused. This
+ * mutation never touches the ADR-003 global `skills` table.
  */
 export const publishPackCustomization = tenantMutation({
   args: {
@@ -1531,6 +1579,15 @@ export const publishPackCustomization = tenantMutation({
     // produce byte-identical bodies and the lineage hash means something.
     const authoredBody = renderCustomization(customizationSchema, accepted);
     if (authoredBody.trim() === "") return { ok: false, reason: "empty_customization" };
+
+    // Refusal 4. The same read `loadSkill` is about to do, asked as a QUESTION rather than as an
+    // assertion — a seeded-but-not-yet-activated pack is a normal deployment state, not a bug, and
+    // the tenant-facing form must get a reason back instead of a 500.
+    const active = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+      .unique();
+    if (active === null) return { ok: false, reason: "template_not_active" };
 
     const state = await readTenantPublishState(ctx, ctx.tenantId, name, authoredBody);
 

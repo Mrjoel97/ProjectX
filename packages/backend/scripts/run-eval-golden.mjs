@@ -968,6 +968,23 @@ function assertEvaluableCandidate(snapshot, id) {
       `--tenant-skill ${id} has status "${c.status}" — only a candidate is evaluable`,
     );
   }
+  // 29-05 remediation. A WORKFLOW PACK row is not evaluable HERE, whoever authored it. Two
+  // independent reasons, and each alone is sufficient:
+  //   - this suite drives `llm:runCockpitAgent` and never runs a pack specialist, so the pin would
+  //     never be loaded and the evidence would certify a body this run did not execute — 16-09's
+  //     defect class, one registry scope down (`skillVersions: {}` is the tell);
+  //   - a pack body is gated on THREE planes (provenance, the pack suite, browser), and the blob
+  //     written from here carries none of them. `planTenantActivation` now refuses every `pack-*`
+  //     name outright, so this evidence could not activate anything even if it were honest — but a
+  //     ~$0.4 run that writes a meaningless certificate is still worth refusing at $0.
+  // The prefix is the derivation `WORKFLOW_PACK_SKILL_NAMES` uses (`pack-${id}`). Matched as a
+  // prefix rather than against an imported list because this file is a standalone node script with
+  // no bundler; over-matching a future non-pack `pack-*` name would fail CLOSED.
+  if (typeof c.name === "string" && c.name.startsWith("pack-")) {
+    throw new Error(
+      `--tenant-skill ${id} is a workflow pack row ("${c.name}") — the golden suite never runs a pack specialist, so it cannot certify one`,
+    );
+  }
   return {
     candidateId: c.id,
     registryTenantId: c.tenantId,
