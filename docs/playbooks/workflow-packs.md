@@ -1,6 +1,16 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-28 (29-01 second repair round: the "no dead vocabulary" exemption for
+> Last verified: 2026-08-28 (29-05: `packArgs` gained `tenantSkillIds` — the tenant twin of the
+> `skillVersions` pin, forwarded to `runSpecialistTurn` so a tenant's schema-driven pack
+> customization can be RUN before it is activated. Row ids (`v.id("tenantSkills")`),
+> `internalAction` only, never model-supplied. The tool grant is unchanged and still derived from
+> the operation matrix: `workflowPackBinding.test.ts` drives a tenant candidate body that asks in
+> prose for every forbidden tool and proves the executed record is still `toolsForWorkflowPack`.
+> A pinned row naming a different pack is refused as `TENANT_SKILL_PIN_MISMATCH` before any model
+> call. See docs/playbooks/skill-registry.md "Phase 29 — pack customization" for the authoring
+> half and for the runner gap that still leaves a tenant candidate uncertifiable in practice.)
+>
+> Previously verified: 2026-08-28 (29-01 second repair round: the "no dead vocabulary" exemption for
 > `support-desk` now CALLS `renderSourceGap` instead of spreading `KNOWLEDGE_SOURCES`.
 > Membership in a second const is a DECLARATION, not a read — the exact shape this file rejects
 > for tool grants — and `support-desk` is the one source no pack operation reads, so it was the

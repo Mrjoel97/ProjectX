@@ -97,9 +97,15 @@ import { swotSkillBody } from "@pikar/contracts/skills/swot";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import {
+  type CustomizationError,
+  canonicalCustomization,
+  checkBaseVersion,
+  customizationSchemaFor,
   hasPassingPackBrowserEvidence,
   hasValidPackProvenance,
   isWorkflowPackSkill,
+  renderCustomization,
+  validateCustomization,
   WORKFLOW_PACK_SKILL_NAMES,
 } from "@pikar/core";
 import { v } from "convex/values";
@@ -1295,79 +1301,271 @@ export const publishUserCandidate = tenantMutation({
   args: { name: v.string(), authoredBody: v.string() },
   handler: async (ctx, { name, authoredBody }) => {
     // The closed v0 product set — deliberately NARROWER than GATED_SKILLS. Refused before any read.
+    // A WORKFLOW PACK NAME IS REFUSED HERE, and 29-05 did not change that: packs are customized
+    // through `publishPackCustomization`'s closed FORM, which renders the body server-side. Widening
+    // this list to admit them would have handed pack customization the wider capability (arbitrary
+    // prose in a pack body) that the form exists to withhold.
     if (!isUserAuthorableSkill(name)) throw new Error(`NOT_USER_AUTHORABLE: ${name}`);
 
-    const { core, base, body, authored, newest } = await readTenantPublishState(
-      ctx,
-      ctx.tenantId,
-      name,
-      authoredBody,
-    );
-    // Idempotence compares the TRIMMED stored text and the exact base lineage — the same
-    // adaptation against a NEW base is a real new candidate, not a repost.
-    const duplicate =
-      newest !== null &&
-      newest.status === "candidate" &&
-      newest.author === "user" &&
-      newest.authoredBody === authored &&
-      newest.basedOnScope === base.scope &&
-      newest.basedOnVersion === base.version;
-
-    const prior = await ensureRollbackBaseline(ctx, ctx.tenantId, name, core, base, newest);
-
-    const { version, inserted } = allocateImmutableVersion(prior, duplicate);
-    // `duplicate` already implies `newest !== null`; the re-test is what narrows it for the
-    // compiler without a non-null assertion.
-    if (!inserted && newest !== null)
-      return {
-        name,
-        version,
-        status: "candidate" as const,
-        inserted: false,
-        tenantSkillId: newest._id,
-      };
-
-    const tenantSkillId = await ctx.db.insert("tenantSkills", {
+    const state = await readTenantPublishState(ctx, ctx.tenantId, name, authoredBody);
+    return insertTenantUserCandidate(ctx, {
       tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      name,
+      state,
+    });
+  },
+});
+
+/** WHICH approved pack template produced a candidate, and the fingerprint of the exact form values.
+ *  Every field is SERVER-DERIVED (29-05) — the closed template id off `resolveWorkflowPack`, the
+ *  live registry version, the validated values, and the hash of the canonical lineage string. */
+type PackTemplateLineage = {
+  templateId: string;
+  templateVersion: number;
+  customizationValues: string;
+  customizationHash: string;
+  fieldCount: number;
+};
+
+/**
+ * THE ONE TENANT CANDIDATE WRITER (21-02, extended by 29-05). Both authoring channels — Phase 21's
+ * free-text adaptation and Phase 29's closed pack form — land here, so candidate-only status,
+ * authenticated provenance, the rollback baseline, immutable version allocation, idempotence and
+ * the refs-only audit row cannot be true on one path and absent on the other.
+ *
+ * `authoredBody` reaches this function ALREADY COMPOSED by `readTenantPublishState`. It is bytes the
+ * caller chose, and the pack channel's whole safety story is that its caller rendered them from a
+ * closed schema rather than accepting them from a client.
+ */
+async function insertTenantUserCandidate(
+  ctx: MutationCtx,
+  args: {
+    tenantId: string;
+    userId: Id<"users">;
+    name: string;
+    state: Awaited<ReturnType<typeof readTenantPublishState>>;
+    template?: PackTemplateLineage;
+  },
+): Promise<{
+  name: string;
+  version: number;
+  status: "candidate";
+  inserted: boolean;
+  tenantSkillId: Id<"tenantSkills">;
+}> {
+  const { tenantId, userId, name, template } = args;
+  const { core, base, body, authored, newest } = args.state;
+  // Idempotence compares the TRIMMED stored text and the exact base lineage — the same
+  // adaptation against a NEW base is a real new candidate, not a repost. It also compares the
+  // TEMPLATE lineage: identical form values rendered against a REPUBLISHED pack template produce
+  // identical bytes but are a different candidate, because the base body they adapt has moved.
+  // Both comparands are `undefined` on the free-text path, so that path's rule is unchanged.
+  const duplicate =
+    newest !== null &&
+    newest.status === "candidate" &&
+    newest.author === "user" &&
+    newest.authoredBody === authored &&
+    newest.basedOnScope === base.scope &&
+    newest.basedOnVersion === base.version &&
+    newest.templateId === template?.templateId &&
+    newest.templateVersion === template?.templateVersion;
+
+  const prior = await ensureRollbackBaseline(ctx, tenantId, name, core, base, newest);
+
+  const { version, inserted } = allocateImmutableVersion(prior, duplicate);
+  // `duplicate` already implies `newest !== null`; the re-test is what narrows it for the
+  // compiler without a non-null assertion.
+  if (!inserted && newest !== null)
+    return {
       name,
       version,
-      body,
-      authoredBody: authored,
-      // CANDIDATE, always. There is no code path from this mutation to an activation function.
-      status: "candidate",
-      author: "user",
-      // Provenance from the AUTHENTICATED context, never from an argument.
-      authorUserId: ctx.userId,
-      basedOnName: name,
-      basedOnVersion: base.version,
-      ...lineageOf(base),
-      // Code-owned: a candidate that was never active has nothing to roll back to.
-      rollbackEligible: false,
-      createdAt: Date.now(),
-    });
+      status: "candidate" as const,
+      inserted: false,
+      tenantSkillId: newest._id,
+    };
 
-    // CLAUDE.md §4: refs, hashes, ids and counts ONLY. The adaptation and the composed body are
-    // content-plane data and never reach this payload — `skills.test.ts` pins the key set by
-    // EQUALITY and needle-scans audit + deadLetters, so adding a body field fails on purpose.
-    await ctx.runMutation(internal.audit.log, {
+  const tenantSkillId = await ctx.db.insert("tenantSkills", {
+    tenantId,
+    name,
+    version,
+    body,
+    authoredBody: authored,
+    // CANDIDATE, always. There is no code path from this function to an activation function.
+    status: "candidate",
+    author: "user",
+    // Provenance from the AUTHENTICATED context, never from an argument.
+    authorUserId: userId,
+    basedOnName: name,
+    basedOnVersion: base.version,
+    ...lineageOf(base),
+    // 29-05: the template half of the lineage. Absent on the free-text path.
+    ...(template === undefined
+      ? {}
+      : {
+          templateId: template.templateId,
+          templateVersion: template.templateVersion,
+          customizationValues: template.customizationValues,
+          customizationHash: template.customizationHash,
+        }),
+    // Code-owned: a candidate that was never active has nothing to roll back to.
+    rollbackEligible: false,
+    createdAt: Date.now(),
+  });
+
+  // CLAUDE.md §4: refs, hashes, ids and counts ONLY. The adaptation, the composed body and the
+  // submitted form VALUES are content-plane data and never reach this payload — `skills.test.ts`
+  // pins the key set by EQUALITY on both channels and needle-scans audit + deadLetters, so adding
+  // a body, a label or a field value fails on purpose. `templateId` is a closed code-owned id, and
+  // `customizedFieldCount` is a count of declared keys, never their names.
+  await ctx.runMutation(internal.audit.log, {
+    tenantId,
+    correlationId: String(tenantSkillId),
+    eventType: "skill.user_candidate_published",
+    actor: "user",
+    payload: {
+      skillName: name,
+      tenantSkillId: String(tenantSkillId),
+      version,
+      baseScope: base.scope,
+      baseSkillId: String(base.skillId),
+      baseVersion: base.version,
+      author: "user",
+      bodyHash: await contentHash(body),
+      authoredBytes: new TextEncoder().encode(authored).length,
+      ...(template === undefined
+        ? {}
+        : {
+            templateId: template.templateId,
+            templateVersion: template.templateVersion,
+            customizationHash: template.customizationHash,
+            customizedFieldCount: template.fieldCount,
+          }),
+    },
+  });
+
+  return { name, version, status: "candidate" as const, inserted: true, tenantSkillId };
+}
+
+/** The refusals of the pack-customization channel. Every one of them is a USER MISTAKE, not a bug,
+ *  so it comes back as DATA (the `PackRunResult` posture, one lane over) and carries no user text:
+ *  the caller already knows what it sent, and an error string is the one place stray content
+ *  reaches a log. `errors` echoes the caller's own submitted keys back to the caller alone. */
+export type PackCustomizationResult =
+  | {
+      ok: true;
+      name: string;
+      version: number;
+      status: "candidate";
+      inserted: boolean;
+      tenantSkillId: Id<"tenantSkills">;
+      customizationHash: string;
+    }
+  | { ok: false; reason: "unknown_template" }
+  | { ok: false; reason: "stale_template_version"; approvedVersion: number }
+  | { ok: false; reason: "stale_base_version"; currentBaseVersion: number | null }
+  | { ok: false; reason: "empty_customization" }
+  | { ok: false; reason: "invalid_values"; errors: readonly CustomizationError[] };
+
+/**
+ * Publish a tenant's WORKFLOW PACK customization as an immutable candidate (29-05, ROUT-01).
+ *
+ * THE ARGUMENT LIST IS THE WHOLE AUTHORIZATION STORY, and it is deliberately narrower than
+ * `publishUserCandidate`'s: four fields, none of which is text that reaches a body. Convex's arg
+ * validator rejects an extra key outright, so `authoredBody`, `body`, `tools` and `name` are refused
+ * at the boundary rather than by a check — a tenant has no way to spell prose into a pack prompt.
+ *
+ * THE REGISTRY NAME IS DERIVED, NOT SUPPLIED. `customizationSchemaFor` resolves `templateId` through
+ * `resolveWorkflowPack`'s closed six-id registry (which uses `Object.hasOwn`, so `__proto__` and
+ * `constructor` are refused rather than resolved), and the name is `pack-<resolved id>`. That is a
+ * stronger property than an allow-list check: there is no string a caller can send that produces a
+ * registry name outside `WORKFLOW_PACK_SKILL_NAMES`. `skills.test.ts` pins that set as literals and
+ * proves the pack names are in NEITHER `USER_AUTHORABLE_SKILLS` nor `AGENT_AUTHORABLE_SKILLS`.
+ *
+ * FIVE REFUSALS, in this order, and the order is what makes the first two meaningful:
+ *  1. UNKNOWN TEMPLATE — before any read.
+ *  2. INVALID VALUES — layer 1 refuses an undeclared KEY before its value is looked at, then layer 2
+ *     content-scans the declared free-text fields (`validateCustomization`, @pikar/core).
+ *  3. EMPTY FORM — an empty adaptation is not a customization; `composeUserSkillBody` would throw.
+ *  4. STALE TEMPLATE VERSION — the form must have been rendered against the pack body that is LIVE.
+ *     A form built against an older template may no longer mean what the live body says it means.
+ *  5. STALE BASE VERSION — optimistic concurrency against the tenant's newest row. No merge: two
+ *     people editing one workflow's thresholds cannot both be satisfied, and silent last-write-wins
+ *     is the version of that failure nobody notices.
+ *
+ * Nothing here activates anything. The candidate leaves `candidate` only through
+ * `activateTenantCandidate` — an `ownerMutation` that additionally demands passing eval evidence
+ * pinning this EXACT row — and rollback is the same owner door. 29-05 added no status flip, and
+ * never touches the ADR-003 global `skills` table.
+ */
+export const publishPackCustomization = tenantMutation({
+  args: {
+    /** A closed Phase 27 pack id (`business-pulse`, …), NOT a registry name. `v.string()` because
+     *  `resolveWorkflowPack` is the fail-closed door and its refusal must be reachable to be
+     *  testable — the `packArgs` precedent in `workflowPackBinding.ts`. */
+    templateId: v.string(),
+    /** The approved template version the form was rendered against. */
+    templateVersion: v.number(),
+    /** The tenant's newest candidate version this edit is based on; `null` means "I believe this
+     *  pack has never been customized here". */
+    baseCandidateVersion: v.union(v.number(), v.null()),
+    /** The submitted form. Every value is a string, a number or a string list; there is no nested
+     *  object and no boolean, so a tool grant or an MCP block has no shape to arrive in even before
+     *  the closed key set refuses its name. */
+    values: v.record(v.string(), v.union(v.string(), v.number(), v.array(v.string()))),
+  },
+  handler: async (
+    ctx,
+    { templateId, templateVersion, baseCandidateVersion, values },
+  ): Promise<PackCustomizationResult> => {
+    const resolved = customizationSchemaFor(templateId, templateVersion);
+    if (!resolved.ok) return { ok: false, reason: "unknown_template" };
+    const customizationSchema = resolved.value;
+    const name = `pack-${customizationSchema.templateId}`;
+
+    const checked = validateCustomization(customizationSchema, values);
+    if (!checked.ok) return { ok: false, reason: "invalid_values", errors: checked.error };
+    const accepted = checked.value;
+
+    // Rendered from the SCHEMA's field order, never the submitted object's key order, so two UIs
+    // produce byte-identical bodies and the lineage hash means something.
+    const authoredBody = renderCustomization(customizationSchema, accepted);
+    if (authoredBody.trim() === "") return { ok: false, reason: "empty_customization" };
+
+    const state = await readTenantPublishState(ctx, ctx.tenantId, name, authoredBody);
+
+    // The approved template IS the global active pack row. A form rendered against any other
+    // version is refused rather than composed onto a body it was not designed for.
+    if (state.core.version !== templateVersion) {
+      return { ok: false, reason: "stale_template_version", approvedVersion: state.core.version };
+    }
+
+    const currentBaseVersion = state.newest?.version ?? null;
+    if (!checkBaseVersion(baseCandidateVersion, currentBaseVersion).ok) {
+      return { ok: false, reason: "stale_base_version", currentBaseVersion };
+    }
+
+    // ONE hash implementation: the pure package returns the canonical STRING, `lib/hash.ts` hashes
+    // it. @pikar/core has no crypto dependency and must not grow a weaker digest of its own.
+    const customizationHash = await contentHash(
+      canonicalCustomization(customizationSchema, accepted),
+    );
+    const res = await insertTenantUserCandidate(ctx, {
       tenantId: ctx.tenantId,
-      correlationId: String(tenantSkillId),
-      eventType: "skill.user_candidate_published",
-      actor: "user",
-      payload: {
-        skillName: name,
-        tenantSkillId: String(tenantSkillId),
-        version,
-        baseScope: base.scope,
-        baseSkillId: String(base.skillId),
-        baseVersion: base.version,
-        author: "user",
-        bodyHash: await contentHash(body),
-        authoredBytes: new TextEncoder().encode(authored).length,
+      userId: ctx.userId,
+      name,
+      state,
+      template: {
+        templateId: customizationSchema.templateId,
+        templateVersion,
+        // CONTENT PLANE, like `savedPrompts.text`: the tenant's own words, stored on their own row
+        // so the form can be reopened. It never reaches an audit payload (CLAUDE.md §4).
+        customizationValues: JSON.stringify(accepted),
+        customizationHash,
+        fieldCount: Object.keys(accepted).length,
       },
     });
-
-    return { name, version, status: "candidate" as const, inserted: true, tenantSkillId };
+    return { ok: true, ...res, customizationHash };
   },
 });
 

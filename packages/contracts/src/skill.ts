@@ -357,6 +357,15 @@ export function isGatedSkill(name: string): boolean {
  * name whose runner cannot drive it (the `document-analyst` / `media-director` deadlock recorded
  * above) would mint tenant candidates no eval run could ever certify. `skillAuthoring.test.ts`
  * pins the exact set AND its subset relationship to `GATED_SKILLS`.
+ *
+ * THERE IS A THIRD AUTHORING CHANNEL, AND IT IS NOT THIS LIST (Phase 29, ROUT-01). The six workflow
+ * packs (`WORKFLOW_PACK_SKILL_NAMES`, @pikar/core) are customized through
+ * `skills.publishPackCustomization`: a CLOSED typed form whose body is rendered SERVER-SIDE from
+ * validated fields. They were deliberately NOT added here, because this channel accepts free-text
+ * bytes — admitting a pack name would grant pack customization the wider capability (arbitrary
+ * prose in a pack prompt) that the form exists to withhold. `skills.test.ts` pins all three sets as
+ * literals and proves they stay disjoint. If you widen this list, decide consciously whether the
+ * name should instead get a form.
  */
 export const USER_AUTHORABLE_SKILLS = [
   OFFER_ARCHITECT_SKILL,

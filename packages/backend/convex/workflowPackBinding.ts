@@ -143,6 +143,15 @@ const packArgs = {
   /** 27-08: the eval runner MUST be able to pin the exact candidate, or a run certifies the ACTIVE
    *  body while the evidence row names the candidate. `internalAction` ⇒ never model-supplied. */
   skillVersions: v.optional(v.record(v.string(), v.number())),
+  /** 29-05: the TENANT twin of the pin above, and the hop that makes a tenant pack candidate
+   *  evaluable at all. `<name>@<version>` cannot name a row once two tenants each own version 2, so
+   *  a tenant candidate is pinned by ROW ID (`skills.getTenantSkillVersion`, resolved inside
+   *  `runSpecialistTurn`). Without this hop a tenant candidate would run the tenant's EFFECTIVE body
+   *  while evidence named the candidate — 16-09's defect, one registry scope down — and, because
+   *  `activateTenantCandidate` demands evidence pinning the exact row, a schema-driven pack
+   *  customization could never leave `candidate` at all. Validated as `v.id("tenantSkills")`, never
+   *  a string, and reachable only from an `internalAction`. */
+  tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
 };
 
 type PackTurnArgs = {
@@ -154,6 +163,7 @@ type PackTurnArgs = {
   runId?: string;
   recommendationId?: string;
   skillVersions?: Record<string, number>;
+  tenantSkillIds?: Record<string, Id<"tenantSkills">>;
 };
 
 /**
@@ -278,6 +288,7 @@ async function runPackTurn(
           turnId: runId,
           threadId,
           ...(args.skillVersions === undefined ? {} : { skillVersions: args.skillVersions }),
+          ...(args.tenantSkillIds === undefined ? {} : { tenantSkillIds: args.tenantSkillIds }),
           ...(mockScript === undefined ? {} : { mockScript }),
         }),
     );

@@ -442,9 +442,7 @@ export function packReadableSources(templateId: WorkflowPackId): readonly PackSo
  * which iterates the schema rather than the submitted object precisely so two UIs produce
  * byte-identical bodies.
  */
-export function packCustomizationFields(
-  templateId: WorkflowPackId,
-): readonly CustomizationField[] {
+export function packCustomizationFields(templateId: WorkflowPackId): readonly CustomizationField[] {
   const sources = packReadableSources(templateId);
   const fields: CustomizationField[] = [
     {

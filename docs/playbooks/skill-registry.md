@@ -1,6 +1,12 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION — THE TWO KNOWLEDGE BODIES ARE UNGATED, AND
+> Last verified: 2026-08-28 (29-05: **A THIRD AUTHORING CHANNEL EXISTS — the workflow-pack FORM.**
+> `skills.publishPackCustomization` mints tenant candidates for the six Phase 27 packs from a CLOSED
+> typed schema, rendering the body server-side. `USER_AUTHORABLE_SKILLS` and `AGENT_AUTHORABLE_SKILLS`
+> were deliberately NOT widened to admit pack names — see "Phase 29 — pack customization" below for
+> the governance reasoning and what a reviewer must check before widening any of the three sets.)
+>
+> Previously verified: 2026-08-28 (**WAVE-2 REMEDIATION — THE TWO KNOWLEDGE BODIES ARE UNGATED, AND
 > THE GATE THEY WERE IN IS FALSELY CLEARABLE.** This REVERSES 29-04.
 >
 > **THE DECISION.** `knowledge-query-planner` and `knowledge-synthesizer` are OUT of
@@ -2356,3 +2362,105 @@ Rollback is deliberately unchanged: only a non-active `rollbackEligible` row can
 is owner-only and evidence-exempt, and the transaction changes the status/eligibility plane only.
 An agent row keeps its original evidence and `ownerApproval` after it is rolled away from and later
 restored. `skill.agent_candidate_activated` is the distinct refs-only activation event.
+
+## Phase 29 — pack customization: the THIRD authoring channel (29-05, ROUT-01)
+
+`skills.publishPackCustomization` is a `tenantMutation` that turns an approved Phase 27 workflow
+pack into a tenant CANDIDATE from a closed typed form. It is the third way a `tenantSkills` row can
+be authored, and the three channels are deliberately not interchangeable:
+
+| Channel | Writer | Allow-list | What the caller supplies |
+| --- | --- | --- | --- |
+| Free-text adaptation (21-02) | `publishUserCandidate` | `USER_AUTHORABLE_SKILLS` (3 names) | up to 4000 bytes of prose |
+| Agent draft (23-01) | `publishAgentCandidate` (internal) | `AGENT_AUTHORABLE_SKILLS` (3 names) | up to 4000 bytes of prose |
+| **Pack form (29-05)** | **`publishPackCustomization`** | **derived: `pack-<resolved pack id>`** | **`{templateId, templateVersion, baseCandidateVersion, values}` — no text that reaches a body** |
+
+### THE GOVERNANCE DECISION, and why the obvious change was NOT made
+
+The plan called for publishing pack customizations "through Phase 21's existing gate". That gate
+refuses every pack name (`NOT_USER_AUTHORABLE`), because `USER_AUTHORABLE_SKILLS` and
+`WORKFLOW_PACK_SKILL_NAMES` have an empty intersection. The obvious fix — add the six pack names to
+`USER_AUTHORABLE_SKILLS` — was **rejected**, and the reason is a capability argument, not a taste one:
+
+`publishUserCandidate` accepts FREE-TEXT `authoredBody`. Widening its allow-list to admit
+`pack-business-pulse` would let any tenant put arbitrary prose into a pack prompt through the
+existing door, standing right beside the closed form — which is the exact capability the form exists
+to withhold. Instead the pack channel is a SEPARATE, NARROWER writer, and the two allow-lists were
+left byte-unchanged.
+
+**Before widening any of the three sets, read this.** `skills.test.ts`
+("the governance sets are these exact literals and the pack channel widened neither") pins all three
+memberships as LITERALS and asserts pack names are in neither authoring list. A widening is
+therefore a deliberate act with a red test in front of it. Ask which channel the name belongs in: if
+the product can describe the edit as a form, it belongs in the form, not in the prose door.
+
+### What a tenant can and cannot express
+
+The offered fields are **derived from the pack's own operation matrix**, never re-typed
+(`packCustomizationFields` / `packReadableSources`, `@pikar/core/workflowCustomization.ts`):
+terminology, tone (one closed four-word list), ONE pack-specific numeric threshold, a source
+preference restricted to the planes that pack's granted tools actually read, and one bounded
+instruction block. A source no pack tool can reach (`crm-facts`, `content-shelf`, …) can never be
+offered, because a checkbox naming it would promise a read the runtime cannot perform.
+
+Refusal is TWO LAYERS, in this order, and the order is the security property: an undeclared KEY is
+rejected as `unknown_field` before its value is read, and only then are declared free-text values
+content-scanned. `tools`, `mcpServers`, `apiKey` and `body` come back `unknown_field` even though
+three of them would also trip the content scan — that ordering is what `skills.test.ts` asserts.
+`values` is `v.record(v.string(), v.union(v.string(), v.number(), v.array(v.string())))`, so a
+nested object has no shape to arrive in either.
+
+### The five refusals, in order
+
+1. `unknown_template` — `resolveWorkflowPack` uses `Object.hasOwn`, so `__proto__` and `constructor`
+   are refused rather than resolved.
+2. `invalid_values` — the two layers above; every rejection is returned, not just the first.
+3. `empty_customization` — an empty form is not a customization.
+4. `stale_template_version` — the form must have been rendered against the pack body that is LIVE
+   (the global active `skills` row for `pack-<id>`).
+5. `stale_base_version` — optimistic concurrency against the tenant's newest row. No merge: two
+   people editing one workflow's thresholds cannot both be satisfied.
+
+All five come back as DATA (`{ok: false, reason}`), never as a throw, and none of them carries user
+text — the caller already knows what it sent, and an error string is the one place stray content
+reaches a log.
+
+### What did NOT change, and must not
+
+- **Activation.** `activateTenantCandidate` / `activateAgentCandidate` / `rollbackTenantSkill` are
+  still `ownerMutation` + exact-row eval evidence. A pack candidate cannot self-activate, and 29-05
+  added no status flip and no second activation path.
+- **The tool grant.** A pack's tools come from `toolsForWorkflowPack(packId)` — the operation matrix
+  in code. A tenant candidate BODY that asks in prose for `dispatchResearch` gets exactly the
+  registry's list; `workflowPackBinding.test.ts` proves that behaviourally against the real loop.
+- **ADR-003.** The global `skills` table is untouched; `tenantSkills` remains an additive overlay.
+- **One writer.** Both `publishUserCandidate` and `publishPackCustomization` insert through
+  `insertTenantUserCandidate`, so candidate-only status, authenticated provenance, the rollback
+  baseline, immutable version allocation, idempotence and the refs-only audit row cannot be true on
+  one path and absent on the other.
+
+### Lineage, and how a republished template is detected
+
+A pack candidate carries BOTH lineages, and they answer different questions. `basedOnScope` /
+`basedOnVersion` say which registry row it adapts; `templateId` / `templateVersion` say which
+approved product template and schema produced it. Once a tenant has an ACTIVE row the registry base
+stops tracking the global template, so identical form values against a REPUBLISHED template have
+identical bytes AND identical registry lineage — which is exactly why the idempotence rule compares
+the template version too. `customizationValues` (the tenant's own words, content plane) and
+`customizationHash` (SHA-256 of `canonicalCustomization`, via the repo's one `contentHash`) complete
+the row. The audit payload gets `templateId`, `templateVersion`, `customizationHash` and
+`customizedFieldCount` — refs, a hash and a count, never a field name or a value.
+
+### Running a pack candidate before it is activated
+
+`workflowPackBinding.runWorkflowPack` accepts `tenantSkillIds` (row ids, `v.id("tenantSkills")`,
+`internalAction` only) and forwards it to `runSpecialistTurn`, which resolves the exact candidate row
+and refuses a pin naming a different skill (`TENANT_SKILL_PIN_MISMATCH`). Without that hop a tenant
+candidate would be un-evaluable, and since activation demands evidence pinning the exact row, it
+could never leave `candidate` at all.
+
+**KNOWN GAP.** `scripts/run-workflow-pack-evals.mjs` has no `--tenant-skill` mode yet: it pins the
+GLOBAL version (`skillVersions`) and writes evidence with `skills:recordEvalEvidence`. The backend
+hop exists and is tested offline, but until the runner learns to pass `tenantSkillIds` and call
+`skills.recordTenantEvalEvidence`, a tenant pack candidate cannot be certified in practice and stays
+dark. That is the honest state; do not paper over it by relaxing the activation gate.
