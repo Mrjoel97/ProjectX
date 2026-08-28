@@ -23,7 +23,12 @@
 // implementation is exactly what that module exists to prevent, and a lineage fingerprint is not
 // the place to introduce a weaker one.
 import { err, ok, type Result } from "./result";
-import type { PackSource, WorkflowPackId } from "./workflowPacks";
+import {
+  type PackSource,
+  resolveWorkflowPack,
+  WORKFLOW_PACKS,
+  type WorkflowPackId,
+} from "./workflowPacks";
 
 // ── The closed field vocabulary ────────────────────────────────────────────────────────────
 
@@ -329,6 +334,167 @@ export function canonicalCustomization(
     parts.push(`${field.key}=${JSON.stringify(rendered)}`);
   }
   return parts.join("\n");
+}
+
+// ── The SIX APPROVED PACK TEMPLATES' customization schemas (ROUT-01) ────────────────────────
+//
+// Everything above is the machinery. This is the PRODUCT: the closed set of fields a tenant may
+// actually fill in for each Phase 27 workflow pack, and the reason the whole file is not a prompt
+// editor with extra steps.
+//
+// THE OFFERED SOURCES ARE DERIVED, NEVER RE-TYPED. `packReadableSources` reads the pack's own
+// operation matrix in `workflowPacks.ts`, so a preference checkbox can only ever name a plane the
+// runtime genuinely reads. A hand-written list here would let a schema offer `crm-facts` — a
+// checkbox promising a read no tool performs — and nothing would catch it. This is the same
+// "derive it or it drifts" rule `WORKFLOW_PACK_SKILL_NAMES` and `toolsForWorkflowPack` already
+// follow one file over.
+
+/**
+ * The ONE tone vocabulary, shared by all six packs.
+ *
+ * Deliberately NOT the `style-direct` / `style-coaching` / `style-concise` registry overlays: those
+ * are separate skill BODIES with their own activation story, and letting a form field select one
+ * would be a body swap wearing a dropdown. These four words are rendered into the tenant's own
+ * adaptation text and change nothing about which row runs.
+ */
+export const PACK_TONE_OPTIONS = ["plain", "warm", "formal", "direct"] as const;
+
+/**
+ * The one numeric dial each pack exposes, and its declared range.
+ *
+ * ONE PER PACK, exhaustive by type over `WorkflowPackId` — a seventh pack cannot ship without
+ * someone deciding what its number means. The ranges are product bounds, not safety bounds: the
+ * safety story is that a `threshold` field can only ever hold a finite number inside a declared
+ * range, so there is no value here that could carry a URL, a tool name or a body.
+ */
+const PACK_THRESHOLD_FIELD: Readonly<
+  Record<WorkflowPackId, Extract<CustomizationField, { kind: "threshold" }>>
+> = {
+  "business-pulse": {
+    key: "priority_count",
+    kind: "threshold",
+    label: "How many priorities to surface",
+    min: 1,
+    max: 5,
+    integer: true,
+  },
+  "campaign-plan": {
+    key: "campaign_weeks",
+    kind: "threshold",
+    label: "How many weeks a campaign usually runs",
+    min: 1,
+    max: 26,
+    integer: true,
+  },
+  "customer-complaint": {
+    key: "reply_max_words",
+    kind: "threshold",
+    label: "Longest reply to draft, in words",
+    min: 40,
+    max: 600,
+    integer: true,
+  },
+  "sales-call-prep": {
+    key: "brief_max_points",
+    kind: "threshold",
+    label: "Most points in a prep brief",
+    min: 3,
+    max: 15,
+    integer: true,
+  },
+  "process-sop": {
+    key: "sop_max_steps",
+    kind: "threshold",
+    label: "Most steps in one procedure",
+    min: 3,
+    max: 40,
+    integer: true,
+  },
+  "brand-review": {
+    key: "review_max_findings",
+    kind: "threshold",
+    label: "Most findings to report",
+    min: 1,
+    max: 20,
+    integer: true,
+  },
+};
+
+/**
+ * The input planes THIS pack actually reads today, in manifest order, deduplicated.
+ *
+ * `existing` operations only, and only those that read something — a `saveAsDocument` row reads
+ * nothing and a `missing` row's `reads` names a plane no tool can reach. Both would otherwise
+ * become a checkbox the product cannot honour.
+ */
+export function packReadableSources(templateId: WorkflowPackId): readonly PackSource[] {
+  const found: PackSource[] = [];
+  for (const op of WORKFLOW_PACKS[templateId].operations) {
+    if (op.state !== "existing") continue;
+    if (op.reads === null) continue;
+    if (!found.includes(op.reads)) found.push(op.reads);
+  }
+  return found;
+}
+
+/**
+ * The closed field list one pack offers. Order is the RENDER order — see `renderCustomization`,
+ * which iterates the schema rather than the submitted object precisely so two UIs produce
+ * byte-identical bodies.
+ */
+export function packCustomizationFields(
+  templateId: WorkflowPackId,
+): readonly CustomizationField[] {
+  const sources = packReadableSources(templateId);
+  const fields: CustomizationField[] = [
+    {
+      key: "business_terms",
+      kind: "terminology",
+      label: "Words your business uses",
+      maxBytes: 400,
+    },
+    { key: "tone", kind: "tone", label: "Tone of the result", options: PACK_TONE_OPTIONS },
+    PACK_THRESHOLD_FIELD[templateId],
+  ];
+  // A preference over ONE source is not a preference — `brand-review` reads only the vault, and
+  // offering it a "which sources" control would be a form asking a question with one answer.
+  if (sources.length > 1) {
+    fields.push({
+      key: "preferred_sources",
+      kind: "source_preference",
+      label: "Which of your sources to lean on",
+      sources,
+    });
+  }
+  fields.push({
+    key: "extra_guidance",
+    kind: "instruction",
+    label: "Anything else this workflow should keep in mind",
+    maxBytes: 1200,
+  });
+  return fields;
+}
+
+/**
+ * Resolve `(templateId, templateVersion)` to the exact approved schema, or refuse.
+ *
+ * `resolveWorkflowPack` is the gate, and it is reused rather than re-implemented for one specific
+ * reason: it uses `Object.hasOwn`, so `"__proto__"` and `"constructor"` are refused instead of
+ * resolving to something on `Object.prototype`. The version is NOT validated here — this package
+ * has no way to know which version is live. The Convex adapter reads the global ACTIVE pack row
+ * and refuses a mismatch, which is the only place that question can be answered honestly.
+ */
+export function customizationSchemaFor(
+  templateId: string,
+  templateVersion: number,
+): Result<CustomizationSchema, "unknown_template"> {
+  const resolved = resolveWorkflowPack(templateId);
+  if (!resolved.ok) return err("unknown_template");
+  return ok({
+    templateId: resolved.packId,
+    templateVersion,
+    fields: packCustomizationFields(resolved.packId),
+  });
 }
 
 // ── Material change ────────────────────────────────────────────────────────────────────────
