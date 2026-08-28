@@ -1,6 +1,6 @@
 # Playbook: PayPal connector (REVN-03)
 
-> Last verified: 2026-08-28 (28-08 Tasks 1-2 — authorization model + bounded reads landed)
+> Last verified: 2026-08-28 (28-08 complete — model, reads and the offline lane gate landed)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-08, 28-25) · Related ADRs: none yet
 
 > **Status: BUILT, PARKED, AND UNABLE TO CONNECT — deliberately.** The normalizer, the bounded read
@@ -38,7 +38,12 @@ merchant's** data.
   ungated for `paypalReadEvidence` (the evidence door, so a seal is never a prerequisite for its own
   evidence). Re-checks the grant subject AFTER decryption and refuses an app-owner credential before
   any request leaves.
-- `scripts/smoke-paypal-read.mjs` — controlled live merchant read + revoke evidence for the lane gate.
+- `scripts/smoke-paypal-read.mjs` — **LANDED (28-08 Task 3).** Runnable-on-credentials evidence
+  producer. `--self-test` runs 31 offline cases through the SAME builder a live run uses and requires
+  every guard to refuse; a bare run exits **2**; `--verify-evidence` refuses to read a stub as a live
+  pass and prints a non-probativeness banner over sandbox evidence. Its hardest rule is
+  `delegatedMerchant`: a read that produced rows on a credential bound to Pikar's own account is
+  rejected outright.
 - `docs/connectors/paypal-suitability.md` — the suitability record (28-01 drafts, 28-25 decides).
 
 ## Dependencies & blast radius
@@ -139,8 +144,9 @@ third parties requires **partner status and partner-manager coordination**.
 |---|---|---|
 | `cd packages/revenue && npx vitest run paypal` | Payload parsing, money boundaries, date/page bounds, partial states. | offline |
 | `cd packages/backend && npx vitest run paypalConnector` | Merchant binding, two-tenant isolation, gate vs evidence doors, local-clear semantics. | offline |
-| `node scripts/smoke-paypal-read.mjs` [PLANNED] | Controlled live merchant read + revoke. Lane evidence. | live creds |
-| `node scripts/check-provider-lane.mjs paypal` [PLANNED] | `passed` or `parked`. | offline |
+| `node scripts/smoke-paypal-read.mjs --self-test` | The evidence builder and every validator guard. **NOT a live pass.** | offline |
+| `node scripts/smoke-paypal-read.mjs` | Exits 2. There is no grant to read; see Known gaps. | — |
+| `node scripts/check-provider-lane.mjs --provider paypal --stage engineering` | The lane is consistent with its record. **Consistent is not passed.** | offline |
 
 ## Operational notes
 
@@ -150,8 +156,23 @@ third parties requires **partner status and partner-manager coordination**.
 
 ## Known gaps & deferred work
 
-- Partner status is unresolved and is the single reason this lane cannot start. It is also the most
-  likely of the four to end as a permanent `parked` — which the release semantics support: a parked
-  PayPal must not block a subset release, but it *does* block Phase 28 completion (REVN-03).
-- Everything [PLANNED] is unbuilt; invariants 1-3 have no enforcement yet.
-- PayPal invoice sends, refunds and dispute changes are explicitly deferred by the phase boundary.
+- **THE LANE CANNOT CONNECT, and no code change here will fix it.** PayPal's third-party read
+  surface is the `partner-transactions` resource, named in the published spec with **no published
+  operation**. It cannot be built from public documentation, so `beginConnect` refuses. Resolving it
+  is a conversation with the assigned partner manager (28-25), not an engineering task — and the
+  tempting shortcut, sealing the app's own client-credentials token as a tenant connection, is the
+  data-disclosure defect this whole lane exists to prevent.
+- **The exact read-only feature package is still not documented as self-serve.** No public page says
+  how to enable `ADVANCED_TRANSACTIONS_SEARCH`, and requested features must match the REST app's
+  configuration or onboarding errors. Agree the package with the partner manager before any live run.
+- **Invoices are OUT of the built read surface.** PayPal's feature enum has no read-only invoice
+  member (invariant 3). Transactions and balances are the whole rail.
+- **Rate limits are UNSOURCED.** PayPal's rate-limiting page renders no content to a non-JS fetch, so
+  the page size (100) and page cap (5) are this repository's conservative bounds, not PayPal's
+  numbers. Do not cite them as PayPal's.
+- **No refresh path exists.** PayPal's client-credentials flow issues no refresh token; an expired
+  access token is a dead connection, not something the connector renews behind the tenant's back.
+- PayPal is the most likely of the four to end as a permanent `parked` — which the release semantics
+  support: a parked PayPal must not block a subset release, but it *does* block Phase 28 completion
+  (REVN-03).
+- PayPal invoice dispatch, refunds and dispute changes are explicitly deferred by the phase boundary.
