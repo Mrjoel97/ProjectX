@@ -9,9 +9,17 @@
 //
 // ── Why every model call in here is free ─────────────────────────────────────
 // THE SEAM IS AN OPERATOR SIGNAL, NOT A SENTINEL, AND THIS SUITE NOW DRIVES THE OPERATOR SIGNAL.
-// `vaultDigest.offlineSeamAvailable()` is true only on a backend with NEITHER model key, which is
-// what convex-test is — and the top-level `beforeEach` deletes both keys so that is structural
-// rather than ambient (other suites in this package SET them and vitest reuses workers).
+// `offlineSeamAvailable()` (`convex/lib/models.ts` — `vaultDigest.ts` only imports it) is true only
+// when an operator has set `PIKAR_OFFLINE_FIXTURES=1` AND the backend holds NEITHER model key. The
+// top-level `beforeEach` below stubs the flag ON and deletes both keys, so both halves are
+// structural here rather than ambient (other suites in this package SET the keys and vitest reuses
+// workers).
+//
+// ⚠ THIS COMMENT PREVIOUSLY STATED THE SUPERSEDED PREDICATE — "true only on a backend with NEITHER
+// model key" — as present-tense fact, twelve lines above the `beforeEach` that the same commit
+// taught to stub the flag. Absence of a credential is a MISCONFIGURATION, not consent; a reader who
+// believed the old sentence would conclude that any keyless convex-test worker reaches the fixture,
+// which is exactly the behaviour that was removed.
 // It used to be `folder.name.includes("SMOKE::digest::")`, and this suite drove exactly that
 // channel — which is how a client-supplied, third-party-chosen string stayed a live model-path
 // selector through three remediation rounds. A test that drives the attack channel cannot see it.
@@ -712,8 +720,9 @@ the rest of the document`,
   });
 
   test("A FOLDER NAME carrying the sentinel takes the LIVE model path — it is a CLIENT argument", async () => {
-    // THE FIX THIS ROUND. `importDriveFolder({ driveFolderId, name })` stores `name` verbatim
-    // (`vaultDrive.ts:880`) and the browser sources it from `listDriveFolders`, which lists SHARED
+    // THE FIX THIS ROUND. `importDriveFolder({ driveFolderId, name })` takes `name` from the CLIENT
+    // (`vaultDrive.ts:705`) and stores it at `vaultDrive.ts:888` as `name.slice(0, 200)` — truncated
+    // only, so a leading sentinel survives — and the browser sources it from `listDriveFolders`, which lists SHARED
     // folders. So this string is exactly as attacker-controlled as the member text above; it only
     // LOOKED tenant-owned. On a deployment with a key it must reach the provider like any other.
     const t = await seeded();

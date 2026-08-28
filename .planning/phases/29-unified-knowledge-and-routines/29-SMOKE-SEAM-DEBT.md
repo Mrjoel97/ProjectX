@@ -34,7 +34,10 @@ fact about the deployment — never by the payload.** `packages/backend/convex/l
 > ```
 >
 > The literal `"1"`, not "is set": `PIKAR_OFFLINE_FIXTURES=""` and a leftover `=0` are the operator
-> saying no. `PIKAR_OFFLINE_FIXTURES` is registered in `lib/env.ts` `ENV_MANIFEST` at
+> saying no. **That value test now lives in ONE place — `lib/env.ts` `isOfflineFixtureConsent` —
+> because it was briefly decided in two with two different rules** (`missingEnv().fixturesActive`
+> used "non-blank", so `PIKAR_OFFLINE_FIXTURES=on` reported a LIVE fabrication seam on a deployment
+> whose fixture was OFF). `lib/models.test.ts` runs a table of literal values through BOTH sites. `PIKAR_OFFLINE_FIXTURES` is registered in `lib/env.ts` `ENV_MANIFEST` at
 > `tier: "fixture"`, so `missingEnv` reports it under `fixturesActive` and the readiness screen says
 > out loud that a fabrication seam is live (the `FAL_FIXTURE` precedent). **A keyless deployment
 > WITHOUT the flag now throws** — which is the honest answer for a backend that cannot synthesise.
@@ -77,6 +80,23 @@ as that folder's digest**, carrying a `ragEntryId` that reads as groundable.
 > missing entirely; both were added on 2026-08-28. #6 is the only one that is NOT coupled to the
 > chain below and can be closed on its own.
 
+**SEVERITY, STATED ONCE, BECAUSE THE NUMBERING BELOW IS BY MODULE AND READS LIKE A RANKING.**
+**#1, #2, #3, #4 and #5 are LIVE AND COMPLETELY UNGATED on a fully keyed production deployment
+today** — every one of them selects its fixture from CONTENT with no operator flag anywhere in the
+handler, so `PIKAR_OFFLINE_FIXTURES` does not restrain any of them. That is the whole point of this
+register: the digest gate (converted) is the ONLY one an operator signal now governs. Within that,
+the ordering that matters is by channel, not by module:
+
+| | Instance | Channel | Reachable today |
+|---|---|---|---|
+| worst | #4 `gmail.ts:370`, #5 `vaultGround.ts:48` | a TOOL ARGUMENT the model composes, inside a tool-bearing loop whose context carries retrieved documents and inbox text — where prompt injection actually lives | yes, no id or setup needed |
+| then | #1 `extractGraph`, #2 `identifyDoc`, #3 `embedDoc` | the ingested document's OWN text, so any Drive file a stranger shared in | yes, position 0 only |
+| lowest | #6 `knowledgeLlm` | a `question` argument with no production caller **as of this commit** | not yet |
+
+**#3 in particular is live and ungated on a fully landed path** (`d1e8826`, 2026-07-14 — six weeks
+older than this branch), and it is the one whose damage is an ABSENCE: a `ready` row with a
+`ragEntryId` that reads groundable and no vector behind it. An absence is what nobody notices.
+
 ### 1. `packages/backend/convex/vaultLlm.ts:135` — `extractGraph`
 
 | | |
@@ -113,6 +133,10 @@ as that folder's digest**, carrying a `ragEntryId` that reads as groundable.
 
 ### 5. `packages/backend/convex/vaultGround.ts:48` — `runVaultGround`
 
+> **RE-VERIFIED 2026-08-28 (wave-3 cleanup fix): this entry is accurate as written.** A model-composed
+> `SMOKE::` tool argument silently disables vault grounding for the turn — half (a) needs no valid id
+> and is reachable today; half (b) is still marked NOT VERIFIED and still is not.
+>
 > **PROMOTED FROM "not classified as debt" ON 2026-08-28.** It was excluded on the grounds that "the
 > content is the caller's own upload/query in the same request rather than a third party's stored
 > document". **That is the same justification that was proven wrong twice on the digest gate, and it

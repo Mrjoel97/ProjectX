@@ -159,8 +159,9 @@ function digestPrompt(folderName: string, members: readonly MemberMeta[]): strin
 // Drive file or email containing that string turned a real folder's digest into a fixture. The fix
 // moved the match to `folder.name`, justified as "the folder name is the tenant's own, chosen when
 // the folder is created". THAT JUSTIFICATION WAS FALSE. `vaultDrive.importDriveFolder` is a
-// `tenantAction` taking `name: v.string()` from the CLIENT (`vaultDrive.ts:697`), stored verbatim at
-// `vaultDrive.ts:880`, and the browser fills it in from `listDriveFolders` — which lists SHARED
+// `tenantAction` taking `name: v.string()` from the CLIENT (`vaultDrive.ts:705`), stored at
+// `vaultDrive.ts:888` as `name.slice(0, 200)` — truncated, not otherwise altered, so a sentinel at
+// the front survives — and the browser fills it in from `listDriveFolders` — which lists SHARED
 // folders whose names a THIRD PARTY chose. A stranger shares a folder called `SMOKE::digest::x`, the
 // tenant imports it, and the digest is fabricated — then STORED as a `vaultDocuments` row and SHOWN
 // to the tenant as that folder's digest, carrying a `ragEntryId` that reads as groundable.

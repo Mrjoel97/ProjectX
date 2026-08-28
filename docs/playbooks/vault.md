@@ -1,3 +1,38 @@
+> Last verified: 2026-08-28 (**WAVE-3 CLEANUP FIX — THE DRIFT GUARD WAS DECIDED, THE FIXTURE FLAG
+> STOPPED BEING DECIDED TWICE, AND THREE FALSE COMMENTS THE PREVIOUS ROUND LEFT BEHIND WERE FIXED.**
+>
+> **1. The copy-drift guard is a CHANNEL guard now, and says so.** `lib/models.test.ts`'s provider
+> scan claimed "the ONLY way to get a provider is the provider package's MODULE SPECIFIER". False,
+> and it was the fourth escapable iteration: `@ai-sdk/openai/internal` is a DOCUMENTED subpath
+> shipping the raw `OpenAIChatLanguageModel`, and a planted module holding a full private route
+> table through it left the suite 17/17 green. The regex now matches the package ROOT plus any
+> subpath tail and backtick specifiers, and the export-surface pin no longer enumerates spellings
+> (`export default`, `export async function`, `export let`, `export class` all walked through it).
+> **The absolute claim is DELETED, not re-worded**, and the two escapes a regex cannot close are
+> named in the test: a non-literal specifier (`import("@ai-sdk/" + "openai")`), and RAW HTTP — which
+> this repo DOES on a landed path, `vaultRag.ts`'s `embeddingV2` (~:230-270) picks provider, env-key
+> name and URL at runtime and calls `fetch` with zero provider imports. Nothing pins that adapter to
+> `lib/models.ts`, and an AST pass is what a real guard would need.
+>
+> **2. "Is the fixture seam on?" had two answers.** `lib/env.ts`'s `fixturesActive` used non-blank,
+> `lib/models.ts` used the literal `"1"`, so `PIKAR_OFFLINE_FIXTURES=on` (the spelling every other
+> fixture flag here takes) gave a readiness screen announcing a LIVE fabrication seam over a fixture
+> that was OFF, plus an unexplained `OPENROUTER_API_KEY is not set`. One predicate now —
+> `lib/env.ts` `isOfflineFixtureConsent` — imported by both, pinned by a table of literal values in
+> `models.test.ts` that fails if either site grows its own rule again.
+>
+> **3. False comments, corrected in source rather than only in the planning doc.**
+> `vaultDigest.test.ts`'s header stated the superseded credential-only predicate as present-tense
+> fact and attributed `offlineSeamAvailable` to the wrong module; `vaultDigest.ts`, that same test
+> and this playbook all still cited `vaultDrive.ts:697`/`:880` after the previous round's own report
+> identified them as wrong (`:705`/`:888`, and the store TRUNCATES to 200 chars rather than storing
+> "verbatim"). All fixed here.
+>
+> **Not fixed, recorded:** `vaultRag.embedDoc` (`vaultRag.ts:390`) still selects a fabrication path
+> from CONTENT with no operator gate at all, on a fully landed path — pre-existing (d1e8826,
+> 2026-07-14), disclosed, and instance #3 in `29-SMOKE-SEAM-DEBT.md`. It needs an owner, not a
+> cleanup patch.)
+
 > Last verified: 2026-08-28 (**WAVE-3 CLEANUP — THE DIGEST OFFLINE GATE NEEDED A THIRD FIX, BECAUSE
 > THE SECOND ONE TRADED AN ATTACKER-TRIGGERED FABRICATION FOR AN UNCONDITIONAL ONE.**
 >
@@ -90,7 +125,8 @@
 > stated grounds that a folder name is "the tenant's own, chosen at creation, and no member can write
 > it". `vaultDrive.importDriveFolder` takes `name: v.string()` FROM THE CLIENT and the browser
 > sources it from `listDriveFolders`, which lists SHARED folders named by a THIRD PARTY. The seam is
-> now `offlineSeamAvailable()` — no model credential on the deployment — and the suite drives that
+> now `offlineSeamAvailable()` — no model credential on the deployment (SUPERSEDED the same day: it
+> ALSO requires `PIKAR_OFFLINE_FIXTURES=1`, see the top entry) — and the suite drives that
 > instead of the attack channel. See `#### The offline seam` below. The OTHER four `SMOKE::` gates
 > (`vaultLlm.extractGraph`, `vaultLlm.identifyDoc`, `vaultRag.embedDoc`, `gmail.ts`) are STILL
 > content-selected and are deliberately NOT touched here: they are coupled to each other and to a
@@ -3323,20 +3359,39 @@ source set is exactly the READY members at build time.
 #### The offline seam
 
 **THE SEAM IS AN OPERATOR SIGNAL, NOT A SENTINEL.** `offlineSeamAvailable()` (`lib/models.ts`) —
-this deployment holds NEITHER `OPENAI_API_KEY` NOR `OPENROUTER_API_KEY` — is the whole gate, so
-nothing in any request, argument or document selects it and it is unreachable on a real deployment.
+an operator has set `PIKAR_OFFLINE_FIXTURES=1` **AND** this deployment holds NEITHER
+`OPENAI_API_KEY` NOR `OPENROUTER_API_KEY` — is the whole gate, so nothing in any request, argument
+or document selects it, and on a deployment that has a key it is unreachable whatever the flag says.
 `folder.name` is still the fixture's LABEL; it is data in the output, never the selector.
+
+⚠ **THIS PARAGRAPH PREVIOUSLY GAVE THE CREDENTIAL HALF AS "the whole gate".** That was the round-4
+predicate, and it made a deployment that merely LOST its keys fabricate every digest silently and
+suppress its own retry. The positive opt-in is the authority now and the credential check is the
+second belt — see the top entry of this playbook. The VALUE test is `lib/env.ts`'s
+`isOfflineFixtureConsent` (the literal `"1"`), shared with `missingEnv().fixturesActive` so the
+readiness screen and the seam cannot disagree about whether the seam is on. They did: at
+`PIKAR_OFFLINE_FIXTURES=on` the screen reported a LIVE fabrication seam over a fixture that was off.
 
 ⚠ **TWO EARLIER GATES FAILED HERE AND BOTH ARE WRITTEN DOWN BECAUSE THE SECOND ONE READ AS SAFE.**
 (a) `safePrompt.includes("SMOKE::digest::")` over the ASSEMBLED prompt — every member TITLE and a
 head slice of every member's TEXT, i.e. bytes a third party authored. (b) `folder.name.includes(...)`,
 justified in a comment as "the folder name is the tenant's own, chosen at creation". IT IS NOT:
 `vaultDrive.importDriveFolder` is a `tenantAction` whose `name: v.string()` comes from the CLIENT
-(`vaultDrive.ts:697`, stored verbatim at `:880`) and the browser fills it from `listDriveFolders`,
-which lists SHARED folders whose names A STRANGER CHOSE. Share a folder called `SMOKE::digest::x`,
-wait for the import, and the digest is fabricated — then STORED, EMBEDDED and served back through
-retrieval as a vault document saying "(offline fixture — no synthesis was performed)", with no model
-call, no spend and no trace that synthesis was skipped.
+(`vaultDrive.ts:705`, stored at `:888` as `name.slice(0, 200)` — truncated only, so a leading
+sentinel survives) and the browser fills it from `listDriveFolders`, which lists SHARED folders whose
+names A STRANGER CHOSE. Share a folder called `SMOKE::digest::x`, wait for the import, and the digest
+is fabricated — then STORED and DISPLAYED as a vault document saying "(offline fixture — no synthesis
+was performed)", with no model call, no spend and no trace that synthesis was skipped.
+
+⚠ **TWO CORRECTIONS TO THE SENTENCE ABOVE, MADE RATHER THAN SOFTENED.** (a) It read "STORED,
+EMBEDDED and served back through retrieval". It was never embedded: `smokeDigestFixture` begins
+`SMOKE::graph::` and `vaultRag.embedDoc` (`vaultRag.ts:390`) short-circuits ANY `SMOKE::` text to
+`{ entryId: "smoke::<hash>", costUsd: 0 }` with no vector, so the fabricated digest was invisible to
+vector search while holding a `ragEntryId` that READS groundable. (b) It cited `vaultDrive.ts:697`
+and `:880`; the real lines are `:705` (the `name: v.string()` arg) and `:888` (the store, which
+truncates to 200 chars and alters nothing else). Both were corrected in `29-SMOKE-SEAM-DEBT.md` a
+round earlier and left standing here — a citation that sends a reader to a `/**` and to an unrelated
+index query is the same defect class as a false claim.
 
 **The fixture must still start with `SMOKE::graph::`**: the digest is itself ingested, and that
 ingest's `vaultLlm.extractGraph` is only free when its text starts with that prefix at position 0
