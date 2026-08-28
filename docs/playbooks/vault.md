@@ -1,3 +1,61 @@
+> Last verified: 2026-08-28 (**DRIVE IS A KNOWLEDGE SOURCE, AND IT IS METADATA ONLY — BY
+> CONSTRUCTION, NOT BY POLICY** — Phase 29 plan 29-02 task 2).
+>
+> `searchDriveKnowledge` (`knowledgeVaultDrive.ts`) is the identity-less half of the same
+> adapter. Its only way in is `internal.vaultDrive.findInDriveForTenant`.
+>
+> **THE GATE MOVED, AND THAT IS THE PART TO READ.** `findInDrive`'s token gate is now
+> `runDriveSearch`, a module-private function BOTH search entry points route through — the
+> cockpit's identity-bearing `findInDrive` and the knowledge plane's identity-less
+> `findInDriveForTenant`. The alternative was a second copy of the scope-before-refresh ordering
+> in the new entry point, and a duplicated security ordering is how one copy silently drifts —
+> here the copy that would drift is the one nobody clicks. `dispatchGuard.test.ts` was updated
+> to follow the gate (it scanned `export const findInDrive` for `hasScope`, which after this
+> change would find no gate and pass VACUOUSLY) and a new assertion pins that neither wrapper
+> calls `freshAccessToken` or `hasScope` itself. `findInDrive`'s PUBLIC shape is byte-identical:
+> it projects the runner's rows back down to `{id, name, kind, readable}`, so the picker, the
+> cockpit tool and their 18 landed tests are untouched.
+>
+> **A DRIVE CITATION IS A POINTER, NOT A QUOTE.** Drive search returns metadata; a content
+> snippet would require downloading or exporting the file, which IS the import rail's paid path.
+> So the evidence text says so in words — *"Pikar read its file listing only — the contents were
+> not opened"* — because a bare file NAME as evidence text is a name a synthesizer will read as
+> a finding about the business. A folder never becomes evidence at all: it has no content, so it
+> could only ever be cited as "a folder with a matching name exists".
+>
+> **THE NO-PAID-PATH PROOF IS A SOURCE SCAN, AND IT HAS TO BE.** A stubbed `fetch` is free to
+> return anything, so no behavioural test can prove the ABSENCE of an import. `knowledgeVault
+> Drive.test.ts` strips comments from both `knowledgeVaultDrive.ts` and the `runDriveSearch`
+> slice of `vaultDrive.ts` and fails on `importDriveFolder`, `diffImport`, `openRun`,
+> `refuseFolder`, `exportOne`, `landFile`, `landFailure`, `reserve`, `startIngest`,
+> `vaultUpload`, `alt=media`, `files.export`, `/export` or `storage.store`; on any `method:` in
+> the runner (every Drive request is a GET — `driveFetch` passes headers only); and on any
+> `fetch(` or `googleapis.com` in the adapter, which reaches no network at all. A POSITIVE
+> CONTROL asserts each scan can see real code first, so none of it can pass on an empty string.
+>
+> **AVAILABILITY IS HONEST IN BOTH DIRECTIONS.** `not_connected` / `reauth` / `refresh_failed`
+> keep their own names and `drive_error` becomes `provider_error`; all four return the
+> `unavailable` arm, which structurally carries NO count, so "Drive needs reconnecting" can never
+> render as "there are no such files". A `nextPageToken` (more matches than one page holds) and
+> the per-source cap of 8 both return `partial/cap`. An unparseable or absent `modifiedTime` is
+> ABSENT, never 0 — an epoch-0 stamp reads as "very stale", a claim about the file we have no
+> basis for.
+>
+> **MEASURED:** `knowledgeVaultDrive vaultDrive dispatchGuard vaultGround` = 4 files / 84 tests
+> pass (`vaultDrive` 18, unchanged; `dispatchGuard` 22, was 21). `packages/backend pnpm
+> typecheck` clean. **12 further mutations applied, observed RED and reverted**, including an
+> unreachable Drive reported as `available/0` (4 red), `reauth` flattened into `not_connected`
+> (1), folders admitted as evidence (1), the scope check moved BELOW the refresh (3), the Drive
+> query-language escape dropped (3), `includeItemsFromAllDrives` dropped (2), a paid verb
+> referenced from the adapter (1), the gate re-implemented inside `findInDriveForTenant` (8) and
+> a `method:` added to the search request (1).
+>
+> **KNOWN GAPS:** a Drive citation carries no content, so a Drive-only answer can say a file
+> matched and nothing about what it says — the upgrade path is a separate, explicitly-costed
+> export of one user-chosen file, never a search-time download. `parentName` on `DriveSearchHit`
+> is still never populated (pre-existing). Nothing calls either adapter yet: the coordinator is
+> plan 29-06.
+
 > Last verified: 2026-08-28 (**THE VAULT IS NOW A KNOWLEDGE SOURCE AS WELL AS A GROUNDING SOURCE**
 > — Phase 29 plan 29-02 task 1, `packages/backend/convex/knowledgeVaultDrive.ts`).
 >

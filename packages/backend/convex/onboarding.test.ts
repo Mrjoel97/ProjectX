@@ -298,7 +298,19 @@ test("cross-tenant: tenant B never retrieves tenant A's committed profile (SC#3)
   // 26-11 added `origins` as a fifth parallel field. Kept EXHAUSTIVE on purpose: a foreign
   // tenant must get empty arrays and nothing else, so any future field that leaks a value
   // across the boundary reddens here instead of passing unnoticed.
-  expect(out).toEqual({ docIds: [], titles: [], origins: [], chunks: [], spine: null });
+  expect(out).toEqual({
+    docIds: [],
+    titles: [],
+    origins: [],
+    // 29-02 added three more parallel citation fields. Kept EXHAUSTIVE rather than loosened to a
+    // subset match: extending this list by hand is the deliberate cost of adding a parallel field,
+    // and it is what keeps a leaked value visible here.
+    kinds: [],
+    sourceUpdatedAt: [],
+    truncated: [],
+    chunks: [],
+    spine: null,
+  });
 
   // And tenant B's own gate is still open (A's profile is invisible to B).
   expect(await asTenant(t, "tenant_b").query(api.onboarding.status, {})).toEqual({

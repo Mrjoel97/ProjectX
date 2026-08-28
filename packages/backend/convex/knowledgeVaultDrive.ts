@@ -1,6 +1,5 @@
 /**
- * Phase 29 (KNOW-01) — the VAULT knowledge-source adapter. The DRIVE adapter joins it here in
- * plan 29-02 task 2.
+ * Phase 29 (KNOW-01) — the VAULT and DRIVE knowledge-source adapters.
  *
  * A thin adapter (CLAUDE.md §1) that turns two landed, bounded retrieval seams into the closed
  * `Evidence` + `KnowledgeSourceState` contract in `@pikar/core/knowledgeSearch`. Every honesty rule
@@ -9,11 +8,18 @@
  *
  * ── WHAT THIS MODULE DELIBERATELY DOES NOT DO ─────────────────────────────────────────────────
  *
- * **It does not retrieve.** Vault evidence comes from `internal.vaultGround.vaultGroundHydrated`,
- * because every bound worth having already lives behind that one door: hybrid `limit: 8` +
- * `vectorScoreThreshold: 0.2`, folder sealing applied BEFORE graph expansion, `GRAPH_HOP_CAP` and
- * the 1,500-per-doc / 8,000-total hydration budget. Reading the vault any other way would silently
- * drop all of them, so `knowledgeVaultDrive.test.ts` scans this source and fails if it ever tries.
+ * **It does not retrieve.** Vault evidence comes from `internal.vaultGround.vaultGroundHydrated`
+ * and Drive evidence from `internal.vaultDrive.findInDriveForTenant`, because every bound worth
+ * having already lives behind those two doors: hybrid `limit: 8` + `vectorScoreThreshold: 0.2`,
+ * folder sealing applied BEFORE graph expansion, `GRAPH_HOP_CAP`, the 1,500-per-doc / 8,000-total
+ * hydration budget, and on the Drive side scope-before-refresh, both shared-drive parameters and
+ * Drive query-language escaping. Reading either plane any other way would silently drop all of
+ * them, so `knowledgeVaultDrive.test.ts` scans this source and fails if it ever tries.
+ *
+ * **It does not fetch.** There is no `fetch` call in this file and no Drive URL. The only network
+ * it can reach is whatever `vaultDrive.ts` already reaches, which is `files.list` with no `method`,
+ * i.e. GET. Import, export, reservation, landing and ingest are not merely unused here — they are
+ * unreachable, and a source scan over both this module and `runDriveSearch` proves it.
  *
  * **It does not carry the Blueprint spine.** `vaultGroundHydrated` returns one; it is not a
  * document, it has no id, and citing it would attribute the product's own summary of the business
@@ -126,5 +132,77 @@ export const searchVaultKnowledge = internalAction({
     }
 
     return settle("vault", raw, { cap, providerError });
+  },
+});
+
+// ── Drive ─────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Every way the Drive read can fail to happen, mapped onto the closed `UnavailableReason` set.
+ * `drive_error` becomes `provider_error`; the three token states keep their own names, so "you
+ * never connected Drive" and "your grant needs widening" stay different sentences to the user.
+ */
+const DRIVE_UNAVAILABLE = {
+  not_connected: "not_connected",
+  reauth: "reauth",
+  refresh_failed: "refresh_failed",
+  drive_error: "provider_error",
+} as const;
+
+/**
+ * Drive evidence: file METADATA over the existing read-only grant. No bytes, ever.
+ *
+ * **THE EVIDENCE TEXT IS THE FILE'S OWN NAME AND TYPE, AND THAT IS THE HONEST CEILING.** Drive
+ * search returns metadata; a snippet of a document's contents would require downloading or
+ * exporting it, which is the import rail's paid path and is exactly what this adapter must be
+ * incapable of. So a Drive citation says "a file called X, of type Y, last modified Z matched your
+ * search" and never pretends to quote it. Stating that in the text is what stops a synthesizer
+ * treating a file NAME as a finding about the business.
+ *
+ * ponytail: no content snippet. Upgrade path if one is ever wanted, and it is not free: it needs a
+ * separate, explicitly-costed export of a single user-chosen file, not a search-time download.
+ */
+export const searchDriveKnowledge = internalAction({
+  args: { tenantId: v.string(), query: v.string() },
+  handler: async (ctx, { tenantId, query }): Promise<KnowledgeAdapterResult> => {
+    const now = Date.now();
+    const result = await ctx.runAction(internal.vaultDrive.findInDriveForTenant, {
+      tenantId,
+      query,
+    });
+
+    // Unreachable is NOT empty. The unavailable arm of `KnowledgeSourceState` carries no count at
+    // all, so "Drive needs reconnecting" can never be rendered as "there are no such files".
+    if (!result.ok)
+      return {
+        state: { status: "unavailable", source: "drive", reason: DRIVE_UNAVAILABLE[result.reason] },
+        evidence: [],
+      };
+
+    const raw: Evidence[] = [];
+    let providerError = false;
+
+    for (const row of result.rows) {
+      // A folder is not a document. It has no content of any kind, so it can only ever be cited as
+      // "a folder with a matching name exists", which is not evidence about the business.
+      if (row.kind !== "file") continue;
+      if (!validateSourceRef(row.id).ok) {
+        providerError = true;
+        continue;
+      }
+      raw.push({
+        evidenceId: `drive-${raw.length + 1}`,
+        source: "drive",
+        sourceRef: row.id,
+        label: row.name,
+        text: `Google Drive file "${row.name}" (${row.mimeType}) matched this search. Pikar read its file listing only — the contents were not opened.`,
+        authority: authorityFor("drive", {}),
+        ...(row.modifiedTime === undefined ? {} : { sourceUpdatedAt: row.modifiedTime }),
+        retrievedAt: now,
+      });
+    }
+
+    // `truncated` is Drive's own `nextPageToken`: there were more matches than one page held.
+    return settle("drive", raw, { cap: result.truncated, providerError });
   },
 });

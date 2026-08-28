@@ -419,10 +419,14 @@ test("llm.ts holds NO reference to the Approve gate or the fan-out at all (not e
 // the 403 on the very first click.
 test("every Drive action checks stored scope before the shared token refresh", () => {
   const src = readCode("vaultDrive.ts");
+  // 29-02: `findInDrive`'s gate moved into `runDriveSearch`, the ONE function both the cockpit
+  // tool and the identity-less knowledge adapter route through. Scanning the wrapper would now
+  // find no gate at all and pass vacuously, so the scan follows the gate — and the assertion
+  // below pins that neither wrapper grew a second copy of it.
   for (const fn of [
     "export const importDriveFolder",
     "export const listDriveFolders",
-    "export const findInDrive",
+    "async function runDriveSearch",
   ]) {
     const start = src.indexOf(fn);
     expect(start, `${fn} not found`).toBeGreaterThanOrEqual(0);
@@ -442,6 +446,28 @@ test("every Drive action checks stored scope before the shared token refresh", (
         `call. Checking after the refresh turns a permanent reconnect condition into a provider ` +
         `failure.`,
     ).toBeLessThan(tokenAt);
+  }
+});
+
+test("both Drive search entry points share ONE gate and neither re-implements it", () => {
+  const src = readCode("vaultDrive.ts");
+  for (const fn of ["export const findInDrive", "export const findInDriveForTenant"]) {
+    const start = src.indexOf(fn);
+    expect(start, `${fn} not found`).toBeGreaterThanOrEqual(0);
+    const rest = src.slice(start);
+    const end = rest.indexOf("\nexport const", 1);
+    const block = end >= 0 ? rest.slice(0, end) : rest;
+
+    expect(block, `${fn} does not route through runDriveSearch`).toContain("runDriveSearch(");
+    expect(
+      block,
+      `${fn} calls freshAccessToken itself — mutation: inline the token gate into either ` +
+        `wrapper. Two copies of a scope-before-refresh ordering is how one of them silently ` +
+        `drifts, and the identity-less knowledge path is the copy nobody clicks.`,
+    ).not.toMatch(/freshAccessToken\s*\(/);
+    expect(block, `${fn} checks hasScope itself instead of through the shared gate`).not.toContain(
+      "hasScope",
+    );
   }
 });
 

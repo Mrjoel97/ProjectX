@@ -304,6 +304,263 @@ describe("the landed retrieval bounds still hold through the adapter", () => {
   });
 });
 
+// ── 5. Drive contributes honest metadata, or a NAMED gap ─────────────────────
+
+const PRE_WIDENING_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+const FULL_SCOPE = `${PRE_WIDENING_SCOPE} https://www.googleapis.com/auth/drive.readonly`;
+
+const seedGrant = (t: T, scope: string, tenantId = TENANT) =>
+  t.run((ctx) =>
+    ctx.db.insert("gmailTokens", {
+      tenantId,
+      refreshToken: "refresh",
+      accessToken: "access",
+      expiresAt: NOW + 3_600_000,
+      scope,
+      updatedAt: NOW,
+    }),
+  );
+
+/** Stub Drive: the refresh POST answers a token, `/drive/v3/` answers this body. */
+function stubDrive(body: unknown) {
+  const spy = vi.fn(async (url: string) => {
+    if (!String(url).includes("/drive/v3/"))
+      return Response.json({ access_token: "fresh", expires_in: 3600 });
+    return Response.json(body);
+  });
+  vi.stubGlobal("fetch", spy);
+  return spy;
+}
+
+const searchDrive = (t: T, query: string, tenantId = TENANT) =>
+  t.action(internal.knowledgeVaultDrive.searchDriveKnowledge, { tenantId, query });
+
+const DRIVE_MODIFIED = "2026-08-01T10:00:00.000Z";
+
+describe("the drive adapter", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  test("a matched FILE becomes one evidence row with a stable ref, its mime and its modified time", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    stubDrive({
+      files: [
+        {
+          id: "1AbC_dEf",
+          name: "Q3 forecast",
+          mimeType: "application/pdf",
+          size: "42",
+          modifiedTime: DRIVE_MODIFIED,
+          capabilities: { canDownload: true },
+        },
+      ],
+    });
+
+    const out = await searchDrive(t, "forecast");
+    expect(out.state).toEqual({ status: "available", source: "drive", returned: 1 });
+    const e = out.evidence[0];
+    if (e === undefined) throw new Error("expected one evidence row");
+    expect(e.evidenceId).toBe("drive-1");
+    expect(e.source).toBe("drive");
+    expect(e.sourceRef).toBe("1AbC_dEf");
+    expect(e.label).toBe("Q3 forecast");
+    expect(e.authority).toBe("tenant_owned");
+    expect(e.sourceUpdatedAt).toBe(Date.parse(DRIVE_MODIFIED));
+    // A DRIVE CITATION IS A POINTER, NOT A QUOTE. The bytes are never opened, so the text says so
+    // in words — otherwise a synthesizer reads a file NAME as a finding about the business.
+    expect(e.text).toContain("Q3 forecast");
+    expect(e.text).toContain("application/pdf");
+    expect(e.text).toMatch(/contents were not opened/);
+  });
+
+  test("a folder is not a document and never becomes evidence", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    stubDrive({
+      files: [
+        { id: "folder1", name: "Forecasts", mimeType: "application/vnd.google-apps.folder" },
+        { id: "file1", name: "Q3 forecast", mimeType: "text/plain", modifiedTime: DRIVE_MODIFIED },
+      ],
+    });
+
+    const out = await searchDrive(t, "forecast");
+    expect(out.evidence.map((e) => e.sourceRef)).toEqual(["file1"]);
+    expect(out.state).toEqual({ status: "available", source: "drive", returned: 1 });
+  });
+
+  test("a file with no modifiedTime carries NO source time — absent is not fresh", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    stubDrive({ files: [{ id: "file1", name: "Undated", mimeType: "text/plain" }] });
+
+    const { evidence } = await searchDrive(t, "undated");
+    expect(evidence[0]?.sourceUpdatedAt).toBeUndefined();
+  });
+
+  test("more matches than one page holds is a PARTIAL read, and says so", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    stubDrive({
+      nextPageToken: "more",
+      files: [{ id: "file1", name: "Q3 forecast", mimeType: "text/plain" }],
+    });
+
+    const { state } = await searchDrive(t, "forecast");
+    expect(state).toEqual({ status: "partial", source: "drive", returned: 1, reason: "cap" });
+  });
+
+  test("nine matching files are cut to the per-source cap and reported partial", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    stubDrive({
+      files: Array.from({ length: 9 }, (_, n) => ({
+        id: `file${n}`,
+        name: `Forecast ${n}`,
+        mimeType: "text/plain",
+      })),
+    });
+
+    const { evidence, state } = await searchDrive(t, "forecast");
+    expect(evidence).toHaveLength(8);
+    expect(state).toEqual({ status: "partial", source: "drive", returned: 8, reason: "cap" });
+    expect(new Set(evidence.map((e) => e.evidenceId)).size).toBe(8);
+  });
+
+  // The KNOW-01 rule, on the plane where it matters most: a source we could not reach must never
+  // read as a source with nothing in it. The `unavailable` arm carries NO count at all.
+  test.each([
+    ["no grant at all", undefined, "not_connected"],
+    ["a pre-widening grant", PRE_WIDENING_SCOPE, "reauth"],
+  ])("%s is UNAVAILABLE with a named reason, never an empty read", async (_label, scope, reason) => {
+    const t = harness();
+    if (scope !== undefined) await seedGrant(t, scope);
+    const spy = stubDrive({ files: [] });
+
+    const out = await searchDrive(t, "forecast");
+    expect(out.state).toEqual({ status: "unavailable", source: "drive", reason });
+    expect(out.evidence).toEqual([]);
+    expect(out.state).not.toHaveProperty("returned");
+    // Scope is checked BEFORE the token refresh, so a pre-widening tenant never touches the network.
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  test("a Drive error is a provider gap, not an empty Drive", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (!String(url).includes("/drive/v3/"))
+          return Response.json({ access_token: "fresh", expires_in: 3600 });
+        return new Response(JSON.stringify({ error: { code: 500 } }), { status: 500 });
+      }),
+    );
+
+    const out = await searchDrive(t, "forecast");
+    expect(out.state).toEqual({
+      status: "unavailable",
+      source: "drive",
+      reason: "provider_error",
+    });
+    expect(out.evidence).toEqual([]);
+  });
+
+  test("two tenants: a grant belonging to one tenant answers nothing for the other", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE, TENANT);
+    const spy = stubDrive({ files: [{ id: "file1", name: "Theirs", mimeType: "text/plain" }] });
+
+    const out = await searchDrive(t, "forecast", OTHER);
+    expect(out.state).toEqual({
+      status: "unavailable",
+      source: "drive",
+      reason: "not_connected",
+    });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  test("the Drive query language is escaped and both shared-drive flags survive the adapter", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const spy = stubDrive({ files: [] });
+
+    await searchDrive(t, "O'Brien' or trashed=true or name contains '");
+    const call = spy.mock.calls.find(([url]) => String(url).includes("/drive/v3/"));
+    expect(call).toBeDefined();
+    const url = new URL(String(call?.[0]));
+    expect(url.searchParams.get("q")).toBe(
+      "(name contains 'O\\'Brien\\' or trashed=true or name contains \\'' or fullText contains 'O\\'Brien\\' or trashed=true or name contains \\'') and trashed=false",
+    );
+    expect(url.searchParams.get("supportsAllDrives")).toBe("true");
+    expect(url.searchParams.get("includeItemsFromAllDrives")).toBe("true");
+    expect(url.searchParams.get("pageSize")).toBe("20");
+  });
+});
+
+// ── 6. Drive knowledge reads are structurally incapable of a paid path ────────
+
+describe("no adapter branch can import, export, land, reserve or write to Drive", () => {
+  const read = (file: string) =>
+    readFileSync(new URL(`./${file}`, import.meta.url), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "");
+  const adapter = read("knowledgeVaultDrive.ts");
+  const driveModule = read("vaultDrive.ts");
+  // The search runner only, sliced out of the import rail it shares a file with.
+  const start = driveModule.indexOf("async function runDriveSearch");
+  const runner = driveModule.slice(start, driveModule.indexOf("\nexport const", start + 1));
+
+  test("the scans can see real code — POSITIVE CONTROL", () => {
+    expect(adapter).toContain("searchDriveKnowledge");
+    expect(adapter).toContain("internal.vaultDrive.findInDriveForTenant");
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(runner).toContain("hasScope");
+    expect(runner).toContain("escapeDriveQueryLiteral");
+    expect(runner.length).toBeGreaterThan(200);
+  });
+
+  test.each([
+    ["knowledgeVaultDrive.ts", () => adapter],
+    ["runDriveSearch", () => runner],
+  ])("%s names no import, export, landing, reservation or ingest verb", (_label, get) => {
+    for (const forbidden of [
+      "importDriveFolder",
+      "diffImport",
+      "openRun",
+      "refuseFolder",
+      "exportOne",
+      "landFile",
+      "landFailure",
+      "reserve",
+      "startIngest",
+      "vaultUpload",
+      "alt=media",
+      "files.export",
+      "/export",
+      "storage.store",
+    ])
+      expect(
+        get(),
+        `a Drive KNOWLEDGE read reaches \`${forbidden}\`. Search is metadata-only and free; ` +
+          `import downloads bytes, takes a reservation and spends money. The two must not be ` +
+          `reachable from one another.`,
+      ).not.toContain(forbidden);
+  });
+
+  test("no non-GET Drive call exists on either side of the seam", () => {
+    // `driveFetch` passes only headers, so every Drive request is a GET. A `method:` appearing in
+    // the runner would be the first write verb in the read path.
+    expect(runner).not.toMatch(/\bmethod\s*:/);
+    // The adapter reaches no network at all: no fetch, no URL, no endpoint constant.
+    expect(adapter).not.toMatch(/\bfetch\s*\(/);
+    expect(adapter).not.toContain("googleapis.com");
+  });
+});
+
 // ── 5. The adapter cannot bypass the one retrieval seam ───────────────────────
 
 describe("the vault adapter has exactly one way in", () => {
