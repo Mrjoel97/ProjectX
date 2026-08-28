@@ -15,12 +15,14 @@
 //   • NO MODEL. Nothing here calls an LLM, and nothing downstream may let one produce, adjust or
 //     repair a figure this returns — only explain one.
 //
-// WHY THE GATE IS CHECKED ON EVERY READ. `com.intuit.quickbooks.accounting` grants the whole
-// Accounting API, and on 2026-08-27 the owner ACCEPTED that blast radius on an attestation nothing
-// in this repository can check. `providerGates` resolving anything other than `passed` therefore
-// means no request leaves — an admission is a permission to build, not evidence that a live read
-// and a live revoke were ever observed (that is 28-23). Failing closed here is what keeps those two
-// axes from collapsing into one.
+// WHY THE GATE IS CHECKED ON EVERY TENANT-FACING READ, AND ONLY THERE.
+// `com.intuit.quickbooks.accounting` grants the whole Accounting API, and on 2026-08-27 the owner
+// ACCEPTED that blast radius on an attestation nothing in this repository can check. So the three
+// exported tenant actions go through `gatedRead` and return `unavailable` unless `providerGates`
+// resolves `passed` — an admission is permission to build, not evidence that a live read and a
+// live revoke were ever observed. The lane-evidence action `quickbooksReadEvidence` deliberately
+// does NOT consult the gate, because it is the thing that PRODUCES the evidence 28-23 seals on;
+// see `gatedRead`'s note.
 //
 // NOT "use node": `readPages` uses the platform fetch and `openCredential` uses `crypto.subtle`,
 // both available in the default Convex runtime.
@@ -62,7 +64,7 @@ import {
 import type { Result } from "@pikar/core/result";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { ActionCtx } from "./_generated/server";
+import { type ActionCtx, internalAction } from "./_generated/server";
 import { readPages } from "./connectorFetch";
 import { requireCredentialKey } from "./connectorCredentials";
 import { tenantAction } from "./lib/functions";
@@ -215,19 +217,6 @@ async function readEntityRows<K extends keyof Rows>(
     windowDays: number;
   },
 ): Promise<ReadOutcome<Rows[K]>> {
-  const gate = await ctx.runQuery(internal.providerGates.gateEligibility, {
-    provider: "quickbooks",
-    environment: args.environment,
-  });
-  // An admission is permission to BUILD. A passed lane is evidence a live read and a live revoke
-  // were observed. Only the second one lets a request leave.
-  if (gate.state !== "passed") {
-    return {
-      projection: unavailable(`the QuickBooks lane is ${gate.state}`),
-      rejected: 0,
-    };
-  }
-
   const token = await accessTokenFor(ctx, args);
   if (!token.ok) return { projection: unavailable(token.because), rejected: 0 };
 
@@ -317,6 +306,39 @@ async function readEntityRows<K extends keyof Rows>(
   return { projection, rejected: normalized.rejected };
 }
 
+/**
+ * The gate, checked on every TENANT-FACING read — and deliberately NOT inside `readEntityRows`.
+ *
+ * The two axes only stay apart if the thing that EARNS a pass can run before the pass exists.
+ * `providerGates.lane` is `passed` once a controlled live read and a live revoke have been
+ * observed, and 28-23 observes them by driving `quickbooksReadEvidence` below. If the shared read
+ * path refused on `lane !== "passed"`, the only way to ever seal the lane would be to seal it
+ * FIRST and verify afterwards — which publishes QuickBooks into `availableProviders` for every
+ * tenant on evidence nobody has, i.e. exactly the decorative seal `providerGates` exists to
+ * prevent. 28-05 reached the same conclusion for HubSpot an hour earlier; the gate governs
+ * CONSUMPTION, and consumption is these three actions.
+ */
+async function gatedRead<K extends keyof Rows>(
+  ctx: ActionCtx,
+  args: {
+    tenantId: string;
+    environment: "sandbox" | "production";
+    entity: K & QbEntity;
+    windowDays: number;
+  },
+): Promise<ReadOutcome<Rows[K]>> {
+  const gate = await ctx.runQuery(internal.providerGates.gateEligibility, {
+    provider: "quickbooks",
+    environment: args.environment,
+  });
+  // An admission is permission to BUILD. A passed lane is evidence a live read and a live revoke
+  // were observed. Only the second one lets a tenant see a figure.
+  if (gate.state !== "passed") {
+    return { projection: unavailable(`the QuickBooks lane is ${gate.state}`), rejected: 0 };
+  }
+  return readEntityRows(ctx, args);
+}
+
 const windowArg = v.optional(v.number());
 
 const clampWindow = (days: number | undefined): number => {
@@ -331,7 +353,7 @@ const clampWindow = (days: number | undefined): number => {
 export const readEntity = tenantAction({
   args: { environment: environmentArg, entity: entityArg, windowDays: windowArg },
   handler: async (ctx, { environment, entity, windowDays }) => {
-    const outcome = await readEntityRows(ctx, {
+    const outcome = await gatedRead(ctx, {
       tenantId: ctx.tenantId,
       environment,
       entity,
@@ -360,7 +382,7 @@ export type ReceivablesSummary = FinanceResult<Aging | null>;
 export const receivablesSummary = tenantAction({
   args: { environment: environmentArg, windowDays: windowArg },
   handler: async (ctx, { environment, windowDays }): Promise<ReceivablesSummary> => {
-    const { projection } = await readEntityRows(ctx, {
+    const { projection } = await gatedRead(ctx, {
       tenantId: ctx.tenantId,
       environment,
       entity: "Invoice",
@@ -394,7 +416,7 @@ export const receivablesSummary = tenantAction({
 export const cashOnHand = tenantAction({
   args: { environment: environmentArg },
   handler: async (ctx, { environment }): Promise<FinanceResult<Money | null>> => {
-    const { projection } = await readEntityRows(ctx, {
+    const { projection } = await gatedRead(ctx, {
       tenantId: ctx.tenantId,
       environment,
       entity: "Account",
@@ -419,3 +441,66 @@ export const cashOnHand = tenantAction({
 });
 
 export type { ReadWindow };
+
+// ── Lane evidence (28-23) ─────────────────────────────────────────────────────────────────
+
+/**
+ * The sanitized shape `scripts/smoke-quickbooks-read.mjs` records as lane evidence.
+ *
+ * COUNTS, STATES AND CLOSED LABELS ONLY (CLAUDE.md §4). No amount, no customer, no realm id, no
+ * token, and not one byte of an Intuit payload — `refCount` rather than the refs themselves,
+ * because even an opaque provider id is a company's own identifier once it lands in a file that
+ * gets pasted into a plan.
+ */
+export type QbReadEvidence = {
+  entity: QbEntity;
+  state: Projection<unknown>["state"];
+  itemCount: number;
+  capped: boolean;
+  missing: string | null;
+  rejected: number;
+  retrievedAt: number | null;
+  refCount: number;
+};
+
+/**
+ * One entity read, reduced to evidence. INTERNAL — no browser reaches it — and UNGATED, because
+ * this is what earns the lane its pass (see `gatedRead`). It cannot widen anything: it still goes
+ * through `readEntityRows`, so the same allow-list, the same closed entity union, the same caps
+ * and the same GET-only transport apply. The only thing it skips is the `lane === "passed"` check
+ * that would otherwise make the pass a prerequisite for the evidence behind it.
+ */
+export const quickbooksReadEvidence = internalAction({
+  args: { tenantId: v.string(), environment: environmentArg, entity: entityArg },
+  handler: async (ctx, { tenantId, environment, entity }): Promise<QbReadEvidence> => {
+    const { projection, rejected } = await readEntityRows(ctx, {
+      tenantId,
+      environment,
+      entity,
+      windowDays: QB_DEFAULT_WINDOW_DAYS,
+    });
+    if (projection.state === "unavailable") {
+      return {
+        entity,
+        state: "unavailable",
+        itemCount: 0,
+        capped: false,
+        // `because` is this repo's own closed prose, never a provider message.
+        missing: projection.because,
+        rejected,
+        retrievedAt: null,
+        refCount: 0,
+      };
+    }
+    return {
+      entity,
+      state: projection.state,
+      itemCount: projection.items.length,
+      capped: projection.meta.capped,
+      missing: projection.state === "partial" ? projection.missing : null,
+      rejected,
+      retrievedAt: projection.meta.retrievedAt,
+      refCount: projection.meta.sources.length,
+    };
+  },
+});

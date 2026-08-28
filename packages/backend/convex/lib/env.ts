@@ -125,6 +125,32 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     tier: "feature",
     whatBreaks: "The HubSpot consent callback lands nowhere.",
   },
+  {
+    name: "QUICKBOOKS_CLIENT_ID",
+    tier: "feature",
+    whatBreaks: "Connecting a QuickBooks company, and therefore every accounting read.",
+  },
+  {
+    name: "QUICKBOOKS_CLIENT_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "The Intuit token exchange, the rolling refresh and the revoke. Disconnect stops working upstream.",
+  },
+  {
+    name: "QUICKBOOKS_REDIRECT_URI",
+    tier: "feature",
+    whatBreaks: "The Intuit consent callback lands nowhere.",
+  },
+  {
+    // Not a secret and not an endpoint: the ISO 4217 code the company's books are kept in, which
+    // QuickBooks omits from every row when multicurrency is off. Unset, reads assume USD — right
+    // for Intuit's sandbox companies and wrong for a euro-denominated tenant, which is a WRONG
+    // FIGURE rather than an outage, so it is classified even though nothing throws without it.
+    name: "QUICKBOOKS_HOME_CURRENCY",
+    tier: "feature",
+    whatBreaks:
+      "Nothing visibly. Amounts from a non-USD company are labelled USD, which mislabels money rather than failing.",
+  },
 
   // ── Governed delivery ───────────────────────────────────────────────────────────────────────
   {
@@ -316,6 +342,9 @@ export const ORIGIN_ENV: readonly string[] = [
   // Same class as the two above: an OAuth callback minted from an ephemeral preview URL stops
   // resolving, and the consent that used it can never come back.
   "HUBSPOT_OAUTH_REDIRECT_URI",
+  // Intuit matches the redirect URI EXACTLY against the one registered on the app, so an ephemeral
+  // origin here does not merely fail to resolve — the exchange is refused before the browser moves.
+  "QUICKBOOKS_REDIRECT_URI",
 ];
 
 /**

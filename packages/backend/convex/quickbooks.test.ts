@@ -1373,3 +1373,85 @@ describe("derived figures", () => {
     expect(cash.confidence).toBe("unavailable");
   });
 });
+
+describe("the lane-evidence action — what 28-23 drives, and what it may record", () => {
+  test("it reads WITHOUT a passed lane, or the seal could never be earned", async () => {
+    const { t, tenantA } = await harness();
+    // NO sealPassedGate: this is the state the lane is actually in on 2026-08-28.
+    await seedConnection(t, tenantA);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(queryResponse("Invoice", [invoiceRow()])));
+
+    const evidence = await t.action(internal.quickbooks.quickbooksReadEvidence, {
+      tenantId: tenantA,
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    // Gating this on `lane === "passed"` would mean sealing the lane BEFORE observing the read it
+    // is sealed on — which publishes QuickBooks to every tenant on evidence nobody has.
+    expect(evidence.state).toBe("ready");
+    expect(evidence.itemCount).toBe(1);
+  });
+
+  test("the tenant-facing read is still refused in that same state", async () => {
+    const { t, asA, tenantA } = await harness();
+    await seedConnection(t, tenantA);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const projection = await asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    expect(projection.state).toBe("unavailable");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("evidence carries counts and closed labels — no amount, no realm, no id, no token", async () => {
+    const { t, tenantA } = await harness();
+    await seedConnection(t, tenantA);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(queryResponse("Invoice", [invoiceRow()])));
+
+    const evidence = await t.action(internal.quickbooks.quickbooksReadEvidence, {
+      tenantId: tenantA,
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    // Whole-value compare, not a substring scan: a field added later is a field this test sees.
+    expect(Object.keys(evidence).sort()).toEqual([
+      "capped",
+      "entity",
+      "itemCount",
+      "missing",
+      "refCount",
+      "rejected",
+      "retrievedAt",
+      "state",
+    ]);
+    const text = JSON.stringify(evidence);
+    expect(text).not.toContain(REALM);
+    expect(text).not.toContain(ACCESS_1);
+    // The refs are COUNTED, never carried.
+    expect(evidence.refCount).toBe(1);
+  });
+
+  test("an unavailable read is reported as unavailable, never as an empty ledger", async () => {
+    const { t, tenantA } = await harness();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const evidence = await t.action(internal.quickbooks.quickbooksReadEvidence, {
+      tenantId: tenantA,
+      environment: "sandbox",
+      entity: "Invoice",
+    });
+
+    expect(evidence.state).toBe("unavailable");
+    expect(evidence.itemCount).toBe(0);
+    expect(evidence.retrievedAt).toBeNull();
+    expect(evidence.missing).toBe("this tenant has no QuickBooks connection");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

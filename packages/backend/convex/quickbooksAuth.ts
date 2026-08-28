@@ -33,7 +33,7 @@ import {
 } from "@pikar/revenue";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
+import { type ActionCtx, internalAction } from "./_generated/server";
 import {
   hashExternalAccountId,
   requireCredentialKey,
@@ -556,13 +556,19 @@ export const refreshConnection = internalAction({
  * The user's sentence is "we deleted our copy and Intuit confirmed" or "we deleted our copy and
  * could not reach Intuit", and those are different sentences.
  */
-export const disconnect = tenantAction({
-  args: { environment: environmentArg },
-  handler: async (
-    ctx,
-    { environment },
-  ): Promise<{ cleared: boolean; upstream: string; statusCode: number | null }> => {
-    const connection = { tenantId: ctx.tenantId, provider: "quickbooks", environment } as const;
+type DisconnectOutcome = { cleared: boolean; upstream: string; statusCode: number | null };
+
+/**
+ * The body of the disconnect, shared by the tenant-facing action and the lane runner's internal
+ * one. ONE implementation on purpose: a second revoke path is a second chance for revoke-ordering
+ * to drift, and the ordering — upstream FIRST, local clear second — is the invariant.
+ */
+async function revokeAndClear(
+  ctx: ActionCtx,
+  { tenantId, environment }: { tenantId: string; environment: "sandbox" | "production" },
+): Promise<DisconnectOutcome> {
+  {
+    const connection = { tenantId, provider: "quickbooks", environment } as const;
     const row = await ctx.runQuery(internal.connectorCredentials.get, connection);
 
     let attempted = false;
@@ -575,7 +581,7 @@ export const disconnect = tenantAction({
           await openCredential(
             key,
             {
-              tenantId: ctx.tenantId,
+              tenantId,
               provider: "quickbooks",
               connectionId: row.connectionId,
               environment,
@@ -616,5 +622,21 @@ export const disconnect = tenantAction({
       ...(statusCode === undefined ? {} : { statusCode }),
     });
     return { cleared: cleared.cleared, upstream: outcome.upstream, statusCode: statusCode ?? null };
-  },
+  }
+}
+
+export const disconnect = tenantAction({
+  args: { environment: environmentArg },
+  handler: (ctx, { environment }): Promise<DisconnectOutcome> =>
+    revokeAndClear(ctx, { tenantId: ctx.tenantId, environment }),
+});
+
+/**
+ * The lane runner's revoke (`scripts/smoke-quickbooks-read.mjs --revoke`, consumed by 28-23).
+ * Internal, so no browser reaches it. DESTRUCTIVE: it revokes the real grant upstream.
+ */
+export const disconnectForTenant = internalAction({
+  args: { tenantId: v.string(), environment: environmentArg, confirm: v.literal("revoke") },
+  handler: (ctx, { tenantId, environment }): Promise<DisconnectOutcome> =>
+    revokeAndClear(ctx, { tenantId, environment }),
 });
