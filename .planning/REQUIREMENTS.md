@@ -206,6 +206,19 @@ boundary inside Pikar.*
 - [ ] **REVN-05**: Cash-flow and payroll-confidence results are computed in deterministic, tested pure TypeScript over validated normalized financial inputs with explicit provenance, coverage windows, confidence semantics and accountant-review disclaimers — never by LLM arithmetic
 - [ ] **REVN-06**: Invoice reminders are drafts until a user approves a governed plan; sending, refunds, credits, CRM mutations and financial writes are unreachable from read-only revenue specialists
 
+### Pikar Billing, Invoicing and Tax (minted 2026-08-28 — Phase 28.1)
+
+Pikar charging for ITSELF, from its OWN Stripe merchant account. Distinct from REVN-03, which reads
+a TENANT’s Stripe account read-only. Opposite direction, opposite trust boundary, separate names
+(`billing*` / `BILLING_STRIPE_*` here; `stripe*` / `STRIPE_APP_*` there).
+
+- [ ] **BILL-01**: A tenant subscribes through Stripe-hosted Checkout with a free trial and a card on file that auto-converts; the tenant↔Stripe-customer mapping is stored on both sides and neither a Stripe customer without a tenant nor a tenant without a customer can be silently invented — an unmatched customer is dead-lettered by ref, never auto-provisioned
+- [ ] **BILL-02**: The webhook receiver verifies Stripe signatures before parsing, and is idempotent by construction — a `stripeEvents` row keyed on `event.id` is inserted before any side effect, so a Stripe retry or a Convex action retry cannot double-apply; every outbound mutating Stripe call carries an idempotency key
+- [ ] **BILL-03**: Billing outcomes reconcile into the existing append-only ledger, which remains the book of record; bank-transfer revenue is NOT recorded as `actual` on `invoice.paid` alone, because those funds land in the customer cash balance and settle later — cash-balance and funding-reversal events are handled, and unapplied funds are visible rather than assumed collected
+- [ ] **BILL-04**: Invoices are created programmatically on a schedule (accumulated invoice items rolled into one document), branded, and payable by card or bank transfer through the Stripe-hosted invoice page; no custom 3DS or card-data handling exists anywhere in the codebase
+- [ ] **BILL-05**: Tax posture is honest by construction — with no registrations, Stripe Tax runs in threshold-monitoring mode with the product tax category and head-office address configured, zero tax is reported as *not owed* rather than as *calculated*, and crossing a monitored threshold surfaces as an explicit alert rather than a silent continuation
+- [ ] **BILL-06**: Deleting a tenant terminates its billing relationship (no subscription keeps charging a deleted tenant), and all billing secrets live in the Convex deployment env, classified in `ENV_MANIFEST`, with no development fallback
+
 ### Unified Knowledge and Routines
 
 - [ ] **KNOW-01**: One tenant-scoped search experience decomposes a query across native Pikar sources (Vault, Drive, Gmail and landed CRM/support sources), returns cited and deduplicated answers with source authority/freshness/confidence, and names unavailable or partial sources honestly
@@ -366,6 +379,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PACK-02 | Phase 27 | Pending |
 | PACK-03 | Phase 27 | Pending |
 | PACK-04 | Phase 27 | Pending |
+| BILL-01 | Phase 28.1 | Pending |
+| BILL-02 | Phase 28.1 | Pending |
+| BILL-03 | Phase 28.1 | Pending |
+| BILL-04 | Phase 28.1 | Pending |
+| BILL-05 | Phase 28.1 | Pending |
+| BILL-06 | Phase 28.1 | Pending |
 | REVN-01 | Phase 28 | Pending |
 | REVN-02 | Phase 28 | Pending |
 | REVN-03 | Phase 28 | Pending |

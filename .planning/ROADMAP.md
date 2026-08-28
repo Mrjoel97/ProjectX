@@ -182,7 +182,7 @@ Plans:
 **Goal:** Charge for Pikar itself — a Stripe-hosted subscription with a card-on-file trial, invoices
 that B2B customers can pay by bank transfer, and an honest tax posture — with our own append-only
 ledger, not Stripe, remaining the book of record.
-**Requirements**: TBD (run /gsd:plan-phase 28.1)
+**Requirements**: BILL-01, BILL-02, BILL-03, BILL-04, BILL-05, BILL-06
 **Depends on:** Phase 28 only for FILENAME separation, not for function. Phase 28 builds a READ-ONLY
 connector into a TENANT’s Stripe account (`convex/stripe*.ts`, `STRIPE_APP_*`); this phase bills from
 **Pikar’s own merchant account** (`convex/billing*.ts`, `packages/billing/`, `BILLING_STRIPE_*`).
