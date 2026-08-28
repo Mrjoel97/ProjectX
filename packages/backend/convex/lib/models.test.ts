@@ -10,6 +10,7 @@
 // So these tests assert the RESOLVED PROVIDER, not that a function was called: `.provider` and
 // `.modelId` are what the AI SDK actually sends the request with.
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { missingEnv } from "./env";
 import { NODE_ONLY_MODEL_PREFIX, offlineSeamAvailable, resolveModel } from "./models";
 
 // A key is needed only to CONSTRUCT the provider; nothing here makes a request.
@@ -128,6 +129,48 @@ describe("offlineSeamAvailable is a POSITIVE operator opt-in, not the absence of
     expect(seam("0", undefined, undefined)).toBe(false);
     expect(seam("", undefined, undefined)).toBe(false);
   });
+
+  test("THE SEAM AND THE READINESS SCREEN CANNOT DISAGREE ABOUT WHETHER IT IS ON", () => {
+    // THE DEFECT, as a value. "Is this fixture seam on?" was decided twice with two rules:
+    // `offlineSeamAvailable()` wanted the literal "1"; `missingEnv().fixturesActive` used the
+    // generic non-blank test. At `PIKAR_OFFLINE_FIXTURES=on` — the spelling every other fixture
+    // flag in this repo takes (`FAL_FIXTURE`, and `env.test.ts` uses the value "on") — BOTH halves
+    // of the contradiction held at once: a readiness screen saying a fabrication seam was LIVE and
+    // a fixture that was silently OFF, plus an unexplained `OPENROUTER_API_KEY is not set`.
+    //
+    // Expected values are LITERALS, so this is not the two sites agreeing with each other about
+    // nothing: the third column is the answer, and the assertion is that BOTH sites give it.
+    const cases: Array<[string | undefined, boolean]> = [
+      ["1", true],
+      [" 1 ", true],
+      ["on", false],
+      ["true", false],
+      ["0", false],
+      ["", false],
+      [undefined, false],
+    ];
+    for (const [value, expected] of cases) {
+      vi.stubEnv("PIKAR_OFFLINE_FIXTURES", value);
+      vi.stubEnv("OPENAI_API_KEY", undefined);
+      vi.stubEnv("OPENROUTER_API_KEY", undefined);
+      expect(offlineSeamAvailable(), `the SEAM at ${JSON.stringify(value)}`).toBe(expected);
+      expect(
+        missingEnv((n) => process.env[n]).fixturesActive.includes("PIKAR_OFFLINE_FIXTURES"),
+        `the READINESS SCREEN at ${JSON.stringify(value)}`,
+      ).toBe(expected);
+    }
+
+    // THE ONE DELIBERATE ASYMMETRY, pinned so it stays a decision rather than becoming the next
+    // divergence: the screen reports THE FLAG, the seam ANDs the flag with "neither model key".
+    // On a keyed deployment the operator HAS consented and the seam is inert — which is what the
+    // manifest row's `whatBreaks` says ("Ignored while either model key is set") — and a fixture
+    // warning that is louder than the seam is the safe direction for this one.
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+    vi.stubEnv("OPENAI_API_KEY", "sk-live");
+    vi.stubEnv("OPENROUTER_API_KEY", undefined);
+    expect(offlineSeamAvailable()).toBe(false);
+    expect(missingEnv((n) => process.env[n]).fixturesActive).toContain("PIKAR_OFFLINE_FIXTURES");
+  });
 });
 
 describe("no module keeps its own copy of the route table", () => {
@@ -175,24 +218,48 @@ describe("no module keeps its own copy of the route table", () => {
   });
 
   /**
-   * THE RENAME-PROOF GUARD, AND THE REASON IT REPLACED A CALL-SHAPE SCAN.
+   * THE PROVIDER-IMPORT CHANNEL GUARD — a CHANNEL guard, and the claim is now sized to that.
    *
    * The scan below (`DYNAMIC_MODEL_ROUTE`) is on its third iteration and was STILL escapable on all
    * three, because it hardcodes the CALLEE SPELLING. Both of these beat it, and were run against it:
    *   `createOpenAI({ apiKey })(id.replace(/^openai\//, ""))`  — the identifier before `(` is `)`
    *   `const P = createOpenAI({ apiKey }); P(id.slice(7))`      — the provider under a local alias
-   * A module holding both, planted under `convex/`, left the whole guard 14/14 GREEN.
+   * A module holding both, planted under `convex/`, left the whole guard 14/14 GREEN. This one does
+   * not read the call at all: to route with an AI-SDK provider a module must first IMPORT one, and
+   * the specifier is a string a rename does not touch.
    *
-   * This one does not read the call at all. To route a model id to a provider a module must first
-   * HAVE a provider, and the only way to get one is the provider package's MODULE SPECIFIER — a
-   * string literal in an import/`import()`/`require`, which no rename touches. So the invariant is
-   * an import invariant, and the allow-list is five files that are named here as LITERALS.
+   * ⚠ THE PREVIOUS VERSION OF THIS PARAGRAPH SAID "the ONLY way to get a provider is the provider
+   * package's MODULE SPECIFIER". THAT WAS FALSE, IT WAS THE FOURTH ESCAPABLE ITERATION OF THIS
+   * GUARD, AND IT IS DELETED RATHER THAN RE-WORDED. Verified escapes, each run against the old
+   * regex `/["'](?:@ai-sdk\/[a-z0-9-]+|…)["']/`:
+   *   • `import { OpenAIChatLanguageModel } from "@ai-sdk/openai/internal";` — a DOCUMENTED subpath
+   *     export (`node_modules/@ai-sdk/openai/package.json` declares `"./internal"`) shipping the raw
+   *     model class. The old regex anchored on the closing quote, so any `/subpath` tail was
+   *     invisible, and the capitalised class name also dodged `DYNAMIC_MODEL_ROUTE`'s alternation.
+   *     A planted module holding a full private route table left the suite 17/17 GREEN.
+   *   • `` await import(`@ai-sdk/openai`) `` — a template literal, not `"` or `'`.
+   *   • `export default openai;` in THIS file — see the export-surface pin below.
+   * The first two are closed by the regex now (subpath tail + backtick). The third is closed by the
+   * pin. WHAT IS STILL OPEN, stated because a tripwire that reads as protection and is not is worse
+   * than an acknowledged gap:
+   *   (i)  A NON-LITERAL specifier — `await import("@ai-sdk/" + "openai")`. A regex cannot see a
+   *        concatenation; only an AST pass could, and that is the upgrade path if this ever matters.
+   *   (ii) RAW HTTP, which needs no provider package at all — and this repo DOES IT TODAY, on a
+   *        landed path: `vaultRag.ts`'s `embeddingV2` (~:230-270) picks provider label, env-key NAME
+   *        and endpoint URL from a runtime decision and calls `fetch`, holding zero provider
+   *        imports. It is deliberate (an ai@6/@7 major skew, documented there), but it means "no
+   *        module holds a provider" was never true of this codebase. Nothing pins that adapter to
+   *        this table.
+   *   (iii) A module importing a provider that an allow-listed file RE-EXPORTS. Closed for THIS
+   *        file by the export-surface pin below — the only one a converted module imports from —
+   *        and open for the other four.
    *
-   * CEILING (stated, not claimed away): a module could still obtain a provider by importing one
-   * that an allow-listed file RE-EXPORTS. The export-surface pin below closes that for this file,
-   * which is the only one a converted module has any reason to import from.
+   * SCOPE, also previously over-claimed: the glob is `../**\/*.ts` from `convex/lib`, so this sees
+   * `convex/` ONLY. `packages/<pkg>/src` is not scanned (grepped by hand this round: no provider import
+   * there today).
    */
-  const PROVIDER_PACKAGE = /["'](?:@ai-sdk\/[a-z0-9-]+|@openrouter\/ai-sdk-provider)["']/;
+  const PROVIDER_PACKAGE =
+    /["'`](?:@ai-sdk\/[a-z0-9-]+|@openrouter\/ai-sdk-provider)(?:\/[^"'`]*)?["'`]/;
 
   /**
    * The ONLY files that may hold a provider. Literals, so adding a sixth is a deliberate act.
@@ -218,39 +285,81 @@ describe("no module keeps its own copy of the route table", () => {
       .map(([path]) => path)
       .sort();
 
-  test("NO MODULE CAN EVEN HOLD A PROVIDER except the five named here", () => {
+  test("no module under convex/ IMPORTS a model provider except the five named here", () => {
     // The rename-proof half. A private route table under any name, built by any call shape, needs
-    // this import — so this list going long IS the defect, before a single call is examined.
+    // this import — so this list going long IS the defect, before a single call is examined. It is
+    // "imports", not "holds": raw `fetch` reaches the same endpoints and is out of this channel.
     expect(providerImporters()).toEqual(PROVIDER_HOLDERS);
   });
 
-  test("THE IMPORT GUARD IS NOT VACUOUS: it sees the two shapes that beat the call scan", () => {
-    // Non-vacuity as a VALUE, not as a promise: the exact planted module, run through both guards.
-    // The call scan calls it clean; the import guard names it. If this ever flips, the guard above
-    // has stopped being able to fail.
-    const planted = [
-      'import { createOpenAI } from "@ai-sdk/openai";',
-      "export const pickModel = (id: string) => createOpenAI({ apiKey: key })(id.replace(/^openai\\//, ''));",
-      "const P = createOpenAI({ apiKey: key });",
-      "export const modelFor = (id: string) => P(id.startsWith('openai/') ? id.slice(7) : id);",
-    ].join("\n");
-    expect(DYNAMIC_MODEL_ROUTE.test(planted), "the call scan is not the guard here").toBe(false);
-    expect(PROVIDER_PACKAGE.test(planted)).toBe(true);
+  test("THE IMPORT GUARD IS NOT VACUOUS: every escape found against it is now caught", () => {
+    // Non-vacuity as a VALUE, not as a promise. Each string below is a shape that was RUN against
+    // the guard as a real planted module under `convex/`; the first left it green for three
+    // iterations, the second and third left it green for a fourth. If any of these flips to false
+    // the guard has stopped being able to fail.
+    const escapes: Array<[string, string]> = [
+      // The two that beat the CALL scan: the callee spelling is `)` and then a local alias.
+      [
+        "aliased factory",
+        [
+          'import { createOpenAI } from "@ai-sdk/openai";',
+          "const P = createOpenAI({ apiKey: key });",
+          "export const modelFor = (id: string) => P(id.startsWith('openai/') ? id.slice(7) : id);",
+        ].join("\n"),
+      ],
+      // THE FOURTH-ITERATION ESCAPE. A documented subpath export shipping the raw model class —
+      // no `openai(`, no `createOpenAI`, and the old regex demanded the closing quote right after
+      // the package segment.
+      [
+        "subpath import of the raw model class",
+        [
+          'import { OpenAIChatLanguageModel } from "@ai-sdk/openai/internal";',
+          "export const pickModel = (id: string) =>",
+          '  new OpenAIChatLanguageModel(id.replace(/^openai\\//, ""), cfg);',
+        ].join("\n"),
+      ],
+      // Same idea through the other provider's package, and through a template literal.
+      ["subpath, other provider", 'import x from "@openrouter/ai-sdk-provider/internal";'],
+      ["template-literal specifier", "const p = await import(`@ai-sdk/openai`);"],
+    ];
+    for (const [what, planted] of escapes) {
+      expect(PROVIDER_PACKAGE.test(planted), `the import guard misses: ${what}`).toBe(true);
+    }
+    // And the call scan calls the first two CLEAN — which is why the import channel is guarded at
+    // all. (Its `new OpenAIChatLanguageModel(` shape dodges the callee alternation as well.)
+    expect(DYNAMIC_MODEL_ROUTE.test(escapes[0]?.[1] ?? ""), "call scan is not the guard").toBe(
+      false,
+    );
+    expect(DYNAMIC_MODEL_ROUTE.test(escapes[1]?.[1] ?? ""), "call scan is not the guard").toBe(
+      false,
+    );
+    // The ordinary import must still match, or the "escapes are caught" rows above prove nothing.
+    expect(PROVIDER_PACKAGE.test('import { openai } from "@ai-sdk/openai";')).toBe(true);
+    // ...and a package that merely starts the same way must NOT, or the tail is over-greedy.
+    expect(PROVIDER_PACKAGE.test('import x from "@ai-sdk-community/thing";')).toBe(false);
   });
 
-  test("the provider cannot be laundered through this file's exports", () => {
+  test("the provider cannot be laundered through this file's exports — ANY spelling", () => {
     // The ceiling named above, closed for the one file every converted module imports. Adding
     // `export { openai }` here would hand every module a provider while the import guard read [].
+    //
+    // ⚠ THIS PIN USED TO ENUMERATE THE SPELLINGS IT FEARED (`export const|function|type`, plus a
+    // ban on `export {` and `export *`) AND THREE ORDINARY ONES WALKED THROUGH IT, each RUN and
+    // each leaving the suite 17/17 green: `export default openai;`, `export async function
+    // providerFor() { return openai; }`, `export let leaked = openai;`. So it no longer enumerates.
+    // EVERY line that starts a top-level export must reduce to one of the three names below; a
+    // spelling the name regex cannot read contributes its own raw text and fails loudly.
     const src = rawSources["./models.ts"] ?? rawSources["../lib/models.ts"] ?? "";
     expect(src, "convex/lib/models.ts is not in the raw-source glob").toBeTruthy();
-    const exported = [...src.matchAll(/^export (?:const|function|type) (\w+)/gm)].map((m) => m[1]);
+    const exportLines = src.split(/\r?\n/).filter((line) => /^export\b/.test(line));
+    const exported = exportLines.map(
+      (line) => /^export (?:const|type) (\w+)/.exec(line)?.[1] ?? line,
+    );
     expect([...exported].sort()).toEqual([
       "NODE_ONLY_MODEL_PREFIX",
       "offlineSeamAvailable",
       "resolveModel",
     ]);
-    expect(src).not.toMatch(/^export\s*\{/m);
-    expect(src).not.toMatch(/^export \*/m);
   });
 
   /**

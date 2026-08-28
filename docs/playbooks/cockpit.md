@@ -1,3 +1,37 @@
+> Last verified: 2026-08-28 (**WAVE-3 CLEANUP FIX — THE COPY-DRIFT GUARD IS DECIDED. It is a CHANNEL
+> guard over provider IMPORTS, it is no longer claimed to be more than that, and the block below is
+> corrected in place where it overstated.**
+>
+> Iteration 4 was escapable too, and by a real shape: `@ai-sdk/openai/internal` is a DOCUMENTED
+> subpath export shipping the raw `OpenAIChatLanguageModel` class. `PROVIDER_PACKAGE` anchored on the
+> closing quote, so any `/subpath` tail was invisible, and the capitalised class name also dodged the
+> call scan's callee alternation — a planted module holding a full private route table left the suite
+> **17/17 GREEN**. The regex now matches the package ROOT plus an optional subpath tail and accepts
+> backtick specifiers. The export-surface pin no longer enumerates spellings (`export default`,
+> `export async function`, `export let` and `export class` all walked through the old one): every
+> line starting `export` must reduce to one of the three allowed names or it fails carrying its own
+> text.
+>
+> **THE ABSOLUTE CLAIM IS DELETED, NOT RE-WORDED, AND THE TWO ESCAPES A REGEX CANNOT CLOSE ARE NAMED
+> IN THE TEST:** (i) a NON-LITERAL specifier — `await import("@ai-sdk/" + "openai")`; (ii) RAW HTTP,
+> which needs no provider package at all — **and this repo does exactly that on a landed path**:
+> `vaultRag.ts`'s `embeddingV2` (~:230-270) picks provider label, env-key NAME and endpoint URL from
+> a runtime decision and calls `fetch`, holding zero provider imports, and nothing pins it to
+> `lib/models.ts`. So "no module can even hold a provider" was never true of this codebase. A real
+> guard needs an AST pass; that is the upgrade path, and copy-drift through raw HTTP is UNGUARDED
+> today. The test name is now "no module under convex/ IMPORTS a model provider…", and the scope
+> over-claim is fixed too — the glob sees `convex/` only, not `packages/`.
+>
+> Mutations OBSERVED red this pass, then reverted (each a real file planted under `convex/`, not a
+> string): subpath-import route table; aliased-factory route table; template-literal dynamic import;
+> and six appended export spellings on `lib/models.ts` (`export default` / `export async function` /
+> `export let` / `export {` / `export *` / `export class`), each failing the laundering pin. Plus an
+> over-greedy `@ai-sdk[a-z0-9/-]+` regex → the "a package that merely starts the same way" pin red.
+>
+> **Also on this module:** the offline-fixture consent test moved to `lib/env.ts`
+> `isOfflineFixtureConsent` and is now shared with the readiness screen, which had its own rule.
+> `PIKAR_OFFLINE_FIXTURES=on` used to report a LIVE fabrication seam over a fixture that was OFF.)
+
 > Last verified: 2026-08-28 (**29-06 REMEDIATION — COMMENT-ONLY CHANGE TO `llm.ts`, CORRECTING A
 > FALSE INVARIANT.** `runAgentLoop`'s skill loader carried "only the three `USER_AUTHORABLE_SKILLS`
 > can have an overlay row at all, so every other specialist name resolves exactly as before". 29-05
@@ -25,9 +59,11 @@
 > A module holding BOTH, planted at `convex/zzAliasCopy.ts` in this pass, left the whole suite
 > **14/14 GREEN**. A tripwire that reads as protection and is not is worse than an acknowledged gap.
 >
-> **THE REPLACEMENT DOES NOT READ THE CALL AT ALL.** To route a model id to a provider a module must
-> first HAVE a provider, and the only way to get one is the provider package's MODULE SPECIFIER — a
-> string literal in an `import` / `import()` / `require` that no rename touches. So
+> **THE REPLACEMENT DOES NOT READ THE CALL AT ALL.** To route with an AI-SDK provider a module must
+> first IMPORT one, and the specifier is a string no rename touches. (⚠ THIS SENTENCE ORIGINALLY
+> READ "the ONLY way to get one is the provider package's MODULE SPECIFIER". **It was false and it
+> is corrected in the entry at the top of this playbook** — a subpath specifier beat the regex, and
+> raw `fetch` needs no provider package at all.) So
 > `lib/models.test.ts` now scans for `@ai-sdk/*` and `@openrouter/ai-sdk-provider` and pins the five
 > files allowed to hold one, as LITERALS: `lib/models.ts` (the table), `llm.ts` (the Node-only
 > `google/` branch), and `intake.ts` / `vaultExtract.ts` / `vaultTranscribe.ts` (ONE FIXED model id
@@ -37,8 +73,9 @@
 > text is asserted to pass the call scan and fail the import scan (if that ever flips, the guard has
 > stopped being able to fail); and `lib/models.ts`'s own export surface is pinned to
 > `NODE_ONLY_MODEL_PREFIX` / `offlineSeamAvailable` / `resolveModel` with no `export {` or `export *`,
-> which closes the one remaining hole — laundering a provider through the file every converted module
-> already imports.
+> which closes ONE hole — laundering a provider through the file every converted module already
+> imports. (⚠ "the one remaining hole" was the overstatement; and as written that pin missed
+> `export default`, `export async function`, `export let` and `export class`. See the top entry.)
 >
 > ⚠ **THE CALL SCAN IS KEPT, AS THE WEAKER SECOND NET, AND ITS CEILING IS NOW STATED IN THE TEST.**
 > Inside those five files a provider IS legitimately in scope, so the import guard says nothing there

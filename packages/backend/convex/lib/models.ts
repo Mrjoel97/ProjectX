@@ -45,6 +45,7 @@
 import { openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
+import { isOfflineFixtureConsent } from "./env";
 
 // OpenRouter, through its OWN provider — and the second SDK is EARNED, not a convenience.
 //
@@ -125,6 +126,12 @@ export const NODE_ONLY_MODEL_PREFIX = "google/";
  * reports it under `fixturesActive` and the readiness screen says out loud that a fabrication seam
  * is live (the `FAL_FIXTURE` precedent — same tier, same reason).
  *
+ * ⚠ THE VALUE TEST IS `lib/env.ts`'s `isOfflineFixtureConsent`, AND IT IS SHARED ON PURPOSE. This
+ * predicate and the readiness screen briefly answered the same question with two different rules
+ * (`=== "1"` here, "non-blank" there), so `PIKAR_OFFLINE_FIXTURES=on` reported a LIVE fabrication
+ * seam on a deployment whose fixture was off. One question, one predicate; `lib/models.test.ts`
+ * runs a table of literal values through both sites and fails if they ever diverge again.
+ *
  * The credential half is KEPT as well, so the two failure directions are both covered: a keyed
  * deployment that sets the flag by accident still takes the real model path. BOTH keys, never just
  * `OPENAI_API_KEY`: `DEFAULT_MODEL` is `or/openai/gpt-4o-mini` and `resolveModel` routes it to
@@ -143,8 +150,10 @@ export const NODE_ONLY_MODEL_PREFIX = "google/";
 export const offlineSeamAvailable = (): boolean =>
   // The LITERAL "1", not merely "set": `convex env set PIKAR_OFFLINE_FIXTURES ""` and a leftover
   // `PIKAR_OFFLINE_FIXTURES=0` are both the operator saying NO, and a `!== undefined` check reads
-  // them as yes. Same class of mistake as the one this whole predicate exists to fix.
-  process.env.PIKAR_OFFLINE_FIXTURES === "1" &&
+  // them as yes. Same class of mistake as the one this whole predicate exists to fix. The rule
+  // lives in `lib/env.ts` so the readiness screen cannot answer it differently; the READ stays a
+  // literal `process.env.X` here, because `env.test.ts`'s dead-entry scan only sees literal reads.
+  isOfflineFixtureConsent(process.env.PIKAR_OFFLINE_FIXTURES) &&
   !process.env.OPENAI_API_KEY &&
   !process.env.OPENROUTER_API_KEY;
 

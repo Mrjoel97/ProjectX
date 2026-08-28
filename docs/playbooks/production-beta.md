@@ -1,5 +1,20 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-28 (**THE READINESS SCREEN NO LONGER DECIDES "IS THIS FIXTURE SEAM ON?" FOR
+> ITSELF.** `missingEnv().fixturesActive` reported any fixture-tier name whose value was non-blank,
+> while its one consumer, `lib/models.ts` `offlineSeamAvailable()`, required the literal `"1"`. So
+> `PIKAR_OFFLINE_FIXTURES=on` — the spelling every other fixture flag in this repo takes — produced
+> all three of: a readiness screen announcing a LIVE fabrication seam, a fixture that was silently
+> OFF, and an unexplained `OPENROUTER_API_KEY is not set`. The value test is now ONE exported
+> predicate, `lib/env.ts` `isOfflineFixtureConsent`, called by both sites, and `lib/models.test.ts`
+> runs a table of literal values through both so they cannot diverge again. **Only
+> `PIKAR_OFFLINE_FIXTURES` is routed through it**; every other fixture-tier name keeps the non-blank
+> test, because no consumer of those disagrees with it. Behaviour change, stated plainly: a
+> fixture-tier value that is not `"1"` (`on`, `true`) now reads as OFF in the readiness screen as
+> well as at the seam. The manifest row's `whatBreaks` string is the operator-facing spec for that.
+> This entry does NOT discharge the separate bump this playbook owes for Phase 28's `lib/env.ts`
+> change.)
+
 > Last verified: 2026-08-28 (**ONE NEW `fixture`-TIER MANIFEST NAME: `PIKAR_OFFLINE_FIXTURES`**,
 > added to `ENV_MANIFEST` in `convex/lib/env.ts`. It is the POSITIVE operator opt-in for the
 > vault-digest and voice-doc offline fixtures: set to the literal `"1"` ON A KEYLESS deployment,
