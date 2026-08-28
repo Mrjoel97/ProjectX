@@ -159,8 +159,9 @@ export const vaultGround = tenantAction({
 // The HYDRATED grounding surface for the identity-less cockpit tool loop (Plan 02 calls this as
 // `internal.vaultGround.vaultGroundHydrated`). tenantId is an EXPLICIT arg — the gmail.search /
 // llm.digestInbox convention — because the tool loop and eval harnesses carry no live identity.
-// Returns three PARALLEL retrieval arrays — docIds, titles (via tenant-scoped ownedDocsMeta), and
-// capped chunk text (via getDoc) — plus a fourth `spine` field for standing blueprint context.
+// Returns PARALLEL retrieval arrays — docIds, titles / origins / kinds / sourceUpdatedAt (all off
+// one tenant-scoped ownedDocsMeta read) and capped chunk text (via getDoc) — plus a separate
+// `spine` field for standing blueprint context.
 // The spine is deliberately NOT entry 0: it is not a search result and must not alter no-match,
 // result-count, source-card, or retrieval-budget behavior. Text is returned into the LOOP only —
 // never into any audit/DLQ payload (§4; Plan 02's tool owns the refs-only `vault.searched` audit).
@@ -181,6 +182,22 @@ export const vaultGroundHydrated = internalAction({
      *  so a citation must not read as the owner's own word. LABELLING ONLY — no caller may use
      *  this to filter what is retrieved (the origin predicate is banned in retrieval). */
     origins: string[];
+    /** 29-02: parallel to docIds. `vaultDocuments.kind`, so a `web_research` document cites as
+     *  third-party research rather than as the tenant's own word (`authorityFor`, @pikar/core).
+     *  LABELLING ONLY, exactly like `origins` — no caller may filter retrieval on it. */
+    kinds: string[];
+    /** 29-02: parallel to docIds. The only source-time the vault holds: the web-research fetch
+     *  stamp when there is one, otherwise the row's creation time (a vault document has no
+     *  provider modification time — it is the tenant's own copy, dated from when it arrived).
+     *  Absent/0 is never treated as fresh downstream; `freshnessFor` reads a missing stamp as
+     *  `unknown`. ADDITIVE — the four production callers destructure by name and are unaffected. */
+    sourceUpdatedAt: (number | null)[];
+    /** 29-02: parallel to docIds. TRUE when this doc's text was cut by PER_DOC_CHAR_CAP or by the
+     *  remaining whole-run budget — i.e. the loop is reading part of a document, not all of it.
+     *  Without it a caller cannot tell a complete read from a truncated one, because both arrive
+     *  as a string that is simply shorter than the cap. The knowledge adapter turns this into
+     *  `{status: "partial", reason: "cap"}` rather than reporting a full read of a partial one. */
+    truncated: boolean[];
     chunks: string[];
     spine: string | null;
   }> => {
@@ -194,18 +211,30 @@ export const vaultGroundHydrated = internalAction({
     const titleById = new Map(meta.map((m) => [m._id as string, m.title]));
     // Same batch read, one more field off it — the origin was already fetched and thrown away.
     const originById = new Map(meta.map((m) => [m._id as string, m.origin ?? ""]));
+    // Same batch read again (29-02). The `retrievedAt ?? createdAt` choice is made HERE, once, so
+    // no caller has to know that only `kind: "web_research"` rows carry a fetch stamp.
+    const kindById = new Map(meta.map((m) => [m._id as string, m.kind]));
+    const updatedById = new Map(
+      meta.map((m) => [m._id as string, m.retrievedAt ?? m.createdAt ?? null]),
+    );
 
     // Chunks: per-doc + running-total char budget so a large corpus never blows the loop context.
     const titles: string[] = [];
     const origins: string[] = [];
+    const kinds: string[] = [];
+    const sourceUpdatedAt: (number | null)[] = [];
+    const truncated: boolean[] = [];
     const chunks: string[] = [];
     let used = 0;
     for (const docId of docIds) {
       titles.push(titleById.get(docId) ?? "");
       origins.push(originById.get(docId) ?? "");
+      kinds.push(kindById.get(docId) ?? "");
+      sourceUpdatedAt.push(updatedById.get(docId) ?? null);
       const remaining = TOTAL_CHAR_CAP - used;
       if (remaining <= 0) {
         chunks.push("");
+        truncated.push(true); // the budget ran out before this doc — nothing of it was read
         continue;
       }
       // Chunk-precise when we have it: the passage that actually matched, not the doc's opening.
@@ -222,6 +251,7 @@ export const vaultGroundHydrated = internalAction({
         ).text;
       const slice = text.slice(0, Math.min(PER_DOC_CHAR_CAP, remaining));
       chunks.push(slice);
+      truncated.push(slice.length < text.length);
       used += slice.length;
     }
 
@@ -239,6 +269,6 @@ export const vaultGroundHydrated = internalAction({
     } catch {
       spine = null;
     }
-    return { docIds, titles, origins, chunks, spine };
+    return { docIds, titles, origins, kinds, sourceUpdatedAt, truncated, chunks, spine };
   },
 });

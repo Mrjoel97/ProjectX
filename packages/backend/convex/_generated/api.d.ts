@@ -50,6 +50,7 @@ import type * as index from "../index.js";
 import type * as intake from "../intake.js";
 import type * as intakeDb from "../intakeDb.js";
 import type * as invites from "../invites.js";
+import type * as knowledgeVaultDrive from "../knowledgeVaultDrive.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_foglamp from "../lib/foglamp.js";
@@ -169,6 +170,7 @@ declare const fullApi: ApiFromModules<{
   intake: typeof intake;
   intakeDb: typeof intakeDb;
   invites: typeof invites;
+  knowledgeVaultDrive: typeof knowledgeVaultDrive;
   "lib/allowlist": typeof lib_allowlist;
   "lib/env": typeof lib_env;
   "lib/foglamp": typeof lib_foglamp;

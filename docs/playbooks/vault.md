@@ -1,3 +1,54 @@
+> Last verified: 2026-08-28 (**THE VAULT IS NOW A KNOWLEDGE SOURCE AS WELL AS A GROUNDING SOURCE**
+> — Phase 29 plan 29-02 task 1, `packages/backend/convex/knowledgeVaultDrive.ts`).
+>
+> `searchVaultKnowledge` is an identity-less `internalAction({tenantId, query})` that turns the
+> landed hydrated retrieval into `@pikar/core`'s closed `Evidence` + `KnowledgeSourceState`
+> contract. **IT RETRIEVES NOTHING ITSELF.** Its only way in is
+> `internal.vaultGround.vaultGroundHydrated`, because every bound worth having lives behind that
+> one door: `limit: 8`, `vectorScoreThreshold: 0.2`, folder sealing applied BEFORE graph
+> expansion, `GRAPH_HOP_CAP`, and the 1,500-per-doc / 8,000-total hydration budget. A source scan
+> in `knowledgeVaultDrive.test.ts` fails if that module ever names `rag.search`,
+> `ownedSearchDocsMeta`, `vaultGraph.expand`, `vault.getDoc` or `ctx.db` — a second read path
+> would silently carry none of those bounds.
+>
+> **THE BLUEPRINT SPINE IS DISCARDED, FROM THE EVIDENCE AND FROM THE COUNT.** `vaultGroundHydrated`
+> still returns one; a spine is not a document, has no id, and citing it would attribute the
+> product's own summary of the business to a source that does not exist. The test that proves this
+> carries a POSITIVE CONTROL (it asserts the spine really was non-null on the same fixture) —
+> without that it would pass on a run where there was no spine to discard.
+>
+> **THREE FIELDS WERE ADDED TO THE HYDRATED SHAPE, AND ONE TO `ownedDocsMeta`.** `kinds`,
+> `sourceUpdatedAt` and `truncated` are parallel to `docIds`; `ownedDocsMeta` now also returns
+> `kind`, `createdAt` and `retrievedAt`. All of it is CITATION metadata under the same rule
+> `origins` already carried: **it labels what was retrieved and must never filter what is
+> retrieved.** `kind` is what makes a `web_research` document cite as third-party research rather
+> than as the owner's own word; `sourceUpdatedAt` is `retrievedAt ?? createdAt`, which is the only
+> source-time the vault holds (a vault document has no provider modification time — it is the
+> tenant's own copy, dated from when it arrived), and without it every vault citation would read
+> as freshness `unknown` for ever.
+>
+> **`truncated` IS THE ONE THAT CAUGHT A REAL HOLE.** Per-doc truncation happens INSIDE
+> `vaultGroundHydrated`, so a caller receiving a 1,500-character chunk cannot tell a complete
+> document from the first page of a long one — both arrive as a string shorter than the cap. The
+> adapter reported `available` for a document it had read one page of. It now reports
+> `{status: "partial", reason: "cap"}`, and a hit whose text the whole-run budget squeezed to the
+> empty string is DROPPED rather than shipped: a row with no text can be cited and never verified.
+>
+> The four `vaultGroundHydrated` production callers (`blueprint.ts:540`, `evaluations.ts:295`,
+> `llm.ts:3873`, `voiceDoc.ts:75`) destructure by name and are unaffected — the change is purely
+> additive. The EXHAUSTIVE `toEqual` in `vaultGround.test.ts`'s cross-tenant case was extended
+> rather than loosened; keeping it exhaustive is what makes a future field that leaks a value
+> across the tenant boundary red instead of unnoticed.
+>
+> **MEASURED:** `knowledgeVaultDrive.test.ts` 13/13 and `vaultGround.test.ts` 17/17 (was 16);
+> `vaultGround knowledgeVaultDrive blueprint evaluations voiceDoc cockpitTools vault` 21 files /
+> 495 tests pass. **10 mutations applied, observed RED and reverted**, including
+> `authorityFor("vault", {})` (2 red), appending the spine as an evidence row (2 red), a constant
+> `evidenceId` (1 red), `truncated.push(false)` (2 red) and dropping `ownedDocsMeta`'s
+> `doc.tenantId === tenantId` check (4 red).
+>
+> **NOT IN THIS ENTRY:** the Drive half of the same adapter — task 2, its own entry.
+
 > Last verified: 2026-08-27 (**EMBEDDINGS RUN THROUGH OPENROUTER NOW — AND THE CHANGE NEARLY TOOK
 > THE RETRY WORK WITH IT.** `EMBEDDING_MODEL` is `openai/text-embedding-3-small`: the SAME OpenAI
 > model as before, reached through OpenRouter's namespaced id and OpenRouter's balance. A ROUTE

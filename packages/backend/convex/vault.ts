@@ -794,7 +794,7 @@ export const getDoc = internalQuery({
 });
 
 /**
- * Resolve a set of doc ids to their {_id, title, category}, KEEPING ONLY the ones this tenant owns.
+ * Resolve a set of doc ids to their citation metadata, KEEPING ONLY the ones this tenant owns.
  * The tenant-scope seam shared by the offline grounding SMOKE path (vaultGround) and vaultSearch —
  * a cross-tenant / missing id silently drops out, mirroring how `namespace = tenantId` would never
  * surface another tenant's entry (VALT-03 isolation). Carries no raw text (§4).
@@ -804,19 +804,47 @@ export const ownedDocsMeta = internalQuery({
   handler: async (
     ctx,
     { tenantId, docIds },
-  ): Promise<{ _id: Id<"vaultDocuments">; title: string; category: string; origin?: string }[]> => {
+  ): Promise<
+    {
+      _id: Id<"vaultDocuments">;
+      title: string;
+      category: string;
+      origin?: string;
+      kind: string;
+      createdAt: number;
+      retrievedAt?: number;
+    }[]
+  > => {
     const out: {
       _id: Id<"vaultDocuments">;
       title: string;
       category: string;
       origin?: string;
+      kind: string;
+      createdAt: number;
+      retrievedAt?: number;
     }[] = [];
     for (const id of docIds) {
       const doc = await ctx.db.get(id);
       if (doc && doc.tenantId === tenantId) {
         // 26-11: `origin` rides along so a CITATION can say who wrote the thing. A closed enum,
         // so the refs-only contract holds. It labels; it must never filter what is retrieved.
-        out.push({ _id: doc._id, title: doc.title, category: doc.category, origin: doc.origin });
+        //
+        // 29-02: `kind`, `createdAt` and `retrievedAt` ride along for the SAME citation reason and
+        // under the same rule. `kind` is what makes `web_research` cite as third-party rather than
+        // as the owner's own word (`authorityFor` in @pikar/core), and the two timestamps are the
+        // only source-time the vault holds, so without them every vault citation would be
+        // freshness `unknown` for ever. A token and two numbers — refs-only holds (§4). NEITHER
+        // may become a retrieval filter; like `origin`, they label what was already retrieved.
+        out.push({
+          _id: doc._id,
+          title: doc.title,
+          category: doc.category,
+          origin: doc.origin,
+          kind: doc.kind,
+          createdAt: doc.createdAt,
+          retrievedAt: doc.retrievedAt,
+        });
       }
     }
     return out;

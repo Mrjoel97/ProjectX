@@ -239,10 +239,62 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
       query: `SMOKE::${docA}`,
     });
 
-    // 26-11 added `origins` as a fifth parallel field. Kept as an EXHAUSTIVE toEqual on
-    // purpose: a foreign tenant must get empty arrays and nothing else, so a future field
-    // that leaks a value across the boundary reddens here rather than passing unnoticed.
-    expect(out).toEqual({ docIds: [], titles: [], origins: [], chunks: [], spine: null });
+    // 26-11 added `origins`; 29-02 added `kinds`, `sourceUpdatedAt` and `truncated`. Kept as an
+    // EXHAUSTIVE toEqual on purpose: a foreign tenant must get empty arrays and nothing else, so a
+    // future field that leaks a value across the boundary reddens here rather than passing
+    // unnoticed. Extending this list is the deliberate cost of adding a parallel field.
+    expect(out).toEqual({
+      docIds: [],
+      titles: [],
+      origins: [],
+      kinds: [],
+      sourceUpdatedAt: [],
+      truncated: [],
+      chunks: [],
+      spine: null,
+    });
+  });
+});
+
+describe("vaultGroundHydrated citation metadata (29-02)", () => {
+  test("kinds / sourceUpdatedAt / truncated stay index-parallel and say what was really read", async () => {
+    const t = convexTest(schema, modules);
+    const short = await seedDoc(t, {
+      title: "Short",
+      kind: "upload",
+      text: "all of it",
+      createdAt: 1_000,
+    });
+    const fetched = 2_000;
+    const long = await seedDoc(t, {
+      title: "Long",
+      kind: "web_research",
+      text: "x".repeat(2000), // > PER_DOC_CHAR_CAP
+      createdAt: 1_500,
+      retrievedAt: fetched,
+    });
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${short},${long}`,
+    });
+
+    const iShort = out.docIds.indexOf(short);
+    const iLong = out.docIds.indexOf(long);
+    expect(iShort).toBeGreaterThanOrEqual(0);
+    expect(iLong).toBeGreaterThanOrEqual(0);
+    for (const arr of [out.kinds, out.sourceUpdatedAt, out.truncated])
+      expect(arr).toHaveLength(out.docIds.length);
+
+    expect(out.kinds[iShort]).toBe("upload");
+    expect(out.kinds[iLong]).toBe("web_research");
+    // createdAt when there is no fetch stamp; the FETCH stamp when there is one.
+    expect(out.sourceUpdatedAt[iShort]).toBe(1_000);
+    expect(out.sourceUpdatedAt[iLong]).toBe(fetched);
+    // Only the doc that was actually cut reports the cut — otherwise every read would look partial.
+    expect(out.truncated[iShort]).toBe(false);
+    expect(out.truncated[iLong]).toBe(true);
+    expect(out.chunks[iLong]).toHaveLength(1500);
   });
 });
 

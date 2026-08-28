@@ -267,6 +267,7 @@
     "packages/core/src/docType.test.ts",
     "packages/core/src/vaultSurface.test.ts",
     "packages/backend/convex/vaultDrive.ts",
+    "packages/backend/convex/knowledgeVaultDrive",
     "apps/web/app/(app)/dashboard/vault/",
     "apps/web/e2e/vault.spec.ts",
     "packages/backend/scripts/run-smoke-vault.mjs",
