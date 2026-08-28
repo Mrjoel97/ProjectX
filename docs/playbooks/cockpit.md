@@ -1,3 +1,53 @@
+> Last verified: 2026-08-28 (**WAVE-3 CLEANUP — THE COPY-DRIFT GUARD WAS DEFEATED AGAIN, ON ITS
+> THIRD ITERATION, AND THE ENTRY DIRECTLY BELOW WAS THE FALSE CLAIM.**
+>
+> The block below says the guard "DETECTS THE SHAPE, NOT THE NAME" and that a rename cannot get past
+> it. **That was proven false by running it.** `DYNAMIC_MODEL_ROUTE` hardcodes the provider CALLEE
+> SPELLINGS (`openai|createOpenAI|createOpenRouter|.chat`) and requires an identifier immediately
+> after `(`. Both of these walk straight through:
+>
+> ```ts
+> createOpenAI({ apiKey })(id.replace(/^openai\//, ""))  // the char before `(` is `)`
+> const P = createOpenAI({ apiKey }); P(id.slice(7))     // the provider under a local alias
+> ```
+>
+> A module holding BOTH, planted at `convex/zzAliasCopy.ts` in this pass, left the whole suite
+> **14/14 GREEN**. A tripwire that reads as protection and is not is worse than an acknowledged gap.
+>
+> **THE REPLACEMENT DOES NOT READ THE CALL AT ALL.** To route a model id to a provider a module must
+> first HAVE a provider, and the only way to get one is the provider package's MODULE SPECIFIER — a
+> string literal in an `import` / `import()` / `require` that no rename touches. So
+> `lib/models.test.ts` now scans for `@ai-sdk/*` and `@openrouter/ai-sdk-provider` and pins the five
+> files allowed to hold one, as LITERALS: `lib/models.ts` (the table), `llm.ts` (the Node-only
+> `google/` branch), and `intake.ts` / `vaultExtract.ts` / `vaultTranscribe.ts` (ONE FIXED model id
+> each — they route nothing, so nothing can drift). Adding a sixth is a deliberate act.
+>
+> Two supporting tests, both non-vacuity as a VALUE rather than a promise: the planted module's exact
+> text is asserted to pass the call scan and fail the import scan (if that ever flips, the guard has
+> stopped being able to fail); and `lib/models.ts`'s own export surface is pinned to
+> `NODE_ONLY_MODEL_PREFIX` / `offlineSeamAvailable` / `resolveModel` with no `export {` or `export *`,
+> which closes the one remaining hole — laundering a provider through the file every converted module
+> already imports.
+>
+> ⚠ **THE CALL SCAN IS KEPT, AS THE WEAKER SECOND NET, AND ITS CEILING IS NOW STATED IN THE TEST.**
+> Inside those five files a provider IS legitimately in scope, so the import guard says nothing there
+> and the shape scan is all that remains — and the two escapes above still beat it. **Do not read a
+> green shape scan as proof that those five hold no private route table.**
+>
+> Mutations OBSERVED red in this pass, then reverted: blind `PROVIDER_PACKAGE` (prefix its literal
+> with `zzz`) → "NO MODULE CAN EVEN HOLD A PROVIDER" and "THE IMPORT GUARD IS NOT VACUOUS" both red;
+> append `export { openai };` to `lib/models.ts` → "the provider cannot be laundered through this
+> file's exports" red; plant `convex/zzAliasCopy.ts` → the import guard names it (the OLD guard did
+> not).
+>
+> **Also on this module:** `offlineSeamAvailable()` gained a POSITIVE operator opt-in
+> (`PIKAR_OFFLINE_FIXTURES === "1"` AND-ed with "neither model key"), because the credential-only
+> version made a deployment that merely LOST its keys fabricate output unconditionally. Full
+> reasoning in `docs/playbooks/vault.md`'s wave-3 block and
+> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`. The stale docstring at
+> `lib/models.ts:27` pointing at `voiceDoc.ts` for that predicate is fixed — `96c4700` moved it here
+> and `voiceDoc.ts` defines it zero times.)
+
 > Last verified: 2026-08-28 (**WAVE-2 FINAL PASS — THE COPY-DRIFT GUARD WAS DEFEATED BY A RENAME,
 > AND THE ENTRY BELOW HAD GONE FALSE.**
 >

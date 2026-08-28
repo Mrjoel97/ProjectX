@@ -9,8 +9,8 @@
 //
 // So these tests assert the RESOLVED PROVIDER, not that a function was called: `.provider` and
 // `.modelId` are what the AI SDK actually sends the request with.
-import { describe, expect, test } from "vitest";
-import { NODE_ONLY_MODEL_PREFIX, resolveModel } from "./models";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { NODE_ONLY_MODEL_PREFIX, offlineSeamAvailable, resolveModel } from "./models";
 
 // A key is needed only to CONSTRUCT the provider; nothing here makes a request.
 process.env.OPENROUTER_API_KEY ??= "test-openrouter-key";
@@ -80,6 +80,56 @@ describe("resolveModel routes an id to the provider that id names", () => {
   });
 });
 
+// ── The offline-seam operator signal ─────────────────────────────────────────
+//
+// THE DEFECT THIS BLOCK EXISTS FOR: the gate was `!OPENAI_API_KEY && !OPENROUTER_API_KEY` ALONE.
+// That closed a content-selected fabrication and opened an UNCONDITIONAL one — a deployment that
+// merely LOST its keys fabricates instead of failing, everywhere the predicate is consumed, with no
+// error and nobody's consent. Consent is now POSITIVE and the credential check is the second belt.
+//
+// Every expected value here is a LITERAL (`"PIKAR_OFFLINE_FIXTURES"`, `"1"`, `true`/`false`) rather
+// than an import: a test that imports the name or the value it is pinning moves with the subject
+// and can never fail.
+//
+// Mutations RUN against this block (each reverted after):
+//   • drop the flag conjunct (back to `!OPENAI && !OPENROUTER`) -> "absence of a credential is a
+//     MISCONFIGURATION" goes RED.
+//   • drop BOTH credential conjuncts (flag alone) -> the two "a key still closes it" cases go RED.
+//   • `=== "1"` -> `!== undefined` -> the `"0"` case goes RED.
+describe("offlineSeamAvailable is a POSITIVE operator opt-in, not the absence of a key", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  const seam = (flag: string | undefined, openai: string | undefined, or: string | undefined) => {
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", flag);
+    vi.stubEnv("OPENAI_API_KEY", openai);
+    vi.stubEnv("OPENROUTER_API_KEY", or);
+    return offlineSeamAvailable();
+  };
+
+  test("the opt-in ON A KEYLESS deployment is the ONLY true case", () => {
+    expect(seam("1", undefined, undefined)).toBe(true);
+  });
+
+  test("absence of a credential is a MISCONFIGURATION, and no longer chooses the fixture", () => {
+    // THE REGRESSION, as a value. A production deployment whose keys are unset or blanked used to
+    // land here and get `true` — every consumer then fabricated silently. It must fall through to
+    // the model path, where `resolveModel(DEFAULT_MODEL)` throws for the missing key.
+    expect(seam(undefined, undefined, undefined)).toBe(false);
+    expect(seam(undefined, "", "")).toBe(false);
+    expect(() => resolveModel("or/openai/gpt-4o-mini")).toThrow(/OPENROUTER_API_KEY is not set/);
+  });
+
+  test("a key still closes the seam even WITH the opt-in — either key, on its own", () => {
+    expect(seam("1", "sk-live", undefined)).toBe(false);
+    expect(seam("1", undefined, "or-live")).toBe(false);
+  });
+
+  test('only the literal "1" is consent — "0" and "" are not', () => {
+    expect(seam("0", undefined, undefined)).toBe(false);
+    expect(seam("", undefined, undefined)).toBe(false);
+  });
+});
+
 describe("no module keeps its own copy of the route table", () => {
   /**
    * THE END STATE: there is exactly ONE `resolveModel`, in this file, plus `llm.ts`'s documented
@@ -96,8 +146,9 @@ describe("no module keeps its own copy of the route table", () => {
    * ⚠ THIS TEST IS NAME-BASED AND THAT IS ITS CEILING. It only looks at a module at all if the
    * module's source mentions `resolveModel(`, so a private copy called `pickModel` is invisible to
    * it — the repo's own recorded lesson (deletion-only mutation is blind to renaming; a symbol gate
-   * has already stayed green through a rename here once). The SHAPE scan below is the one a rename
-   * cannot get past. Do not add a name back to this list to make either green — convert the module.
+   * has already stayed green through a rename here once). The IMPORT scan below is the one a rename
+   * cannot get past; the SHAPE scan is not, and said it was for three iterations. Do not add a name
+   * back to this list to make either green — convert the module.
    */
   const ALLOWED_PRIVATE_RESOLVERS: string[] = [];
 
@@ -124,9 +175,92 @@ describe("no module keeps its own copy of the route table", () => {
   });
 
   /**
-   * THE SHAPE, NOT THE NAME: a provider factory called with a MODEL ARGUMENT THAT IS NOT A STRING
-   * LITERAL. That is what a private route table IS — a runtime decision about which model id goes
-   * to which provider — and it stays true however the const is named, so a rename cannot escape it.
+   * THE RENAME-PROOF GUARD, AND THE REASON IT REPLACED A CALL-SHAPE SCAN.
+   *
+   * The scan below (`DYNAMIC_MODEL_ROUTE`) is on its third iteration and was STILL escapable on all
+   * three, because it hardcodes the CALLEE SPELLING. Both of these beat it, and were run against it:
+   *   `createOpenAI({ apiKey })(id.replace(/^openai\//, ""))`  — the identifier before `(` is `)`
+   *   `const P = createOpenAI({ apiKey }); P(id.slice(7))`      — the provider under a local alias
+   * A module holding both, planted under `convex/`, left the whole guard 14/14 GREEN.
+   *
+   * This one does not read the call at all. To route a model id to a provider a module must first
+   * HAVE a provider, and the only way to get one is the provider package's MODULE SPECIFIER — a
+   * string literal in an import/`import()`/`require`, which no rename touches. So the invariant is
+   * an import invariant, and the allow-list is five files that are named here as LITERALS.
+   *
+   * CEILING (stated, not claimed away): a module could still obtain a provider by importing one
+   * that an allow-listed file RE-EXPORTS. The export-surface pin below closes that for this file,
+   * which is the only one a converted module has any reason to import from.
+   */
+  const PROVIDER_PACKAGE = /["'](?:@ai-sdk\/[a-z0-9-]+|@openrouter\/ai-sdk-provider)["']/;
+
+  /**
+   * The ONLY files that may hold a provider. Literals, so adding a sixth is a deliberate act.
+   *   lib/models.ts    — this table.
+   *   llm.ts           — the Node-only `google/` branch, documented above; delegates the rest here.
+   *   intake.ts, vaultExtract.ts, vaultTranscribe.ts — ONE FIXED model id each (multimodal /
+   *     transcription calls that name a model on purpose). They route nothing, so nothing can drift.
+   */
+  const PROVIDER_HOLDERS = [
+    "../intake.ts",
+    "../llm.ts",
+    "../vaultExtract.ts",
+    "../vaultTranscribe.ts",
+    "./models.ts",
+  ];
+
+  const providerImporters = () =>
+    Object.entries(rawSources)
+      .filter(([path]) => !path.endsWith(".test.ts"))
+      .filter(([, raw]) =>
+        PROVIDER_PACKAGE.test(raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "")),
+      )
+      .map(([path]) => path)
+      .sort();
+
+  test("NO MODULE CAN EVEN HOLD A PROVIDER except the five named here", () => {
+    // The rename-proof half. A private route table under any name, built by any call shape, needs
+    // this import — so this list going long IS the defect, before a single call is examined.
+    expect(providerImporters()).toEqual(PROVIDER_HOLDERS);
+  });
+
+  test("THE IMPORT GUARD IS NOT VACUOUS: it sees the two shapes that beat the call scan", () => {
+    // Non-vacuity as a VALUE, not as a promise: the exact planted module, run through both guards.
+    // The call scan calls it clean; the import guard names it. If this ever flips, the guard above
+    // has stopped being able to fail.
+    const planted = [
+      'import { createOpenAI } from "@ai-sdk/openai";',
+      "export const pickModel = (id: string) => createOpenAI({ apiKey: key })(id.replace(/^openai\\//, ''));",
+      "const P = createOpenAI({ apiKey: key });",
+      "export const modelFor = (id: string) => P(id.startsWith('openai/') ? id.slice(7) : id);",
+    ].join("\n");
+    expect(DYNAMIC_MODEL_ROUTE.test(planted), "the call scan is not the guard here").toBe(false);
+    expect(PROVIDER_PACKAGE.test(planted)).toBe(true);
+  });
+
+  test("the provider cannot be laundered through this file's exports", () => {
+    // The ceiling named above, closed for the one file every converted module imports. Adding
+    // `export { openai }` here would hand every module a provider while the import guard read [].
+    const src = rawSources["./models.ts"] ?? rawSources["../lib/models.ts"] ?? "";
+    expect(src, "convex/lib/models.ts is not in the raw-source glob").toBeTruthy();
+    const exported = [...src.matchAll(/^export (?:const|function|type) (\w+)/gm)].map((m) => m[1]);
+    expect([...exported].sort()).toEqual([
+      "NODE_ONLY_MODEL_PREFIX",
+      "offlineSeamAvailable",
+      "resolveModel",
+    ]);
+    expect(src).not.toMatch(/^export\s*\{/m);
+    expect(src).not.toMatch(/^export \*/m);
+  });
+
+  /**
+   * THE SHAPE, NOT THE NAME — the SECOND net, and it is the weaker one. Kept because inside the
+   * five provider holders a provider IS legitimately in scope, so the import guard says nothing
+   * there and this is what remains. It hardcodes callee spellings and the two escapes above get
+   * past it; do not read a green here as proof that those five hold no route table.
+   *
+   * A provider factory called with a MODEL ARGUMENT THAT IS NOT A STRING LITERAL is what a private
+   * route table IS — a runtime decision about which model id goes to which provider.
    *
    * It covers both providers and both spellings of the defect:
    *   `openai(id.replace(/^openai\//, ""))`   — the original naive one-liner, seven copies of it
