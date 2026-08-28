@@ -2,6 +2,68 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_phase: 28.1
+current_plan: 1 of 8 executed (28.1-01 Stripe webhook receiver + billingStripeEvents) -- 28.1 IN PROGRESS
+status: executing
+stopped_at: "28.1-01 SEALED (`1a2130e` scaffold+playbook, `bf15767` RED, `cd3b3e1` pure signature/event law, `8f9fbc2` table+route+receiver).
+**THE WEBHOOK RECEIVER EXISTS AND IT HAS NEVER SPOKEN TO STRIPE.** Every one of the 59 new tests
+(36 pure + 23 route) is offline at $0 against a FABRICATED `whsec_test_...`; a green suite proves the
+handler cannot tell a fabricated delivery from a real one, NOT that Stripe accepts anything.
+`BILLING_STRIPE_WEBHOOK_SECRET` is set in NO deployment, so the route currently refuses every
+delivery -- which is the correct state, not a bug.
+**NO `stripe` DEPENDENCY, AND THAT IS FORCED, NOT PREFERENCE:** `http.ts` CANNOT be `\"use node\"`
+(Convex HTTP actions run in the query/mutation sandbox), so the synchronous `constructEvent` is
+unreachable there. The HMAC is hand-rolled Web Crypto over the EXISTING `hmacHex` (gmailAuth.ts) --
+the rung every other provider in this repo sits on.
+**ORDER IS THE WHOLE SECURITY PROPERTY:** secret+header present -> `req.text()` ONCE -> verify THAT
+EXACT string -> only then `JSON.parse`. Never `json()`-then-restringify.
+**IDEMPOTENCY IS STRUCTURAL AND HAS TWO KEYS.** `receiveAndApply` is ONE `internalMutation` owning
+the dedupe insert AND the effect switch -- an httpAction is not transactional, so a split lets a
+crash leave a dedupe row that suppresses Stripe's retry while nothing was applied. `event.id` alone
+is NOT a complete dedupe (Stripe's own guidance), so `by_object_type` catches the same transition
+arriving as a DIFFERENT Event object.
+**A VACUOUS TEST WAS CAUGHT BEFORE IT SHIPPED.** The plan's `{inserted: boolean}` return made the
+by-object branch UNOBSERVABLE while the effect switch is empty (`status` is `ignored` on every
+path), so no assertion over the rows could tell it from the ordinary path. Widened to a three-value
+`outcome` (new/duplicate_event/duplicate_object); the index-column-swap mutation now kills EXACTLY
+one test. **28.1-06 gates its effects on `outcome === \"new\"`.**
+**TWO PRE-EXISTING RED GATES FOUND AND FIXED.** (1) `packages/core/src/tenantData.test.ts` -- the
+schema-drift TRIPWIRE -- has been RED since 28-03 (46 vs 50 tables, stale credential set), so a
+genuinely unclassified table was indistinguishable from the standing failure. (2) The `http.ts`
+route-count pin (7) refused the new route; bumped to 8 with the justification, which is the guard
+working. `npx convex codegen` CANNOT RUN HERE (no local backend on :3210), so the two
+`_generated/api.d.ts` lines were hand-added exactly as codegen emits them.
+**12 NON-DELETION MUTATIONS, ALL RED, ALL RESTORED, all three blind spots covered:** renames not
+deletions (header name, env name, event literals, route path); the TOLERANCE and SIGNATURE guards
+disabled INDEPENDENTLY, each killing only its own 2 tests (neither absorbs the other); and the 300s
+window pinned to written-out literals (301 rejected / 299 accepted), not just the imported constant.
+**A CRASHED MUTATION HARNESS POISONED THE BATTERY ONCE** -- it died on a Windows cp1252 decode error
+AFTER applying mutation 1, so the re-run snapshotted the already-mutated tree as its baseline and all
+8 results plus the post-restore check were meaningless. Read the FILE, never trust the harness.
+`tsc --noEmit` run SEPARATELY in billing/core/backend, all exit 0 (it caught 3 real errors a green
+suite was silent over). Backend 2833/2833 (107 files; up from 2809/2809 in 106), core 1232/1232,
+billing 36/36, `check-playbooks` STDOUT empty. `SPEND_RAILS` untouched; `git diff --stat HEAD --
+\"*.ts\"` empty after committing.
+`requirements-completed: []` -- **BILL-02 STAYS PENDING**: it also needs 28.1-04's outbound
+`Idempotency-Key` transport, so `requirements mark-complete` was deliberately NOT called.
+**NEXT: 28.1-02 is a CHECKPOINT (`autonomous: false`) -- Stripe Dashboard configuration and
+credentials.** It must produce the endpoint pointing at the Convex SITE origin
+(`/billing/stripe/webhook`) and then `npx convex env set BILLING_STRIPE_WEBHOOK_SECRET whsec_...`
+from packages/backend (never Vercel, never `.env`). Do NOT run any `gsd-tools state *` subcommand
+against this file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-28T14:25:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 421
+  completed_plans: 325
+  percent: 77
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 28
 current_plan: 9 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail, 28-06 read-only QuickBooks rail) -- 28 IN PROGRESS
 status: executing
