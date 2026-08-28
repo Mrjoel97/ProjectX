@@ -633,12 +633,16 @@ export function dedupeEvidence(items: readonly Evidence[]): {
  * `totalEvidenceCharCap` are only meaningful here, and this is the call that has to happen before
  * anything is paid for.
  *
- * ponytail: today the run-scope caller is `knowledgeLlm.synthesizeKnowledge`, immediately before
- * the paid model call, because that is the first place the union of adapter output exists.
- * Ceiling: the per-source counts an adapter already published are minted before that clamp, so a
- * corpus cut at the union can leave a state whose `returned` overstates what reached synthesis.
- * Upgrade path: plan 29-06's coordinator clamps the union ONCE and mints every state after, and
- * this comment comes out when it does.
+ * WHO CALLS IT AT RUN SCOPE, as of 29-06: `convex/knowledgeSearch.ts`, the coordinator — the first
+ * place the union of every adapter's output exists. It dedupes, clamps the union ONCE, and THEN
+ * re-mints every per-source `returned` from what survived, so a state can no longer overstate what
+ * reached synthesis. That ordering is the whole point of the two scopes and it is tested by
+ * mutation (mint before the clamp -> a cut source still reports a complete read -> RED).
+ *
+ * `knowledgeLlm.synthesizeKnowledge` ALSO clamps at run scope, and that is defence in depth rather
+ * than a duplicate: its `rawEvidence` argument is an unbounded array crossing an action boundary,
+ * so it is a trust boundary in its own right. The clamp is idempotent, so a corpus the coordinator
+ * already cut passes through unchanged.
  */
 export type EvidenceScope = "source" | "run";
 

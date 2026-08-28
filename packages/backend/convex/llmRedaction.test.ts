@@ -433,6 +433,104 @@ test.each([
   }
 });
 
+// ── 29-06: the knowledge COORDINATOR's two planes ────────────────────────────────────────────────
+
+/**
+ * Content-bearing identifiers, and every one of them is a real field on the search plane:
+ * `question`/`query` (the user's own words), `summary` and `text` (model prose over untrusted
+ * sources), `label`/`title`/`subject`/`sender`/`name` (a doc title, a file name, a mail subject),
+ * `excerpt` (a quoted passage) and `sourceRef` (an id we are allowed to STORE on the content row,
+ * but which is per-record and identifies the document a citation points at).
+ *
+ * The hash and the count forms are excluded by construction: `questionHash` and every `*Count` /
+ * `*Ref` name below survive a `\b…\b` match against these words only if they are the bare word.
+ *
+ * `claims` and `evidence` are deliberately NOT here. They are the ARGUMENT names of
+ * `redactedSearchEvent`, a pure projection in `@pikar/core` whose parameters are `claims: number`
+ * and whose output keys are `claimCount` / `evidenceCount` — banning the words would ban the very
+ * call that does the redacting. The projection's own contract is covered by `knowledgeSearch`'s
+ * needle test, which asserts on the SERIALIZED STORED PAYLOAD rather than on this source.
+ */
+const KNOWLEDGE_CONTENT_FIELDS =
+  /\b(question|query|summary|text|label|title|subject|sender|excerpt|sourceRef|snippet|body)\b/;
+
+test("knowledgeSearch.ts writes exactly ONE audit row and its payload is refs/counts-only (§4)", () => {
+  // The coordinator is the only module in this feature that touches a governance plane at all
+  // (`knowledgeVaultDrive.ts`, `knowledgeExternalSources.ts` and `knowledgeLlm.ts` write none, and
+  // their own suites scan for that). So this ONE payload is the whole §4 surface of unified search.
+  const src = readSource("knowledgeSearch.ts")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  expect(src.match(/audit\.log\b/g) ?? [], "knowledgeSearch.ts audit.log call sites").toHaveLength(
+    1,
+  );
+  const payload = payloadAfter(src, /eventType:\s*["']knowledge\.searched["']/);
+  // POSITIVE CONTROL — a scan that found no payload would pass every assertion below vacuously.
+  expect(payload, "the knowledge.searched audit payload was not found").not.toBe("");
+  expect(payload).toMatch(/questionHash/);
+  expect(payload).toMatch(/redactedSearchEvent/);
+
+  // `x.length` is a COUNT, not content (the briefing.created idiom), and so is `claims.length`.
+  const stripped = payload.replace(/\b[A-Za-z]\w*\.length\b/g, "COUNT");
+  expect(stripped, `knowledge.searched leaks source content: ${payload}`).not.toMatch(
+    KNOWLEDGE_CONTENT_FIELDS,
+  );
+  // The planner's rejected SOURCE NAMES are model-authored strings ("notion",
+  // "http://evil.example"). Only the count may cross.
+  expect(stripped).toMatch(/rejectedPlanCount/);
+  expect(stripped, "a model-authored rejection name reaches the log plane").not.toMatch(
+    /rejected(?!PlanCount)/,
+  );
+});
+
+test("knowledgeSearch.ts writes NO telemetry, NO dead letter and NO agentSteps row", () => {
+  // The measurement rides the ONE audit event. A search has no `requests` row, so there is nothing
+  // for a telemetry row to be keyed on — see the next test.
+  // Comments STRIPPED: the module header explains WHY there is no telemetry row and names the
+  // symbol to do it, and a scan that reads its own subject's prose fails on the documentation of
+  // the invariant it enforces (the `gmail.ts:229` idiom — prose may name a hazard, CODE may not).
+  const src = readSource("knowledgeSearch.ts")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  expect(src, "the scan is vacuous — the module was not read").toMatch(/audit\.log\b/);
+  for (const forbidden of [
+    /\.insert\(\s*["'](audit|deadLetters|telemetry|agentSteps)["']/,
+    /telemetry\./,
+    /deadLetters/,
+    /agentSteps/,
+  ])
+    expect(src, `knowledgeSearch.ts reaches ${String(forbidden)}`).not.toMatch(forbidden);
+});
+
+test("telemetry.writeTerminal is STILL hard-bound to requestId: v.id('requests')", () => {
+  // 29-06 chose NOT to loosen this, and a decision recorded only in a comment is not a decision.
+  // If a later plan widens `requestId` to a string (or drops the fail-closed lookup) so a
+  // knowledge search can write a telemetry row, this fails and the choice gets re-made on purpose.
+  const src = readSource("telemetry.ts");
+  expect(src).toMatch(/requestId:\s*v\.id\("requests"\)/);
+  expect(src).toMatch(/telemetry: no request for/);
+});
+
+test("the TOOL-BEARING loop cannot reach the knowledge search plane at all (SC-2)", () => {
+  // The whole safety argument of unified search is that mail bodies, Drive text and CRM records
+  // never sit beside a tool grant. 29-06 deliberately ships NO cockpit tool, which is strictly
+  // stronger than the counts-only tool contract the plan allowed for — and this is what makes that
+  // an enforced absence rather than a claim in a module header. A future plan that DOES add the
+  // tool must delete this test on purpose and replace it with a counts-only return assertion.
+  const src = readSource("llm.ts");
+  expect(src, "the scan is vacuous — llm.ts is not the tool-bearing loop").toMatch(
+    /generateText[\s\S]*tools:/,
+  );
+  for (const module of [
+    "knowledgeSearch",
+    "knowledgeLlm",
+    "knowledgeVaultDrive",
+    "knowledgeExternalSources",
+  ])
+    expect(src, `llm.ts reaches ${module} — untrusted search content is one call from a tool grant`)
+      .not.toContain(module);
+});
+
 test("knowledgeLlm.ts is structurally TOOLLESS — both knowledge calls, no tools: anywhere", () => {
   // 29-04. The whole safety argument of the unified search: mail bodies, Drive text and CRM
   // records reach a model that CANNOT act. This is a WHOLE-FILE ban, not a per-block one, because

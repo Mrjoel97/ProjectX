@@ -569,9 +569,12 @@ const vEvidence = v.object({
   // either: `authorityFor` needs `docKind`/`origin`/`ownedByMe`/`providerAuthority`, which are
   // adapter-local facts that deliberately do not cross this boundary.
   //
-  // ⚠ FOR PLAN 29-06, WHICH IS THE FIRST NON-TEST CALLER: carry each adapter's
-  // `KnowledgeAdapterResult.evidence` through UNMODIFIED, or re-derive via `authorityFor` at the
-  // merge point. Do not let a coordinator compute or choose this value.
+  // THE FIRST NON-TEST CALLER LANDED (29-06) AND TAKES THE FIRST OPTION: `knowledgeSearch.ts`
+  // concatenates each adapter's `KnowledgeAdapterResult.evidence` and never writes an `authority`
+  // — dedupe, the run-level clamp and the citation projection all copy the field through. Its
+  // "authority and freshness are CODE-OWNED" test is what makes that checkable rather than
+  // promised: an `agent_promoted` vault document comes back `agent_authored` (the WEAKEST class)
+  // while the model's own attempt to award itself `tenant_owned` has no schema field to land in.
   authority: literals(AUTHORITY_CLASSES as readonly [AuthorityClass, ...AuthorityClass[]]),
   sourceUpdatedAt: v.optional(v.number()),
   retrievedAt: v.number(),
@@ -606,10 +609,13 @@ export const synthesizeKnowledge = internalAction({
     // It runs before the gate, the prompt and the model, so nothing is billed for evidence that
     // will not be used.
     //
-    // ponytail: the per-source `returned` counts the adapters published upstream are minted before
-    // this clamp, so a corpus cut HERE can leave a state that overstates what reached synthesis.
-    // Ceiling named rather than papered over. Upgrade path: plan 29-06's coordinator clamps the
-    // union ONCE and mints every state after it, and this call moves there.
+    // IT IS NOW THE SECOND RUN-SCOPE CLAMP, AND THAT IS DELIBERATE. 29-06's coordinator
+    // (`knowledgeSearch.ts`) dedupes, clamps the union ONCE and re-mints every per-source
+    // `returned` from what survived — so the "a state can overstate what reached synthesis"
+    // ceiling this comment used to name is closed at the source, not here. This call STAYS because
+    // `rawEvidence` is an unbounded array crossing an action boundary and any caller can reach it;
+    // it is a trust boundary, not bookkeeping. `clampEvidence` is idempotent, so an already-clamped
+    // corpus passes through unchanged and the coordinator's counts remain true.
     const { evidence } = clampEvidence(rawEvidence);
     const skill: { body: string; version: number } =
       skillVersion === undefined

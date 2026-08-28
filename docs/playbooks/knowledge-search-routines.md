@@ -1,5 +1,20 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-28 (**29-06 — THE COORDINATOR LANDS, AND THE RUN-LEVEL CLAMP WITH IT.**
+> `packages/backend/convex/knowledgeSearch.ts` is the one place a question becomes a search:
+> `tenantAction` -> `contentHash(question)` -> `planKnowledgeSearch` -> `Promise.allSettled` over
+> `KNOWLEDGE_ADAPTER_ACTIONS` -> `dedupeEvidence` -> `clampEvidence(corpus, "run")` -> re-mint every
+> per-source state -> `synthesizeKnowledge` -> one `knowledgeSearches` row -> one refs-only
+> `knowledge.searched` audit event. The wave-2 `ponytail:` comments that named this plan are gone
+> from `@pikar/core/knowledgeSearch.ts` and `knowledgeLlm.ts`; the second clamp inside
+> `synthesizeKnowledge` STAYS, as an action-boundary trust check, and now says so.
+> **THREE THINGS ARE NOT BUILT, on purpose and with a test each:** no cockpit tool (the tool-bearing
+> loop cannot reach any knowledge module at all — strictly stronger than the counts-only contract
+> the plan allowed for), no telemetry row (`writeTerminal` is hard-bound to
+> `requestId: v.id("requests")` and that binding is now pinned by a test rather than by a comment),
+> and no recurrence. See the 29-06 section at the foot of this file for the invariants, the
+> mutation witnesses and the two limits that are stated rather than hidden.)
+>
 > Last verified: 2026-08-28 (**WAVE-2 FINAL PASS — THE CROSS-PLANE AUTHORITY DIVERGENCE IS DECIDED,
 > NOT DISCLOSED.**
 >
@@ -628,3 +643,163 @@ plans 29-02 onward, and every recurrence live proof in 29-11.
 | **`sourcePreferences` array LENGTH is unbounded at the storage boundary.** Membership is closed (invariant 22); a Convex validator has no array-length bound, so 10000 repeats of `"vault"` is storable. Claiming a length bound in a comment is the defect invariant 22 exists to record, so it is recorded here instead. | `ponytail:` comment on the field. The real ceiling is `CUSTOMIZATION_CAPS.maxValuesPerField` (8) in `validateCustomization`; there is no writer of this field yet. Upgrade path: clamp in the `savedPrompts` mutation when plan 29-08 writes the first pin, and assert the refusal there. |
 | **`packages/backend/convex/schema.ts` is NOT watched by the §9 hook.** It is registered under `watch._unassigned` — explicitly acknowledged rather than left as a silent hole. | `watch.json` prefixes are per-file and `schema.ts` holds all 47 tables, so assigning it to this playbook would demand a knowledge-search bump for every unrelated table edit repo-wide — noise that trains readers to ignore the hook. The Phase-29 tables' real gate is `schema.test.ts`, which IS watched here and which now fails on enum drift, header drift and value drift. |
 | **Recurrence is entirely deferred**, by decision, not by omission. | Plan 29-11's decision record; invariant 15. |
+
+## Plan 29-05, Task 1 — the six APPROVED PACK TEMPLATE schemas (2026-08-28)
+
+`workflowCustomization.ts` gained the product half of ROUT-01: the closed field list a tenant may
+actually fill in for each Phase 27 workflow pack. Everything that was already here is machinery
+tested against a hand-written fixture; these are the six schemas a user can really reach.
+
+**Invariant 32 — the offered sources are DERIVED from the pack's own operation matrix.**
+`packReadableSources(templateId)` walks `WORKFLOW_PACKS[templateId].operations`, keeps the
+`existing` rows whose `reads` is not `null`, deduplicates and preserves manifest order. A
+hand-written list beside the manifest would let a schema offer `crm-facts` — a checkbox promising a
+read no tool performs — and nothing would catch it. Same "derive it or it drifts" rule
+`WORKFLOW_PACK_SKILL_NAMES` and `toolsForWorkflowPack` already follow.
+*Mutations RED:* dropping the `reads === null` skip (a produce-only `saveAsDocument` row becomes a
+"source"); dropping the `state !== "existing"` skip (every `missing` plane becomes offerable);
+replacing `sources` with a four-name literal.
+
+**Invariant 33 — a preference over ONE source is not offered at all.** `brand-review` reads only
+the vault, so it has no `source_preference` field. The other five do. The test asserts BOTH halves,
+so a schema that never offers preferences cannot pass by accident.
+*Mutation RED:* `sources.length > 1` → `> 0`.
+
+**Invariant 34 — the offered key vocabulary is a pinned literal set of ten**, and none of them is
+capability-shaped. `business_terms`, `tone`, one threshold per pack (`priority_count`,
+`campaign_weeks`, `reply_max_words`, `brief_max_points`, `sop_max_steps`, `review_max_findings`),
+`preferred_sources`, `extra_guidance`. A key matching
+`/tool|mcp|server|url|endpoint|key|token|secret|auth|code|script|command|prompt|body|model|webhook|env/i`
+fails the suite. Adding an eleventh key is therefore a deliberate act with a test to update.
+*Mutation RED:* renaming `business_terms` to `business_prompt`.
+
+**Invariant 35 — layer 1 is proved by ORDERING, not by a count.** The refusal test submits five
+capability-shaped keys (`tools`, `mcpServers`, `apiKey`, `body`, `authoredBody`) whose VALUES would
+each independently trip layer 2's content scan (a URL, an `sk-` key, `${`, `require(`). All five
+come back `unknown_field` and none comes back `forbidden_content` — which is only possible if the
+undeclared key was refused before its value was ever looked at. A companion test proves layer 2 is
+still live on a DECLARED free-text field, so the pair cannot both be satisfied by a dead scan.
+
+**Invariant 36 — the schema knows its template version but the rendered body does not.**
+`customizationSchemaFor(templateId, templateVersion)` echoes the version it was handed; the version
+is NOT validated in `@pikar/core`, which has no way to know which pack version is live. The Convex
+adapter reads the global ACTIVE pack row and refuses a mismatch — the only place that question can
+be answered honestly. The rendered body is therefore identical across two template versions while
+`canonicalCustomization` differs (`template=business-pulse@4` vs `@5`), which is exactly what makes
+a template republish a material change without churning the stored body.
+*Mutations RED:* hardcoding `templateVersion: 1`; moving the instruction block ahead of the
+threshold (the rendered body is pinned as one exact literal string).
+
+**Invariant 37 — `resolveWorkflowPack` is the template gate, reused not re-implemented**, because
+it uses `Object.hasOwn`: `"__proto__"` and `"constructor"` are refused rather than resolving to
+something on `Object.prototype`.
+*Mutation RED:* swapping it for `templateId in WORKFLOW_PACKS`, which walks the prototype chain and
+resolves both.
+
+**One tone vocabulary, four words** (`plain`, `warm`, `formal`, `direct`), shared by all six packs
+and deliberately NOT the `style-direct` / `style-coaching` / `style-concise` registry overlays —
+those are separate skill BODIES with their own activation story, and selecting one from a form
+field would be a body swap wearing a dropdown.
+
+
+## Plan 29-06 — the COORDINATOR, and where each bound is finally enforced (2026-08-28)
+
+`packages/backend/convex/knowledgeSearch.ts` composes the wave-2 adapters and the two toolless
+model calls into one cited tenant search. It owns no honesty rule of its own — every one lives in
+`@pikar/core/knowledgeSearch` and is mutation-tested there — only the ORDER.
+
+**Invariant 38 — the RUN-level clamp is here, and the per-source states are minted AFTER it.**
+The adapters clamp at `scope: "source"` because an adapter that cannot see the other four cannot
+spend a shared budget honestly. The coordinator is the first place the UNION exists, so
+`maxEvidenceTotal` and `totalEvidenceCharCap` bind here, BEFORE `synthesizeKnowledge` is called and
+therefore before anything is billed. Every `returned` is then re-computed from what survived the
+cut, so a state can no longer report eight rows when three reached the model.
+*Mutations RED:* `clampEvidence(corpus, "run")` -> `"source"`; returning `state` unchanged from
+`remintState`; taking `searchedGapCount` from the PRE-clamp reads (that last one was a REAL DEFECT
+the test caught, not a synthetic mutation).
+
+**Invariant 39 — the dedupe baseline, not the adapter's count, decides "partial".**
+A row absorbed as an exact duplicate is the same record read twice, not something a cap took away.
+`remintState` compares the kept count against the DEDUPED corpus, so collapsing a duplicate leaves
+an `available` read `available`. Only a row lost to a run bound turns a source `partial/cap`, and
+`provider_error` still outranks `cap` (the `settleRead` ordering).
+
+**Invariant 40 — a REJECTED adapter promise is a bug, and is surfaced as one.**
+Since the wave-2 blocker fix every adapter returns its governed `unavailable` state as DATA, so
+`Promise.allSettled`'s rejected arm means something threw that was not supposed to. `adapterOutcome`
+turns it into `unavailable/provider_error` — a named gap carrying zero rows, because
+`unavailableRead` is the only constructor of that arm and the arm has no `returned` field — and the
+coordinator counts it into `adapterCrashCount` so the bug is visible on the log plane.
+*Mutation RED:* a rejection returning `{available, returned: 0}`.
+*Stated limit:* the FULFILLED branch of `adapterOutcome` is what every behavioural test in this
+feature runs through, which is what binds the function to the handler. The REJECTED branch has no
+reachable driver today (all four adapters catch) and is exercised directly.
+
+**Invariant 41 — all-empty and all-unavailable are different rows.**
+`searchedGapCount` counts gaps among the sources a read was ACTUALLY attempted against, read off the
+re-minted states. Zero with sources present means "we looked and there is nothing"; three means
+"we could not look, and here is why for each". `renderSourceGap` turns each state into the sentence.
+
+**Invariant 42 — the tool-bearing loop cannot reach the knowledge plane AT ALL.**
+There is no cockpit tool. The user surface is 29-09's `KnowledgeSearchPanel`, which calls
+`knowledgeSearch.search` / `listByThread`. A tool would need a grant inside `llm.ts` AND a
+`cockpit-agent` skill-BODY change to make the model aware of it (CLAUDE.md §5 — prompts are registry
+rows), which is eval-gated work this plan could not certify. `llmRedaction.test.ts` scans `llm.ts`
+for the four knowledge module names with a positive control, so this is an enforced absence.
+A later plan that adds the tool must delete that test deliberately and replace it with a
+counts-only return assertion.
+*Mutation RED:* a `const _k = internal.knowledgeSearch;` line in `llm.ts`.
+
+**Invariant 43 — ONE governance write, and its payload is the whole §4 surface of this feature.**
+`knowledge.searched`, `actor: "system"`, `correlationId` = the coordinator's own run uuid, payload =
+`redactedSearchEvent` plus eight run refs/counts, registered in `AUDIT_VIEWER_EVENTS` with all 22
+keys. The question crosses as `questionHash` only. **The planner's REJECTED SOURCE NAMES are
+model-authored strings** ("notion", "http://evil.example") so only `rejectedPlanCount` crosses.
+Proven behaviourally — five unique needles in the question, a doc title, a doc body, a mail subject
+and a mail body, none of which appears in the serialized payload — and structurally by a payload
+scan with a vacuous-scan control.
+*Mutations RED:* `question` on the payload; a second `audit.log` site; the eventType anchor renamed
+(the control); `telemetry.` reachable from the coordinator; `telemetry.writeTerminal`'s
+`requestId: v.id("requests")` loosened to `v.string()`.
+
+**Invariant 44 — no telemetry row, and the reason is a hard binding, not a preference.**
+`telemetry.writeTerminal` is bound to `requestId: v.id("requests")` and throws
+`telemetry: no request for <id>`. A search has no `requests` row, and minting one to satisfy a
+foreign key would put a fabricated row on the delivery plane. The measurement rides the audit event.
+Cost is carried as REFS (`planRunRef` / `synthRunRef`, the `guardrails.recordSpend` correlation ids)
+rather than a restated figure.
+
+**Invariant 45 — a search with no evidence costs nothing.**
+The synthesizer is not called when the clamped corpus is empty: there is nothing to cite, so there
+is nothing a model could honestly write. `summary` is stored empty and the source states carry the
+reason.
+*Mutation RED:* `if (evidence.length > 0)` -> `if (true)`.
+
+### Two limits stated rather than hidden
+
+1. **`dedupeEvidence`'s same-ref-different-text CONFLICT arm is unreachable from the landed
+   adapters.** It needs one `(source, sourceRef)` read twice in ONE run, and no adapter can do that:
+   `vault.ownedDocsMeta` returns each document once, and Drive file ids, Gmail message ids and
+   HubSpot deal ids are unique within a page. The coordinator still carries `conflicting` rows into
+   the corpus (they are not dropped), but that line has no behavioural test and a mutation of it
+   would stay green. The conflict the USER sees is the one the synthesizer DECLARES through
+   `conflictEvidenceIds`, which `validateSynthesis` re-checks against the run's own evidence table —
+   that path IS tested, in both directions (a declared conflict survives onto the stored row; a
+   declared conflict citing an unminted id is stripped and counted as an invented citation).
+2. **`SEARCH_CAPS.maxEvidenceTotal` (24 rows) cannot be reached in an offline test.** A `SMOKE::`
+   vault query holds at most five 32-character document ids before it breaks
+   `SEARCH_CAPS.queryCharCap` (200), `gmail.knowledgeQuery` hydrates at most 5 bodies, and Drive
+   gives 8 — 18 in total. `totalEvidenceCharCap` (8,000) IS reachable and is what the run-clamp
+   tests bind on. The row cap's own enforcement is mutation-tested inside `@pikar/core`.
+   An earlier draft of that test used EIGHT vault seeds, which made the QUERY illegal, so
+   `clampSearchPlan` refused the vault entirely and the test silently measured a run in which the
+   vault was never searched. Count the characters before adding a seed.
+
+### A trap worth remembering: the `internal`-graph type cycle
+
+`type AdapterRef = typeof internal.knowledgeVaultDrive.searchVaultKnowledge` compiles, and it takes
+the whole repo's type inference down with it: `internal` is derived from `fullApi`, which now
+includes this module, so the reference closes a cycle. Measured — 0 `tsc` errors before, **379**
+after, nearly all of them `implicitly has an 'any' type` in unrelated files. The registry uses a
+hand-written `FunctionReference<"action", "internal", {tenantId, query}, KnowledgeAdapterResult>`,
+which keeps the same compile-time contract over the four adapters' signatures without the cycle.
