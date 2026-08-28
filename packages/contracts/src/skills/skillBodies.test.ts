@@ -6,6 +6,8 @@ import {
   DOCUMENT_CLASSIFIER_SKILL,
   FOLDER_DIGEST_SKILL,
   isGatedSkill,
+  KNOWLEDGE_QUERY_PLANNER_SKILL,
+  KNOWLEDGE_SYNTHESIZER_SKILL,
   MEDIA_DIRECTOR_SKILL,
 } from "../skill";
 import { bmcSkillBody } from "./bmc";
@@ -15,6 +17,8 @@ import { documentAnalystSkillBody } from "./documentAnalyst";
 import { documentClassifierSkillBody } from "./documentClassifier";
 import { folderDigestSkillBody } from "./folderDigest";
 import { growthOsDiagnosticSkillBody } from "./growthOsDiagnostic";
+import { knowledgeQueryPlannerSkillBody } from "./knowledgeQueryPlanner";
+import { knowledgeSynthesizerSkillBody } from "./knowledgeSynthesizer";
 import { leadEngineSkillBody } from "./leadEngine";
 import { leanCanvasSkillBody } from "./leanCanvas";
 import { mediaDirectorSkillBody } from "./mediaDirector";
@@ -100,6 +104,12 @@ const bodies: [string, string][] = [
   // anyway, with its blind spot stated in its own first output section.
   ["pack-process-sop", packProcessSopSkillBody],
   ["pack-brand-review", packBrandReviewSkillBody],
+  // Phase 29 (KNOW-01): the two toolless knowledge bodies. There is NO generator for the derived
+  // `.ts`, so this row is the only thing that turns an edit to one side into a failure instead of
+  // a silently stale seeded prompt — and it matters more here than usual because both bodies are
+  // GATED: the body an eval run certifies and the body `seedSkills` publishes must be one file.
+  ["knowledge-query-planner", knowledgeQueryPlannerSkillBody],
+  ["knowledge-synthesizer", knowledgeSynthesizerSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {
@@ -154,5 +164,69 @@ describe("folder-digest gating (15.3-06)", () => {
 describe("document-classifier gating (15.3-08)", () => {
   test("is DELIBERATELY UNGATED — do not add it to GATED_SKILLS", () => {
     expect(isGatedSkill(DOCUMENT_CLASSIFIER_SKILL)).toBe(false);
+  });
+});
+
+// Phase 29 (KNOW-01). The OPPOSITE direction from the four blocks above, and deliberately so: the
+// planner's containment is behavioural in exactly the half `clampSearchPlan` cannot see, and the
+// synthesizer ingests untrusted third-party content from several planes at once — the
+// `inbox-digest` criterion. See the reachability warning on each constant in `../skill.ts`: this
+// gate is clearable only once plan 29-06 lands a golden fixture that drives a knowledge search.
+describe("knowledge planner/synthesizer gating (29-04)", () => {
+  test.each([
+    KNOWLEDGE_QUERY_PLANNER_SKILL,
+    KNOWLEDGE_SYNTHESIZER_SKILL,
+  ])("%s is GATED — a candidate body may only activate on recorded eval evidence", (name) => {
+    expect(isGatedSkill(name)).toBe(true);
+  });
+});
+
+// A BODY IS NOT A CAPABILITY GRANT (ADR-007, CLAUDE.md §5). Neither knowledge call is given a
+// tool, and neither is told which sources exist: the planner's source list is supplied per run
+// from `KNOWLEDGE_SOURCES` and re-checked by `clampSearchPlan`, and the synthesizer only ever sees
+// fenced blocks. A body that hardcodes a source id or a provider name is drift the moment the
+// registry changes — and it is also how a "grant" gets written in prose and then believed.
+describe("the knowledge bodies encode NO tool grant and NO provider (29-04)", () => {
+  // LITERALS, not an import of the constant the implementation uses: an oracle that moves with its
+  // subject can never fail. The five source ids are pinned as strings in `knowledgeSearch.test.ts`
+  // (@pikar/core), which is a different package and cannot be imported from here anyway.
+  const FORBIDDEN = [
+    // the five knowledge source ids — code-supplied per run, never named in a body
+    "vault",
+    "drive",
+    "inbox",
+    "crm-facts",
+    "support-desk",
+    // provider/vendor names
+    "gmail",
+    "google",
+    "hubspot",
+    "quickbooks",
+    "stripe",
+    "outlook",
+    "notion",
+    "slack",
+    "salesforce",
+    // tool-grant vocabulary from the cockpit loop
+    "searchvault",
+    "senddraft",
+    "draftbody",
+    "createdocument",
+    "resolvecontacts",
+    "websearch",
+    "function call",
+  ];
+
+  test.each([
+    ["knowledge-query-planner", knowledgeQueryPlannerSkillBody],
+    ["knowledge-synthesizer", knowledgeSynthesizerSkillBody],
+  ])("%s names no source, no provider and no tool", (_name, body) => {
+    // Whitespace-collapsed, because a markdown body wraps: the 29-01 repair found a line-anchored
+    // scan that read green with the banned thing sitting in the file, one newline in.
+    const lower = lf(body).toLowerCase().replace(/\s+/g, " ");
+    expect(FORBIDDEN.filter((word) => lower.includes(word))).toEqual([]);
+    // POSITIVE CONTROL: the scan can see words that ARE in the body, so an empty result above is
+    // evidence of absence rather than evidence of a broken scan.
+    expect(lower).toContain("you have no tools");
   });
 });

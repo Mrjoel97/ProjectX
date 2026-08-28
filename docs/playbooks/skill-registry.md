@@ -1,6 +1,31 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-08-27 (**SUPERSEDES "A FILTERED PROBE OF AN EMAIL FIXTURE MUST CARRY A PIN"
+> Last verified: 2026-08-28 against **plan 29-04** (KNOW-01). Two new registry rows —
+> `knowledge-query-planner` and `knowledge-synthesizer`, seeded LAST in `SEEDS`, both **GATED**.
+> Three things a reader needs from this bump:
+>
+> 1. **THE GATE ON THESE TWO IS NOT YET CLEARABLE, AND THAT IS RECORDED RATHER THAN HIDDEN.**
+>    `seedSkills`' `rows.length === 0` branch lands both at v1 `active`, so nothing is blocked
+>    today. The FIRST BODY EDIT mints a candidate `activateSkill`'s EVAL_GATE holds until a green
+>    `pnpm eval:golden --skill <name>@N` run — and that runner drives `llm:runCockpitAgent`, which
+>    cannot reach a toolless knowledge call until **plan 29-06** lands the cockpit-side knowledge
+>    tool and threads `skillVersions` down into `knowledgeLlm`. Half of the rail is already built:
+>    both `knowledgeLlm` actions take a `skillVersion` pin and load that EXACT version, proved
+>    behaviourally in `knowledgeLlm.test.ts`. **Do not edit either body before 29-06 lands.**
+> 2. **A gated name with NO `SEEDS` row is a worse deadlock than an ungated skill**, and until
+>    now nothing tested for it: the row never reaches the registry, `getActiveSkill` throws
+>    `NO_ACTIVE_SKILL` forever, and no eval run can be recorded against a version that does not
+>    exist. `skills.test.ts` now LOADS every `GATED_SKILLS` body after `seedSkills` (behavioural,
+>    not an array comparison — that would pass on an empty body). MUTATION OBSERVED RED: delete
+>    the `knowledge-synthesizer` seed row.
+> 3. **A BODY IS NOT A CAPABILITY GRANT.** Neither knowledge body names a tool, a provider or a
+>    knowledge source: the planner's source list is supplied per run and re-checked by
+>    `clampSearchPlan`, and the synthesizer only ever sees fenced evidence blocks. A
+>    whitespace-collapsed source scan in `skillBodies.test.ts` fails on any of the five source
+>    ids, eight vendor names or six cockpit tool names, with a positive control beside it.
+>    MUTATIONS OBSERVED RED: insert `Gmail` into the planner body; remove the whitespace collapse.
+>
+> PREVIOUS: 2026-08-27 (**SUPERSEDES "A FILTERED PROBE OF AN EMAIL FIXTURE MUST CARRY A PIN"
 > BELOW. THAT RULE IS GONE, BECAUSE THE THING THAT MADE IT NECESSARY IS FIXED.** An unpinned run no
 > longer withholds the email rail: `isPinnedCockpitEvaluation` became
 > `isHarnessDrivenEvaluation(tenantId)`, keyed on the `eval-` tenant prefix alone. Any run shape —

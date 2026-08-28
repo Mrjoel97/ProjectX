@@ -33,6 +33,8 @@ import {
   isAgentAuthorableSkill,
   isGatedSkill,
   isUserAuthorableSkill,
+  KNOWLEDGE_QUERY_PLANNER_SKILL,
+  KNOWLEDGE_SYNTHESIZER_SKILL,
   LEAD_ENGINE_SKILL,
   LEAN_CANVAS_SKILL,
   type LoadedSkill,
@@ -68,6 +70,8 @@ import { folderDigestSkillBody } from "@pikar/contracts/skills/folderDigest";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { growthOsDiagnosticSkillBody } from "@pikar/contracts/skills/growthOsDiagnostic";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
+import { knowledgeQueryPlannerSkillBody } from "@pikar/contracts/skills/knowledgeQueryPlanner";
+import { knowledgeSynthesizerSkillBody } from "@pikar/contracts/skills/knowledgeSynthesizer";
 import {
   KNOWLEDGE_WORK_PINNED_AT,
   KNOWLEDGE_WORK_PROVENANCE,
@@ -635,6 +639,19 @@ const SEEDS = [
   // SEED BEFORE THIS SHIPS: `classifyDoc` loads it fail-closed, and on an unseeded deployment
   // every document classifies as `unclassified` (degraded label, never a failed document).
   { name: DOCUMENT_CLASSIFIER_SKILL, body: documentClassifierSkillBody },
+  // GATED (29-04, KNOW-01): the two TOOLLESS knowledge calls — a query planner and a cited
+  // synthesizer. APPEND-ONLY — these rows go LAST; do not reorder or touch the rows above.
+  // As NEW names they take the `rows.length === 0` branch below and land at v1 `active`, so
+  // bootstrap needs no eval cycle and no paid run. THE FIRST BODY EDIT IS DIFFERENT: it mints a
+  // candidate the EVAL_GATE holds until a green `--skill <name>@N` run records evidence, and the
+  // golden runner can only reach these calls once plan 29-06 lands the cockpit knowledge tool and
+  // threads `skillVersions` into `knowledgeLlm`. Read the reachability warning on
+  // KNOWLEDGE_QUERY_PLANNER_SKILL in contracts/src/skill.ts before editing either body.
+  // SEED BEFORE 29-06 SHIPS: both `knowledgeLlm` actions load fail-closed (getActiveSkill throws
+  // NO_ACTIVE_SKILL), so on an unseeded deployment a knowledge search errors rather than
+  // synthesizing from a hardcoded fallback — which is the correct direction and is deliberate.
+  { name: KNOWLEDGE_QUERY_PLANNER_SKILL, body: knowledgeQueryPlannerSkillBody },
+  { name: KNOWLEDGE_SYNTHESIZER_SKILL, body: knowledgeSynthesizerSkillBody },
 ];
 
 /** Every seeded skill name. Derived from `SEEDS`, never typed a second time. */

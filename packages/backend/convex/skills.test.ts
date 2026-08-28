@@ -8,6 +8,7 @@ import {
   composeUserSkillBody,
   type EvalEvidenceTenantTarget,
   EXECUTIVE_AGENT_AUTHOR_ID,
+  GATED_SKILLS,
   hasPassingEvidence,
   hasPassingTenantEvidence,
   isAgentAuthorableSkill,
@@ -88,6 +89,23 @@ describe("skills registry loader + activation", () => {
     const loaded = await t.run((ctx) => loadSkill(ctx, "cockpit-agent"));
     expect(loaded.version).toBe(1);
     expect(loaded.body.length).toBeGreaterThan(0);
+  });
+
+  // 29-04. THE GATE'S OTHER DEADLOCK, and it had no test: a name in `GATED_SKILLS` with no `SEEDS`
+  // row never reaches the registry at all, so `getActiveSkill` throws NO_ACTIVE_SKILL forever and
+  // no eval run can ever be recorded against it — a strictly worse failure than an ungated skill,
+  // and one that every existing seed assertion (each pinned to ONE name) is blind to. Behavioural
+  // on purpose: it LOADS each body rather than comparing two arrays, because the array comparison
+  // would pass on a `SEEDS` row whose body is the empty string.
+  test("EVERY gated skill actually seeds — a gated name with no SEEDS row can never activate", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+
+    for (const name of GATED_SKILLS) {
+      const loaded = await t.run((ctx) => loadSkill(ctx, name));
+      expect(loaded.version, `${name} did not seed at v1`).toBe(1);
+      expect(loaded.body.length, `${name} seeded an empty body`).toBeGreaterThan(0);
+    }
   });
 
   // Phase 18 (ACTN-04). The whole reason short-form got its OWN row rather than an edit to the
