@@ -24,6 +24,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import { classifyRevokeOutcome, PROVIDER_REVOKE_SUPPORT } from "./connectorOAuth";
+import schema from "./schema";
 import {
   ACCESS_TOKEN_TTL_S,
   classifyTokenFailure,
@@ -36,7 +37,6 @@ import {
   STRIPE_TOKEN_ENDPOINT,
   stripeAuthorizeUrl,
 } from "./stripeAuth";
-import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.*s");
 
@@ -145,10 +145,7 @@ async function seedConnection(
       accessExpiresAt: over.accessExpiresAt ?? Date.now() + 3_600_000,
       refreshExpiresAt: Date.now() + 365 * 86_400_000,
       externalAccountHash: await (async () => {
-        const digest = await crypto.subtle.digest(
-          "SHA-256",
-          new TextEncoder().encode(accountId),
-        );
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(accountId));
         return Array.from(new Uint8Array(digest))
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
@@ -171,6 +168,12 @@ describe("the Stripe App route, and not the dead Extension one", () => {
 
   test("the token exchange is Stripe's API host", () => {
     expect(STRIPE_TOKEN_ENDPOINT).toBe("https://api.stripe.com/v1/oauth/token");
+  });
+
+  test("the grant scope string is pinned to the literal Stripe Apps returns", () => {
+    // Asserted as a LITERAL, once. Every other test in this file builds its grant bodies from the
+    // same constant, so mutating the constant alone would move the tests with it and prove nothing.
+    expect(STRIPE_GRANT_SCOPE).toBe("stripe_apps");
   });
 
   test("every declared permission is a read permission", () => {
@@ -220,14 +223,20 @@ describe("parseStripeGrant", () => {
   });
 
   test("refuses a scope string that is not the Stripe Apps one", () => {
-    expect(parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { scope: "read_write" }), now)).toBeNull();
+    expect(
+      parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { scope: "read_write" }), now),
+    ).toBeNull();
     // Even `read_only` is refused: it is the CONNECT vocabulary, and a grant that speaks it did not
     // come from a Stripe App. Accepting it would silently put the lane back on the dead route.
-    expect(parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { scope: "read_only" }), now)).toBeNull();
+    expect(
+      parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { scope: "read_only" }), now),
+    ).toBeNull();
   });
 
   test("refuses a stripe_user_id that is not an account id", () => {
-    expect(parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { stripe_user_id: "cus_1" }), now)).toBeNull();
+    expect(
+      parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { stripe_user_id: "cus_1" }), now),
+    ).toBeNull();
     expect(parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { stripe_user_id: 7 }), now)).toBeNull();
   });
 
@@ -271,7 +280,12 @@ describe("parseStripeCredential", () => {
     expect(parseStripeCredential("not json")).toBeNull();
     expect(
       parseStripeCredential(
-        JSON.stringify({ accessToken: ACCESS_1, refreshToken: REFRESH_1, accountId: "nope", scope: "x" }),
+        JSON.stringify({
+          accessToken: ACCESS_1,
+          refreshToken: REFRESH_1,
+          accountId: "nope",
+          scope: "x",
+        }),
       ),
     ).toBeNull();
   });
@@ -395,7 +409,9 @@ describe("handleCallback", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => jsonResponse(grantBody(ACCESS_2, REFRESH_2, { stripe_user_id: OTHER_ACCOUNT }))),
+      vi.fn(async () =>
+        jsonResponse(grantBody(ACCESS_2, REFRESH_2, { stripe_user_id: OTHER_ACCOUNT })),
+      ),
     );
     const result = await h.t.action(internal.stripeAuth.handleCallback, {
       environment: "sandbox",
@@ -448,7 +464,10 @@ describe("handleCallback", () => {
       environment: "sandbox",
       redirectPath: "/dashboard/profile",
     });
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1))),
+    );
     await h.t.action(internal.stripeAuth.handleCallback, {
       environment: "sandbox",
       state: minted.state,
@@ -593,7 +612,10 @@ describe("disconnect — there is no documented platform-initiated revoke for St
   test("the local clear is recorded as a local clear — never as a confirmed revocation", async () => {
     const h = await harness();
     await seedConnection(h.t, h.tenantA);
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, 200)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({}, 200)),
+    );
     await h.asA.action(api.stripeAuth.disconnect, { environment: "sandbox" });
 
     const rows = await h.t.run((ctx) => ctx.db.query("connectorConnections").collect());
@@ -609,7 +631,10 @@ describe("disconnect — there is no documented platform-initiated revoke for St
   test("the client projection tells the user the grant may still be live on Stripe's side", async () => {
     const h = await harness();
     await seedConnection(h.t, h.tenantA);
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, 200)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({}, 200)),
+    );
     await h.asA.action(api.stripeAuth.disconnect, { environment: "sandbox" });
     const view = await h.asA.query(api.connectorCredentials.connectorStatuses, {});
     expect(view[0]?.revocation?.upstream).toBe("unsupported");
@@ -618,7 +643,10 @@ describe("disconnect — there is no documented platform-initiated revoke for St
   test("the lane runner's revoke shares one body with the tenant action", async () => {
     const h = await harness();
     await seedConnection(h.t, h.tenantA);
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, 200)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({}, 200)),
+    );
     const out = await h.t.action(internal.stripeAuth.disconnectForTenant, {
       tenantId: h.tenantA,
       environment: "sandbox",
@@ -632,7 +660,10 @@ describe("disconnect — there is no documented platform-initiated revoke for St
     const h = await harness();
     await seedConnection(h.t, h.tenantA);
     await seedConnection(h.t, h.tenantB);
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, 200)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({}, 200)),
+    );
     await h.asA.action(api.stripeAuth.disconnect, { environment: "sandbox" });
     const rows = await h.t.run((ctx) => ctx.db.query("connectorConnections").collect());
     const b = rows.find((r) => r.tenantId === h.tenantB);
@@ -646,8 +677,30 @@ describe("disconnect — there is no documented platform-initiated revoke for St
 const laneSources = (): [string, string][] =>
   Object.entries(rawSources).filter(
     ([path]) =>
-      /\/stripe[A-Za-z]*\.ts$/.test(path) && !path.endsWith(".test.ts") && !path.includes("_generated"),
+      /\/stripe[A-Za-z]*\.ts$/.test(path) &&
+      !path.endsWith(".test.ts") &&
+      !path.includes("_generated"),
   );
+
+/**
+ * The same lane modules with comments removed.
+ *
+ * The namespace scan below must catch CODE reaching the 28.1 billing namespace, not prose warning
+ * against it — the first run of this file went red on `stripeAuth.ts`'s own doc comment explaining
+ * why `BILLING_STRIPE_*` must never appear. That is `env.test.ts`'s "guard catching its own
+ * documentation" defect, and the fix is the same, INCLUDING THE ORDER: line comments first, because
+ * doing block comments first lets a `/*` inside a `//` comment open a block that runs to the next
+ * `*``/` anywhere in the file and swallows real code in between.
+ */
+const laneCode = (): [string, string][] =>
+  laneSources().map(([path, src]) => [
+    path,
+    src
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("//"))
+      .join("\n")
+      .replace(/\/\*[\s\S]*?\*\//g, ""),
+  ]);
 
 describe("the lane modules cannot express a write", () => {
   test("there are lane modules to scan", () => {
@@ -702,18 +755,36 @@ describe("the 28.1 billing namespace stays out of this lane", () => {
     // A SECOND Stripe integration exists in this repo, pointing the OPPOSITE way: it charges from
     // Pikar's OWN merchant account and is write-capable. The naming split is the only thing keeping
     // the wrong secret out of this path.
-    for (const [path, src] of laneSources()) {
+    for (const [path, src] of laneCode()) {
       expect(`${path}:${src.includes("BILLING_")}`).toBe(`${path}:false`);
       expect(`${path}:${src.includes("packages/billing")}`).toBe(`${path}:false`);
       expect(`${path}:${src.includes("@pikar/billing")}`).toBe(`${path}:false`);
     }
   });
 
+  test("the comment stripper does not hide a real BILLING_ reference", () => {
+    // A stripper that ate too much would make the guard above vacuous — the exact way env.test.ts's
+    // block-comment ordering bug hid a live `process.env` consumer. So: the same transformation,
+    // applied to a source that DOES reach the other namespace in code, must still be caught.
+    const [, strip] = laneCode()[0] ?? ["", ""];
+    expect(strip.length).toBeGreaterThan(200);
+    const planted = `// BILLING_STRIPE_SECRET_KEY is only mentioned here\nconst x = process.env.BILLING_STRIPE_SECRET_KEY;`;
+    const stripped = planted
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("//"))
+      .join("\n")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(stripped.includes("BILLING_")).toBe(true);
+  });
+
   test("this lane's env names are all STRIPE_APP_ prefixed", () => {
-    for (const [path, src] of laneSources()) {
-      for (const [, name] of src.matchAll(/process\.env\.([A-Z_0-9]+)/g)) {
+    for (const [path, src] of laneCode()) {
+      for (const match of src.matchAll(/process\.env\.([A-Z_0-9]+)/g)) {
+        const name = match[1] ?? "";
         if (!name.includes("STRIPE")) continue;
-        expect(`${path}:${name}`).toBe(`${path}:${name.startsWith("STRIPE_APP_") ? name : "STRIPE_APP_*"}`);
+        expect(`${path}:${name}`).toBe(
+          `${path}:${name.startsWith("STRIPE_APP_") ? name : "STRIPE_APP_*"}`,
+        );
       }
     }
   });

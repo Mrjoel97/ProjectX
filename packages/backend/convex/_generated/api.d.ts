@@ -95,6 +95,7 @@ import type * as skills from "../skills.js";
 import type * as smoke from "../smoke.js";
 import type * as smokeAssert from "../smokeAssert.js";
 import type * as spendLedger from "../spendLedger.js";
+import type * as stripeAuth from "../stripeAuth.js";
 import type * as telemetry from "../telemetry.js";
 import type * as tenantDelete from "../tenantDelete.js";
 import type * as tenantExport from "../tenantExport.js";
@@ -217,6 +218,7 @@ declare const fullApi: ApiFromModules<{
   smoke: typeof smoke;
   smokeAssert: typeof smokeAssert;
   spendLedger: typeof spendLedger;
+  stripeAuth: typeof stripeAuth;
   telemetry: typeof telemetry;
   tenantDelete: typeof tenantDelete;
   tenantExport: typeof tenantExport;

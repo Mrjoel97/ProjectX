@@ -152,6 +152,36 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
       "Nothing visibly. Amounts from a non-USD company are labelled USD, which mislabels money rather than failing.",
   },
 
+  // ── The tenant's own Stripe account, READ-ONLY ──────────────────────────────────────────────
+  //
+  // `STRIPE_APP_*` is this repo's read-only Stripe App, reading a TENANT'S account. It is NOT
+  // Pikar's own merchant account: that is the write-capable `BILLING_STRIPE_*` family and it must
+  // never be substituted here. The prefix split is the boundary.
+  {
+    name: "STRIPE_APP_CLIENT_ID",
+    tier: "feature",
+    whatBreaks: "Connecting a tenant's Stripe account, and therefore every payment-rail read.",
+  },
+  {
+    name: "STRIPE_APP_SECRET_KEY",
+    tier: "feature",
+    whatBreaks:
+      "The Stripe Apps token exchange and the rolling refresh. A connection cannot be made or renewed.",
+  },
+  {
+    name: "STRIPE_APP_REDIRECT_URI",
+    tier: "feature",
+    whatBreaks: "The Stripe Apps consent callback lands nowhere.",
+  },
+  {
+    // Not a secret: the Stripe API version this lane's parsers were written against. Unset, the
+    // lane REFUSES to read rather than silently taking whichever version the connected account's
+    // dashboard is on — Stripe ships breaking changes per version and the tenant can move it.
+    name: "STRIPE_APP_API_VERSION",
+    tier: "feature",
+    whatBreaks: "Every Stripe read fails closed rather than running against an unpinned shape.",
+  },
+
   // ── Governed delivery ───────────────────────────────────────────────────────────────────────
   {
     name: "UNSUBSCRIBE_SECRET",
@@ -356,6 +386,9 @@ export const ORIGIN_ENV: readonly string[] = [
   // Intuit matches the redirect URI EXACTLY against the one registered on the app, so an ephemeral
   // origin here does not merely fail to resolve — the exchange is refused before the browser moves.
   "QUICKBOOKS_REDIRECT_URI",
+  // Stripe matches the redirect against the app manifest's `allowed_redirect_uris`, so an ephemeral
+  // preview origin is refused at the consent screen rather than merely failing to resolve later.
+  "STRIPE_APP_REDIRECT_URI",
 ];
 
 /**
