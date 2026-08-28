@@ -13,6 +13,9 @@
 import type { CashFigure, CashOrigin } from "@pikar/core/cash";
 import type { FigureActor } from "@pikar/core/financeClaim";
 import { err, ok, type Result } from "@pikar/core/result";
+// Type-only, so no runtime cycle: `credential.ts` owns the environment vocabulary and this
+// module owns the provider vocabulary. Neither re-declares the other’s closed set.
+import type { ConnectorEnvironment } from "./credential";
 
 const DAY_MS = 86_400_000;
 
@@ -44,6 +47,178 @@ export const SOURCE_AUTHORITIES = [
 export type SourceAuthority = (typeof SOURCE_AUTHORITIES)[number];
 export const isSourceAuthority = (v: unknown): v is SourceAuthority =>
   typeof v === "string" && (SOURCE_AUTHORITIES as readonly string[]).includes(v);
+
+// ── Lane eligibility — admission and the live gate are SEPARATE axes ──────────────────────
+
+/**
+ * The owner's suitability DECISION, mirroring the `decision:` marker in
+ * `docs/connectors/<provider>-suitability.md`. The FILE is the register of record; a
+ * `providerGates` row is the runtime copy, and `scripts/check-provider-lane.mjs` is what keeps the
+ * two honest.
+ *
+ * `undecided` is the DEFAULT and it is BLOCKING — the register must not be satisfiable by
+ * forgetting to answer. It has no `providerGates` literal on purpose: a missing row IS `undecided`,
+ * so there is exactly one representation of "nobody judged this".
+ */
+export const ADMISSIONS = [
+  "approved_beta",
+  "approved_production",
+  "blocked",
+  "deferred",
+  "undecided",
+] as const;
+export type Admission = (typeof ADMISSIONS)[number];
+
+/**
+ * The STORED live-gate result — whether a controlled live read/revoke was actually observed.
+ *
+ * `failed` is not a synonym for `parked`. A lane that ran and broke is operationally different from
+ * one that never ran: the first says something about a provider we were connected to, the second
+ * says nothing at all. Both are unavailable to consumers; only one is an incident.
+ */
+export const LANES = ["passed", "parked", "failed"] as const;
+export type Lane = (typeof LANES)[number];
+
+/**
+ * The RESOLVED state a consumer reads. Five values over three stored ones, because two of them
+ * cannot honestly be stored:
+ *
+ *   • `pending` — there is no gate record. It is the ABSENCE of a row, and a row saying "pending"
+ *     would be a row claiming a judgment exists.
+ *   • `expired` — `reviewBy` has passed. Storing this would mean a row that was true when written
+ *     and silently false an hour later; the register caps evidence life at 90 days precisely
+ *     because a stored freshness flag rots. Resolved against `now`, always.
+ */
+export const ELIGIBILITY_STATES = ["passed", "parked", "expired", "failed", "pending"] as const;
+export type EligibilityState = (typeof ELIGIBILITY_STATES)[number];
+
+/** Closed. A refusal names WHICH axis refused — "not eligible" alone is unactionable. */
+export const ELIGIBILITY_REASONS = [
+  "no_gate_record",
+  "live_gate_failed",
+  "evidence_expired",
+  "lane_not_passed",
+  "admission_does_not_permit",
+  "no_read_paths",
+  "open_condition_unresolved",
+] as const;
+export type EligibilityReason = (typeof ELIGIBILITY_REASONS)[number];
+
+/**
+ * A condition that survived its provider's approval, and the plan that owes an answer.
+ *
+ * These are NOT advisory. On 2026-08-27 all four providers were admitted `approved_production` and
+ * NOT ONE of the four approvals resolved its record's open condition — three of those approvals
+ * rest on owner testimony rather than evidence. A gate that ignored them would let a provider go
+ * live on a say-so, which is the exact failure the register exists to prevent.
+ */
+export type OpenCondition = {
+  /** A stable slug. This is the token a lane clears on the gate record. */
+  id: string;
+  /** The Phase 28 plan that must confront it. */
+  resolvedBy: string;
+};
+
+/**
+ * Kept in step with the register's "Open conditions that survived every approval" table by a
+ * parity test in `contracts.test.ts` — the docs are the source of truth and this is the machine
+ * copy, so the test compares them rather than trusting either alone. Resolving one means editing
+ * BOTH, deliberately.
+ */
+export const PROVIDER_OPEN_CONDITIONS: Record<Provider, readonly OpenCondition[]> = {
+  // Does `POST /oauth/2026-03/token/revoke` cascade to already-issued ACCESS tokens? Undocumented;
+  // the legacy DELETE did not.
+  hubspot: [{ id: "revoke-cascades-to-access-tokens", resolvedBy: "28-22" }],
+  // App Partner Program tier unstated, so the GET/query-only allow-list is mandatory.
+  quickbooks: [{ id: "partner-tier-and-poll-budget", resolvedBy: "28-23" }],
+  // Platform-initiated revocation for Stripe Apps is undocumented. Not closable by a green test.
+  stripe: [{ id: "platform-initiated-revocation", resolvedBy: "28-24" }],
+  // No revoke endpoint documented anywhere; sandbox is non-probative about production.
+  paypal: [{ id: "no-documented-revoke-endpoint", resolvedBy: "28-25" }],
+};
+
+/** The `providerGates` row, as the pure rule sees it. Convex validators own the wire shape. */
+export type ProviderGateRecord = {
+  provider: Provider;
+  environment: ConnectorEnvironment;
+  admission: Admission;
+  lane: Lane;
+  /** Evidence expiry. An expired record is `parked`, not `passed`. */
+  reviewBy: number;
+  /** Open-condition ids a lane explicitly closed with evidence. */
+  clearedConditions: readonly string[];
+};
+
+export type EligibilityInput = {
+  now: number;
+  /**
+   * How many paths this provider may read, from `connectorFetch.PROVIDER_READ_PATHS`. Passed in
+   * rather than imported so this stays Convex-free — and so the rule cannot drift from the
+   * allow-list it depends on. `stripe` is `[]` BY DECISION (28-04); a provider that may read
+   * nothing is not eligible for anything, whatever the owner approved.
+   */
+  readPathCount: number;
+  /** Open-condition ids still outstanding for this provider. */
+  openConditions: readonly string[];
+};
+
+export type Eligibility = {
+  state: EligibilityState;
+  reasons: readonly EligibilityReason[];
+  unresolvedConditions: readonly string[];
+};
+
+/** Production exposure needs the production decision; sandbox accepts either approval. */
+const admissionPermits = (admission: Admission, environment: ConnectorEnvironment): boolean =>
+  admission === "approved_production" ||
+  (admission === "approved_beta" && environment === "sandbox");
+
+/**
+ * THE COMPOSITE RULE. An admission decision is not a passed live gate, and this function is the
+ * only place the two are ever combined.
+ *
+ * `approved_production` means "engineering and production exposure are PERMITTED". It does not mean
+ * the provider demonstrated a live read and a live revoke — that is wave 7 (28-22..25). Collapsing
+ * the two into one flag would make those seals decorative and let a provider go discoverable on an
+ * owner's say-so alone.
+ *
+ * The terminal states short-circuit (there is nothing to add to "no record exists"); the blocking
+ * axes ACCUMULATE, so fixing one does not merely reveal the next one run at a time.
+ */
+export function resolveProviderEligibility(
+  record: ProviderGateRecord | null,
+  input: EligibilityInput,
+): Eligibility {
+  const unresolvedConditions =
+    record === null
+      ? [...input.openConditions]
+      : input.openConditions.filter((c) => !record.clearedConditions.includes(c));
+
+  if (record === null) {
+    return { state: "pending", reasons: ["no_gate_record"], unresolvedConditions };
+  }
+  // A failure outranks staleness: a lane that broke is an incident, not an expiry.
+  if (record.lane === "failed") {
+    return { state: "failed", reasons: ["live_gate_failed"], unresolvedConditions };
+  }
+  if (record.reviewBy <= input.now) {
+    return { state: "expired", reasons: ["evidence_expired"], unresolvedConditions };
+  }
+
+  const reasons: EligibilityReason[] = [];
+  if (record.lane !== "passed") reasons.push("lane_not_passed");
+  if (!admissionPermits(record.admission, record.environment)) {
+    reasons.push("admission_does_not_permit");
+  }
+  if (input.readPathCount <= 0) reasons.push("no_read_paths");
+  if (unresolvedConditions.length > 0) reasons.push("open_condition_unresolved");
+
+  return {
+    state: reasons.length === 0 ? "passed" : "parked",
+    reasons,
+    unresolvedConditions,
+  };
+}
 
 // ── Code-owned caps ───────────────────────────────────────────────────────────────────────
 

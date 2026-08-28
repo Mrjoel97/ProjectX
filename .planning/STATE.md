@@ -3,51 +3,263 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 1 of 29 executed (28-17, the Wave 1 readiness gate) -- 28 IN PROGRESS
+current_plan: 8 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail) -- 28 IN PROGRESS
 status: executing
-stopped_at: "28-17 SEALED `passed`. **PHASE 28 IS UNBLOCKED, AND EXACTLY ONE OF THE SIXTEEN GREEN
-ROWS WAS CHECKED BY NOBODY BUT A PERSON.** `node scripts/check-phase28-readiness.mjs` exits 0 over
-16 prerequisite rows resolved from a NAMED SYMBOL IN A FILE ON DISK -- never from a SUMMARY.md, a
-ROADMAP row or a planner's memory (Phase 27's own readiness audit found ELEVEN rotted premises of
-exactly that shape). 15 rows are machine-verified. **`p25-production-posture` is green on OWNER
-ATTESTATION dated 2026-08-27** -- prod-set secrets, org-owned OAuth client, deployed build fails
-closed -- and the readiness doc records those three claims verbatim under an explicit 'no code
-checked this' heading, NOT as evidence. **THE BOOKKEEPING STILL DISAGREES WITH THE IMPLIED HISTORY:
-Phase 25 plans 25-11 / 25-12 / 25-13 have NO SUMMARY ON DISK**, and those are precisely where
-production secret/OAuth posture would have been exercised; the owner did not attest that they ran.
-If a production connector grant misbehaves, that row is the first suspect. To reverse it, set
-`phase25_production_posture: block` in the attestation comment -- one edit re-blocks every
-dependent plan.
-**THE DURABLE FINDING IS A DEFECT IN THE GATE ITSELF.** Task 1's checker matched with
-`String.includes` and `--self-check` passed all 91 symbols -- because its only mutation was
-DELETION, which is invisible to a substring matcher. Two real exports were renamed in the working
-tree (`listPacks` -> `listPacksRENAMED`, `pipelineTiles` -> `pipelineTilesRENAMED`) and **THE GATE
-STAYED GREEN over the exact rename it exists to catch.** Fixed with identifier-boundary
-`containsSymbol`, and suffix/prefix RENAME mutations were added to `--self-check` permanently.
-Re-run: `p19-pipeline-view` and `p27-discovery` red, exit 1, files restored clean. **Mutation
-testing only proves what it mutates -- and here the untested assumption was inside the harness.**
-**THREE INVENTORY CONSEQUENCES EVERY 28 PLAN MUST RESPECT** (each contradicts a 2026-08-05
-assumption): (1) THERE IS NO SECOND CRM -- `convex/contacts.ts` is the only
-person/consent/suppression/follow-up store, REVN-04 attaches provider refs to it and creates no
-opportunity/stage/deal-value; (2) A PACK WITH A TOOL ALLOW-LIST IS A LEAF AGENT --
-`runAgentLoop` sets `grantDispatch: toolNames === undefined`, so a revenue pack carrying a static
-grant structurally cannot dispatch a specialist, compose in the Executive Agent; (3) THERE IS NO
-SIXTH EVENT PLANE -- `workflowPackEvents` + `core/workflowPackMetrics.ts` is the contract, and
-cost/latency are READ from `spendEvents`/`telemetry`, never re-emitted. Plus: suppression is
-checked TWICE (`cockpit.executePlan` per-recipient before the group join, `gmail`
-`prepareGovernedMessage` at the wire) -- REVN-06 must not add a third; and missing credentials
-THROW (`requireEnv`/`requireEnvMedia`), a connector that degrades to a dev default is the one thing
-`p25-no-dev-fallback` forbids.
-**NEXT: Wave 2** -- 28-01 (provider suitability), 28-18 (playbook/watch ownership), 28-02 (finance
-core). Every dependent plan runs the gate FIRST; exit 1 means stop, not shim. Regenerate the
-interface inventory with `--inventory`; do not hand-edit it. Working branch
-feat/27-02-pack-contracts."
-last_updated: "2026-08-27T14:10:00.000Z"
+stopped_at: "28-05 SEALED (`ccb0281` rail, `362dee8` smoke+docs, `0dca7bd` env manifest), on top of 28-26's `1bb8b3b`/`40047f3`.
+**THE FIRST PROVIDER RAIL EXISTS AND IT HAS NEVER SPOKEN TO HUBSPOT.**
+`node scripts/check-provider-lane.mjs --provider hubspot` reads `consistent` -- decision, evidence
+life, absence, adapter, read-only, allow-list and parity all OK, open condition `PEND`. CONSISTENT
+IS NOT PASSED. Every one of the 77 new tests is offline against a stubbed `fetch`, $0.
+**THE OPEN CONDITION IS NOT CLEARED, AND THE REASON IS RECORDED IN THOSE WORDS.** 28-05 owed a live
+test of whether `POST /oauth/2026-03/token/revoke` cascades to already-issued ACCESS tokens. The
+MECHANISM shipped -- `hubspotAuth.probeRevocationCascade`, ONE action that reads with the token,
+revokes, then re-issues the SAME allow-listed GET with that same pre-revocation token (it cannot be
+split: `recordRevocation` clears the ciphertext, so the token only exists in memory across the
+revoke). It reports `true` / `false` / **`null`**, and `null` is the point -- a 429 or a 500 after a
+revoke proves NOTHING and must never read as proof. **It has never been run: there is no live grant,
+no client id, no test portal.** `docs/connectors/hubspot-suitability.md` now says
+**"Observed result: NONE"**. 28-22 MUST NOT SEAL THIS LANE until an observation lands there.
+Three things enforce that rather than trusting anyone: `PROVIDER_REVOKE_SUPPORT.hubspot =
+"unproven"` makes the clean-kill answer unreachable (a 2xx revoke is `confirmed` WITH
+`residualAccessUntil` = the access token's own expiry); the smoke's validator REFUSES any evidence
+file claiming the condition resolved; and a test asserts the probe writes no `providerGates` row.
+**"NO SECOND CRM" IS ENFORCED AT THE REQUEST, NOT AT THE PARSE.** The compile-time
+`HUBSPOT_CONTACT/COMPANY/DEAL_PROPERTIES` allow-lists mean Pikar never ASKS HubSpot for a name, an
+email, a phone or a deal title -- so there is no free text in the response to filter out and no way
+to forget the filter. Phase 19's contacts substrate stays the only person store; this rail produces
+refs for it and nothing consumes them yet (28-10/28-21).
+**EXACTLY FIVE READ SCOPES, and NO `crm.pipelines.*`** -- that family is ORDER pipelines; deal
+pipelines/stages come from `crm.objects.deals.read` + `crm.schemas.deals.read` together. OAuth is
+pinned to the date-versioned `2026-03` endpoints FROM THE API REFERENCE; the `working-with-oauth`
+guide still says `/oauth/v3/token` and is stale.
+**`postTokenForm` NOW LIVES IN `connectorOAuth.ts` AS THE ONE NON-GET IN THE CONNECTOR PLANE.** That
+is what makes the lane checker's read-only scan literally true, and the scan is no longer
+theoretical: it reads 2 REAL lane modules and passes. A rail that inlines its own token POST trips
+its own gate -- call the shared one, do not rename the string.
+**NO `providerGates` CHECK ON THE CONNECT/READ PATH, DELIBERATELY.** Gating it on a PASSED lane is
+circular (the lane cannot pass without a live read, which needs a connection). The gate governs
+CONSUMPTION via the passed-only `availableProviders` projection; 28-09 builds the surface.
+**DEFECT FOUND AND FIXED IN-PLAN: the `revoked` branch was unreachable.** A ciphertext guard above it
+absorbed every disconnected row into `not_connected` -- "you never connected this" instead of "you
+disconnected this". The outer-swallows-inner class, twice now in this phase.
+**MUTATION: 10 non-deletion mutations, ALL RED, ZERO SURVIVORS**, all three blind spots covered --
+renames not deletions (scope string, OAuth version, read path), the two guards disabled
+INDEPENDENTLY (exactly 1 test red each), and every constant the test imports ALSO pinned to a
+written-out LITERAL. **The first pass found the ciphertext guard SURVIVING; the hole was closed with
+a new test rather than accepted.**
+`tsc --noEmit` run SEPARATELY per package: revenue exit 0, backend exit 0 for this lane.
+**28-06 RAN IN THE SAME WORKING TREE AND A SHARED-FILE NEAR-MISS IS RECORDED.** Mid-plan, its
+in-flight edit had `classifyRevokeOutcome` treating a 400 as success (Intuit's rule) -- a SHARED
+function the HubSpot revoke also calls, under which a HubSpot 400 revoke would have read `confirmed`
+with nothing in the record supporting it. 28-05 staged only ITS OWN version of `connectorOAuth.ts`
+via git plumbing rather than committing a neighbour's unfinished work; 28-06 then dropped that
+change, and the landed `d18a70e` only adds an OPT-IN `basicAuth` + `asJson` to `postTokenForm`
+(HubSpot passes neither). The hubspot suite is green against the landed version. **The rule stands:
+never `git add` a shared connector file wholesale here, and never `git add -A`.** Their unclassified
+`QUICKBOOKS_*` env names are the ONE remaining backend test failure and their `quickbooks*.ts`
+account for every backend `tsc` error and the only `check-playbooks.mjs` block.
+`requirements-completed: []` -- **REVN-01 STAYS PENDING.** No callback route, no connections UI, no
+live read, no consumer. All four open conditions survive.
+**NEXT: the rest of wave 6 (28-06 QuickBooks in flight, 28-07 Stripe, 28-08 PayPal).** Each rail
+runs `check-phase28-readiness.mjs` FIRST, unpiped, and `check-provider-lane.mjs --provider <slug>`
+before and after. Note 28-07 starts with `PROVIDER_READ_PATHS.stripe = []` by decision -- a lane
+module over an empty allow-list is a RED row, so the paths and the module must land together. Do NOT
+run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working
+branch feat/27-02-pack-contracts."
+previous_stopped_at: "28-26 SEALED (`1bb8b3b`, `40047f3`), on top of 28-04's `48f5ef0` and 28-03's `82d14a6`.
+**PROVIDER AVAILABILITY IS NOW ONE SERVER-OWNED ANSWER, AND THE TWO AXES ARE HELD APART BY CODE.**
+`admission` (the owner's suitability DECISION -- permission to start) and `lane` (whether a
+controlled LIVE read/revoke was observed) are separate `providerGates` fields, and
+`resolveProviderEligibility` in `@pikar/revenue` is the ONLY place they are ever combined. Do not add
+a convenience boolean, do not let a UI derive availability from `admission`, and do not let any tool
+read the stored `lane` -- read the passed-only `availableProviders` projection (provider +
+environment and NOTHING else; a surface that could see `reviewBy` would start rendering
+`expiring soon` and treating an admission as a status).
+**FIVE RESOLVED STATES OVER THREE STORED ONES, and the two extra ones CANNOT be stored.** `pending`
+is the ABSENCE of a row (a row saying pending would be a row claiming a judgment exists -- which is
+also why there is no `undecided` schema literal), and `expired` is resolved against `now` (a stored
+freshness flag is true when written and false an hour later). A `failed` lane OUTRANKS expiry: a
+lane that broke is an incident, one that never ran is silence.
+**THE COMPOSITE RULE, all six, refusal names EVERY axis that refused:** row exists; lane passed;
+`reviewBy > now`; admission permits that environment (approved_beta reaches sandbox ONLY);
+`readPathCount > 0`; and every `PROVIDER_OPEN_CONDITIONS[provider]` id present in the row's
+`clearedConditions`. **`readPathCount` is passed IN, not imported** -- that is what keeps the pure
+rule Convex-free AND makes it impossible to contradict `PROVIDER_READ_PATHS.stripe = []`, so Stripe
+cannot be made available today whatever the owner approved.
+**`sealGate` VALIDATES A PASS BY RUNNING THE SAME RESOLVER THE READERS RUN.** One rule, one
+implementation -- a pass can never be recorded that a reader would then refuse. Parking is NEVER
+blocked (a lane discovered broken must always be switchable off) and `recordLaneFailure` carries NO
+CAS on purpose (refusing to record a failure on a stale revision would leave a known-broken lane
+readable) but it DOES bump `revision`, so an owner seal already in flight fails rather than
+resurrecting the lane.
+**THE FOUR OPEN ADMISSION CONDITIONS ARE NOW LOAD-BEARING, NOT PROSE.** hubspot
+`revoke-cascades-to-access-tokens` (28-22), quickbooks `partner-tier-and-poll-budget` (28-23),
+stripe `platform-initiated-revocation` (28-24), paypal `no-documented-revoke-endpoint` (28-25).
+28-22..25 CANNOT seal a passed lane without naming theirs with evidence. Ids are pinned by a
+WRITTEN-OUT LITERAL in `contracts.test.ts` and the provider/plan mapping is parity-tested against
+the register's own markdown table.
+**SCHEMA: TWO ADDITIVE FIELDS on a table that had never held a row** -- `lane` widened with `failed`,
+`clearedConditions` optional. 28-03 stays the connector-schema owner; this was flagged, not assumed.
+**`node scripts/check-provider-lane.mjs --all` IS EXIT 0 TODAY WITH 13 PENDING ROWS AND ZERO GREEN
+LANES -- CONSISTENT IS NOT PASSED.** Three statuses because `not built` and `wrong` are different
+facts; at `--stage final` a pending IS red. `--seal-decision from-owner` resolves an ADMITTED
+provider to **park, always** -- an admission is permission to start, never a passed lane, and
+turning one into the other here is the laundering the register exists to prevent.
+**MUTATION: 9 non-deletion mutations, ALL RED, ZERO SURVIVORS**, plus 11 CLI row mutations and 9 seal
+combinations. All three known blind spots addressed: renames are non-substring
+(`passed`->`parked`, `failed`->`broken`) and the builder-import scan compares the WHOLE imported set
+rather than banning substrings; the CAS and composite guards were disabled INDEPENDENTLY (M8 -> 1
+test, no composite; M5 -> 7 tests, no CAS); and because a constant the test imports moves with its
+own mutation, the condition ids are pinned to LITERALS and M9 mutates the SCHEMA literal instead.
+**`tsc --noEmit` RUN SEPARATELY in both packages, exit 0 -- it caught 41 real errors under a fully
+green 24-test suite** (`readonly string[]`, and 40 `Property providerGates does not exist` because
+`npx convex codegen` needs a running backend and timed out; the two `_generated/api.d.ts` lines were
+added by hand exactly as codegen emits them). Backend full run: **104/104 files, 2668/2668 tests
+pass**. The `Errors 1 error` (`ReferenceError: process is not defined`, worker teardown) is
+PRE-EXISTING and was attributed BY EXCLUSION -- re-running with `--exclude providerGates.test.ts`
+reproduces it identically (103 files, 2644 tests, same 1 error).
+**FOUND INSIDE THIS PLAN: the CLI condition row and the runtime resolver disagreed** -- the CLI
+ignored `--clear-condition` so a pass could never be sealed, while the resolver clears via the row.
+Two mechanisms for one rule, exactly the drift class this plan closes. Fixed, and a self-test case
+now proves the pass path is REACHABLE (a gate that refuses everything is broken, not safe).
+`requirements-completed: []` -- REVN-01/02/03/05 STAY PENDING. No adapter, no callback route, no
+connections UI, no live read; all four open conditions survive untouched.
+**NEXT: Wave 6 (28-05..08 provider rails).** Each rail still runs `check-phase28-readiness.mjs`
+FIRST, unpiped, and should now ALSO run `check-provider-lane.mjs --provider <slug>` before and after
+-- the `absence`/`adapter`/`read-only`/`allow-list` rows are about the module it is adding, and the
+read-only scan (playbook invariant 1) is ARMED BUT HAS NEVER BITTEN: there is no lane module in the
+tree for it to scan, so wave 6 is its first real test. Do NOT run any `gsd-tools state *` subcommand
+against this file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-27T23:10:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 35
   total_plans: 413
-  completed_plans: 318
+  completed_plans: 323
+  percent: 78
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 4 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider suitability, 28-02 deterministic finance core) -- 28 IN PROGRESS
+status: executing
+stopped_at: "28-02 SEALED. **PHASE 28 NOW HAS CODE, AND IT IS PURE.** `packages/revenue` is a
+Convex-free, LLM-free, dependency-free (bar `@pikar/core`) workspace package: 79 tests green,
+`tsc` clean, biome clean. `node scripts/check-phase28-readiness.mjs` was run FIRST and exited 0
+before a line was written.
+
+**WHAT IS FROZEN, AND WHAT EVERY LATER LANE MUST OBEY.** (1) `Money` is a SAFE-INTEGER count of
+minor units plus an explicit ISO 4217 code. Parsing is BigInt string arithmetic -- `0.1` USD is
+exactly `10`, never `10.000000000000002` -- and the magnitude check happens BEFORE any lossy
+conversion. Exponents come from a code-owned ISO 4217 exception table (JPY 0, BHD 3, CLF 4) with the
+ISO default of 2; enumerating the exceptions IS enumerating all of them. **An adapter may create a
+`Money` ONLY through `parseMoney` / `moneyFromMinor` / `moneyFromNumber`.** (2) Every combining
+operation returns a `Result` and REFUSES a mixed currency; the currency is a REQUIRED argument to
+`sumMoney`/`agingReport`, never read off the first element. (3) `validateProjection` REFUSES a
+capped `ready` -- a prefix of reality is not a total, so a capped read is `partial` or it does not
+land. (4) `receiptsTotal` takes a `Reconciled` and is the ONLY exported total over payments, so
+books+rail double-counting has no route through the public API. Do not add a second one.
+(5) `confidenceFor` is closed and MONOTONE DOWNWARD, asserted over every authority-subset x
+capped x partial x missing permutation.
+
+**MISSING IS UNKNOWN, NEVER ZERO, IN FOUR PLACES:** a null due date is the `unknown` aging bucket
+(not `current`); a median over no settled invoices is `not-computable` (not 0); missing opening
+cash makes the whole cash timeline `unknown` (not a balance starting at zero); and **no payroll run
+on file returns `unknown`, NEVER `covered: true` -- silence is not safety.**
+
+**REUSE, NOT RE-MINT.** `@pikar/core`'s `CashFigure` states are imported via
+`Exclude<CashFigure, {state:'known'}>`, so there is still exactly ONE definition of unknown vs
+not-applicable vs not-computable in the repo. What is genuinely new is the money type (core's
+`CashUnit` is the literal `\"usd\"` -- it cannot express EUR) and all the AR/lag/cash/payroll math.
+`toCashFigure` bridges back and returns `not-computable` for non-USD rather than losing the code.
+
+**THE MUTATION FINDING.** 18 non-deletion mutations were replayed (off-by-one on every boundary,
+RENAME on every discriminating literal -- never a deletion, per 28-17's own lesson). **ONE SURVIVED
+AND IT WAS A REAL DEFECT:** `low.minor >= 0` vs `> 0` decides whether a payroll run that lands the
+balance on EXACTLY zero is a shortfall. It is not -- reporting a $0.00 shortfall tells an owner they
+missed payroll when they made it. Boundary test added, mutation replayed RED, suite now 79.
+
+**TWO BUGS AUTO-FIXED WHILE IMPLEMENTING**, both worth remembering: `receiptsTotal` summed
+`Payment` ROWS instead of their amounts (caught by a test, not by `tsc`), and `nearestRank` ended
+`?? 0` -- the exact fabricated zero this module exists to prevent. **AND A PROCESS FINDING: 78
+TESTS WERE GREEN OVER TWO REAL `tsc` ERRORS.** Vitest transpiles without typechecking. Run both
+gates, every time -- a green suite in this package proves nothing about types.
+
+**REVN-05 IS DELIBERATELY STILL `Pending`.** 17 of the 29 Phase 28 plans claim it and only the pure
+core landed; the Convex orchestration (`revenueFinance.ts`) and the LLM-explains-only guard are
+28-11. Marking it Complete here would have told every later reader that cash-flow reporting works
+when nothing is wired. `docs/playbooks/revenue-finance.md` was flipped from REGISTERED-AHEAD to
+THE-PURE-CORE-HAS-LANDED and its `Last verified` bumped; **note it had listed FIVE function names
+that do not exist (`ageReceivables`, `buildCashTimeline`, `classifyCoverage`, `classifyConfidence`,
+`composeFinanceResult`) -- the landed names are `agingReport`, `cashTimeline`, `coverageOf`,
+`confidenceFor`, `financeResult`, and 28-11 must use those.** `revenue-connectors.md` was already
+current (another lane bumped it to `eaea00c`) and was not touched.
+
+Every dependent plan still runs `node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means
+stop, not shim. Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-27T15:17:35.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 413
+  completed_plans: 321
+  percent: 78
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 2 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership) -- 28 IN PROGRESS
+status: executing
+stopped_at: "28-18 SEALED. Seven Phase 28 playbooks and 40 `watch.json` prefixes are committed BEFORE the
+parallel lanes write, so no two plans contend for one doc: `revenue-connectors.md` (shared spine +
+release semantics), one per provider, plus `revenue-crm.md` / `revenue-finance.md`. Proven
+proven mechanically -- 0 Phase-28 prefix collisions and 0 uncovered Phase-28 source paths against a 31-path
+must-cover list drawn from every 28-xx plan's `files_modified`.
+**THE DURABLE FINDING IS THAT THE PLAN'S OWN VERIFY COMMAND IS A NO-OP.**
+`node scripts/check-playbooks.mjs` -- the command 28-18 was told to verify with -- CANNOT verify
+anything. Run bare it BLOCKS FOREVER on stdin (`readFileSync(0)`), and it EXITS 0 IN EVERY CASE.
+Measured here, not assumed: clean tree -> empty stdout, exit 0; one violating probe -> a block
+object on stdout, exit 0; seven violating probes -> seven playbooks named on stdout, exit 0. The
+ONLY signal is a JSON object on STDOUT carrying decision=block. Verify with
+`echo '{}' | node scripts/check-playbooks.mjs check` and grep STDOUT. A green exit code from that
+script is worth nothing, and this is now written into `revenue-connectors.md` Operational notes.
+Load-bearing-ness was therefore proven by OBSERVING RED, not by absence of red: seven probe files,
+one per newly-registered lane, each block naming ONLY its own owner and cross-naming none. The run
+also swept up 28-02's REAL in-flight `packages/revenue/src/{money,finance}.ts` under
+`revenue-finance.md` -- the registration is already working on live code.
+**`gsd-tools state advance-plan` CORRUPTED THIS FILE AND WAS REVERTED.** It collapsed the 26
+stacked frontmatter blocks to one, dropped `current_phase`, wrote `current_plan: 7 (done)` /
+`status: completed` and pasted a PHASE 26 `stopped_at` over Phase 28's. Recovered with
+`git checkout -- .planning/STATE.md`; this block is hand-edited. Do NOT run `state advance-plan`
+or `state update-progress` against this STATE.md.
+**HANDOFF LEFT DELIBERATELY RED:** 28-02 parked `packages/revenue/` under `watch._unassigned` with
+the message `28-18 owns the playbook`; that acknowledgment is now retired, so 28-02's own
+`money.ts`/`finance.ts` are flagged against `revenue-finance.md` until 28-02 bumps it. It was NOT
+pre-bumped -- bumping a playbook to clear a gate over another lane's unreviewed code is the exact
+silencing pattern the hook exists to stop.
+**EACH PROVIDER PLAYBOOK OPENS WITH AN UNANSWERED ADMISSION BLOCKER** and no adapter code should
+be written before 28-01/28-22..25 settle it: HubSpot AI-connector Marketplace classification;
+QuickBooks `com.intuit.quickbooks.accounting` is a DATA CATEGORY not a read verb, plus production
+self-assessment; Stripe `read_only` is Extensions-only; PayPal client credentials read the APP'S
+OWN merchant, so modelling them as a tenant grant would serve one merchant's figures to every
+tenant with every unit test green. Also logged, not fixed: 12 PRE-EXISTING two-owner collisions
+under `apps/web/e2e/` and `dashboard/workspace/`, and `convex/schema.ts` is watched by NO playbook
+(28-03 is Phase 28's single serialized schema owner regardless).
+**NEXT: finish Wave 2** -- 28-01 (provider suitability) is the gate on all four provider lanes.
+Every dependent plan still runs `node scripts/check-phase28-readiness.mjs` FIRST; exit 1 means
+stop, not shim. Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-27T14:41:27.386Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 413
+  completed_plans: 319
   percent: 77
 ---
 

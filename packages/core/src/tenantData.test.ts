@@ -20,7 +20,7 @@ describe("tenant table classification registry", () => {
     //      answer they were shown and their own document titles).
     // This count is a TRIPWIRE, not bookkeeping: a new table cannot reach the export/deletion
     // walks without someone deliberately bumping it and classifying the table on the way past.
-    expect(schemaTables).toHaveLength(47);
+    expect(schemaTables).toHaveLength(51);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -31,7 +31,12 @@ describe("tenant table classification registry", () => {
       .map(([table]) => table)
       .sort();
 
-    expect(credentialTables).toEqual(["gmailTokens", "microsoftCalendarTokens"]);
+    expect(credentialTables).toEqual([
+      "connectorConnections",
+      "connectorOAuthStates",
+      "gmailTokens",
+      "microsoftCalendarTokens",
+    ]);
   });
 
   // OWNER DECISION 2026-08-23 (27-02). Asserted POSITIVELY and by name, because the derived

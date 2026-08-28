@@ -34,7 +34,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 47 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 51 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -84,6 +84,10 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │                                                                            │
 // │ ── Workflow Packs (27-02) ──────────────────────────────── ~L2652          │
 // │   workflowPackEvents                                                       │
+// │                                                                            │
+// │ ── Connector Rails (28-03) ─────────────────────────────── ~L2547          │
+// │   connectorConnections, connectorOAuthStates, contactProviderRefs,         │
+// │   providerGates                                                            │
 // └──────────────────────────────────────────────────────────────────────────────┘
 
 /**
@@ -1598,6 +1602,28 @@ export default defineSchema({
       // evaluateBusiness and recordScorecardAnswer. Still no text field: the adaptation the model
       // drafted has nowhere to go here, which is how CLAUDE.md §4 stays enforced on this path.
       v.literal("authorSkillCandidate"),
+      // ── Phase-28 (REVN) revenue literals, PRE-DECLARED by 28-03 ──────────────────────────
+      // 28-03 is this phase's single serialized `schema.ts` owner, so the plans that write these
+      // steps (28-12 revenueTools, 28-13 invoiceReminders) cannot add their own literals. Landing
+      // them here is the only way they avoid the swallow trap this union has now sprung FOUR
+      // times: a missing literal makes `agentSteps:record` throw an ArgumentValidationError inside
+      // an AI-SDK callback the SDK SILENTLY swallows, so prod loses the trace row while the whole
+      // suite stays green.
+      //
+      // The one failure mode pre-declaration has is the `webResearch` one — a literal that reads
+      // as a trace that exists while nothing ever writes it. All four WILL be written by LOCAL
+      // executable tools (`onToolExecutionStart` fires for those), and the names are BINDING on
+      // 28-12/28-13: the specialist route's `stepTool` and the tool keys in `buildCockpitTools`
+      // must be exactly these, or `cockpitTools.test.ts`'s key scan goes red at that plan.
+      //
+      // Still NO text field, on this path as on every other: §4 safety here is STRUCTURAL — this
+      // table has nowhere to put an invoice amount, a customer name or a provider payload, and a
+      // `detail: v.string()` would trade that away. Their cards.tsx VERB entries land in the SAME
+      // commit, because traceParity.test.ts asserts the two sets equal BOTH ways.
+      v.literal("dispatchRevenue"),
+      v.literal("readRevenueCrm"),
+      v.literal("readBusinessFinance"),
+      v.literal("stageInvoiceReminder"),
     ),
     phase: v.union(v.literal("running"), v.literal("done"), v.literal("error")),
     startedAt: v.number(),
@@ -2743,4 +2769,269 @@ export default defineSchema({
   // tenant-scoped read is already served by the `by_tenant_createdAt` prefix. If this table is ever
   // reclassified `tenant_owned`, the bare index must come back in the same commit or the backend
   // does not typecheck.
+  // ── Phase 28: connector-backed revenue rails ─────────────────────────────────────────────
+  //
+  // FOUR tables, landed in ONE additive edit because 28-03 is the phase's single serialized
+  // schema owner. Every table is NEW, every field on an existing table is untouched: nothing here
+  // needs a backfill and nothing here can invalidate a row at rest.
+  //
+  // THE CROWN-JEWEL RULE from `gmailTokens`/`microsoftCalendarTokens` applies verbatim and then
+  // some: these rows carry a tenant's ACCOUNTING and PAYMENT credentials. Read by internal
+  // functions only, never returned to a client query, never in an audit or dead-letter payload
+  // (CLAUDE.md §4). Unlike the two Google/Microsoft grants above, the material at rest here is
+  // ENCRYPTED — `@pikar/revenue/credential` seals it under `CONNECTOR_CREDENTIAL_KEY_V1` with the
+  // tenant/provider/connection tuple as AAD, so a row lifted into another tenant does not decrypt.
+
+  /**
+   * ONE row per tenant × provider × environment. The connection AND its sealed credential, kept
+   * together rather than split across two tables, because the atomicity is the point: QuickBooks
+   * rotates its refresh token on every refresh and a racing second refresh can invalidate the
+   * connection outright, so access and refresh must be replaced in ONE patch. They are one
+   * sealed blob in `credentialCiphertextB64`, so that patch is a single field.
+   */
+  connectorConnections: defineTable({
+    tenantId: v.string(),
+    // CLOSED unions, pinned to `PROVIDERS` / `CONNECTOR_ENVIRONMENTS` in @pikar/revenue by a source
+    // scan in `connectorCredentials.test.ts`. The `agentSteps.tool` trap in reverse: a provider
+    // string with no literal here makes the insert throw `ArgumentValidationError` at the exact
+    // moment a user finishes an OAuth consent, which is the worst possible time to discover it.
+    provider: v.union(
+      v.literal("hubspot"),
+      v.literal("quickbooks"),
+      v.literal("stripe"),
+      v.literal("paypal"),
+    ),
+    // A sandbox grant is a DIFFERENT grant. Keying the row by environment is what stops a sandbox
+    // token from ever being handed to a production read (28-RESEARCH: PayPal's sandbox is
+    // explicitly non-probative about production authorization).
+    environment: v.union(v.literal("sandbox"), v.literal("production")),
+    /** Server-minted, opaque, stable for the life of the row, and BOUND INTO THE AAD. Not the
+     *  provider's account id — that never appears in the clear anywhere on this row. */
+    connectionId: v.string(),
+    status: v.union(
+      v.literal("connecting"),
+      v.literal("connected"),
+      v.literal("reauth_required"),
+      // `revoked` means PIKAR STOPPED USING THE GRANT. What happened upstream is a separate
+      // question, answered by `revocation.upstream` below — never by this field.
+      v.literal("revoked"),
+      v.literal("failed"),
+    ),
+    // ── The sealed credential ────────────────────────────────────────────────────────────
+    // OPTIONAL, and that is load-bearing. A disconnect CLEARS these two fields and keeps the row,
+    // rather than deleting the row: the secret is gone (which is the whole point of "delete"),
+    // while the honest revocation record survives so the UI can still say "we deleted our copy;
+    // your Stripe app stays installed until you remove it". Deleting the row would destroy the
+    // one fact the user most needs. Tenant ERASURE still removes the row — the table is
+    // `tenant_credential` in TENANT_TABLE_CLASSIFICATION and rides the normal deletion walk.
+    //
+    // ONE blob, not one field per token: it holds access token, refresh token, granted scope and
+    // the provider account id together. That keeps the scope string — a capability inventory, per
+    // `gmailAuth.gmailStatus`'s standing rule — and the external account id out of the clear.
+    credentialCiphertextB64: v.optional(v.string()),
+    credentialIvB64: v.optional(v.string()),
+    /** Which deployment key sealed the blob. `v2` is declared so a key rotation is a data
+     *  migration, not a schema change plus a deploy, in the middle of an incident. */
+    keyVersion: v.union(v.literal("v1"), v.literal("v2")),
+    /** Plaintext METADATA, deliberately: the refresh scheduler must know a token is expiring
+     *  without decrypting anything. A timestamp is not a credential. */
+    accessExpiresAt: v.optional(v.number()),
+    refreshExpiresAt: v.optional(v.number()),
+    /** SHA-256 hex of the provider's account/realm id. Enough to prove a callback returned the
+     *  SAME account on re-consent (28-RESEARCH callback step 3) without storing the id. */
+    externalAccountHash: v.optional(v.string()),
+    // ── Refresh single-flight: lease + CAS ───────────────────────────────────────────────
+    // Intuit's documented behaviour: two concurrent refreshes with the same refresh token leave
+    // the first successful, the second `invalid_grant`, AND Intuit may then revoke the token the
+    // first call issued — so the connection dies and the user must re-consent. A retry is not a
+    // safe response to a refresh failure there. Hence BOTH:
+    //   • the lease makes a second refresher wait instead of racing, and
+    //   • `revision` is the compare-and-set token, so a refresher that slept past its lease still
+    //     cannot overwrite a newer credential.
+    // The lease alone would be a lock with no fencing token, which is a lock that lies.
+    /** Monotonic. Read it, refresh, then patch only if it is unchanged. */
+    revision: v.number(),
+    refreshLeaseId: v.optional(v.string()),
+    refreshLeaseExpiresAt: v.optional(v.number()),
+    // ── Honest lifecycle ─────────────────────────────────────────────────────────────────
+    connectedAt: v.optional(v.number()),
+    lastReadAt: v.optional(v.number()),
+    /** A CLOSED class, never a provider message: vendor error text can embed account ids and
+     *  customer names, and this row is read by a client-facing projection (CLAUDE.md §4). */
+    lastFailureClass: v.optional(
+      v.union(
+        v.literal("reauth"),
+        v.literal("forbidden"),
+        v.literal("rate_limited"),
+        v.literal("provider_error"),
+        v.literal("unsupported_account"),
+        v.literal("network"),
+        v.literal("timeout"),
+      ),
+    ),
+    lastFailureAt: v.optional(v.number()),
+    /**
+     * WHAT ACTUALLY HAPPENED WHEN THE USER PRESSED DISCONNECT — and the reason this is an object
+     * and not a `revoked: v.boolean()`.
+     *
+     * On 2026-08-27 all four providers were admitted `approved_production`, each carrying an open
+     * condition, and three of those conditions land exactly here:
+     *   • Stripe — platform-initiated revocation for Stripe Apps is UNDOCUMENTED. Admitted as an
+     *     explicit owner override with the condition still open. Only the user uninstalling, plus
+     *     an `account.application.deauthorized` webhook, are documented.
+     *   • PayPal — NO revoke endpoint is documented anywhere. Seller-side revocation is an account
+     *     action, not an API.
+     *   • HubSpot — a revoke endpoint exists, but whether it invalidates already-issued ACCESS
+     *     tokens is UNPROVEN; the legacy endpoint it replaced explicitly did not cascade. 28-05
+     *     must test this against a live grant and 28-22 must not seal the lane without the result.
+     * Only QuickBooks has a confirmed revocation endpoint.
+     *
+     * So for at least three providers, LOCAL DELETION MAY BE THE ONLY REVOCATION PIKAR CAN
+     * PERFORM. A boolean would record that as "revoked" and the product would then tell a user
+     * their PayPal access is revoked when nothing upstream changed. That is a lie with a
+     * regulatory shape. These fields keep the two facts apart and let the UI say the true thing.
+     */
+    revocation: v.optional(
+      v.object({
+        upstream: v.union(
+          // The provider's revoke endpoint accepted it. The grant is gone.
+          v.literal("confirmed"),
+          // Pikar called it and got a network error or a 5xx. END STATE UNKNOWN — offer a retry.
+          v.literal("attempted_failed"),
+          // The provider documents no revocation call Pikar can make. Local deletion is ALL that
+          // happened, and the connections surface must say so in those words.
+          v.literal("unsupported"),
+          // Nothing was called (an internal cleanup, an erasure sweep).
+          v.literal("not_attempted"),
+        ),
+        attemptedAt: v.optional(v.number()),
+        /** When the local ciphertext was cleared. Independent of `upstream` on purpose. */
+        localClearedAt: v.optional(v.number()),
+        /** The provider's HTTP status CODE only — never a body, never a message. */
+        statusCode: v.optional(v.number()),
+        /** HubSpot's unproven cascade in one field: if revoking the refresh token does not kill
+         *  already-issued access tokens, the grant stays usable until this instant. The UI must
+         *  show it rather than claim an instant cutoff. `undefined` = not applicable/unknown. */
+        residualAccessUntil: v.optional(v.number()),
+      }),
+    ),
+    updatedAt: v.number(),
+  })
+    // Bare `by_tenant` is REQUIRED, not optional: `tenantDelete.ts` calls
+    // `.withIndex("by_tenant", ...)` on every name `deletableTables()` returns, and this table is
+    // `tenant_credential`. Without it the backend does not typecheck.
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_provider_environment", ["tenantId", "provider", "environment"]),
+
+  /**
+   * One-time OAuth state (28-RESEARCH). HMAC binding — what `gmailAuth.verifyState` does — proves
+   * a state was minted for this tenant, but a signature is REPLAYABLE: it stays valid forever and
+   * says nothing about whether it has already been spent. A row that is consumed atomically is
+   * the part a signature cannot provide. 28-04 owns the mint/consume module.
+   */
+  connectorOAuthStates: defineTable({
+    tenantId: v.string(),
+    provider: v.union(
+      v.literal("hubspot"),
+      v.literal("quickbooks"),
+      v.literal("stripe"),
+      v.literal("paypal"),
+    ),
+    environment: v.union(v.literal("sandbox"), v.literal("production")),
+    /** SHA-256 hex of the server-random nonce. THE NONCE ITSELF IS NEVER STORED — a leaked
+     *  database read must not yield a state a caller could then present at the callback. */
+    stateHash: v.string(),
+    /** The connection this consent will seal into, minted before the redirect so the AAD tuple
+     *  is fixed before any token exists. */
+    connectionId: v.string(),
+    /** An in-app PATH ("/dashboard/profile"), never an absolute URL: an open redirect on an OAuth
+     *  callback hands the code to whoever asked for it. 28-04 enforces the shape. */
+    redirectPath: v.string(),
+    expiresAt: v.number(),
+    /** Set once, atomically, BEFORE the code exchange. A second callback with the same state
+     *  finds this non-null and performs zero exchange and zero store. */
+    usedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    // NOT tenant-leading, and it cannot be: the callback arrives with a nonce and NOTHING else —
+    // no session, no tenant. That is the whole reason the row exists. Registered in
+    // isolation.test.ts's NON_TENANT_LEADING with this reason.
+    .index("by_state", ["stateHash"]),
+
+  /**
+   * Provider references attached to Phase 19 contacts. HubSpot must NOT create a second person
+   * store (28-CONTEXT: "one business-data model"), so this is a join table, not a CRM.
+   *
+   * A join table rather than a field on `contacts` for a concrete reason: the reverse lookup
+   * (provider object id → our contact) is the one a webhook or a sync needs, and an array field
+   * on `contacts` cannot be indexed for it. It also keeps `contacts` at its locked three content
+   * fields (19.1 CONTEXT, LOCKED).
+   */
+  contactProviderRefs: defineTable({
+    tenantId: v.string(),
+    contactId: v.id("contacts"),
+    provider: v.union(
+      v.literal("hubspot"),
+      v.literal("quickbooks"),
+      v.literal("stripe"),
+      v.literal("paypal"),
+    ),
+    /** A record CLASS, closed. Not a label a provider chose. */
+    kind: v.union(v.literal("contact"), v.literal("company"), v.literal("deal")),
+    /** The provider's own opaque id. An ID, never a name, an email or a note (CLAUDE.md §4). */
+    externalId: v.string(),
+    linkedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_contact", ["tenantId", "contactId"])
+    .index("by_tenant_provider_external", ["tenantId", "provider", "externalId"]),
+
+  /**
+   * The per-provider lane gate. SERVER-OWNED and DEPLOYMENT-WIDE — no `tenantId`, which is what
+   * makes it `global` in TENANT_TABLE_CLASSIFICATION and what stops a tenant from ever widening
+   * their own provider access.
+   *
+   * TWO fields, not one, because they answer different questions and the playbook's release
+   * semantics turn on the difference: `admission` is the owner's suitability DECISION (permission
+   * to start), `lane` is whether a controlled live read/revoke was actually observed green.
+   * An `approved_production` admission with a `parked` lane is the normal state for most of this
+   * phase, and collapsing the two is how a partial rollout gets recorded as a finished phase.
+   */
+  providerGates: defineTable({
+    provider: v.union(
+      v.literal("hubspot"),
+      v.literal("quickbooks"),
+      v.literal("stripe"),
+      v.literal("paypal"),
+    ),
+    environment: v.union(v.literal("sandbox"), v.literal("production")),
+    /** Mirrors the `decision:` marker in docs/connectors/<provider>-suitability.md. The FILE is
+     *  the register of record; this row is the runtime copy an owner action syncs. */
+    admission: v.union(
+      v.literal("approved_beta"),
+      v.literal("approved_production"),
+      v.literal("blocked"),
+      v.literal("deferred"),
+    ),
+    /** The LIVE-GATE axis, pinned to `LANES` in @pikar/revenue by a source scan in
+     *  `providerGates.test.ts`. `failed` is not a synonym for `parked`: a lane that ran and
+     *  broke is an incident, one that never ran is silence. Both are unavailable; only one
+     *  needs a human. Widened additively by 28-26 on a table that had never held a row. */
+    lane: v.union(v.literal("passed"), v.literal("parked"), v.literal("failed")),
+    /** A doc/commit REF, never evidence prose. */
+    evidenceRef: v.string(),
+    /** The re-review trigger. An EXPIRED record is `parked`, not `passed` — readers compare this
+     *  against now rather than trusting `lane` alone. */
+    reviewBy: v.number(),
+    /** Open-condition ids (see `PROVIDER_OPEN_CONDITIONS`) this lane closed WITH EVIDENCE.
+     *  Not one of the four 2026-08-27 approvals resolved its record's open condition, so an
+     *  empty/absent list is the honest default and it blocks `passed`. Optional and additive:
+     *  absent reads as “nothing cleared”, never as “everything cleared”. */
+    clearedConditions: v.optional(v.array(v.string())),
+    /** CAS token, so two owner edits cannot silently clobber one another. */
+    revision: v.number(),
+    updatedAt: v.number(),
+  }).index("by_provider_environment", ["provider", "environment"]),
 });

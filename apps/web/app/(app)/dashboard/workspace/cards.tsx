@@ -2166,6 +2166,20 @@ const VERB: Record<string, [running: string, done: string]> = {
   // a passing eval AND the owner's own click; BRAND §1 forbids claiming an action that did not
   // happen, and "it changed how I work" would be exactly that claim.
   authorSkillCandidate: ["Drafting a skill update…", "Skill update ready for review"],
+  // Phase-28 (REVN): MANDATORY beside the four schema literals 28-03 pre-declared —
+  // traceParity.test.ts asserts set equality BOTH ways, so either half alone is RED. No tool
+  // writes these yet; 28-12 and 28-13 do.
+  //
+  // The done states are deliberately READS, not results. These tools reach a tenant's HubSpot,
+  // QuickBooks, Stripe and PayPal accounts, and a coverage window can be partial, so nothing here
+  // may read "Your cash flow is X" or imply completeness — the honest partial/unavailable state
+  // lives in the card body, and BRAND §1 forbids claiming an action that did not happen.
+  dispatchRevenue: ["Looking at your revenue…", "Reviewed your revenue"],
+  readRevenueCrm: ["Reading your CRM…", "Read your CRM"],
+  readBusinessFinance: ["Reading your business finances…", "Read your business finances"],
+  // STAGES a draft and sends nothing. REVN-06 stops at the existing human Approve gate, so this
+  // must never read "Sent" or "Reminded" — the send happens on Approve, if at all.
+  stageInvoiceReminder: ["Preparing a payment reminder…", "Payment reminder ready to approve"],
 };
 const FALLBACK: [string, string] = ["Working…", "Done"];
 
