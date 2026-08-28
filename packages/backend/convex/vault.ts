@@ -813,6 +813,8 @@ export const ownedDocsMeta = internalQuery({
       kind: string;
       createdAt: number;
       retrievedAt?: number;
+      /** 29 remediation: the document's FULL extracted length. A number, so refs-only holds (§4). */
+      textChars: number;
     }[]
   > => {
     const out: {
@@ -823,6 +825,7 @@ export const ownedDocsMeta = internalQuery({
       kind: string;
       createdAt: number;
       retrievedAt?: number;
+      textChars: number;
     }[] = [];
     for (const id of docIds) {
       const doc = await ctx.db.get(id);
@@ -844,6 +847,12 @@ export const ownedDocsMeta = internalQuery({
           kind: doc.kind,
           createdAt: doc.createdAt,
           retrievedAt: doc.retrievedAt,
+          // A LENGTH, NOT THE TEXT. `ctx.db.get` already loaded the whole row, so this costs
+          // nothing, and it is the only way `vaultGroundHydrated` can tell a passage from a
+          // document: on the chunk-precise path the hydrated string IS the matched passage, so
+          // comparing it against itself said "complete" for 300 characters of a 40,000-character
+          // file. Shipping `doc.text` here instead would put raw content on a refs-only read.
+          textChars: (doc.text ?? "").length,
         });
       }
     }

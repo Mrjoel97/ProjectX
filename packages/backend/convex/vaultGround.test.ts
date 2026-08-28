@@ -296,6 +296,73 @@ describe("vaultGroundHydrated citation metadata (29-02)", () => {
     expect(out.truncated[iLong]).toBe(true);
     expect(out.chunks[iLong]).toHaveLength(1500);
   });
+
+  // ── THE CHUNK-PRECISE PATH, WHICH NOTHING COULD DRIVE OFFLINE UNTIL NOW ────────────────────
+  //
+  // Vector seeds hydrate from the passage that actually MATCHED, not from the document's opening —
+  // that is why a 300-page PDF is no longer answered from its copyright notice. But `truncated` was
+  // computed against the hydrated string, which on that path IS the passage, so a 40-character
+  // extract from a 4,000-character document reported `truncated: false`: a complete read of a
+  // document one paragraph of which was read. The knowledge adapter turns that flag into
+  // `available` vs `partial`, so the lie surfaced to the user as "we read your whole document".
+  //
+  // Every test above takes the doc-text fallback, where the passage and the document are the same
+  // string, which is exactly why the defect survived a green suite. The `SMOKE::<id>|<passage>`
+  // seam populates `matchedByDoc` so the real branch runs.
+
+  test("a MATCHED PASSAGE is what gets hydrated, and it is reported as a partial read", async () => {
+    const t = convexTest(schema, modules);
+    const doc = await seedDoc(t, {
+      title: "Long contract",
+      kind: "upload",
+      text: `${"x".repeat(4000)}the renewal fee is 40 dollars per seat${"y".repeat(4000)}`,
+      createdAt: 1_000,
+    });
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${doc}|the renewal fee is 40 dollars per seat`,
+    });
+
+    // The passage, not the document's first 1500 characters of "x".
+    expect(out.chunks[0]).toBe("the renewal fee is 40 dollars per seat");
+    // MUTATION that must turn this RED: measure `truncated` against the hydrated string again
+    // (`slice.length < text.length`), which is `38 < 38` here.
+    expect(out.truncated[0]).toBe(true);
+  });
+
+  test("a passage that IS the whole document is NOT reported as truncated — the control", async () => {
+    // Without this the fix could be "always true on the matched path", which would make every
+    // vault read partial and drain the distinction of meaning.
+    const t = convexTest(schema, modules);
+    const text = "the entire document";
+    const doc = await seedDoc(t, { title: "Tiny", kind: "upload", text, createdAt: 1_000 });
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${doc}|${text}`,
+    });
+    expect(out.chunks[0]).toBe(text);
+    expect(out.truncated[0]).toBe(false);
+  });
+
+  test("a passage is attached only to a doc the TENANT owns", async () => {
+    // The seam resolves ids through `ownedDocsMeta`; a foreign id resolves to nothing, so its
+    // passage can never be hydrated for the asking tenant.
+    const t = convexTest(schema, modules);
+    const foreign = await seedDoc(
+      t,
+      { title: "Theirs", kind: "upload", text: "their private terms", createdAt: 1_000 },
+      "tenant_someone_else",
+    );
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${foreign}|their private terms`,
+    });
+    expect(out.docIds).toEqual([]);
+    expect(JSON.stringify(out)).not.toContain("their private terms");
+  });
 });
 
 describe("vaultGroundHydrated spine (BLPR-02)", () => {

@@ -304,6 +304,59 @@ describe("the landed retrieval bounds still hold through the adapter", () => {
   });
 });
 
+// ── 1b. A read that could not happen is a NAMED GAP, never an empty vault ────
+//
+// The adapter had NO `unavailable` arm at all: `vaultGroundHydrated` reaches OpenRouter for
+// embeddings and `internal.vault.getDoc` for hydration, and either can reject, so the failure
+// escaped the internalAction instead of coming back as a state. Every other landed caller of that
+// action (`llm.ts`, `evaluations.ts`) wraps it; this one did not.
+
+describe("the vault adapter never throws — an unreachable vault is a named gap", () => {
+  test("a retrieval failure is UNAVAILABLE/provider_error, not an exception", async () => {
+    const t = harness();
+    await seedDoc(t, { title: "Playbook", text: "The margin is 40 percent." });
+    // A PLAIN query is the only shape production ever uses, and it runs the real embedding path:
+    // `rag.search` needs OPENROUTER_API_KEY, which no test environment has. Before the fix this
+    // line was `THREW: vault: OPENROUTER_API_KEY unset for embeddings`.
+    const out = await searchVault(t, "what is my margin");
+    expect(out.state).toEqual({
+      status: "unavailable",
+      source: "vault",
+      reason: "provider_error",
+    });
+    expect(out.evidence).toEqual([]);
+    // An unreachable vault can carry no count — the union has no field for one.
+    expect("returned" in out.state).toBe(false);
+  });
+
+  test("a blank query is UNPLANNED — a search never sent is not an empty vault", async () => {
+    const t = harness();
+    await seedDoc(t, { title: "Playbook", text: "The margin is 40 percent." });
+    for (const query of ["", "   "]) {
+      const out = await searchVault(t, query);
+      expect(out.state).toEqual({ status: "unavailable", source: "vault", reason: "unplanned" });
+      expect(out.evidence).toEqual([]);
+    }
+  });
+
+  test("a hit with NO extracted text is provider_error, not a cap that never applied", async () => {
+    // Two different facts reach the loop as `""`: the whole-run budget ran out (a real cap,
+    // `truncated: true`), and the document simply has no extracted text (`vaultDocuments.text` is
+    // optional and `getDoc` returns `text ?? ""`, `truncated: false`). Reporting the second as
+    // `cap` told the user we hit a retrieval limit that never applied.
+    const t = harness();
+    const empty = await seedDoc(t, { title: "Scanned page, no text layer" });
+    const out = await searchVault(t, `SMOKE::${empty}`);
+    expect(out.evidence).toEqual([]);
+    expect(out.state).toEqual({
+      status: "partial",
+      source: "vault",
+      returned: 0,
+      reason: "provider_error",
+    });
+  });
+});
+
 // ── 5. Drive contributes honest metadata, or a NAMED gap ─────────────────────
 
 const PRE_WIDENING_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
@@ -342,6 +395,62 @@ describe("the drive adapter", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  test("a REJECTED fetch is UNAVAILABLE/provider_error, not an escaped exception", async () => {
+    // `findInDriveForTenant` models four failures; a transport fault (DNS, TLS, timeout) is not one
+    // of them and propagated straight through `driveFetch` and out of the action. The landed test
+    // for "a Drive error is a provider gap" only ever stubbed an HTTP 500 STATUS.
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (!String(url).includes("/drive/v3/"))
+          return Response.json({ access_token: "fresh", expires_in: 3600 });
+        throw new TypeError("fetch failed");
+      }),
+    );
+    const out = await searchDrive(t, "forecast");
+    expect(out.state).toEqual({
+      status: "unavailable",
+      source: "drive",
+      reason: "provider_error",
+    });
+    expect(out.evidence).toEqual([]);
+  });
+
+  test("a blank query is UNPLANNED, and Drive is never called at all", async () => {
+    // `runDriveSearch` short-circuits a blank needle to `{ok: true, rows: []}` with zero network
+    // calls, which arrived here as `available/0` — "we looked at your Drive and there is nothing"
+    // for a search that was never sent.
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const spy = stubDrive({ files: [] });
+    const out = await searchDrive(t, "   ");
+    expect(out.state).toEqual({ status: "unavailable", source: "drive", reason: "unplanned" });
+    expect(spy.mock.calls.filter((c) => String(c[0]).includes("/drive/v3/"))).toHaveLength(0);
+  });
+
+  test("a REFRESH-FAILED grant keeps its own name — not `not_connected`", async () => {
+    // The one `DRIVE_UNAVAILABLE` key with no coverage: it could be silently remapped, and a stale
+    // refresh token would then tell the user to connect an account they already connected.
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).includes("/drive/v3/")
+          ? Response.json({ files: [] })
+          : new Response("upstream is down", { status: 500 }),
+      ),
+    );
+    const out = await searchDrive(t, "forecast");
+    expect(out.state).toEqual({
+      status: "unavailable",
+      source: "drive",
+      reason: "refresh_failed",
+    });
   });
 
   test("a matched FILE becomes one evidence row with a stable ref, its mime and its modified time", async () => {

@@ -48,15 +48,29 @@ async function runVaultGround(
   if (query.startsWith(SMOKE_PREFIX)) {
     // Offline: the seed doc ids ride in the sentinel; resolve them tenant-scoped (a cross-tenant
     // seed drops out exactly as namespace scoping would exclude it — no embedding call).
-    const candidateIds = query
+    //
+    // A seed may carry its MATCHED PASSAGE — `SMOKE::<docId>|<passage>` — and without that the
+    // chunk-precise branch below was undrivable offline: every existing test took the doc-text
+    // fallback, so nothing could tell a passage from a document and the `truncated` flag that rides
+    // on the difference had a green suite over a wrong answer. The `|` half is optional and every
+    // `SMOKE::<id>,<id>` sentinel keeps its exact meaning.
+    const seeds = query
       .slice(SMOKE_PREFIX.length)
       .split(",")
-      .filter(Boolean) as Id<"vaultDocuments">[];
+      .filter(Boolean)
+      .map((segment) => {
+        const [id = "", passage] = segment.split("|");
+        return { id: id as Id<"vaultDocuments">, passage };
+      });
     const owned = await ctx.runQuery(internal.vault.ownedDocsMeta, {
       tenantId,
-      docIds: candidateIds,
+      docIds: seeds.map((seed) => seed.id),
     });
     seedDocIds = owned.map((d) => d._id);
+    // Tenant-scoped by construction: a passage is attached only to a doc `ownedDocsMeta` returned.
+    const ownedIds = new Set<string>(seedDocIds);
+    for (const seed of seeds)
+      if (seed.passage !== undefined && ownedIds.has(seed.id)) matchedByDoc[seed.id] = seed.passage;
     hits = seedDocIds.map((docId, i) => ({ docId, score: 1 - i * 0.01 }));
   } else {
     const { results, entries } = await rag.search(ctx, {
@@ -217,6 +231,9 @@ export const vaultGroundHydrated = internalAction({
     const updatedById = new Map(
       meta.map((m) => [m._id as string, m.retrievedAt ?? m.createdAt ?? null]),
     );
+    // The DOCUMENT's full length, which is what `truncated` has to be measured against — see the
+    // loop below. Same batch read again; no extra query and no extra text crosses the boundary.
+    const charsById = new Map(meta.map((m) => [m._id as string, m.textChars]));
 
     // Chunks: per-doc + running-total char budget so a large corpus never blows the loop context.
     const titles: string[] = [];
@@ -251,7 +268,15 @@ export const vaultGroundHydrated = internalAction({
         ).text;
       const slice = text.slice(0, Math.min(PER_DOC_CHAR_CAP, remaining));
       chunks.push(slice);
-      truncated.push(slice.length < text.length);
+      // MEASURED AGAINST THE DOCUMENT, NOT AGAINST WHAT WE HAPPEN TO BE HOLDING. On the
+      // chunk-precise path `text` is the matched PASSAGE, so `slice.length < text.length` compared
+      // a passage against itself and reported `truncated: false` for a 300-character extract from a
+      // 40,000-character file — the knowledge adapter then called that an `available`, i.e.
+      // complete, read of a document it had read one paragraph of. That is verbatim the defect the
+      // flag was added to close. `textChars` is the row's own full length; `text.length` still
+      // covers the graph-neighbour and SMOKE:: paths, where the two are the same number.
+      const full = Math.max(text.length, charsById.get(docId) ?? 0);
+      truncated.push(slice.length < full);
       used += slice.length;
     }
 

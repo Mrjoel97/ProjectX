@@ -34,47 +34,22 @@
  */
 import {
   authorityFor,
-  clampEvidence,
   type Evidence,
-  type KnowledgeSource,
-  type KnowledgeSourceState,
+  type KnowledgeAdapterResult,
+  settleRead,
+  unavailableRead,
   validateSourceRef,
 } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 
-/** What every knowledge-source adapter returns: what was read, and how the read ended. */
-export type KnowledgeAdapterResult = {
-  readonly state: KnowledgeSourceState;
-  readonly evidence: readonly Evidence[];
-};
-
-/**
- * The one place a raw adapter row becomes admitted evidence.
- *
- * `degraded` is the adapter's own honest report that something was lost BEFORE this point (a
- * provider page cap, a hit with no usable text). `clampEvidence` then applies the repo-owned per-
- * source and per-run bounds and reports anything IT cut. Either kind of loss makes the read
- * `partial` — a capped read is never reported as a complete one.
- *
- * `provider_error` outranks `cap` because an unusable row is a different problem from a full one,
- * and collapsing the two would hide it.
- */
-function settle(
-  source: KnowledgeSource,
-  raw: readonly Evidence[],
-  degraded: { readonly cap: boolean; readonly providerError: boolean },
-): KnowledgeAdapterResult {
-  const { evidence, capped } = clampEvidence(raw);
-  const cut = degraded.cap || capped.includes(source);
-  const state: KnowledgeSourceState = degraded.providerError
-    ? { status: "partial", source, returned: evidence.length, reason: "provider_error" }
-    : cut
-      ? { status: "partial", source, returned: evidence.length, reason: "cap" }
-      : { status: "available", source, returned: evidence.length };
-  return { state, evidence };
-}
+// THE RESULT CONTRACT IS NOT DEFINED HERE. `KnowledgeAdapterResult`, `settleRead` and
+// `unavailableRead` live in `@pikar/core` beside `clampEvidence` and the closed state union
+// (CLAUDE.md §1), because this module and `knowledgeExternalSources.ts` each had their own
+// structurally-identical copy, written three minutes apart, and the copies had ALREADY drifted on
+// the question that matters — one clamped at the admission boundary and the other applied
+// hand-written slices. One type, two constructors, four adapters.
 
 // ── Vault ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -88,9 +63,30 @@ export const searchVaultKnowledge = internalAction({
   args: { tenantId: v.string(), query: v.string() },
   handler: async (ctx, { tenantId, query }): Promise<KnowledgeAdapterResult> => {
     const now = Date.now();
+    // A SEARCH THAT WAS NEVER SENT IS NOT AN EMPTY VAULT. `clampSearchPlan` refuses a query with no
+    // searchable term upstream, but this action's own argument is a bare `v.string()` and this is
+    // the trust boundary, so it fails closed on its own terms rather than on a claim about another
+    // module. `unplanned` is the honest word: no search of the vault happened.
+    if (query.trim() === "") return unavailableRead("vault", "unplanned");
+
+    // UNREACHABLE IS NOT EMPTY, AND A THROW IS NOT A STATE. `vaultGroundHydrated` reaches
+    // OpenRouter for embeddings and `internal.vault.getDoc` for hydration, and either can reject —
+    // no key, a network fault, a document raced out from under the read. Every landed caller of
+    // this action wraps it for exactly that reason (`llm.ts`, `evaluations.ts`); without this the
+    // adapter was the only one that did not, and the failure escaped the internalAction instead of
+    // coming back as the governed gap the whole contract exists to produce.
+    let hydrated: Awaited<
+      ReturnType<typeof ctx.runAction<typeof internal.vaultGround.vaultGroundHydrated>>
+    >;
+    try {
+      hydrated = await ctx.runAction(internal.vaultGround.vaultGroundHydrated, { tenantId, query });
+    } catch {
+      // The error itself is deliberately not carried out: it can hold provider prose, and the
+      // search plane's `reason` is a code-owned enum that reaches a stored row (CLAUDE.md §4).
+      return unavailableRead("vault", "provider_error");
+    }
     // The spine is destructured away and never named again — see the module header.
-    const { docIds, titles, kinds, origins, sourceUpdatedAt, truncated, chunks } =
-      await ctx.runAction(internal.vaultGround.vaultGroundHydrated, { tenantId, query });
+    const { docIds, titles, kinds, origins, sourceUpdatedAt, truncated, chunks } = hydrated;
 
     const raw: Evidence[] = [];
     let cap = false;
@@ -99,12 +95,17 @@ export const searchVaultKnowledge = internalAction({
     for (let i = 0; i < docIds.length; i++) {
       const docId = docIds[i] ?? "";
       const text = chunks[i] ?? "";
-      // A hit whose text the whole-run budget squeezed to nothing. It is a REAL match, so the loss
-      // is reported rather than swallowed — but it is not shipped as evidence, because a row with
-      // no text can be cited and never verified (`validateSynthesis` checks excerpts against the
-      // cited text, and there would be none).
+      // A hit with no text is dropped either way — a row with no text can be cited and never
+      // verified (`validateSynthesis` checks excerpts against the cited text, and there would be
+      // none) — but WHY it is empty decides the reason, and the two causes are different facts
+      // about the read. `truncated` true means the whole-run budget ran out before this document:
+      // a real cap. `truncated` false over an empty string means the document simply has no
+      // extracted text (`vaultDocuments.text` is optional and `getDoc` returns `text ?? ""`), which
+      // is an unusable row, not a bound we hit. Reporting the second as `cap` told the user we hit
+      // a retrieval limit that never applied.
       if (text === "") {
-        cap = true;
+        if (truncated[i] === true) cap = true;
+        else providerError = true;
         continue;
       }
       // Read in part, not in full: the loop saw the first 1,500 characters of a longer document.
@@ -131,7 +132,7 @@ export const searchVaultKnowledge = internalAction({
       });
     }
 
-    return settle("vault", raw, { cap, providerError });
+    return settleRead("vault", raw, { cap, providerError });
   },
 });
 
@@ -166,18 +167,27 @@ export const searchDriveKnowledge = internalAction({
   args: { tenantId: v.string(), query: v.string() },
   handler: async (ctx, { tenantId, query }): Promise<KnowledgeAdapterResult> => {
     const now = Date.now();
-    const result = await ctx.runAction(internal.vaultDrive.findInDriveForTenant, {
-      tenantId,
-      query,
-    });
+    // A DRIVE SEARCH THAT WAS NEVER SENT IS NOT AN EMPTY DRIVE. `runDriveSearch` short-circuits a
+    // blank needle to `{ok: true, rows: []}` with ZERO network calls, which arrived here as
+    // `{status: "available", returned: 0}` — "we looked at your Drive and there is nothing there"
+    // for a read that never happened. Refused at the boundary instead.
+    if (query.trim() === "") return unavailableRead("drive", "unplanned");
+
+    // A rejected `fetch` — DNS, TLS, timeout — is not one of `findInDriveForTenant`'s four modelled
+    // failures; it propagates through `driveFetch` and out of this action. Caught, so a transport
+    // fault is the same governed gap as an HTTP 500.
+    let result: Awaited<
+      ReturnType<typeof ctx.runAction<typeof internal.vaultDrive.findInDriveForTenant>>
+    >;
+    try {
+      result = await ctx.runAction(internal.vaultDrive.findInDriveForTenant, { tenantId, query });
+    } catch {
+      return unavailableRead("drive", "provider_error");
+    }
 
     // Unreachable is NOT empty. The unavailable arm of `KnowledgeSourceState` carries no count at
     // all, so "Drive needs reconnecting" can never be rendered as "there are no such files".
-    if (!result.ok)
-      return {
-        state: { status: "unavailable", source: "drive", reason: DRIVE_UNAVAILABLE[result.reason] },
-        evidence: [],
-      };
+    if (!result.ok) return unavailableRead("drive", DRIVE_UNAVAILABLE[result.reason]);
 
     const raw: Evidence[] = [];
     let providerError = false;
@@ -203,6 +213,6 @@ export const searchDriveKnowledge = internalAction({
     }
 
     // `truncated` is Drive's own `nextPageToken`: there were more matches than one page held.
-    return settle("drive", raw, { cap: result.truncated, providerError });
+    return settleRead("drive", raw, { cap: result.truncated, providerError });
   },
 });
