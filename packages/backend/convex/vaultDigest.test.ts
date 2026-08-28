@@ -67,9 +67,12 @@ const MODEL_KEYS = ["OPENAI_API_KEY", "OPENROUTER_API_KEY"] as const;
 // after the suite and retry-loop against vitest's torn-down module runner (vaultExtract.test.ts:40).
 beforeEach(() => {
   vi.useFakeTimers();
-  // THE OFFLINE PRECONDITION, MADE STRUCTURAL. `offlineSeamAvailable()` reads the deployment's
-  // model credentials; another suite in this worker may have left either one set, which would send
-  // every digest below down the live model path.
+  // THE OFFLINE PRECONDITION, MADE STRUCTURAL — and it is now TWO facts, not one.
+  // `offlineSeamAvailable()` requires the operator's `PIKAR_OFFLINE_FIXTURES=1` **and** neither
+  // model credential. Another suite in this worker may have left a key set, which would send every
+  // digest below down the live model path; and without the opt-in a keyless backend no longer takes
+  // the fixture at all — it throws, which is the whole point of the last round's fix.
+  vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
   for (const key of MODEL_KEYS) vi.stubEnv(key, undefined);
 });
 afterEach(() => {
@@ -616,11 +619,16 @@ describe("the staleness read is bounded by BYTES, not only by rows", () => {
 //       creation". IT IS NOT. `vaultDrive.importDriveFolder` is a `tenantAction` whose
 //       `name: v.string()` comes from the CLIENT, and the browser fills it from `listDriveFolders`
 //       — which lists SHARED folders whose names A STRANGER CHOSE. Share a folder called
-//       `SMOKE::digest::x`, wait for the import, and the digest is fabricated: a stored, embedded,
-//       RETRIEVABLE vault document saying "(offline fixture — no synthesis was performed)", with no
+//       `SMOKE::digest::x`, wait for the import, and the digest is fabricated: a STORED and
+//       DISPLAYED vault document saying "(offline fixture — no synthesis was performed)", with no
 //       model call, no spend and no trace that synthesis was skipped.
-// The gate is now `offlineSeamAvailable()` — the deployment holds no model credential — which no
-// request, argument or document can influence.
+//       ⚠ CORRECTION: this comment used to say "stored, EMBEDDED, RETRIEVABLE". It was not embedded
+//       and it was not vector-retrievable — the fixture starts `SMOKE::graph::` and
+//       `vaultRag.embedDoc` short-circuits any `SMOKE::` text to a fake `smoke::<hash>` entryId with
+//       no vector. Stored + displayed + a `ragEntryId` that READS groundable is the true blast
+//       radius, and it is bad enough without the extra claim.
+// The gate is now `offlineSeamAvailable()` — the operator set `PIKAR_OFFLINE_FIXTURES=1` AND the
+// deployment holds no model credential — which no request, argument or document can influence.
 //
 // Mutations RUN against this block:
 //   • gate reverted to `folder.name.includes(SMOKE_DIGEST_PREFIX)` -> "a FOLDER NAME carrying the
@@ -628,6 +636,14 @@ describe("the staleness read is bounded by BYTES, not only by rows", () => {
 //   • gate reverted to `safePrompt.includes(...)` -> the member TEXT and member TITLE tests go RED.
 //   • gate `offlineSeamAvailable()` -> `true` (i.e. ignore the credentials) -> all three RED.
 //   • gate `offlineSeamAvailable()` -> `false` -> the keyless control goes RED.
+//
+// AND THE THIRD FAILURE ON THE SAME GATE, WHICH WAS THE PREVIOUS FIX'S OWN: `!OPENAI && !OPENROUTER`
+// alone made ABSENCE OF A CREDENTIAL the selector, so a production deployment that lost or blanked
+// both keys fabricated a digest for EVERY completed folder — unconditionally, silently, and with the
+// retry suppressed, because a fixture RETURNS where the model call THREW. The predicate now needs a
+// POSITIVE operator opt-in as well (`PIKAR_OFFLINE_FIXTURES=1`).
+//   • drop the opt-in conjunct from `offlineSeamAvailable` -> "KEYS GONE, OPT-IN ABSENT" goes RED.
+//   • drop the credential conjuncts (flag alone) -> "the opt-in does NOT re-open the seam" goes RED.
 describe("the offline seam is selected by the DEPLOYMENT, never by content", () => {
   const TENANT = "tenant_digest_seam";
 
@@ -722,6 +738,55 @@ the rest of the document`,
     expect(result).toMatchObject({ ok: true, memberCount: 1 });
     const { digest } = await digestOf(t, folderId);
     expect(digest?.text).toContain("(offline fixture — no synthesis was performed)");
+  });
+
+  test("KEYS GONE, OPT-IN ABSENT: it FAILS LOUDLY and writes NO digest", async () => {
+    // THE REGRESSION THE PREVIOUS FIX INTRODUCED, as a value. `!OPENAI && !OPENROUTER` alone meant
+    // a production deployment that lost (or blanked) both keys silently fabricated a digest for
+    // EVERY completed folder and suppressed its own retry — the fixture RETURNS where the model
+    // call THREW. Absence of a credential is a misconfiguration, not an operator's consent.
+    const t = await seeded();
+    const folderId = await seamFolder(t, "Acme onboarding", "an ordinary handbook");
+    for (const key of MODEL_KEYS) vi.stubEnv(key, undefined);
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", undefined);
+
+    // Loud: the missing credential surfaces from `resolveModel`, where a caller's dead-letter and
+    // retry path can see it. NOT the fetch stub — this never reaches the network at all.
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/OPENROUTER_API_KEY is not set/);
+
+    // And nothing was fabricated: no digest row, and the folder is not marked as built.
+    const { digestDocId, digest } = await digestOf(t, folderId);
+    expect(digestDocId).toBeUndefined();
+    expect(digest).toBeNull();
+    expect((await folderRow(t, folderId))?.digestBuiltAt).toBeUndefined();
+  });
+
+  test('THE OPT-IN, SET: "PIKAR_OFFLINE_FIXTURES=1" on the same keyless backend returns the fixture', async () => {
+    // The other half of the pair, and what keeps the test above from passing against a seam that is
+    // simply dead: one env var apart, same folder, same harness.
+    const t = await seeded();
+    const folderId = await seamFolder(t, "Acme onboarding", "an ordinary handbook");
+    for (const key of MODEL_KEYS) vi.stubEnv(key, undefined);
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+
+    expect(await build(t, TENANT, folderId)).toMatchObject({ ok: true, memberCount: 1 });
+    expect((await digestOf(t, folderId)).digest?.text).toContain(
+      "(offline fixture — no synthesis was performed)",
+    );
+  });
+
+  test("the opt-in does NOT re-open the seam on a deployment that still holds a key", async () => {
+    // The flag is consent, not an override: an operator who sets it on a keyed deployment by
+    // accident gets the real model path, not a fabricated digest.
+    const t = await seeded();
+    const folderId = await seamFolder(t, "Acme onboarding", "an ordinary handbook");
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/no network is allowed/);
   });
 
   test("OPENROUTER_API_KEY ALONE closes the seam — that is the key a digest actually spends", async () => {

@@ -24,8 +24,9 @@
  *
  * ⚠ A CONSEQUENCE WORTH KNOWING BEFORE YOU TOUCH A CALLER: converting a module moves the credential
  * it actually spends from `OPENAI_API_KEY` to `OPENROUTER_API_KEY`. Any guard phrased as "this
- * deployment has no model key" must check BOTH (see `voiceDoc.ts`'s `offlineSeamAvailable`, which
- * keeps a public fabrication seam inert).
+ * deployment has no model key" must check BOTH — see `offlineSeamAvailable` BELOW IN THIS FILE
+ * (`voiceDoc.ts` consumes it and defines it zero times; 96c4700 moved it here, and this line went
+ * on pointing at the old home).
  *
  * ── WHY IT IS NOT SIMPLY EXPORTED FROM llm.ts ─────────────────────────────────────────────────
  *
@@ -102,7 +103,7 @@ const OX_ALPHA_SETTINGS = {} as const;
 export const NODE_ONLY_MODEL_PREFIX = "google/";
 
 /**
- * THE OFFLINE-SEAM OPERATOR SIGNAL. True only on a backend that could not make a model call at all.
+ * THE OFFLINE-SEAM OPERATOR SIGNAL — a POSITIVE opt-in, AND-ed with the precondition it claims.
  *
  * Every offline fixture in this repo used to be selected by an IN-BAND `SMOKE::` SENTINEL IN
  * CONTENT — and content is authored by whoever authored the document. `vaultDigest.ts` gated on the
@@ -111,15 +112,27 @@ export const NODE_ONLY_MODEL_PREFIX = "google/";
  * argument to `vaultDrive.importDriveFolder`, populated by the browser from `listDriveFolders`,
  * which lists SHARED folders whose names a THIRD PARTY chose. Same channel, one hop further away.
  *
- * This is the out-of-band replacement: a fact about the DEPLOYMENT that no request, no argument and
- * no document can influence. It is not a new config knob — it is the exact precondition the seam
- * exists for (convex-test / a local backend with no key), so the seam is structurally INERT on any
- * real deployment.
+ * ⚠ THE FIRST REPLACEMENT WAS `!OPENAI_API_KEY && !OPENROUTER_API_KEY` ALONE, AND THAT TRADED ONE
+ * DEFECT FOR A WORSE ONE. It closed the attacker-triggered fabrication and opened an UNCONDITIONAL
+ * one: a production deployment that loses (or never sets, or blanks — `convex env set X ""`) both
+ * model keys would have silently fabricated a digest for every completed folder and suppressed its
+ * own failure, because a fixture RETURNS where the previous gate THREW at `openRouter()`. Blast
+ * radius: every folder on the deployment, with no error anywhere. Absence of a credential is a
+ * MISCONFIGURATION, not consent — so it can no longer, by itself, choose the fixture path.
  *
- * BOTH keys, never just `OPENAI_API_KEY`: `DEFAULT_MODEL` is `or/openai/gpt-4o-mini` and
- * `resolveModel` routes it to OpenRouter, so `OPENROUTER_API_KEY` is the credential the caller
- * would actually spend. A guard reading one key alone leaves the seam open on a deployment that
- * carries the other.
+ * `PIKAR_OFFLINE_FIXTURES=1` is the consent: an operator stating that THIS deployment is running
+ * offline fixtures on purpose. It is classified `tier: "fixture"` in `lib/env.ts`, so `missingEnv`
+ * reports it under `fixturesActive` and the readiness screen says out loud that a fabrication seam
+ * is live (the `FAL_FIXTURE` precedent — same tier, same reason).
+ *
+ * The credential half is KEPT as well, so the two failure directions are both covered: a keyed
+ * deployment that sets the flag by accident still takes the real model path. BOTH keys, never just
+ * `OPENAI_API_KEY`: `DEFAULT_MODEL` is `or/openai/gpt-4o-mini` and `resolveModel` routes it to
+ * OpenRouter, so `OPENROUTER_API_KEY` is the credential the caller would actually spend.
+ *
+ * WHAT A CALLER MUST DO WHEN THIS IS FALSE AND THERE IS NO KEY: nothing special — call the model.
+ * `resolveModel(DEFAULT_MODEL)` reaches `openRouter()`, which throws `OPENROUTER_API_KEY is not
+ * set`. Loud, and the caller's dead-letter/retry path sees it. Do not add a keyless fallback.
  *
  * ⚠ NOT EVERY `SMOKE::` SEAM IS CLOSED. `vaultLlm.extractGraph` / `identifyDoc`, `vaultRag.embedDoc`
  * and `gmail.ts`'s tool-argument gate still select on content, and they are coupled to each other
@@ -128,7 +141,12 @@ export const NODE_ONLY_MODEL_PREFIX = "google/";
  * `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.
  */
 export const offlineSeamAvailable = (): boolean =>
-  !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY;
+  // The LITERAL "1", not merely "set": `convex env set PIKAR_OFFLINE_FIXTURES ""` and a leftover
+  // `PIKAR_OFFLINE_FIXTURES=0` are both the operator saying NO, and a `!== undefined` check reads
+  // them as yes. Same class of mistake as the one this whole predicate exists to fix.
+  process.env.PIKAR_OFFLINE_FIXTURES === "1" &&
+  !process.env.OPENAI_API_KEY &&
+  !process.env.OPENROUTER_API_KEY;
 
 export const resolveModel = (id: string): LanguageModel => {
   // `.chat(...)`, NOT the bare callable — MEASURED 2026-08-25 and this is the load-bearing half.

@@ -19,9 +19,10 @@
 //
 // §5: the prompt loads from the skill registry (`folder-digest`) and fails closed when unseeded —
 // never hardcoded. §4: the assembled manifest is scanned (fail-closed) BEFORE the model call.
-// The offline fixture is selected by an OPERATOR SIGNAL (`offlineSeamAvailable`: this deployment
-// holds no model credential at all), NEVER by anything in the request or in any document — see the
-// seam note below for the two content channels that used to select it.
+// The offline fixture is selected by an OPERATOR SIGNAL (`offlineSeamAvailable`: the operator SET
+// `PIKAR_OFFLINE_FIXTURES=1` **and** the deployment holds no model credential), NEVER by anything
+// in the request or in any document — see the seam note below for the two content channels that
+// used to select it, and for why the credential half alone was not enough.
 import { FOLDER_DIGEST_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
@@ -161,8 +162,17 @@ function digestPrompt(folderName: string, members: readonly MemberMeta[]): strin
 // `tenantAction` taking `name: v.string()` from the CLIENT (`vaultDrive.ts:697`), stored verbatim at
 // `vaultDrive.ts:880`, and the browser fills it in from `listDriveFolders` — which lists SHARED
 // folders whose names a THIRD PARTY chose. A stranger shares a folder called `SMOKE::digest::x`, the
-// tenant imports it, and the digest is fabricated — then STORED, EMBEDDED and served back through
-// retrieval as a vault document. Same channel as the first version, one hop further away.
+// tenant imports it, and the digest is fabricated — then STORED as a `vaultDocuments` row and SHOWN
+// to the tenant as that folder's digest, carrying a `ragEntryId` that reads as groundable.
+//
+// ⚠ IT WAS NOT ACTUALLY EMBEDDED, and an earlier version of this comment (and of
+// `29-SMOKE-SEAM-DEBT.md`) claimed it was "embedded and served back through retrieval". That was an
+// OVERSTATEMENT and it is corrected here rather than softened: `smokeDigestFixture` begins
+// `SMOKE::graph::`, and `vaultRag.embedDoc` (`vaultRag.ts:390`) short-circuits on ANY `SMOKE::`
+// prefix to `{ entryId: "smoke::<hash>", costUsd: 0 }` — no vector, so the fabricated digest was
+// never vector-retrievable. The real harm was DISPLAY plus a row that reads `ready` and groundable
+// while being invisible to search, which is debt instance #3 in that register, not retrieval
+// poisoning. Same channel as the first version, one hop further away.
 //
 // So: no sentinel. On any deployment with a key the fixture is unreachable by construction, whatever
 // anyone names anything.
@@ -366,9 +376,16 @@ export const buildFolderDigest = internalAction({
     const safePrompt = scan.value.safeText;
 
     let markdown: string;
-    // THE OPERATOR SIGNAL, NOT THE CONTENT. Nothing a client or a third party can write reaches
-    // this branch; on a deployment with a model key it is unreachable. `folder.name` is still the
+    // THE OPERATOR SIGNAL, NOT THE CONTENT, AND IT IS A POSITIVE OPT-IN. Nothing a client or a
+    // third party can write reaches this branch; on a deployment with a model key, or on one whose
+    // operator never set `PIKAR_OFFLINE_FIXTURES=1`, it is not taken. `folder.name` is still the
     // fixture's LABEL — it is data in the output, never the selector.
+    //
+    // A DEPLOYMENT THAT SIMPLY LOST ITS KEYS FALLS THROUGH TO THE MODEL PATH AND THROWS at
+    // `resolveModel` (`OPENROUTER_API_KEY is not set`) — deliberately. The gate used to be the
+    // absence of both keys alone, which turned a misconfiguration into a fabricated digest for
+    // EVERY completed folder, with no error and no retry (the fixture RETURNS where the model call
+    // THREW). A loud failure is the correct behaviour for a backend that cannot synthesise.
     if (offlineSeamAvailable()) {
       markdown = smokeDigestFixture(folder.name, members);
     } else {

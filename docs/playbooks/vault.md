@@ -1,3 +1,50 @@
+> Last verified: 2026-08-28 (**WAVE-3 CLEANUP — THE DIGEST OFFLINE GATE NEEDED A THIRD FIX, BECAUSE
+> THE SECOND ONE TRADED AN ATTACKER-TRIGGERED FABRICATION FOR AN UNCONDITIONAL ONE.**
+>
+> Round 4 replaced the content sentinel with `offlineSeamAvailable()` = "this deployment holds
+> NEITHER model key". That closed the third-party channel and opened a worse one. **Absence of a
+> credential is a MISCONFIGURATION, not an operator's consent.** A production deployment that lost
+> its keys — never set, or blanked with `convex env set X ""` — would have fabricated a digest for
+> EVERY completed folder, silently, and suppressed its own retry, because a fixture RETURNS where
+> the previous gate THREW at `openRouter()`. Blast radius: every folder on the deployment, no error
+> anywhere. Strictly worse than the defect it replaced.
+>
+> **The gate is now a POSITIVE OPERATOR OPT-IN, AND-ed with the precondition it claims:**
+> `process.env.PIKAR_OFFLINE_FIXTURES === "1" && !OPENAI_API_KEY && !OPENROUTER_API_KEY`
+> (`convex/lib/models.ts`). The literal `"1"` — `""` and a leftover `0` are the operator saying no.
+> The credential half is KEPT as the second belt: an operator who sets the flag on a keyed
+> deployment by accident still takes the real model path. `PIKAR_OFFLINE_FIXTURES` is registered in
+> `lib/env.ts` `ENV_MANIFEST` at `tier: "fixture"`, so the readiness screen names it under
+> `fixturesActive` (the `FAL_FIXTURE` precedent). **A keyless deployment WITHOUT the flag now throws
+> `OPENROUTER_API_KEY is not set` out of `buildFolderDigest` — deliberately. Do not add a keyless
+> fallback.** `voiceDoc.reviewDocument` shares the predicate and the reasoning matters more there,
+> because that seam is reached from a PUBLIC endpoint.
+>
+> **A FALSE CLAIM WAS ALSO CORRECTED, IN THREE PLACES.** `vaultDigest.ts`'s header, the
+> `vaultDigest.test.ts` seam comment and `29-SMOKE-SEAM-DEBT.md` all said the fabricated digest was
+> "stored, EMBEDDED and served back through retrieval". It was not. `smokeDigestFixture` begins
+> `SMOKE::graph::`, and `vaultRag.embedDoc` (`vaultRag.ts:390`) short-circuits ANY `SMOKE::` text to
+> `{ entryId: "smoke::<hash>", costUsd: 0 }` with no vector — so the fabricated digest was **stored
+> and DISPLAYED, never embedded and never vector-retrievable**, holding a `ragEntryId` that merely
+> READS groundable. Corrected, not softened.
+>
+> Mutations that MUST go red (all three OBSERVED red in this pass, then reverted): drop the
+> `PIKAR_OFFLINE_FIXTURES` conjunct → `vaultDigest.test.ts` "KEYS GONE, OPT-IN ABSENT",
+> `voiceDoc.test.ts` "KEYS GONE, OPT-IN ABSENT" and `models.test.ts` "absence of a credential is a
+> MISCONFIGURATION"; drop BOTH credential conjuncts → `vaultDigest.test.ts` "the opt-in does NOT
+> re-open the seam" plus the four member-content / folder-name cases; `=== "1"` → `!== undefined` →
+> `models.test.ts` 'only the literal "1" is consent'.
+>
+> ⚠ **KNOWN-FLAKY SUITES — read before calling a red a regression.** `convex/vaultDigest.test.ts` is
+> LOAD-FLAKY under a full backend run (0, 1 and 6 failures across three identical clean runs; 17/17
+> green ALONE). **Re-run any failing backend file ALONE before treating it as a regression.**
+> `convex/media.test.ts` joined it on 2026-08-28: "a transcript with no usable words never buys a
+> sandbox" fails under full-suite load (spy called 1x, expected 0) and passes 255/255 in isolation.
+> That is a LATENT TEST-ISOLATION DEFECT newly EXPOSED by the suite growing 107 → 111 files, not a
+> media regression — Phase 29 touched no `media.*`, no `render/` and not `vaultIngest.ts`. **It is
+> recorded here rather than fixed, and it NEEDS AN OWNER on the media plane.** Recording it here so
+> it is not silently folded into the known-red list.)
+
 > Last verified: 2026-08-28 (**WAVE-2 FINAL PASS, PART 2 — DRIVE OWNERSHIP NOW CROSSES THE IMPORT,
 > SO THE VAULT AND DRIVE PLANES TELL ONE STORY ABOUT ONE FILE.**
 >

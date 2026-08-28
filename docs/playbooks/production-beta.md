@@ -1,5 +1,16 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-28 (**ONE NEW `fixture`-TIER MANIFEST NAME: `PIKAR_OFFLINE_FIXTURES`**,
+> added to `ENV_MANIFEST` in `convex/lib/env.ts`. It is the POSITIVE operator opt-in for the
+> vault-digest and voice-doc offline fixtures: set to the literal `"1"` ON A KEYLESS deployment,
+> folder digests and voice-doc review are FAKED from a local fixture with no model call; ignored
+> while either model key is set. It is `fixture` tier for the `FAL_FIXTURE` reason — `missingEnv`
+> reports it under `fixturesActive`, so the readiness screen says out loud that a fabrication seam is
+> live. **Production must never set it.** It exists because the previous gate was the ABSENCE of both
+> model keys, which turned a lost-credentials misconfiguration into silent fabrication; see
+> `docs/playbooks/vault.md`'s wave-3 block. NOTHING ELSE in the readiness surface changed, and this
+> entry does NOT discharge the separate bump this playbook owes for Phase 28's `lib/env.ts` change.)
+
 > Last verified: 2026-08-26 (**ONE NEW `feature`-TIER MANIFEST NAME: `PEXELS_API_KEY`**, added to
 > `ENV_MANIFEST` in `convex/lib/env.ts` for the free stock-footage scenes. The row is mandatory
 > rather than documentation — `env.test.ts` scans source for `process.env.X` and reds on any

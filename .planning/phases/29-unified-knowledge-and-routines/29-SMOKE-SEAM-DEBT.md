@@ -17,9 +17,29 @@ sources, text the model itself composes after reading retrieved documents.
 
 The fix, in one line: **an offline fixture must be selected by an OUT-OF-BAND OPERATOR SIGNAL — a
 fact about the deployment — never by the payload.** `packages/backend/convex/lib/models.ts`
-`offlineSeamAvailable()` is the shape: `!OPENAI_API_KEY && !OPENROUTER_API_KEY`, i.e. exactly the
-precondition the seam exists for, and nothing a request can influence. `voiceDoc.ts` and (as of this
-pass) `vaultDigest.ts` use it.
+`offlineSeamAvailable()` is the shape. `voiceDoc.ts` and (as of this pass) `vaultDigest.ts` use it.
+
+> **CORRECTION, 2026-08-28 (wave-3 cleanup).** This section previously gave the shape as
+> `!OPENAI_API_KEY && !OPENROUTER_API_KEY` — the ABSENCE OF A CREDENTIAL — and that shipped as
+> written. It was wrong, and worse in blast radius than the defect it replaced: a deployment that
+> merely LOST its keys (never set, or blanked with `convex env set X ""`) then took the fixture path
+> **unconditionally, on every call, with nobody's consent** — and silently, because a fixture
+> RETURNS where the previous gate THREW at `openRouter()`. It turned a misconfiguration into
+> fabricated output plus a suppressed retry. **Absence of a credential is a misconfiguration, not an
+> operator's consent.** The predicate is now a POSITIVE opt-in AND-ed with that precondition:
+>
+> ```ts
+> process.env.PIKAR_OFFLINE_FIXTURES === "1" &&
+>   !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY
+> ```
+>
+> The literal `"1"`, not "is set": `PIKAR_OFFLINE_FIXTURES=""` and a leftover `=0` are the operator
+> saying no. `PIKAR_OFFLINE_FIXTURES` is registered in `lib/env.ts` `ENV_MANIFEST` at
+> `tier: "fixture"`, so `missingEnv` reports it under `fixturesActive` and the readiness screen says
+> out loud that a fabrication seam is live (the `FAL_FIXTURE` precedent). **A keyless deployment
+> WITHOUT the flag now throws** — which is the honest answer for a backend that cannot synthesise.
+> Pinned by `lib/models.test.ts`, `vaultDigest.test.ts` and `voiceDoc.test.ts`; each of the three
+> was observed RED under a reversion to the credential-only gate.
 
 This is not a hypothetical. It has already produced two shipped defects on the SAME gate:
 
@@ -28,16 +48,34 @@ This is not a hypothetical. It has already produced two shipped defects on the S
    that string** turned a real folder's digest into a fixture.
 2. The round-3 fix moved it to `folder.name`, justified in a code comment as "the tenant's own,
    chosen at creation". **`vaultDrive.importDriveFolder` is a `tenantAction` taking
-   `name: v.string()` from the CLIENT** (`vaultDrive.ts:697`, stored verbatim at `:880`), and the
-   browser fills it from `listDriveFolders`, which lists **SHARED** folders whose names a third
-   party chose. Same channel, one hop further away, and it read as safe for a whole round.
+   `name: v.string()` from the CLIENT** (`vaultDrive.ts:705`, stored at `:888` as
+   `name.slice(0, 200)`), and the browser fills it from `listDriveFolders`, which lists **SHARED**
+   folders whose names a third party chose. Same channel, one hop further away, and it read as safe
+   for a whole round.
 
-Both times the fabricated output was **stored, embedded and served back through retrieval** as a
-vault document.
+Both times the fabricated output was **stored as a `vaultDocuments` row and DISPLAYED to the tenant
+as that folder's digest**, carrying a `ragEntryId` that reads as groundable.
+
+> **CORRECTION, 2026-08-28 (wave-3 cleanup).** The sentence above previously read "stored, embedded
+> and served back through retrieval", and that phrasing had been copied verbatim into
+> `vaultDigest.ts`'s module header and `vaultDigest.test.ts`'s seam comment. **It was an
+> overstatement and it is corrected rather than softened** — a false comment is the exact defect
+> class this phase has spent four rounds on. What is actually true, traced: `smokeDigestFixture`
+> begins its text with `SMOKE::graph::`, and the digest's own ingest calls `vaultRag.embedDoc`,
+> which short-circuits on ANY `SMOKE::` prefix (`vaultRag.ts:390`) to
+> `{ entryId: "smoke::<contentHash>", costUsd: 0 }`. **No vector was ever written, so the fabricated
+> digest was never vector-retrievable.** The real harm was (a) a fabricated digest shown to the
+> tenant as the folder's summary, with no model call, no spend and no trace that synthesis was
+> skipped, and (b) a row that reads `ready` and groundable while being invisible to search — which
+> is debt instance #3 below, not retrieval poisoning. Bad enough without the extra claim.
 
 ---
 
-## The four open instances
+## The open instances
+
+> Was "the four open instances". #5 was demoted to a footnote on an unproven argument and #6 was
+> missing entirely; both were added on 2026-08-28. #6 is the only one that is NOT coupled to the
+> chain below and can be closed on its own.
 
 ### 1. `packages/backend/convex/vaultLlm.ts:135` — `extractGraph`
 
@@ -73,11 +111,53 @@ vault document.
 | **What the attacker gets** | Two fabricated `HeaderRecord`s — `Sarah Smoke <sarah@example.com>` / `Sara Test <sara@example.org>` — presented to the agent as REAL mailbox evidence about who the user corresponds with, which then feeds contact resolution and therefore recipient selection. A `mailbox.searched` audit row is written for the fabricated result, so the log agrees it happened. |
 | **Why it is the worst of the four** | It is the only one selected from *inside* a tool-bearing loop, which is where prompt injection actually lives, and it is on the recipient-resolution path. |
 
-**Also present, not classified as debt here:** `vaultGround.ts:48` (`SMOKE::<docId>` seeds retrieval),
-`intake.ts:69/111` and `vaultExtract.ts:389` (`SMOKE::transcribe::` / `SMOKE::extract::` over uploaded
-BYTES). These select on content too, but the content is the caller's own upload/query in the same
-request rather than a third party's stored document, so the exposure is narrower. They are named
-because any conversion has to move them together with the four above (see below).
+### 5. `packages/backend/convex/vaultGround.ts:48` — `runVaultGround`
+
+> **PROMOTED FROM "not classified as debt" ON 2026-08-28.** It was excluded on the grounds that "the
+> content is the caller's own upload/query in the same request rather than a third party's stored
+> document". **That is the same justification that was proven wrong twice on the digest gate, and it
+> is wrong again here.** It was not re-derived last time; it was re-used. Traced this time, every
+> writer of `query`:
+>
+> | Caller | Where `query` comes from |
+> |---|---|
+> | `llm.ts:3792` `searchVault` tool `execute({ query })` | **A TOOL ARGUMENT THE MODEL COMPOSES** (`inputSchema: jsonSchema<{ query: string }>`, `llm.ts:3784`), inside `runAgentLoop`, whose context carries retrieved vault content and inbox content. |
+> | `blueprint.ts:547` | Server-composed profile queries. |
+> | `evaluations.ts:295` | Server-composed, from a validated arg. |
+>
+> One of the three is **the same channel as instance #4** — the one this register calls "the worst of
+> the four", because it is where prompt injection actually lives. "The caller" is the model.
+
+| | |
+|---|---|
+| **Gate** | `if (query.startsWith(SMOKE_PREFIX)) { … }` (bare `SMOKE::`), which bypasses `rag.search` entirely and takes the seed doc ids out of the sentinel. |
+| **Channel that selects it** | The `query` argument — which on the `searchVault` path is model-composed (see above). |
+| **What the attacker gets** | Two things. (a) **A silent denial of vault retrieval, needing no valid id at all**: an injected document that steers the model into passing a `SMOKE::` query makes `searchVault` skip the vector search and answer from an empty seed set, so the turn is ungrounded and reads as "nothing in your vault about that". (b) With a docId the loop can reach, the `SMOKE::<docId>\|<passage>` form attaches a **MODEL-WRITTEN "matched passage"** to a REAL tenant document, which is then rendered inside the `<vault_context>` fence under that document's title and recorded on the `vaultSources` content-plane row behind the SourceCard. That is the provenance-laundering class this repo has now hit repeatedly: the model writes the text and the citation UI attributes it to the user's own document. |
+| **Not in scope** | Tenant isolation holds either way — seeds are resolved through `internal.vault.ownedDocsMeta`, which silently drops foreign ids, so this buys nothing cross-tenant. **NOT VERIFIED HERE:** whether a real `vaultDocuments` id is reachable from inside the tool loop, which is what half (b) needs. Half (a) needs nothing and is reachable today. A future plan must trace it rather than assume either way. |
+
+### 6. `packages/backend/convex/knowledgeLlm.ts:333/…` — `planKnowledgeSearch` / `synthesizeKnowledge`
+
+> **ADDED 2026-08-28.** It was absent from this register although it breaks the register's own stated
+> rule, and its module docstring (`knowledgeLlm.ts:88-97`) argues the exclusion explicitly:
+> *"The `question` is the caller's own argument, so keying on it puts the seam back under the
+> operator."* **A caller's argument is a payload, not a fact about the deployment.** The docstring is
+> right that scanning the assembled prompt would have been far worse (it embeds `Evidence.text` and
+> `Evidence.label` — inbound email bodies and subject lines, so any remote sender could have selected
+> the code path). Narrowing to `question` was a real improvement. It is not the rule.
+
+| | |
+|---|---|
+| **Gate** | `if (question.includes(SMOKE_PLAN_PREFIX))` (`:333`) and the matching `SMOKE::knowledge-synth::` gate in `synthesizeKnowledge`. `SMOKE::knowledge-plan::FAIL` additionally drives the real `catch`. |
+| **Channel that selects it** | The `question` argument. Whether that is operator-controlled depends entirely on a caller that **does not exist yet** — as of this commit the only references outside the module are in `skills.test.ts:913-914`. |
+| **Why it is here** | It is the ONE instance that is cheap to close, because it has no production caller and no E2E driving it, so it is NOT part of the coupled chain below. `offlineSeamAvailable()` applies verbatim: `flag && content`, the flag as the authority and the sentinel retained only as the fixture SELECTOR (the shape this document's closing section proposes). Doing it before the wave-3 coordinator wires a caller is strictly cheaper than after. |
+| **Also owed** | The docstring's "puts the seam back under the operator" claim must go with the fix — it is a comment asserting an invariant nothing enforces. |
+
+**Also present, not classified as debt here:** `intake.ts:69/111` and `vaultExtract.ts:389`
+(`SMOKE::transcribe::` / `SMOKE::extract::` over uploaded BYTES). These select on content too. Their
+exclusion rests on a claim that has NOT been re-traced in this pass and should be treated as
+unproven: that the bytes are the caller's own upload in the same request. **A future plan must trace
+every writer of those bytes before relying on it** — that is exactly the step whose omission produced
+instance #5. They are named because any conversion has to move them together with #1-#4 above.
 
 ---
 
@@ -118,6 +198,17 @@ never does, with the sentinel retained ONLY as the fixture SELECTOR once that sw
 E2E's determinism and its ability to name a specific fixture, while making every gate unreachable on
 any deployment an attacker can reach. The digest seam did not need the second half at all, which is
 why it could be converted alone.
+
+> **UPDATE, 2026-08-28 (wave-3 cleanup) — the env var now EXISTS, and it will not work here as-is.**
+> `PIKAR_OFFLINE_FIXTURES` is real and registered in `ENV_MANIFEST`, but `offlineSeamAvailable()`
+> ANDs it with "neither model key is set" (see the correction at the top of this document — the
+> credential half is a second belt against an accidental flag on a keyed deployment). **The E2E and
+> `pnpm smoke:vault` run against a KEYED deployment, so `offlineSeamAvailable()` is `false` there by
+> construction and cannot be the `flag` half of `flag && content` for instances #1-#4.** The future
+> plan needs a SEPARATE, flag-only predicate for the chain — and must then answer, explicitly, why
+> that weaker predicate is acceptable on a deployment that has credentials. Reusing
+> `offlineSeamAvailable()` here without noticing this will produce a chain that is dead offline and
+> looks fine in a unit suite. That is the whole class of failure this document exists for.
 
 The alternative — a mock model provider behind `lib/models.ts` — deletes the sentinels entirely and
 is the cleaner end state, but it is a much larger change and it moves the E2E's assertions from

@@ -278,12 +278,19 @@ const docReviewSchema = jsonSchema<RawDocReview>({
 // `actOnGap` → memo → the Approve gate. Tenant-scoped and non-exfiltrating, but it directly
 // contradicts Success Criterion 2: a production endpoint must never fabricate a gap on request.
 //
-// So the seam is gated on there being NO model credential at all. That is not a new config knob —
-// it is the exact precondition the seam exists for (a local backend / convex-test with no key). Any
-// real deployment has one, so the sentinel is INERT in production and a `SMOKE::` transcript there
-// takes the ordinary model path. `voiceDoc.test.ts` deletes BOTH variables in `beforeEach` (beside
-// the throwing `fetch` stub) so the offline precondition is structural rather than ambient, and
-// pins the inert-with-a-key behavior with its own test.
+// So the seam is gated on `offlineSeamAvailable()` — the operator SET `PIKAR_OFFLINE_FIXTURES=1`
+// AND the deployment holds neither model key. The sentinel is then only the fixture SELECTOR, never
+// the authority.
+//
+// ⚠ THE CREDENTIAL HALF ALONE WAS NOT ENOUGH, and this module is why the rule is worth stating
+// twice. This seam is reached from a PUBLIC endpoint, so on a deployment that merely LOST its keys
+// — never set them, or blanked them with `convex env set X ""` — the fabrication endpoint reopened
+// to every authenticated user, with no operator anywhere in the decision. Absence of a credential
+// is a misconfiguration, not consent. A keyless deployment WITHOUT the flag now throws at
+// `resolveModel` (`OPENROUTER_API_KEY is not set`), which is the honest answer for a backend that
+// cannot review. `voiceDoc.test.ts` sets the flag and deletes BOTH keys in `beforeEach` (beside the
+// throwing `fetch` stub) so the offline precondition is structural rather than ambient, and pins
+// BOTH refusals — inert-with-a-key, and inert-when-keyless-without-the-flag — with its own tests.
 //
 // BOTH keys, not just OPENAI_API_KEY: `DEFAULT_MODEL` is `or/openai/gpt-4o-mini` and this module now
 // resolves it through the shared `lib/models` table, so the credential this producer actually spends
@@ -465,8 +472,9 @@ export const reviewDocument = internalAction({
     if (!doc) return NO_REVIEW;
     const docText = doc.text ?? "";
 
-    // The sentinel is honoured ONLY on a keyless backend — see the exposure note on the seam. A
-    // `SMOKE::` transcript on a real deployment is just text and takes the model path.
+    // The sentinel is honoured ONLY on a backend whose operator opted in AND which holds no model
+    // key — see the exposure note on the seam. A `SMOKE::` transcript anywhere else is just text
+    // and takes the model path (which throws if there is no key, rather than fabricating).
     const first = transcript[0]?.text ?? "";
     const raw: RawDocReview =
       offlineSeamAvailable() && first.startsWith(SMOKE_REVIEW_PREFIX)

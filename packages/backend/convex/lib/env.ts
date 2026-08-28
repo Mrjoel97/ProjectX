@@ -257,6 +257,16 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   },
   { name: "FAL_FIXTURE", tier: "fixture", whatBreaks: "Nothing. Set = fal.ai calls are FAKED." },
   {
+    // `lib/models.offlineSeamAvailable()` — the OPERATOR HALF of the vault-digest / voice-doc
+    // fixture gate. It was the ABSENCE of both model keys alone, which made a deployment that
+    // merely LOST its keys fabricate digests silently instead of failing; consent is now positive
+    // and it is reported here, on the same footing as the media fixtures.
+    name: "PIKAR_OFFLINE_FIXTURES",
+    tier: "fixture",
+    whatBreaks:
+      'Nothing. Set to "1" ON A KEYLESS deployment = folder digests and voice-doc review are FAKED from a local fixture with no model call. Ignored while either model key is set.',
+  },
+  {
     name: "PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE",
     tier: "fixture",
     whatBreaks: "Nothing. Set = the Graph concurrency probe may run against a disposable account.",

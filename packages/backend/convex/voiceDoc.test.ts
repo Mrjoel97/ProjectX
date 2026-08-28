@@ -219,17 +219,24 @@ const searchAudits = (t: ReturnType<typeof convexTest>, tenantId: string) =>
 const MODEL_KEYS = ["OPENAI_API_KEY", "OPENROUTER_API_KEY"] as const;
 const savedKeys = new Map<string, string | undefined>();
 
+// THE SECOND HALF OF THE GATE, ADDED AFTER THE CREDENTIAL-ONLY VERSION PROVED WORSE. Deleting the
+// keys is no longer enough to reach the fixture: `offlineSeamAvailable()` requires a POSITIVE
+// operator opt-in too, because "this deployment lost its keys" is a misconfiguration and used to be
+// read as consent — on a PUBLIC endpoint. This suite is exactly the deployment the opt-in describes.
+const ENV_KEYS = [...MODEL_KEYS, "PIKAR_OFFLINE_FIXTURES"] as const;
+
 beforeEach(() => {
-  for (const key of MODEL_KEYS) {
+  for (const key of ENV_KEYS) {
     savedKeys.set(key, process.env[key]);
     delete process.env[key];
   }
+  process.env.PIKAR_OFFLINE_FIXTURES = "1";
   vi.stubGlobal("fetch", () => {
     throw new Error("voiceDoc.test: no network is allowed in this suite");
   });
 });
 afterEach(() => {
-  for (const key of MODEL_KEYS) {
+  for (const key of ENV_KEYS) {
     const saved = savedKeys.get(key);
     if (saved === undefined) delete process.env[key];
     else process.env[key] = saved;
@@ -746,6 +753,42 @@ describe("voiceDoc.reviewSession (SC2 — the persisted, cited findings row)", (
     ).rejects.toThrow(/NO_ACTIVE_SKILL/);
 
     expect(await reviewRow(t, TENANT, sessionId)).toBeNull();
+  });
+
+  test("KEYS GONE, OPT-IN ABSENT: the public sentinel fabricates NOTHING and the call fails", async () => {
+    // The credential-only gate shipped a worse defect than the one it closed: on a deployment that
+    // never set its keys, or blanked them (`convex env set X ""`), THIS PUBLIC ENDPOINT reopened to
+    // every authenticated tenant with no operator in the decision at all. Absence of a credential is
+    // a misconfiguration, not consent. Same suite, same keyless backend — only the opt-in removed.
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    delete process.env.PIKAR_OFFLINE_FIXTURES;
+    await expect(
+      asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+        sessionId,
+        transcript: smokeTranscript("gaps"),
+      }),
+    ).rejects.toThrow(/NO_ACTIVE_SKILL/); // the model path, fail-closed at the unseeded persona
+
+    expect(await reviewRow(t, TENANT, sessionId)).toBeNull();
+  });
+
+  test("THE OPT-IN, SET: the same keyless backend DOES return the fixture", async () => {
+    // Anti-vacuous for the test above: one env var apart, same harness, same transcript. Without
+    // this the refusal above would also pass against a seam that had simply been deleted.
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    process.env.PIKAR_OFFLINE_FIXTURES = "1";
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+      sessionId,
+      transcript: smokeTranscript("gaps"),
+    });
+    expect(res.findingCount).toBe(3);
+    expect(await reviewRow(t, TENANT, sessionId)).not.toBeNull();
   });
 
   test("BETA-05 — tenant B can neither review nor read tenant A's voice-doc thread", async () => {

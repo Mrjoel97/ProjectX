@@ -1,5 +1,30 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-08-28 (**WAVE-3 CLEANUP — THE SHARED PREDICATE GAINED A POSITIVE OPERATOR
+> OPT-IN, AND THIS MODULE IS THE REASON IT HAD TO.**
+>
+> `reviewDocument`'s `SMOKE::` seam is reached from a PUBLIC endpoint (`api.voiceDoc.reviewSession`).
+> The previous gate was `offlineSeamAvailable()` = "this deployment holds NEITHER model key" — so on
+> a deployment that merely LOST its keys (never set, or blanked with `convex env set X ""`) **the
+> fabrication endpoint reopened to every authenticated tenant, with no operator anywhere in the
+> decision.** Absence of a credential is a MISCONFIGURATION, not consent.
+>
+> The predicate is now `PIKAR_OFFLINE_FIXTURES === "1"` AND-ed with "neither model key"
+> (`convex/lib/models.ts`; registered `tier: "fixture"` in `lib/env.ts`, so the readiness screen
+> names it). **A keyless deployment WITHOUT the flag now throws rather than fabricating** — for this
+> module the throw surfaces as `NO_ACTIVE_SKILL` from the fail-closed persona load, before any model
+> call. `voiceDoc.test.ts`'s `beforeEach` now sets the flag as well as deleting both keys, so the
+> offline precondition stays structural, and pins BOTH refusals: inert-with-a-key, and
+> inert-when-keyless-without-the-flag.
+>
+> Mutations OBSERVED red in this pass, then reverted: drop the `PIKAR_OFFLINE_FIXTURES` conjunct →
+> "KEYS GONE, OPT-IN ABSENT: the public sentinel fabricates NOTHING and the call fails"; drop both
+> credential conjuncts → "the SMOKE:: sentinel is INERT once a model key exists" and
+> "OPENROUTER_API_KEY ALONE is enough to make the sentinel inert".
+>
+> Full reasoning: `docs/playbooks/vault.md`'s wave-3 block and
+> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.)
+
 > Last verified: 2026-08-28 (**`offlineSeamAvailable` MOVED OUT OF THIS MODULE — same predicate,
 > one definition.** `vaultDigest.ts` needed the identical "this deployment holds no model
 > credential" check to close its own fabrication seam, and a second copy of a credential check is
