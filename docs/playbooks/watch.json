@@ -374,6 +374,7 @@
     "packages/core/src/knowledgeSearch",
     "packages/core/src/workflowCustomization",
     "packages/backend/convex/knowledgeSearch",
+    "packages/backend/convex/knowledgeExternalSources",
     "packages/backend/convex/schema.test.ts"
   ],
   "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],

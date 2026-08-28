@@ -1,6 +1,6 @@
 "use node";
 
-import { BODY_TRUNCATE_CHARS, type InboxMessageMeta } from "@pikar/core";
+import { BODY_TRUNCATE_CHARS, type InboxMessageMeta, SEARCH_CAPS } from "@pikar/core";
 // Gmail delivery send action (DLVR-01). "use node": this module holds ONLY the send
 // action — every DB touch goes through internal queries/mutations in gmailAuth.ts /
 // pipeline.ts / audit.ts via ctx.runQuery/runMutation (01-07 rule: a "use node" module
@@ -730,5 +730,197 @@ export const getReplyTarget = internalAction({
           : undefined,
       },
     };
+  },
+});
+
+// ── 29-03 (KNOW-01): the metadata-first knowledge query ──────────────────────────────────────
+//
+// A SEPARATE verb from `search`, on purpose. `search` resolves a CONTACT: it asks `from:/to:`
+// about a name and never fetches a body. This asks a free-text BUSINESS QUESTION and exists to
+// fetch a bounded number of bodies, because a body is what the toolless synthesis reads. Merging
+// them would give the contact resolver a reason to hydrate bodies it has never needed.
+//
+// EVERYTHING HERE IS A GET on the tenant's own token, and NOTHING here writes an audit row: a
+// unified search reads several sources and owes exactly ONE refs-only `knowledge.searched` event,
+// which the plan-29-06 coordinator owns. Per-source events would let the log plane infer the shape
+// of the question from how many rows appeared.
+//
+// WHAT LEAVES THIS FUNCTION IS UNTRUSTED CONTENT — a subject line and a message body, both
+// attacker-controlled. They are for the toolless plane only. The known boundary, stated rather
+// than papered over: the LANDED firewall (`llmRedaction.test.ts`) is BODY-scoped, so today's
+// briefing path already admits senders and subjects into the tool-bearing loop. This verb is
+// deliberately tighter — it returns NO sender at all — and `knowledgeExternalSources.ts` is where
+// that containment is scanned.
+
+/** Ids one knowledge query may list. Hard: it also bounds the hydration fan-out below. */
+const KNOWLEDGE_LIST_CAP = 25;
+/**
+ * Bodies hydrated per query. DELIBERATELY smaller than the list cap and smaller than
+ * `SEARCH_CAPS.maxEvidencePerSource` (8): the list is ids, the hydration is untrusted content and
+ * a per-message round trip. Listing wide and reading narrow is what makes the read "metadata
+ * first" rather than "download the mailbox".
+ */
+const KNOWLEDGE_BODY_CAP = 5;
+/** Words one escaped query may carry. Gmail ANDs them, so more words means fewer results, not more. */
+const KNOWLEDGE_QUERY_WORD_CAP = 12;
+
+/** Everything that carries Gmail search-operator meaning. Replaced by a SPACE, never deleted. */
+const GMAIL_OPERATOR_CHARS = /[:"'`(){}[\]\\<>\r\n\t]/g;
+
+/**
+ * Turn a planner phrase into a Gmail `q` that cannot carry Gmail query language.
+ *
+ * NEUTRALIZE, never drop-the-token: every character that makes an operator (`:` for `from:`,
+ * `label:`, `has:`, `in:`, `is:`; quotes for exact phrases; brackets for grouping) becomes a SPACE,
+ * a leading `-`/`+` is stripped per token (they are Gmail's exclude/require prefixes, and a phrase
+ * that happened to start with a dash would silently invert the search), and the bare uppercase
+ * `OR`/`AND` are dropped. What survives is a bag of literal words, which Gmail ANDs.
+ *
+ * URL encoding does NOT protect this boundary — Gmail decodes `q` before it parses operators, the
+ * same trap `escapeDriveQueryLiteral` (`vaultDrive.ts`) exists for.
+ *
+ * Returns `""` only for a phrase with no letter or digit at all. The caller must NOT list on that:
+ * an empty `q` returns arbitrary recent mail, which is an answer about messages nobody asked about.
+ */
+export function escapeGmailQuery(raw: string): string {
+  const words = raw
+    .replace(GMAIL_OPERATOR_CHARS, " ")
+    .split(/\s+/)
+    .map((w) => w.replace(/^[-+]+/, ""))
+    .filter((w) => w !== "" && w !== "OR" && w !== "AND");
+  return words.slice(0, KNOWLEDGE_QUERY_WORD_CAP).join(" ").slice(0, SEARCH_CAPS.queryCharCap);
+}
+
+/**
+ * One mailbox message as knowledge evidence.
+ *
+ * THERE IS NO SENDER FIELD, and that is a decision rather than an omission: a display name and an
+ * address are the PII-densest things in a mailbox, the answer is built from what was SAID, and the
+ * landed briefing path already admits senders into the tool-bearing loop. Adding one here would
+ * widen a boundary this plan is meant to hold. `ponytail:` ceiling — an answer cannot say "Sarah
+ * said X". Upgrade path when that is genuinely needed: carry an index into a server-side sender
+ * table the model never sees, the `buildRecipientView` idiom.
+ */
+export type KnowledgeMailMessage = {
+  /** The Gmail message id — an opaque provider ref, safe for a `sourceRef`. */
+  id: string;
+  /** UNTRUSTED CONTENT. The subject line, capped. Content plane only. */
+  subject: string;
+  /** UNTRUSTED CONTENT. Plain-text body (or Gmail's own snippet), truncated to the search cap. */
+  body: string;
+  internalDate: number;
+  /** The body was cut. The caller must report the read as PARTIAL, never as a full read. */
+  bodyTruncated: boolean;
+};
+
+// Explicit return type (guidelines §96) — see SendResult.
+type KnowledgeQueryResult =
+  | {
+      ok: true;
+      messages: KnowledgeMailMessage[];
+      /** How many ids the list returned, BEFORE hydration narrowed it. */
+      listed: number;
+      /** Gmail had another page. Reported so a capped read can never present as complete. */
+      more: boolean;
+    }
+  | { ok: false; reason: "not_connected" | "reauth" };
+
+/** Apply the content-plane caps once, so the fixture path and the live path cannot disagree. */
+function knowledgeMessage(
+  id: string,
+  subject: string,
+  body: string,
+  internalDate: number,
+): KnowledgeMailMessage {
+  const text = body.slice(0, SEARCH_CAPS.evidenceTextCharCap);
+  return {
+    id,
+    subject: subject.slice(0, SEARCH_CAPS.labelCharCap),
+    body: text,
+    internalDate,
+    bodyTruncated: text.length < body.length,
+  };
+}
+
+export const knowledgeQuery = internalAction({
+  args: { tenantId: v.string(), query: v.string() },
+  handler: async (ctx, { tenantId, query }): Promise<KnowledgeQueryResult> => {
+    const q = escapeGmailQuery(query);
+    // FAIL CLOSED, and loudly. This is unreachable through the product path — `clampSearchPlan`
+    // refuses a query with no searchable term at the planner boundary — so reaching it means an
+    // adapter was called directly with something no planner could produce. A throw is the honest
+    // answer: the coordinator runs adapters under `Promise.allSettled`, and there is no governed
+    // state that truthfully describes "we could not build a query", while every alternative
+    // (`available` with zero rows, `provider_error`) is a sentence that is not true.
+    if (q === "") {
+      throw new Error("gmail.knowledgeQuery: the query carried no searchable term");
+    }
+
+    // FIXTURE FIRST (the same seam and ordering as listInbox/fetchInboxBodies), so the offline
+    // eval corpus can exercise the inbox source with no mailbox. Real tenants never have fixture
+    // rows — `smoke.seedInboxFixture` is the only writer and it is internal.
+    const fixture = await ctx.runQuery(internal.smoke.getInboxFixture, { tenantId });
+    if (fixture) {
+      // The seam FILTERS on the escaped terms rather than returning every fixture message: a seam
+      // that answered every question with the whole fixture would make every offline assertion
+      // built on it vacuous. It is a substring AND, not Gmail's ranking — `ponytail:` ceiling,
+      // named because the offline path is a shape check and not a relevance check.
+      const terms = q.toLowerCase().split(" ");
+      const hits = fixture.messages
+        .filter((m) => {
+          const hay = `${m.subject}\n${m.snippet}\n${m.body}`.toLowerCase();
+          return terms.every((term) => hay.includes(term));
+        })
+        .sort((a, b) => b.internalDate - a.internalDate);
+      return {
+        ok: true,
+        listed: hits.length,
+        more: false,
+        messages: hits
+          .slice(0, KNOWLEDGE_BODY_CAP)
+          .map((m) => knowledgeMessage(m.id, m.subject, m.body || m.snippet, m.internalDate)),
+      };
+    }
+
+    const access = await freshAccessToken(ctx, tenantId);
+    if (!access.ok) {
+      // The same non-throwing governed signal every other read verb returns. The caller renders a
+      // GAP ("your mailbox needs reconnecting"), never an empty result.
+      return { ok: false, reason: access.reason === "not_connected" ? "not_connected" : "reauth" };
+    }
+
+    const listRes = await fetch(
+      `${MESSAGES_ENDPOINT}?maxResults=${KNOWLEDGE_LIST_CAP}&q=${encodeURIComponent(q)}`,
+      { headers: { Authorization: `Bearer ${access.token}` } },
+    );
+    const listBody = (await listRes.json()) as {
+      messages?: { id: string }[];
+      nextPageToken?: string;
+    };
+    const ids = (listBody.messages ?? []).slice(0, KNOWLEDGE_LIST_CAP);
+
+    // Gmail returns the list newest-first, so the first `KNOWLEDGE_BODY_CAP` ARE the most recent
+    // matches and no extra metadata round trip is needed to rank them. `ponytail:` ceiling — the
+    // selection is recency, not relevance; upgrade path if that is not good enough: fetch metadata
+    // for all `listed` ids and rank in pure code, at 5x the quota.
+    const messages = await Promise.all(
+      ids.slice(0, KNOWLEDGE_BODY_CAP).map(async ({ id }) => {
+        const res = await fetch(`${MESSAGES_ENDPOINT}/${id}?format=full`, {
+          headers: { Authorization: `Bearer ${access.token}` },
+        });
+        const msg = (await res.json()) as {
+          snippet?: string;
+          internalDate?: string;
+          payload?: MessagePart & { headers?: { name: string; value: string }[] };
+        };
+        // No text/plain leaf (an HTML-only newsletter) → Gmail's own snippet. Never parse HTML.
+        const text = (msg.payload ? pickPlainText(msg.payload) : null) ?? msg.snippet ?? "";
+        const subject = toHeaderRecord(msg.payload?.headers ?? []).subject ?? "";
+        // internalDate is a STRING int64 of epoch-ms in the Gmail API.
+        return knowledgeMessage(id, subject, text, Number(msg.internalDate ?? 0));
+      }),
+    );
+
+    return { ok: true, messages, listed: ids.length, more: Boolean(listBody.nextPageToken) };
   },
 });

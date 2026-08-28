@@ -1,6 +1,8 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
-> Last verified: 2026-08-28 against the SECOND 29-01 adversarial-repair round (a first pass found
+> Last verified: 2026-08-28 against **plan 29-03** (the first EXTERNAL adapters land:
+> `packages/backend/convex/knowledgeExternalSources.ts` + `gmail.knowledgeQuery`). Previously
+> verified against the SECOND 29-01 adversarial-repair round (a first pass found
 > 22 defects, a fixer repaired them, a second pass re-ran the mutations and found 10 still
 > standing — including two the first round's SUMMARY had claimed as "observed RED". This file
 > records the state after the second repair.)
@@ -46,13 +48,15 @@ coordinator, no adapter, no UI and no Convex module yet.
 | `packages/core/src/workflowCustomization.ts` | `CUSTOMIZATION_FIELD_KINDS`, `MATERIAL_FIELD_KINDS`, `CUSTOMIZATION_CAPS`, `validateCustomization`, `renderCustomization`, `canonicalCustomization`, `classifyCustomizationChange`, `checkBaseVersion`, `TenantSkillRef`, `WorkflowPin` (carries `tenantSkillId`, NOT a version) / `pinIdentity`/`pinMatchesActive`/`freshRunCorrelation`. |
 | `packages/core/src/workflowCustomization.test.ts` | 87 tests, including the "ordinary business prose is not refused" corpus and the SOURCE-TEXT recurrence scan that replaced two unfalsifiable runtime bans. |
 
-**Backend (schema only, 29-01)**
+**Backend (29-01 schema, 29-03 external adapters)**
 
 | File | Role |
 |---|---|
 | `packages/backend/convex/schema.ts` | `knowledgeSearches` (new), `tenantSkills` template-lineage fields + `by_tenant_template`, `savedPrompts` pin-lineage fields + `by_tenant_template`. |
 | `packages/backend/convex/schema.test.ts` | 32 tests: the Phase-29 widening proved by INSERT (not by substring), and the **recurrence-absence scan** that nothing else in the repo performed. |
 | `packages/core/src/tenantData.ts` | `knowledgeSearches: "tenant_owned"` — owned by `audit-dead-letter.md`, listed here because Phase 29 is why the row exists. |
+| `packages/backend/convex/knowledgeExternalSources.ts` | **29-03.** The EXTERNAL adapters: `EXTERNAL_KNOWLEDGE_READERS` (the code-owned reader registry), `readInboxKnowledge`, `unavailableResult`/`answeredResult` (the only two state constructors). Registered under this playbook in `watch.json`. |
+| `packages/backend/convex/knowledgeExternalSources.test.ts` | **29-03.** Two-tenant isolation, injected-instruction fixtures, the reader-registry drift scans and the structural containment scans. |
 
 **Consumed, not owned** (their own playbooks apply — read those before touching them)
 
@@ -60,7 +64,7 @@ coordinator, no adapter, no UI and no Convex module yet.
 |---|---|---|
 | `packages/backend/convex/vaultGround.ts` | `vault.md` | `vaultGroundHydrated` — `{docIds, titles, origins, chunks, spine}`, caps 1500/doc and 8000 total. |
 | `packages/backend/convex/vaultDrive.ts` | `vault.md` | `findInDrive` only. Never `importDriveFolder`. |
-| `packages/backend/convex/gmail.ts` | `cockpit.md` | Read verbs only. A NEW knowledge query is needed; `gmail.search` is a contact resolver. |
+| `packages/backend/convex/gmail.ts` | `cockpit.md` | Read verbs only. **29-03 added `knowledgeQuery`** — a FIFTH read verb, separate from `search` (a contact resolver that never fetches a body). `escapeGmailQuery` neutralizes Gmail operator syntax; 25 ids listed, 5 bodies hydrated, each truncated to `SEARCH_CAPS.evidenceTextCharCap`; NO audit row, NO sender returned. |
 | `packages/backend/convex/skills.ts` | `skill-registry.md` | `loadEffectiveSkill`, `publishUserCandidate`, `recordTenantEvalEvidence`, `activateTenantCandidate`, `rollbackTenantSkill`. |
 | `packages/backend/convex/savedPrompts.ts` | `cockpit.md` | `save`/`list`/`remove` and the workspace pin menu. **Phase 29 extends the ROW, not this module.** |
 | `packages/core/src/workflowPacks.ts` | `workflow-packs.md` | `WORKFLOW_PACK_IDS`, `PACK_SOURCE_LABEL`, `packPreflight`, `toolsForWorkflowPack`. |

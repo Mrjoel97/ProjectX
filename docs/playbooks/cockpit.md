@@ -1,3 +1,55 @@
+> Last verified: 2026-08-28 (29-03 — **`gmail.ts` GAINS A FIFTH READ VERB, `knowledgeQuery`, AND
+> IT IS DELIBERATELY NOT `search`.** `search` resolves a CONTACT: it asks `from:/to:` about a name,
+> fetches `format=metadata` only and never touches a body. `knowledgeQuery` asks a free-text
+> BUSINESS question and exists to fetch a bounded number of bodies, because a body is what the
+> Phase-29 toolless synthesis reads. Merging them would give the contact resolver a standing reason
+> to hydrate bodies it has never needed, so they stay two verbs with two privacy shapes.
+>
+> **THE ESCAPE IS THE SECURITY BOUNDARY.** `escapeGmailQuery` NEUTRALIZES every character that
+> carries Gmail search-operator meaning (`:` — which is what makes `from:`, `label:`, `has:`,
+> `in:`, `is:` operators at all — plus quotes, brackets, angle brackets and backslash) into a SPACE,
+> strips a leading `-`/`+` per token (Gmail's exclude/require prefixes: a planner phrase starting
+> with a dash would silently invert the search) and drops the bare uppercase `OR`/`AND`. It
+> neutralizes rather than dropping the whole token, so every word the planner wrote survives while
+> no operator it could have built does. **URL encoding does not protect this boundary** — Gmail
+> decodes `q` before it parses operators, the same trap `escapeDriveQueryLiteral` exists for. A
+> phrase with no letter or digit escapes to `""`, and the action THROWS rather than listing on an
+> empty `q` (an empty `q` returns arbitrary recent mail, i.e. an answer about messages nobody asked
+> about). That state is unreachable through the product: `clampSearchPlan` refuses such a query at
+> the planner boundary.
+>
+> **BOUNDS:** 25 ids listed (`maxResults`), 5 bodies hydrated, each body truncated to
+> `SEARCH_CAPS.evidenceTextCharCap` (1500). Listing wide and reading narrow is what makes it
+> "metadata first" rather than "download the mailbox". Selection is Gmail's own newest-first list
+> order — `ponytail:` ceiling, recency not relevance; the upgrade is a metadata fetch for all
+> `listed` ids and pure-code ranking, at 5x the quota.
+>
+> **NO AUDIT ROW, ON PURPOSE.** `search` writes `mailbox.searched` and `listInbox` writes
+> `mailbox.listed`; this verb writes nothing. A unified search reads several sources and owes
+> exactly ONE refs-only `knowledge.searched` event, owned by the plan-29-06 coordinator — per-source
+> events would let the log plane infer the shape of the question from how many rows appeared.
+> `gmail.test.ts` asserts the `audit` table is empty after a knowledge query.
+>
+> **NO SENDER LEAVES THE VERB.** `KnowledgeMailMessage` is `{id, subject, body, internalDate,
+> bodyTruncated}` — there is no `from`. The known boundary this respects: the LANDED toolless
+> firewall (`llmRedaction.test.ts`) is **BODY-scoped, not CONTENT-scoped**, so today's briefing path
+> already admits sender display names and subject lines into the tool-bearing loop. Phase 29 is
+> strictly tighter and must not be loosened toward it. `ponytail:` ceiling — an answer cannot say
+> "Sarah said X"; the upgrade path is a server-side sender table addressed by index, the
+> `buildRecipientView` idiom.
+>
+> Every existing `gmail.ts` invariant is unchanged and still enforced: GET-only reads, the POST set
+> pinned to `TOKEN_ENDPOINT` + `SEND_ENDPOINT`, zero mailbox-write endpoints, and the
+> `inboxFixtures` seam checked BEFORE the token (which `knowledgeQuery` also does, so the offline
+> eval corpus can exercise the inbox source with no mailbox). The fixture path FILTERS on the
+> escaped terms rather than returning the whole fixture — a seam that answered every question with
+> every fixture message would make every offline assertion built on it vacuous.
+>
+> The knowledge-plane mapping (evidence, authority, availability) lives in
+> `packages/backend/convex/knowledgeExternalSources.ts` and is documented in
+> `knowledge-search-routines.md`, not here. 15 new tests in `gmail.test.ts`; mutations M1-M6, M12
+> observed RED.)
+
 > Last verified: 2026-08-27 (28-03 — **FOUR REVENUE VERB ENTRIES, AND NOT ONE TOOL WRITES THEM
 > YET.** `cards.tsx`'s `VERB` record gains `dispatchRevenue`, `readRevenueCrm`,
 > `readBusinessFinance` and `stageInvoiceReminder`, beside the four `agentSteps.tool` literals
