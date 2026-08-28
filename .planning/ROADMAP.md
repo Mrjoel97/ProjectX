@@ -177,6 +177,38 @@ Plans:
 - [ ] 28-16-PLAN.md — Automated live/browser/repository exposure evidence (Wave 19)
 - [ ] 28-27-PLAN.md — Owner subset decision and strict named-provider phase sealing (Wave 20)
 
+### Phase 28.1: Stripe Billing, Invoicing and Tax for Pikar's own merchant account (INSERTED)
+
+**Goal:** Charge for Pikar itself — a Stripe-hosted subscription with a card-on-file trial, invoices
+that B2B customers can pay by bank transfer, and an honest tax posture — with our own append-only
+ledger, not Stripe, remaining the book of record.
+**Requirements**: TBD (run /gsd:plan-phase 28.1)
+**Depends on:** Phase 28 only for FILENAME separation, not for function. Phase 28 builds a READ-ONLY
+connector into a TENANT’s Stripe account (`convex/stripe*.ts`, `STRIPE_APP_*`); this phase bills from
+**Pikar’s own merchant account** (`convex/billing*.ts`, `packages/billing/`, `BILLING_STRIPE_*`).
+Opposite directions, opposite trust boundaries — the naming split is what keeps the wrong secret out
+of the wrong code path. Also consumes Phase 26’s spend ledger and its "never fabricate historical
+zeroes" rule.
+**Accepted plan:** `.planning/research/stripe-billing-plan-2026-08-28.md` — from Stripe’s
+`stripe_implementation_planner`, guide `iguide_61VIbfMAu8kdIrDnB41V05ajSTq7I`, status `accepted`
+(2026-08-28). Account `acct_1U9DJHV05ajSTq7I`; zero products configured at plan time — clean slate.
+Decisions already made: Stripe-hosted Checkout (redirect), flat-rate tiers, free trial with card on
+file, Invoicing API driven by a Convex scheduled function, bank transfer via the Hosted Invoice Page,
+webhook-driven reconciliation into our own ledger, Customer Portal, Smart Retries, and **Stripe Tax
+threshold monitoring with NO collection** — no registrations exist, so zero tax is the correct answer
+today and monitoring is what warns us before a threshold is crossed.
+**Known traps, recorded in the plan:** (1) `invoice.paid` is NOT cash-in-hand for bank transfer — funds
+land in the customer cash balance and settle in 1-5 days, so `actual` must not be written on that event
+alone. (2) Usage-based billing is the moment Customer Portal stops working and management must move to
+the Subscription Update API. (3) Convex action retries AND Stripe webhook retries both demand
+structural idempotency — a `stripeEvents` table keyed on `event.id`, plus an idempotency key on every
+POST. (4) `convex/tenantDelete.ts` says nothing about billing and would leave a deleted tenant’s
+subscription still charging a card.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 28.1 to break down)
+
 ### Phase 29: Unified Knowledge and Routines
 
 **Goal:** Turn connected Pikar knowledge into one cited cross-source search experience and turn Phase 21 from a generic prompt editor into safe workflow-pack customization and repeatable routines.
