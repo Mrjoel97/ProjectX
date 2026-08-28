@@ -1,0 +1,117 @@
+/**
+ * THE ONE MODEL ROUTE TABLE. A pricing/audit model id in, a `LanguageModel` out.
+ *
+ * ── WHY THIS FILE EXISTS ──────────────────────────────────────────────────────────────────────
+ *
+ * It was SEVEN copies of `const resolveModel = (id) => openai(id.replace(/^openai\//, ""))` — in
+ * `llm.ts`, `blueprint.ts`, `onboarding.ts`, `vaultDigest.ts`, `vaultLlm.ts`, `voiceDoc.ts` and
+ * (newest) `knowledgeLlm.ts` — and only `llm.ts`'s ever grew the `or/` branch. `@pikar/cost`'s
+ * `DEFAULT_MODEL` is `"or/openai/gpt-4o-mini"`, so every stale copy hands an OPENROUTER ROUTE id
+ * straight to the OpenAI provider, which is a different endpoint with a different key:
+ * `"or/openai/gpt-4o-mini".replace(/^openai\//,"")` is unchanged, so the request goes out with a
+ * model OpenAI has never heard of. The failure is silent where the caller catches (a planner
+ * degrades to its fallback on EVERY production run, for ever) and a throw where it does not.
+ * Nothing pinned the copies together, and every test drives the offline `SMOKE::` seam, so no test
+ * could see it.
+ *
+ * `llm.ts` and `knowledgeLlm.ts` are converted. THE OTHER FIVE ARE STILL STALE AND STILL
+ * MISROUTING — that is a live defect in five landed subsystems, not a knowledge-plane one, and it
+ * needs its own change with its own verification. `lib/models.test.ts` holds the named list, fails
+ * if a SIXTH copy appears, and fails again if a name is left there after its copy is gone.
+ *
+ * ── WHY IT IS NOT SIMPLY EXPORTED FROM llm.ts ─────────────────────────────────────────────────
+ *
+ * `llm.ts` is `"use node"`. The knowledge plane, `blueprint.ts` and `vaultDigest.ts` run in the
+ * DEFAULT (V8) runtime, and a V8 module cannot import a Node one. This module is deliberately
+ * V8-SAFE: `@ai-sdk/openai` and `@openrouter/ai-sdk-provider` only.
+ *
+ * ── THE ONE BRANCH THAT IS NOT HERE ───────────────────────────────────────────────────────────
+ *
+ * `google/` stays in `llm.ts`, because `@ai-sdk/google-vertex` pulls `google-auth-library` and is
+ * Node-only — importing it here would drag the Node runtime into every V8 caller. `llm.ts` handles
+ * that prefix and delegates everything else to `resolveModel`, so the three prefixes the V8 plane
+ * can reach have exactly one implementation. `resolveModel` FAILS CLOSED on `google/` rather than
+ * silently routing it to OpenAI, which is the mistake this file exists to end.
+ */
+import { openai } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import type { LanguageModel } from "ai";
+
+// OpenRouter, through its OWN provider — and the second SDK is EARNED, not a convenience.
+//
+// This started as a baseURL swap on @ai-sdk/openai, on the reasoning that OpenRouter is
+// OpenAI-wire-compatible. It is, for the request body. It is NOT for the two things ox-alpha needs:
+//   1. `reasoningEffort` was SILENTLY DROPPED. @ai-sdk/openai gates that parameter on its own
+//      model-capability table, which has never heard of `stealth/ox-alpha`, so it emitted a console
+//      warning and sent nothing. Verified on the wire with a spying `fetch`.
+//   2. `reasoning_details` is not round-tripped. OpenRouter requires the assistant message's
+//      `reasoning_details` to be passed back UNMODIFIED for the model to continue a reasoning chain
+//      across turns. Every step of a tool loop re-sends the transcript, so without it a
+//      reasoning-MANDATORY model re-reasons from scratch on every step — which is the leading
+//      explanation for both the 113-164 s pack runs and the empty replies at 180 s.
+// This provider does both. That is what a new dependency has to buy to be worth it.
+//
+// Lazy + memoised: a module-load factory would throw on a deployment that has no OpenRouter key
+// but never routes here.
+let openRouterProvider: ReturnType<typeof createOpenRouter> | undefined;
+const openRouter = () => {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
+  openRouterProvider ??= createOpenRouter({ apiKey });
+  return openRouterProvider;
+};
+
+/**
+ * Model-level settings for ox-alpha. **EMPTY ON PURPOSE, AND THE MEASUREMENTS ARE WHY.**
+ *
+ * Reasoning is MANDATORY on this model: `reasoning: {enabled: false}` returns HTTP 400 "Reasoning is
+ * mandatory for this endpoint and cannot be disabled". `effort` is the only dial, and this provider
+ * genuinely delivers it — verified on the wire, and the probe's output fell from ~16-20 tokens to 3.
+ * On an isolated call it is dramatic: default 6556 ms / 105 output tokens, `effort: low` 2488 ms / 55.
+ *
+ * **IT IS STILL NOT SET, BECAUSE THE PACK EVIDENCE DOES NOT SUPPORT SETTING IT.** Single runs of
+ * `customer-complaint` scored: low 1/5, medium 2/5, default 0/5 — and then a REPEAT of the default
+ * config scored 1/5, with individual cases changing which way they failed (case 03 failed on wording
+ * in one run and on dropped tool calls in the next; case 05 failed then passed). **Run-to-run
+ * variance is at least +/-1 case, so all three settings sit inside the noise.** Reading that spread
+ * as a gradient would be inventing a finding.
+ *
+ * WHAT WOULD SETTLE IT: repeats, not another single run. The upstream DeepSWE harness used `-k 3`
+ * for exactly this reason — ox-alpha's tool-call behaviour is stochastic, so one number per config
+ * measures the dice. Until a repeated experiment exists, the default is the honest setting.
+ *
+ * NOTE THE TRADE THE MEASUREMENTS HINT AT (unproven): less reasoning is faster and cheaper, and the
+ * pilot's headline assertion — the honest-partial statement — is precisely the kind of output that a
+ * shorter answer drops first. If the dial is ever adopted, re-run the `missingNamed` cases, not the
+ * latency.
+ *
+ * ponytail: an empty object rather than a deleted parameter — the seam is the finding, and the next
+ * person needs somewhere obvious to put the answer.
+ */
+const OX_ALPHA_SETTINGS = {} as const;
+
+/** The prefix every caller must handle for itself, because its provider is Node-only. */
+export const NODE_ONLY_MODEL_PREFIX = "google/";
+
+export const resolveModel = (id: string): LanguageModel => {
+  // `.chat(...)`, NOT the bare callable — MEASURED 2026-08-25 and this is the load-bearing half.
+  // The bare provider defaults to OpenAI's RESPONSES API, and two things went wrong there, both
+  // silently: the request went to /responses instead of /chat/completions, and @ai-sdk/openai
+  // DROPPED `reasoningEffort` on the floor with only a console warning ("not supported for
+  // non-reasoning models") because it gates that parameter on its own model-capability table, which
+  // has never heard of `stealth/ox-alpha`. Observed on the wire: reasoning_effort=undefined via
+  // /responses, reasoning_effort="low" via /chat/completions, and the model honours it — output
+  // tokens fell 235 -> 44 on the same prompt. A dial that is silently discarded is worse than no
+  // dial: the first attempt at this looked applied and changed nothing.
+  if (id.startsWith("stealth/")) return openRouter().chat(id, OX_ALPHA_SETTINGS);
+  // OpenRouter-routed vendor models. The `or/` prefix is the ROUTE and is stripped here; the full id
+  // stays the PRICING/audit key, so `or/openai/gpt-4o-mini` and `openai/gpt-4o-mini` price and audit
+  // as the different billing paths they are. No per-model settings: unlike ox-alpha these are not
+  // reasoning-mandatory, and the 45 s lane is the one place reasoning has actually cost us runs.
+  if (id.startsWith("or/")) return openRouter().chat(id.slice(3));
+  // FAIL CLOSED. Routing a `google/` id to `openai()` is precisely the silent misroute this module
+  // was created to stop; a caller that can reach Vertex handles the prefix before calling here.
+  if (id.startsWith(NODE_ONLY_MODEL_PREFIX))
+    throw new Error(`resolveModel: ${NODE_ONLY_MODEL_PREFIX} needs the Node runtime`);
+  return openai(id.replace(/^openai\//, ""));
+};
