@@ -1,5 +1,42 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS — THE CROSS-PLANE AUTHORITY DIVERGENCE IS DECIDED,
+> NOT DISCLOSED.**
+>
+> Round 3 documented, rather than resolved, that ONE document read two provenances: a file a
+> stranger shared into the tenant's Drive was `third_party_research` on the Drive plane (Drive's own
+> `ownedByMe`) and `tenant_owned` the moment the folder import copied it into the vault. **DECISION:
+> the two planes agree, at the weaker class.** The reading that "an import is a deliberate tenant
+> act, so `tenant_owned` means in the tenant's own STORE" was rejected — `tenant_owned` is the
+> strongest class and it is what makes a claim citable as the owner's own word; copying a stranger's
+> file changes where it is KEPT, not who WROTE it.
+>
+> The ownership signal is threaded through the import: `vaultDrive.enumerateFolder` ASKS Drive for
+> `ownedByMe` (its `files.list` never did — the browse projection did, the import's did not),
+> `landFile` collapses Drive's tristate at the WRITE SITE (`ownedByMe === true`, the Drive plane's
+> own "absence is not ownership" rule) into `vaultDocuments.driveOwnedByMe`, `ownedDocsMeta` and
+> `vaultGroundHydrated` carry it as the `driveOwned` parallel array, and the vault adapter passes it
+> to `authorityFor`. The rejected alternative — dropping `"upload"` from `TENANT_AUTHORED_DOC_KINDS`
+> — would have downgraded every genuine upload, a much larger untruth than the one it fixes.
+>
+> **ONE ASYMMETRY IS DELIBERATE AND IT IS ABOUT WHAT ABSENCE MEANS.** On the Drive plane the field
+> is always requested, so absent ⇒ Drive declined to confirm ⇒ downgrade (`ownedByMe !== true`). On
+> the vault plane it exists only for Drive imports, so absent ⇒ this row never came from Drive, and
+> ONLY AN EXPLICIT `false` downgrades (`source !== "drive" && ownedByMe === false`). Downgrading on
+> absence there would take `tenant_owned` from the entire upload rail.
+>
+> Mutations that MUST go red: delete the vault-plane clause in `authorityFor` (core
+> `knowledgeSearch.test.ts` + backend `knowledgeVaultDrive.test.ts`); stop the vault adapter passing
+> `driveOwned` (`knowledgeVaultDrive.test.ts` — the reason that test is driven through the ADAPTER
+> and not through the pure `authorityFor` alone); `landFile`'s `a.ownedByMe === true` → `?? true`
+> (`vaultDrive.test.ts`); drop `ownedByMe` from the enumeration projection (`vaultDrive.test.ts`);
+> `driveOwned.push(...)` → `push(null)` (`knowledgeVaultDrive.test.ts`).
+>
+> Also fixed here: the corrected `AGENT_AUTHORED_ORIGINS` docstring — the one carrying round 3's
+> retraction of "a row with no origin is a tenant upload" — was ORPHANED. It sat immediately above a
+> SECOND `/** */` block belonging to `FACT_OWNING_PROVIDER_AUTHORITIES`, so TypeScript attached it
+> to nothing and no reader saw it on hover. Moved onto its symbol.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, ROUND 3 — THE PROMPT DEFENCE HAD NO COVERAGE
 > ON THE PATH PRODUCTION TAKES, AND A ROW WITH NO `origin` WAS NEVER PROOF OF A TENANT UPLOAD.**
 >
@@ -197,7 +234,10 @@ because `vaultDrive.findInDrive` is a prefix of `vaultDrive.findInDriveForTenant
 > through the `<citeIds>|<excerptFromId>|<conflictIds>` grammar. A remote party selected a code path
 > in the one module whose entire safety argument is that untrusted content steers nothing. **Both
 > seams now key on the `question` ARGUMENT alone.** `blueprint.ts` and `vaultDigest.ts` may scan
-> their whole prompt because theirs is built from the tenant's own profile; this one is not, and the
+> their whole prompt because theirs is built from the tenant's own profile (**NO LONGER TRUE OF
+> `vaultDigest.ts` as of the final pass** — its manifest is built from ingested Drive files and
+> email, and its seam is now the credential-based `offlineSeamAvailable()`, selected by nothing in
+> the prompt at all; see `vault.md`); this one is not, and the
 > difference is a security boundary rather than a style choice.
 >
 > **(2) THE EVIDENCE FENCE WAS FORGEABLE, AND ITS JSDOC DENIED IT.** `synthesisPrompt` interpolated

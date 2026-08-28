@@ -1,3 +1,41 @@
+> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS, PART 2 — DRIVE OWNERSHIP NOW CROSSES THE IMPORT,
+> SO THE VAULT AND DRIVE PLANES TELL ONE STORY ABOUT ONE FILE.**
+>
+> A file a stranger shared into the tenant's Drive is `third_party_research` on the Drive plane
+> (Drive's own `ownedByMe`) and used to become `tenant_owned` the moment the folder import copied it
+> into the vault — the row landed `kind: "upload"` with no ownership signal, and
+> `vaultGroundHydrated` carries `kinds`/`origins` and not `source`, so the search plane could not
+> tell it from a real upload. Round 3 DISCLOSED that; this pass DECIDES it, at the weaker class:
+> importing someone else's document changes where it is kept, not who wrote it.
+>
+> **What changed, end to end.** `enumerateFolder`'s `files.list` projection now asks for
+> `ownedByMe` (BROWSE_FIELDS already did; the IMPORT's did not, which is why there was no signal to
+> carry). `Importable` and `exportOne` carry it verbatim, absence included. **`landFile` makes the
+> decision, once, at the write site**: `driveOwnedByMe = a.ownedByMe === true`, applying the Drive
+> plane's own "absence is not ownership" rule — Drive leaves the field unset for shared-drive items
+> — so the two planes cannot later disagree about what an absent value meant. It is written on
+> INSERT and re-stated on BOTH re-import branches, including the bare `modifiedTime` touch, because
+> a file can be transferred away from the tenant without its bytes changing.
+>
+> **THE CONTENT-DEDUP BRANCH DELIBERATELY DOES NOT WRITE IT.** That branch attaches a Drive identity
+> to a document the tenant ALREADY HELD whose bytes happen to match (it deliberately does not attach
+> membership either). Stamping it `false` would let anyone who can share a file into the tenant's
+> Drive DOWNGRADE a document the tenant uploaded themselves, just by matching its content hash.
+>
+> `vault.ownedDocsMeta` projects `driveOwnedByMe` (a boolean — refs-only holds, §4) and
+> `vaultGroundHydrated` returns it as the `driveOwned` parallel array, `null` where the row is not a
+> Drive import at all. `null` and `false` are DIFFERENT FACTS: `authorityFor` downgrades a vault row
+> only on an explicit `false`, so the upload rail keeps `tenant_owned`.
+>
+> ⚠ **`vaultGroundHydrated`'s return shape is pinned EXHAUSTIVELY by two suites** —
+> `vaultGround.test.ts`'s cross-tenant test and `onboarding.test.ts`'s. Adding a parallel field
+> means extending both by hand; that is the deliberate cost, and it is what keeps a leaked value
+> visible at the tenant boundary.
+>
+> Mutations that MUST go red: `landFile`'s `=== true` → `?? true` (`vaultDrive.test.ts`); drop
+> `ownedByMe` from the enumeration projection (`vaultDrive.test.ts`); `driveOwned.push(...)` →
+> `push(null)` and the adapter no longer passing `driveOwned` (both `knowledgeVaultDrive.test.ts`).)
+
 > Last verified: 2026-08-28 (**WAVE-2 FINAL PASS — THE ROUND-3 DIGEST-SEAM FIX MOVED THE CHANNEL,
 > IT DID NOT CLOSE IT, AND THIS PLAYBOOK CERTIFIED THE MOVE.**
 >

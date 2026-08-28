@@ -509,8 +509,32 @@ describe("authority is a fixed mapping, never a model output", () => {
     expect(authorityFor("drive", { ownedByMe: false })).toBe("third_party_research");
     expect(authorityFor("drive", {})).toBe("third_party_research");
     expect(authorityFor("drive", { ownedByMe: true })).toBe("tenant_owned");
-    // The downgrade is DRIVE-scoped: it must not silently weaken a vault or CRM row.
-    expect(authorityFor("vault", { docKind: "upload", ownedByMe: false })).toBe("tenant_owned");
+  });
+
+  test("THE TWO PLANES AGREE ABOUT ONE FILE: an imported stranger-shared file is third-party on BOTH", () => {
+    // THE DECISION, AS A VALUE. This used to be pinned the other way — `authorityFor("vault",
+    // { docKind: "upload", ownedByMe: false })` was asserted to be `tenant_owned`, on the reading
+    // that "an import is a deliberate tenant act, so `tenant_owned` means in the tenant's own
+    // STORE". That reading is rejected: `tenant_owned` is the strongest class and it is what makes
+    // a claim citable as the owner's own word. Copying a stranger's file changes where it is kept,
+    // not who wrote it — and one document reading two different provenances on two planes is the
+    // defect class this phase hit four times.
+    expect(authorityFor("drive", { ownedByMe: false })).toBe("third_party_research");
+    expect(authorityFor("vault", { docKind: "upload", ownedByMe: false })).toBe(
+      "third_party_research",
+    );
+
+    // THE ASYMMETRY THAT REMAINS IS DELIBERATE, and it is about what ABSENCE means on each plane.
+    // Drive always REQUESTS the field, so absent = Drive declined to confirm ownership = downgrade.
+    // The vault only carries it for Drive IMPORTS, so absent = this row never came from Drive, and
+    // downgrading on that would take `tenant_owned` away from the entire upload rail.
+    expect(authorityFor("drive", {})).toBe("third_party_research");
+    expect(authorityFor("vault", { docKind: "upload" })).toBe("tenant_owned");
+
+    // A TRUE ownership signal cannot RAISE anything either — an agent-written row stays agent's.
+    expect(authorityFor("vault", { docKind: "upload", origin: "agent", ownedByMe: true })).toBe(
+      "agent_authored",
+    );
   });
 
   test("THE CONNECTOR LAYER'S OWN AUTHORITY IS HONOURED, and it can only ever downgrade", () => {

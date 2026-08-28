@@ -2031,6 +2031,28 @@ export default defineSchema({
     // Drive import writes them; every other insert site leaves both absent.
     driveFileId: v.optional(v.string()),
     driveModifiedTime: v.optional(v.number()),
+    /**
+     * PROVENANCE, CARRIED ACROSS THE IMPORT — the one field that keeps the Drive plane and the
+     * vault plane telling the same story about the same file.
+     *
+     * Drive search is not ownership-scoped (`includeItemsFromAllDrives`, no `'me' in owners`), so a
+     * file a STRANGER shared into the tenant's Drive is a hit. `authorityFor("drive", ...)` reads
+     * Drive's own `ownedByMe` and calls anything but `true` `third_party_research`. Importing that
+     * same file used to erase the distinction: the row landed as `kind: "upload"` with no ownership
+     * signal at all, `vaultGroundHydrated` carries `kinds`/`origins` and not `source`, and the
+     * search plane's allowlist reads `"upload"` as the tenant's own word — so ONE document read
+     * `third_party_research` on the Drive plane and `tenant_owned` on the vault plane.
+     *
+     * A DECIDED BOOLEAN, NOT DRIVE'S TRISTATE. `landFile` stores `ownedByMe === true`, applying the
+     * Drive plane's own "absence is not ownership" rule at the write site, so the two planes cannot
+     * drift apart later by disagreeing about what an absent value meant. Drive leaves `ownedByMe`
+     * unset for shared-drive items, and those must read as NOT owned on both planes.
+     *
+     * ABSENT ⇒ this row did not come from Drive (an upload, a brain dump, an agent write). Absence
+     * is NOT a downgrade — `authorityFor` only downgrades on an explicit `false`, or the whole
+     * upload rail would lose `tenant_owned`.
+     */
+    driveOwnedByMe: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"]) // browse

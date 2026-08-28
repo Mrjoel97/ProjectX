@@ -86,7 +86,8 @@ export const searchVaultKnowledge = internalAction({
       return unavailableRead("vault", "provider_error");
     }
     // The spine is destructured away and never named again — see the module header.
-    const { docIds, titles, kinds, origins, sourceUpdatedAt, truncated, chunks } = hydrated;
+    const { docIds, titles, kinds, origins, sourceUpdatedAt, truncated, driveOwned, chunks } =
+      hydrated;
 
     const raw: Evidence[] = [];
     let cap = false;
@@ -136,7 +137,19 @@ export const searchVaultKnowledge = internalAction({
         // `TENANT_AUTHORED_DOC_KINDS`, and an unrecognised kind fails to the weaker class. The
         // real fix is an explicit `origin: "agent"` at those three write sites, which are three
         // other modules' to change.
-        authority: authorityFor("vault", { docKind: kinds[i], origin: origins[i] }),
+        //
+        // `driveOwned` CLOSES THE CROSS-PLANE DIVERGENCE. A file a stranger shared into the
+        // tenant's Drive read `third_party_research` on the Drive plane and `tenant_owned` the
+        // moment the folder import copied it here — one document, two provenances. `landFile` now
+        // decides Drive's tristate at the write site and `vaultGroundHydrated` carries it; `null`
+        // means the row is not a Drive import at all, which is NOT a downgrade (see `authorityFor`).
+        authority: authorityFor("vault", {
+          docKind: kinds[i],
+          origin: origins[i],
+          ...(driveOwned[i] === null || driveOwned[i] === undefined
+            ? {}
+            : { ownedByMe: driveOwned[i] as boolean }),
+        }),
         ...(typeof updated === "number" ? { sourceUpdatedAt: updated } : {}),
         retrievedAt: now,
       });

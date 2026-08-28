@@ -308,6 +308,29 @@ const SOURCE_AUTHORITY: Readonly<Record<KnowledgeSource, AuthorityClass>> = {
 };
 
 /**
+ * `@pikar/revenue`'s `SourceAuthority` values that OWN a money fact: the books, and the payment
+ * rails. THE SEARCH PLANE DOES NOT GET TO OVERRIDE THE PROVIDER LAYER'S OWN CLASSIFICATION.
+ *
+ * `hubspotProjection` hardcodes `authority: "supplemental"` — with the comment "so no caller can
+ * promote a deal amount into accounting authority by passing an argument" — and the CRM adapter
+ * discarded it and re-stamped the same rows `system_of_record`, the SECOND-STRONGEST class, which
+ * then feeds `weakestAuthority` and `searchConfidence`. A pipeline total built from those rows
+ * read back at high authority, which is precisely the promotion revenue's hardcoding exists to
+ * prevent.
+ *
+ * The two vocabularies stay separate — revenue's answers "may this be summed into a total", this
+ * one answers "how much may this be believed" — and this is the ONE place they are related. The
+ * relation is a DOWNGRADE only: nothing here can raise a source above its `SOURCE_AUTHORITY` entry.
+ *
+ * A plain `readonly string[]` rather than an import: `@pikar/core` must not depend on
+ * `@pikar/revenue` (it is the connector-lane package), and the values are pinned to it by a test.
+ */
+const FACT_OWNING_PROVIDER_AUTHORITIES: readonly string[] = [
+  "accounting_authority",
+  "payment_rail",
+];
+
+/**
  * EVERY `vaultDocuments.origin` value, and every one of them means THE AGENT WROTE THE PROSE.
  *
  * `agent_promoted` is the agent's output that the owner promoted (26-11, ADR-025), `agent` is
@@ -331,29 +354,6 @@ const SOURCE_AUTHORITY: Readonly<Record<KnowledgeSource, AuthorityClass>> = {
  * `origin` union off disk and fails if a value lands there without a decision here — the same
  * falsifiable-registry idiom as `KNOWLEDGE_ADAPTERS`.
  */
-/**
- * `@pikar/revenue`'s `SourceAuthority` values that OWN a money fact: the books, and the payment
- * rails. THE SEARCH PLANE DOES NOT GET TO OVERRIDE THE PROVIDER LAYER'S OWN CLASSIFICATION.
- *
- * `hubspotProjection` hardcodes `authority: "supplemental"` — with the comment "so no caller can
- * promote a deal amount into accounting authority by passing an argument" — and the CRM adapter
- * discarded it and re-stamped the same rows `system_of_record`, the SECOND-STRONGEST class, which
- * then feeds `weakestAuthority` and `searchConfidence`. A pipeline total built from those rows
- * read back at high authority, which is precisely the promotion revenue's hardcoding exists to
- * prevent.
- *
- * The two vocabularies stay separate — revenue's answers "may this be summed into a total", this
- * one answers "how much may this be believed" — and this is the ONE place they are related. The
- * relation is a DOWNGRADE only: nothing here can raise a source above its `SOURCE_AUTHORITY` entry.
- *
- * A plain `readonly string[]` rather than an import: `@pikar/core` must not depend on
- * `@pikar/revenue` (it is the connector-lane package), and the values are pinned to it by a test.
- */
-const FACT_OWNING_PROVIDER_AUTHORITIES: readonly string[] = [
-  "accounting_authority",
-  "payment_rail",
-];
-
 export const AGENT_AUTHORED_ORIGINS: readonly string[] = [
   "agent",
   "agent_promoted",
@@ -399,17 +399,29 @@ export const TENANT_AUTHORED_DOC_KINDS: readonly string[] = ["upload", "brain_du
  * proof of a tenant upload, and three landed writers ingest LLM prose with no origin, so the
  * agent's own memos, voice briefs and onboarding profile were cited as the owner's own word.
  *
- * ⚠ ONE ASYMMETRY THIS CANNOT REACH, AND IT IS NOT AN OVERSIGHT. `vaultDrive.ts:1169`'s folder
- * import stores a Drive file as `kind: "upload"`, `source: "google"`, with no origin — so a file a
- * stranger shared into the tenant's Drive is `third_party_research` on the DRIVE plane (proven by
- * `ownedByMe`) and `tenant_owned` once imported into the vault. The search plane cannot tell that
- * row from a real upload: `vaultGroundHydrated` carries `kinds` and `origins` and NOT `source`,
- * and dropping `"upload"` from the allowlist to close it would downgrade every genuine upload —
- * a much larger untruth than the one it fixes. The defensible reading is that an import is a
- * deliberate tenant act and `tenant_owned` means "in the tenant's own store" (authorship is what
- * `AGENT_AUTHORED_ORIGINS` answers), but the two planes DO disagree about one document and
- * `knowledgeVaultDrive.test.ts` pins that disagreement so it cannot drift unnoticed. The fix is a
- * distinguishable `kind` (or a `source`) at the import site, which is `vaultDrive.ts`'s to make.
+ * THE CROSS-PLANE DIVERGENCE IS CLOSED, AND THE DECISION IS: THE TWO PLANES AGREE. A file a
+ * stranger shared into the tenant's Drive used to read `third_party_research` on the DRIVE plane
+ * (Drive's own `ownedByMe`) and `tenant_owned` the moment the folder import copied it into the
+ * vault — one document, two provenances, which is the defect class this phase hit four times.
+ *
+ * It was disclosed rather than decided for one round, on the reading that "an import is a
+ * deliberate tenant act, so `tenant_owned` means in the tenant's own STORE". That reading was
+ * rejected: `tenant_owned` is the STRONGEST class and it is what makes a claim citable as the
+ * owner's own word, and importing someone else's document changes where it is kept, not who wrote
+ * it. Nothing about copying a stranger's file makes the stranger's assertions more true.
+ *
+ * So the ownership signal is threaded through the import instead. `vaultDrive.enumerateFolder` now
+ * ASKS Drive for `ownedByMe`, `landFile` collapses Drive's tristate to a decided boolean at the
+ * write site (`ownedByMe === true`, the Drive plane's own "absence is not ownership" rule) and
+ * stores it as `vaultDocuments.driveOwnedByMe`, `ownedDocsMeta` and `vaultGroundHydrated` carry it
+ * as `driveOwned`, and `knowledgeVaultDrive`'s vault adapter passes it here. The alternative —
+ * dropping `"upload"` from `TENANT_AUTHORED_DOC_KINDS` — would have downgraded every genuine
+ * upload, a much larger untruth than the one it fixes.
+ *
+ * ABSENCE IS STILL NOT A DOWNGRADE ON THE VAULT PLANE, and that asymmetry with Drive is deliberate:
+ * on the Drive plane the field is always REQUESTED, so absence means Drive declined to confirm
+ * ownership; on the vault plane absence means the row never came from Drive at all (an upload, a
+ * brain dump, an agent write), and treating that as a downgrade would break the whole upload rail.
  *
  * `ownedByMe` is Drive's own `files.get` field, and its DEFAULT IS A DOWNGRADE. Drive search runs
  * with `includeItemsFromAllDrives`, so a file a stranger shared into the tenant's Drive matches;
@@ -441,7 +453,14 @@ export function authorityFor(
     candidates.push("third_party_research");
   if (meta.origin !== undefined && AGENT_AUTHORED_ORIGINS.includes(meta.origin))
     candidates.push("agent_authored");
+  // Drive plane: the field is always requested, so ANYTHING but `true` — including absence, which
+  // is what a shared-drive item returns — means ownership was not established.
   if (source === "drive" && meta.ownedByMe !== true) candidates.push("third_party_research");
+  // Vault plane: only an EXPLICIT `false` downgrades. `vaultDrive.landFile` writes a decided
+  // boolean on every Drive import, so `false` is a positive statement that Drive did not confirm
+  // the tenant owns the file — while absence means the row is not a Drive import at all. This is
+  // what makes an imported stranger-shared file read `third_party_research` on BOTH planes.
+  if (source !== "drive" && meta.ownedByMe === false) candidates.push("third_party_research");
   if (
     meta.providerAuthority !== undefined &&
     !FACT_OWNING_PROVIDER_AUTHORITIES.includes(meta.providerAuthority)

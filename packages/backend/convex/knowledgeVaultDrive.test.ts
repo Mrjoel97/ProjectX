@@ -219,20 +219,67 @@ describe("the vault adapter returns cited, bounded, tenant-owned evidence", () =
     expect(evidence[0]?.authority).toBe("third_party_research");
   });
 
-  test("THE VAULT AND DRIVE PLANES DISAGREE ABOUT AN IMPORTED STRANGER-SHARED FILE, on purpose", () => {
-    // `vaultDrive.ts:1169`'s folder import stores a Drive file as `kind: "upload"`,
-    // `source: "google"` with NO origin, so the SAME file a stranger shared in is
-    // `third_party_research` on the Drive plane (proven by `ownedByMe`) and `tenant_owned` once
-    // imported. The search plane cannot tell that row from a real upload: `vaultGroundHydrated`
-    // carries `kinds` and `origins` and NOT `source`, and dropping `"upload"` from
-    // `TENANT_AUTHORED_DOC_KINDS` would downgrade every genuine upload — a bigger untruth than the
-    // one it fixes. Pinned as a VALUE so the asymmetry is a recorded decision rather than drift.
+  test("THE TWO PLANES AGREE ABOUT AN IMPORTED STRANGER-SHARED FILE — third-party on BOTH", async () => {
+    // `vaultDrive.landFile` stores a Drive file as `kind: "upload"`, so for one round the SAME file
+    // read `third_party_research` on the Drive plane (Drive's `ownedByMe`) and `tenant_owned` the
+    // moment the folder import copied it into the vault: one document, two provenances. Decided
+    // rather than disclosed — importing someone else's file changes where it is KEPT, not who
+    // WROTE it, and `tenant_owned` is the class that makes a claim citable as the owner's own word.
     //
-    // FOLLOW-UP, and it is `vaultDrive.ts`'s to make (not this plan's file): give the import a
-    // distinguishable `kind`, or carry `source` through `vaultGroundHydrated`. Either one lets this
-    // assertion flip to `third_party_research` on BOTH planes and this test says so.
-    expect(authorityFor("vault", { docKind: "upload" })).toBe("tenant_owned");
+    // DRIVEN THROUGH THE REAL ADAPTER. The previous version of this test pinned the divergence with
+    // the pure `authorityFor` alone, so it would not have gone red if the vault adapter changed
+    // what it PASSES — and the fix is precisely a change to what the adapter passes. Every other
+    // provenance claim in this file goes through `searchVault`; this one does now too.
+    const t = harness();
+    const docId = await seedDoc(t, {
+      title: "A stranger's shared deck",
+      kind: "upload",
+      source: "google",
+      driveFileId: "drive-file-shared-in",
+      // What `landFile` writes: Drive's tristate already collapsed at the write site.
+      driveOwnedByMe: false,
+      text: "Their margin is 40 percent and they recommend raising prices.",
+    });
+
+    const { evidence } = await searchVault(t, `SMOKE::${docId}`);
+    // Still retrievable and still cited — the fix is the CLASS, not suppression.
+    expect(evidence[0]?.text).toContain("raising prices");
+    expect(evidence[0]?.authority).toBe("third_party_research");
+    // And the Drive plane, looking at the same file, says the same word.
     expect(authorityFor("drive", { ownedByMe: false })).toBe("third_party_research");
+  });
+
+  test("A GENUINE UPLOAD KEEPS `tenant_owned` — absence of the Drive flag is not a downgrade", async () => {
+    // THE CONTROL, and the reason the vault plane reads absence differently from the Drive plane.
+    // On Drive the field is always requested, so absent means "Drive declined to confirm". In the
+    // vault it is written only by the Drive import, so absent means "this row never came from
+    // Drive" — and downgrading on that would take the strongest class away from the entire upload
+    // rail. Without this test the one above passes with `TENANT_AUTHORED_DOC_KINDS` gutted.
+    const t = harness();
+    const docId = await seedDoc(t, {
+      title: "The tenant's own handbook",
+      kind: "upload",
+      text: "Our margin is 40 percent and we are raising prices.",
+    });
+
+    const { evidence } = await searchVault(t, `SMOKE::${docId}`);
+    expect(evidence[0]?.authority).toBe("tenant_owned");
+  });
+
+  test("A DRIVE-IMPORTED FILE THE TENANT DOES OWN still reads `tenant_owned`", async () => {
+    // The other half of the boolean: threading the signal must not blanket-downgrade every import.
+    const t = harness();
+    const docId = await seedDoc(t, {
+      title: "Our own Drive doc",
+      kind: "upload",
+      source: "google",
+      driveFileId: "drive-file-ours",
+      driveOwnedByMe: true,
+      text: "Our margin is 40 percent.",
+    });
+
+    const { evidence } = await searchVault(t, `SMOKE::${docId}`);
+    expect(evidence[0]?.authority).toBe("tenant_owned");
   });
 
   test("EVERY origin schema.ts allows has an authority decision behind it", () => {

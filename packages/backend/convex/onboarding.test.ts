@@ -308,6 +308,8 @@ test("cross-tenant: tenant B never retrieves tenant A's committed profile (SC#3)
     kinds: [],
     sourceUpdatedAt: [],
     truncated: [],
+    // The 29 final pass added `driveOwned` (Drive ownership carried across the folder import).
+    driveOwned: [],
     chunks: [],
     spine: null,
   });

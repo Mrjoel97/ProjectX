@@ -321,6 +321,67 @@ describe("an exported file lands as an ordinary vault document", () => {
     expect(await t.run((ctx) => ctx.storage.getUrl(doc.storageId as never))).toBeTruthy();
   });
 
+  test("OWNERSHIP CROSSES THE IMPORT: a stranger-shared file lands `driveOwnedByMe: false`", async () => {
+    // THE CROSS-PLANE FIX. Drive search is not ownership-scoped, so a file a stranger shared into
+    // the tenant's Drive is a hit and `authorityFor("drive", ...)` calls it `third_party_research`.
+    // Before this, importing it erased the distinction: the row landed `kind: "upload"` with no
+    // ownership signal, and the vault plane cited the SAME document at `tenant_owned` — the
+    // strongest class, i.e. as the owner's own word.
+    //
+    // Drive's field is a TRISTATE (unset for shared-drive items) and the decision is made HERE, at
+    // the write site, using the Drive plane's own rule: anything but `true` is not ownership. That
+    // is what stops the two planes drifting apart later over what an absent value meant.
+    const t = harness();
+    const folderId = await openFolder(t, 3);
+    const storageId = await t.run(async (ctx) => ctx.storage.store(new Blob(["x"])));
+    const land = (driveFileId: string, ownedByMe?: boolean) =>
+      t.mutation(internal.vaultDrive.landFile, {
+        tenantId: TENANT,
+        folderId,
+        driveFileId,
+        driveModifiedTime: NOW,
+        title: driveFileId,
+        mimeType: "text/plain",
+        size: 1,
+        contentHash: `h_${driveFileId}`,
+        storageId,
+        text: "x",
+        ...(ownedByMe === undefined ? {} : { ownedByMe }),
+      });
+
+    await land("theirs", false);
+    await land("ours", true);
+    await land("shared_drive"); // Drive said nothing at all
+
+    const byId = new Map(
+      (await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).map((d) => [
+        d.driveFileId,
+        d.driveOwnedByMe,
+      ]),
+    );
+    expect(byId.get("theirs")).toBe(false);
+    expect(byId.get("ours")).toBe(true);
+    // ABSENCE IS NOT OWNERSHIP, and it must land as a decided `false` rather than as `undefined` —
+    // `undefined` on a vault row means "not a Drive import at all", which is NOT a downgrade.
+    expect(byId.get("shared_drive")).toBe(false);
+  });
+
+  test("the folder ENUMERATION asks Drive for ownedByMe — a field never requested cannot be stored", async () => {
+    // The stub is free to return a field nobody asked for, so the REQUEST is what has to be
+    // asserted. `BROWSE_FIELDS` already asked; the IMPORT's own `files.list` did not, which is why
+    // there was no ownership signal to carry across in the first place.
+    const src = readFileSync(new URL("./vaultDrive.ts", import.meta.url), "utf8");
+    const projections = [...src.matchAll(/"nextPageToken,files\(([^"]*)\)"/g)].map((m) => m[1]);
+    // Non-vacuous: the two paged file projections are the browse one and the enumeration one.
+    const fileProjections = projections.filter((p) => (p ?? "").includes("mimeType"));
+    expect(fileProjections.length).toBeGreaterThanOrEqual(2);
+    for (const projection of fileProjections) {
+      expect(projection, `a files.list projection omits ownedByMe: ${projection}`).toContain(
+        "ownedByMe",
+      );
+    }
+  });
+
   // The fan-in. The folder may not leave `reserving` until every expected file has landed —
   // `tryComplete` refuses to fire on anything but `ingesting`, so this flip is the ONLY thing
   // standing between a fast first file and a folder that completes while file 2 is in flight.
@@ -547,7 +608,9 @@ describe("findInDrive uses the existing bounded, shared-drive-aware boundary", (
       if (!String(url).includes("/drive/v3/"))
         return Response.json({ access_token: "fresh", expires_in: 3600 });
       return Response.json({
-        files: [{ id: "doc-1", name: "Undated", mimeType: "text/plain", modifiedTime: "not a date" }],
+        files: [
+          { id: "doc-1", name: "Undated", mimeType: "text/plain", modifiedTime: "not a date" },
+        ],
       });
     });
     vi.stubGlobal("fetch", fetchSpy);
@@ -560,7 +623,9 @@ describe("findInDrive uses the existing bounded, shared-drive-aware boundary", (
     expect(out).toEqual({
       ok: true,
       truncated: false,
-      rows: [{ id: "doc-1", name: "Undated", kind: "file", readable: true, mimeType: "text/plain" }],
+      rows: [
+        { id: "doc-1", name: "Undated", kind: "file", readable: true, mimeType: "text/plain" },
+      ],
     });
 
     const driveCall = fetchSpy.mock.calls.find(([url]) => String(url).includes("/drive/v3/"));

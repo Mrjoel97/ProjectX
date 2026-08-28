@@ -212,6 +212,13 @@ export const vaultGroundHydrated = internalAction({
      *  as a string that is simply shorter than the cap. The knowledge adapter turns this into
      *  `{status: "partial", reason: "cap"}` rather than reporting a full read of a partial one. */
     truncated: boolean[];
+    /** 29 final pass: parallel to docIds. Drive's decided ownership flag for an IMPORTED row —
+     *  `false` means Drive did not confirm the tenant owns the file, `null` means the row is not a
+     *  Drive import at all (an upload, a brain dump, an agent write). Without it the vault plane
+     *  cited a file A STRANGER SHARED IN at `tenant_owned` while the Drive plane, looking at the
+     *  same file, called it `third_party_research`. LABELLING ONLY, exactly like `origins` and
+     *  `kinds` — no caller may filter retrieval on it. */
+    driveOwned: (boolean | null)[];
     chunks: string[];
     spine: string | null;
   }> => {
@@ -234,6 +241,9 @@ export const vaultGroundHydrated = internalAction({
     // The DOCUMENT's full length, which is what `truncated` has to be measured against — see the
     // loop below. Same batch read again; no extra query and no extra text crosses the boundary.
     const charsById = new Map(meta.map((m) => [m._id as string, m.textChars]));
+    // Same batch read again. `?? null` rather than `?? false`: "this row is not from Drive" and
+    // "Drive did not confirm ownership" are different facts and only the second is a downgrade.
+    const driveOwnedById = new Map(meta.map((m) => [m._id as string, m.driveOwnedByMe ?? null]));
 
     // Chunks: per-doc + running-total char budget so a large corpus never blows the loop context.
     const titles: string[] = [];
@@ -241,6 +251,7 @@ export const vaultGroundHydrated = internalAction({
     const kinds: string[] = [];
     const sourceUpdatedAt: (number | null)[] = [];
     const truncated: boolean[] = [];
+    const driveOwned: (boolean | null)[] = [];
     const chunks: string[] = [];
     let used = 0;
     for (const docId of docIds) {
@@ -248,6 +259,7 @@ export const vaultGroundHydrated = internalAction({
       origins.push(originById.get(docId) ?? "");
       kinds.push(kindById.get(docId) ?? "");
       sourceUpdatedAt.push(updatedById.get(docId) ?? null);
+      driveOwned.push(driveOwnedById.get(docId) ?? null);
       const remaining = TOTAL_CHAR_CAP - used;
       if (remaining <= 0) {
         chunks.push("");
@@ -294,6 +306,16 @@ export const vaultGroundHydrated = internalAction({
     } catch {
       spine = null;
     }
-    return { docIds, titles, origins, kinds, sourceUpdatedAt, truncated, chunks, spine };
+    return {
+      docIds,
+      titles,
+      origins,
+      kinds,
+      sourceUpdatedAt,
+      truncated,
+      driveOwned,
+      chunks,
+      spine,
+    };
   },
 });

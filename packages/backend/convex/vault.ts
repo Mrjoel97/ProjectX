@@ -815,6 +815,10 @@ export const ownedDocsMeta = internalQuery({
       retrievedAt?: number;
       /** 29 remediation: the document's FULL extracted length. A number, so refs-only holds (§4). */
       textChars: number;
+      /** 29 remediation: Drive's decided ownership flag for an IMPORTED row. ABSENT ⇒ not a Drive
+       *  import. A boolean, so refs-only holds (§4). Without it the vault plane cannot tell a
+       *  stranger's shared file from the tenant's own upload and cites both at `tenant_owned`. */
+      driveOwnedByMe?: boolean;
     }[]
   > => {
     const out: {
@@ -826,6 +830,7 @@ export const ownedDocsMeta = internalQuery({
       createdAt: number;
       retrievedAt?: number;
       textChars: number;
+      driveOwnedByMe?: boolean;
     }[] = [];
     for (const id of docIds) {
       const doc = await ctx.db.get(id);
@@ -853,6 +858,10 @@ export const ownedDocsMeta = internalQuery({
           // comparing it against itself said "complete" for 300 characters of a 40,000-character
           // file. Shipping `doc.text` here instead would put raw content on a refs-only read.
           textChars: (doc.text ?? "").length,
+          // PROVENANCE, not content. `vaultDrive.landFile` decides this boolean at the write site
+          // (Drive's `ownedByMe === true`); absence means the row is not a Drive import at all, and
+          // `authorityFor` downgrades only on an explicit `false`.
+          driveOwnedByMe: doc.driveOwnedByMe,
         });
       }
     }

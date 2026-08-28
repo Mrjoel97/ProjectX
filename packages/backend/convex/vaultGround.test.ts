@@ -239,7 +239,9 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
       query: `SMOKE::${docA}`,
     });
 
-    // 26-11 added `origins`; 29-02 added `kinds`, `sourceUpdatedAt` and `truncated`. Kept as an
+    // 26-11 added `origins`; 29-02 added `kinds`, `sourceUpdatedAt` and `truncated`; the 29 final
+    // pass added `driveOwned` (Drive ownership, carried across the import so the vault and Drive
+    // planes stop disagreeing about a stranger-shared file). Kept as an
     // EXHAUSTIVE toEqual on purpose: a foreign tenant must get empty arrays and nothing else, so a
     // future field that leaks a value across the boundary reddens here rather than passing
     // unnoticed. Extending this list is the deliberate cost of adding a parallel field.
@@ -250,6 +252,7 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
       kinds: [],
       sourceUpdatedAt: [],
       truncated: [],
+      driveOwned: [],
       chunks: [],
       spine: null,
     });
@@ -272,6 +275,9 @@ describe("vaultGroundHydrated citation metadata (29-02)", () => {
       text: "x".repeat(2000), // > PER_DOC_CHAR_CAP
       createdAt: 1_500,
       retrievedAt: fetched,
+      // A Drive import the tenant does NOT own — `landFile` decides this boolean at the write site.
+      driveFileId: "shared-in",
+      driveOwnedByMe: false,
     });
 
     const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
@@ -283,7 +289,7 @@ describe("vaultGroundHydrated citation metadata (29-02)", () => {
     const iLong = out.docIds.indexOf(long);
     expect(iShort).toBeGreaterThanOrEqual(0);
     expect(iLong).toBeGreaterThanOrEqual(0);
-    for (const arr of [out.kinds, out.sourceUpdatedAt, out.truncated])
+    for (const arr of [out.kinds, out.sourceUpdatedAt, out.truncated, out.driveOwned])
       expect(arr).toHaveLength(out.docIds.length);
 
     expect(out.kinds[iShort]).toBe("upload");
@@ -295,6 +301,13 @@ describe("vaultGroundHydrated citation metadata (29-02)", () => {
     expect(out.truncated[iShort]).toBe(false);
     expect(out.truncated[iLong]).toBe(true);
     expect(out.chunks[iLong]).toHaveLength(1500);
+    // `driveOwned` carries Drive's DECIDED ownership across the import, and it must be
+    // index-parallel like the rest — asserted on TWO docs with different values, because a
+    // one-document test cannot tell an aligned array from a misaligned one. `null`, not `false`,
+    // for the upload: "this row never came from Drive" is not "Drive did not confirm ownership",
+    // and only the second is a downgrade in `authorityFor`.
+    expect(out.driveOwned[iShort]).toBeNull();
+    expect(out.driveOwned[iLong]).toBe(false);
   });
 
   // ── THE CHUNK-PRECISE PATH, WHICH NOTHING COULD DRIVE OFFLINE UNTIL NOW ────────────────────
