@@ -822,6 +822,9 @@ export type KnowledgeMailMessage = {
   bodyTruncated: boolean;
 };
 
+/** A hydration Gmail refused or a fetch that never landed. Dropped, and the drop is REPORTED. */
+type HydrationFailure = null;
+
 // Explicit return type (guidelines §96) — see SendResult.
 type KnowledgeQueryResult =
   | {
@@ -831,8 +834,19 @@ type KnowledgeQueryResult =
       listed: number;
       /** Gmail had another page. Reported so a capped read can never present as complete. */
       more: boolean;
+      /**
+       * At least one message was listed and then could not be read — Gmail answered its body
+       * request with a non-2xx, or the request never landed. The message is DROPPED rather than
+       * shipped as an evidence row of two empty strings dated 1970, and the caller reports the read
+       * as `partial/provider_error`: short for a reason that is not one of our own budgets.
+       */
+      hydrationFailed: boolean;
     }
-  | { ok: false; reason: "not_connected" | "reauth" };
+  /**
+   * EVERY member is a `UnavailableReason` in `@pikar/core`, so the knowledge adapter forwards it
+   * unmapped and a new failure here cannot arrive as an empty successful read.
+   */
+  | { ok: false; reason: "not_connected" | "reauth" | "provider_error" | "unplanned" };
 
 /** Apply the content-plane caps once, so the fixture path and the live path cannot disagree. */
 function knowledgeMessage(
@@ -855,15 +869,19 @@ export const knowledgeQuery = internalAction({
   args: { tenantId: v.string(), query: v.string() },
   handler: async (ctx, { tenantId, query }): Promise<KnowledgeQueryResult> => {
     const q = escapeGmailQuery(query);
-    // FAIL CLOSED, and loudly. This is unreachable through the product path — `clampSearchPlan`
-    // refuses a query with no searchable term at the planner boundary — so reaching it means an
-    // adapter was called directly with something no planner could produce. A throw is the honest
-    // answer: the coordinator runs adapters under `Promise.allSettled`, and there is no governed
-    // state that truthfully describes "we could not build a query", while every alternative
-    // (`available` with zero rows, `provider_error`) is a sentence that is not true.
-    if (q === "") {
-      throw new Error("gmail.knowledgeQuery: the query carried no searchable term");
-    }
+    // FAIL CLOSED — AND THIS IS REACHABLE THROUGH THE PRODUCT PATH, WHICH AN EARLIER COMMENT HERE
+    // DENIED. `clampSearchPlan`'s guard only requires one letter or digit in the RAW phrase, while
+    // `escapeGmailQuery` additionally drops the bare boolean operators, so a planner emitting
+    // "OR", "AND" or "OR AND" cleared the boundary and escaped to "" here. The old answer was a
+    // throw, justified by the claim that no planner could produce it; the claim was about ANOTHER
+    // module and it was false, so the throw was live — and the coordinator runs adapters under
+    // `Promise.allSettled`, where a rejection is not a governed state and renders as nothing.
+    //
+    // `unplanned` is the honest word: no search of the mailbox happened. It is NOT `provider_error`
+    // (Gmail did nothing wrong and was never called) and it is emphatically not an empty result.
+    // Listing on an empty `q` is the one thing that must never happen — it returns arbitrary recent
+    // mail, which is an answer about messages nobody asked about.
+    if (q === "") return { ok: false, reason: "unplanned" };
 
     // FIXTURE FIRST (the same seam and ordering as listInbox/fetchInboxBodies), so the offline
     // eval corpus can exercise the inbox source with no mailbox. Real tenants never have fixture
@@ -885,6 +903,7 @@ export const knowledgeQuery = internalAction({
         ok: true,
         listed: hits.length,
         more: false,
+        hydrationFailed: false,
         messages: hits
           .slice(0, KNOWLEDGE_BODY_CAP)
           .map((m) => knowledgeMessage(m.id, m.subject, m.body || m.snippet, m.internalDate)),
@@ -898,38 +917,66 @@ export const knowledgeQuery = internalAction({
       return { ok: false, reason: access.reason === "not_connected" ? "not_connected" : "reauth" };
     }
 
-    const listRes = await fetch(
-      `${MESSAGES_ENDPOINT}?maxResults=${KNOWLEDGE_LIST_CAP}&q=${encodeURIComponent(q)}`,
-      { headers: { Authorization: `Bearer ${access.token}` } },
-    );
-    const listBody = (await listRes.json()) as {
-      messages?: { id: string }[];
-      nextPageToken?: string;
-    };
+    // A FAILED READ IS NOT AN EMPTY MAILBOX, AND THIS IS WHERE THAT WAS BROKEN. Neither status was
+    // checked and nothing was caught, so an HTTP 500, 429 or 403 parsed as `{}`, `messages` came
+    // back undefined, and the adapter above reported `{status:"available", returned:0}` — "we
+    // searched your mailbox and there is nothing" for a mailbox we were refused. `res.json()` on a
+    // non-JSON error body threw straight out of the action instead. Both come back as a governed
+    // `provider_error` now.
+    let listBody: { messages?: { id: string }[]; nextPageToken?: string };
+    try {
+      const listRes = await fetch(
+        `${MESSAGES_ENDPOINT}?maxResults=${KNOWLEDGE_LIST_CAP}&q=${encodeURIComponent(q)}`,
+        { headers: { Authorization: `Bearer ${access.token}` } },
+      );
+      if (!listRes.ok) return { ok: false, reason: "provider_error" };
+      listBody = await listRes.json();
+    } catch {
+      // The provider's own error text never leaves this function: it is untrusted prose and the
+      // search plane's reason is a code-owned enum that reaches a stored row (CLAUDE.md §4).
+      return { ok: false, reason: "provider_error" };
+    }
     const ids = (listBody.messages ?? []).slice(0, KNOWLEDGE_LIST_CAP);
 
     // Gmail returns the list newest-first, so the first `KNOWLEDGE_BODY_CAP` ARE the most recent
     // matches and no extra metadata round trip is needed to rank them. `ponytail:` ceiling — the
     // selection is recency, not relevance; upgrade path if that is not good enough: fetch metadata
     // for all `listed` ids and rank in pure code, at 5x the quota.
-    const messages = await Promise.all(
-      ids.slice(0, KNOWLEDGE_BODY_CAP).map(async ({ id }) => {
-        const res = await fetch(`${MESSAGES_ENDPOINT}/${id}?format=full`, {
-          headers: { Authorization: `Bearer ${access.token}` },
-        });
-        const msg = (await res.json()) as {
-          snippet?: string;
-          internalDate?: string;
-          payload?: MessagePart & { headers?: { name: string; value: string }[] };
-        };
-        // No text/plain leaf (an HTML-only newsletter) → Gmail's own snippet. Never parse HTML.
-        const text = (msg.payload ? pickPlainText(msg.payload) : null) ?? msg.snippet ?? "";
-        const subject = toHeaderRecord(msg.payload?.headers ?? []).subject ?? "";
-        // internalDate is a STRING int64 of epoch-ms in the Gmail API.
-        return knowledgeMessage(id, subject, text, Number(msg.internalDate ?? 0));
-      }),
+    const hydrated = await Promise.all(
+      ids
+        .slice(0, KNOWLEDGE_BODY_CAP)
+        .map(async ({ id }): Promise<KnowledgeMailMessage | HydrationFailure> => {
+          try {
+            const res = await fetch(`${MESSAGES_ENDPOINT}/${id}?format=full`, {
+              headers: { Authorization: `Bearer ${access.token}` },
+            });
+            // A refused body used to arrive as `{}`, which `pickPlainText` and `toHeaderRecord` turn
+            // into two empty strings and `Number(undefined ?? 0)` turns into 1970 — an evidence row
+            // asserting that a message exists and says nothing. Dropped instead.
+            if (!res.ok) return null;
+            const msg = (await res.json()) as {
+              snippet?: string;
+              internalDate?: string;
+              payload?: MessagePart & { headers?: { name: string; value: string }[] };
+            };
+            // No text/plain leaf (an HTML-only newsletter) → Gmail's own snippet. Never parse HTML.
+            const text = (msg.payload ? pickPlainText(msg.payload) : null) ?? msg.snippet ?? "";
+            const subject = toHeaderRecord(msg.payload?.headers ?? []).subject ?? "";
+            // internalDate is a STRING int64 of epoch-ms in the Gmail API.
+            return knowledgeMessage(id, subject, text, Number(msg.internalDate ?? 0));
+          } catch {
+            return null;
+          }
+        }),
     );
+    const messages = hydrated.filter((m): m is KnowledgeMailMessage => m !== null);
 
-    return { ok: true, messages, listed: ids.length, more: Boolean(listBody.nextPageToken) };
+    return {
+      ok: true,
+      messages,
+      listed: ids.length,
+      more: Boolean(listBody.nextPageToken),
+      hydrationFailed: messages.length < hydrated.length,
+    };
   },
 });

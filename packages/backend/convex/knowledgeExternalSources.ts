@@ -10,8 +10,16 @@
 //  1. UNREACHABLE IS NEVER EMPTY. A missing module, a missing connection, a dead token or a
 //     provider failure comes back as `unavailable` WITH A REASON. There is no path in this file
 //     from a failed read to `{status:"available", returned:0}` — the `unavailable` arm of
-//     `KnowledgeSourceState` has no `returned` field, and `unavailableResult` is the only
-//     constructor of it here, so it always returns an EMPTY evidence array with it.
+//     `KnowledgeSourceState` has no `returned` field, and `unavailableRead` (@pikar/core) is the
+//     only constructor of it, so it always returns an EMPTY evidence array with it.
+//
+//     THE STRUCTURAL ARGUMENT ONLY EVER HELD FOR FAILURES THE PROVIDER LAYER NAMED. It said
+//     nothing about a provider layer that did not name one: `gmail.knowledgeQuery` checked neither
+//     fetch's status nor its own, so an HTTP 500/429/403 parsed as `{}`, `messages` came back
+//     undefined and this adapter reported `{status:"available", source:"inbox", returned:0}` — the
+//     exact sentence above, produced by the exact path above. The read verb now returns
+//     `provider_error` for a non-2xx or a rejected fetch, and drops (and reports) a message whose
+//     body hydration failed instead of shipping an evidence row of two empty strings.
 //
 //  2. PARTIAL IS NEVER A SMALLER COMPLETE. A hit list longer than what was hydrated, a further
 //     provider page, a truncated body, a dropped malformed ref: each makes the read `partial` with
@@ -34,11 +42,12 @@
 import {
   authorityFor,
   type Evidence,
+  type KnowledgeAdapterResult,
   type KnowledgeSource,
-  type KnowledgeSourceState,
-  type PartialReason,
   SEARCH_CAPS,
+  settleRead,
   type UnavailableReason,
+  unavailableRead,
   validateSourceRef,
 } from "@pikar/core";
 import { formatMoneyAmount, type Projection } from "@pikar/revenue";
@@ -62,38 +71,14 @@ export const EXTERNAL_KNOWLEDGE_READERS = {
   "crm-facts": "readCrmKnowledge",
 } as const satisfies Partial<Record<KnowledgeSource, string>>;
 
-/** What every adapter in this module returns. */
-export type ExternalKnowledgeResult = {
-  readonly state: KnowledgeSourceState;
-  /** ALWAYS empty when `state.status === "unavailable"` — see rule 1. */
-  readonly evidence: readonly Evidence[];
-};
-
-/**
- * The ONE constructor of an unavailable answer. Centralised so "unreachable" can never acquire a
- * result count or a row: both are structurally impossible from here.
- */
-function unavailableResult(
-  source: KnowledgeSource,
-  reason: UnavailableReason,
-): ExternalKnowledgeResult {
-  return { state: { status: "unavailable", source, reason }, evidence: [] };
-}
-
-/** The ONE constructor of an answered read. `partial` iff something was lost, with the reason. */
-function answeredResult(
-  source: KnowledgeSource,
-  evidence: readonly Evidence[],
-  lost: PartialReason | null,
-): ExternalKnowledgeResult {
-  return {
-    state:
-      lost === null
-        ? { status: "available", source, returned: evidence.length }
-        : { status: "partial", source, returned: evidence.length, reason: lost },
-    evidence,
-  };
-}
+// THE RESULT CONTRACT IS NOT DEFINED HERE. `KnowledgeAdapterResult`, `unavailableRead` and
+// `settleRead` come from `@pikar/core`, beside `clampEvidence` and the closed state union
+// (CLAUDE.md §1). This module and `knowledgeVaultDrive.ts` each defined their own
+// structurally-identical copy, three minutes apart in the same wave, and the copies had already
+// drifted on the question that matters: 29-02's ran the repo's admission clamp and this one relied
+// on hand-written slices, so `evidenceTextCharCap` was enforced for a mail body (in `gmail.ts`) and
+// not at all for a CRM row. Now every adapter in every module goes through `settleRead`, which
+// clamps and then reports what it cut.
 
 // ── The mailbox ────────────────────────────────────────────────────────────────────────────
 
@@ -108,9 +93,12 @@ function answeredResult(
  */
 export const readInboxKnowledge = internalAction({
   args: { tenantId: v.string(), query: v.string() },
-  handler: async (ctx, { tenantId, query }): Promise<ExternalKnowledgeResult> => {
+  handler: async (ctx, { tenantId, query }): Promise<KnowledgeAdapterResult> => {
     const read = await ctx.runAction(internal.gmail.knowledgeQuery, { tenantId, query });
-    if (!read.ok) return unavailableResult("inbox", read.reason);
+    // Every one of the read verb's failures is a NAMED `UnavailableReason` — including
+    // `provider_error` for a non-2xx or a rejected fetch, and `unplanned` for a phrase that
+    // escaped to an empty Gmail query. None of them can arrive as an empty successful read.
+    if (!read.ok) return unavailableRead("inbox", read.reason);
 
     const retrievedAt = Date.now();
     // A provider id is untrusted input like any other. A ref that is not ref-shaped is DROPPED
@@ -138,15 +126,14 @@ export const readInboxKnowledge = internalAction({
       });
     }
 
-    // Order matters only in that BOTH are honest; `provider_error` is named first because a
-    // malformed ref is a provider problem, while a cap is our own bound working as designed.
-    const lost: PartialReason | null =
-      dropped > 0
-        ? "provider_error"
-        : read.more || read.listed > evidence.length || read.messages.some((m) => m.bodyTruncated)
-          ? "cap"
-          : null;
-    return answeredResult("inbox", evidence, lost);
+    // BOTH are honest, and `provider_error` outranks `cap` inside `settleRead`: a malformed ref
+    // or a message Gmail refused to hand over is a provider problem, while a cap is our own bound
+    // working as designed. `read.hydrationFailed` is the second kind — the list succeeded and one
+    // or more body reads did not, so this read is short for a reason that is not a budget.
+    return settleRead("inbox", evidence, {
+      providerError: dropped > 0 || read.hydrationFailed,
+      cap: read.more || read.listed > evidence.length || read.messages.some((m) => m.bodyTruncated),
+    });
   },
 });
 
@@ -165,11 +152,17 @@ export const readInboxKnowledge = internalAction({
 // is not merely unnecessary here, it is unreachable: `connectorFetch` hardcodes GET against the
 // allow-list and `hubspot.ts` builds the query string from a compile-time property list.
 //
-// NO VENDOR FREE TEXT EXISTS TO LEAK. `HUBSPOT_DEAL_PROPERTIES` never asks HubSpot for `dealname`,
-// a contact name, an email or a phone number, so a `HubSpotDeal` is ids, stage keys, timestamps
-// and a money figure — nothing else. The evidence `text` below is therefore COMPOSED IN CODE from
-// those structured fields; there is no provider string in it at all, which is a stronger property
-// than "we redact the provider strings".
+// NO VENDOR FREE TEXT IS REQUESTED. `HUBSPOT_DEAL_PROPERTIES` never asks HubSpot for `dealname`,
+// a contact name, an email or a phone number, so a `HubSpotDeal` is ids, stage keys, timestamps and
+// a money figure — nothing else.
+//
+// THE EVIDENCE TEXT IS COMPOSED IN CODE, BUT IT IS NOT PROVIDER-STRING-FREE, AND AN EARLIER VERSION
+// OF THIS COMMENT CLAIMED IT WAS. `pipelineId` and `stageId` are HubSpot's own `pipeline` and
+// `dealstage` property values: opaque keys in every real portal, but unbounded provider strings on
+// the wire, and a portal is free to put prose in them. They were interpolated verbatim into text
+// carrying the second-strongest authority class. They now go through `validateSourceRef` — the same
+// §4 ref-shape rule the `sourceRef` uses — so a value that is not id-shaped is reported as
+// `unknown` rather than repeated, and `settleRead` caps the composed sentence like any other row.
 
 /** The one dataset a knowledge question can use. Owners and pipelines are configuration, contacts
  *  and companies carry only timestamps — none of the three answers a business question. */
@@ -208,10 +201,16 @@ function dealText(deal: HubSpotDeal): string {
       ? `${formatMoneyAmount(deal.amount.value)} ${deal.amount.value.currency}`
       : // A deal with no amount, or an amount with no currency, is UNKNOWN — never zero.
         "an unrecorded amount";
+  // A provider key is only usable as a key if it is SHAPED like one. Prose in a stage field is
+  // content, not an identifier, and content from a provider does not belong in a code-composed
+  // sentence — it is dropped rather than truncated, because half a sentence of somebody else's
+  // text reads exactly like the rest of ours.
+  const key = (value: string | null | undefined): string =>
+    typeof value === "string" && validateSourceRef(value).ok ? value : "unknown";
   const parts = [
     `HubSpot deal ${deal.ref.id} is worth ${amount}`,
-    `pipeline ${deal.pipelineId ?? "unknown"}`,
-    `stage ${deal.stageId ?? "unknown"}`,
+    `pipeline ${key(deal.pipelineId)}`,
+    `stage ${key(deal.stageId)}`,
     `created ${isoDay(deal.createdAt)}`,
     deal.closeAt === null ? "no close date" : `closing ${isoDay(deal.closeAt)}`,
   ];
@@ -231,7 +230,7 @@ const isDeal = (row: HubSpotRow): row is HubSpotDeal => "stageId" in row;
  */
 export const readCrmKnowledge = internalAction({
   args: { tenantId: v.string(), query: v.string() },
-  handler: async (ctx, { tenantId }): Promise<ExternalKnowledgeResult> => {
+  handler: async (ctx, { tenantId }): Promise<KnowledgeAdapterResult> => {
     // Probe production, then sandbox. `ensureHubSpotAccessToken` answers `not_connected` from the
     // row lookup alone, so an unconnected environment costs no network call and no money.
     let projection: Projection<HubSpotRow> | null = null;
@@ -246,7 +245,7 @@ export const readCrmKnowledge = internalAction({
     }
     if (projection === null || projection.state === "unavailable") {
       const because = projection === null ? "not_connected" : projection.because;
-      return unavailableResult("crm-facts", CRM_UNAVAILABLE_REASON[because] ?? "provider_error");
+      return unavailableRead("crm-facts", CRM_UNAVAILABLE_REASON[because] ?? "provider_error");
     }
 
     const retrievedAt = Date.now();
@@ -280,17 +279,13 @@ export const readCrmKnowledge = internalAction({
       });
     }
 
-    const lost: PartialReason | null =
-      dropped > 0
-        ? "provider_error"
-        : // A capped or partial provider read, or more deals than the per-source evidence cap:
-          // presenting eight of two hundred as a complete read of the pipeline is the same lie as
-          // presenting an unreachable CRM as an empty one.
-          projection.state === "partial" || ranked.length > evidence.length
-          ? projection.state === "partial" && !projection.meta.capped
-            ? "provider_error"
-            : "cap"
-          : null;
-    return answeredResult("crm-facts", evidence, lost);
+    // A capped or partial provider read, or more deals than the per-source evidence cap:
+    // presenting eight of two hundred as a complete read of the pipeline is the same lie as
+    // presenting an unreachable CRM as an empty one. A projection that is `partial` for a reason
+    // that is NOT its own cap is a provider problem, and `settleRead` ranks that above a cap.
+    return settleRead("crm-facts", evidence, {
+      providerError: dropped > 0 || (projection.state === "partial" && !projection.meta.capped),
+      cap: projection.state === "partial" || ranked.length > evidence.length,
+    });
   },
 });

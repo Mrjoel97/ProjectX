@@ -865,8 +865,41 @@ describe("gmail.knowledgeQuery — bounded, GET-only, never throwing on a govern
 
   type MailStub = { id: string; subject: string; body: string; internalDate: number };
 
-  /** A fake Gmail that serves one list page and a `format=full` get per id. */
-  function mockMailbox(mails: MailStub[], opts: { nextPageToken?: string } = {}) {
+  /**
+   * Gmail's OWN error shape, and the choice is the whole point. A JSON envelope PARSES, so a
+   * handler that never checks `res.ok` sails past it with `messages: undefined` and reports an
+   * empty successful read — the defect. An HTML page throws on `.json()` and is caught, which is
+   * why an HTML-only stub cannot tell the two implementations apart.
+   */
+  const errorResponse = (status: number, html = false) =>
+    new Response(
+      html ? "<html>502 Bad Gateway</html>" : JSON.stringify({ error: { code: status } }),
+      {
+        status,
+      },
+    );
+
+  /**
+   * A fake Gmail that serves one list page and a `format=full` get per id.
+   *
+   * `listStatus`, `bodyStatus` and `throwOn` are what the ORIGINAL 29-03 suite could not say, and
+   * that is why a failed read reporting as an empty successful one shipped green: every stub
+   * answered 200. An error body is deliberately HTML, because Gmail's 5xx pages are, and
+   * `res.json()` on one throws rather than parsing to `{}`.
+   */
+  function mockMailbox(
+    mails: MailStub[],
+    opts: {
+      nextPageToken?: string;
+      listStatus?: number;
+      /** Ids whose `format=full` GET fails, with the status it fails with. */
+      bodyStatus?: Record<string, number>;
+      /** "list" | a message id — the fetch REJECTS rather than answering (DNS, TLS, timeout). */
+      throwOn?: string;
+      /** Answer errors with an HTML page instead of Gmail's JSON error envelope. */
+      htmlError?: boolean;
+    } = {},
+  ) {
     const calls: { url: string; method: string }[] = [];
     vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
       const u = String(url);
@@ -877,6 +910,9 @@ describe("gmail.knowledgeQuery — bounded, GET-only, never throwing on a govern
         });
       }
       if (u.startsWith(`${listUrl}?`)) {
+        if (opts.throwOn === "list") throw new TypeError("fetch failed");
+        if (opts.listStatus !== undefined && opts.listStatus !== 200)
+          return errorResponse(opts.listStatus, opts.htmlError);
         return new Response(
           JSON.stringify({
             messages: mails.map((m) => ({ id: m.id })),
@@ -886,6 +922,9 @@ describe("gmail.knowledgeQuery — bounded, GET-only, never throwing on a govern
         );
       }
       const id = u.slice(`${listUrl}/`.length).split("?")[0] ?? "";
+      if (opts.throwOn === id) throw new TypeError("fetch failed");
+      const bad = opts.bodyStatus?.[id];
+      if (bad !== undefined) return errorResponse(bad, opts.htmlError);
       const found = mails.find((m) => m.id === id);
       return new Response(
         JSON.stringify({
@@ -1016,15 +1055,112 @@ describe("gmail.knowledgeQuery — bounded, GET-only, never throwing on a govern
     ).toEqual({ ok: false, reason: "reauth" });
   });
 
-  test("a query with no searchable term THROWS rather than listing the whole mailbox", async () => {
+  // A phrase the planner boundary CANNOT refuse, because `clampSearchPlan` only requires one
+  // letter or digit while `escapeGmailQuery` additionally drops the bare boolean operators. The
+  // code comment here used to call this seam unreachable and justify a THROW with it; the claim was
+  // about another module and it was false, so the throw was live in the product.
+  test.each([
+    ["--- :::"],
+    ["OR"],
+    ["AND"],
+    ["OR AND"],
+    ["+OR"],
+    ['"OR"'],
+  ])("a query that escapes to nothing (%j) is a governed `unplanned`, not a throw and not a listing", async (query) => {
     const t = convexTest(schema, modules);
     await seedKqTokens(t);
     const g = mockMailbox([mail(1)]);
-    await expect(
-      t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "--- :::" }),
-    ).rejects.toThrow(/searchable/);
-    // And nothing was asked of Gmail at all.
+    expect(await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query })).toEqual({
+      ok: false,
+      reason: "unplanned",
+    });
+    // And nothing was asked of Gmail at all. Listing on an empty `q` returns arbitrary recent
+    // mail, which is an answer about messages nobody asked about.
     expect(g.calls).toHaveLength(0);
+  });
+
+  // ── A FAILED READ IS NOT AN EMPTY MAILBOX ──────────────────────────────────────────────────
+  //
+  // Every one of these returned `{ok: true, messages: [], listed: 0}` or an evidence row of two
+  // empty strings before the fix, which the inbox adapter then published as
+  // `{status: "available", source: "inbox", returned: 0}` — "we searched your mailbox and there is
+  // nothing there" for a mailbox Gmail refused to show us.
+
+  test.each([
+    [500],
+    [429],
+    [403],
+  ])("a %i on the LIST is provider_error — never an empty successful read", async (status) => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1), mail(2)], { listStatus: status });
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" }),
+    ).toEqual({ ok: false, reason: "provider_error" });
+  });
+
+  test("a NON-JSON error page is provider_error too, not an escaped parse error", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1)], { listStatus: 502, htmlError: true });
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" }),
+    ).toEqual({ ok: false, reason: "provider_error" });
+  });
+
+  test("a rejected LIST fetch (DNS/TLS/timeout) is provider_error, not a rejection", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1)], { throwOn: "list" });
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" }),
+    ).toEqual({ ok: false, reason: "provider_error" });
+  });
+
+  test("a message Gmail refuses to hand over is DROPPED and the drop is reported", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1), mail(2)], { bodyStatus: { m2: 500 } });
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // The good message survives; the refused one does NOT arrive as an evidence row whose subject
+    // and body are "" and whose date is 1970 — which is what `res.json()` on an error body built.
+    expect(res.messages.map((m) => m.id)).toEqual(["m1"]);
+    expect(res.messages.map((m) => m.subject)).toEqual(["Subject 1"]);
+    expect(res.hydrationFailed).toBe(true);
+    expect(res.listed).toBe(2);
+  });
+
+  test("a rejected BODY fetch is reported the same way, not thrown", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1), mail(2)], { throwOn: "m1" });
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.messages.map((m) => m.id)).toEqual(["m2"]);
+    expect(res.hydrationFailed).toBe(true);
+  });
+
+  test("a fully successful read reports NO hydration failure — the negative control", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1), mail(2)]);
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.hydrationFailed).toBe(false);
+    expect(res.messages).toHaveLength(2);
   });
 
   test("the fixture seam is checked BEFORE the token, and it is tenant-scoped", async () => {
