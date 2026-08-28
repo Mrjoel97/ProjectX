@@ -1,3 +1,10 @@
+> Last verified: 2026-08-28 (28.1-01 — **`http.ts` GAINED A ROUTE THIS PLAYBOOK DOES NOT OWN.**
+> `POST /billing/stripe/webhook` is the Stripe webhook receiver for PIKAR'S OWN merchant account;
+> it is documented in `docs/playbooks/billing.md`, not here. It touches no cockpit surface — no
+> tool, no card, no `VERB` entry, no `agentSteps.tool` literal, no skill body. This entry exists
+> only because `watch.json` gives `http.ts` to this playbook, so the route inventory below stays
+> honest: `http.ts` now ALSO holds `POST /billing/stripe/webhook`. **No cockpit behaviour changed.**
+>
 > Last verified: 2026-08-27 (28-03 — **FOUR REVENUE VERB ENTRIES, AND NOT ONE TOOL WRITES THEM
 > YET.** `cards.tsx`'s `VERB` record gains `dispatchRevenue`, `readRevenueCrm`,
 > `readBusinessFinance` and `stageInvoiceReminder`, beside the four `agentSteps.tool` literals

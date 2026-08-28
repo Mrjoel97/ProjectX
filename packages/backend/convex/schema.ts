@@ -2789,4 +2789,39 @@ export default defineSchema({
     revision: v.number(),
     updatedAt: v.number(),
   }).index("by_provider_environment", ["provider", "environment"]),
+
+  /**
+   * Phase 28.1 — the Stripe DELIVERY LOG for PIKAR'S OWN merchant account.
+   *
+   * NOT the Phase 28 `stripe` connector (that reads a TENANT's account and lives in
+   * `connectorConnections`). This table exists for exactly one reason: **the insert IS the
+   * dedupe.** Convex has no unique index, so `receiveAndApply` reads `by_event`, then inserts —
+   * and OCC re-runs the loser of a race, which finds the row on its second pass and no-ops.
+   *
+   * `by_object_type` covers Stripe's OWN duplicate guidance: some duplicates arrive as two
+   * DISTINCT Event objects (different `event.id`) describing the same object transition. Keying
+   * only on `event.id` would apply those twice.
+   *
+   * CLAUDE.md §4: ids, types and counts ONLY. There is deliberately no payload field — a raw
+   * Stripe object carries emails, names and card metadata, and this table must never become a
+   * PII honeypot.
+   */
+  billingStripeEvents: defineTable({
+    /** Stripe's `event.id` (`evt_…`). The primary dedupe key. */
+    eventId: v.string(),
+    /** Stripe's `event.type`. A free string, not a union: Stripe adds types without asking, and a
+     *  union here would make a NEW type a schema violation — i.e. a 500 and a retry storm.
+     *  `@pikar/billing`'s `HANDLED_EVENT_TYPES` is the closed set we ACT on; this records what
+     *  ARRIVED. */
+    eventType: v.string(),
+    /** `data.object.id`, or "" when the payload has no object id. Half of `by_object_type`. */
+    objectId: v.string(),
+    /** Whether the effect switch acted. `ignored` covers three distinct cases and that is
+     *  deliberate — an unhandled type, a duplicate-by-object, and (until later plans land) every
+     *  handled type too, because the switch is still empty. */
+    status: v.union(v.literal("applied"), v.literal("ignored")),
+    receivedAt: v.number(),
+  })
+    .index("by_event", ["eventId"])
+    .index("by_object_type", ["objectId", "eventType"]),
 });

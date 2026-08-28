@@ -260,6 +260,17 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   },
   { name: "GOOGLE_VERTEX_LOCATION", tier: "feature", whatBreaks: "Vertex region selection." },
 
+  // ── Phase 28.1 Pikar's OWN merchant account (billing*, NOT the Phase 28 stripe* connector) ──
+  // A FOURTH credential family. It charges money OUT of Pikar's Stripe account; STRIPE_APP_* (the
+  // Phase 28 connector) reads a TENANT's. Keeping the prefixes apart is what stops the wrong
+  // secret reaching the wrong code path.
+  {
+    name: "BILLING_STRIPE_WEBHOOK_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "The Stripe billing webhook refuses every delivery, so no subscription, invoice or payment outcome is ever recorded.",
+  },
+
   // ── Convex-provided and build-time. Present without operator action. ────────────────────────
   {
     name: "CONVEX_CLOUD_URL",

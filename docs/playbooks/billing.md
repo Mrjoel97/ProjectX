@@ -87,12 +87,21 @@ Run `graphify query "billing webhook"` for the current subgraph. Couplings graph
    `|now − t| > SIGNATURE_TOLERANCE_S`, HMAC-SHA-256 `` `${t}.${raw}` ``, constant-time compare
    against **every** `v1=` value. Failure ⇒ **400, zero rows**.
 5. Only now `JSON.parse(raw)`; `id`, `type` and `data.object.id` are lifted out.
-6. `ctx.runMutation(internal.billingWebhook.receiveAndApply, …)`:
-   a. read `by_event` — a row for this `eventId` ⇒ return, insert nothing (the retry case);
-   b. read `by_object_type` — a row for this `(objectId, eventType)` ⇒ insert `status: "ignored"`
-      (the two-distinct-Event-objects case) and apply nothing;
-   c. otherwise `classifyEvent(type)`, run the effect switch **in this same transaction**, and
-      insert the row with the resulting status.
+6. `ctx.runMutation(internal.billingWebhook.receiveAndApply, …)`, which returns a three-value
+   `outcome`:
+   a. read `by_event` — a row for this `eventId` ⇒ `duplicate_event`, insert nothing (Stripe
+      re-delivering the same Event object);
+   b. read `by_object_type` — a row for this `(objectId, eventType)` ⇒ `duplicate_object`: insert
+      `status: "ignored"` so the delivery stays visible, but apply nothing (the
+      two-distinct-Event-objects case). An EMPTY `objectId` is never a dedupe key;
+   c. otherwise `new` — `classifyEvent(type)`, run the effect switch **in this same transaction**,
+      and insert the row with the resulting status.
+
+   `outcome` is three values rather than a boolean on purpose. While the effect switch is empty,
+   `status` is `ignored` on every path, so the stored row cannot distinguish the by-object branch
+   from the ordinary one — and a branch no test can observe is a branch no test can prove. The
+   mutation that swaps the `by_object_type` index columns fails exactly one test, and it is the
+   one that reads `outcome`.
 7. `200`, always fast. A timeout is a delivery failure to Stripe and buys a retry storm.
 
 ## Invariants — what must never break

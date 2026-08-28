@@ -13,6 +13,7 @@ import type * as aggregates from "../aggregates.js";
 import type * as approvals from "../approvals.js";
 import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
+import type * as billingWebhook from "../billingWebhook.js";
 import type * as blueprint from "../blueprint.js";
 import type * as briefings from "../briefings.js";
 import type * as calendar from "../calendar.js";
@@ -134,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   approvals: typeof approvals;
   audit: typeof audit;
   auth: typeof auth;
+  billingWebhook: typeof billingWebhook;
   blueprint: typeof blueprint;
   briefings: typeof briefings;
   calendar: typeof calendar;
