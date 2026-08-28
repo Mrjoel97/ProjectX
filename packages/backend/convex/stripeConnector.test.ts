@@ -1,0 +1,726 @@
+// The Stripe lane, proven offline against a real in-memory Convex backend. $0 — convex-test only,
+// no network, no Stripe, no model.
+//
+// FOUR THINGS THESE TESTS EXIST FOR, in order of how expensive the bug would be.
+//
+//  1. THE ROUTE ITSELF. The Aug-5 research said "become a Connect Extension to get `read_only`".
+//     That door is CLOSED — Stripe: "You can no longer build new Connect extensions." The route is
+//     a Stripe App with `stripe_api_access_type: "oauth"` declaring only `*_read` permissions. So
+//     there are tests that pin the authorize ORIGIN, pin every permission's `_read` suffix, and
+//     refuse a `read_write`/`read_only` scope string outright. A rename of any of those must go red.
+//  2. REVOCATION HONESTY, WHICH IS AN OPEN CONDITION AND STAYS OPEN. There is NO documented
+//     platform-initiated revoke for Stripe Apps. Connect's deauthorize belongs to the other flow.
+//     So disconnect must make ZERO upstream calls and record `unsupported` — never `confirmed`, and
+//     never a local ciphertext clear dressed up as an upstream revocation.
+//  3. LIVE/TEST MODE BINDING. A production connection sealed from a test-mode grant reads a sandbox
+//     account's numbers and calls them the business. `livemode` is checked before anything is
+//     sealed.
+//  4. THE NAMESPACE BOUNDARY. A SECOND Stripe integration exists in this repo (phase 28.1,
+//     `packages/billing/`, `convex/billing*.ts`, `BILLING_STRIPE_*`) that charges from PIKAR'S OWN
+//     merchant account and is write-capable. The naming split is the only thing keeping the wrong
+//     secret out of the wrong path, so there is a source scan for it.
+import { CAPS, importCredentialKey, openCredential, sealCredential } from "@pikar/revenue";
+import { convexTest } from "convex-test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { api, internal } from "./_generated/api";
+import { classifyRevokeOutcome, PROVIDER_REVOKE_SUPPORT } from "./connectorOAuth";
+import {
+  ACCESS_TOKEN_TTL_S,
+  classifyTokenFailure,
+  isStripeAccountId,
+  parseStripeCredential,
+  parseStripeGrant,
+  STRIPE_APP_PERMISSIONS,
+  STRIPE_AUTHORIZE_ENDPOINT,
+  STRIPE_GRANT_SCOPE,
+  STRIPE_TOKEN_ENDPOINT,
+  stripeAuthorizeUrl,
+} from "./stripeAuth";
+import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
+
+/** Raw sources for the write-verb and namespace scans. edge-runtime has no `node:fs`. */
+const rawSources = import.meta.glob("./**/*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+const ACCOUNT = "acct_1PikarStripeTestAccount";
+const OTHER_ACCOUNT = "acct_1SomeoneElsesAccount";
+const ACCESS_1 = "SENTINEL-ACCESS-1-DO-NOT-LEAK";
+const REFRESH_1 = "SENTINEL-REFRESH-1-DO-NOT-LEAK";
+const ACCESS_2 = "SENTINEL-ACCESS-2-DO-NOT-LEAK";
+const REFRESH_2 = "SENTINEL-REFRESH-2-DO-NOT-LEAK";
+
+function keyB64(fill: number): string {
+  let binary = "";
+  for (const b of new Uint8Array(32).fill(fill)) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+const KEY_B64 = keyB64(11);
+
+beforeEach(() => {
+  process.env.CONNECTOR_CREDENTIAL_KEY_V1 = KEY_B64;
+  process.env.STRIPE_APP_CLIENT_ID = "ca_test_client_id";
+  process.env.STRIPE_APP_SECRET_KEY = "sk_test_app_secret_key";
+  process.env.STRIPE_APP_REDIRECT_URI = "https://example.test/stripe/callback";
+  process.env.STRIPE_APP_API_VERSION = "2024-06-20";
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const APP = {
+  clientId: "ca_test_client_id",
+  secretKey: "sk_test_app_secret_key",
+  redirectUri: "https://example.test/stripe/callback",
+  apiVersion: "2024-06-20",
+};
+
+async function harness() {
+  const t = convexTest(schema, modules);
+  const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+  const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+  return {
+    t,
+    tenantA: String(userA),
+    tenantB: String(userB),
+    asA: t.withIdentity({ subject: `${userA}|session_a` }),
+    asB: t.withIdentity({ subject: `${userB}|session_b` }),
+  };
+}
+
+const grantBody = (
+  access: string,
+  refresh: string,
+  over: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  access_token: access,
+  refresh_token: refresh,
+  token_type: "bearer",
+  scope: "stripe_apps",
+  stripe_user_id: ACCOUNT,
+  livemode: false,
+  expires_in: 3600,
+  ...over,
+});
+
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+/** Seal a connection straight into the DB, the way a completed callback would leave it. */
+async function seedConnection(
+  t: Awaited<ReturnType<typeof harness>>["t"],
+  tenantId: string,
+  over: { access?: string; refresh?: string; accountId?: string; accessExpiresAt?: number } = {},
+) {
+  const connectionId = `conn_${tenantId}`;
+  const key = await importCredentialKey(KEY_B64, "v1");
+  const accountId = over.accountId ?? ACCOUNT;
+  const sealed = await sealCredential(
+    key,
+    { tenantId, provider: "stripe", connectionId, environment: "sandbox" },
+    JSON.stringify({
+      accessToken: over.access ?? ACCESS_1,
+      refreshToken: over.refresh ?? REFRESH_1,
+      accountId,
+      scope: STRIPE_GRANT_SCOPE,
+    }),
+  );
+  await t.run(async (ctx) => {
+    await ctx.db.insert("connectorConnections", {
+      tenantId,
+      provider: "stripe",
+      environment: "sandbox",
+      status: "connected",
+      revision: 1,
+      connectionId,
+      credentialCiphertextB64: sealed.ciphertextB64,
+      credentialIvB64: sealed.ivB64,
+      keyVersion: sealed.keyVersion,
+      accessExpiresAt: over.accessExpiresAt ?? Date.now() + 3_600_000,
+      refreshExpiresAt: Date.now() + 365 * 86_400_000,
+      externalAccountHash: await (async () => {
+        const digest = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(accountId),
+        );
+        return Array.from(new Uint8Array(digest))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+      })(),
+      connectedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  });
+  return connectionId;
+}
+
+// ── The route, pinned ─────────────────────────────────────────────────────────────────────
+
+describe("the Stripe App route, and not the dead Extension one", () => {
+  test("consent starts at the Stripe Apps marketplace, not at Connect", () => {
+    expect(STRIPE_AUTHORIZE_ENDPOINT).toBe("https://marketplace.stripe.com/oauth/v2/authorize");
+    // Connect's own authorize host would mean the Extension route, which Stripe closed in 2022.
+    expect(STRIPE_AUTHORIZE_ENDPOINT).not.toContain("connect.stripe.com");
+  });
+
+  test("the token exchange is Stripe's API host", () => {
+    expect(STRIPE_TOKEN_ENDPOINT).toBe("https://api.stripe.com/v1/oauth/token");
+  });
+
+  test("every declared permission is a read permission", () => {
+    expect(STRIPE_APP_PERMISSIONS.length).toBeGreaterThan(0);
+    for (const permission of STRIPE_APP_PERMISSIONS) {
+      expect(permission.endsWith("_read")).toBe(true);
+    }
+  });
+
+  test("no permission has a write counterpart named here", () => {
+    for (const permission of STRIPE_APP_PERMISSIONS) {
+      expect(permission).not.toContain("_write");
+    }
+  });
+
+  test("the authorize URL carries client id, redirect and state — and never a scope", () => {
+    const url = new URL(stripeAuthorizeUrl(APP, "nonce-123"));
+    expect(url.origin + url.pathname).toBe(STRIPE_AUTHORIZE_ENDPOINT);
+    expect(url.searchParams.get("client_id")).toBe(APP.clientId);
+    expect(url.searchParams.get("redirect_uri")).toBe(APP.redirectUri);
+    expect(url.searchParams.get("state")).toBe("nonce-123");
+    // A Stripe App's access comes from its MANIFEST permissions. A `scope` parameter here would be
+    // the Connect vocabulary, where the only alternative to `read_only` is `read_write`.
+    expect(url.searchParams.get("scope")).toBeNull();
+    expect(url.toString()).not.toContain("read_write");
+  });
+});
+
+// ── Grant parsing ─────────────────────────────────────────────────────────────────────────
+
+describe("parseStripeGrant", () => {
+  const now = 1_700_000_000_000;
+
+  test("accepts a well-formed Stripe Apps grant", () => {
+    const grant = parseStripeGrant(grantBody(ACCESS_1, REFRESH_1), now);
+    expect(grant?.accessToken).toBe(ACCESS_1);
+    expect(grant?.refreshToken).toBe(REFRESH_1);
+    expect(grant?.accountId).toBe(ACCOUNT);
+    expect(grant?.livemode).toBe(false);
+    expect(grant?.accessExpiresAt).toBe(now + ACCESS_TOKEN_TTL_S * 1000);
+  });
+
+  test("refuses a grant with no refresh token — Stripe rolls it on every exchange", () => {
+    const body = grantBody(ACCESS_1, REFRESH_1);
+    delete body.refresh_token;
+    expect(parseStripeGrant(body, now)).toBeNull();
+  });
+
+  test("refuses a scope string that is not the Stripe Apps one", () => {
+    expect(parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { scope: "read_write" }), now)).toBeNull();
+    // Even `read_only` is refused: it is the CONNECT vocabulary, and a grant that speaks it did not
+    // come from a Stripe App. Accepting it would silently put the lane back on the dead route.
+    expect(parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { scope: "read_only" }), now)).toBeNull();
+  });
+
+  test("refuses a stripe_user_id that is not an account id", () => {
+    expect(parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { stripe_user_id: "cus_1" }), now)).toBeNull();
+    expect(parseStripeGrant(grantBody(ACCESS_1, REFRESH_1, { stripe_user_id: 7 }), now)).toBeNull();
+  });
+
+  test("refuses a grant that does not say which mode it is for", () => {
+    const body = grantBody(ACCESS_1, REFRESH_1);
+    delete body.livemode;
+    expect(parseStripeGrant(body, now)).toBeNull();
+  });
+
+  test("a missing expires_in falls back to Stripe's hour, never to zero", () => {
+    const body = grantBody(ACCESS_1, REFRESH_1);
+    delete body.expires_in;
+    const grant = parseStripeGrant(body, now);
+    expect(grant?.accessExpiresAt).toBe(now + ACCESS_TOKEN_TTL_S * 1000);
+  });
+});
+
+describe("isStripeAccountId", () => {
+  test("accepts an account id", () => {
+    expect(isStripeAccountId(ACCOUNT)).toBe(true);
+  });
+  test("refuses every other Stripe object prefix and every path trick", () => {
+    for (const bad of ["cus_1", "ch_1", "acct", "acct_", "acct_a/b", "acct_a%2fb", "", 5, null]) {
+      expect(isStripeAccountId(bad)).toBe(false);
+    }
+  });
+});
+
+describe("parseStripeCredential", () => {
+  test("round-trips a sealed blob", () => {
+    const blob = JSON.stringify({
+      accessToken: ACCESS_1,
+      refreshToken: REFRESH_1,
+      accountId: ACCOUNT,
+      scope: STRIPE_GRANT_SCOPE,
+    });
+    expect(parseStripeCredential(blob)?.accountId).toBe(ACCOUNT);
+  });
+  test("returns null rather than a partial blob", () => {
+    expect(parseStripeCredential("{}")).toBeNull();
+    expect(parseStripeCredential("not json")).toBeNull();
+    expect(
+      parseStripeCredential(
+        JSON.stringify({ accessToken: ACCESS_1, refreshToken: REFRESH_1, accountId: "nope", scope: "x" }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("classifyTokenFailure", () => {
+  test("a null status is a network failure", () => {
+    expect(classifyTokenFailure(null)).toBe("network");
+  });
+  test("401 is OUR credential, not the tenant's", () => {
+    expect(classifyTokenFailure(401)).toBe("forbidden");
+  });
+  test("another 4xx means the grant is gone", () => {
+    expect(classifyTokenFailure(400)).toBe("reauth");
+  });
+  test("5xx is the provider", () => {
+    expect(classifyTokenFailure(503)).toBe("provider_error");
+  });
+});
+
+// ── The callback ──────────────────────────────────────────────────────────────────────────
+
+describe("handleCallback", () => {
+  test("a valid consent seals a connection and the plaintext never lands in a row", async () => {
+    const h = await harness();
+    const minted = await h.asA.mutation(api.connectorOAuth.mintConnectState, {
+      provider: "stripe",
+      environment: "sandbox",
+      redirectPath: "/dashboard/profile",
+    });
+    const fetchMock = vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "sandbox",
+      state: minted.state,
+      code: "ac_test_code",
+    });
+    expect(result.result).toBe("connected");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const rows = await h.t.run((ctx) => ctx.db.query("connectorConnections").collect());
+    expect(rows).toHaveLength(1);
+    const stored = JSON.stringify(rows[0]);
+    expect(stored).not.toContain(ACCESS_1);
+    expect(stored).not.toContain(REFRESH_1);
+    expect(stored).not.toContain(ACCOUNT);
+  });
+
+  test("a replayed state performs zero exchange and zero writes", async () => {
+    const h = await harness();
+    const minted = await h.asA.mutation(api.connectorOAuth.mintConnectState, {
+      provider: "stripe",
+      environment: "sandbox",
+      redirectPath: "/dashboard/profile",
+    });
+    const fetchMock = vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1)));
+    vi.stubGlobal("fetch", fetchMock);
+    await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "sandbox",
+      state: minted.state,
+      code: "ac_test_code",
+    });
+    fetchMock.mockClear();
+
+    const replay = await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "sandbox",
+      state: minted.state,
+      code: "ac_test_code",
+    });
+    expect(replay.result).toBe("invalid_state");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("a live-mode grant is refused for a sandbox connection", async () => {
+    const h = await harness();
+    const minted = await h.asA.mutation(api.connectorOAuth.mintConnectState, {
+      provider: "stripe",
+      environment: "sandbox",
+      redirectPath: "/dashboard/profile",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1, { livemode: true }))),
+    );
+    const result = await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "sandbox",
+      state: minted.state,
+      code: "ac_test_code",
+    });
+    expect(result.result).toBe("account_mismatch");
+    expect(await h.t.run((ctx) => ctx.db.query("connectorConnections").collect())).toHaveLength(0);
+  });
+
+  test("a test-mode grant is refused for a production connection", async () => {
+    const h = await harness();
+    const minted = await h.asA.mutation(api.connectorOAuth.mintConnectState, {
+      provider: "stripe",
+      environment: "production",
+      redirectPath: "/dashboard/profile",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1, { livemode: false }))),
+    );
+    const result = await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "production",
+      state: minted.state,
+      code: "ac_test_code",
+    });
+    expect(result.result).toBe("account_mismatch");
+  });
+
+  test("re-consent from a DIFFERENT Stripe account is refused", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    const minted = await h.asA.mutation(api.connectorOAuth.mintConnectState, {
+      provider: "stripe",
+      environment: "sandbox",
+      redirectPath: "/dashboard/profile",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(grantBody(ACCESS_2, REFRESH_2, { stripe_user_id: OTHER_ACCOUNT }))),
+    );
+    const result = await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "sandbox",
+      state: minted.state,
+      code: "ac_test_code",
+    });
+    expect(result.result).toBe("account_mismatch");
+  });
+
+  test("a denied consent exchanges nothing", async () => {
+    const h = await harness();
+    const minted = await h.asA.mutation(api.connectorOAuth.mintConnectState, {
+      provider: "stripe",
+      environment: "sandbox",
+      redirectPath: "/dashboard/profile",
+    });
+    const fetchMock = vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1)));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "sandbox",
+      state: minted.state,
+      denied: true,
+    });
+    expect(result.result).toBe("denied");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("a state minted for another provider cannot seal a Stripe connection", async () => {
+    const h = await harness();
+    const minted = await h.asA.mutation(api.connectorOAuth.mintConnectState, {
+      provider: "quickbooks",
+      environment: "sandbox",
+      redirectPath: "/dashboard/profile",
+    });
+    const fetchMock = vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1)));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "sandbox",
+      state: minted.state,
+      code: "ac_test_code",
+    });
+    expect(result.result).toBe("invalid_state");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("the callback lands the tenant that minted the state, never the caller", async () => {
+    const h = await harness();
+    const minted = await h.asB.mutation(api.connectorOAuth.mintConnectState, {
+      provider: "stripe",
+      environment: "sandbox",
+      redirectPath: "/dashboard/profile",
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(grantBody(ACCESS_1, REFRESH_1))));
+    await h.t.action(internal.stripeAuth.handleCallback, {
+      environment: "sandbox",
+      state: minted.state,
+      code: "ac_test_code",
+    });
+    const rows = await h.t.run((ctx) => ctx.db.query("connectorConnections").collect());
+    expect(rows[0]?.tenantId).toBe(h.tenantB);
+  });
+});
+
+// ── Refresh ───────────────────────────────────────────────────────────────────────────────
+
+describe("refreshConnection", () => {
+  test("rotates both tokens and keeps the account binding", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(grantBody(ACCESS_2, REFRESH_2))),
+    );
+    const out = await h.t.action(internal.stripeAuth.refreshConnection, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+    });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.accessToken).toBe(ACCESS_2);
+    expect(out.accountId).toBe(ACCOUNT);
+    expect(out.rotated).toBe(true);
+  });
+
+  test("THE LEASE refuses a second refresher, on its own", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    await h.t.mutation(internal.connectorCredentials.acquireRefreshLease, {
+      tenantId: h.tenantA,
+      provider: "stripe",
+      environment: "sandbox",
+      leaseId: "someone-else",
+      ttlMs: 60_000,
+    });
+    const fetchMock = vi.fn(async () => jsonResponse(grantBody(ACCESS_2, REFRESH_2)));
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await h.t.action(internal.stripeAuth.refreshConnection, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.reason).toBe("refresh_in_flight");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("THE FENCE refuses a stale refresher, on its own — the tokens are discarded", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    // The row moves underneath the refresher WHILE its token request is in flight, so the lease it
+    // legitimately holds is not what refuses it — `revision` is.
+    const fetchMock = vi.fn(async () => {
+      await h.t.run(async (ctx) => {
+        const row = await ctx.db.query("connectorConnections").first();
+        if (row) await ctx.db.patch(row._id, { revision: row.revision + 5 });
+      });
+      return jsonResponse(grantBody(ACCESS_2, REFRESH_2));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await h.t.action(internal.stripeAuth.refreshConnection, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.reason).toBe("stale_revision");
+  });
+
+  test("refuses a connection that does not exist, distinctly from a held lease", async () => {
+    const h = await harness();
+    const out = await h.t.action(internal.stripeAuth.refreshConnection, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.reason).toBe("not_connected");
+  });
+
+  test("EXACTLY ONE attempt on a 5xx — a rolled refresh token must not be replayed", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    const fetchMock = vi.fn(async () => jsonResponse({ error: "server_error" }, 503));
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await h.t.action(internal.stripeAuth.refreshConnection, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+    });
+    expect(out.ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("a refused refresh is recorded as a class, never as a provider message", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ error_description: "Acme Ltd is not authorized" }, 400)),
+    );
+    await h.t.action(internal.stripeAuth.refreshConnection, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+    });
+    const rows = await h.t.run((ctx) => ctx.db.query("connectorConnections").collect());
+    expect(rows[0]?.lastFailureClass).toBe("reauth");
+    expect(JSON.stringify(rows[0])).not.toContain("Acme");
+  });
+});
+
+// ── Disconnect: the open condition, held open ─────────────────────────────────────────────
+
+describe("disconnect — there is no documented platform-initiated revoke for Stripe Apps", () => {
+  test("the shared revoke-support table records stripe as unsupported", () => {
+    expect(PROVIDER_REVOKE_SUPPORT.stripe).toBe("unsupported");
+  });
+
+  test("classifyRevokeOutcome cannot be talked into confirmed, not even by a 200", () => {
+    expect(
+      classifyRevokeOutcome({ provider: "stripe", attempted: true, statusCode: 200 }).upstream,
+    ).toBe("unsupported");
+  });
+
+  test("disconnect makes ZERO upstream calls and records unsupported", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    const fetchMock = vi.fn(async () => jsonResponse({}, 200));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await h.asA.action(api.stripeAuth.disconnect, { environment: "sandbox" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(out.upstream).toBe("unsupported");
+    expect(out.cleared).toBe(true);
+  });
+
+  test("the local clear is recorded as a local clear — never as a confirmed revocation", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, 200)));
+    await h.asA.action(api.stripeAuth.disconnect, { environment: "sandbox" });
+
+    const rows = await h.t.run((ctx) => ctx.db.query("connectorConnections").collect());
+    const row = rows[0];
+    expect(row?.status).toBe("revoked");
+    expect(row?.revocation?.upstream).toBe("unsupported");
+    expect(row?.revocation?.localClearedAt).toBeTypeOf("number");
+    // The ciphertext is gone. That is a real act — it is not revocation, and the row says so.
+    expect(row?.credentialCiphertextB64).toBeUndefined();
+    expect(row?.credentialIvB64).toBeUndefined();
+  });
+
+  test("the client projection tells the user the grant may still be live on Stripe's side", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, 200)));
+    await h.asA.action(api.stripeAuth.disconnect, { environment: "sandbox" });
+    const view = await h.asA.query(api.connectorCredentials.connectorStatuses, {});
+    expect(view[0]?.revocation?.upstream).toBe("unsupported");
+  });
+
+  test("the lane runner's revoke shares one body with the tenant action", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, 200)));
+    const out = await h.t.action(internal.stripeAuth.disconnectForTenant, {
+      tenantId: h.tenantA,
+      environment: "sandbox",
+      confirm: "revoke",
+    });
+    expect(out.upstream).toBe("unsupported");
+    expect(out.cleared).toBe(true);
+  });
+
+  test("one tenant's disconnect leaves another tenant's connection alone", async () => {
+    const h = await harness();
+    await seedConnection(h.t, h.tenantA);
+    await seedConnection(h.t, h.tenantB);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({}, 200)));
+    await h.asA.action(api.stripeAuth.disconnect, { environment: "sandbox" });
+    const rows = await h.t.run((ctx) => ctx.db.query("connectorConnections").collect());
+    const b = rows.find((r) => r.tenantId === h.tenantB);
+    expect(b?.status).toBe("connected");
+    expect(b?.credentialCiphertextB64).toBeTypeOf("string");
+  });
+});
+
+// ── Source scans: what no type can express ────────────────────────────────────────────────
+
+const laneSources = (): [string, string][] =>
+  Object.entries(rawSources).filter(
+    ([path]) =>
+      /\/stripe[A-Za-z]*\.ts$/.test(path) && !path.endsWith(".test.ts") && !path.includes("_generated"),
+  );
+
+describe("the lane modules cannot express a write", () => {
+  test("there are lane modules to scan", () => {
+    expect(laneSources().length).toBeGreaterThan(0);
+  });
+
+  test("no lane module names a mutating HTTP verb or reaches the platform fetch", () => {
+    // Mirrors `scripts/check-provider-lane.mjs`'s WRITE_MARKERS, because a gate that only runs at
+    // release is a gate discovered at release.
+    const markers = ['"POST"', '"PUT"', '"PATCH"', '"DELETE"', "fetch("];
+    for (const [path, src] of laneSources()) {
+      for (const marker of markers) {
+        expect(`${path}:${src.includes(marker)}`).toBe(`${path}:false`);
+      }
+    }
+  });
+
+  test("no lane module names a Stripe write operation", () => {
+    // Invariant 1 of docs/playbooks/connector-stripe.md, as a literal scan: no type can express
+    // "this module contains no way to name a refund".
+    const forbidden = [
+      "refunds",
+      "/capture",
+      "/cancel",
+      "/finalize",
+      "/send",
+      "/void",
+      "transfers",
+      "payment_links",
+      "subscription_items",
+    ];
+    for (const [path, src] of laneSources()) {
+      for (const marker of forbidden) {
+        expect(`${path}:${src.includes(marker)}`).toBe(`${path}:false`);
+      }
+    }
+  });
+
+  test("no lane module asks for read_write, and none uses the dead Connect deauthorize", () => {
+    for (const [path, src] of laneSources()) {
+      expect(`${path}:${src.includes("read_write")}`).toBe(`${path}:false`);
+      // Connect's `oauth/deauthorize` belongs to the OTHER flow. No Stripe documentation says it
+      // applies to app installs, and calling it would let a 200 from somewhere else be recorded as
+      // a confirmed revocation of a grant that is still live.
+      expect(`${path}:${src.includes("oauth/deauthorize")}`).toBe(`${path}:false`);
+    }
+  });
+});
+
+describe("the 28.1 billing namespace stays out of this lane", () => {
+  test("no lane module reads a BILLING_ env name or imports the billing package", () => {
+    // A SECOND Stripe integration exists in this repo, pointing the OPPOSITE way: it charges from
+    // Pikar's OWN merchant account and is write-capable. The naming split is the only thing keeping
+    // the wrong secret out of this path.
+    for (const [path, src] of laneSources()) {
+      expect(`${path}:${src.includes("BILLING_")}`).toBe(`${path}:false`);
+      expect(`${path}:${src.includes("packages/billing")}`).toBe(`${path}:false`);
+      expect(`${path}:${src.includes("@pikar/billing")}`).toBe(`${path}:false`);
+    }
+  });
+
+  test("this lane's env names are all STRIPE_APP_ prefixed", () => {
+    for (const [path, src] of laneSources()) {
+      for (const [, name] of src.matchAll(/process\.env\.([A-Z_0-9]+)/g)) {
+        if (!name.includes("STRIPE")) continue;
+        expect(`${path}:${name}`).toBe(`${path}:${name.startsWith("STRIPE_APP_") ? name : "STRIPE_APP_*"}`);
+      }
+    }
+  });
+});
+
+describe("caps are the contract module's, not retyped", () => {
+  test("the phase item cap is what the contracts module says", () => {
+    expect(CAPS.maxItems).toBe(2_000);
+  });
+});
