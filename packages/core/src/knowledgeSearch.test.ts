@@ -17,6 +17,7 @@ import {
   freshnessFor,
   groundedSourceProps,
   isKnowledgeSource,
+  KNOWLEDGE_ADAPTERS,
   KNOWLEDGE_SOURCES,
   type KnowledgeSourceState,
   NOT_LANDED_SOURCES,
@@ -90,24 +91,54 @@ describe("the source registry is closed and code-owned", () => {
     }
   });
 
-  test("crm and support are recorded as NOT LANDED — the Phase 28 half that does not exist", () => {
-    expect([...NOT_LANDED_SOURCES]).toEqual(["crm-facts", "support-desk"]);
+  test("support-desk ALONE is not landed — crm-facts became searchable when hubspot.ts landed", () => {
+    // Was `["crm-facts", "support-desk"]` until 2026-08-28. Phase 28's HubSpot rail landed a
+    // GET-only, allow-listed, bounded CRM read (`convex/hubspot.ts`), so a TOOLLESS CRM adapter
+    // now exists. Nothing landed for a support desk.
+    expect([...NOT_LANDED_SOURCES]).toEqual(["support-desk"]);
     for (const s of NOT_LANDED_SOURCES) expect(KNOWLEDGE_SOURCES).toContain(s);
   });
 
-  test("NOT_LANDED is DERIVED from the one registry, not a second hand-kept list", () => {
-    // MUTATION that must turn this RED: move `crm-facts` from MISSING_PACK_SOURCES to
-    // REACHABLE_PACK_SOURCES without touching knowledgeSearch.ts. The point of deriving it is that
-    // a connector landing in the one registry cannot leave a stale not-landed claim behind here.
-    const missing = new Set<string>(MISSING_PACK_SOURCES);
-    expect([...NOT_LANDED_SOURCES]).toEqual(KNOWLEDGE_SOURCES.filter((s) => missing.has(s)));
-    const reachable = new Set<string>(REACHABLE_PACK_SOURCES);
-    for (const s of KNOWLEDGE_SOURCES) {
-      if (NOT_LANDED_SOURCES.includes(s)) continue;
-      expect(reachable.has(s), `${s} is neither reachable nor missing in the pack registry`).toBe(
-        true,
-      );
+  test("NOT_LANDED is DERIVED from KNOWLEDGE_ADAPTERS — a landed claim needs a module behind it", () => {
+    // MUTATION that must turn this RED: hand-write NOT_LANDED_SOURCES as a literal list while
+    // `KNOWLEDGE_ADAPTERS["crm-facts"]` names a module. The point of deriving it is that a
+    // connector landing cannot leave a stale not-landed claim behind, and a not-landed source
+    // cannot quietly acquire a reader.
+    expect([...NOT_LANDED_SOURCES]).toEqual(
+      KNOWLEDGE_SOURCES.filter((s) => KNOWLEDGE_ADAPTERS[s] === null),
+    );
+    // Totality, and no adapter may be a half-declaration: a module with no verb is not a landing.
+    for (const source of KNOWLEDGE_SOURCES) {
+      const adapter = KNOWLEDGE_ADAPTERS[source];
+      if (adapter === null) continue;
+      expect(adapter.module, source).toMatch(/^packages\/backend\/convex\/[A-Za-z]+\.ts$/);
+      expect(adapter.read.length, source).toBeGreaterThan(0);
     }
+    // The filesystem half of this claim — the module and verb actually existing — is asserted in
+    // `packages/backend/convex/knowledgeExternalSources.test.ts`, which can read files.
+  });
+
+  test("THE TWO PLANES ANSWER DIFFERENT QUESTIONS, AND crm-facts IS WHERE THEY DISAGREE", () => {
+    // This is the whole point of the 2026-08-28 change and it is pinned in BOTH directions so
+    // that nobody "fixes" the inconsistency in either.
+    //
+    // pack plane:   is there an agent-reachable read TOOL?      crm-facts: still NO, by decision.
+    // search plane: is there a landed TOOLLESS adapter?         crm-facts: yes, since 28-05.
+    //
+    // MUTATION 1 (must be RED): move `crm-facts` into `REACHABLE_PACK_SOURCES` — that silently
+    // reverses owner decision A (2026-08-23, binding: do NOT add read tools to close these) and
+    // tells every workflow pack a CRM tool exists.
+    // MUTATION 2 (must be RED): derive `NOT_LANDED_SOURCES` from `MISSING_PACK_SOURCES` again —
+    // that reports a landed adapter as an unavailable product gap.
+    expect(MISSING_PACK_SOURCES as readonly string[]).toContain("crm-facts");
+    expect(NOT_LANDED_SOURCES as readonly string[]).not.toContain("crm-facts");
+    // …and `support-desk` is not landed on EITHER plane, because nothing landed for it at all.
+    expect(MISSING_PACK_SOURCES as readonly string[]).toContain("support-desk");
+    expect(NOT_LANDED_SOURCES as readonly string[]).toContain("support-desk");
+    // Every source is still in the ONE vocabulary — the disagreement is about landedness, never
+    // about names.
+    const packVocabulary = new Set<string>([...REACHABLE_PACK_SOURCES, ...MISSING_PACK_SOURCES]);
+    for (const source of KNOWLEDGE_SOURCES) expect(packVocabulary.has(source)).toBe(true);
   });
 
   test("every knowledge source IS a PackSource — one vocabulary, not two", () => {
@@ -217,14 +248,40 @@ describe("clampSearchPlan is the boundary the planner output crosses", () => {
   test("a NOT-LANDED source becomes an honest unavailable state, not a plan entry and not silence", () => {
     const out = clampSearchPlan([
       { source: "vault", query: "revenue" },
-      { source: "crm-facts", query: "revenue" },
+      { source: "support-desk", query: "revenue" },
     ]);
     expect(out.plan.map((p) => p.source)).toEqual(["vault"]);
     expect(out.notLanded).toEqual([
-      { status: "unavailable", source: "crm-facts", reason: "not_landed" },
+      { status: "unavailable", source: "support-desk", reason: "not_landed" },
     ]);
     // It is NOT a rejection: a rejection is a planner error, this is a product gap we must show.
     expect(out.rejected).toEqual([]);
+  });
+
+  test("crm-facts is now a PLAN ENTRY, because a toolless adapter landed for it", () => {
+    // The behavioural half of the two-plane change: before 2026-08-28 this came back as
+    // `unavailable/not_landed` and the CRM was never read. MUTATION: put `crm-facts` back in
+    // `NOT_LANDED_SOURCES` (or derive that list from `MISSING_PACK_SOURCES` again) -> RED.
+    const out = clampSearchPlan([{ source: "crm-facts", query: "open deals this quarter" }]);
+    expect(out.plan).toEqual([{ source: "crm-facts", query: "open deals this quarter" }]);
+    expect(out.notLanded).toEqual([]);
+    expect(out.rejected).toEqual([]);
+  });
+
+  test("a query with no letter or digit is EMPTY, not merely odd", () => {
+    // Every provider boundary strips punctuation before it searches, so `"---"` arrives as
+    // nothing — and an adapter handed nothing either searches for nothing or lists the whole
+    // mailbox. MUTATION: relax the guard back to `query === ""` -> RED.
+    for (const query of ["---", ":::", "(!!) ...", "-", "\u2014 \u2014"]) {
+      const out = clampSearchPlan([{ source: "vault", query }]);
+      expect(out.plan, query).toEqual([]);
+      expect(out.rejected, query).toEqual([{ source: "vault", reason: "empty_query" }]);
+    }
+    // …and a real question in a non-Latin script is NOT empty (the guard is Unicode-aware).
+    expect(
+      clampSearchPlan([{ source: "vault", query: "\u30de\u30fc\u30b8\u30f3" }]).plan,
+    ).toHaveLength(1);
+    expect(clampSearchPlan([{ source: "vault", query: "2026" }]).plan).toHaveLength(1);
   });
 
   test("a repeated source is rejected — one query per source", () => {

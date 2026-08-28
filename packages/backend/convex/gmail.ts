@@ -764,8 +764,17 @@ const KNOWLEDGE_BODY_CAP = 5;
 /** Words one escaped query may carry. Gmail ANDs them, so more words means fewer results, not more. */
 const KNOWLEDGE_QUERY_WORD_CAP = 12;
 
-/** Everything that carries Gmail search-operator meaning. Replaced by a SPACE, never deleted. */
-const GMAIL_OPERATOR_CHARS = /[:"'`(){}[\]\\<>\r\n\t]/g;
+/**
+ * Everything that carries Gmail search-operator meaning. Replaced by a SPACE, never deleted.
+ *
+ * A BACKTICK IS DELIBERATELY NOT IN THIS CLASS. It carries no Gmail query meaning, and putting
+ * one here made `skills.test.ts`'s "no long inline prompt string literals" scan read the rest
+ * of the file as one 1714-char template literal: its string matcher is a regex, not a
+ * tokenizer, so a lone backtick in source opens a span it cannot close. Adding a character
+ * with no security value here, at the cost of blinding a real CLAUDE.md §5 guard for the whole
+ * file, is a bad trade. If a backtick ever needs neutralizing, fix the scanner first.
+ */
+const GMAIL_OPERATOR_CHARS = /[:"'(){}[\]\\<>\r\n\t]/g;
 
 /**
  * Turn a planner phrase into a Gmail `q` that cannot carry Gmail query language.

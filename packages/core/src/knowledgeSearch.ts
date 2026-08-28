@@ -20,7 +20,6 @@
 // in — do not add a second hash implementation to this repo.
 import { err, ok, type Result } from "./result";
 import {
-  MISSING_PACK_SOURCES,
   MISSING_SOURCE_UNLOCK,
   type MissingPackSource,
   PACK_SOURCE_LABEL,
@@ -55,21 +54,59 @@ export function isKnowledgeSource(value: unknown): value is KnowledgeSource {
 }
 
 /**
- * Sources with NO landed adapter (29-DEPENDENCY-EVIDENCE §2: Phase 28 shipped contracts only —
- * zero connector tables, zero credential encryption, zero provider modules).
+ * WHICH SOURCES HAVE A LANDED TOOLLESS ADAPTER — and the module that IS that adapter.
  *
- * DERIVED, not hand-maintained: a knowledge source is not-landed exactly when the one registry
- * classifies it as missing. When a connector genuinely lands it moves from `MISSING_PACK_SOURCES`
- * to `REACHABLE_PACK_SOURCES` once and both planes follow — there is no second list to forget.
+ * THE SEARCH PLANE AND THE PACK PLANE ANSWER DIFFERENT QUESTIONS, AND THEY ARE ALLOWED TO
+ * DISAGREE. `workflowPacks.ts`'s `MISSING_PACK_SOURCES` means "no agent-reachable READ TOOL
+ * exists", and it carries a binding owner decision in its own docstring: *do not add read tools to
+ * close these* (decision A, 2026-08-23). This registry means "no landed toolless ADAPTER exists".
+ * Phase 29's search plane is TOOLLESS BY DESIGN — that is its entire safety argument, that
+ * connector content never reaches a tool-bearing loop — so a source can be searchable here while
+ * remaining, correctly and permanently, unreachable to a workflow pack's tool grant.
  *
- * Keeping them in `KNOWLEDGE_SOURCES` at all is deliberate and is the opposite of pretending they
- * work: a planned CRM search becomes `unavailable/not_landed`, which renders as a visible gap.
- * Dropping them would make the product silently answer business questions from mail and files
- * while never mentioning that the CRM was not consulted.
+ * `crm-facts` is exactly that source, as of 2026-08-28: Phase 28 landed `convex/hubspot.ts`
+ * (`hubspotRead`/`hubspotReadForTenant`, GET-only, allow-listed paths, a bounded `Projection`), so
+ * a toolless CRM read exists — while the pack plane still has NO CRM read tool and must not get
+ * one. Until this registry existed, `NOT_LANDED_SOURCES` was derived from `MISSING_PACK_SOURCES`
+ * and therefore conflated the two questions. Moving `crm-facts` into `REACHABLE_PACK_SOURCES` to
+ * "fix" the disagreement would silently reverse the owner's decision and tell every workflow pack
+ * that a CRM tool exists. Do not do it.
+ *
+ * `support-desk` is `null` on BOTH planes: nothing landed for it at all.
+ *
+ * WHY THE MODULE PATH IS A STRING IN A PURE PACKAGE. It is not an import and it is not a call —
+ * it is the falsifiable half of the claim. `knowledgeExternalSources.test.ts` reads these paths
+ * off disk and fails if a source is declared landed with no module or no exported verb behind it,
+ * and fails the other way if a reader lands for a source this registry still calls not-landed. A
+ * boolean here would be a claim with nothing to check it against, which is the shape of defect
+ * this phase has already paid for twice.
+ */
+export type KnowledgeAdapter = {
+  /** Repo-relative path of the module that performs the toolless read. */
+  readonly module: string;
+  /** The exported verb inside it. */
+  readonly read: string;
+};
+
+export const KNOWLEDGE_ADAPTERS: Readonly<Record<KnowledgeSource, KnowledgeAdapter | null>> = {
+  vault: { module: "packages/backend/convex/vaultGround.ts", read: "vaultGroundHydrated" },
+  drive: { module: "packages/backend/convex/vaultDrive.ts", read: "findInDrive" },
+  inbox: { module: "packages/backend/convex/gmail.ts", read: "knowledgeQuery" },
+  "crm-facts": { module: "packages/backend/convex/hubspot.ts", read: "readHubSpotDataset" },
+  "support-desk": null,
+};
+
+/**
+ * Sources with NO landed adapter. DERIVED from `KNOWLEDGE_ADAPTERS`, never hand-kept.
+ *
+ * Keeping a not-landed source in `KNOWLEDGE_SOURCES` at all is deliberate and is the opposite of
+ * pretending it works: a planned support-desk search becomes `unavailable/not_landed`, which
+ * renders as a visible gap naming its unlock. Dropping it would let the product answer a business
+ * question from mail, files and the CRM while never mentioning that the support desk was not
+ * consulted.
  */
 export const NOT_LANDED_SOURCES: readonly KnowledgeSource[] = KNOWLEDGE_SOURCES.filter(
-  (source): source is KnowledgeSource & MissingPackSource =>
-    (MISSING_PACK_SOURCES as readonly string[]).includes(source),
+  (source) => KNOWLEDGE_ADAPTERS[source] === null,
 );
 
 function isNotLanded(source: KnowledgeSource): boolean {
@@ -495,6 +532,9 @@ export type PlanRejection = (typeof PLAN_REJECTIONS)[number];
 /** Any scheme-qualified or bare-host address. The model has no business naming a remote endpoint. */
 const REMOTE_ADDRESS = /(\b[a-z][a-z0-9+.-]*:\/\/)|(\bwww\.)/i;
 
+/** One letter or digit, anywhere. Unicode-aware: a question in any script is a real question. */
+const HAS_SEARCHABLE_TERM = /[\p{L}\p{N}]/u;
+
 /**
  * The one place planner output crosses into this system. Everything the model wrote is re-checked
  * here, in code, against the code-owned registry and caps.
@@ -533,7 +573,13 @@ export function clampSearchPlan(raw: readonly unknown[]): {
       continue;
     }
     const query = typeof candidate.query === "string" ? candidate.query.trim() : "";
-    if (query === "") {
+    // A phrase with no letter or digit is EMPTY for search purposes, not merely odd. Every
+    // provider boundary strips punctuation before it searches (`gmail.ts escapeGmailQuery`,
+    // `vaultDrive.ts escapeDriveQueryLiteral`), so `"---"` reaches the provider as nothing —
+    // and an adapter handed nothing either searches for nothing or lists the whole mailbox.
+    // Refusing it HERE, with the reason the planner can act on, is what keeps the adapters'
+    // fail-closed guards unreachable in the product rather than load-bearing.
+    if (!HAS_SEARCHABLE_TERM.test(query)) {
       rejected.push({ source, reason: "empty_query" });
       continue;
     }

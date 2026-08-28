@@ -37,12 +37,16 @@ import {
   type KnowledgeSource,
   type KnowledgeSourceState,
   type PartialReason,
+  SEARCH_CAPS,
   type UnavailableReason,
   validateSourceRef,
 } from "@pikar/core";
+import { formatMoneyAmount, type Projection } from "@pikar/revenue";
+import type { HubSpotDeal, HubSpotRow } from "@pikar/revenue/providers/hubspot";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
+import { readHubSpotDataset } from "./hubspot";
 
 /**
  * The external knowledge sources THIS module serves, mapped to the action that serves each.
@@ -55,6 +59,7 @@ import { internalAction } from "./_generated/server";
  */
 export const EXTERNAL_KNOWLEDGE_READERS = {
   inbox: "readInboxKnowledge",
+  "crm-facts": "readCrmKnowledge",
 } as const satisfies Partial<Record<KnowledgeSource, string>>;
 
 /** What every adapter in this module returns. */
@@ -142,5 +147,150 @@ export const readInboxKnowledge = internalAction({
           ? "cap"
           : null;
     return answeredResult("inbox", evidence, lost);
+  },
+});
+
+// ── The CRM (HubSpot, landed 28-05) ────────────────────────────────────────────────────────
+//
+// WHY THIS SOURCE IS SEARCHABLE WHILE THE PACK PLANE STILL CALLS IT MISSING: the two planes ask
+// different questions. `MISSING_PACK_SOURCES` means "no agent-reachable read TOOL", and owner
+// decision A (2026-08-23, binding) says not to add one. Phase 29's search plane is TOOLLESS by
+// design, so a landed toolless adapter makes the CRM searchable without giving any workflow pack a
+// CRM tool. `KNOWLEDGE_ADAPTERS` in `@pikar/core` is where that distinction is code-owned.
+//
+// THE QUERY IS DELIBERATELY NOT FORWARDED. `HUBSPOT_READ_PATHS` has no search endpoint — CRM
+// Search is excluded from HubSpot's own rate-limit budget and needs its own decision (28-05), so
+// it is not on the allow-list. A CRM knowledge read is therefore a WINDOWED LIST of recent deals,
+// and the model filters them during synthesis. Passing the planner's phrase into a HubSpot request
+// is not merely unnecessary here, it is unreachable: `connectorFetch` hardcodes GET against the
+// allow-list and `hubspot.ts` builds the query string from a compile-time property list.
+//
+// NO VENDOR FREE TEXT EXISTS TO LEAK. `HUBSPOT_DEAL_PROPERTIES` never asks HubSpot for `dealname`,
+// a contact name, an email or a phone number, so a `HubSpotDeal` is ids, stage keys, timestamps
+// and a money figure — nothing else. The evidence `text` below is therefore COMPOSED IN CODE from
+// those structured fields; there is no provider string in it at all, which is a stronger property
+// than "we redact the provider strings".
+
+/** The one dataset a knowledge question can use. Owners and pipelines are configuration, contacts
+ *  and companies carry only timestamps — none of the three answers a business question. */
+const CRM_DATASET = "deals" as const;
+
+/** Environments probed, in order. Production first, so a tenant connected to both reads live. */
+const CRM_ENVIRONMENTS = ["production", "sandbox"] as const;
+
+/**
+ * The credential layer's closed reason set, mapped onto the search plane's closed reason set.
+ *
+ * A CLOSED RECORD, and `projection.because` is NEVER forwarded: it is a provider-adjacent string
+ * and the search plane's `reason` is a code-owned enum that reaches a stored row (CLAUDE.md §4).
+ * An unrecognised value falls through to `provider_error` — fail closed, never "available".
+ */
+const CRM_UNAVAILABLE_REASON: Readonly<Record<string, UnavailableReason>> = {
+  not_connected: "not_connected",
+  // A revoked grant and a dead refresh both need the user to reconnect. `refresh_failed` is
+  // deliberately NOT used: it reads as transient, and neither of these is.
+  revoked: "reauth",
+  reauth: "reauth",
+  // A refresh lease held by a concurrent read. Transient, and honestly a provider-layer problem.
+  busy: "provider_error",
+  provider_error: "provider_error",
+};
+
+const isoDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * One deal as a sentence, composed ENTIRELY from structured fields. Ids and stage keys are opaque
+ * HubSpot keys, never labels — HubSpot's label for a stage is free text this rail never requests.
+ */
+function dealText(deal: HubSpotDeal): string {
+  const amount =
+    deal.amount.state === "known"
+      ? `${formatMoneyAmount(deal.amount.value)} ${deal.amount.value.currency}`
+      : // A deal with no amount, or an amount with no currency, is UNKNOWN — never zero.
+        "an unrecorded amount";
+  const parts = [
+    `HubSpot deal ${deal.ref.id} is worth ${amount}`,
+    `pipeline ${deal.pipelineId ?? "unknown"}`,
+    `stage ${deal.stageId ?? "unknown"}`,
+    `created ${isoDay(deal.createdAt)}`,
+    deal.closeAt === null ? "no close date" : `closing ${isoDay(deal.closeAt)}`,
+  ];
+  return `${parts.join(", ")}.`;
+}
+
+const isDeal = (row: HubSpotRow): row is HubSpotDeal => "stageId" in row;
+
+/**
+ * Bounded CRM evidence.
+ *
+ * `query` is accepted so every adapter in this module has one signature, and is deliberately
+ * UNUSED — see the header above. It is named `_query` so that is visible at the call site rather
+ * than only in prose.
+ *
+ * Explicit return type (guidelines §96) — never inferred through the internal graph.
+ */
+export const readCrmKnowledge = internalAction({
+  args: { tenantId: v.string(), query: v.string() },
+  handler: async (ctx, { tenantId }): Promise<ExternalKnowledgeResult> => {
+    // Probe production, then sandbox. `ensureHubSpotAccessToken` answers `not_connected` from the
+    // row lookup alone, so an unconnected environment costs no network call and no money.
+    let projection: Projection<HubSpotRow> | null = null;
+    for (const environment of CRM_ENVIRONMENTS) {
+      const read = await readHubSpotDataset(ctx, {
+        tenantId,
+        environment,
+        dataset: CRM_DATASET,
+      });
+      projection = read.projection;
+      if (!(projection.state === "unavailable" && projection.because === "not_connected")) break;
+    }
+    if (projection === null || projection.state === "unavailable") {
+      const because = projection === null ? "not_connected" : projection.because;
+      return unavailableResult("crm-facts", CRM_UNAVAILABLE_REASON[because] ?? "provider_error");
+    }
+
+    const retrievedAt = Date.now();
+    const ranked = projection.items
+      .filter(isDeal)
+      .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+
+    const evidence: Evidence[] = [];
+    let dropped = 0;
+    for (const deal of ranked.slice(0, SEARCH_CAPS.maxEvidencePerSource)) {
+      // Namespaced, so a CRM ref can never be mistaken for a Drive file id or a vault docId.
+      const sourceRef = `${deal.ref.provider}:${deal.ref.kind}:${deal.ref.id}`;
+      if (!validateSourceRef(sourceRef).ok) {
+        dropped += 1;
+        continue;
+      }
+      evidence.push({
+        evidenceId: `crm-facts:${evidence.length}`,
+        source: "crm-facts",
+        sourceRef,
+        // A code-composed label. There is no vendor string to use even if we wanted one.
+        label: `Deal ${deal.ref.id}`,
+        text: dealText(deal),
+        // `system_of_record` from the code-owned table. NOT `@pikar/revenue`'s `supplemental` —
+        // that authority answers "may this figure be summed into a revenue total" (no, it may
+        // not), which is a different question from "how much may this be believed as a fact about
+        // the pipeline". The two vocabularies are not interchangeable and are not merged.
+        authority: authorityFor("crm-facts", {}),
+        sourceUpdatedAt: deal.updatedAt ?? deal.createdAt,
+        retrievedAt,
+      });
+    }
+
+    const lost: PartialReason | null =
+      dropped > 0
+        ? "provider_error"
+        : // A capped or partial provider read, or more deals than the per-source evidence cap:
+          // presenting eight of two hundred as a complete read of the pipeline is the same lie as
+          // presenting an unreachable CRM as an empty one.
+          projection.state === "partial" || ranked.length > evidence.length
+          ? projection.state === "partial" && !projection.meta.capped
+            ? "provider_error"
+            : "cap"
+          : null;
+    return answeredResult("crm-facts", evidence, lost);
   },
 });

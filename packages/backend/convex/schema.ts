@@ -121,10 +121,14 @@ export const AGENT_STEP_REFUSAL = v.union(
  * `PACK_SOURCE_LABEL` and `savedPrompts.sourcePreferences` use. 29-01 first shipped `gmail`/`crm`
  * here, which meant a pin preferring `inbox` could never select the mail search source.
  *
- * `crm-facts` and `support-desk` have NO landed adapter (29-DEPENDENCY-EVIDENCE §2). They are here
- * on purpose: a planned CRM read lands as `{status: "unavailable", reason: "not_landed"}`, which
- * renders as a visible gap. Omitting them would let the product answer a business question from
- * mail and files while never saying the CRM was not consulted.
+ * `support-desk` has NO landed adapter, so a planned support search lands as
+ * `{status: "unavailable", reason: "not_landed"}` and renders as a visible gap. It is in the enum
+ * on purpose: omitting it would let the product answer a business question from mail, files and
+ * the CRM while never saying the support desk was not consulted. **`crm-facts` STOPPED being
+ * not-landed on 2026-08-28** — Phase 28's `convex/hubspot.ts` landed a toolless CRM read and
+ * plan 29-03 adapted it, so a `crm-facts` row can now legitimately be `available` or `partial`.
+ * Landedness for the search plane is `KNOWLEDGE_ADAPTERS` in `@pikar/core/knowledgeSearch`, NOT
+ * `MISSING_PACK_SOURCES` — the two planes ask different questions and deliberately disagree here.
  */
 const knowledgeSource = literals(KNOWLEDGE_SOURCES);
 

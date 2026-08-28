@@ -1,8 +1,10 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
 > Last verified: 2026-08-28 against **plan 29-03** (the first EXTERNAL adapters land:
-> `packages/backend/convex/knowledgeExternalSources.ts` + `gmail.knowledgeQuery`). Previously
-> verified against the SECOND 29-01 adversarial-repair round (a first pass found
+> `packages/backend/convex/knowledgeExternalSources.ts` + `gmail.knowledgeQuery` + the HubSpot
+> CRM read. **`crm-facts` IS NOW SEARCHABLE** — the search plane got its own landedness
+> determination, `KNOWLEDGE_ADAPTERS`, and it deliberately disagrees with the pack plane; see
+> invariant 23.) Previously verified against the SECOND 29-01 adversarial-repair round (a first pass found
 > 22 defects, a fixer repaired them, a second pass re-ran the mutations and found 10 still
 > standing — including two the first round's SUMMARY had claimed as "observed RED". This file
 > records the state after the second repair.)
@@ -43,7 +45,7 @@ coordinator, no adapter, no UI and no Convex module yet.
 
 | File | Role |
 |---|---|
-| `packages/core/src/knowledgeSearch.ts` | The closed source registry (`KNOWLEDGE_SOURCES` — a named SUBSET of `workflowPacks.ts`'s `PackSource`; `NOT_LANDED_SOURCES`, DERIVED from `MISSING_PACK_SOURCES`), `KnowledgeSourceState`, `SEARCH_CAPS`, `clampEvidence` (the cap-enforcing admission boundary), `validateSourceRef`, `authorityFor`/`weakestAuthority`, `freshnessFor`/`oldestFreshness`, `normalizeEvidenceText`/`dedupeEvidence`, `clampSearchPlan`, `validateSynthesis`, `aggregateCoverage`, `renderSourceGap`, `groundedSourceProps`, `searchConfidence`, `redactedSearchEvent`. |
+| `packages/core/src/knowledgeSearch.ts` | The closed source registry (`KNOWLEDGE_SOURCES` — a named SUBSET of `workflowPacks.ts`'s `PackSource`; `KNOWLEDGE_ADAPTERS` and `NOT_LANDED_SOURCES`, DERIVED from it), `KnowledgeSourceState`, `SEARCH_CAPS`, `clampEvidence` (the cap-enforcing admission boundary), `validateSourceRef`, `authorityFor`/`weakestAuthority`, `freshnessFor`/`oldestFreshness`, `normalizeEvidenceText`/`dedupeEvidence`, `clampSearchPlan`, `validateSynthesis`, `aggregateCoverage`, `renderSourceGap`, `groundedSourceProps`, `searchConfidence`, `redactedSearchEvent`. |
 | `packages/core/src/knowledgeSearch.test.ts` | 95 tests. Every honesty rule above has a mutation recorded in `29-01-SUMMARY.md`, and each mutation listed there was OBSERVED red. |
 | `packages/core/src/workflowCustomization.ts` | `CUSTOMIZATION_FIELD_KINDS`, `MATERIAL_FIELD_KINDS`, `CUSTOMIZATION_CAPS`, `validateCustomization`, `renderCustomization`, `canonicalCustomization`, `classifyCustomizationChange`, `checkBaseVersion`, `TenantSkillRef`, `WorkflowPin` (carries `tenantSkillId`, NOT a version) / `pinIdentity`/`pinMatchesActive`/`freshRunCorrelation`. |
 | `packages/core/src/workflowCustomization.test.ts` | 87 tests, including the "ordinary business prose is not refused" corpus and the SOURCE-TEXT recurrence scan that replaced two unfalsifiable runtime bans. |
@@ -55,7 +57,7 @@ coordinator, no adapter, no UI and no Convex module yet.
 | `packages/backend/convex/schema.ts` | `knowledgeSearches` (new), `tenantSkills` template-lineage fields + `by_tenant_template`, `savedPrompts` pin-lineage fields + `by_tenant_template`. |
 | `packages/backend/convex/schema.test.ts` | 32 tests: the Phase-29 widening proved by INSERT (not by substring), and the **recurrence-absence scan** that nothing else in the repo performed. |
 | `packages/core/src/tenantData.ts` | `knowledgeSearches: "tenant_owned"` — owned by `audit-dead-letter.md`, listed here because Phase 29 is why the row exists. |
-| `packages/backend/convex/knowledgeExternalSources.ts` | **29-03.** The EXTERNAL adapters: `EXTERNAL_KNOWLEDGE_READERS` (the code-owned reader registry), `readInboxKnowledge`, `unavailableResult`/`answeredResult` (the only two state constructors). Registered under this playbook in `watch.json`. |
+| `packages/backend/convex/knowledgeExternalSources.ts` | **29-03.** The EXTERNAL adapters: `EXTERNAL_KNOWLEDGE_READERS` (the code-owned reader registry), `readInboxKnowledge` (via `gmail.knowledgeQuery`), `readCrmKnowledge` (via the landed `hubspot.readHubSpotDataset`), `unavailableResult`/`answeredResult` (the only two state constructors) and `CRM_UNAVAILABLE_REASON` (the closed credential-reason map). Registered under this playbook in `watch.json`. |
 | `packages/backend/convex/knowledgeExternalSources.test.ts` | **29-03.** Two-tenant isolation, injected-instruction fixtures, the reader-registry drift scans and the structural containment scans. |
 
 **Consumed, not owned** (their own playbooks apply — read those before touching them)
@@ -69,6 +71,7 @@ coordinator, no adapter, no UI and no Convex module yet.
 | `packages/backend/convex/savedPrompts.ts` | `cockpit.md` | `save`/`list`/`remove` and the workspace pin menu. **Phase 29 extends the ROW, not this module.** |
 | `packages/core/src/workflowPacks.ts` | `workflow-packs.md` | `WORKFLOW_PACK_IDS`, `PACK_SOURCE_LABEL`, `packPreflight`, `toolsForWorkflowPack`. |
 | `packages/backend/convex/guardrails.ts` | `guardrails.md` | `preCall` / `recordSpend` — the budget gate every toolless call must cross. |
+| `packages/backend/convex/hubspot.ts` | `connector-hubspot.md` | `readHubSpotDataset` ONLY, dataset `deals`. GET-only, allow-listed paths, a bounded `Projection`. Phase 29 never writes, never adds a path and never passes a query. |
 
 ## Dependencies & blast radius
 
@@ -98,9 +101,18 @@ Run `graphify query "knowledge search"` for the current subgraph. Couplings grap
 - **No hash implementation lives in `@pikar/core`.** `canonicalCustomization` returns a deterministic
   STRING; the caller hashes it with `packages/backend/convex/lib/hash.ts` `contentHash` (SHA-256).
   A second hash implementation is exactly what that module exists to prevent.
-- **`crm-facts` and `support-desk` have no adapter.** Phase 28 landed contracts only — no connector
-  table, no credential encryption, no provider module. Evidence:
-  `.planning/phases/29-unified-knowledge-and-routines/29-DEPENDENCY-EVIDENCE.md` §2.
+- **THE SEARCH PLANE AND THE PACK PLANE ANSWER DIFFERENT QUESTIONS ABOUT LANDEDNESS, AND THEY
+  DISAGREE ON `crm-facts` ON PURPOSE.** `MISSING_PACK_SOURCES` means *no agent-reachable read
+  TOOL exists*, and its own docstring carries owner decision A (2026-08-23, binding): do NOT add
+  read tools to close these. `KNOWLEDGE_ADAPTERS` in `knowledgeSearch.ts` means *no landed
+  TOOLLESS adapter exists*. Phase 29's search plane is toolless by design — that is its whole
+  safety argument — so a source can be searchable here while remaining, correctly and
+  permanently, unreachable to a workflow pack's tool grant. `crm-facts` is exactly that as of
+  2026-08-28 (Phase 28's `convex/hubspot.ts` landed a GET-only bounded CRM read).
+  **`NOT_LANDED_SOURCES` was derived from `MISSING_PACK_SOURCES` until 29-03, which conflated the
+  two questions.** `support-desk` is `null` on both planes — nothing landed for it at all.
+  Evidence: `.planning/phases/29-unified-knowledge-and-routines/29-DEPENDENCY-EVIDENCE.md` §2 and
+  the post-merge addendum of 2026-08-28.
 - **Convex validator ↔ pure contract coupling.** `knowledgeSearches`' literal unions duplicate
   `KNOWLEDGE_SOURCES`, `CONFIDENCE_LABELS`, `AUTHORITY_CLASSES` and `FRESHNESS_LABELS` as literals
   because a Convex validator needs them at module load. Widening either side without the other
@@ -131,7 +143,9 @@ Landed today is only steps 0 and 8; the rest is the shape the later plans must b
    partial, never available. A coordinator that skips it puts an unbounded array on a Convex row:
    the schema validator imposes no length bound of its own.
 4. Adapters run under `Promise.allSettled`. Every rejection becomes a named `KnowledgeSourceState`.
-   One provider failure never erases a successful source.
+   One provider failure never erases a successful source. **Landed as of 29-03:**
+   `knowledgeExternalSources.readInboxKnowledge` and `.readCrmKnowledge` (29-03),
+   `knowledgeVaultDrive` (29-02). They return `{state, evidence}` and write to no plane at all.
 5. `dedupeEvidence` collapses the same record read twice AND SAYING THE SAME THING, reports a ref
    that disagrees with itself as `conflicting`, and **cross-links** identical text from different
    records without deleting either.
@@ -165,13 +179,17 @@ Customization: form values → `validateCustomization` → `renderCustomization`
 | 13 | **A pinned rerun mints a fresh correlation every run.** | It must create a fresh request and cross current approval, connection, budget and active-version gates — never replay a plan. | `freshRunCorrelation`, mutation WC-12. |
 | 14 | **Activation stays owner-gated in Phase 21's existing seam.** Phase 29 adds NO second activation path or status flip. | One choke point or none. | `skills.ts` `activateTenantCandidate` / `rollbackTenantSkill` are `ownerMutation`. |
 | 15 | **NO RECURRENCE STORAGE.** No `routines`/`routineRuns` table, no cron text, no `nextRunAt`, no cadence, no IANA timezone rule, no scheduler id on a pin, no standing approval, no run-history table. | Plan 29-11's decision-and-proof gate has not been passed. Inert schema invites the UI that assumes it. | `schema.test.ts` "recurrence storage is structurally absent" — table-name scan over the parsed schema, field-name scan over the source, and a per-table scan of `savedPrompts`. Three pre-existing ONE-SHOT exceptions are named in that test on purpose: `optimizerConfig.lastRunAt`, `plans.scheduledFunctionId`, `pendingTimeouts.scheduledId`. |
-| 16 | **A `crm-facts`/`support-desk` gap is `not_landed`, never a stub adapter and never an empty success**, and the sentence also names the UNLOCK. | Owner ruling, 2026-08-27. Naming a gap without naming its unlock leaves a complaint instead of a next step. | `NOT_LANDED_SOURCES` (derived) + `clampSearchPlan` + `renderSourceGap` reading `MISSING_SOURCE_UNLOCK`. MUTATION OBSERVED RED: return the bare sentence for `not_landed`. |
+| 16 | **A not-landed gap is `not_landed`, never a stub adapter and never an empty success**, and the sentence also names the UNLOCK. Since 29-03 that is `support-desk` alone. | Owner ruling, 2026-08-27. Naming a gap without naming its unlock leaves a complaint instead of a next step. | `NOT_LANDED_SOURCES` (derived) + `clampSearchPlan` + `renderSourceGap` reading `MISSING_SOURCE_UNLOCK`. MUTATION OBSERVED RED: return the bare sentence for `not_landed`. |
 | 17 | **EVERY `SEARCH_CAPS` ENTRY IS ENFORCED BY CODE.** Six of eleven were enforced by nothing while `schema.ts` cited them as bounds. | A cap nothing applies is a documented invariant with no enforcement, and the 29-0x adapter that trusts the comment puts an unbounded array on a Convex row. | `clampEvidence`/`clampSearchPlan`/`validateSynthesis`, plus a source scan (`NO CAP IS DEAD`) that fails when a key becomes declaration-only. Two by-construction exceptions are named in that test. Same rule and same test for `CUSTOMIZATION_CAPS`. |
 | 18 | **ONE SOURCE VOCABULARY.** `KNOWLEDGE_SOURCES satisfies readonly PackSource[]`; labels and unlocks come from `workflowPacks.ts`. | A pin's `sourcePreferences` are `PackSource[]`; a forked search vocabulary makes a preference unable to select a source with no code that could translate. | `satisfies` at compile time, plus "every knowledge source IS a PackSource" and the derived `NOT_LANDED_SOURCES` test. |
 | 20 | **THE CONVEX ENUMS ARE THE `@pikar/core` ENUMS, DERIVED — NOT HAND-COPIED.** `knowledgeSource`, the unavailable/partial reasons, the authority classes, the freshness labels and the confidence labels are all built by `schema.ts`'s `literals(...)` helper from the exported const array. | They were hand-copied, and three separate narrowings of them each left the whole backend suite AND the typecheck green: dropping `support-desk` from the source union, `unplanned` from the unavailable reasons, `agent_authored` from the authority classes. Nothing crossed the package boundary. The cost is exactly the honest-gap row this phase exists to produce: core can construct `{status:"unavailable", reason:"not_landed", source:"support-desk"}` and the validator would refuse it at INSERT time, at runtime, with nothing red in CI. | One list, not two. Falsified by `schema.test.ts`, "the Convex enums are the @pikar/core enums, proved by storing every member" — it inserts EVERY member of every core constant, plus a scan that fails if any member reappears as a hand-written `v.literal` inside `knowledgeSearches`. MUTATIONS OBSERVED RED: hand-write each of the three unions back minus one member. |
 | 21 | **`groundedSourceProps` PROJECTS VAULT EVIDENCE ONLY into `docIds`.** Non-vault citations come back in `nonVault` and must be rendered without a vault drill-in. | `docIds[i]` is not a neutral id: `cards.tsx:2413 GroundedSources` -> `:2373 VaultDocButton` -> `:2317 VaultDocModal` OPENS it as a vault document. The first version mapped every source's `sourceRef` in, so a Gmail message id rendered a clickable control that opens a document that does not exist — committing, one plane over, the exact naming lie this function's own JSDoc rejects for `citationDocId`. | `knowledgeSearch.test.ts`, "NO NON-VAULT REF EVER REACHES docIds". MUTATION OBSERVED RED: drop the `.filter((e) => e.source === "vault")`. |
 | 22 | **`savedPrompts.sourcePreferences` MEMBERSHIP is closed by the Convex validator** — the full `PackSource` vocabulary, derived, not `v.array(v.string())`. | It was `v.array(v.string())` under a comment reading "Bounded `PackSource` names", and a convex-test probe stored `["notion","http://evil.example","sharepoint"]` verbatim: a documented invariant with no enforcement, one field over from where the identical hole had just been closed on `claims[].evidence[].source`. | `schema.test.ts`, "sourcePreferences refuses a source the product does not have — a WRONG VALUE, not a wrong type". MUTATION OBSERVED RED: reopen to `v.optional(v.array(v.string()))`. **LENGTH is NOT bounded** — see Known gaps. |
 | 19 | **A PIN NAMES THE EXACT `tenantSkills` ROW, never a (name, version) pair.** | Two tenants can hold the same name AND version — which is why `recordTenantEvalEvidence` keys on the row id, and why the landed rail is `Record<string, Id<"tenantSkills">>` (dispatch.ts:234/:256). | `WorkflowPin.tenantSkillId: TenantSkillRef \| null`, `pinIdentity`/`pinMatchesActive` compare it, and `savedPrompts.tenantSkillId` is `v.id("tenantSkills")` — proved by INSERT, not by a substring scan. MUTATIONS OBSERVED RED: relax to `v.optional(v.string())`; drop the id from `pinIdentity`. |
+| 23 | **LANDEDNESS ON THE SEARCH PLANE IS DERIVED FROM `KNOWLEDGE_ADAPTERS`, WHICH NAMES A MODULE AND A VERB — never from `MISSING_PACK_SOURCES`, and never from a boolean.** | The two planes ask different questions (see "Dependencies & blast radius"). A boolean would be a claim with nothing to check it; the module path is what makes the claim falsifiable from outside the pure package. Moving `crm-facts` into `REACHABLE_PACK_SOURCES` to remove the disagreement would silently reverse a binding owner decision and tell every workflow pack a CRM tool exists. | `knowledgeSearch.test.ts` ("THE TWO PLANES ANSWER DIFFERENT QUESTIONS", pinned in BOTH directions) + `knowledgeExternalSources.test.ts`, which reads the named modules off disk. MUTATIONS OBSERVED RED: hand-write `NOT_LANDED_SOURCES`; derive it from `MISSING_PACK_SOURCES` again; null the `crm-facts` adapter; point `support-desk` at a module that does not exist; rename a verb the module does not export; delete `crm-facts` from `MISSING_PACK_SOURCES`. |
+| 24 | **AN ADAPTER AND ITS SOURCE'S SEARCHABILITY LAND TOGETHER, IN BOTH DIRECTIONS.** A source may not be reported landed with no adapter behind it, and an adapter may not land for a source the search plane still calls `not_landed`. | The first is the lie this phase exists to prevent; the second is dead code behind an invisible gap. | `EXTERNAL_KNOWLEDGE_READERS` in `knowledgeExternalSources.ts` is scanned against `NOT_LANDED_SOURCES` both ways, plus a totality check that every landed non-vault/drive source has a reader. MUTATION OBSERVED RED: add a `support-desk` reader while `support-desk` has no adapter. |
+| 25 | **THE EXTERNAL ADAPTERS WRITE NOTHING TO ANY GOVERNANCE PLANE.** No audit row, no telemetry row, no dead letter, no `agentSteps` row, no `payload:` literal, no direct `fetch`. | A unified search reads several sources and owes exactly ONE refs-only `knowledge.searched` event, owned by the 29-06 coordinator. Per-source events would let the log plane infer the shape of the question from how many rows appeared — and a subject line or a mail body in a payload is the §4 PII honeypot. | A source scan in `knowledgeExternalSources.test.ts` (the `briefings.ts` content-plane idiom), plus behavioural assertions that `audit`/`agentSteps`/`telemetry`/`deadLetters` are EMPTY after a read carrying a prompt injection. |
+| 26 | **AN UNREACHABLE OR PARTIAL EXTERNAL READ IS NAMED, NEVER SHRUNK.** `unavailableResult` is the only constructor of an unavailable state in the adapters and always returns zero rows with it; a further provider page, a hydration cap, a truncated body, a per-source evidence cap or a dropped malformed ref each produce `partial` with a reason. A provider's own `because`/`missing` string is NEVER forwarded onto the closed enum. | Presenting five of twenty-five messages, or eight of two hundred deals, as a complete read is the same lie as presenting an unreachable CRM as an empty one. `reason` reaches a stored row, so it must stay a code-owned enum (CLAUDE.md §4). | `knowledgeExternalSources.test.ts`. MUTATIONS OBSERVED RED: rewrite `unavailableResult` as `{available, returned: 0}`; force `lost` to `null`; narrow the partial condition; forward the credential layer's raw `revoked` onto the enum; remove the per-source slice. |
 
 ## How to change safely
 
@@ -180,8 +198,10 @@ Customization: form values → `validateCustomization` → `renderCustomization`
 `MISSING_SOURCE_UNLOCK` + `MISSING_SOURCE_MENTIONS` if missing), then to `KNOWLEDGE_SOURCES` and
 `SOURCE_AUTHORITY`. Do **not** touch `schema.ts`'s `knowledgeSource` — it is DERIVED from
 `KNOWLEDGE_SOURCES` (invariant 20) and follows on its own. Do NOT edit
-`NOT_LANDED_SOURCES` — it is derived; a connector that lands moves between the two pack lists once
-and both planes follow. Keep `SEARCH_CAPS.maxSources === KNOWLEDGE_SOURCES.length` (a test pins it).
+`NOT_LANDED_SOURCES` — it is derived from `KNOWLEDGE_ADAPTERS`. **When an adapter genuinely lands,
+add its module + verb to `KNOWLEDGE_ADAPTERS` and a reader to `EXTERNAL_KNOWLEDGE_READERS` in the
+same change** (invariant 24), and leave `MISSING_PACK_SOURCES` alone unless an agent-reachable read
+TOOL also landed — those are different questions (invariant 23). Keep `SEARCH_CAPS.maxSources === KNOWLEDGE_SOURCES.length` (a test pins it).
 Most likely to violate: invariants 1, 16 and 18.
 
 **Adding or changing a cap**: add the enforcement in the SAME change, or do not add the cap. The
@@ -270,7 +290,10 @@ plans 29-02 onward, and every recurrence live proof in 29-11.
 | Gap | Where the upgrade path is recorded |
 |---|---|
 | **Nothing writes `knowledgeSearches` yet.** The table, the contracts and the tests exist; the coordinator does not. | Plans 29-02 … 29-06. |
-| **`crm-facts` and `support-desk` are permanently `not_landed`** until Phase 28 ships a connector rail. | `29-DEPENDENCY-EVIDENCE.md` §2 + owner ruling 2026-08-27. |
+| **`support-desk` is `not_landed`** — nothing landed for it on either plane. `crm-facts` STOPPED being not-landed on 2026-08-28 when Phase 28's HubSpot rail merged. | `29-DEPENDENCY-EVIDENCE.md` §2, the post-merge addendum, and invariant 23. |
+| **The CRM read is HubSpot `deals` only, and it ignores the planner's query.** `HUBSPOT_READ_PATHS` has no search endpoint (CRM Search carries its own rate limit and needs its own decision, 28-05), so a CRM knowledge read is a 90-day windowed list of the 8 most recently updated deals and the synthesis model filters them. QuickBooks read, Stripe, PayPal and any support desk are absent. | `ponytail:` comments in `knowledgeExternalSources.ts`. Upgrade path: add CRM Search to the allow-list with its own budget, or add datasets, in a plan that owns `connectorFetch`. |
+| **The inbox adapter returns NO sender**, so an answer cannot say "Sarah said X". Deliberate: the landed toolless firewall is BODY-scoped, so senders and subjects already reach the tool-bearing briefing loop, and Phase 29 must not widen that. | `ponytail:` comment on `KnowledgeMailMessage`. Upgrade path: a server-side sender table addressed by index, the `buildRecipientView` idiom. |
+| **Inbox hydration selects by RECENCY, not relevance** — Gmail's own newest-first list order, top 5 of up to 25 matches. | `ponytail:` comment in `gmail.knowledgeQuery`. Upgrade path: fetch metadata for all listed ids and rank in pure code, at 5x the quota. |
 | **`savedPrompts.textHash` collision** for two pins of the same text under different customizations. | "How to change safely" above; must be fixed in plan 29-08 before the first lineage-bearing pin. |
 | **`USER_AUTHORABLE_SKILLS` is a closed three-name allowlist** and does not yet include the six workflow packs. Widening it is a plan-29-05 decision with eval consequences. | `29-DEPENDENCY-EVIDENCE.md` §1.3. |
 | `ponytail:` no hash function in `@pikar/core` — dedupe compares normalized strings directly. Ceiling: a corpus larger than `totalEvidenceCharCap`. | Header comment of `knowledgeSearch.ts`. |

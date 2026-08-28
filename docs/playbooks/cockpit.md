@@ -45,6 +45,16 @@
 > escaped terms rather than returning the whole fixture — a seam that answered every question with
 > every fixture message would make every offline assertion built on it vacuous.
 >
+> **A BACKTICK IS DELIBERATELY ABSENT FROM `GMAIL_OPERATOR_CHARS`.** The first version included
+> one, and `skills.test.ts`'s "no long inline prompt string literals" scan went from 0 offenders
+> to 3 in `gmail.ts` — the longest a 1714-char span. That scan's string matcher is a regex, not
+> a tokenizer, so a lone backtick anywhere in source opens a template-literal span it cannot
+> close, and everything after it in the file goes unscanned for a hardcoded prompt (CLAUDE.md
+> §5). A backtick carries no Gmail query meaning, so neutralizing it bought nothing and blinded
+> a real guard for the whole file. If one ever needs neutralizing, fix the scanner first. The
+> scan's own header already records the same class of bug for `//` and for apostrophes; this is
+> the third instance and the first from the source side rather than from prose.
+>
 > The knowledge-plane mapping (evidence, authority, availability) lives in
 > `packages/backend/convex/knowledgeExternalSources.ts` and is documented in
 > `knowledge-search-routines.md`, not here. 15 new tests in `gmail.test.ts`; mutations M1-M6, M12
