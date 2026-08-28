@@ -93,8 +93,11 @@ describe("no module keeps its own copy of the route table", () => {
    * / document classifier and the voice-doc reviewer were all misrouting; nothing in any suite could
    * see it, because every test drives a `SMOKE::` seam that never reaches a provider.
    *
-   * A NEW naive copy anywhere under `convex/` fails this test. Do not add a name back to this list
-   * to make that green — convert the module.
+   * ⚠ THIS TEST IS NAME-BASED AND THAT IS ITS CEILING. It only looks at a module at all if the
+   * module's source mentions `resolveModel(`, so a private copy called `pickModel` is invisible to
+   * it — the repo's own recorded lesson (deletion-only mutation is blind to renaming; a symbol gate
+   * has already stayed green through a rename here once). The SHAPE scan below is the one a rename
+   * cannot get past. Do not add a name back to this list to make either green — convert the module.
    */
   const ALLOWED_PRIVATE_RESOLVERS: string[] = [];
 
@@ -120,17 +123,56 @@ describe("no module keeps its own copy of the route table", () => {
     expect(privateResolvers()).toEqual(ALLOWED_PRIVATE_RESOLVERS);
   });
 
-  test("the naive one-liner exists NOWHERE under convex/ — not even in a module that also imports", () => {
-    // The scan above is satisfied by an import, so a module could import the shared table AND keep
-    // a stale private copy beside it. This one is blind to imports: it looks for the misroute
-    // itself — `openai(<id>.replace(...))` — which is what silently hands an `or/` route id to the
-    // OpenAI provider. This module is the one legitimate site of that expression.
-    const naive = Object.entries(rawSources)
-      .filter(([path]) => !isSharedTable(path))
-      .filter(([, raw]) => /\bopenai\(\s*\w+\.replace\(/.test(raw))
+  /**
+   * THE SHAPE, NOT THE NAME: a provider factory called with a MODEL ARGUMENT THAT IS NOT A STRING
+   * LITERAL. That is what a private route table IS — a runtime decision about which model id goes
+   * to which provider — and it stays true however the const is named, so a rename cannot escape it.
+   *
+   * It covers both providers and both spellings of the defect:
+   *   `openai(id.replace(/^openai\//, ""))`   — the original naive one-liner, seven copies of it
+   *   `openai(id.startsWith("openai/") ? …)`   — the same table rewritten, invisible to a `.replace` scan
+   *   `createOpenRouter({…}).chat(id)`         — the same table built on the other provider
+   *
+   * A FIXED model id — `openai("gpt-4o-mini")` in `intake.ts` and `vaultExtract.ts`, both of which
+   * price on the matching `"openai/gpt-4o-mini"` key — is deliberately NOT flagged. Those are
+   * multimodal calls naming one model on purpose; they route nothing, so there is nothing to drift.
+   */
+  const DYNAMIC_MODEL_ROUTE =
+    /(?:\b(?:openai|createOpenAI|createOpenRouter)|\.chat)\s*\(\s*[A-Za-z_$]/;
+
+  test("THE DETECTOR ITSELF: a route table under ANY name is caught, a fixed model id is not", () => {
+    // Non-vacuity for the file scan below, and the actual claim being made. The scan can only
+    // report `[]` honestly if it would have reported a renamed copy — and the previous version of
+    // this guard would have passed every one of these three, because it grepped for the word
+    // `resolveModel`.
+    for (const renamed of [
+      'const pickModel = (id: string) => openai(id.replace(/^openai\\//, ""));',
+      'const modelFor = (id: string) => openai(id.startsWith("openai/") ? id.slice(7) : id);',
+      "const route = (id: string) => createOpenRouter({ apiKey }).chat(id);",
+      "  if (id.startsWith('or/')) return openRouter().chat(id.slice(3));",
+    ]) {
+      expect(DYNAMIC_MODEL_ROUTE.test(renamed), `not detected: ${renamed}`).toBe(true);
+    }
+    // The legitimate shape, which must stay legal: one named model, no routing.
+    for (const fixed of [
+      'model: openai("gpt-4o-mini"),',
+      "openRouter().chat('stealth/ox-alpha')",
+    ]) {
+      expect(DYNAMIC_MODEL_ROUTE.test(fixed), `false positive: ${fixed}`).toBe(false);
+    }
+  });
+
+  test("no module under convex/ routes a model id to a provider except the shared table", () => {
+    // Comments stripped first: this module's own docstrings quote the defect verbatim, and a
+    // playbook-grade comment must not be able to fail a source scan.
+    const routing = Object.entries(rawSources)
+      .filter(([path]) => !isSharedTable(path) && !path.endsWith(".test.ts"))
+      .filter(([, raw]) =>
+        DYNAMIC_MODEL_ROUTE.test(raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "")),
+      )
       .map(([path]) => path)
       .sort();
-    expect(naive).toEqual([]);
+    expect(routing).toEqual([]);
   });
 
   test("llm.ts keeps its `google/` wrapper and DELEGATES the rest to the shared table", () => {
