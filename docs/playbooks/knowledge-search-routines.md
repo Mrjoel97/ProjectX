@@ -1,5 +1,68 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, ROUND 3 — THE PROMPT DEFENCE HAD NO COVERAGE
+> ON THE PATH PRODUCTION TAKES, AND A ROW WITH NO `origin` WAS NEVER PROOF OF A TENANT UPLOAD.**
+>
+> **(1) THE REPAIR INTRODUCED THE VACUITY IT WAS FIXING.** Rounds A/B exported `plannerPrompt`
+> and `synthesisPrompt` "for the test that proves it", and every prompt assertion then called the
+> exported builder DIRECTLY with values the test itself chose. Nothing bound either builder to the
+> handler that runs, so the whole prompt-assembly defence — the evidence fence, the per-run nonce
+> that is the stated remedy for fence forgery, `fenceSafe`'s marker stripping and the planner's
+> per-run closed source list — was asserted against a function the shipped path might never call.
+> Three mutations proved it green: a hardcoded fence nonce, and `scanText(question)` in place of
+> each assembled prompt. `knowledgeLlm.test.ts` now mocks ONLY `generateObject` (via
+> `vi.hoisted` + `vi.mock("ai", importOriginal)`) and asserts the `prompt` and `system` THE
+> HANDLER HANDED THE MODEL: the fence nonce is read off the RETURNED `runId`, two runs produce two
+> fences, the injected markers are gone, the hostile words survive as material, and `system` is the
+> REGISTRY body (§5). Every other test in the file still drives the `SMOKE::` seam, and the two
+> that need the live call to FAIL still do — `resolveModel` throws on a missing
+> `OPENROUTER_API_KEY` before `generateObject` is reached.
+>
+> **(2) THE THIRD `validateSourceRef` GUARD.** Part B's SUMMARY said "both guards" were closed;
+> there are THREE on the external plane — the inbox `message.id`, `dealText`'s `key()` and the CRM
+> `sourceRef` — and the CRM one had no test, nor did the `dropped > 0` arm of its `providerError`.
+> It is genuinely drivable: `@pikar/revenue`'s `validateSourceRef` is a DENYLIST of quotes and
+> control characters with no space class, so `hubspot:deal:a b c` clears the provider layer and
+> only `@pikar/core`'s ALLOWLIST refuses it. Now asserted as a VALUE, with the windowed-read `cap`
+> state as the negative control that makes `provider_error` falsifiable.
+>
+> **(3) `authorityFor` NO LONGER READS ABSENCE AS PROOF.** Its docstring asserted "a row with NO
+> origin is a tenant upload" and it decided the STRONGEST class from that absence. Three landed
+> writers ingest LLM prose with no `origin` at all — `evaluations.ts:1150` (`persistNextStepMemo`,
+> `text: plan.body`), `voice.ts:349` (`persistBrief`) and `onboarding.ts:492` — so the agent's own
+> memo, brief and onboarding profile were each cited as the owner's own word. Vault authorship is
+> now established POSITIVELY from `docKind` against the new `TENANT_AUTHORED_DOC_KINDS`
+> (`upload`, `brain_dump`, `document`); anything else, INCLUDING a kind this repo has never heard
+> of, falls to `third_party_research` or weaker. An allowlist that fails weak costs a downgrade
+> when somebody forgets; a denylist costs a laundered citation. It subsumes the old
+> `docKind === "web_research"` special case, which is why that mutation is red three ways.
+>
+> **(4) THE `rawEvidence.authority` COMMENT NOW MATCHES THE CODE.** The closed union makes an
+> UNKNOWN class unspellable; it does not stop a caller passing a wrong-but-valid one, and the
+> value cannot be derived inside the module (`authorityFor` needs adapter-local facts that do not
+> cross the boundary). Plan 29-06 must carry each adapter's `KnowledgeAdapterResult` through
+> unmodified or re-derive at the merge point — that is written on the validator now.
+>
+> **(5) EVERY `SEARCH_CAPS` VALUE IS PINNED TO A LITERAL.** `maxClaims` (12) and `excerptCharCap`
+> (300) had no literal anywhere — every assertion read the constant it was meant to pin, so 12 -> 40
+> and 300 -> 3000 both left core and the four backend knowledge suites green. One whole-object
+> equality replaces the per-cap guesswork and also fails when a NEW cap lands unpinned.
+>
+> **HOW TO VERIFY:** `cd packages/core && pnpm vitest run knowledgeSearch` and
+> `cd packages/backend && pnpm vitest run knowledgeLlm knowledgeVaultDrive knowledgeExternalSources`.
+> MUTATIONS OBSERVED RED: the fence nonce -> `"fence"`; `scanText(synthesisPrompt(...))` ->
+> `scanText(question)`; `scanText(plannerPrompt(question))` -> `scanText(question)`; the CRM
+> `validateSourceRef` guard -> `if (false)`; the `dropped > 0 ||` term -> `false ||`; the
+> `TENANT_AUTHORED_DOC_KINDS` rule reverted to `docKind === "web_research"`; `maxClaims` 12 -> 40;
+> `excerptCharCap` 300 -> 3000.
+>
+> **NOT FIXED, DELIBERATELY, AND NAMED SO IT IS A TASK RATHER THAN A REDISCOVERY:**
+> `evaluations.ts:1150`, `voice.ts:349` and `onboarding.ts:492` should each store
+> `origin: "agent"` on the row they ingest. That is the real fix — it lands them at
+> `agent_authored`, the class that names the author, instead of `third_party_research`, which is
+> true ("the tenant did not author this") but one rank too strong. All three are outside this
+> plan's owned files.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — SIX GUARDS IN `knowledgeLlm.ts`
 > THAT COULD NOT FAIL, AND ONE ERROR THAT CARRIED PROVIDER PROSE.**
 >

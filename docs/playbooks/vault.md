@@ -1,3 +1,49 @@
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, ROUND 3 — THE PROVENANCE FIX ONE ENTRY BELOW
+> CLOSED ONE DOOR OF FOUR, AND ITS OWN SUMMARY SENTENCE WAS FALSE.**
+>
+> ⚠ **THE ENTRY BELOW SAYS "a row with NO origin is the tenant's upload". THAT IS NOT TRUE AND
+> WAS NOT TRUE WHEN IT WAS WRITTEN.** `schema.ts:1971`'s "ABSENT ⇒ user-supplied (every row that
+> exists today)" was true when `origin` landed in Phase 18, because agent rows were then
+> structurally never ingested. Three later writers ingest LLM prose with NO `origin` at all and DO
+> call `startIngest`, so their rows are retrievable and were cited at `tenant_owned` — the
+> strongest class, the owner's own word:
+> `evaluations.ts:1150` (`persistNextStepMemo`, `text: plan.body`, `startIngest` at :1167),
+> `voice.ts:349` (`persistBrief`, markdown from `internal.llm.draftVoiceBrief`, :363) and
+> `onboarding.ts:492` (the `business_profile` document, :506).
+>
+> **VAULT AUTHORSHIP IS NOW ESTABLISHED POSITIVELY, NOT INFERRED FROM AN ABSENCE.** `@pikar/core`
+> exports `TENANT_AUTHORED_DOC_KINDS` = `["upload", "brain_dump", "document"]` — every retrievable
+> `vaultDocuments.kind` a TENANT-SUPPLIED path writes (`vault.ts:265` upload, `vault.ts:1174`
+> attachment, `vault.ts:186` brain dump, `smoke.ts:1196`'s upload stand-in). `authorityFor` reaches
+> `tenant_owned` only for those; any other kind, INCLUDING one this repo has never heard of, falls
+> to `third_party_research` or weaker. The direction is the point: `kind` is `v.string()` and
+> `schema.ts` records that it "grows every phase", so a denylist costs a laundered citation when
+> somebody forgets and an allowlist costs a downgrade. It SUBSUMES the old
+> `docKind === "web_research"` special case. `knowledgeVaultDrive.test.ts` drives all three
+> writers' exact stored row shapes through the REAL `searchVaultKnowledge`, not the pure function.
+>
+> **THE TWO PLANES STILL DISAGREE ABOUT ONE DOCUMENT, AND THAT IS NOW A PINNED DECISION RATHER
+> THAN DRIFT.** `vaultDrive.ts:1169`'s folder import stores a Drive file as `kind: "upload"`,
+> `source: "google"`, no origin — so the SAME stranger-shared file is `third_party_research` on the
+> Drive plane (proven by `ownedByMe`) and `tenant_owned` once imported. The search plane cannot
+> tell that row from a real upload: `vaultGroundHydrated` carries `kinds` and `origins` and NOT
+> `source`, and dropping `"upload"` from the allowlist would downgrade every genuine upload — a
+> bigger untruth than the one it fixes. The defensible reading is that an import is a deliberate
+> tenant act and `tenant_owned` means "in the tenant's own store". A test asserts both values so
+> the asymmetry cannot move silently.
+>
+> **HOW TO VERIFY:** `cd packages/core && pnpm vitest run knowledgeSearch` and
+> `cd packages/backend && pnpm vitest run knowledgeVaultDrive`. MUTATION OBSERVED RED: revert
+> `!TENANT_AUTHORED_DOC_KINDS.includes(meta.docKind ?? "")` to `meta.docKind === "web_research"` —
+> three backend tests and one core test fail.
+>
+> **TWO NAMED FOLLOW-UPS, both outside this plan's owned files.** (a) `evaluations.ts:1150`,
+> `voice.ts:349` and `onboarding.ts:492` should each store `origin: "agent"`, which lands them at
+> `agent_authored` — the class that names the author — instead of `third_party_research`, which is
+> true but one rank too strong. (b) `vaultDrive.ts`'s folder import should write a distinguishable
+> `kind`, or `vaultGround.ts` should carry `source` through `vaultGroundHydrated`; either one lets
+> the imported stranger-shared file read as third-party on BOTH planes.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — PROVENANCE. A citation now says who
 > actually wrote the thing.**
 >
