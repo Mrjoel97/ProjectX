@@ -19,9 +19,8 @@
 //
 // §5: the prompt loads from the skill registry (`folder-digest`) and fails closed when unseeded —
 // never hardcoded. §4: the assembled manifest is scanned (fail-closed) BEFORE the model call.
-// A `SMOKE::digest::` sentinel anywhere in the assembled prompt returns a deterministic fixture
-// with NO model call (the offline convex-test path).
-import { openai } from "@ai-sdk/openai";
+// A `SMOKE::digest::` sentinel in the FOLDER NAME returns a deterministic fixture with NO model
+// call (the offline convex-test path). Never in the prompt — see the seam note below.
 import { FOLDER_DIGEST_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
@@ -31,7 +30,7 @@ import {
   VAULT_FOLDER_MEMBER_BATCH,
   VAULT_GRID_READ_BUDGET_BYTES,
 } from "@pikar/vault";
-import { generateText, type LanguageModel } from "ai";
+import { generateText } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -43,15 +42,11 @@ import {
 } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { resolveModel } from "./lib/models";
 import { startIngest } from "./vaultIngest";
 
 // Per-call wall-clock ceiling + one retry budget (mirrors llm.ts / vaultLlm.ts).
 const CALL_TIMEOUT_MS = 45_000;
-
-// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel. Duplicated
-// from llm.ts / vaultLlm.ts / blueprint.ts — the third module-local copy of one line, deliberately
-// not a shared helper (it would be the only reason for a new module).
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 /** The excerpt budget. Mirrors `vaultGround.ts:29-30`'s PER_DOC_CHAR_CAP / TOTAL_CHAR_CAP, which
  *  are module-private `const`s there and therefore cannot be imported. Same numbers, same job: cap
@@ -153,12 +148,18 @@ function digestPrompt(folderName: string, members: readonly MemberMeta[]): strin
 
 // ── Offline SMOKE seam ───────────────────────────────────────────────────────
 // convex-test and a dev-deployment smoke must drive synthesis deterministically and offline (no
-// OPENAI_API_KEY on the local backend). The sentinel is matched with `.includes` over the ASSEMBLED
-// prompt (blueprint.ts:267's variant, not `startsWith`), so it may ride in the folder NAME, any
-// member TITLE, or any member's TEXT — which matters, because a folder whose only member FAILED
-// contributes no excerpt at all and would otherwise reach the model.
-// ponytail: content sentinel, not an env flag — keeps the seam per-request and out of shared
-// deployment config. Remove once a mock-model vault smoke exists.
+// model credentials on the local backend).
+//
+// ⚠ THE SENTINEL IS MATCHED AGAINST THE FOLDER NAME ONLY, NEVER THE ASSEMBLED PROMPT. It used to
+// be `.includes` over the whole prompt (blueprint.ts's variant), which meant it could ride in any
+// member TITLE or any member's TEXT — and members are ingested Drive files and email, i.e. text a
+// third party authors. One document containing this string was enough to make a real folder's
+// digest a FIXTURE: the stored vault artifact, the thing the tenant then reads and grounds on,
+// silently stops being synthesis. The folder name is the tenant's own, chosen when the folder is
+// created, and it still reaches this point for the case the prompt match existed for — a folder
+// whose only member FAILED contributes no excerpt at all.
+// ponytail: content sentinel on ONE tenant-owned field, not an env flag — keeps the seam
+// per-request and out of shared deployment config. Remove once a mock-model vault smoke exists.
 const SMOKE_DIGEST_PREFIX = "SMOKE::digest::";
 
 /**
@@ -360,7 +361,7 @@ export const buildFolderDigest = internalAction({
     const safePrompt = scan.value.safeText;
 
     let markdown: string;
-    if (safePrompt.includes(SMOKE_DIGEST_PREFIX)) {
+    if (folder.name.includes(SMOKE_DIGEST_PREFIX)) {
       markdown = smokeDigestFixture(folder.name, members);
     } else {
       // `generateText`, not `generateObject`: the contract's three sections ARE markdown headings,

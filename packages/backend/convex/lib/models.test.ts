@@ -2,9 +2,10 @@
 //
 // `resolveModel` existed SEVEN times — `llm.ts`, `blueprint.ts`, `onboarding.ts`, `vaultDigest.ts`,
 // `vaultLlm.ts`, `voiceDoc.ts`, `knowledgeLlm.ts` — and only `llm.ts`'s ever grew the `or/` branch,
-// while `DEFAULT_MODEL` is `"or/openai/gpt-4o-mini"`. Every other copy hands an OpenRouter ROUTE id
+// while `DEFAULT_MODEL` is `"or/openai/gpt-4o-mini"`. Every other copy handed an OpenRouter ROUTE id
 // to the OpenAI provider: a different endpoint with a different key. Nothing in any suite could see
-// it, because every test drives a `SMOKE::` seam that never reaches a provider at all.
+// it, because every test drives a `SMOKE::` seam that never reaches a provider at all. All seven are
+// converted now, and the second describe below pins that END STATE rather than a shrinking list.
 //
 // So these tests assert the RESOLVED PROVIDER, not that a function was called: `.provider` and
 // `.modelId` are what the AI SDK actually sends the request with.
@@ -81,60 +82,87 @@ describe("resolveModel routes an id to the provider that id names", () => {
 
 describe("no module keeps its own copy of the route table", () => {
   /**
-   * ⚠ FIVE MODULES STILL HOLD THE STALE PRIVATE COPY, AND ALL FIVE ARE MISROUTING TODAY.
+   * THE END STATE: there is exactly ONE `resolveModel`, in this file, plus `llm.ts`'s documented
+   * wrapper. This list is EMPTY and must stay empty.
    *
-   * Each is the identical one-liner `openai(id.replace(/^openai\//, ""))`, and each calls it with
-   * `DEFAULT_MODEL` — which has been `"or/openai/gpt-4o-mini"` since commit 845f4b1 — so each sends
-   * an OpenRouter route id to the OpenAI provider on every production run. This is NOT a knowledge
-   * plane defect and it is not fixed here: changing which provider and which key five landed
-   * subsystems talk to is its own change, with its own playbooks and its own verification, and
-   * bundling it into a knowledge-plane remediation would be the wrong blast radius.
+   * It was five: `blueprint.ts`, `onboarding.ts`, `vaultDigest.ts`, `vaultLlm.ts`, `voiceDoc.ts`,
+   * each holding the identical `openai(id.replace(/^openai\//, ""))` one-liner and each calling it
+   * with `DEFAULT_MODEL` — which has been `"or/openai/gpt-4o-mini"` since commit 845f4b1 — so each
+   * sent an OpenRouter ROUTE id to the OpenAI provider on every production run. All five now import
+   * the shared table. Business-blueprint derivation, onboarding, vault digests, the graph extractor
+   * / document classifier and the voice-doc reviewer were all misrouting; nothing in any suite could
+   * see it, because every test drives a `SMOKE::` seam that never reaches a provider.
    *
-   * The list is the tripwire in BOTH directions: a SIXTH copy fails this test, and so does leaving
-   * a name here after its copy is gone. Delete a name when its module imports the shared table.
+   * A NEW naive copy anywhere under `convex/` fails this test. Do not add a name back to this list
+   * to make that green — convert the module.
    */
-  const KNOWN_STALE_COPIES = [
-    "../blueprint.ts",
-    "../onboarding.ts",
-    "../vaultDigest.ts",
-    "../vaultLlm.ts",
-    "../voiceDoc.ts",
-  ];
+  const ALLOWED_PRIVATE_RESOLVERS: string[] = [];
+
+  /** This module. Vite normalises the `../**` glob key for a sibling to `./models.ts`. */
+  const isSharedTable = (path: string) => path === "./models.ts" || path.endsWith("/lib/models.ts");
 
   const privateResolvers = () => {
     const found: string[] = [];
     for (const [path, raw] of Object.entries(rawSources)) {
-      if (path.endsWith(".test.ts") || path.endsWith("lib/models.ts")) continue;
-      const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+      if (path.endsWith(".test.ts") || isSharedTable(path)) continue;
+      const src = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
       if (!src.includes("resolveModel(")) continue;
       if (!/from "\.(\.)?\/lib\/models"/.test(src)) found.push(path);
     }
     return found.sort();
   };
 
-  test("no NEW module invents a route table, and no stale one is left on the list once fixed", () => {
+  test("EXACTLY ONE shared table: no module resolves a model without importing it", () => {
     // The regression is not a wrong branch — it is a SECOND branch table, written next door, that
-    // nothing keeps in step. `llm.ts` is allowed its own `resolveModel` wrapper because it owns the
-    // Node-only `google/` branch, and it is required to delegate everything else.
-    expect(privateResolvers()).toEqual([...KNOWN_STALE_COPIES].sort());
+    // nothing keeps in step. `llm.ts` is allowed its own `resolveModel` WRAPPER because it owns the
+    // Node-only `google/` branch, and it satisfies this scan by importing the shared table and
+    // delegating everything else to it.
+    expect(privateResolvers()).toEqual(ALLOWED_PRIVATE_RESOLVERS);
   });
 
-  test("every stale copy is the SAME misroute, so the list is a debt and not a design", () => {
-    // If one of them ever grows its own branch, this stops being a deletion and becomes a merge.
-    for (const path of KNOWN_STALE_COPIES) {
-      expect(rawSources[path], `${path} is on the stale list but does not exist`).toBeTruthy();
-      expect(rawSources[path] ?? "", `${path} no longer holds the stale one-liner`).toMatch(
-        /const resolveModel = \(id: string\): LanguageModel => openai\(id\.replace\(/,
-      );
-    }
+  test("the naive one-liner exists NOWHERE under convex/ — not even in a module that also imports", () => {
+    // The scan above is satisfied by an import, so a module could import the shared table AND keep
+    // a stale private copy beside it. This one is blind to imports: it looks for the misroute
+    // itself — `openai(<id>.replace(...))` — which is what silently hands an `or/` route id to the
+    // OpenAI provider. This module is the one legitimate site of that expression.
+    const naive = Object.entries(rawSources)
+      .filter(([path]) => !isSharedTable(path))
+      .filter(([, raw]) => /\bopenai\(\s*\w+\.replace\(/.test(raw))
+      .map(([path]) => path)
+      .sort();
+    expect(naive).toEqual([]);
   });
 
-  test("the scan is not vacuous — it can see modules that DO resolve models", () => {
+  test("llm.ts keeps its `google/` wrapper and DELEGATES the rest to the shared table", () => {
+    // The one documented exception, pinned so it stays an exception: it may branch on the Node-only
+    // prefix, and everything else must go through this module.
+    const llm = rawSources["../llm.ts"] ?? "";
+    expect(llm, "convex/llm.ts is not in the raw-source glob").toBeTruthy();
+    expect(llm).toMatch(/resolveModel as resolveSharedModel.*from "\.\/lib\/models"/);
+    expect(llm).toMatch(
+      /if \(!id\.startsWith\(NODE_ONLY_MODEL_PREFIX\)\) return resolveSharedModel\(id\);/,
+    );
+  });
+
+  test("the scan is not vacuous — it can see the modules that DO resolve models", () => {
     const users = Object.keys(rawSources).filter(
       (path) => !path.endsWith(".test.ts") && (rawSources[path] ?? "").includes("resolveModel("),
     );
-    expect(users.length).toBeGreaterThan(1);
-    expect(users.some((p) => p.endsWith("/llm.ts"))).toBe(true);
-    expect(users.some((p) => p.endsWith("/knowledgeLlm.ts"))).toBe(true);
+    // Every module that was converted, by name: if one is deleted or renamed away the list above
+    // would go empty for the wrong reason and the first test would still pass.
+    for (const name of [
+      "/llm.ts",
+      "/knowledgeLlm.ts",
+      "/blueprint.ts",
+      "/onboarding.ts",
+      "/vaultDigest.ts",
+      "/vaultLlm.ts",
+      "/voiceDoc.ts",
+    ]) {
+      expect(
+        users.some((p) => p.endsWith(name)),
+        `no module resolving models at ${name}`,
+      ).toBe(true);
+    }
   });
 });

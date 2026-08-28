@@ -1,5 +1,20 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-08-28 (**`voiceDoc.ts` WAS SENDING AN UNKNOWN MODEL ID, AND ITS SEAM GUARD
+> HAD TO WIDEN WITH THE FIX.** The module held a private
+> `resolveModel = id => openai(id.replace(/^openai\//, ""))`; the regex is anchored on `^openai/` and
+> `DEFAULT_MODEL` is `"or/openai/gpt-4o-mini"`, so the OpenRouter ROUTE id passed through unchanged
+> and every live `reviewDocument` call named a model the OpenAI provider does not know. Deleted; the
+> module now imports the ONE route table at `convex/lib/models.ts`. That moves the credential this
+> producer actually spends from `OPENAI_API_KEY` to `OPENROUTER_API_KEY`, so `offlineSeamAvailable()`
+> — the guard that keeps the `SMOKE::docreview::` fabrication seam INERT wherever a model can be
+> called — now requires BOTH keys to be absent. A guard that still looked only at `OPENAI_API_KEY`
+> would have re-opened the seam on any deployment carrying the OpenRouter key alone; that is pinned
+> by its own test and the narrowed guard was run RED. Nothing about the voice/realtime plane changed:
+> `voiceToken.ts` still mints against `OPENAI_API_KEY` and that is correct — the Realtime API is
+> OpenAI's own and is not routed.)
+>
+
 > Last verified: 2026-08-14 (⚠ **SOURCE REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF, NOT A RUN.**
 > Reviewed by reading the working-tree diff of `voiceToken.ts` and `packages/voice/src/brief.ts`;
 > no voice session, mint, or brief was executed, and no live gate was re-run. Two behaviours moved.
@@ -823,14 +838,21 @@ consolidated list, not three. `reviewSession` also returns `threadId` so the cal
 transcript plus the SAME `buildDocDigest(...)` block the agent saw at the mint, so the review reads
 exactly what was discussed and inherits the fence and the cap. A first transcript turn beginning
 `SMOKE::docreview::<healthy|gaps|empty>` returns a deterministic fixture with **no model call**,
-which is what lets the entire retrieval → findings → row → `actOnGap` path run offline with no
-`OPENAI_API_KEY`. The `gaps` fixture deliberately carries three findings — one whose excerpt is
+which is what lets the entire retrieval → findings → row → `actOnGap` path run offline. The seam
+is gated on there being NO model credential at all — **neither `OPENAI_API_KEY` nor
+`OPENROUTER_API_KEY`** — because `reviewSession` is a PUBLIC `tenantAction` whose transcript is
+entirely client-supplied, so an ungated sentinel would let any authenticated user have a
+fabricated review persisted as a real `evaluations` row. Both keys, not just the OpenAI one:
+this producer resolves `DEFAULT_MODEL` (`or/openai/gpt-4o-mini`) through `convex/lib/models.ts`
+and therefore spends the OpenRouter credential. The `gaps` fixture deliberately carries three findings — one whose excerpt is
 lifted verbatim out of the seeded document, one with `excerpt: null`, one whose excerpt is nowhere
 in the document — so all three excerpt states are covered offline. A live call's priced usage is
 charged through `internal.guardrails.recordSpend` (the `intake.ts` idiom), so a review cannot spend
 off-budget.
 
-Verify with `pnpm --filter @pikar/backend test voiceDoc` (18 tests) and
+Verify with `cd packages/backend && pnpm vitest run voiceDoc` (31 tests — NOT
+`pnpm --filter ... test -- voiceDoc`: pnpm swallows the `--` and the filter never reaches
+vitest) and
 `node scripts/check-playbooks.mjs check`.
 
 ### Gap routing is code-owned

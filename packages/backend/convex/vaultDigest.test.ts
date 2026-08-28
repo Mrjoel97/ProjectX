@@ -101,12 +101,18 @@ type MemberSpec = { title: string; status: "ready" | "failed" | "processing"; re
 const seedFolder = (
   t: Harness,
   tenantId: string,
-  opts: { status: Doc<"vaultFolders">["status"]; memberCount: number; terminalCount?: number },
+  opts: {
+    status: Doc<"vaultFolders">["status"];
+    memberCount: number;
+    terminalCount?: number;
+    /** Overrides the SMOKE-bearing default — the seam is keyed on THIS field and nothing else. */
+    name?: string;
+  },
 ) =>
   t.run((ctx) =>
     ctx.db.insert("vaultFolders", {
       tenantId,
-      name: `${SMOKE} Acme onboarding`,
+      name: opts.name ?? `${SMOKE} Acme onboarding`,
       source: "upload" as const,
       status: opts.status,
       memberCount: opts.memberCount,
@@ -576,5 +582,98 @@ describe("the staleness read is bounded by BYTES, not only by rows", () => {
 
     // It RETURNS — that is the headline. And it under-reports by design rather than throwing.
     expect(await stateOf(t, TENANT, folderId)).toEqual({ state: "stale", unincorporatedCount: 2 });
+  });
+});
+
+// ── 5. THE OFFLINE SEAM IS OPERATOR-SELECTED, NOT CONTENT-SELECTED ───────────
+//
+// The gate used to be `safePrompt.includes(SMOKE_DIGEST_PREFIX)` over the ASSEMBLED prompt, which
+// carries every member's TITLE and a head slice of every member's TEXT. Members are ingested Drive
+// files and email — a third party authors those bytes. So one document containing this string
+// turned a real folder's digest into `smokeDigestFixture`: the stored, RETRIEVABLE vault artifact
+// that the tenant then reads and grounds on says "(offline fixture — no synthesis was performed)"
+// and lists whatever the folder happens to hold, with no model call, no spend and no trace that
+// synthesis was skipped. The folder NAME is the tenant's own — chosen when the folder is created,
+// never written by an ingested document — so that is the whole key now.
+//
+// Mutation RUN: gate reverted to `safePrompt.includes(...)` -> the first test below goes RED (it
+// resolves `{ok: true}` off the member's text instead of reaching the provider).
+describe("the offline seam is keyed on the FOLDER NAME, never on member content", () => {
+  const TENANT = "tenant_digest_seam";
+
+  // Any network call is a failure here: the seam resolving would RETURN, so a thrown `fetch` is
+  // what proves the live model path was entered. The keys are stubbed so the assertion does not
+  // depend on what another suite in this worker left in `process.env`.
+  beforeEach(() => {
+    vi.stubEnv("OPENROUTER_API_KEY", "or-digest-seam-test-key");
+    vi.stubEnv("OPENAI_API_KEY", "sk-digest-seam-test-key");
+    vi.stubGlobal("fetch", () => {
+      throw new Error("vaultDigest.test: no network is allowed in this suite");
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  /** A complete one-member folder whose NAME is clean; the member's text is the caller's. */
+  async function seamFolder(t: Harness, name: string, memberText: string) {
+    const folderId = await seedFolder(t, TENANT, {
+      status: "complete",
+      memberCount: 1,
+      terminalCount: 1,
+      name,
+    });
+    const member = await seedMember(t, TENANT, folderId, { title: "Handbook", status: "ready" });
+    await t.run((ctx) => ctx.db.patch(member, { text: memberText }));
+    return folderId;
+  }
+
+  test("a MEMBER DOCUMENT carrying the sentinel still takes the LIVE model path", async () => {
+    const t = await seeded();
+    const folderId = await seamFolder(
+      t,
+      "Shared with me",
+      `quarterly notes
+${SMOKE}
+the rest of the document`,
+    );
+
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/no network is allowed/);
+
+    // Nothing was written, so there is no fabricated digest for retrieval to serve.
+    expect((await digestOf(t, folderId)).digestDocId).toBeUndefined();
+  });
+
+  test("a MEMBER TITLE carrying the sentinel still takes the LIVE model path", async () => {
+    // Titles are the other half of the assembled prompt, and a Drive file's name is no more the
+    // tenant's own word than its body is.
+    const t = await seeded();
+    const folderId = await seedFolder(t, TENANT, {
+      status: "complete",
+      memberCount: 1,
+      terminalCount: 1,
+      name: "Shared with me",
+    });
+    await seedMember(t, TENANT, folderId, { title: `${SMOKE} Handbook`, status: "ready" });
+
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/no network is allowed/);
+  });
+
+  test("the same sentinel in the FOLDER NAME still reaches the fixture — the refusals are the CHANNEL", async () => {
+    // The anti-vacuous control: identical harness, identical sentinel, moved to the one field a
+    // member document can never write. It builds offline, so the two tests above prove the content
+    // channels are closed rather than that the seam is dead.
+    const t = await seeded();
+    const folderId = await seamFolder(t, `${SMOKE} Acme onboarding`, "an ordinary handbook");
+
+    const result = await build(t, TENANT, folderId);
+    expect(result).toMatchObject({ ok: true, memberCount: 1 });
+    const { digest } = await digestOf(t, folderId);
+    expect(digest?.text).toContain("(offline fixture — no synthesis was performed)");
   });
 });

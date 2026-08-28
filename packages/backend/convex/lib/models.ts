@@ -6,18 +6,26 @@
  * It was SEVEN copies of `const resolveModel = (id) => openai(id.replace(/^openai\//, ""))` — in
  * `llm.ts`, `blueprint.ts`, `onboarding.ts`, `vaultDigest.ts`, `vaultLlm.ts`, `voiceDoc.ts` and
  * (newest) `knowledgeLlm.ts` — and only `llm.ts`'s ever grew the `or/` branch. `@pikar/cost`'s
- * `DEFAULT_MODEL` is `"or/openai/gpt-4o-mini"`, so every stale copy hands an OPENROUTER ROUTE id
+ * `DEFAULT_MODEL` is `"or/openai/gpt-4o-mini"`, so every stale copy handed an OPENROUTER ROUTE id
  * straight to the OpenAI provider, which is a different endpoint with a different key:
- * `"or/openai/gpt-4o-mini".replace(/^openai\//,"")` is unchanged, so the request goes out with a
+ * `"or/openai/gpt-4o-mini".replace(/^openai\//,"")` is unchanged, so the request went out with a
  * model OpenAI has never heard of. The failure is silent where the caller catches (a planner
  * degrades to its fallback on EVERY production run, for ever) and a throw where it does not.
  * Nothing pinned the copies together, and every test drives the offline `SMOKE::` seam, so no test
  * could see it.
  *
- * `llm.ts` and `knowledgeLlm.ts` are converted. THE OTHER FIVE ARE STILL STALE AND STILL
- * MISROUTING — that is a live defect in five landed subsystems, not a knowledge-plane one, and it
- * needs its own change with its own verification. `lib/models.test.ts` holds the named list, fails
- * if a SIXTH copy appears, and fails again if a name is left there after its copy is gone.
+ * ALL SEVEN ARE NOW CONVERTED (the last five on 2026-08-28: business-blueprint derivation,
+ * onboarding extraction + the conversational turn, folder digests, the graph extractor / document
+ * classifier, and the voice-doc reviewer — every one of them live, and every one of them naming a
+ * model OpenAI does not know on every real call). `lib/models.test.ts` pins the END STATE: its
+ * allow-list is EMPTY, so a new module that resolves a model without importing this table is red,
+ * and so is a naive `openai(id.replace(...))` written anywhere under `convex/` — including inside a
+ * module that also imports this one.
+ *
+ * ⚠ A CONSEQUENCE WORTH KNOWING BEFORE YOU TOUCH A CALLER: converting a module moves the credential
+ * it actually spends from `OPENAI_API_KEY` to `OPENROUTER_API_KEY`. Any guard phrased as "this
+ * deployment has no model key" must check BOTH (see `voiceDoc.ts`'s `offlineSeamAvailable`, which
+ * keeps a public fabrication seam inert).
  *
  * ── WHY IT IS NOT SIMPLY EXPORTED FROM llm.ts ─────────────────────────────────────────────────
  *

@@ -17,7 +17,6 @@
 // `classifyDoc` (15.3-08) is the same shape one rung cheaper, with ONE deliberate asymmetry: it
 // swallows its own failures instead of throwing. See its handler for why.
 
-import { openai } from "@ai-sdk/openai";
 import { DOCUMENT_CLASSIFIER_SKILL, GRAPH_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
 import { DOC_TYPES, type DocType, isDocType } from "@pikar/core";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
@@ -25,18 +24,15 @@ import { scanText } from "@pikar/pii";
 // The `/constants` SUBPATH, not the barrel: the barrel re-exports the extractors, which pull xlsx
 // and fflate into this module's graph for two head-slice helpers.
 import { capClassifyText, capGraphText } from "@pikar/vault/constants";
-import { generateObject, jsonSchema, type LanguageModel } from "ai";
+import { generateObject, jsonSchema } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { internalAction, internalQuery } from "./_generated/server";
+import { resolveModel } from "./lib/models";
 
 // Per-call wall-clock ceiling (mirrors llm.ts). One retry budget: SDK maxRetries:1.
 const CALL_TIMEOUT_MS = 45_000;
-
-// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel (mirrors
-// llm.ts resolveModel — the @ai-sdk/openai provider wants the bare name + reads OPENAI_API_KEY).
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 // Extractor output contract (RESEARCH Code Example): typed entities + relationships + call cost.
 // `nodes[].name`/`edges` are surface forms/labels — NEVER raw document text (§4).
