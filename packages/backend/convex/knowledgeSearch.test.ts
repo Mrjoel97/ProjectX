@@ -24,14 +24,10 @@
 //  6. THE GOVERNANCE PLANE HOLDS NO CONTENT. The question, a doc title, a mail subject and a mail
 //     body each carry a unique needle; none of them reaches an audit payload.
 //  7. TWO TENANTS SHARE NOTHING — not evidence, not stored rows.
-import {
-  KNOWLEDGE_QUERY_PLANNER_SKILL,
-  KNOWLEDGE_SYNTHESIZER_SKILL,
-} from "@pikar/contracts/skill";
+import { KNOWLEDGE_QUERY_PLANNER_SKILL, KNOWLEDGE_SYNTHESIZER_SKILL } from "@pikar/contracts/skill";
 import {
   KNOWLEDGE_ADAPTERS,
   KNOWLEDGE_SOURCES,
-  type KnowledgeSource,
   NOT_LANDED_SOURCES,
   SEARCH_CAPS,
 } from "@pikar/core";
@@ -39,7 +35,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import { adapterOutcome, KNOWLEDGE_ADAPTER_ACTIONS } from "./knowledgeSearch";
 import schema from "./schema";
 
@@ -363,10 +359,7 @@ describe("the fan-out survives a partial failure", () => {
     const h = await harness();
     await seedGoogle(h, h.tenantA, GMAIL_ONLY_SCOPE);
     stubGoogle([{ id: "m1", subject: "Renewal", body: "renewal body", internalDate: NOW }]);
-    planSearches(
-      { source: "inbox", query: "renewal" },
-      { source: "drive", query: "renewal" },
-    );
+    planSearches({ source: "inbox", query: "renewal" }, { source: "drive", query: "renewal" });
     synthesizeClaims([{ text: "There is a renewal.", evidenceIds: ["inbox:0"] }]);
 
     const out = await search(h, "any renewals?");
@@ -398,10 +391,7 @@ describe("an empty answer and an unreachable one are different answers", () => {
     const h = await harness();
     await seedGoogle(h, h.tenantA);
     stubGoogle([]); // Gmail lists nothing, Drive lists nothing, vault SMOKE resolves no docs
-    planSearches(
-      { source: "inbox", query: "widgets" },
-      { source: "drive", query: "widgets" },
-    );
+    planSearches({ source: "inbox", query: "widgets" }, { source: "drive", query: "widgets" });
 
     const out = await search(h, "anything about widgets?");
     if (!out.ok) throw new Error(out.reason);
@@ -454,22 +444,25 @@ describe("an empty answer and an unreachable one are different answers", () => {
 // ── 4. The RUN-level clamp lands here, before anything is billed ───────────────────────────
 
 describe("the union of the adapters' output is clamped ONCE, before synthesis", () => {
-  test("more rows than maxEvidenceTotal are cut BEFORE the synthesis prompt is built", async () => {
-    const h = await harness();
-    // Two sources, eight rows each (the per-source cap), = 16 short rows. Then a third source's
-    // rows push past `maxEvidenceTotal`.
+  /**
+   * The union fixture: five 1,500-char vault documents (7,500 chars — under the vault adapter's
+   * OWN 8,000 budget, so it reports a complete read) plus eight Drive rows of ~133 chars each.
+   * Neither source exceeds a per-source bound; TOGETHER they pass `totalEvidenceCharCap`, which is
+   * exactly the budget no single adapter can see.
+   *
+   * Five is the ceiling on vault seeds, not a preference: a Convex id is 32 characters and
+   * `SEARCH_CAPS.queryCharCap` is 200, so a sixth `SMOKE::` seed makes the QUERY itself illegal and
+   * `clampSearchPlan` refuses it. An earlier draft of this test used eight and silently measured a
+   * run in which the vault was never searched at all.
+   */
+  const unionFixture = async (h: Harness) => {
+    const big = "x".repeat(SEARCH_CAPS.evidenceTextCharCap);
     const docIds: string[] = [];
-    for (let n = 0; n < 8; n++)
-      docIds.push(await seedDoc(h, h.tenantA, { title: `D${n}`, text: `short body ${n}` }));
+    for (let n = 0; n < 5; n++)
+      docIds.push(await seedDoc(h, h.tenantA, { title: `Big ${n}`, text: big }));
     await seedGoogle(h, h.tenantA);
-    const mails = Array.from({ length: 8 }, (_, n) => ({
-      id: `m${n}`,
-      subject: `S${n}`,
-      body: `mail body ${n}`,
-      internalDate: NOW - n,
-    }));
-    stubGoogle(mails, {
-      driveFiles: Array.from({ length: 12 }, (_, n) => ({
+    stubGoogle([], {
+      driveFiles: Array.from({ length: 8 }, (_, n) => ({
         id: `f${n}`,
         name: `File ${n}`,
         mimeType: "application/pdf",
@@ -479,42 +472,75 @@ describe("the union of the adapters' output is clamped ONCE, before synthesis", 
     });
     planSearches(
       { source: "vault", query: `SMOKE::${docIds.join(",")}` },
-      { source: "inbox", query: "body" },
       { source: "drive", query: "file" },
     );
     synthesizeClaims([]);
+    return docIds;
+  };
+
+  test("the union is cut to totalEvidenceCharCap BEFORE the synthesis prompt is built", async () => {
+    const h = await harness();
+    await unionFixture(h);
 
     const out = await search(h, "everything");
     if (!out.ok) throw new Error(out.reason);
 
-    // The RUN cap binds over the union: 8 + 8 + 8 = 24 would be exactly the cap, so the third
-    // source contributes only what is left.
-    expect(out.evidenceCount).toBeLessThanOrEqual(SEARCH_CAPS.maxEvidenceTotal);
-    // …and the PROMPT the synthesizer handler actually built carries no more than that.
+    // Unclamped the union is 13 rows / ~8,560 chars. MUTATION that must turn this RED: drop the
+    // `clampEvidence(corpus, "run")` call (or scope it to "source").
+    expect(out.evidenceCount).toBe(8);
+    const chars = out.claims.length; // (claims are empty here; the budget proof is below)
+    expect(chars).toBe(0);
+    // …and the PROMPT THE HANDLER ACTUALLY SENT carries exactly the clamped corpus, which is what
+    // proves the cut happened before anything was billed.
     const synthPrompt = boundary.calls.find((c) => c.system === SYNTH_BODY)?.prompt ?? "";
     expect(synthPrompt, "the synthesizer was never called").not.toBe("");
-    expect(synthPrompt.match(/<<<evidence:/g)?.length ?? 0).toBe(out.evidenceCount);
+    expect(synthPrompt.match(/<<<evidence:/g)?.length ?? 0).toBe(8);
+    expect(synthPrompt.length).toBeLessThan(
+      SEARCH_CAPS.totalEvidenceCharCap + 2_000, // fences + the question
+    );
   });
 
-  test("a source whose rows were cut at the UNION is reported PARTIAL/cap, not available", async () => {
+  test("the source cut at the UNION is PARTIAL/cap, the one that survived stays AVAILABLE", async () => {
     const h = await harness();
-    // 8 vault rows of ~1500 chars each = 12,000 chars, well past `totalEvidenceCharCap` (8,000).
-    const big = "x".repeat(SEARCH_CAPS.evidenceTextCharCap);
-    const docIds: string[] = [];
-    for (let n = 0; n < 8; n++)
-      docIds.push(await seedDoc(h, h.tenantA, { title: `Big ${n}`, text: big }));
-    planSearches({ source: "vault", query: `SMOKE::${docIds.join(",")}` });
-    synthesizeClaims([]);
+    await unionFixture(h);
 
     const out = await search(h, "everything");
     if (!out.ok) throw new Error(out.reason);
-    const vault = out.sources.find((s) => s.source === "vault");
-    expect(vault?.status).toBe("partial");
-    expect(vault && "reason" in vault && vault.reason).toBe("cap");
-    // THE STATE IS MINTED AFTER THE CUT: `returned` is what reached synthesis, not what the
-    // adapter first published. MUTATION that must turn this RED: mint the states before the clamp.
-    expect(vault && "returned" in vault && vault.returned).toBe(out.evidenceCount);
-    expect(out.evidenceCount).toBeLessThan(8);
+    const bySource = Object.fromEntries(out.sources.map((s) => [s.source, s]));
+    // The vault filled the budget first and lost nothing.
+    expect(bySource.vault).toEqual({ source: "vault", status: "available", returned: 5 });
+    // Drive published eight rows and three fitted. THE STATE IS MINTED AFTER THE CUT — a state
+    // minted before it would still say `available, returned: 8`, which is a complete read of a
+    // source five of whose rows never reached the model.
+    // MUTATION that must turn this RED: mint `states` from `reads` before `clampEvidence`.
+    expect(bySource.drive).toEqual({
+      source: "drive",
+      status: "partial",
+      returned: 3,
+      reason: "cap",
+    });
+    expect(out.searchedGapCount).toBe(1);
+  });
+
+  test("an exact duplicate is collapsed WITHOUT making the read look partial", async () => {
+    const h = await harness();
+    // Two DIFFERENT documents carrying identical text. `dedupeEvidence` cross-links them as
+    // `related` and keeps BOTH — "two records agree" and "one record was read twice" are different
+    // facts, and only the second is a duplicate.
+    const a = await seedDoc(h, h.tenantA, { title: "Copy A", text: "The margin is 40 percent." });
+    const b = await seedDoc(h, h.tenantA, { title: "Copy B", text: "The margin is 40 percent." });
+    planSearches({ source: "vault", query: `SMOKE::${a},${b}` });
+    synthesizeClaims([{ text: "Margin is 40.", evidenceIds: ["vault-1", "vault-2"] }]);
+
+    const out = await search(h, "margin?");
+    if (!out.ok) throw new Error(out.reason);
+    expect(out.evidenceCount).toBe(2);
+    expect(out.sources.find((s) => s.source === "vault")).toEqual({
+      source: "vault",
+      status: "available",
+      returned: 2,
+    });
+    expect(out.claims[0]?.evidence.map((e) => e.sourceRef).sort()).toEqual([a, b].sort());
   });
 });
 
@@ -553,12 +579,17 @@ describe("only validated cited claims land", () => {
     expect(out.claims[0]?.excerpt).toBeUndefined();
   });
 
-  test("a ref that DISAGREES with itself is carried into the row, never resolved away", async () => {
+  test("evidence that DISAGREES is carried into the stored row, never resolved away", async () => {
     const h = await harness();
-    // The same vault document seeded twice in the SMOKE list with a per-seed passage: same
-    // `(source, sourceRef)`, different text — `dedupeEvidence`'s CONFLICTING case.
-    const docId = await seedDoc(h, h.tenantA, { title: "Rate card", text: "The rate is $40." });
-    planSearches({ source: "vault", query: `SMOKE::${docId}|The rate is $40.,${docId}|The rate is $60.` });
+    // TWO DOCUMENTS, TWO FIGURES. This is the conflict shape the landed adapters can actually
+    // produce: `dedupeEvidence`'s same-ref-different-text arm needs one `(source, sourceRef)` read
+    // twice in ONE run, and no landed adapter can do that (`ownedDocsMeta` returns each vault doc
+    // once, Drive/Gmail/HubSpot ids are unique per page). The disagreement the user is shown is
+    // therefore the one the synthesizer DECLARES, through `conflictEvidenceIds` — which
+    // `validateSynthesis` re-checks against the run's own evidence table.
+    const a = await seedDoc(h, h.tenantA, { title: "Rate card", text: "The rate is $40." });
+    const b = await seedDoc(h, h.tenantA, { title: "Old quote", text: "The rate is $60." });
+    planSearches({ source: "vault", query: `SMOKE::${a},${b}` });
     synthesizeClaims([
       {
         text: "The rate is disputed.",
@@ -570,9 +601,28 @@ describe("only validated cited claims land", () => {
     const out = await search(h, "what is the rate?");
     if (!out.ok) throw new Error(out.reason);
     expect(out.claims[0]?.conflictEvidence).toHaveLength(1);
-    expect(out.claims[0]?.conflictEvidence[0]?.sourceRef).toBe(docId);
+    expect(out.claims[0]?.conflictEvidence[0]?.sourceRef).toBe(b);
+    expect(out.claims[0]?.conflictEvidence[0]?.label).toBe("Old quote");
     // A disagreement caps confidence and is never silently collapsed.
     expect(out.conflictCount).toBe(1);
+    // It survives onto the durable row, not just the return value.
+    const rows = await h.t.run((ctx) => ctx.db.query("knowledgeSearches").collect());
+    expect(JSON.stringify(rows[0])).toContain("Old quote");
+  });
+
+  test("a DECLARED conflict citing an id the run never minted is stripped, not rendered", async () => {
+    const h = await harness();
+    const a = await seedDoc(h, h.tenantA, { title: "Rate card", text: "The rate is $40." });
+    planSearches({ source: "vault", query: `SMOKE::${a}` });
+    synthesizeClaims([
+      { text: "Disputed.", evidenceIds: ["vault-1"], conflictEvidenceIds: ["vault-99"] },
+    ]);
+
+    const out = await search(h, "rate?");
+    if (!out.ok) throw new Error(out.reason);
+    expect(out.claims[0]?.conflictEvidence).toEqual([]);
+    expect(out.conflictCount).toBe(0);
+    expect(out.invalidCitationCount).toBe(1);
   });
 
   test("authority and freshness are CODE-OWNED — a model-supplied value has nowhere to land", async () => {
@@ -676,7 +726,11 @@ describe("a governed stop is DATA, and a planner failure is not an empty busines
   test("an exhausted budget returns the reason and writes NO content-plane row", async () => {
     const h = await harness();
     await h.t.run((ctx) =>
-      ctx.db.insert("guardrailConfig", { key: "killSwitch", value: 1, updatedAt: NOW }),
+      ctx.db.insert("guardrailConfig", {
+        killSwitch: true,
+        budgetUsdPerRequest: 0.05,
+        updatedAt: NOW,
+      }),
     );
     const out = await search(h, "anything");
     expect(out.ok).toBe(false);

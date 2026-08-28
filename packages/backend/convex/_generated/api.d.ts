@@ -52,6 +52,7 @@ import type * as intakeDb from "../intakeDb.js";
 import type * as invites from "../invites.js";
 import type * as knowledgeExternalSources from "../knowledgeExternalSources.js";
 import type * as knowledgeLlm from "../knowledgeLlm.js";
+import type * as knowledgeSearch from "../knowledgeSearch.js";
 import type * as knowledgeVaultDrive from "../knowledgeVaultDrive.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
 import type * as lib_env from "../lib/env.js";
@@ -175,6 +176,7 @@ declare const fullApi: ApiFromModules<{
   invites: typeof invites;
   knowledgeExternalSources: typeof knowledgeExternalSources;
   knowledgeLlm: typeof knowledgeLlm;
+  knowledgeSearch: typeof knowledgeSearch;
   knowledgeVaultDrive: typeof knowledgeVaultDrive;
   "lib/allowlist": typeof lib_allowlist;
   "lib/env": typeof lib_env;

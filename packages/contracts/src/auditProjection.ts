@@ -135,6 +135,37 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "guardrail.blocked": ["requestId", "reason"],
   "intake.extracted": ["artifactId", "kind", "charCount"],
   "intake.extraction_failed": ["artifactId", "kind", "reason"],
+  // Phase 29 (KNOW-01) — the ONE governance event a unified knowledge search writes, and every key
+  // here is a ref, a hash, a count, a boolean or a closed enum. What is deliberately ABSENT is the
+  // interesting half: the question (only `questionHash`), the summary, any claim text, label,
+  // excerpt, sourceRef, subject, sender or file name — and the planner's REJECTED SOURCE NAMES,
+  // which are model-authored strings, so only `rejectedPlanCount` crosses.
+  // `unavailableReasons` is an array of closed `UnavailableReason` values, ≤ 5 members
+  // (`KNOWLEDGE_SOURCES.length`), all `[a-z_]` — well inside `MAX_REF_ARRAY_LENGTH` and `SAFE_REF`.
+  "knowledge.searched": [
+    "searchRunRef",
+    "questionHash",
+    "requestedSources",
+    "availableSources",
+    "partialSources",
+    "unavailableSources",
+    "unavailableReasons",
+    "evidenceCount",
+    "claimCount",
+    "unsupportedCount",
+    "conflictCount",
+    "inventedCitationCount",
+    "confidence",
+    "durationMs",
+    "collapsedCount",
+    "dedupeConflictCount",
+    "rejectedPlanCount",
+    "adapterCrashCount",
+    "plannerFallback",
+    "planRunRef",
+    "synthRunRef",
+    "plannerSkillVersion",
+  ],
   "llm.cache_hit": ["requestId", "safeTextHash", "model", "stage"],
   "llm.called": ["model", "skillVersion", "stage"],
   "llm.fallback": ["fromModel", "toModel", "errorName", "stage"],

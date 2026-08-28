@@ -1,5 +1,22 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-28 (29-06 — **ONE NEW AUDIT EVENT: `knowledge.searched`**, written by
+> `convex/knowledgeSearch.ts` and by nothing else. `actor: "system"`, `correlationId` = the
+> coordinator's own run uuid. The payload is `@pikar/core`'s `redactedSearchEvent` projection plus
+> eight run refs/counts, and it is registered in `AUDIT_VIEWER_EVENTS` with all 22 keys — every one
+> a ref, a hash, a count, a boolean or a closed enum. **The absences are the contract**: the
+> question is present ONLY as `questionHash`, and there is no summary, claim text, label, excerpt,
+> `sourceRef`, subject, sender or file name — those live on the tenant's own `knowledgeSearches`
+> content row. The planner's REJECTED SOURCE NAMES are model-authored strings, so only
+> `rejectedPlanCount` crosses. `unavailableReasons` is the one array: closed `UnavailableReason`
+> values, at most `KNOWLEDGE_SOURCES.length` = 5 members, well inside `MAX_REF_ARRAY_LENGTH`.
+> Enforced by a behavioural test — five unique needles are planted in the question, a doc title, a
+> doc body, a mail subject and a mail body, and the serialized payload is asserted to contain none
+> of them — plus static payload scans in `llmRedaction.test.ts`. NO dead-letter, telemetry or
+> `agentSteps` write: `telemetry.writeTerminal` is hard-bound to `requestId: v.id("requests")` and a
+> search has no request row, so the measurement rides this audit event instead and that binding was
+> deliberately NOT loosened.)
+>
 > Last verified: 2026-08-28 (MERGE of the Phase 28 and Phase 29 lanes — both notes below stand;
 > five tables were classified between them, none of which changed the insert-only rule, the
 > dead-letter path or the WORM export.)
