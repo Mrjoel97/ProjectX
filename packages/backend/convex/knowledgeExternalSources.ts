@@ -33,6 +33,15 @@
 //     `knowledgeExternalSources.test.ts` scans for. The one refs-only `knowledge.searched` event
 //     belongs to the plan-29-06 coordinator, which sees counts and never content.
 //
+//  4. THE TENANT IS AN ARGUMENT, WHICH IS ONLY SAFE BECAUSE NOTHING PUBLIC LIVES HERE. Every
+//     reader is an `internalAction` taking `tenantId: v.string()` — the landed
+//     `hubspotReadForTenant` / `vaultGroundHydrated` convention, needed because the plan-29-06
+//     coordinator runs without a live identity. The argument IS the tenant scope, so the
+//     coordinator MUST pass `ctx.tenantId` from a tenant wrapper and never a caller-supplied
+//     value, and NO function in this module may ever become a `tenantAction`/`action`/`query` —
+//     that would let any caller name any tenant. `knowledgeExternalSources.test.ts` scans both
+//     adapter modules for exactly that, because nothing else records it.
+//
 // THE KNOWN BOUNDARY, STATED RATHER THAN PAPERED OVER: the LANDED toolless firewall (the static
 // scans in `llmRedaction.test.ts`) is BODY-scoped, not CONTENT-scoped. Sender display names and
 // subject lines are deliberately admitted into today's tool-bearing briefing loop. This module is
@@ -50,12 +59,13 @@ import {
   unavailableRead,
   validateSourceRef,
 } from "@pikar/core";
-import { formatMoneyAmount, type Projection } from "@pikar/revenue";
+import type { Projection } from "@pikar/revenue";
 import type { HubSpotDeal, HubSpotRow } from "@pikar/revenue/providers/hubspot";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-import { readHubSpotDataset } from "./hubspot";
+import { DEFAULT_WINDOW_DAYS, readHubSpotDataset } from "./hubspot";
+import type { AccessTokenResult } from "./hubspotAuth";
 
 /**
  * The external knowledge sources THIS module serves, mapped to the action that serves each.
@@ -178,7 +188,16 @@ const CRM_ENVIRONMENTS = ["production", "sandbox"] as const;
  * and the search plane's `reason` is a code-owned enum that reaches a stored row (CLAUDE.md §4).
  * An unrecognised value falls through to `provider_error` — fail closed, never "available".
  */
-const CRM_UNAVAILABLE_REASON: Readonly<Record<string, UnavailableReason>> = {
+/**
+ * DERIVED FROM `ensureHubSpotAccessToken`'S OWN RETURN TYPE, so a member that is added, removed or
+ * renamed there is a COMPILE ERROR here. It was `Record<string, UnavailableReason>`, which the
+ * compiler cannot see a gap in: deleting the `reauth` entry left both the suite and `tsc` green,
+ * and a dead refresh was then reported as the transient `provider_error` instead of asking the
+ * user to reconnect.
+ */
+type CrmUnavailableCause = Extract<AccessTokenResult, { ok: false }>["reason"];
+
+const CRM_UNAVAILABLE_REASON: Readonly<Record<CrmUnavailableCause, UnavailableReason>> = {
   not_connected: "not_connected",
   // A revoked grant and a dead refresh both need the user to reconnect. `refresh_failed` is
   // deliberately NOT used: it reads as transient, and neither of these is.
@@ -189,18 +208,35 @@ const CRM_UNAVAILABLE_REASON: Readonly<Record<string, UnavailableReason>> = {
   provider_error: "provider_error",
 };
 
+/** Fail CLOSED at runtime AND at compile time: the record is exhaustive over the token verb's
+ *  union, and a value from anywhere else still lands on `provider_error`, never on "available". */
+const crmReason = (because: string): UnavailableReason =>
+  (CRM_UNAVAILABLE_REASON as Readonly<Record<string, UnavailableReason | undefined>>)[because] ??
+  "provider_error";
+
 const isoDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 /**
- * One deal as a sentence, composed ENTIRELY from structured fields. Ids and stage keys are opaque
- * HubSpot keys, never labels — HubSpot's label for a stage is free text this rail never requests.
+ * One deal as a sentence, composed ENTIRELY from structured fields — and WITHOUT THE MONEY.
+ *
+ * **THE AMOUNT IS THE RESTRICTED FIELD AND IT IS NOT IN FREE TEXT.** `@pikar/revenue` classifies a
+ * HubSpot deal amount as `supplemental` — "colour only ... Never a total" — and
+ * `hubspotProjection` hardcodes that authority so no caller can promote it. Interpolating the
+ * figure into prose handed the model everything it needs to sum a pipeline total and cite it: the
+ * constraint restated in a comment and dropped in code, which is this repo's named
+ * provenance-laundering shape. The ABSENCE IS STATED rather than silent, so "no amount here" can
+ * never be read as "zero".
+ *
+ * ponytail: no amount at all, rather than a structured non-summable figure field. Ceiling — a
+ * knowledge answer cannot say what a deal is worth. Upgrade path, and it is not one line: a typed
+ * `Evidence.figure` the synthesizer's schema has no arithmetic for, plus a claim-level rule in
+ * `validateSynthesis` refusing a claim that cites more than one of them. That is a design, and it
+ * belongs with the revenue rail rather than smuggled in through prose.
+ *
+ * THE WINDOW IS STATED FOR THE SAME REASON: `readHubSpotDataset` filters to `DEFAULT_WINDOW_DAYS`,
+ * so this row is one of the RECENT deals and never one of all of them.
  */
 function dealText(deal: HubSpotDeal): string {
-  const amount =
-    deal.amount.state === "known"
-      ? `${formatMoneyAmount(deal.amount.value)} ${deal.amount.value.currency}`
-      : // A deal with no amount, or an amount with no currency, is UNKNOWN — never zero.
-        "an unrecorded amount";
   // A provider key is only usable as a key if it is SHAPED like one. Prose in a stage field is
   // content, not an identifier, and content from a provider does not belong in a code-composed
   // sentence — it is dropped rather than truncated, because half a sentence of somebody else's
@@ -208,13 +244,17 @@ function dealText(deal: HubSpotDeal): string {
   const key = (value: string | null | undefined): string =>
     typeof value === "string" && validateSourceRef(value).ok ? value : "unknown";
   const parts = [
-    `HubSpot deal ${deal.ref.id} is worth ${amount}`,
+    `HubSpot deal ${deal.ref.id}`,
     `pipeline ${key(deal.pipelineId)}`,
     `stage ${key(deal.stageId)}`,
     `created ${isoDay(deal.createdAt)}`,
     deal.closeAt === null ? "no close date" : `closing ${isoDay(deal.closeAt)}`,
   ];
-  return `${parts.join(", ")}.`;
+  return (
+    `${parts.join(", ")}. Pikar does not carry deal amounts into a knowledge answer: a HubSpot ` +
+    `figure is colour, not the books. This read covers deals created in the last ` +
+    `${DEFAULT_WINDOW_DAYS} days only.`
+  );
 }
 
 const isDeal = (row: HubSpotRow): row is HubSpotDeal => "stageId" in row;
@@ -245,7 +285,7 @@ export const readCrmKnowledge = internalAction({
     }
     if (projection === null || projection.state === "unavailable") {
       const because = projection === null ? "not_connected" : projection.because;
-      return unavailableRead("crm-facts", CRM_UNAVAILABLE_REASON[because] ?? "provider_error");
+      return unavailableRead("crm-facts", crmReason(because));
     }
 
     const retrievedAt = Date.now();
@@ -269,11 +309,13 @@ export const readCrmKnowledge = internalAction({
         // A code-composed label. There is no vendor string to use even if we wanted one.
         label: `Deal ${deal.ref.id}`,
         text: dealText(deal),
-        // `system_of_record` from the code-owned table. NOT `@pikar/revenue`'s `supplemental` —
-        // that authority answers "may this figure be summed into a revenue total" (no, it may
-        // not), which is a different question from "how much may this be believed as a fact about
-        // the pipeline". The two vocabularies are not interchangeable and are not merged.
-        authority: authorityFor("crm-facts", {}),
+        // THE PROVIDER LAYER'S OWN AUTHORITY IS HONOURED, NOT OVERRIDDEN. `hubspotProjection`
+        // hardcodes `supplemental` so no caller can promote a deal into accounting authority; this
+        // adapter discarded it and re-stamped every row `system_of_record`, the second-strongest
+        // class, so a claim built on HubSpot read back at nearly the strength of the books. The
+        // two vocabularies are still separate — `authorityFor` relates them in ONE direction, as a
+        // downgrade, and can never raise a source above its code-owned class.
+        authority: authorityFor("crm-facts", { providerAuthority: projection.meta.authority }),
         sourceUpdatedAt: deal.updatedAt ?? deal.createdAt,
         retrievedAt,
       });
@@ -283,9 +325,14 @@ export const readCrmKnowledge = internalAction({
     // presenting eight of two hundred as a complete read of the pipeline is the same lie as
     // presenting an unreachable CRM as an empty one. A projection that is `partial` for a reason
     // that is NOT its own cap is a provider problem, and `settleRead` ranks that above a cap.
+    // A WINDOWED READ IS A PARTIAL READ, ALWAYS. `readHubSpotDataset` filters deals to
+    // `DEFAULT_WINDOW_DAYS` and this adapter never passes a `windowDays`, so the default always
+    // applies — and a question about deals older than that was getting a complete-LOOKING answer
+    // built from a slice, with nothing naming the coverage that had been dropped. `cap` is the
+    // honest reason: the window is our own bound working as designed, not a provider failure.
     return settleRead("crm-facts", evidence, {
       providerError: dropped > 0 || (projection.state === "partial" && !projection.meta.capped),
-      cap: projection.state === "partial" || ranked.length > evidence.length,
+      cap: true,
     });
   },
 });

@@ -23,6 +23,7 @@ import {
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
+import { DEFAULT_WINDOW_DAYS } from "./hubspot";
 import { EXTERNAL_KNOWLEDGE_READERS } from "./knowledgeExternalSources";
 import schema from "./schema";
 
@@ -593,7 +594,7 @@ describe("the CRM adapter maps the LANDED HubSpot projection honestly", () => {
     expect(out.evidence[0]?.text).toContain("pipeline default, stage closedwon");
   });
 
-  test("a connected CRM is AVAILABLE, with system_of_record authority and CODE-COMPOSED text", async () => {
+  test("a connected CRM read is PARTIAL/cap, carries NO money, and honours HubSpot's OWN authority", async () => {
     const h = await crmHarness();
     await connect(h, "asA");
     stubProvider(() => dealPage(["5001"]));
@@ -603,21 +604,36 @@ describe("the CRM adapter maps the LANDED HubSpot projection honestly", () => {
       query: "open deals this quarter",
     });
 
-    expect(out.state).toEqual({ status: "available", source: "crm-facts", returned: 1 });
+    // A WINDOWED READ IS A PARTIAL READ. `readHubSpotDataset` filters to `DEFAULT_WINDOW_DAYS` and
+    // this adapter never passes a `windowDays`, so a question about older deals used to get a
+    // complete-LOOKING answer built from a slice, with nothing naming the dropped coverage.
+    expect(out.state).toEqual({
+      status: "partial",
+      source: "crm-facts",
+      returned: 1,
+      reason: "cap",
+    });
     // The whole evidence row, as a VALUE. Every character of `text` is composed here from ids,
-    // stage keys, a money figure and timestamps — there is no provider string in it.
+    // stage keys and timestamps — there is no provider string and NO MONEY FIGURE in it.
     expect(out.evidence[0]).toEqual({
       evidenceId: "crm-facts:0",
       source: "crm-facts",
       sourceRef: "hubspot:deal:5001",
       label: "Deal 5001",
       text:
-        "HubSpot deal 5001 is worth 1250.50 USD, pipeline default, stage appointmentscheduled, " +
-        `created ${new Date(DEAL_CREATED).toISOString().slice(0, 10)}, no close date.`,
-      authority: "system_of_record",
+        "HubSpot deal 5001, pipeline default, stage appointmentscheduled, " +
+        `created ${new Date(DEAL_CREATED).toISOString().slice(0, 10)}, no close date. ` +
+        "Pikar does not carry deal amounts into a knowledge answer: a HubSpot figure is colour, " +
+        "not the books. This read covers deals created in the last 90 days only.",
+      // NOT `system_of_record`. `hubspotProjection` hardcodes `supplemental` — "colour only ...
+      // Never a total" — so no caller can promote a deal into accounting authority, and this
+      // adapter used to discard that and re-stamp the row at the second-strongest class.
+      authority: "correspondence",
       sourceUpdatedAt: DEAL_UPDATED,
       retrievedAt: expect.any(Number),
     });
+    // LITERAL 90, beside the constant rather than read from it.
+    expect(DEFAULT_WINDOW_DAYS).toBe(90);
   });
 
   test("NO VENDOR FREE TEXT SURVIVES — not even when the provider volunteers it", async () => {
@@ -642,17 +658,83 @@ describe("the CRM adapter maps the LANDED HubSpot projection honestly", () => {
     }
   });
 
-  test("an unrecorded amount is UNKNOWN, never zero", async () => {
+  test("THE MONEY FIGURE IS NOT IN THE EVIDENCE TEXT, and its absence is STATED", async () => {
+    // The restricted field. It used to be interpolated verbatim into prose carrying (then) the
+    // second-strongest authority class, which is everything a model needs to sum a pipeline total
+    // and cite it — the exact promotion `hubspotProjection`'s hardcoded `supplemental` exists to
+    // prevent. Silence would be worse than absence: "no amount here" must not read as "zero".
     const h = await crmHarness();
     await connect(h, "asA");
-    stubProvider(() => dealPage(["5001"], { amount: null, deal_currency_code: null }));
+    stubProvider(() => dealPage(["5001"], { amount: "987654.32", deal_currency_code: "USD" }));
 
     const out = await h.t.action(internal.knowledgeExternalSources.readCrmKnowledge, {
       tenantId: h.a,
       query: "deals",
     });
-    expect(out.evidence[0]?.text).toContain("an unrecorded amount");
-    expect(out.evidence[0]?.text).not.toContain("0.00");
+    const text = out.evidence[0]?.text ?? "";
+    expect(text).not.toContain("987654");
+    expect(text).not.toContain("987,654");
+    expect(text).not.toContain("USD");
+    expect(text).not.toContain("0.00");
+    expect(text).toContain("does not carry deal amounts");
+    // The figure is not anywhere else in the result either — not a label, not a ref, not a state.
+    expect(JSON.stringify(out)).not.toContain("987654");
+  });
+
+  test("evidence ids are UNIQUE per row — a duplicate silently DROPS evidence downstream", async () => {
+    // `validateSynthesis` builds `new Map(evidence.map((e) => [e.evidenceId, e]))`, so two rows
+    // sharing an id collapse to the LAST one and an excerpt is then verified against the wrong
+    // record. Collapsing the per-row index to a constant left all 30 adapter tests green.
+    const h = await crmHarness();
+    await connect(h, "asA");
+    stubProvider(() => dealPage(["5001", "5002", "5003"]));
+
+    const out = await h.t.action(internal.knowledgeExternalSources.readCrmKnowledge, {
+      tenantId: h.a,
+      query: "deals",
+    });
+    expect(out.evidence.map((e) => e.evidenceId)).toEqual([
+      "crm-facts:0",
+      "crm-facts:1",
+      "crm-facts:2",
+    ]);
+    expect(new Set(out.evidence.map((e) => e.evidenceId)).size).toBe(out.evidence.length);
+  });
+
+  test("the surviving deals are the MOST RECENT ones — which 8 survive is the answer", async () => {
+    // Only `maxEvidencePerSource` deals are admitted and the rest are dropped behind a
+    // `partial/cap`, so WHICH ones survive is a substantive answer-quality property. Deleting the
+    // sort left the suite green, and the code comment claiming recency with it.
+    const h = await crmHarness();
+    await connect(h, "asA");
+    // Nine deals, returned OLDEST-first, each an hour apart. `d8` is the newest.
+    stubProvider(() => ({
+      status: 200,
+      body: {
+        results: Array.from({ length: 9 }, (_, i) => ({
+          id: `d${i}`,
+          createdAt: new Date(DEAL_CREATED).toISOString(),
+          updatedAt: new Date(DEAL_UPDATED - (8 - i) * 3_600_000).toISOString(),
+          properties: { dealstage: "appointmentscheduled", pipeline: "default" },
+        })),
+      },
+    }));
+
+    const out = await h.t.action(internal.knowledgeExternalSources.readCrmKnowledge, {
+      tenantId: h.a,
+      query: "deals",
+    });
+    // Newest first, and the OLDEST deal (`d0`) is the one that fell off the cap.
+    expect(out.evidence.map((e) => e.sourceRef)).toEqual([
+      "hubspot:deal:d8",
+      "hubspot:deal:d7",
+      "hubspot:deal:d6",
+      "hubspot:deal:d5",
+      "hubspot:deal:d4",
+      "hubspot:deal:d3",
+      "hubspot:deal:d2",
+      "hubspot:deal:d1",
+    ]);
   });
 
   test("THE PLANNER'S QUERY NEVER REACHES A HUBSPOT REQUEST", async () => {
@@ -777,7 +859,12 @@ describe("the CRM adapter maps the LANDED HubSpot projection honestly", () => {
       tenantId: h.a,
       query: "deals",
     });
-    expect(out.state).toEqual({ status: "available", source: "crm-facts", returned: 1 });
+    expect(out.state).toEqual({
+      status: "partial",
+      source: "crm-facts",
+      returned: 1,
+      reason: "cap",
+    });
     expect(out.evidence.map((e) => e.sourceRef)).toEqual(["hubspot:deal:SANDBOX-DEAL"]);
   });
 
@@ -838,6 +925,39 @@ describe("untrusted external content has NO path to a governance plane", () => {
       expect(src(), `knowledgeExternalSources.ts contains ${marker}`).not.toContain(marker);
     }
   });
+
+  test.each([["knowledgeExternalSources.ts"], ["knowledgeVaultDrive.ts"]])(
+    "%s IS INTERNAL-ONLY — its tenantId argument is never caller-supplied",
+    (file) => {
+      // Every adapter takes `tenantId: v.string()` as an ARGUMENT rather than from an
+      // authenticated wrapper. That is correct for an `internalAction` — it matches the landed
+      // `hubspotReadForTenant` — and catastrophic for anything a browser can name: the argument IS
+      // the tenant scope, so a `tenantAction` here would let any caller read any tenant. Nothing
+      // recorded that: not a test, not a type, not a comment. This is the record.
+      const src = (rawSources[`./${file}`] ?? "").replace(/\r\n/g, "\n");
+      const noComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+      // POSITIVE CONTROL: the module really was read, and it really does declare internal actions.
+      expect(noComments).toContain("= internalAction({");
+      expect(noComments).toContain("tenantId: v.string()");
+      for (const exposed of [
+        "tenantAction",
+        "tenantQuery",
+        "tenantMutation",
+        "ownerAction",
+        "= action(",
+        "= query(",
+        "= mutation(",
+        "httpAction",
+      ]) {
+        expect(
+          noComments.includes(exposed),
+          `${file} exposes a caller-reachable function (\`${exposed}\`) while taking tenantId ` +
+            `as an argument. The 29-06 coordinator must pass ctx.tenantId from a tenant wrapper; ` +
+            `a caller-supplied tenantId on a public function is a cross-tenant read.`,
+        ).toBe(false);
+      }
+    },
+  );
 
   test("this module BUILDS no source state — every one comes from @pikar/core", () => {
     // STRONGER than the scan this replaces, which sliced each `status: "..."` literal out of this

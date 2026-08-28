@@ -463,6 +463,29 @@ describe("authority is a fixed mapping, never a model output", () => {
     expect(authorityFor("vault", { ownedByMe: false })).toBe("tenant_owned");
   });
 
+  test("THE CONNECTOR LAYER'S OWN AUTHORITY IS HONOURED, and it can only ever downgrade", () => {
+    // `hubspotProjection` hardcodes `authority: "supplemental"` — "colour only ... Never a total"
+    // — so no caller can promote a deal amount into accounting authority. The CRM adapter
+    // discarded it and re-stamped the rows `system_of_record`, the second-strongest class.
+    expect(authorityFor("crm-facts", { providerAuthority: "supplemental" })).toBe("correspondence");
+    expect(authorityFor("crm-facts", { providerAuthority: "user_confirmed_obligation" })).toBe(
+      "correspondence",
+    );
+    // The two that DO own a money fact keep the source's own class.
+    expect(authorityFor("crm-facts", { providerAuthority: "accounting_authority" })).toBe(
+      "system_of_record",
+    );
+    expect(authorityFor("crm-facts", { providerAuthority: "payment_rail" })).toBe(
+      "system_of_record",
+    );
+    // An unrecognised value is a downgrade, never a promotion — fail closed.
+    expect(authorityFor("crm-facts", { providerAuthority: "whatever" })).toBe("correspondence");
+    // And it can never RAISE a source above its code-owned class.
+    expect(authorityFor("inbox", { providerAuthority: "accounting_authority" })).toBe(
+      "correspondence",
+    );
+  });
+
   test("when two downgrades apply, the WEAKER one wins", () => {
     expect(authorityFor("vault", { docKind: "web_research", origin: "agent_promoted" })).toBe(
       "agent_authored",

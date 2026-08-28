@@ -256,7 +256,11 @@ export const AUTHORITY_CLASSES = [
   "tenant_owned",
   /** A system that owns the fact (CRM, support desk). */
   "system_of_record",
-  /** What somebody said in the mailbox. Not a record of anything. */
+  /**
+   * What somebody SAID, rather than a record of anything: a mailbox message, or a figure a person
+   * typed into a system that does not own the fact (a HubSpot deal amount — `@pikar/revenue` calls
+   * that `supplemental`, "colour only ... never a total").
+   */
   "correspondence",
   /**
    * Material the tenant did not author, reachable from a tenant surface: a web page stored in the
@@ -312,6 +316,29 @@ const SOURCE_AUTHORITY: Readonly<Record<KnowledgeSource, AuthorityClass>> = {
  * `origin` union off disk and fails if a value lands there without a decision here — the same
  * falsifiable-registry idiom as `KNOWLEDGE_ADAPTERS`.
  */
+/**
+ * `@pikar/revenue`'s `SourceAuthority` values that OWN a money fact: the books, and the payment
+ * rails. THE SEARCH PLANE DOES NOT GET TO OVERRIDE THE PROVIDER LAYER'S OWN CLASSIFICATION.
+ *
+ * `hubspotProjection` hardcodes `authority: "supplemental"` — with the comment "so no caller can
+ * promote a deal amount into accounting authority by passing an argument" — and the CRM adapter
+ * discarded it and re-stamped the same rows `system_of_record`, the SECOND-STRONGEST class, which
+ * then feeds `weakestAuthority` and `searchConfidence`. A pipeline total built from those rows
+ * read back at high authority, which is precisely the promotion revenue's hardcoding exists to
+ * prevent.
+ *
+ * The two vocabularies stay separate — revenue's answers "may this be summed into a total", this
+ * one answers "how much may this be believed" — and this is the ONE place they are related. The
+ * relation is a DOWNGRADE only: nothing here can raise a source above its `SOURCE_AUTHORITY` entry.
+ *
+ * A plain `readonly string[]` rather than an import: `@pikar/core` must not depend on
+ * `@pikar/revenue` (it is the connector-lane package), and the values are pinned to it by a test.
+ */
+const FACT_OWNING_PROVIDER_AUTHORITIES: readonly string[] = [
+  "accounting_authority",
+  "payment_rail",
+];
+
 export const AGENT_AUTHORED_ORIGINS: readonly string[] = [
   "agent",
   "agent_promoted",
@@ -341,6 +368,9 @@ export function authorityFor(
     readonly docKind?: string;
     readonly origin?: string;
     readonly ownedByMe?: boolean;
+    /** The connector layer's OWN authority for this row (`@pikar/revenue`'s `SourceAuthority`).
+     *  Present only for connector-backed sources; a value that does not own a fact downgrades. */
+    readonly providerAuthority?: string;
   },
 ): AuthorityClass {
   const candidates: AuthorityClass[] = [SOURCE_AUTHORITY[source]];
@@ -349,6 +379,11 @@ export function authorityFor(
   if (meta.origin !== undefined && AGENT_AUTHORED_ORIGINS.includes(meta.origin))
     candidates.push("agent_authored");
   if (source === "drive" && meta.ownedByMe !== true) candidates.push("third_party_research");
+  if (
+    meta.providerAuthority !== undefined &&
+    !FACT_OWNING_PROVIDER_AUTHORITIES.includes(meta.providerAuthority)
+  )
+    candidates.push("correspondence");
   return weakestAuthority(candidates);
 }
 

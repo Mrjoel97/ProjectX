@@ -1,5 +1,45 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — THE CRM ADAPTER STOPS OVERRIDING THE
+> CONNECTOR LAYER, AND STOPS PUTTING THE MONEY IN PROSE.**
+>
+> **(1) HubSpot's own authority is honoured.** `hubspotProjection` hardcodes
+> `authority: "supplemental"` — "colour only ... Never a total" — precisely so no caller can
+> promote a deal into accounting authority, and `readCrmKnowledge` discarded it and re-stamped
+> every row `system_of_record`, the second-strongest class, which feeds `weakestAuthority` and
+> `searchConfidence`. `authorityFor` now takes `providerAuthority` and relates the two
+> vocabularies in ONE direction only: a value that does not own a money fact
+> (`accounting_authority`, `payment_rail`) drops the row to `correspondence` — what somebody said
+> — and nothing can RAISE a source above its code-owned class.
+>
+> **(2) The deal amount is no longer in the evidence text.** It was interpolated verbatim, which
+> is everything a model needs to sum a pipeline and cite the total. The absence is STATED in the
+> composed sentence so it can never be read as zero. Ceiling, named in the code: a knowledge
+> answer cannot say what a deal is worth. Upgrade path is a typed non-summable `Evidence.figure`
+> plus a `validateSynthesis` rule, which is a design and belongs with the revenue rail.
+>
+> **(3) A WINDOWED READ IS A PARTIAL READ.** `readHubSpotDataset` filters to
+> `DEFAULT_WINDOW_DAYS` (90) and this adapter never passes a `windowDays`, so the CRM arm now
+> always settles `partial/cap`. `available` was a complete-looking answer built from a slice.
+>
+> **(4) `CRM_UNAVAILABLE_REASON` IS TYPED ON THE TOKEN VERB'S OWN UNION.** It was
+> `Record<string, UnavailableReason>` — deleting the `reauth` entry left `tsc` AND the suite
+> green while a dead refresh was reported as the transient `provider_error`. It is now
+> `Extract<AccessTokenResult, {ok:false}>["reason"]`-keyed, so a gap is a compile error; a
+> `crmReason` helper keeps the runtime fail-closed for a value from anywhere else.
+>
+> **(5) BOTH ADAPTER MODULES ARE INTERNAL-ONLY, AND THAT IS NOW RECORDED.** Every reader takes
+> `tenantId: v.string()` as an ARGUMENT, which is correct for an `internalAction` and a
+> cross-tenant read on anything public. A scan over both modules fails on `tenantAction`,
+> `action(`, `query(`, `mutation(` or `httpAction`. 29-06 must pass `ctx.tenantId` from a tenant
+> wrapper, never a caller-supplied value.
+>
+> **HOW TO VERIFY:** `cd packages/backend && pnpm vitest run knowledgeExternalSources` and
+> `cd packages/core && pnpm vitest run knowledgeSearch`. Mutations that MUST go red: drop
+> `providerAuthority` from the `authorityFor` call; put the amount back in `dealText`; revert
+> `cap: true`; collapse `evidenceId` to a constant; delete the recency `.sort`; make a reader a
+> `tenantAction`. Deleting a `CRM_UNAVAILABLE_REASON` member must fail `pnpm typecheck`.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — `authorityFor` gained two downgrades
 > and one exported registry.**
 >
