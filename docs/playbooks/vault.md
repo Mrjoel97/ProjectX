@@ -1,3 +1,34 @@
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — PROVENANCE. A citation now says who
+> actually wrote the thing.**
+>
+> **(1) A FOLDER DIGEST IS THE MODEL'S OWN PROSE AND IS CITED AS SUCH.** `authorityFor` downgraded
+> only `origin: "agent_promoted"`, so a `folder_digest` — `vaultDigest.ts`'s LLM-written summary,
+> which IS retrievable because that insert calls `startIngest` — was cited at `tenant_owned`, the
+> STRONGEST class, while the adapter's own comment claimed origins were honoured. `@pikar/core`
+> now exports `AGENT_AUTHORED_ORIGINS` = every value in the `vaultDocuments.origin` union, because
+> every one of them means the agent wrote the prose; a row with NO origin is the tenant's upload.
+> `knowledgeVaultDrive.test.ts` reads that union OFF DISK, so a new origin landing without an
+> authority decision is RED rather than a silent `tenant_owned`.
+>
+> **(2) A DRIVE FILE SOMEBODY ELSE OWNS IS NOT THE TENANT'S DOCUMENT.** `runDriveSearch` passes
+> `includeItemsFromAllDrives` and never restricts to `'me' in owners`, so a stranger's shared file
+> matches — and `BROWSE_FIELDS` did not even ASK Drive for ownership, so the distinction was
+> unavailable rather than unused. `ownedByMe` is now requested, carried on `DriveSearchRow`, and
+> **anything but `true` is `third_party_research`** — absence included, because Drive leaves the
+> field unset for shared-drive items, which is exactly the unproven case. Ceiling, named: a file in
+> the tenant's OWN shared drive is understated as third-party. Understating is the safe direction.
+>
+> **HOW TO VERIFY:** `cd packages/core && pnpm vitest run knowledgeSearch` and `cd packages/backend
+> && pnpm vitest run knowledgeVaultDrive vaultDrive`. Mutations that MUST go red: narrow
+> `AGENT_AUTHORED_ORIGINS` back to `["agent_promoted"]`; delete the `source === "drive" &&
+> meta.ownedByMe !== true` branch; drop `ownedByMe` from `BROWSE_FIELDS` or from the row
+> projection.
+>
+> **(3) `vaultDrive.test.ts` NOW COVERS ITS OWN REFACTOR.** 29-02 named this file in
+> `files_modified` and never touched it while `vaultDrive.ts` took a 142-line change; every
+> assertion about `findInDriveForTenant` lived in another plan's file. Five tests here now pin the
+> shared gate, the argument-supplied tenant, the two projections of one request, the `fields`
+> request itself and the blank-needle short-circuit.)
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — the two vault-plane honesty defects, and
 > the one that was reported fixed and was not.**
 >

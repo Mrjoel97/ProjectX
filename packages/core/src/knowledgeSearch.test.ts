@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
+  AGENT_AUTHORED_ORIGINS,
   AUTHORITY_CLASSES,
   aggregateCoverage,
   authorityFor,
@@ -425,7 +426,9 @@ describe("authority is a fixed mapping, never a model output", () => {
 
   test("each source maps to its adapter's class", () => {
     expect(authorityFor("vault", {})).toBe("tenant_owned");
-    expect(authorityFor("drive", {})).toBe("tenant_owned");
+    // Drive's base class is `tenant_owned`, but it is only REACHED with proven ownership — see
+    // the shared-file test below. `{}` is the unproven case and it is a downgrade.
+    expect(authorityFor("drive", { ownedByMe: true })).toBe("tenant_owned");
     expect(authorityFor("inbox", {})).toBe("correspondence");
     expect(authorityFor("crm-facts", {})).toBe("system_of_record");
     expect(authorityFor("support-desk", {})).toBe("system_of_record");
@@ -437,6 +440,27 @@ describe("authority is a fixed mapping, never a model output", () => {
 
   test("an AGENT-PROMOTED vault doc never reads as the owner's own word (26-11 origins)", () => {
     expect(authorityFor("vault", { origin: "agent_promoted" })).toBe("agent_authored");
+  });
+
+  test("EVERY vault origin is agent-written, including the model-written FOLDER DIGEST", () => {
+    // `folder_digest` is `vaultDigest.ts`'s own LLM output and it is retrievable (that insert calls
+    // `startIngest`), so it was being cited at `tenant_owned` — the strongest class — while the
+    // adapter's comment claimed the opposite. A row with NO origin is the tenant's upload.
+    expect(authorityFor("vault", { origin: "folder_digest" })).toBe("agent_authored");
+    expect(authorityFor("vault", { origin: "agent" })).toBe("agent_authored");
+    expect([...AGENT_AUTHORED_ORIGINS]).toEqual(["agent", "agent_promoted", "folder_digest"]);
+    expect(authorityFor("vault", {})).toBe("tenant_owned");
+  });
+
+  test("A DRIVE FILE SOMEBODY ELSE OWNS IS NOT THE TENANT'S OWN DOCUMENT", () => {
+    // The search passes `includeItemsFromAllDrives` and never restricts to `'me' in owners`, so a
+    // stranger's shared file matches. Absence is NOT ownership: Drive leaves `ownedByMe` unset for
+    // shared-drive items, which is exactly the case that must not read as tenant-owned.
+    expect(authorityFor("drive", { ownedByMe: false })).toBe("third_party_research");
+    expect(authorityFor("drive", {})).toBe("third_party_research");
+    expect(authorityFor("drive", { ownedByMe: true })).toBe("tenant_owned");
+    // The downgrade is DRIVE-scoped: it must not silently weaken a vault or CRM row.
+    expect(authorityFor("vault", { ownedByMe: false })).toBe("tenant_owned");
   });
 
   test("when two downgrades apply, the WEAKER one wins", () => {

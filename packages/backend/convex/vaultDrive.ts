@@ -151,6 +151,8 @@ type DriveFile = {
   modifiedTime?: string;
   shortcutDetails?: { targetId?: string; targetMimeType?: string };
   capabilities?: { canDownload?: boolean };
+  /** Drive's own ownership flag. ABSENT for shared-drive items — see `BROWSE_FIELDS`. */
+  ownedByMe?: boolean;
 };
 
 /** One importable file, already resolved to what it will become in the vault. */
@@ -376,8 +378,15 @@ const FOLDER_Q = `mimeType='${FOLDER_MIME}' and trashed=false`;
 const NODE_FIELDS = "nextPageToken,files(id,name)";
 /** Everything `classifyOne` reads, so a browsed level can answer "can this be read?" without a
  *  second round-trip per file. */
+/**
+ * `ownedByMe` IS A PROVENANCE FIELD, NOT A DISPLAY ONE. The search runs with
+ * `includeItemsFromAllDrives`, so a file a stranger shared in matches — and without asking for
+ * this, the distinction was not merely unused, it was UNAVAILABLE, and the knowledge adapter
+ * stamped every hit `tenant_owned`. Drive does not populate it for shared-drive items, so an
+ * ABSENT value means ownership was not established and `authorityFor` downgrades on it.
+ */
 const BROWSE_FIELDS =
-  "nextPageToken,files(id,name,mimeType,size,modifiedTime,shortcutDetails,capabilities/canDownload)";
+  "nextPageToken,files(id,name,mimeType,size,modifiedTime,shortcutDetails,capabilities/canDownload,ownedByMe)";
 
 /** One page-1 `files.list` of folders. Deliberately NOT paginated: a browse level is a HUMAN
  *  reading a list, and 100 folders in one directory is already past what anyone scans.
@@ -427,6 +436,9 @@ export type DriveSearchRow = DriveSearchHit & {
   /** Epoch ms, parsed from Drive's RFC-3339 `modifiedTime`. ABSENT is not "fresh" — downstream
    *  reads a missing source time as freshness `unknown`, never as current. */
   modifiedTime?: number;
+  /** Drive's `ownedByMe`. ABSENT is not ownership — `authorityFor` downgrades anything but `true`,
+   *  which is what stops a stranger's shared file being cited as the tenant's own document. */
+  ownedByMe?: boolean;
 };
 
 export type DriveSearchRowsResult =
@@ -619,6 +631,8 @@ async function runDriveSearch(
         // An unparseable date is ABSENT, never 0 — an epoch-0 timestamp reads as "very stale",
         // which is a claim about the file we have no basis for.
         ...(Number.isFinite(modified) ? { modifiedTime: modified } : {}),
+        // Carried VERBATIM, absence included: only `true` is ownership, and only Drive says it.
+        ...(file.ownedByMe === undefined ? {} : { ownedByMe: file.ownedByMe }),
       };
     }),
   };

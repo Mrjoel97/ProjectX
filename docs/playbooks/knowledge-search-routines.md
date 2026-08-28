@@ -1,5 +1,15 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — `authorityFor` gained two downgrades
+> and one exported registry.**
+>
+> `AGENT_AUTHORED_ORIGINS` is every value in `vaultDocuments.origin`, exported so the backend can
+> read the schema union off disk and fail when one lands with no authority decision. A Drive hit
+> is `tenant_owned` ONLY when Drive itself says `ownedByMe: true`; absence is a downgrade, because
+> Drive leaves the field unset for shared-drive items. Both are provenance-laundering doors:
+> agent-written prose and a stranger's file were reading back as the owner's own word. See
+> `vault.md`'s Part-B entry for the full reasoning and the mutations that must go red.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — three blockers, one reinvented contract,
 > and a cap with no enforcement site.**
 >

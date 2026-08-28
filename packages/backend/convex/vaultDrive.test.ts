@@ -440,6 +440,151 @@ describe("findInDrive uses the existing bounded, shared-drive-aware boundary", (
     expect(url.searchParams.get("includeItemsFromAllDrives")).toBe("true");
   });
 
+  // ── The 29-02 refactor, covered HERE rather than only from another plan's file ──────────────
+  //
+  // `findInDrive` was split into a private `runDriveSearch` plus TWO wrappers, and a new exported
+  // `findInDriveForTenant` (identity-less, for the knowledge plane) was added — a 142-line change
+  // to this module that this file, which the plan NAMED, never saw. Every assertion about the new
+  // export lived in `knowledgeVaultDrive.test.ts`, so deleting that file left this module's newest
+  // export with no coverage at all.
+
+  test("findInDriveForTenant runs the SAME gate — reauth before any Drive network call", async () => {
+    // The security ordering (scope BEFORE refresh) lives once, in `runDriveSearch`. If the
+    // identity-less wrapper ever re-implemented it, this is where the copy would drift.
+    const t = harness();
+    await seedGrant(t, PRE_WIDENING_SCOPE);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    expect(
+      await t.action(internal.vaultDrive.findInDriveForTenant, {
+        tenantId: TENANT,
+        query: "quarterly plan",
+      }),
+    ).toEqual({ ok: false, reason: "reauth" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("the tenant comes from the ARGUMENT, and a stranger's tenantId reaches nothing", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    expect(
+      await t.action(internal.vaultDrive.findInDriveForTenant, {
+        tenantId: "tenant_somebody_else",
+        query: "quarterly plan",
+      }),
+    ).toEqual({ ok: false, reason: "not_connected" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("ONE request, TWO projections: the runner keeps the citation fields, the tool drops them", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const modified = "2026-08-01T10:00:00.000Z";
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (!String(url).includes("/drive/v3/"))
+        return Response.json({ access_token: "fresh", expires_in: 3600 });
+      return Response.json({
+        nextPageToken: "more",
+        files: [
+          {
+            id: "doc-1",
+            name: "Quarterly plan",
+            mimeType: "text/plain",
+            modifiedTime: modified,
+            capabilities: { canDownload: true },
+            ownedByMe: false,
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    // The runner's row: mime, parsed modified time, ownership and the page cap all survive.
+    expect(
+      await t.action(internal.vaultDrive.findInDriveForTenant, {
+        tenantId: TENANT,
+        query: "quarterly plan",
+      }),
+    ).toEqual({
+      ok: true,
+      truncated: true,
+      rows: [
+        {
+          id: "doc-1",
+          name: "Quarterly plan",
+          kind: "file",
+          readable: true,
+          mimeType: "text/plain",
+          modifiedTime: Date.parse(modified),
+          ownedByMe: false,
+        },
+      ],
+    });
+
+    // The cockpit tool's projection is the runner's row MINUS the three citation fields, so the
+    // picker's contract did not widen when the knowledge plane needed more.
+    expect(
+      await t.withIdentity({ subject: TENANT }).action(api.vaultDrive.findInDrive, {
+        query: "quarterly plan",
+      }),
+    ).toEqual({
+      ok: true,
+      hits: [{ id: "doc-1", name: "Quarterly plan", kind: "file", readable: true }],
+    });
+  });
+
+  test("an UNPARSEABLE modifiedTime is ABSENT, and Drive is ASKED for ownedByMe", async () => {
+    // `ownedByMe` is a PROVENANCE field: `authorityFor` downgrades anything but `true`, so if the
+    // request stops asking for it, every Drive citation silently becomes third-party. A stub is
+    // free to return a field nobody requested, so the REQUEST is what has to be asserted.
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (!String(url).includes("/drive/v3/"))
+        return Response.json({ access_token: "fresh", expires_in: 3600 });
+      return Response.json({
+        files: [{ id: "doc-1", name: "Undated", mimeType: "text/plain", modifiedTime: "not a date" }],
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const out = await t.action(internal.vaultDrive.findInDriveForTenant, {
+      tenantId: TENANT,
+      query: "undated",
+    });
+    // An epoch-0 stamp would read as "very stale", which is a claim we have no basis for.
+    expect(out).toEqual({
+      ok: true,
+      truncated: false,
+      rows: [{ id: "doc-1", name: "Undated", kind: "file", readable: true, mimeType: "text/plain" }],
+    });
+
+    const driveCall = fetchSpy.mock.calls.find(([url]) => String(url).includes("/drive/v3/"));
+    const fields = new URL(String(driveCall?.[0])).searchParams.get("fields") ?? "";
+    expect(fields).toContain("ownedByMe");
+    expect(fields).toContain("modifiedTime");
+  });
+
+  test("a blank needle is NOT sent to Drive at all — the short-circuit the adapter relies on", async () => {
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    const fetchSpy = vi.fn(async (_url: string) =>
+      Response.json({ access_token: "fresh", expires_in: 3600 }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    expect(
+      await t.action(internal.vaultDrive.findInDriveForTenant, { tenantId: TENANT, query: "   " }),
+    ).toEqual({ ok: true, rows: [], truncated: false });
+    expect(fetchSpy.mock.calls.filter(([url]) => String(url).includes("/drive/v3/"))).toHaveLength(
+      0,
+    );
+  });
+
   test("escapes quotes inside both Drive query-language literals", async () => {
     const t = harness();
     await seedGrant(t, FULL_SCOPE);

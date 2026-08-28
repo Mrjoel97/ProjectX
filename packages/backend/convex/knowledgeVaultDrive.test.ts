@@ -14,7 +14,11 @@
 //     comments, assert on what remains, with a POSITIVE CONTROL so the scan cannot be vacuous) is
 //     `llmRedaction.test.ts`'s and `dispatchGuard.test.ts`'s.
 import { readFileSync } from "node:fs";
-import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
+import {
+  AGENT_AUTHORED_ORIGINS,
+  type BusinessBlueprint,
+  serializeBlueprint,
+} from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
@@ -163,6 +167,38 @@ describe("the vault adapter returns cited, bounded, tenant-owned evidence", () =
 
     const { evidence } = await searchVault(t, `SMOKE::${docA}`);
     expect(evidence[0]?.authority).toBe("agent_authored");
+  });
+
+  test("A FOLDER DIGEST IS THE MODEL'S OWN PROSE, not the owner's word", async () => {
+    // `vaultDigest.ts` writes an LLM-SYNTHESISED summary and calls `startIngest` on it, so it is
+    // retrievable — and it was cited at `tenant_owned`, the STRONGEST class, while the adapter's
+    // own comment claimed origins were honoured. Only `agent_promoted` was downgraded.
+    const t = harness();
+    const digest = await seedDoc(t, {
+      title: "Folder digest — Q3 uploads",
+      text: "The business has 40 percent margins and should raise prices.",
+      origin: "folder_digest",
+    });
+
+    const { evidence } = await searchVault(t, `SMOKE::${digest}`);
+    expect(evidence[0]?.authority).toBe("agent_authored");
+  });
+
+  test("EVERY origin schema.ts allows has an authority decision behind it", () => {
+    // `@pikar/core` cannot see `schema.ts`, so the union and the downgrade list could drift and a
+    // new agent-written origin would be cited as the owner's own word with the suite green. This
+    // reads the union OFF DISK. If it fails, decide the new origin's authority in `authorityFor`.
+    const schemaSrc = readFileSync(new URL("./schema.ts", import.meta.url), "utf8");
+    const marker = "origin: v.optional(";
+    const from = schemaSrc.indexOf(marker, schemaSrc.indexOf("vaultDocuments:"));
+    expect(from, "the vaultDocuments origin union moved").toBeGreaterThan(0);
+    const union = schemaSrc.slice(from, schemaSrc.indexOf(")),", from) + 3);
+    const declared = [...union.matchAll(/v\.literal\("([a-z_]+)"\)/g)].map((m) => m[1]);
+    // Non-vacuity: the union really was parsed, and it is the three-value one this rule is about.
+    expect(declared).toEqual(["agent", "agent_promoted", "folder_digest"]);
+    for (const origin of declared) {
+      expect(AGENT_AUTHORED_ORIGINS as readonly string[], `origin ${origin}`).toContain(origin);
+    }
   });
 });
 
@@ -465,6 +501,8 @@ describe("the drive adapter", () => {
           size: "42",
           modifiedTime: DRIVE_MODIFIED,
           capabilities: { canDownload: true },
+          // `tenant_owned` is only reachable with Drive SAYING so — see the shared-file test.
+          ownedByMe: true,
         },
       ],
     });
@@ -499,6 +537,57 @@ describe("the drive adapter", () => {
     const out = await searchDrive(t, "forecast");
     expect(out.evidence.map((e) => e.sourceRef)).toEqual(["file1"]);
     expect(out.state).toEqual({ status: "available", source: "drive", returned: 1 });
+  });
+
+  test("A FILE SOMEBODY ELSE OWNS IS NOT THE TENANT'S OWN DOCUMENT", async () => {
+    // `runDriveSearch` passes `includeItemsFromAllDrives` and never restricts to `'me' in owners`,
+    // so a file a stranger shared in matches — and every hit was stamped `tenant_owned`, the
+    // STRONGEST class, over a `files.list` that did not even ASK for the ownership field.
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    stubDrive({
+      files: [
+        { id: "mine", name: "Our forecast", mimeType: "text/plain", ownedByMe: true },
+        {
+          id: "theirs",
+          name: "Competitor pricing (shared by stranger@example.com)",
+          mimeType: "text/plain",
+          ownedByMe: false,
+        },
+        // Drive does NOT populate `ownedByMe` for shared-drive items. Absence is not ownership.
+        { id: "sharedDrive", name: "Team deck", mimeType: "text/plain" },
+      ],
+    });
+
+    const { evidence } = await searchDrive(t, "forecast");
+    expect(evidence.map((e) => [e.sourceRef, e.authority])).toEqual([
+      ["mine", "tenant_owned"],
+      ["theirs", "third_party_research"],
+      ["sharedDrive", "third_party_research"],
+    ]);
+  });
+
+  test("a Drive ref that is CONTENT rather than an id is DROPPED and reported as a gap", async () => {
+    // The `validateSourceRef` guard had zero coverage: deleting it left the suite green, and with
+    // it the whole `partial/provider_error` state it is the only producer of. `row.id` is
+    // provider-supplied and crosses the CLAUDE.md §4 ref boundary.
+    const t = harness();
+    await seedGrant(t, FULL_SCOPE);
+    stubDrive({
+      files: [
+        { id: "good1", name: "Q3 forecast", mimeType: "text/plain", ownedByMe: true },
+        { id: "a b c: not an id", name: "Hostile", mimeType: "text/plain", ownedByMe: true },
+      ],
+    });
+
+    const out = await searchDrive(t, "forecast");
+    expect(out.evidence.map((e) => e.sourceRef)).toEqual(["good1"]);
+    expect(out.state).toEqual({
+      status: "partial",
+      source: "drive",
+      returned: 1,
+      reason: "provider_error",
+    });
   });
 
   test("a file with no modifiedTime carries NO source time — absent is not fresh", async () => {

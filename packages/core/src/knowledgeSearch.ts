@@ -258,7 +258,10 @@ export const AUTHORITY_CLASSES = [
   "system_of_record",
   /** What somebody said in the mailbox. Not a record of anything. */
   "correspondence",
-  /** A web page that happens to be stored in the vault. Retrieval location is not provenance. */
+  /**
+   * Material the tenant did not author, reachable from a tenant surface: a web page stored in the
+   * vault, or a Drive file somebody else owns and shared in. Retrieval location is not provenance.
+   */
   "third_party_research",
   /**
    * The AGENT wrote it and the owner promoted it (26-11 `origins: "agent_promoted"`, ADR-025).
@@ -295,19 +298,57 @@ const SOURCE_AUTHORITY: Readonly<Record<KnowledgeSource, AuthorityClass>> = {
 };
 
 /**
- * The fixed adapter mapping, plus the two vault downgrades. The model supplies none of this.
+ * EVERY `vaultDocuments.origin` value, and every one of them means THE AGENT WROTE THE PROSE.
+ *
+ * A row with NO origin is a tenant upload. A row WITH one is not: `agent_promoted` is the agent's
+ * output that the owner promoted (26-11, ADR-025), `agent` is agent-written working material, and
+ * `folder_digest` is `vaultDigest.ts`'s MODEL-WRITTEN summary of a folder — which is retrievable,
+ * because that insert calls `startIngest`, so up to `evidenceTextCharCap` characters of the model's
+ * own prose reached a citation stamped `tenant_owned`, the STRONGEST class. Only `agent_promoted`
+ * was listed here, so the digest read back as the owner's own word: the provenance-laundering door
+ * this class exists to close, standing open on the very table it names.
+ *
+ * EXPORTED because `@pikar/core` cannot see `schema.ts`. `knowledgeVaultDrive.test.ts` reads the
+ * `origin` union off disk and fails if a value lands there without a decision here — the same
+ * falsifiable-registry idiom as `KNOWLEDGE_ADAPTERS`.
+ */
+export const AGENT_AUTHORED_ORIGINS: readonly string[] = [
+  "agent",
+  "agent_promoted",
+  "folder_digest",
+];
+
+/**
+ * The fixed adapter mapping, plus the downgrades. The model supplies none of this.
  *
  * `docKind` is `vaultDocuments.kind` and `origin` is `vaultDocuments.origin` — both server facts
  * already carried on the row and already surfaced by `vaultGroundHydrated`'s `origins` array.
+ *
+ * `ownedByMe` is Drive's own `files.get` field, and its DEFAULT IS A DOWNGRADE. Drive search runs
+ * with `includeItemsFromAllDrives`, so a file a stranger shared into the tenant's Drive matches;
+ * Drive does not populate `ownedByMe` for shared-drive items at all, so an absent value is
+ * precisely the case where ownership is NOT established. `tenant_owned` was asserted
+ * unconditionally over a search the tenant does not own the results of.
+ *
+ * ponytail: one boolean, no owner identity. Ceiling — a file in the tenant's own SHARED DRIVE is
+ * treated as third-party, which understates it. Upgrade path if that matters: request `owners` and
+ * compare the domain against the tenant's connected account, which costs a second Drive field and
+ * a notion of "our domain" this repo does not have. Understating authority is the safe direction.
  */
 export function authorityFor(
   source: KnowledgeSource,
-  meta: { readonly docKind?: string; readonly origin?: string },
+  meta: {
+    readonly docKind?: string;
+    readonly origin?: string;
+    readonly ownedByMe?: boolean;
+  },
 ): AuthorityClass {
   const candidates: AuthorityClass[] = [SOURCE_AUTHORITY[source]];
   if (source === "vault" && meta.docKind === "web_research")
     candidates.push("third_party_research");
-  if (meta.origin === "agent_promoted") candidates.push("agent_authored");
+  if (meta.origin !== undefined && AGENT_AUTHORED_ORIGINS.includes(meta.origin))
+    candidates.push("agent_authored");
+  if (source === "drive" && meta.ownedByMe !== true) candidates.push("third_party_research");
   return weakestAuthority(candidates);
 }
 
