@@ -8,4 +8,5 @@
 export * from "./config";
 export * from "./events";
 export * from "./signature";
+export * from "./reconcile";
 export * from "./tax";

@@ -1,8 +1,9 @@
 # Playbook: Billing — Pikar's OWN merchant account (Phase 28.1)
 
-> Last verified: 2026-08-28 against 28.1-02 (the Dashboard checklist, the code-owned config
-> mirror, and the tax / bank-transfer reality in Operations below; 28.1-01 shipped the webhook
-> receiver and the `billingStripeEvents` idempotency table)
+> Last verified: 2026-08-29 against 28.1-03 (`tax.ts` and `reconcile.ts` — the pure tax posture
+> and the Stripe-signal-to-ledger-phase mapping, both offline at $0; 28.1-02 landed the Dashboard
+> checklist and the code-owned config mirror; 28.1-01 shipped the webhook receiver and the
+> `billingStripeEvents` idempotency table)
 > Build history: `.planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/`
 > · Related ADRs: none yet
 
@@ -18,6 +19,12 @@
 > is **not set in any deployment** — with it unset the route refuses every delivery, which is the
 > correct and current state. Every test in this plan is offline at $0 against a fabricated
 > `whsec_test_…` secret; none of them proves Stripe accepts anything.
+>
+> **28.1-03 added `tax.ts` and `reconcile.ts` — PURE FUNCTIONS WITH NO CALLER.** They are fully
+> specified and mutation-proven offline, and **nothing invokes them**: `receiveAndApply`'s effect
+> switch is still empty and no movement has ever reached a table. The `billingEvents` book of
+> record and the wiring are **28.1-06**. A green `reconcile.test.ts` proves the LAW, not that any
+> money was ever reconciled.
 >
 > Everything marked **[PLANNED]** below is a contract a later plan must satisfy, not a claim that
 > code exists. Do not cite a [PLANNED] line as evidence that something works.
@@ -47,6 +54,10 @@ name or an env prefix:
   `SIGNATURE_TOLERANCE_S`. No `ctx`, no `fetch`, no Convex import (CLAUDE.md §1).
 - `packages/billing/src/events.ts` — `HANDLED_EVENT_TYPES` (the closed v1-snapshot list) and
   `classifyEvent`, whose default arm is `{ kind: "ignored" }`.
+- `packages/billing/src/reconcile.ts` — `reconcileEvent`, `PAYMENT_METHOD_BANK_TRANSFER`,
+  `UNRECONCILED_RETURN_DAYS` / `UNRECONCILED_SWEEP_DAYS`. BILL-03's pure half: one Stripe event in,
+  ledger movements + observations out. Stateless per event (Stripe does not guarantee order) and
+  `nowMs` is an ARGUMENT — no clock read inside.
 - `packages/billing/src/tax.ts` — `taxPosture` + `renderTaxPosture` + the written-out
   `TAXABILITY_REASONS` table. BILL-05's whole code surface. Pure; the product tax code is an
   ARGUMENT, never read from config inside the function.
@@ -143,6 +154,16 @@ Run `graphify query "billing webhook"` for the current subgraph. Couplings graph
 | `zero_rated` / `not_subject_to_tax` / `reverse_charge` / `customer_exempt` / `product_exempt` / `not_supported` are **calculated zero**, a different statement from not-owed | A calculation ran. Collapsing it into "not owed" claims a registration posture Stripe never reported | `tax.test.ts` — every published reason has an asserted posture, and the two never render the same sentence |
 | A positive tax amount beats ANY reason | Money that was charged was charged, whatever Stripe said about why | `tax.test.ts` — "a positive amount wins over reason …" |
 | **No zero posture ever renders a bare `0.00`** | BILL-05's promise is about what a human READS; a perfect enum behind a `$0.00` has delivered nothing. Every zero arm of `renderTaxPosture` emits no amount at all, so the bare number is unreachable rather than discouraged | `tax.test.ts` — "NO zero-tax posture renders a bare 0.00 anywhere", asserted across the whole reason × product-code grid |
+| **`invoice.paid` is NOT collection for a bank transfer** — it produces zero movements and one `awaiting-cash-application` observation | Bank-transfer funds land in the customer CASH BALANCE, not on the invoice. Booking `actual` here records money we do not have, in an append-only ledger that cannot quietly correct it — and `funding_reversed` makes that a real error, not a theoretical one | `reconcile.test.ts` — "a BANK TRANSFER invoice produces NO actual movement" |
+| `invoice.paid` for a CARD **is** collection → `actual` | Card is synchronous; the trap does not apply. The two paths differ and both are tested | `reconcile.test.ts` — "a CARD invoice IS collection" |
+| An UNDETERMINABLE payment method also books no `actual` | `payment_settings.payment_method_types` is what was ALLOWED, not what was USED. Unknown is never card — both guards fail closed and are mutation-proven INDEPENDENTLY | `reconcile.test.ts` — "an UNDETERMINABLE payment method books no actual either" + "customer_balance among SEVERAL allowed methods" |
+| cash-balance `funded` → `reserved`; `applied_to_payment` → `actual`; `funding_reversed` / `unapplied_from_payment` / `refunded_from_payment` → `refunded` | `funded` is ARRIVAL (money exists, it is not ours). `applied_to_payment` is the ONLY collection signal on this rail. `funding_reversed` TAKES IT BACK and is never silently dropped | `reconcile.test.ts` — one test per row |
+| `applied_to_payment` without a PaymentIntent is an ERROR, never an uncorrelated `actual` | The PI is the only tie back to the invoice; an uncorrelated `actual` in an append-only ledger can never be paired up | `reconcile.test.ts` — "applied_to_payment WITHOUT a PaymentIntent is an error" |
+| `cash_balance.funds_available` produces ZERO movements and one `unapplied-funds` observation carrying an AGE | Under Stripe's default AUTOMATIC reconciliation this fires only when money is LEFT OVER — it is the unapplied-funds signal, **not** an arrival signal, and getting it backwards is the trap. Unreconciled funds are returned at `UNRECONCILED_RETURN_DAYS` (75) and swept at `UNRECONCILED_SWEEP_DAYS` (90), so the surface shows age, not just amount | `reconcile.test.ts` — "produces ZERO ledger movements and one visibility record" + the 74/75/89/90 boundary test |
+| Every movement amount is POSITIVE and in integer minor units | Direction lives in the PHASE, never in the sign (`spend.ts:25`); Stripe's cash-balance `net_amount` is signed and is `Math.abs`-ed at this boundary. Stripe is natively minor units — never multiplied, never divided, never a float | `reconcile.test.ts` — the money-boundary block (lowercase `usd`, JPY 0-digit, `applied_to_payment` with a negative `net_amount`) |
+| A movement that cannot be BUILT returns an error, never a zero | A ledger that writes a zero because it could not read a number is worse than one that refuses | `reconcile.test.ts` — "a movement that cannot be built returns an error rather than a zero" |
+| `correlationId` is `billing/<stripe id>` and nothing else, ref-token-checked | CLAUDE.md §4 — refs, hashes, ids and counts ONLY. A movement is audit-bound; no Stripe object, email, name or prose may reach it | `reconcile.test.ts` — the ref-safe-token refusal + "no Stripe object, email or prose ever reaches a movement" |
+| `reconcileEvent` is stateless per event and takes `nowMs` as an ARGUMENT | Stripe does not guarantee delivery order, so nothing may depend on what arrived first; and a pure function that reads a clock cannot be tested at a boundary | `reconcile.test.ts` — "the same events in reverse produce the same movement SET" |
 | There is **no** tax-threshold monitor, constant or subscription anywhere | Stripe publishes no `tax.threshold.*` event, monitoring is live-mode only, and notification is gated at $10k prior-year revenue — a monitor here could not fire. See Operations below | `grep -rn "tax.threshold" packages/ apps/` returns nothing |
 
 ## How to change safely
@@ -229,9 +250,14 @@ such registration goes in `acct_1U9DJsV05pYaPPIE` (the sandbox), never in the li
 
 ### Bank transfer is COUNTRY-GATED, and the answer is not in this repo
 
+**ANSWERED `true` by the account owner on 2026-08-29.** `BANK_TRANSFER_ENABLED` in `config.ts` is
+`true`, so **BILL-03's cash-balance arm is SHIPPED code on a live path, not recorded dead code**, and
+the reconciliation law in `reconcile.ts` is load-bearing. (`HEAD_OFFICE_COUNTRY` is still `null` —
+the owner deferred it, so `CONFIG_CONFIRMED` stays `false`.) The reasoning that made this a blocking
+question is kept below because it is what makes the answer re-checkable:
+
 Bank-transfer eligibility depends on the merchant's country, and **the account's country cannot be
-read from this codebase**. That makes it a blocking owner question, not an assumption:
-`BANK_TRANSFER_ENABLED` and `HEAD_OFFICE_COUNTRY` in `config.ts` stay `null` until answered.
+read from this codebase**. That makes it a blocking owner question, not an assumption.
 
 - **Answer `true`** → BILL-03's cash-balance path ships. `invoice.paid` is then NOT cash in hand:
   money lands in the customer **cash balance** first (`funded` = arrival, `applied_to_payment` =
