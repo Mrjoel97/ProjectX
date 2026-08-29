@@ -1,5 +1,14 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-29 (29-W3-TAIL — **`run-eval-golden.mjs` AND `planTenantActivation` DO NOT
+> REFUSE THE SAME SET, AND THE COMMENT SAID THEY DID.** `assertEvaluableCandidate`'s note claimed
+> *"`planTenantActivation` now refuses every `pack-*` name outright"*. It does not: it gates on
+> MEMBERSHIP in `WORKFLOW_PACK_SKILL_NAMES` (via `isWorkflowPackSkill`), while this script really
+> does match the `pack-` PREFIX, because it is a standalone node script with no bundler and cannot
+> import the list. So a `pack-`-named row that is not a registered pack is refused HERE and accepted
+> THERE. The comment now says what each one does and names the asymmetry as the safe direction —
+> over-matching fails closed at $0. Comment-only; no behaviour changed.)
+
 > Last verified: 2026-08-28 (29-05 REMEDIATION — **`run-eval-golden.mjs` NO LONGER ACCEPTS A
 > WORKFLOW-PACK ROW AS A `--tenant-skill` TARGET.** `assertEvaluableCandidate` validated only the
 > row's AUTHOR and STATUS; it had no name predicate, so a tenant `pack-business-pulse` candidate was

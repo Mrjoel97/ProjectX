@@ -4984,7 +4984,10 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
       asOwner.mutation(api.skills.activateTenantCandidate, { candidateId: res.tenantSkillId }),
     ).rejects.toThrow(/PACK_GATE/);
 
-    // Still dark, and the tenant still runs the GLOBAL body.
+    // The row stays a candidate, and the tenant still runs the GLOBAL body. ("Dark" was the word
+    // used here and in the playbook until the wave-3 sweep; it is wrong — a `pack-*` candidate is
+    // still runnable through the `tenantSkillIds` pin door. See `skill-registry.md`, "The pin door
+    // IS open".)
     expect((await t.run((ctx) => ctx.db.get(res.tenantSkillId)))!.status).toBe("candidate");
     const effective = await t.run((ctx) =>
       loadEffectiveSkill(ctx, String(userA), "pack-business-pulse"),
@@ -4992,8 +4995,9 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
     expect(effective.scope).toBe("global");
     expect(effective.body).toBe(GLOBAL_PULSE_BODY);
 
-    // Rollback is refused too, and for the same reason: nothing pack-named can ever have been live,
-    // so there is no incident-time recovery this blocks.
+    // Rollback is refused by the SAME branch: the `isWorkflowPackSkill` throw sits ahead of
+    // `planTenantActivation`'s mode switch, so activate-user, activate-agent and rollback all take
+    // it. This assertion is the rollback arm of the mutation named above.
     await expect(
       asOwner.mutation(api.skills.rollbackTenantSkill, { targetId: res.tenantSkillId }),
     ).rejects.toThrow(/PACK_GATE/);

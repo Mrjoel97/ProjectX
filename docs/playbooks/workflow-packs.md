@@ -1,5 +1,14 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-29 (29-W3-TAIL — **`workflowPackBinding.ts`'s `TENANT_SKILL_PIN_FOREIGN`
+> THROW NO LONGER JUSTIFIES ITSELF WITH AN UNENFORCED CLAIM.** The comment above it read *"both
+> entry points that declare `tenantSkillIds` here … are `internalAction`s, so a foreign id is a BUG,
+> not an outcome"* — true today, enforced by nothing, and used to argue for throwing rather than
+> returning a governed refusal. The justification is deleted; the comment now states the consequence
+> (a caller reaching it with a foreign id gets an unhandled error, not a rendered outcome) and points
+> at `skill-registry.md`, which records the same gap for all eight declaring sites. No behaviour
+> changed — the tenant comparison before `preCall` is untouched.)
+
 > Last verified: 2026-08-29 (29-FIN-05 PROSE SWEEP — **THE PIN DOOR IS OPEN ON PURPOSE, AND THE
 > COMMENTS THAT DENIED IT ARE GONE.** `skills.ts` said a pack customization row was "DARK BY
 > CONSTRUCTION" and could "never become the body a specialist runs"; the `tenantSkillIds` rail runs

@@ -974,12 +974,15 @@ function assertEvaluableCandidate(snapshot, id) {
   //     never be loaded and the evidence would certify a body this run did not execute — 16-09's
   //     defect class, one registry scope down (`skillVersions: {}` is the tell);
   //   - a pack body is gated on THREE planes (provenance, the pack suite, browser), and the blob
-  //     written from here carries none of them. `planTenantActivation` now refuses every `pack-*`
-  //     name outright, so this evidence could not activate anything even if it were honest — but a
-  //     ~$0.4 run that writes a meaningless certificate is still worth refusing at $0.
-  // The prefix is the derivation `WORKFLOW_PACK_SKILL_NAMES` uses (`pack-${id}`). Matched as a
-  // prefix rather than against an imported list because this file is a standalone node script with
-  // no bundler; over-matching a future non-pack `pack-*` name would fail CLOSED.
+  //     written from here carries none of them. `planTenantActivation` refuses any name that is a
+  //     MEMBER of `WORKFLOW_PACK_SKILL_NAMES` — membership in the derived list, not a prefix test —
+  //     so this evidence could not activate a registered pack even if it were honest; but a ~$0.4
+  //     run that writes a meaningless certificate is still worth refusing at $0.
+  // THE TWO REFUSALS ARE NOT THE SAME SET, deliberately. `WORKFLOW_PACK_SKILL_NAMES` is derived as
+  // `pack-${id}` over the six registered pack ids, and this file matches that PREFIX rather than
+  // importing the list, because it is a standalone node script with no bundler. So a `pack-`-named
+  // row that is NOT a registered pack is refused here and accepted by `planTenantActivation`. That
+  // asymmetry is the safe direction: over-matching fails CLOSED at $0.
   if (typeof c.name === "string" && c.name.startsWith("pack-")) {
     throw new Error(
       `--tenant-skill ${id} is a workflow pack row ("${c.name}") — the golden suite never runs a pack specialist, so it cannot certify one`,

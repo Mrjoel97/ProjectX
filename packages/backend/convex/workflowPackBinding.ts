@@ -202,10 +202,12 @@ async function runPackTurn(
   // would run as another tenant's system prompt.
   //
   // Refused BEFORE `preCall` and before any event is recorded: a mis-wired harness costs $0 and
-  // leaves no run row behind. Throws rather than returning a governed refusal because there is no
-  // user-facing state here to render — both entry points that declare `tenantSkillIds` here
-  // (`runWorkflowPack`, `__runWorkflowPackWithScript`, below) are `internalAction`s, so a foreign id
-  // is a BUG, not an outcome.
+  // leaves no run row behind. It THROWS rather than returning a governed refusal, which means a
+  // caller reaching this with a foreign id gets an unhandled error and not a rendered outcome. The
+  // justification that used to sit here — that both declaring entry points below are
+  // `internalAction`s, so a foreign id can only be a bug — is deleted: it was true when written and
+  // nothing enforces it, and `skill-registry.md` now records the same gap for all eight declaring
+  // sites repo-wide.
   //
   // ponytail: the unscoped read is `skills.getTenantSkillVersion` itself, and the root fix is a
   // required `tenantId` arg on it — that also changes the pin resolution in `runSpecialistTurn`

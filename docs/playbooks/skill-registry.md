@@ -1,5 +1,18 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-29 (29-W3-TAIL — **THE REPLACEMENT FOR A DELETED ABSOLUTE WAS ITSELF
+> FALSE.** "The pin door IS open" said *"Every entry point declaring the arg is an `internalAction`
+> (`runWorkflowPack`, `__runWorkflowPackWithScript`, `dispatchArgs`' four, `runCockpitAgent`). No
+> client-callable surface and no model output can name a row."* There are EIGHT declaring sites, not
+> those five, and the eighth — `evaluations.ts`'s `actOnGapInternal` — is an `internalMutation`, so
+> the claim was wrong in kind as well as incomplete. DELETED, not narrowed again. What replaces it
+> is the validator (`v.id("tenantSkills")` on every site, so a caller may name only WHICH ROW) plus
+> the gap stated out loud: every site is internal today and NO test fails when a client-callable one
+> declares the arg. Also here: `skills.test.ts`'s "Still dark" and "nothing pack-named can ever have
+> been live" — two absolutes 29-FIN-05's commit body lists as deleted — survived verbatim in the
+> test file and are gone; the rollback comment now names the mechanism (the `isWorkflowPackSkill`
+> throw sits ahead of `planTenantActivation`'s mode switch) instead of asserting a history.)
+
 > Last verified: 2026-08-29 (29-FIN-05 PROSE SWEEP: **A TENANT PACK CANDIDATE IS NOT "DARK" — IT IS
 > UNACTIVATABLE AND STILL RUNNABLE UNDER A PIN.** `planTenantActivation`'s `PACK_GATE` throw is real
 > and driven, but the `tenantSkillIds` rail resolves a `pack-*` row into `runSpecialistTurn` and the
@@ -2561,9 +2574,18 @@ in the code used it until the wave-3 sweep; see the next subsection for the door
 candidate's version back off the result. That is deliberate: since activation is refused, a pin is
 how a published customization reaches a model at all. What bounds it:
 
-- **Internal only.** Every entry point declaring the arg is an `internalAction` (`runWorkflowPack`,
-  `__runWorkflowPackWithScript`, `dispatchArgs`' four, `runCockpitAgent`). No client-callable
-  surface and no model output can name a row.
+- **A caller may name only WHICH ROW, and the validator checks it.** Every declaring site takes
+  `v.optional(v.record(v.string(), v.id("tenantSkills")))`, so a value that is not a real row of
+  that table is refused before any handler runs. No site accepts a body, a name, or a
+  `(name, version)` pair.
+- **Every declaring site is internal TODAY, and nothing enforces that it stays so.** The eight are
+  `runWorkflowPack` and `__runWorkflowPackWithScript` (here), `dispatch.ts`'s `runSpecialist`,
+  `runResearch`, `runMedia` and `__runSpecialistWithScript`, `llm.ts`'s `runCockpitAgent`, and
+  `evaluations.ts`'s `actOnGapInternal`. This bullet previously read "every entry point declaring
+  the arg is an `internalAction`" and listed five of the eight — `actOnGapInternal` is an
+  `internalMutation`, so the claim was wrong in kind as well as incomplete. There is no test that
+  fails when a client-callable surface declares the arg; adding one is caught by review. Recorded
+  as a gap, not restated as a narrower guarantee.
 - **Tenant-scoped.** `runPackTurn` compares `row.tenantId` to the run's tenant BEFORE `preCall` and
   throws `TENANT_SKILL_PIN_FOREIGN`; two-tenant test in `workflowPackBinding.test.ts`.
 - **Name-scoped.** `runSpecialistTurn` throws `TENANT_SKILL_PIN_MISMATCH` if the row's `name` is not
