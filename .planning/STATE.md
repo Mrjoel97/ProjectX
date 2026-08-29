@@ -2,92 +2,64 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 28
-current_plan: 11 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail, 28-06 read-only QuickBooks rail, 28-07 read-only Stripe rail, 28-08 read-only PayPal rail) -- 28 IN PROGRESS
+current_phase: 28.1
+current_plan: 3 of 8 executed (28.1-01 webhook receiver + dedupe table, 28.1-02 Dashboard config mirror, 28.1-03 pure tax posture + event-to-phase mapping) -- 28.1 IN PROGRESS
 status: executing
-stopped_at: "28-08 SEALED (`de37ee0` authorization model, `954f277` bounded reads, `5012171` lane gate+docs).
-**THE PAYPAL RAIL IS BUILT AND IT CANNOT CONNECT -- AND THAT IS THE DELIVERABLE.** 74 tests added
-(31 revenue + 43 backend), every one offline at $0. `check-provider-lane --provider paypal` reads
-`consistent`, 1 row pending; adapter and read-only moved PEND->OK. CONSISTENT IS NOT PASSED.
-**THE MODELLING ERROR WAS THE WHOLE PLAN.** A PayPal client-credentials token reads THE APP OWNER'S
-OWN account -- Pikar's. Model it as a per-tenant grant and you get a green suite, a working smoke run
-and PIKAR'S OWN payment data rendered to a tenant as theirs, because every gate in this phase checks
-that a read WORKED and not one checks WHOSE MONEY CAME BACK. Refused THREE times, each
-mutation-proven: `classifyGrantSubject` fails CLOSED to `app_owner` for a missing, malformed OR
-PARTNER-OWNED merchant id (inverting the partner comparison = 12 red); `PayPalCredential.merchantId`
-is required BY TYPE and `parsePayPalCredential` refuses a blob without one; and `paypalConnector`
-re-checks the subject AFTER decryption and refuses BEFORE the request leaves
-(`expect(fetchMock).not.toHaveBeenCalled()`). A FOURTH lives in the evidence plane: the smoke
-validator rejects any read that PRODUCED ROWS with `delegatedMerchant: false` -- a well-formed file
-recording a SUCCESSFUL read of Pikar's own account would otherwise have sealed the lane.
-**THE GAP IS RECORDED, NOT INVENTED.** The published spec declares a partner-only
-`partner-transactions` tag WITH NO PUBLISHED OPERATION, so the third-party read surface cannot be
-built from public docs. `PAYPAL_PARTNER_TRANSACTIONS_PATH = null` (the gap as a VALUE) +
-`PAYPAL_PARTNER_SURFACE_GAP` (one code-owned sentence shared by connector, beginConnect and smoke).
-No fixture asserts a partner response. **`beginConnect` RETURNS A REFUSAL, mints no state and calls
-nothing -- NO TENANT CAN CONNECT PAYPAL TODAY.** Deliberately NOT built: the Partner Referrals
-creation call, because the read-only feature package is not documented as self-serve and must be
-agreed with the partner manager first, and a bespoke POST in a lane module goes RED on
-check-provider-lane's write-verb scan.
-**NEW FINDING -- THE INVOICE HALF OF THE READ SURFACE WAS DROPPED.** PayPal's feature enum has NO
-read-only invoice member; the only one reaching an invoice is `INVOICE_READ_WRITE`, which also grants
-invoice dispatch. It is on `PAYPAL_REFUSED_FEATURES`, alongside PayPal's write-capable DEFAULT set
-(`PAYMENT`/`REFUND`/`DELAY_FUNDS_DISBURSEMENT`). **The rail is transactions and balances ONLY.**
-**MONEY IS DECIMAL STRINGS THROUGH `parseMoney` ONLY** -- `0.29` USD is exactly 29 (0.29*100 is
-28.999999999999996), `5000` JPY is 5000 minor units, `1.005` is REFUSED not rounded. **A NEGATIVE
-AMOUNT IS KEPT, the opposite of the Stripe rule on purpose:** PayPal reports a reversal as its own
-negative transaction while the gross charge stays, so refusing it would report money given back as
-money kept. `fee_amount` is NOT netted -- that would make `received` mean two different things across
-two rails that `reconcilePayments` compares.
-**BOUNDS ARE TWO KINDS OF FACT AND ARE KEPT APART.** PayPal's: 31-day max range (32 is refused),
-3-hour listing latency (**every coverage window ENDS THREE HOURS BACK**, so `ready` is TRUE rather
-than every read being permanently `partial`), 3-year history. THIS REPO'S: page size 100, page cap 5
--- PayPal's rate-limit page renders nothing to a non-JS fetch, so NO figure is attributed to PayPal.
-`fields=transaction_info` is a PRIVACY bound (payer/cart/shipping carry names, emails, addresses),
-asserted on the OUTGOING URL not just the parsed shape.
-**REVOCATION STAYS OPEN.** No revoke endpoint is documented ANYWHERE for PayPal. `disconnect`
-attempts nothing and records `unsupported`; the validator rejects `confirmed`, `attempted_failed` AND
-`not_attempted`, and a local clear must carry `grantRemainsGrantedUpstream: true`.
-**`no-documented-revoke-endpoint` STAYS UNCLEARED for 28-25.**
-**SANDBOX NON-PROBATIVENESS IS IN THE GATE'S OWN OUTPUT.** `probativeForProduction` is DERIVED
-(`live && production`), never operator-typed, and the validator refuses any sandbox/self-test file
-claiming it; `--verify-evidence` prints a SANDBOX-NON-PROBATIVE banner. The `approved_production`
-marker is never rendered as verified -- code, playbook, suitability record and the evidence document
-all say OWNER ATTESTATION.
-**TASK 3 COULD NOT RUN LIVE and could not have** -- unlike 28-05/06/07 this lane lacks not a
-credential but a ROUTE TO OBTAIN ONE. Bare run exits **2**; `--self-test` fires 31 guards through the
-SAME builder and prints 'THIS IS NOT A LIVE PASS'. **ONLY TWO env names, NEITHER a credential family:
-`PAYPAL_PARTNER_MERCHANT_ID` (a public merchant id, the thing `classifyGrantSubject` compares against;
-unset = every read fails closed) and `CONNECTOR_CREDENTIAL_KEY_V1`.** There is deliberately no
-`PAYPAL_CLIENT_ID`/`_SECRET` because nothing here mints a PayPal token.
-**11 NON-DELETION MUTATIONS, ALL RED, ALL RESTORED** (snapshots diffed before AND after): partner
-comparison inverted (12), malformed id -> delegated (2), connector app-owner refusal disabled (2),
-consumption gate disabled independently (4), `REFUND`->`REFUNDS` (2), status `S`->`P` (7), 31->32 (2),
-3h->2h (1), `transaction_info`->`all` (1), offset sign flipped (1), cursor `page+1`->`page+2` (1).
-Imported bounds are ALSO pinned as LITERALS (31, 5, 100, 3*60*60*1000) -- 28-04's finding.
-`tsc --noEmit` run SEPARATELY per package, both exit 0 (it caught 2 real errors a green run was
-silent over). **Backend 2958/2958 in 109 files, revenue 296/296; baselined BY FAILURE COUNT against
-2913/2913 + the PRE-EXISTING worker-teardown `process is not defined` error.**
-**`check-playbooks.mjs` DID BLOCK mid-plan and named the file** -- so its zero-byte output at the end
-is a real pass, not the standing no-op. `npx convex codegen` CANNOT RUN HERE (no local backend on
-:3210); `_generated/api.d.ts` was hand-edited to register the two modules and `tsc` verifies it.
-`requirements-completed: []` -- **REVN-03 STAYS PENDING**: it needs 28-25's live gate, so
-`requirements mark-complete` was deliberately NOT called.
-**NEXT: wave 6 is CLOSED. All four provider rails are built, none has ever spoken to its vendor, and
-all four lanes are `parked` with their open conditions intact.** Still open across the phase: no
-provider callback route or connections UI (28-09), nothing consumes any projection (28-12/28-13), and
-the wave-7 seals (28-22..25) each owe one live gate. For PayPal specifically, 28-25 must resolve TWO
-things with the partner manager, not one: the revocation story AND the unpublished third-party read
-surface -- and it must not seal on a sandbox run.
+stopped_at: "28.1-03 COMPLETE (`e78046c` RED tax, `2eb10b0` GREEN tax, `b9a7189` RED reconcile,
+`c601223` GREEN reconcile, `0188139` biome). TDD, RED observed per-test against deliberate stubs
+before each implementation. Two PURE modules, 66 new tests, ALL OFFLINE AT $0; billing 41/41 ->
+107/107, `tsc --noEmit` run SEPARATELY with the exit code read on its OWN LINE (0).
+**THE CENTRAL LAW IS NOW CODE, AND IT IS A LIVE PATH** (`BANK_TRANSFER_ENABLED` was confirmed `true`
+by the owner on 2026-08-29, so this is shipped code, not recorded dead code): `invoice.paid` on a
+bank-transfer invoice books **NO `actual`** -- zero movements plus one `awaiting-cash-application`
+observation. Funds are in the customer CASH BALANCE; collection is `applied_to_payment` ALONE,
+`funded` is arrival -> `reserved`, `funding_reversed` -> `refunded` and is never dropped, and
+`cash_balance.funds_available` is LEFTOVER money (zero movements, one observation carrying a
+75/90-day age), NOT an arrival -- the trap the research says is easiest to get backwards.
+**A THIRD FAIL-CLOSED BRANCH THE PLAN DID NOT HAVE.** `payment_settings.payment_method_types` is what
+was ALLOWED, not what was USED, so an UNDETERMINABLE payment method also books no `actual`: unknown
+is never card. Resolution is three tiers, most specific first (charge `payment_method_details.type`
+-> expanded PI types -> the invoice allow-list). The bank-transfer guard and the undeterminable guard
+were disabled INDEPENDENTLY and killed DISJOINT tests (3 and 1), so neither hides behind the other.
+**BILL-05: `not_collecting` IS AMBIGUOUS IN STRIPE'S OWN WORDS** -- no registration OR the Nontaxable
+code `txcd_00000000` -- so `taxPosture` takes the product code as an ARGUMENT and structurally
+refuses to be written with one. Because `PRODUCT_TAX_CODE` is STILL `null` (owner deferred), the
+honest live answer today is a THIRD state, `unknown`, never a guessed 'unregistered'. Every other
+published reason with a zero amount is `calculated-zero` -- a real calculation ran, a different
+claim. `renderTaxPosture` makes a bare `0.00` UNREACHABLE rather than discouraged: no zero arm emits
+an amount at all, asserted across the whole reason x product-code grid.
+**15 RENAME/BOUNDARY MUTATIONS, ALL RED, ALL RESTORED.** Backup size-verified BEFORE mutating;
+restore verified by `git status` (tax.ts) and by `cmp` against the backup (reconcile.ts, whose HEAD
+was still the RED stub so `git status` correctly reads M) -- never by the harness's own output.
+Includes the SUBSTRING class deletion-only mutation is blind to (`.includes` -> `methods[0]`, 1 red)
+and both `>=`->`>` off-by-ones on the 75-day return and 90-day sweep boundaries.
+**FORBIDDEN FILES PROVEN UNTOUCHED:** `git diff --stat c3a63d9` over `spend.ts`, `spendLedger.ts`,
+`finance.ts`, `stripeAuth.ts`, `stripeConnector.ts` and `providers/stripe.ts` is EMPTY. `SPEND_PHASES`
+reused verbatim. `git diff --stat HEAD -- '*.ts'` empty after every commit (verify the COMMIT, not
+the tree). ZERO lines of threshold-monitoring code and the literal `tax.threshold` is not written
+anywhere -- a mention in a comment is indistinguishable from a use by grep, so the fact is stated
+without the string.
+**NOTHING CALLS EITHER FUNCTION.** `receiveAndApply`'s effect switch is still EMPTY, no movement has
+reached a table, and nothing in this phase has ever spoken to Stripe -- every event object is
+fabricated. A green `reconcile.test.ts` proves the LAW, not that any money was reconciled. The
+`billingEvents` book of record is 28.1-06.
+`requirements-completed: []` -- **BILL-03 AND BILL-05 BOTH STAY PENDING**: BILL-03 needs 28.1-06's
+ledger wiring, BILL-05 needs the owner's product tax code. `requirements mark-complete` was
+deliberately NOT called.
+**NEXT: 28.1-04** (outbound Stripe transport + hosted Checkout and Customer Portal, Wave 4).
+NOTE: this top block was STALE -- it still reported 28-08 and never recorded 28.1-01 or 28.1-02, both
+of which are complete on disk. `completed_plans` was incremented by ONE for this plan only; the
+frontmatter counter (421) does not match the 430 PLAN / 353 SUMMARY files on disk and was not
+reconciled here.
 Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
 Working branch feat/27-02-pack-contracts."
-last_updated: "2026-08-28T18:40:00.000Z"
+last_updated: "2026-08-29T05:10:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 35
   total_plans: 421
-  completed_plans: 327
-  percent: 77
+  completed_plans: 328
+  percent: 78
 ---
 
 ---
