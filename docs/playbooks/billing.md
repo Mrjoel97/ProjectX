@@ -632,9 +632,22 @@ which is how `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` escaped classification entirely
 2026-08-29**, so `startCheckout` throws naming the missing variable for every caller.
 ## Known gaps & deferred work
 
-- **The effect switch handles the four MAPPING types only.** `invoice.*`, `charge.refunded`,
-  `credit_note.created` and both cash-balance types are still recorded `ignored`. Ledger writes
-  are 28.1-06.
+- ~~**The effect switch handles the four MAPPING types only.**~~ **CLOSED by 28.1-06** — the
+  invoice, refund and cash-balance arms all write the ledger now, and the switch is exhaustive.
+- **No UI renders any of the ledger.** `unappliedFunds` has no caller in `apps/web`, so the
+  75/90-day clock is visible only to a query nobody calls. `taxPosture`/`renderTaxPosture` still
+  have no renderer either (28.1-03's gap, unchanged).
+- **A ledger write that throws is a 500 and a Stripe retry.** `recordBillingMovement` throws rather
+  than coercing (the `spendLedger.recordMovement` posture), and `receiveAndApply` does not catch.
+  Every caller today comes through `reconcileEvent`, which pre-validates amount and currency, so a
+  throw means a programming error — but the CURRENCY-MISMATCH guard could in principle be reached
+  by real cross-currency data, and it would be loud rather than absorbed. Recorded, not mitigated:
+  a `try`/`catch` inside the mutation would 200 the delivery away and could leave a half-written
+  event, which is worse.
+- **The 75/90 stage is derived from `observedAt` = the delivery's `event.created`**, not from
+  Stripe's own view of when the funds landed. Those should agree; nothing checks it.
+- **`invoice.payment_failed` books nothing and dunning is not modelled.** Stripe's Smart Retries
+  own that today, and the subscription status on `billingCustomers` is the only trace.
 - **NOTHING HAS EVER BEEN DELIVERED.** Every mapping test fabricates a `whsec_`, signs its own
   body and drives the real route in memory. That proves what the handler DOES with a delivery;
   it does not prove Stripe ever sends one, nor that `client_reference_id` survives a real
