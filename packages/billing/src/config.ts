@@ -71,9 +71,21 @@ export const HEAD_OFFICE_COUNTRY: string | null = null;
  *
  * `null` = not yet answered. `false` is a LEGITIMATE answer, not a failure: the toggle is
  * country-gated and may simply not exist for this account, in which case BILL-03's cash-balance
- * arm is recorded dead code rather than shipped code. UNCONFIRMED. Set in 28.1-02 Task 3.
+ * arm is recorded dead code rather than shipped code.
+ *
+ * CONFIRMED `true` by the account owner on 2026-08-29. So BILL-03's cash-balance arm is SHIPPED
+ * code on a live path, and the reconciliation law it encodes is load-bearing, not defensive:
+ *
+ *   `invoice.paid` is NOT collection. Bank-transfer funds land in the customer CASH BALANCE and
+ *   are collected only when a `customer_cash_balance_transaction.created` arrives with
+ *   `type=applied_to_payment`. `funded` is arrival; `funding_reversed` takes it back. Booking
+ *   `actual` on `invoice.paid` would record money we do not have, in an append-only ledger that
+ *   cannot quietly correct it.
+ *
+ * The owner deferred the other four answers, so `CONFIG_CONFIRMED` stays false. This value is
+ * format-checked on its own — see the per-field widening in `config.test.ts`, 2026-08-29.
  */
-export const BANK_TRANSFER_ENABLED: boolean | null = null;
+export const BANK_TRANSFER_ENABLED: boolean | null = true;
 
 /**
  * Free-trial length in days, as configured on the price/Checkout session.

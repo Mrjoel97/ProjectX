@@ -31,33 +31,44 @@ describe("the Dashboard configuration mirrored in code", () => {
     expect(STRIPE_API_BASE.endsWith("/")).toBe(false);
   });
 
-  test("the config is either wholly pending or wholly landed — never half", () => {
-    if (!CONFIG_CONFIRMED) {
-      // A value that lands while the flag stays false would escape every format guard below.
-      expect({
-        STRIPE_API_VERSION,
-        PRODUCT_TAX_CODE,
-        HEAD_OFFICE_COUNTRY,
-        BANK_TRANSFER_ENABLED,
-        TRIAL_DAYS,
-      }).toEqual({
-        STRIPE_API_VERSION: null,
-        PRODUCT_TAX_CODE: null,
-        HEAD_OFFICE_COUNTRY: null,
-        BANK_TRANSFER_ENABLED: null,
-        TRIAL_DAYS: null,
-      });
-      return;
+  test("every value that has LANDED is format-checked, whether or not the rest have", () => {
+    // WIDENED 2026-08-29 from all-or-nothing to per-field. The owner answered exactly one of the
+    // five Dashboard questions (bank transfer) and deferred the other four, and the binary form
+    // could not express that: it demanded all five be null, so a single true answer read as red.
+    //
+    // The intent it protected is UNCHANGED and is what these per-field guards enforce — a value
+    // that lands is format-checked the moment it lands, so nothing escapes by arriving early.
+    // That was the actual hazard; "landing together" never was.
+    if (STRIPE_API_VERSION !== null) {
+      expect(STRIPE_API_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}(\.[a-z]+)?$/);
     }
+    if (PRODUCT_TAX_CODE !== null) {
+      expect(PRODUCT_TAX_CODE).toMatch(/^txcd_\d+$/);
+    }
+    if (HEAD_OFFICE_COUNTRY !== null) {
+      expect(HEAD_OFFICE_COUNTRY).toMatch(/^[A-Z]{2}$/);
+    }
+    if (BANK_TRANSFER_ENABLED !== null) {
+      expect(typeof BANK_TRANSFER_ENABLED).toBe("boolean");
+    }
+    if (TRIAL_DAYS !== null) {
+      expect(Number.isInteger(TRIAL_DAYS)).toBe(true);
+      expect(TRIAL_DAYS).toBeGreaterThanOrEqual(0);
+    }
+  });
 
-    // Confirmed: every value must be well formed, because from here the rest of the phase reads
-    // them without re-checking.
-    expect(STRIPE_API_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}(\.[a-z]+)?$/);
-    expect(PRODUCT_TAX_CODE).toMatch(/^txcd_\d+$/);
-    expect(HEAD_OFFICE_COUNTRY).toMatch(/^[A-Z]{2}$/);
-    expect(typeof BANK_TRANSFER_ENABLED).toBe("boolean");
-    expect(typeof TRIAL_DAYS).toBe("number");
-    expect(Number.isInteger(TRIAL_DAYS)).toBe(true);
-    expect(TRIAL_DAYS as number).toBeGreaterThanOrEqual(0);
+  test("CONFIG_CONFIRMED is the claim that ALL FIVE landed — it cannot be flipped early", () => {
+    // The flag stays explicit rather than derived, but its meaning is now precise: it asserts
+    // completeness, not format. Format is guarded per-field above, unconditionally.
+    if (!CONFIG_CONFIRMED) return;
+    for (const [name, value] of Object.entries({
+      STRIPE_API_VERSION,
+      PRODUCT_TAX_CODE,
+      HEAD_OFFICE_COUNTRY,
+      BANK_TRANSFER_ENABLED,
+      TRIAL_DAYS,
+    })) {
+      expect(value, `${name} is still null but CONFIG_CONFIRMED is true`).not.toBeNull();
+    }
   });
 });
