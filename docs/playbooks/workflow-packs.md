@@ -1,5 +1,54 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-29 (29-07-FIX — **TWO RECORDED FACTS IN THIS FILE WERE FALSE; BOTH ARE
+> RETRACTED ABOVE.** (a) The Next production build DOES run here: `pnpm --filter @pikar/web build`
+> exits 0 and `ƒ /dashboard/workflows` is in its route table, measured on this tip. It is the
+> meaningful compile gate for the route and it should be run. (b) The eval harness's staging
+> function is `seedCase` (`packages/backend/scripts/run-workflow-pack-evals.mjs`), not `stageFor`,
+> and it plants THREE things: `smoke:seedPackEvalTenant` (a figure row, one calendar event, a
+> `gmailTokens` row), `smoke:seedInboxFixture` (the mailbox — only when the fixture declares
+> `inbox: available`) and `vaultSmoke:seedCorpus` (the briefs — only when an expected operation uses
+> `searchVault`); `runCase` adds `smoke:seedCockpitPlan`.
+>
+> **THE MAILBOX CARRIES A REAL INJECTION, ON PURPOSE.** `seedInboxFixture`'s `fix-injection` message
+> body is a forward-to-attacker instruction, and `pack-customer-complaint` is the only pack whose
+> fixtures declare `inbox: available` — so all five of its cases run against it, not only its
+> `-injected-` one. The other three seeded planes carry none. Every one of those four claims is now
+> asserted against the SEEDER'S OWN sliced source, with a positive control on the slicer.
+> `INJECTION_MARKERS` gained "system instruction": without it the guard could not see
+> `IMPORTANT SYSTEM INSTRUCTION:`, the phrasing this repo's own probe payload uses, so planting that
+> exact line in `vaultSmoke.ts` left the file green. It now goes red (observed).
+>
+> **THE RUNNER'S VALIDATOR NOW RUNS IN CI.** `run-workflow-pack-evals.mjs` executes `main()` only
+> when Node was pointed at it, so `convex/workflowPackEvals.test.ts` imports the real
+> `validateFixture` / `validateCorpus` / `projectRegistry` instead of carrying a second traversal.
+> `--fixtures-only` still reports "30 valid". Two assertions were DELETED rather than kept: a
+> tautological `toEqual(packReadableSources(packId))` (the implementation assigns that call's
+> result; `packages/core/src/workflowCustomization.test.ts` is what catches a change to it, verified
+> red) and a verbatim copy of `packages/core/src/workflowPacks.test.ts`'s grant-derivation test.
+>
+> **THE CUSTOMIZER IS NOW ASSERTED THROUGH ITS RENDER.** Every user-facing sentence used to be
+> checked by CALLING an exported copy function; six could be stripped out of the JSX with the suite
+> green. `WorkflowPackCustomizer` is split into a hooks container and `CustomizerView`, no copy
+> function is exported, and the test renders with `react-dom/server` and asserts the RENDERED string
+> and the exact ARIA id pairs on the exact controls. `ACTIVATION_NOTE`'s claim about `cockpit.ts` is
+> cited by a test that reads `cockpit.ts` (adding `tenantSkillIds` there turns it red).
+>
+> **TWO USER-FACING DEFECTS CLOSED.** `baseCandidateVersion` came from `skills.myUserSkills`, a
+> 50-row tenant-WIDE window; past it the form sent `null` forever and every save was refused
+> `stale_base_version` with copy telling the user to reload — which reproduces the window.
+> `workflowPackDiscovery.listPacks` now returns `myBaseVersion` from the same per-name
+> `by_tenant_name_version` `take(1)` `readTenantPublishState` uses, the client adopts the server's
+> `currentBaseVersion` on a refusal, and the copy asks for a retry that can win. And a repeat
+> customization silently dropped every field the user did not re-type: `listPacks` returns
+> `myCustomizationValues`, the form reopens with them, the diff is against what it opened with, and
+> the surface says saving replaces the whole set.
+>
+> apps/web 97/97 · workflowPackEvals 22/22 · workflowPackDiscovery 12/12 · both typechecks clean ·
+> `pnpm --filter @pikar/web build` EXIT=0. **STILL UNRUN: the authenticated browser gate.** No
+> Playwright spec has been executed against `/dashboard/workflows`, and this release's honesty
+> claims about what a user SEES rest on SSR renders, not on a live page.)
+
 > Last verified: 2026-08-29 (29-W3-TAIL-FIX — **THE `internalAction` JUSTIFICATION IS DELETED FROM
 > THE CODE, AND THE 2026-08-28 ENTRY BELOW STILL STATES IT.** The `packArgs` docstrings in
 > `workflowPackBinding.ts` no longer read "`internalAction` ⇒ never model-supplied" or "declared
@@ -19,16 +68,11 @@
 > `toolsAllowed` must be in `toolsForWorkflowPack` and `toolsForbidden` must not be, and
 > `artifactCreated` must not be claimed of a briefing pack.
 >
-> **THE FINDING, recorded rather than fixed here.** `stageFor` plants exactly two things
-> (`smoke:seedInboxFixture`, `vaultSmoke:seedCorpus`) and neither contains an injected instruction
-> — asserted, with a positive control. So only `brand-review-05` and `customer-complaint-03` carry
-> their injection in the turn text. `business-pulse-04` and `process-sop-05` describe an injection
-> inside a stored document, and `campaign-plan-05` / `sales-call-prep-05` inside a live web page;
-> nothing plants either, so those four score as ordinary cases. The four are pinned by name as a
-> LITERAL list: planting the line in `vaultSmoke:seedCorpus` (or giving the two web cases a
-> controlled page) turns that test red, and the red is the signal to shorten the list. Fixing it
-> needs edits to `vaultSmoke.ts`, the fixture JSONs and the `casesHash`/`caseCount` in
-> `packages/contracts/src/skill.ts` — none of which is 29-07's to touch.
+> **THE FINDING AS FIRST WRITTEN HERE WAS WRONG AND IS RETRACTED.** It said "`stageFor` plants
+> exactly two things (`smoke:seedInboxFixture`, `vaultSmoke:seedCorpus`) and neither contains an
+> injected instruction — asserted, with a positive control". `stageFor` exists nowhere in this
+> repository, three things are planted, and one of them DOES carry an injection. See the 29-07-FIX
+> block at the top of this file for what the harness actually plants; do not cite this paragraph.
 >
 > Also made executable: a valid pack-suite evidence blob does NOT satisfy `hasPassingTenantEvidence`
 > and tenant evidence does not satisfy `hasPassingPackEvalEvidence`, with a positive control that
@@ -51,10 +95,12 @@
 > does not link to it, with a positive control that the scan can see a route that IS linked. Adding
 > the href IS the activation, and rollback is deleting it — the `dashboard-pages.md` rule.
 >
-> **UNRUN:** no browser has loaded this route. The component tests are source scans plus literal
-> copy assertions in a node-only runner (`apps/web` has no jsdom), and `pnpm --filter @pikar/web
-> build` cannot run in this worktree at all — `server-only` is missing from `node_modules`, which
-> reproduces with the route deleted. `pnpm typecheck` is the compile gate that did run.)
+> **UNRUN:** no browser has loaded this route. **The claim that once stood here — that `pnpm
+> --filter @pikar/web build` "cannot run in this worktree at all" because `server-only` is missing
+> — WAS FALSE and is deleted.** The build runs; see the 29-07-FIX block at the top. Nothing imports
+> `server-only`; it appears once, in a comment. A false gate RESULT is worse than a false
+> invariant: it tells the next operator that a working verification path is unavailable, which is
+> how a gate stops being run.)
 
 > Last verified: 2026-08-29 (29-W3-TAIL — **`workflowPackBinding.ts`'s `TENANT_SKILL_PIN_FOREIGN`
 > THROW NO LONGER JUSTIFIES ITSELF WITH AN UNENFORCED CLAIM.** The comment above it read *"both
@@ -1310,6 +1356,22 @@ pack DARK until it has earned three independent kinds of evidence.
 - `packages/backend/convex/skills.ts` — `publishPackCandidate`, `recordPackBrowserEvidence`,
   `assertPackActivationEvidence`, and the pack branch of `planGlobalActivation`.
 - `packages/backend/convex/skills.test.ts` — the `workflow-pack candidate lifecycle` block.
+- `packages/backend/convex/workflowPackDiscovery.ts` — `listPacks` (ACTIVE-only, with the preflight
+  and this tenant's `myBaseVersion` / `myCustomizationValues` for the pack), `probeSources`, and the
+  owner-only candidate-preview and rollback-target queries.
+- `packages/backend/convex/workflowPackEvals.test.ts` — the $0 corpus gate. It IMPORTS the runner's
+  `validateFixture` / `validateCorpus` / `projectRegistry` rather than re-implementing them, and
+  adds what the runner does not check: the terminal through the shipped `outcomeFor`, an audit of
+  what the harness actually seeds, the customization/eval tie, the evidence-predicate boundary.
+
+**Web**
+- `apps/web/app/(app)/dashboard/workflows/page.tsx` — the route. NOT in the `(app)` layout's `NAV`.
+- `apps/web/app/(app)/dashboard/workflows/WorkflowPackCustomizer.tsx` — a hooks/handlers container
+  plus `CustomizerView`, which holds all the JSX and takes its whole state as props. No copy
+  function is exported: the sentences are proved by RENDERING, not by calling them.
+- `apps/web/app/(app)/dashboard/workflows/WorkflowPackCustomizer.test.ts` — renders with
+  `react-dom/server` and asserts the rendered string and the exact ARIA id pairs, plus source scans
+  for the absences a render cannot show.
 
 **Scripts**
 - `packages/backend/scripts/run-workflow-pack-evals.mjs` — fixture schema, validator and
@@ -1442,8 +1504,18 @@ cd packages/core && npx vitest run src/tenantData.test.ts        # the new table
 cd packages/core && npx tsc --noEmit                             # compile-time totality proofs
 cd packages/backend && npx vitest run convex/skills.test.ts      # publication + gate + rollback
 cd packages/backend && npx vitest run convex/isolation.test.ts   # tenant scoping of the new table
+cd packages/backend && npx vitest run convex/workflowPackEvals.test.ts       # the $0 corpus gate
+cd packages/backend && npx vitest run convex/workflowPackDiscovery.test.ts  # listPacks + base version
 cd packages/backend && node scripts/run-workflow-pack-evals.mjs --fixtures-only --self-test
+cd apps/web && pnpm vitest run WorkflowPackCustomizer   # renders the surface; asserts its sentences
+pnpm --filter @pikar/web build                          # RUNS. `f /dashboard/workflows` is in the
+                                                        # route table. The dev server OOMs on the
+                                                        # workspace page, so this is THE compile
+                                                        # gate for a route — do not skip it.
 ```
+
+**The browser gate has not been run for `/dashboard/workflows`.** No Playwright spec has loaded it
+authenticated. Everything above is SSR and source; a live page is still owed.
 
 Never `pnpm --filter <pkg> test -- <name>`: the `--` is swallowed and the whole suite runs, so the
 command reads green whether or not the named file exists. Never `node scripts/check-playbooks.mjs`
