@@ -1,5 +1,43 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-30 (29-11 + 29-12 **round 4** — **THE BLOCKLISTS BECAME ALLOWLISTS, AND
+> THE CITATION CHECK NOW CANONICALISES THE PATH.** Round 3 was defeated twice more: three
+> independent verifiers built recurrence subsystems that simply DID NOT USE the ten banned tokens
+> (89/89, 135/135 and 8/8 green), and three found that the anti-fabrication rules compared
+> `evidenceRef` as RAW STRINGS on a **case-insensitive filesystem**, so `package.json` /
+> `Package.json` / `PACKAGE.JSON` were twelve "distinct" citations of ONE file and a fully
+> fabricated `enable-safe` exited 0 in all three modes. **A blocklist over an open vocabulary
+> cannot prove absence — renaming always defeats it**, which is why three rounds of hardening kept
+> failing the same way. The proof primitive changed: `routines.test.ts` now pins **CONVEX_MODULES**
+> (the whole convex namespace, enumerated from the filesystem) and **SCHEDULER_CALL_SITES /
+> CRON_REGISTRARS** (every file calling `ctx.scheduler.*`), so a new scheduler is a visible
+> governance diff UNDER ANY NAME; the ten-token scan is demoted to a convenience check and its
+> comment says so. `check-routine-gate.mjs` resolves each ref to a real path, case-folded on win32,
+> before comparing identity.
+>
+> **Both fixes were proven by refusal, by the orchestrator, on this tree:** a fabricated
+> `enable-safe` citing one file under twelve case variants is REFUSED in all three modes, naming
+> the reason per row ("cites the SAME FILE as row `standing-approval`"); twelve genuinely distinct
+> real files still exit 0, so the gate is fail-closed rather than always-failing. And a disguised
+> self-arming `internalMutation` (`cadenceKeeper.ts` — innocuous name, no banned token, not under
+> `routines/`) turned **three** tests red, including both structural allowlists, then was deleted.
+>
+> **The residual, stated rather than hidden:** twelve distinct real files that say NOTHING about
+> recurrence still produce `enable-safe`. The gate proves a citation is distinct and resolves — it
+> cannot judge relevance, and no parser can. That is what the blocking owner checkpoint is for.
+> Round 4 also DELETED the affirmative "this costs an author N distinct real citations" sentence
+> rather than writing a fourth version of it; it had been published falsely three rounds running,
+> each round asserting the new rule closed it without testing the new rule's own alias space.
+>
+> Two round-3 edits were left unfinished by an interrupted agent and completed by the orchestrator:
+> `DEPENDENCY_MANIFESTS` is now filesystem-derived (13 manifests, was 5) and its **hand-written**
+> literal pin was updated to match — deliberately not regenerated from the derivation, since an
+> oracle copied from its own subject pins nothing; and `tokenHits` is deduped BY LINE, because the
+> banned tokens overlap (`nextRunAt` contains `runAt`) so one offending line was reported twice.
+> Gates: backend `routineDecision` + `routines` **91/91**, backend typecheck exit 0, and the real
+> artifact still reads `--matrix` 0 · `--eligibility` 1 (13 problems) · `--validate-decision` 0
+> (`decision: defer`).)
+
 > Last verified: 2026-08-29 (29-11 + 29-12 **round 3** — **THE RECURRENCE GATE COULD BE BYPASSED
 > WITH ONE FLAG, AND THE ABSENCE PROOF WITH ONE `//`.** Three verifiers read round 2. Two blockers:
 > (1) `--self-check` anywhere in argv short-circuited the requested mode and exited **0 without

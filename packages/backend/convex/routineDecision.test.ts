@@ -116,13 +116,24 @@ describe("the closed schema is genuinely closed", () => {
     expect(EVIDENCE_TYPES).toEqual(["automated", "live", "manual"]);
     expect(DECISIONS).toEqual(["defer", "enable-safe"]);
     expect(DECIDERS).toEqual(["owner", "agent", "fixture"]);
-    // The lockfile and apps/web are in the dependency scan, not just the three round-1 manifests.
+    // DERIVED from the filesystem (round 4), so a new package cannot slip a scheduler dependency
+    // past the scan. This literal is written BY HAND and is the governance half: adding a package
+    // turns this red and someone reads the diff. Never regenerate it from DEPENDENCY_MANIFESTS —
+    // an oracle copied from its own subject pins nothing.
     expect(DEPENDENCY_MANIFESTS).toEqual([
       "package.json",
-      "packages/core/package.json",
-      "packages/backend/package.json",
-      "apps/web/package.json",
       "pnpm-lock.yaml",
+      "apps/web/package.json",
+      "packages/audit/package.json",
+      "packages/backend/package.json",
+      "packages/contracts/package.json",
+      "packages/core/package.json",
+      "packages/cost/package.json",
+      "packages/extraction/package.json",
+      "packages/pii/package.json",
+      "packages/revenue/package.json",
+      "packages/vault/package.json",
+      "packages/voice/package.json",
     ]);
     // The three required-live rows must actually be rows.
     for (const id of REQUIRED_LIVE_ROWS) expect(ROW_IDS).toContain(id);

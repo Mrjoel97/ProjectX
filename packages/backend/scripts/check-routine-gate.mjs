@@ -30,16 +30,31 @@
  *   - it resolves to a REGULAR FILE, not a directory,
  *   - that file is not empty,
  *   - it is not the decision artifact under validation (a record is not its own evidence),
- *   - and no two `pass` rows resolve to the same FILE. Round 2 keyed this on the raw string, so
- *     `package.json#row-1 ... package.json#row-12` counted as twelve citations and a fabricated
- *     enable-safe exited 0 in all three modes; the key is the resolved path now, and an
- *     `#anchor` does not turn one document into two.
+ *   - and no two `pass` rows resolve to the same file.
  *
- * That refuses every fabrication shape four verifiers demonstrated, and it forces an author who
- * wants twelve green rows to cite twelve distinct real FILES. It CANNOT tell whether any of them
+ * THE LAST TWO ARE KEYED ON FILESYSTEM IDENTITY, NOT ON THE AUTHOR'S SPELLING. Both have been
+ * bypassed twice now by re-spelling one path. Round 2 keyed the duplicate rule on the raw
+ * string, so `package.json#row-1 ... package.json#row-12` read as twelve citations. Round 3
+ * keyed it on `resolve()`d path STRINGS, which on win32 and darwin — case-insensitive
+ * filesystems, this repo's own development and gating platform included — made `package.json`,
+ * `Package.json` and `PACKAGE.JSON` three keys over one file; three independent verifiers
+ * produced a fabricated `enable-safe` citing ONE file twelve times that exited 0 in all three
+ * modes, and the self-citation rule fell to the same edit. `fileIdentity()` now resolves each
+ * ref through `realpathSync.native` — which returns the on-disk name, so casing, `.` / `..`
+ * segments, Windows 8.3 short names and symlinks all collapse — and case-folds on top for
+ * paths that are not on disk to be read.
+ *
+ * NO CLAIM IS MADE HERE ABOUT WHAT FABRICATION COSTS. Three consecutive rounds published a
+ * sentence of that shape ("N distinct real citations — a reviewable N-line diff"), each one
+ * asserting that the round's new rule closed the previous round's alias space, and each one
+ * falsified by the next verifier finding an alias the new rule did not canonicalise. The
+ * mechanism is stated above and the residuals below; nothing is claimed about cost.
+ *
+ * KNOWN RESIDUALS. The gate never READS a cited file, so it cannot tell whether a citation
  * substantiates its row's question — `turbo.json` is a real, distinct, non-empty, meaningless
- * citation and the gate says yes. Nothing a parser does can close that. That judgement is the
- * human checkpoint's job, and §5/§7 of the decision record say so.
+ * citation and the gate says yes. Two genuinely distinct files with identical content are two
+ * citations. A hard link is two names for one inode and `realpath` does not collapse it. That
+ * judgement is the human checkpoint's job, and §5/§7 of the decision record say so.
  *
  * WHY THE YAML READER IS HAND-WRITTEN AND HOSTILE. No YAML dependency is installed in this
  * repo and this gate is not worth adding one for. More importantly, a permissive parser is the
@@ -86,12 +101,38 @@
  * Do not read this script's exit code through a pipe.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
-import { argv, exit, stdout } from "node:process";
+import { argv, exit, platform, stdout } from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRootDefault = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+/**
+ * `true` where the filesystem folds case — which includes the platform this repo is developed
+ * and gated on. A path rule that compares spellings treats `Package.json` and `package.json` as
+ * two files here, and that is exactly how the round-3 citation rules were defeated.
+ */
+export const CASE_INSENSITIVE_FS = platform === "win32" || platform === "darwin";
+
+/**
+ * The identity of a path as the FILESYSTEM sees it, not as its author spelled it. Two refs name
+ * the same citation if and only if their identities are equal.
+ *
+ * `realpathSync.native` returns the on-disk name, so one call collapses casing, `.`/`..`
+ * segments, Windows 8.3 short names and symlinks. It throws for a path that is not on disk — a
+ * ref naming a missing file, which the caller refuses on its own — so the fallback is the
+ * resolved string, with case folding applied on top because there is no on-disk name to read.
+ */
+export function fileIdentity(abs) {
+  let out = abs;
+  try {
+    out = realpathSync.native(abs);
+  } catch {
+    /* not on disk: fall back to the resolved string, case-folded below */
+  }
+  return CASE_INSENSITIVE_FS ? out.toLowerCase() : out;
+}
 
 /**
  * THE CLOSED ROW SET. Every governance question the research gate raised, one row each. A row
@@ -226,22 +267,29 @@ export function checkEvidenceRef(ref, repoRoot = repoRootDefault) {
     return {
       ok: false,
       path,
+      id: null,
       reason: "names no file at all — an anchor or a note is not a citation",
     };
   }
   const abs = resolve(repoRoot, path);
-  if (abs !== repoRoot && !abs.startsWith(repoRoot + sep)) {
-    return { ok: false, path, reason: "escapes the repository root" };
+  // CONTAINMENT IS CHECKED ON THE CANONICAL IDENTITY, not on the resolved string, so neither a
+  // re-spelled case nor a symlink inside the repo pointing outside it can smuggle a path past
+  // the boundary. `id` is what every downstream identity rule keys on.
+  const id = fileIdentity(abs);
+  const rootId = fileIdentity(repoRoot);
+  if (id !== rootId && !id.startsWith(rootId + sep)) {
+    return { ok: false, path, id, reason: "escapes the repository root" };
   }
   let stat;
   try {
     stat = statSync(abs);
   } catch {
-    return { ok: false, path, reason: "does not resolve to a file in this repo" };
+    return { ok: false, path, id, reason: "does not resolve to a file in this repo" };
   }
-  if (!stat.isFile()) return { ok: false, path, reason: "resolves to a directory, not a file" };
-  if (stat.size === 0) return { ok: false, path, reason: "resolves to an EMPTY file" };
-  return { ok: true, path };
+  if (!stat.isFile())
+    return { ok: false, path, id, reason: "resolves to a directory, not a file" };
+  if (stat.size === 0) return { ok: false, path, id, reason: "resolves to an EMPTY file" };
+  return { ok: true, path, id };
 }
 
 /**
@@ -299,19 +347,23 @@ export function validateMatrix(text, { repoRoot = repoRootDefault, artifactPath 
       // An artifact may not be its own evidence. This is the fabrication shape an author reaches
       // for FIRST once refs have to resolve (the most available real file is the one already
       // open), and unlike "does this file answer the question" it is mechanically decidable.
-      const abs = check.ok ? resolve(repoRoot, check.path) : null;
-      if (abs !== null && artifactPath !== null && abs === resolve(artifactPath)) {
+      //
+      // KEYED ON `fileIdentity`, BOTH SIDES. Round 3 compared `resolve()`d strings, so on a
+      // case-insensitive filesystem an artifact at `d.md` citing `D.md` was not citing itself.
+      const id = check.ok ? check.id : null;
+      if (id !== null && artifactPath !== null && id === fileIdentity(resolve(artifactPath))) {
         errors.push(
           `row \`${row.id}\`: cites the decision artifact ITSELF - ${JSON.stringify(row.evidenceRef)}. ` +
             "A record cannot be the evidence for its own verdict.",
         );
       }
-      // KEYED ON THE RESOLVED PATH, not the raw string. Round 2 keyed on the string INCLUDING its
-      // `#anchor`, so `package.json#row-1 ... package.json#row-12` counted as twelve distinct
-      // citations and a fabricated enable-safe exited 0 in all three modes - while the error
-      // message below told the author exactly how to do it ("cite the specific section with a
-      // `#anchor`"). Twelve green rows now genuinely cost twelve distinct FILES.
-      const key = abs ?? row.evidenceRef;
+      // KEYED ON `fileIdentity`, not on the author's spelling. Round 2 keyed on the raw string
+      // INCLUDING its `#anchor` (`package.json#row-1 ... #row-12` read as twelve citations);
+      // round 3 keyed on the `resolve()`d string, which on a case-insensitive filesystem let
+      // `package.json` / `Package.json` / `PACKAGE.JSON` be three keys over one file. Both
+      // shapes produced a fabricated enable-safe that exited 0 in all three modes. See the
+      // header for what this does and does not close - no cost claim is made.
+      const key = id ?? row.evidenceRef;
       const prior = passRefs.get(key);
       if (prior !== undefined) {
         errors.push(
@@ -356,18 +408,33 @@ export function eligibility(text, opts = {}) {
 }
 
 /**
- * The manifests a scheduling dependency could hide in. `apps/web/package.json` and
- * `pnpm-lock.yaml` are here because 29-12's plan text gates on "package manifests or the
- * lockfile", and round 1 scanned neither — a dependency added under `apps/web`, or pinned only
- * in the lockfile, left the gate green.
+ * Every manifest a scheduling dependency could hide in, DERIVED FROM THE FILESYSTEM.
+ *
+ * Round 1 hardcoded three manifests and no lockfile. Round 3 hardcoded five — the root, the
+ * lockfile, `apps/web` and two of ten workspace packages — so `rrule` added to
+ * `packages/vault/package.json` was invisible until `pnpm install` wrote it into the lock, and
+ * the test that asserted "EVERY scanned manifest" iterated the same constant it pinned and so
+ * could never discover a manifest missing from it. Enumerating `apps/*` and `packages/*` means
+ * a workspace package added later is scanned without anyone remembering to add it.
+ *
+ * The root manifest and the lockfile are unconditional: `deferAbsenceChecks` skips a manifest
+ * that does not exist, so listing them costs nothing on a scratch root that has neither.
  */
-export const DEPENDENCY_MANIFESTS = [
-  "package.json",
-  "packages/core/package.json",
-  "packages/backend/package.json",
-  "apps/web/package.json",
-  "pnpm-lock.yaml",
-];
+export function manifestsUnder(repoRoot = repoRootDefault) {
+  const found = ["package.json", "pnpm-lock.yaml"];
+  for (const group of ["apps", "packages"]) {
+    const dir = resolve(repoRoot, group);
+    if (!existsSync(dir)) continue;
+    for (const name of readdirSync(dir).sort()) {
+      const rel = `${group}/${name}/package.json`;
+      if (existsSync(resolve(repoRoot, rel))) found.push(rel);
+    }
+  }
+  return found;
+}
+
+/** The derived list for THIS repository, so a test can pin it and see it widen or narrow. */
+export const DEPENDENCY_MANIFESTS = manifestsUnder();
 
 /**
  * The scheduling libraries a recurrence implementation would reach for, as a CLOSED, NAMED set.
@@ -400,7 +467,7 @@ export function deferAbsenceChecks({ repoRoot = repoRootDefault } = {}) {
       errors.push(`decision is \`defer\` but docs/decisions/${f} exists — no ADR may be minted`);
     }
   }
-  for (const manifest of DEPENDENCY_MANIFESTS) {
+  for (const manifest of manifestsUnder(repoRoot)) {
     const p = resolve(repoRoot, manifest);
     if (!existsSync(p)) continue;
     const hit = SCHEDULING_DEPENDENCY_RE.exec(readFileSync(p, "utf8"));
@@ -529,6 +596,36 @@ function selfCheck() {
     /evidenceRef: [^\n#]*#/g,
     "evidenceRef: package.json#",
   );
+  // THE CASE LOOPHOLE: one file, twelve spellings. Round 3 keyed the duplicate and the
+  // self-citation rules on `resolve()`d path STRINGS, so on win32/darwin these read as twelve
+  // distinct citations of one file, and a fabricated enable-safe exited 0 in all three modes.
+  // On a case-SENSITIVE filesystem eleven of these do not exist and are refused as unresolvable
+  // instead - a different reason, the same verdict, which is why these cases assert `false`
+  // rather than a message. The identity case below is the one that distinguishes the two.
+  const CASINGS = [
+    "package.json",
+    "Package.json",
+    "PACKAGE.json",
+    "pACKAGE.json",
+    "PaCKAGE.json",
+    "pAcKAGE.json",
+    "packAGE.json",
+    "PACKage.json",
+    "packagE.json",
+    "PACKAGE.JSON",
+    "Package.JSON",
+    "pACKAGE.JSON",
+  ];
+  let casing = 0;
+  const oneFileTwelveCasings = green.replace(
+    /evidenceRef: .*/g,
+    () => `evidenceRef: ${CASINGS[casing++]}`,
+  );
+  const selfPath = "packages/backend/scripts/check-routine-gate.mjs";
+  const selfCitedByCase = green.replace(
+    /evidenceRef: .*/g,
+    () => "evidenceRef: packages/backend/scripts/Check-Routine-Gate.mjs",
+  );
 
   const cases = [
     ["validateMatrix: empty text", () => validateMatrix("").ok === false],
@@ -592,6 +689,29 @@ function selfCheck() {
       "validateMatrix: twelve pass rows citing ONE file under twelve #anchors",
       () =>
         validateMatrix(oneFileTwelveAnchors).errors.some((e) => e.includes("cites the SAME FILE")),
+    ],
+    [
+      "validateMatrix: twelve pass rows citing ONE file under twelve CASINGS",
+      () => validateMatrix(oneFileTwelveCasings).ok === false,
+    ],
+    [
+      "validateDecision: a fabricated enable-safe under twelve CASINGS of one file is refused",
+      () => validateDecision(oneFileTwelveCasings).ok === false,
+    ],
+    [
+      "validateDecision: an enable-safe citing the artifact itself under a DIFFERENT CASE is refused",
+      () =>
+        validateDecision(selfCitedByCase, {
+          artifactPath: resolve(repoRootDefault, selfPath),
+        }).ok === false,
+    ],
+    [
+      "fileIdentity: two spellings of one real file share an identity iff the FS folds case",
+      () => {
+        const a = fileIdentity(resolve(repoRootDefault, "package.json"));
+        const b = fileIdentity(resolve(repoRootDefault, "Package.json"));
+        return CASE_INSENSITIVE_FS ? a === b : a !== b;
+      },
     ],
     [
       "validateMatrix: extra row key",
@@ -671,12 +791,11 @@ function selfCheck() {
 }
 
 /**
- * TWELVE DISTINCT REAL FILES, one per row, in ROW_IDS order. They are all repo-root manifests and
- * docs, so no reader can mistake the fixture for a real evidence set - and because the duplicate
- * rule now keys on the RESOLVED PATH, twelve distinct files is the only way a twelve-green matrix
- * gets past `--matrix`. Round 2's fixture was `package.json#<row-id>` twelve times, which pinned
- * the anchor loophole in place: the fixture the suite called "genuinely green" was the same shape
- * a verifier used to fabricate one.
+ * One real file per row, in ROW_IDS order, no two of them the same file. They are all repo-root
+ * manifests and docs, so no reader can mistake the fixture for a real evidence set. Round 2's
+ * fixture was `package.json#<row-id>` twelve times, which pinned the anchor loophole in place:
+ * the fixture the suite called "genuinely green" was the same shape a verifier used to fabricate
+ * one, so hardening the rule would have turned the suite red.
  *
  * `packages/cost/package.json` is deliberately NOT used, so a test that appends a thirteenth row
  * has a real file left to cite without colliding.
@@ -710,7 +829,8 @@ export const fixtureRef = (id) => {
 
 /**
  * A synthetic all-green matrix. It exists ONLY inside the self-check and the unit tests - never
- * on disk. Every row cites a DIFFERENT real file, because `pass` rows may not share one.
+ * on disk. Every row cites a DIFFERENT real file, because `pass` rows may not share one. It is
+ * schema-valid and says NOTHING about routines - see the header's residuals.
  */
 export function greenFixture() {
   const rows = ROW_IDS.map(
