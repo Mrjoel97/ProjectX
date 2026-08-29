@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { NONTAXABLE_TAX_CODE, PRODUCT_TAX_CODE } from "./config";
-import { renderTaxPosture, TAXABILITY_REASONS, taxPosture } from "./tax";
+import { NONTAXABLE_TAX_CODE, PRODUCT_TAX_CODE, STRIPE_API_VERSION } from "./config";
+import {
+  INVOICE_TAX_FIELD,
+  invoiceTaxabilityReason,
+  renderTaxPosture,
+  TAXABILITY_REASONS,
+  taxPosture,
+} from "./tax";
 
 /** A real SaaS-shaped code. NOT read from config: `PRODUCT_TAX_CODE` is still `null`, and a test
  *  that reads its subject from a value the owner can change tomorrow proves nothing today. */
@@ -202,5 +208,80 @@ describe("renderTaxPosture — what a human actually reads (BILL-05)", () => {
     const s = renderTaxPosture(taxPosture("not_collecting", PRODUCT_TAX_CODE, 0), "usd");
     expect(s).not.toContain("0.00");
     expect(s.toLowerCase()).not.toContain("calculated as zero");
+  });
+});
+
+describe("invoiceTaxabilityReason — read against the version we PIN", () => {
+  /**
+   * THE VERSION AND THE FIELD NAME, pinned side by side as WRITTEN-OUT LITERALS.
+   *
+   * The invoice tax breakdown is `total_tax_amounts[]` before `2025-03-31.basil` and `total_taxes[]`
+   * from Basil onward. A comment cannot make a version bump visible; this can. Changing
+   * `STRIPE_API_VERSION` without re-reading the field shape turns this RED, which is the entire
+   * point — the alternative failure is a silent `null` on every invoice.
+   */
+  test("the pinned API version is Basil-or-later, so the field is total_taxes", () => {
+    expect(STRIPE_API_VERSION).toBe("2026-08-26.dahlia");
+    expect(INVOICE_TAX_FIELD).toBe("total_taxes");
+    // Stripe's version strings sort lexicographically by their leading ISO date.
+    expect(String(STRIPE_API_VERSION) > "2025-03-31.basil").toBe(true);
+  });
+
+  test("the pre-Basil field is NOT read — a version downgrade must be an edit, not a silent null", () => {
+    expect(
+      invoiceTaxabilityReason({ total_tax_amounts: [{ taxability_reason: "standard_rated" }] }),
+    ).toBeNull();
+  });
+
+  test("one entry with a published reason is that reason", () => {
+    expect(
+      invoiceTaxabilityReason({ total_taxes: [{ taxability_reason: "reverse_charge" }] }),
+    ).toBe("reverse_charge");
+  });
+
+  test("several entries that AGREE are still one reason", () => {
+    expect(
+      invoiceTaxabilityReason({
+        total_taxes: [{ taxability_reason: "zero_rated" }, { taxability_reason: "zero_rated" }],
+      }),
+    ).toBe("zero_rated");
+  });
+
+  // Storing the first would print a confident sentence about the wrong half of the invoice.
+  test("entries that DISAGREE are null — there is no single reason to claim", () => {
+    expect(
+      invoiceTaxabilityReason({
+        total_taxes: [
+          { taxability_reason: "standard_rated" },
+          { taxability_reason: "reverse_charge" },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  test("a reason Stripe has not published, and prose, are both null", () => {
+    expect(invoiceTaxabilityReason({ total_taxes: [{ taxability_reason: "vibes" }] })).toBeNull();
+    expect(
+      invoiceTaxabilityReason({ total_taxes: [{ taxability_reason: "because Acme said so" }] }),
+    ).toBeNull();
+    expect(invoiceTaxabilityReason({ total_taxes: [{ taxability_reason: 7 }] })).toBeNull();
+  });
+
+  test("no tax breakdown at all is null, and never a throw", () => {
+    expect(invoiceTaxabilityReason({})).toBeNull();
+    expect(invoiceTaxabilityReason(null)).toBeNull();
+    expect(invoiceTaxabilityReason(undefined)).toBeNull();
+    expect(invoiceTaxabilityReason("not an object")).toBeNull();
+    expect(invoiceTaxabilityReason({ total_taxes: [] })).toBeNull();
+    expect(invoiceTaxabilityReason({ total_taxes: "nope" })).toBeNull();
+  });
+
+  // Non-vacuity: every published reason survives the round trip, so the guard is not just "null".
+  test("every published reason is readable", () => {
+    for (const reason of TAXABILITY_REASONS) {
+      expect(invoiceTaxabilityReason({ total_taxes: [{ taxability_reason: reason }] })).toBe(
+        reason,
+      );
+    }
   });
 });

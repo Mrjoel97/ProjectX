@@ -748,3 +748,435 @@ describe("an unmatched Stripe customer is dead-lettered by ref and NEVER auto-pr
     expect(src).not.toMatch(/(patch|replace|delete)\(\s*["'](deadLetters|audit)["']/);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-06 — THE MONEY ARMS, driven through the SAME signature-verified route.
+//
+// A handler cannot tell a fabricated `customer_cash_balance_transaction` from a real one, which is
+// what makes this both $0 and complete. Nothing in this repo has ever spoken to Stripe; what these
+// prove is that the SHIPPED path writes the right rows for the payloads Stripe documents.
+//
+// THE CENTRAL LAW UNDER TEST: `invoice.paid` is NOT cash in hand. `BANK_TRANSFER_ENABLED` is true
+// for this merchant, so booking `actual` on a bank-transfer `invoice.paid` would record money we
+// do not have, in an append-only table that cannot quietly correct it.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+const CUSTOMER = "cus_money_1";
+
+/** A `users` row + the 28.1-05 mapping that money events resolve their tenant through. */
+async function seedMappedTenant(
+  t: ReturnType<typeof harness>,
+  stripeCustomerId = CUSTOMER,
+): Promise<string> {
+  const tenantId = await seedTenant(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("billingCustomers", {
+      tenantId,
+      stripeCustomerId,
+      status: "active",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+  });
+  return tenantId;
+}
+
+/**
+ * An invoice event. `paidWith` selects the payment method the way Stripe reports it — on the
+ * charge's `payment_method_details.type`, which is what was actually USED rather than what was
+ * allowed. `null` leaves the method UNDETERMINABLE, which must never resolve to "card".
+ */
+function invoiceBody(input: {
+  id?: string;
+  type?: string;
+  invoiceId?: string;
+  customer?: string;
+  total?: number;
+  amountPaid?: number;
+  currency?: string;
+  paidWith?: string | null;
+  taxabilityReason?: string | null;
+  created?: number;
+}): string {
+  const object: Record<string, unknown> = {
+    id: input.invoiceId ?? "in_money_1",
+    object: "invoice",
+    customer: input.customer ?? CUSTOMER,
+    customer_email: SENTINEL_EMAIL,
+    customer_name: SENTINEL_NAME,
+    currency: input.currency ?? "usd",
+    total: input.total ?? 4900,
+    amount_paid: input.amountPaid ?? input.total ?? 4900,
+  };
+  if (input.paidWith !== null) {
+    object.charge = { payment_method_details: { type: input.paidWith ?? "card" } };
+  }
+  if (input.taxabilityReason !== null) {
+    object.total_taxes = [
+      { amount: 300, taxability_reason: input.taxabilityReason ?? "standard_rated" },
+    ];
+  }
+  return JSON.stringify({
+    id: input.id ?? "evt_inv_1",
+    type: input.type ?? "invoice.paid",
+    created: input.created ?? 1_700_000_200,
+    data: { object },
+  });
+}
+
+/** A `customer_cash_balance_transaction.created` — the bank-transfer rail. */
+function cashBody(input: {
+  id?: string;
+  txnId?: string;
+  type: string;
+  netAmount?: number;
+  currency?: string;
+  customer?: string;
+  paymentIntent?: string;
+  created?: number;
+}): string {
+  const object: Record<string, unknown> = {
+    id: input.txnId ?? "ccsbtxn_1",
+    object: "customer_cash_balance_transaction",
+    customer: input.customer ?? CUSTOMER,
+    currency: input.currency ?? "usd",
+    net_amount: input.netAmount ?? 4900,
+    type: input.type,
+  };
+  const pi = input.paymentIntent ?? "pi_money_1";
+  if (input.type === "applied_to_payment") object.applied_to_payment = { payment_intent: pi };
+  if (input.type === "unapplied_from_payment")
+    object.unapplied_from_payment = { payment_intent: pi };
+  if (input.type === "refunded_from_payment") object.refunded_from_payment = { payment_intent: pi };
+  return JSON.stringify({
+    id: input.id ?? "evt_cash_1",
+    type: "customer_cash_balance_transaction.created",
+    created: input.created ?? 1_700_000_300,
+    data: { object },
+  });
+}
+
+/** `cash_balance.funds_available` — LEFTOVER money, not an arrival. A CashBalance has no `id`. */
+function fundsBody(input: {
+  id?: string;
+  customer?: string;
+  available?: Record<string, number>;
+  created?: number;
+}): string {
+  return JSON.stringify({
+    id: input.id ?? "evt_funds_1",
+    type: "cash_balance.funds_available",
+    created: input.created ?? 1_700_000_400,
+    data: {
+      object: {
+        object: "cash_balance",
+        customer: input.customer ?? CUSTOMER,
+        available: input.available ?? { usd: 2500 },
+      },
+    },
+  });
+}
+
+const ledger = (t: ReturnType<typeof harness>) =>
+  t.run(async (ctx) => await ctx.db.query("billingEvents").collect());
+const unapplied = (t: ReturnType<typeof harness>) =>
+  t.run(async (ctx) => await ctx.db.query("billingUnapplied").collect());
+
+/** Every phase present, sorted — the shape most of these assertions are really about. */
+const phasesOf = async (t: ReturnType<typeof harness>) =>
+  (await ledger(t)).map((r) => r.phase).sort();
+
+/** What we claim to have COLLECTED: actuals less refunds, in minor units. */
+async function netCollected(t: ReturnType<typeof harness>): Promise<number> {
+  const rows = await ledger(t);
+  return rows.reduce(
+    (sum, r) =>
+      sum + (r.phase === "actual" ? r.amountMinor : r.phase === "refunded" ? -r.amountMinor : 0),
+    0,
+  );
+}
+
+describe("the money arms write OUR ledger, and Stripe is only the processor", () => {
+  test("invoice.finalized books ONE estimated row — what we expect, not money", async () => {
+    const t = harness();
+    const tenantId = await seedMappedTenant(t);
+    expect((await send(t, invoiceBody({ type: "invoice.finalized" }))).status).toBe(200);
+
+    const rows = await ledger(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      tenantId,
+      phase: "estimated",
+      amountMinor: 4900,
+      currency: "USD",
+      kind: "invoice-finalized",
+      correlationId: "billing/in_money_1",
+    });
+    expect(await netCollected(t)).toBe(0);
+  });
+
+  test("invoice.paid on a CARD invoice books one actual", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, invoiceBody({ paidWith: "card" }));
+
+    const rows = await ledger(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      phase: "actual",
+      kind: "invoice-paid-card",
+      amountMinor: 4900,
+    });
+  });
+
+  // THE ONE THAT MATTERS. Assert the ABSENCE: bank-transfer funds are in the customer's cash
+  // balance, not ours, until an `applied_to_payment` says otherwise.
+  test("invoice.paid on a BANK-TRANSFER invoice books NO actual — nothing was collected", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    expect((await send(t, invoiceBody({ paidWith: "customer_balance" }))).status).toBe(200);
+
+    const rows = await ledger(t);
+    expect(rows.filter((r) => r.phase === "actual")).toEqual([]);
+    expect(rows).toEqual([]);
+    expect(await netCollected(t)).toBe(0);
+    // And it is NOT a refusal: the delivery was understood, and the understanding was "not yet".
+    expect(await letters(t)).toEqual([]);
+  });
+
+  test("a payment method we cannot determine is never read as a card — no actual, one dead letter", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, invoiceBody({ paidWith: null }));
+
+    expect(await ledger(t)).toEqual([]);
+    const dl = await letters(t);
+    expect(dl).toHaveLength(1);
+    expect(dl[0]?.error).toBe("billing_undetermined_payment_method");
+  });
+
+  test("cash `funded` is an ARRIVAL — reserved, never collected", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, cashBody({ type: "funded" }));
+
+    const rows = await ledger(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ phase: "reserved", kind: "cash-funded", amountMinor: 4900 });
+    expect(await netCollected(t)).toBe(0);
+  });
+
+  test("cash `applied_to_payment` is THE collection signal — actual", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, cashBody({ type: "applied_to_payment" }));
+
+    const rows = await ledger(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      phase: "actual",
+      kind: "cash-applied",
+      correlationId: "billing/pi_money_1",
+    });
+    expect(await netCollected(t)).toBe(4900);
+  });
+
+  test("funding_reversed after a collection takes it back — net returns to nothing collected", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, cashBody({ id: "evt_c1", txnId: "ccsbtxn_a", type: "funded" }));
+    await send(t, cashBody({ id: "evt_c2", txnId: "ccsbtxn_b", type: "applied_to_payment" }));
+    expect(await netCollected(t)).toBe(4900);
+
+    await send(t, cashBody({ id: "evt_c3", txnId: "ccsbtxn_c", type: "funding_reversed" }));
+
+    expect(await phasesOf(t)).toEqual(["actual", "refunded", "reserved"]);
+    // The reversal is a NEW row, not an edit: the history of the collection survives it.
+    expect(await netCollected(t)).toBe(0);
+    expect((await ledger(t)).every((r) => r.amountMinor > 0)).toBe(true);
+  });
+
+  test("cash_balance.funds_available writes ONE unapplied row and ZERO ledger rows", async () => {
+    const t = harness();
+    const tenantId = await seedMappedTenant(t);
+    await send(t, fundsBody({}));
+
+    expect(await ledger(t)).toEqual([]);
+    const held = await unapplied(t);
+    expect(held).toHaveLength(1);
+    expect(held[0]).toMatchObject({
+      tenantId,
+      stripeObjectId: CUSTOMER,
+      amountMinor: 2500,
+      currency: "USD",
+    });
+  });
+
+  test("a RE-observed balance updates the amount and never restarts the 75/90-day clock", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, fundsBody({ id: "evt_f1", created: 1_700_000_000, available: { usd: 2500 } }));
+    await send(t, fundsBody({ id: "evt_f2", created: 1_800_000_000, available: { usd: 900 } }));
+
+    const held = await unapplied(t);
+    // Two rows would report the same money twice on a screen that says how much we hold.
+    expect(held).toHaveLength(1);
+    expect(held[0]?.amountMinor).toBe(900);
+    expect(held[0]?.observedAt).toBe(1_700_000_000_000);
+  });
+
+  test("charge.refunded and credit_note.created are refunds, POSITIVE, direction in the phase", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    const charge = JSON.stringify({
+      id: "evt_ref_1",
+      type: "charge.refunded",
+      created: 1_700_000_500,
+      data: {
+        object: {
+          id: "ch_1",
+          object: "charge",
+          customer: CUSTOMER,
+          currency: "usd",
+          payment_intent: "pi_ref_1",
+          amount_refunded: 1200,
+        },
+      },
+    });
+    const note = JSON.stringify({
+      id: "evt_cn_1",
+      type: "credit_note.created",
+      created: 1_700_000_600,
+      data: {
+        object: {
+          id: "cn_1",
+          object: "credit_note",
+          customer: CUSTOMER,
+          currency: "usd",
+          invoice: "in_cn_1",
+          total: 700,
+        },
+      },
+    });
+    await send(t, charge);
+    await send(t, note);
+
+    const rows = await ledger(t);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.phase === "refunded" && r.amountMinor > 0)).toBe(true);
+    expect(rows.map((r) => r.kind).sort()).toEqual(["charge-refunded", "credit-note"]);
+  });
+});
+
+describe("the money arms are idempotent and order-independent", () => {
+  test("the IDENTICAL invoice.paid delivered twice leaves exactly one actual row", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    const payload = invoiceBody({});
+    await send(t, payload);
+    await send(t, payload);
+    expect(await ledger(t)).toHaveLength(1);
+  });
+
+  /**
+   * The MOVEMENT identity, proven where the event dedupe cannot help: two DIFFERENT cash
+   * transactions applying to the SAME PaymentIntent. Different event ids and different object ids,
+   * so `billingStripeEvents` lets both through — only (tenantId, correlationId, phase) stops the
+   * second from booking the money twice.
+   */
+  test("two distinct cash transactions on one PaymentIntent book the collection ONCE", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, cashBody({ id: "evt_p1", txnId: "ccsbtxn_x", type: "applied_to_payment" }));
+    await send(t, cashBody({ id: "evt_p2", txnId: "ccsbtxn_y", type: "applied_to_payment" }));
+
+    const rows = await ledger(t);
+    expect(rows).toHaveLength(1);
+    expect(await netCollected(t)).toBe(4900);
+  });
+
+  /**
+   * Stripe does not guarantee delivery order. A `funded` can arrive after its
+   * `applied_to_payment`, and a handler that required the sequence would break in production the
+   * first time a retry was reordered.
+   */
+  test("the full bank-transfer sequence delivered in REVERSE reaches the same ledger state", async () => {
+    const forward = harness();
+    await seedMappedTenant(forward);
+    const sequence = [
+      invoiceBody({ id: "evt_s1", type: "invoice.finalized", paidWith: null }),
+      invoiceBody({ id: "evt_s2", type: "invoice.paid", paidWith: "customer_balance" }),
+      cashBody({ id: "evt_s3", txnId: "ccsbtxn_s1", type: "funded" }),
+      cashBody({ id: "evt_s4", txnId: "ccsbtxn_s2", type: "applied_to_payment" }),
+    ];
+    for (const payload of sequence) await send(forward, payload);
+
+    const backward = harness();
+    await seedMappedTenant(backward);
+    for (const payload of [...sequence].reverse()) await send(backward, payload);
+
+    const shape = async (t: ReturnType<typeof harness>) =>
+      (await ledger(t))
+        .map((r) => `${r.phase}:${r.kind}:${r.amountMinor}:${r.currency}:${r.correlationId}`)
+        .sort();
+
+    expect(await shape(backward)).toEqual(await shape(forward));
+    expect(await netCollected(backward)).toBe(await netCollected(forward));
+    expect(await netCollected(forward)).toBe(4900);
+  });
+});
+
+describe("tax and attribution travel with the row", () => {
+  test("the invoice's taxability_reason is persisted on the row it belongs to", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, invoiceBody({ type: "invoice.finalized", taxabilityReason: "reverse_charge" }));
+    expect((await ledger(t))[0]?.taxabilityReason).toBe("reverse_charge");
+  });
+
+  test("a taxability_reason Stripe has not published is refused, not stored as prose", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(
+      t,
+      invoiceBody({ type: "invoice.finalized", taxabilityReason: "because Acme said so" }),
+    );
+    const [row] = await ledger(t);
+    expect(row?.phase).toBe("estimated");
+    expect(row?.taxabilityReason).toBeUndefined();
+  });
+
+  test("a money event for an UNKNOWN Stripe customer dead-letters and writes NO ledger row", async () => {
+    const t = harness();
+    await seedTenant(t); // a tenant exists, but nothing maps this customer to it
+    await send(t, invoiceBody({ customer: "cus_stranger" }));
+
+    expect(await ledger(t)).toEqual([]);
+    expect(await unapplied(t)).toEqual([]);
+    const dl = await letters(t);
+    expect(dl).toHaveLength(1);
+    expect(dl[0]?.error).toBe("billing_unattributable_customer");
+  });
+
+  test("money is booked to the ONE tenant that paid, across two mapped tenants", async () => {
+    const t = harness();
+    const payer = await seedMappedTenant(t, "cus_payer");
+    const bystander = await seedMappedTenant(t, "cus_bystander");
+    await send(t, invoiceBody({ customer: "cus_payer" }));
+
+    const rows = await ledger(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.tenantId).toBe(payer);
+    expect(rows[0]?.tenantId).not.toBe(bystander);
+  });
+
+  test("the stored ledger row carries no email and no name — whole-row string assertion", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, invoiceBody({}));
+    const serialized = JSON.stringify(await ledger(t));
+    expect(serialized).not.toContain(SENTINEL_EMAIL);
+    expect(serialized).not.toContain(SENTINEL_NAME);
+    expect(serialized).not.toContain("example.invalid");
+  });
+});

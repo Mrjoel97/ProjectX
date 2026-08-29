@@ -17,6 +17,7 @@
 //     the very row that proves nothing happened. Do no I/O in here — no runAction, no fetch.
 import type { BillingEventFacts } from "@pikar/billing/events";
 import { classifyEvent } from "@pikar/billing/events";
+import type { BillingObservation, Reconciliation } from "@pikar/billing/reconcile";
 import {
   parseStripeSignature,
   SIGNATURE_TOLERANCE_S,
@@ -25,6 +26,7 @@ import {
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, type MutationCtx } from "./_generated/server";
+import { recordBillingMovement } from "./billingLedger";
 import { hmacHex } from "./gmailAuth";
 
 /** A fact is an id or it is absent. `v.null()` rather than `v.optional` so the shape is total —
@@ -47,6 +49,64 @@ const vBillingFacts = v.object({
   priceId: factRef,
   trialEndsAt: v.union(v.number(), v.null()),
 });
+
+/**
+ * WHAT `reconcileEvent` DECIDED — the second closed type a delivery may hand the database, and the
+ * money half of the same redaction boundary `vBillingFacts` is above.
+ *
+ * The reconciliation is computed at the HTTP boundary (`http.ts`), beside `eventFacts` and for the
+ * identical reason: `reconcileEvent` is the only thing that reads the Stripe object, and what
+ * crosses into this mutation is its OUTPUT — a phase, an integer count of minor units, an ISO 4217
+ * code, a `billing/<id>` correlation and a code-owned kind token. There is nowhere in this shape to
+ * put an email, a name, a line-item description or a card. The plan for 28.1-06 called
+ * `reconcileEvent` from inside the mutation; that would have required passing the raw Stripe object
+ * across this boundary, which is exactly what CLAUDE.md §4 and 28.1-05's `eventFacts` exist to
+ * prevent. **This module never re-derives a phase or an amount — it only writes what it is given.**
+ */
+const vMoney = v.object({ minor: v.number(), currency: v.string() });
+
+const vMovement = v.object({
+  phase: v.union(
+    v.literal("estimated"),
+    v.literal("reserved"),
+    v.literal("actual"),
+    v.literal("refunded"),
+    v.literal("adjustment"),
+  ),
+  amount: vMoney,
+  correlationId: v.string(),
+  kind: v.string(),
+  stripeObjectId: v.string(),
+});
+
+const vObservation = v.union(
+  v.object({
+    kind: v.literal("unapplied-funds"),
+    amount: vMoney,
+    correlationId: v.string(),
+    stripeObjectId: v.string(),
+    ageDays: v.number(),
+    stage: v.union(v.literal("held"), v.literal("return-attempted"), v.literal("swept")),
+  }),
+  v.object({
+    kind: v.literal("awaiting-cash-application"),
+    correlationId: v.string(),
+    stripeObjectId: v.string(),
+  }),
+  v.object({
+    kind: v.literal("payment-method-undetermined"),
+    correlationId: v.string(),
+    stripeObjectId: v.string(),
+  }),
+);
+
+/** `null` is not "nothing moved" — it is `reconcileEvent` REFUSING a delivery whose amount or
+ *  currency it could not read. A ledger that wrote a zero because it could not read a number is
+ *  worse than one that refuses, so the null takes the dead-letter path below. */
+const vReconciliation = v.union(
+  v.object({ movements: v.array(vMovement), observations: v.array(vObservation) }),
+  v.null(),
+);
 
 /**
  * Verify a `Stripe-Signature` header against the EXACT raw request body.
@@ -99,6 +159,12 @@ export const receiveAndApply = internalMutation({
     /** Ids lifted from `data.object` at the HTTP boundary. Optional so the 28.1-01 callers that
      *  predate the mapping arm still typecheck; absent is treated as "carried nothing". */
     facts: v.optional(vBillingFacts),
+    /** What `reconcileEvent` decided, computed at the HTTP boundary. Optional for the same reason
+     *  `facts` is: absent means the caller predates 28.1-06 and no money is booked. */
+    money: v.optional(vReconciliation),
+    /** The invoice's single published `taxability_reason`, when it claimed exactly one. Stamped on
+     *  every ledger row this delivery writes, because a bare `Tax: 0.00` is never presentable. */
+    taxabilityReason: v.optional(v.string()),
   },
   // The outcome is a THREE-value discriminant, not a boolean, because the two duplicate shapes are
   // genuinely different events: `duplicate_event` is Stripe re-delivering the SAME Event object
@@ -147,17 +213,29 @@ export const receiveAndApply = internalMutation({
   },
 });
 
+/** Everything an arm of the effect switch may see. Deliberately NOT the Stripe object. */
+type EffectArgs = {
+  eventId: string;
+  eventType: string;
+  objectId: string;
+  eventCreatedAt?: number;
+  money?: Reconciliation | null;
+  taxabilityReason?: string;
+};
+
 /**
- * THE effect switch. Singular, on purpose: later plans add their arms HERE, inside
- * `receiveAndApply`'s transaction, so "we recorded it" and "we acted on it" can never diverge.
+ * THE effect switch. Singular, on purpose: every arm runs inside `receiveAndApply`'s transaction,
+ * so "we recorded it" and "we acted on it" can never diverge.
  *
- * 28.1-05 filled the first four arms. The invoice / refund / cash-balance arms are still empty and
- * still return `ignored` rather than a flattering `applied` — 28.1-06 wires the `billingEvents`
- * book of record.
+ * EXHAUSTIVE over `HandledEventType`, with no `default`. That is the point of the `never` below:
+ * a type added to `HANDLED_EVENT_TYPES` is now a COMPILE error rather than a silently unbooked
+ * delivery, and on a money path silence is the expensive failure. (An event type this deployment
+ * has never heard of is still ignored, one line above — `classifyEvent` owns that, and must, or a
+ * new Stripe type becomes a 500 and a retry storm.)
  */
 async function applyEffect(
   ctx: MutationCtx,
-  args: { eventId: string; eventType: string; objectId: string; eventCreatedAt?: number },
+  args: EffectArgs,
   facts: BillingEventFacts,
 ): Promise<"applied" | "ignored"> {
   const classified = classifyEvent(args.eventType);
@@ -168,9 +246,21 @@ async function applyEffect(
     case "customer.subscription.updated":
     case "customer.subscription.deleted":
       return await applyMapping(ctx, args, facts);
-    default:
-      // invoice.*, charge.refunded, credit_note.created and both cash-balance types — 28.1-06.
+    case "invoice.finalized":
+    case "invoice.paid":
+    case "charge.refunded":
+    case "credit_note.created":
+    case "customer_cash_balance_transaction.created":
+    case "cash_balance.funds_available":
+      return await applyMoney(ctx, args, facts);
+    case "invoice.payment_failed":
+      // A failed attempt is not a movement in either direction, and `reconcileEvent` agrees —
+      // it maps this type to nothing. Recorded as received, never booked.
       return "ignored";
+    default: {
+      const unreachable: never = classified.type;
+      return unreachable;
+    }
   }
 }
 
@@ -202,6 +292,11 @@ const REFUSAL = {
   tenantConflict: "billing_tenant_customer_conflict",
   /** A mapping event with no `cus_…` — there is nothing to map. */
   noCustomer: "billing_no_customer",
+  /** `reconcileEvent` could not read the amount or the currency. Refused, never written as zero. */
+  unreconcilable: "billing_unreconcilable_event",
+  /** An `invoice.paid` whose payment method could not be determined. NOT booked as a card: the
+   *  money may or may not be ours, and an append-only ledger cannot un-say that it is. */
+  undeterminedPaymentMethod: "billing_undetermined_payment_method",
 } as const;
 
 /**
@@ -365,4 +460,127 @@ async function applyMapping(
     updatedAt: now,
   });
   return "applied";
+}
+
+/**
+ * THE MONEY ARM — every invoice, refund and cash-balance signal, booked into OUR ledger.
+ *
+ * IT ONLY WRITES. `reconcileEvent` (`@pikar/billing`, pure, plan 03) already decided which phase
+ * each signal is and what it is worth; nothing here re-derives either. In particular the central
+ * law is NOT restated in this file, so it cannot drift from the place that owns it:
+ *
+ *   `invoice.paid` is not cash in hand. Bank-transfer funds land in the customer CASH BALANCE and
+ *   are collected only on `customer_cash_balance_transaction.created` with
+ *   `type=applied_to_payment`. `funded` is arrival (`reserved`); `funding_reversed` takes it back.
+ *
+ * ORDER-INDEPENDENT BY CONSTRUCTION, like the mapping arm above: each delivery is booked from its
+ * own contents alone, there is no state machine and no arm reads what came before it. A `funded`
+ * arriving after its `applied_to_payment` produces the same final ledger as the other order.
+ *
+ * TENANT RESOLUTION IS THE MAPPING ROW AND NOTHING ELSE. Unlike the mapping arm, a money event has
+ * no `client_reference_id` thread to fall back on, and guessing one would book a stranger's payment
+ * to a tenant. No mapping means the refusal path and NO ledger row: an unattributable payment is
+ * visible in the dead-letter queue, which is recoverable, whereas a misattributed one is written
+ * into an append-only table that cannot take it back.
+ */
+async function applyMoney(
+  ctx: MutationCtx,
+  args: EffectArgs,
+  facts: BillingEventFacts,
+): Promise<"applied" | "ignored"> {
+  const money = args.money;
+  // Absent = a caller that predates 28.1-06 (the 28.1-01 tests). Null = a REFUSAL from
+  // `reconcileEvent`, which is a fact somebody has to look at rather than a quiet nothing.
+  if (money === undefined) return "ignored";
+  if (money === null) return await refuse(ctx, args, facts, REFUSAL.unreconcilable);
+  if (money.movements.length === 0 && money.observations.length === 0) return "ignored";
+
+  const customerId = facts.customerId;
+  if (customerId === null) return await refuse(ctx, args, facts, REFUSAL.noCustomer);
+  const mapping = await ctx.db
+    .query("billingCustomers")
+    .withIndex("by_customer", (q) => q.eq("stripeCustomerId", customerId))
+    .first();
+  if (!mapping) return await refuse(ctx, args, facts, REFUSAL.unattributableCustomer);
+  const tenantId = mapping.tenantId;
+  // The mapping is deleted by a tenant erasure, so a surviving row pointing at a vanished tenant
+  // should be impossible — but this row is about to become permanent, so it is checked anyway.
+  if (!(await tenantExists(ctx, tenantId))) {
+    return await refuse(ctx, args, facts, REFUSAL.unknownTenant, tenantId);
+  }
+
+  // `event.created`, not `Date.now()`: the ledger records when the money moved, not when the
+  // delivery reached us. A retry days later must not re-date the movement.
+  const at = args.eventCreatedAt ?? Date.now();
+  for (const movement of money.movements) {
+    await recordBillingMovement(ctx, {
+      tenantId,
+      phase: movement.phase,
+      amountMinor: movement.amount.minor,
+      currency: movement.amount.currency,
+      correlationId: movement.correlationId,
+      kind: movement.kind,
+      stripeObjectId: movement.stripeObjectId,
+      ...(args.taxabilityReason === undefined ? {} : { taxabilityReason: args.taxabilityReason }),
+      createdAt: at,
+    });
+  }
+
+  let undetermined = false;
+  for (const observation of money.observations) {
+    if (observation.kind === "unapplied-funds") {
+      await observeUnapplied(ctx, tenantId, observation, at);
+    } else if (observation.kind === "payment-method-undetermined") {
+      undetermined = true;
+    }
+    // `awaiting-cash-application` is the NORMAL bank-transfer path — the invoice is paid as far as
+    // Stripe is concerned and the cash has not been applied to us yet. Nothing to record: the
+    // `reserved`/`actual` rows arrive on the cash-balance rail, in their own time and any order.
+  }
+  // Refused LAST, so any unapplied observation on the same delivery is still recorded. This is not
+  // a Stripe failure; it is us declining to guess, and it must be visible rather than silent.
+  if (undetermined) {
+    return await refuse(ctx, args, facts, REFUSAL.undeterminedPaymentMethod, tenantId);
+  }
+  return "applied";
+}
+
+/**
+ * Money we HOLD that is attached to nothing, re-observed rather than re-inserted.
+ *
+ * `cash_balance.funds_available` fires whenever the leftover balance CHANGES, and a CashBalance
+ * object carries no `id` — so `billingStripeEvents`' by-object dedupe cannot see two of them as the
+ * same thing, and a plain insert would report one pile of money two, three, four times on a screen
+ * whose whole job is to say how much we hold.
+ *
+ * THE AMOUNT MOVES, `observedAt` DOES NOT. Stripe attempts to RETURN unreconciled funds at 75 days
+ * and SWEEPS them at 90; restarting that clock on every notification would hide exactly the row
+ * that is about to be taken away.
+ */
+async function observeUnapplied(
+  ctx: MutationCtx,
+  tenantId: string,
+  observation: Extract<BillingObservation, { kind: "unapplied-funds" }>,
+  observedAt: number,
+): Promise<void> {
+  const existing = await ctx.db
+    .query("billingUnapplied")
+    .withIndex("by_tenant_object_currency", (q) =>
+      q
+        .eq("tenantId", tenantId)
+        .eq("stripeObjectId", observation.stripeObjectId)
+        .eq("currency", observation.amount.currency),
+    )
+    .first();
+  if (existing) {
+    await ctx.db.patch(existing._id, { amountMinor: observation.amount.minor });
+    return;
+  }
+  await ctx.db.insert("billingUnapplied", {
+    tenantId,
+    stripeObjectId: observation.stripeObjectId,
+    amountMinor: observation.amount.minor,
+    currency: observation.amount.currency,
+    observedAt,
+  });
 }

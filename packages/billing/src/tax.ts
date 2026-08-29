@@ -28,6 +28,17 @@ import { formatMoneyAmount, moneyFromMinor } from "@pikar/revenue/money";
 import { NONTAXABLE_TAX_CODE } from "./config";
 
 /**
+ * THE INVOICE TAX FIELD, read against the version we PIN.
+ *
+ * `STRIPE_API_VERSION` is `2026-08-26.dahlia` (`./config`), which is after `2025-03-31.basil`, so
+ * the invoice tax breakdown is **`total_taxes[]`**. Before Basil the same breakdown was
+ * `total_tax_amounts[]`, and that name is deliberately NOT read here: a version downgrade must
+ * become a visible edit rather than a silent null, and `tax.test.ts` pins the version literal
+ * beside this field name so moving one without the other is RED.
+ */
+export const INVOICE_TAX_FIELD = "total_taxes";
+
+/**
  * Stripe's published `taxability_reason` table, written out. A value outside this list is
  * `unknown` — never quietly folded into one of the arms below, because every arm is a factual
  * claim about why a customer was or was not charged tax.
@@ -101,6 +112,36 @@ export function taxPosture(
   // Every other published reason means a calculation RAN and landed on zero. The product code is
   // irrelevant to these — only `not_collecting` is ambiguous.
   return { state: "calculated-zero", reason };
+}
+
+/**
+ * The ONE taxability reason an invoice claims, or null when it does not claim exactly one.
+ *
+ * Null on DISAGREEMENT, not just on absence. An invoice can carry several tax entries, and if two
+ * of them give different reasons there is no single reason — storing the first would pick a
+ * winner and print a confident sentence about the wrong one. `taxPosture` answers `unknown` for a
+ * null, which is the honest result.
+ *
+ * PURE, and the only thing it lifts is a published enum token: the value is checked against
+ * `TAXABILITY_REASONS` before it is returned, so an unrecognised string (or prose) becomes null
+ * rather than a free-text field on a row that lives forever (CLAUDE.md §4).
+ */
+export function invoiceTaxabilityReason(invoice: unknown): TaxabilityReason | null {
+  const object = (typeof invoice === "object" && invoice !== null ? invoice : {}) as Record<
+    string,
+    unknown
+  >;
+  const entries = object[INVOICE_TAX_FIELD];
+  if (!Array.isArray(entries)) return null;
+
+  const claimed = new Set<unknown>();
+  for (const entry of entries) {
+    const reason = (entry as { taxability_reason?: unknown } | null)?.taxability_reason;
+    if (reason !== undefined && reason !== null) claimed.add(reason);
+  }
+  if (claimed.size !== 1) return null;
+  const [only] = [...claimed];
+  return isReason(only) ? only : null;
 }
 
 /**

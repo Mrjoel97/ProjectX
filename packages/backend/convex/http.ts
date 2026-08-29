@@ -1,4 +1,6 @@
 import { eventFacts } from "@pikar/billing/events";
+import { reconcileEvent } from "@pikar/billing/reconcile";
+import { invoiceTaxabilityReason } from "@pikar/billing/tax";
 import { GOOGLE_SCOPES, type MicrosoftCallbackError, notificationMessage } from "@pikar/core";
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
@@ -479,10 +481,18 @@ http.route({
     const dataObject = event.data?.object as { id?: unknown } | undefined;
     const objectId = dataObject?.id;
 
-    // REDACT THEN WRITE, and this line is the ordering. `eventFacts` lifts ids and enum tokens out
-    // of the Stripe object HERE, at the trust boundary; the parsed object never crosses into the
-    // mutation, so `customer_details.email`, the customer name and the amount have no route to a
-    // row even by accident (CLAUDE.md §4). `receiveAndApply`'s validator refuses any other shape.
+    // REDACT THEN WRITE, and these three lines are the ordering. `eventFacts` lifts ids and enum
+    // tokens out of the Stripe object HERE, at the trust boundary; `reconcileEvent` decides what
+    // money moved and hands back a phase, an integer count of minor units and an ISO 4217 code;
+    // `invoiceTaxabilityReason` lifts one published enum token. The parsed object never crosses
+    // into the mutation, so `customer_details.email`, the customer name and every line-item
+    // description have no route to a row even by accident (CLAUDE.md §4).
+    //
+    // BOTH the meaning and the redaction are decided by pure functions in `@pikar/billing`
+    // (CLAUDE.md §1). `receiveAndApply` only WRITES what they return — it never re-derives a phase
+    // or an amount, so the law "invoice.paid is not cash in hand" lives in exactly one place.
+    const reconciled = reconcileEvent(event, Date.now());
+    const taxabilityReason = invoiceTaxabilityReason(dataObject);
     await ctx.runMutation(internal.billingWebhook.receiveAndApply, {
       eventId: event.id,
       eventType: event.type,
@@ -490,6 +500,10 @@ http.route({
       // Stripe sends `created` in SECONDS. It is the only delivery ordering Stripe provides.
       eventCreatedAt: typeof event.created === "number" ? event.created * 1000 : undefined,
       facts: eventFacts(event.type, dataObject),
+      // `null` is a REFUSAL, not "nothing moved": an amount or currency `reconcileEvent` could not
+      // read is dead-lettered rather than written as a zero.
+      money: reconciled.ok ? reconciled.value : null,
+      ...(taxabilityReason === null ? {} : { taxabilityReason }),
     });
     // 2xx fast and unconditional once recorded. A non-2xx (or a timeout) is a delivery failure to
     // Stripe and buys a retry we have already deduped away.
