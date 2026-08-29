@@ -1125,6 +1125,38 @@ unreachable, and every number in §4 of the decision record reproduced. The *gat
 or lift the defer. And the gate is in no CI workflow and no npm script: its automatic run is
 `routineDecision.test.ts`, which does execute under `pnpm test` in `ci.yml`. Adding a script would
 mean editing `packages/backend/package.json`, which the `defer` branch forbids touching.
+## Plan 29-12 — the deferred branch, proven absent (2026-08-29)
+
+> Last verified: 2026-08-29 (29-12 — `--validate-decision` was run FIRST and returned
+> `OK --validate-decision (decision: defer)`, so the branch is the ABSENCE PROOF and **no
+> implementation edit was made**: no schema change, no module, no route, nothing installed,
+> `package.json` and `pnpm-lock.yaml` untouched. The proof is
+> `packages/backend/convex/routines.test.ts`, 8 tests.)
+
+**The five claims, and the control beside each one.** An absence test is the easiest kind to write
+vacuously and this repo has shipped one — `apps/web/e2e/workflow-pack-pilot.spec.ts` had a
+`toHaveCount(0)` that passed with all six packs active, because it resolved before the query did.
+So every claim in `routines.test.ts` sits next to a positive control proving the same scan, over
+the same corpus, finds something that really is there.
+
+| Claim | Positive control | Proven to fail by |
+|---|---|---|
+| No table name is recurrence-shaped (read from the **parsed schema object**) | the object contains `savedPrompts`, `audit`, `contacts`, `tenantSkills` and >30 tables | planting `routines: defineTable(...)` in `schema.ts` |
+| No convex module is named for routines; `crons.ts` is the single named exception | the recursive listing contains `schema.ts`, `crons.ts`, `lib/functions.ts`, `render/renderReel.ts` | creating `convex/routines.ts` |
+| `crons.ts` holds only the five global system jobs, none per-tenant | the five job names are asserted literally, and the file has no `tenantId` | — (the literal list is the control) |
+| No UI route or component is recurrence-shaped | the walk contains `dashboard/workflows/page.tsx` and `dashboard/workspace/page.tsx` | creating `dashboard/routines/page.tsx` |
+| No identifier computes or stores a next occurrence (`nextRunAt`, `nextOccurrence`, `occurrenceKey`, `rrule`, `routineId`, ...), **comments stripped first** because `schema.ts:499` legitimately contains those words inside the sentence banning them | after stripping, the corpus still contains `ctx.scheduler` in >5 files and `cronJobs` in `crons.ts` | appending `export const nextRunAt = 0;` to `convex/lib/hash.ts` |
+| No manifest names `temporal` (reuses the gate's own `deferAbsenceChecks`, five manifests incl. the lockfile) | every scanned manifest is read and non-empty | adding `@js-temporal/polyfill` to `packages/backend/package.json` |
+| The recorded decision is still `defer` — the branch guard for this whole file | the record parses under the closed schema | flipping the frontmatter to `enable-safe` |
+
+All seven mutations were observed RED and reverted. Two further vacuity proofs: pointing a scan at
+a misspelled root throws `ENOENT` rather than silently returning `[]`, and forcing every scan to
+return an empty list turns **three positive controls red** while the absence assertions themselves
+would still have "passed" — which is the exact shape of the pack-pilot defect.
+
+**If a later plan earns `enable-safe`,** `routines.test.ts`'s last test fails first, on purpose:
+the absence proof must be revisited deliberately rather than quietly deleted.
+
 
 ## Plan 29-08 — the manual pin, and the three things it refuses to pretend (2026-08-29)
 
