@@ -1,3 +1,13 @@
+> Last verified: 2026-08-29 (29-W3-TAIL — **TWO STALE CITATIONS IN THE FOLDER-DIGEST SECTION.**
+> 29-FIN-06 inserted a nine-line header into `vaultGround.ts` and edited this file in the same
+> commit without moving the two constants it cites: `vaultGround.ts:29-30` was already
+> `PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP` at `:39-40`. Beside it, `schema.ts:900` for the `docType`
+> union had drifted to `:2018`. BOTH ARE NOW NAMED BY SYMBOL rather than by line — this phase has
+> produced stale citations in four separate rounds and a line number rots every commit. The
+> "mirroring" wording went with them: `vaultDigest.ts`'s `DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS`
+> hold the SAME two numbers as `vaultGround.ts`'s caps and nothing couples the pairs, which is now
+> what the sentence says. Prose-only; no vault code changed.)
+>
 > Last verified: 2026-08-29 (**29-FIN-06 — `vaultGround.ts`'s `SMOKE::` SEAM IS GATED ON THE
 > OPERATOR, NOT ON THE QUERY.** It was the last tenant-supplied string on the knowledge plane that
 > could select an offline fixture: `vaultGround` is a `tenantAction`, and every
@@ -3357,9 +3367,11 @@ silently drops a document it could not read makes the reader assume full coverag
 
 Parts 1 and 3 are built from PROJECTED metadata only (title, kind, docType, identityLine, status,
 failureReason, size, createdAt). Part 2 gets a bounded head slice per member under a running total
-(`DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS`, mirroring `vaultGround.ts:29-30`). An ABSENT
+(`DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS` in `vaultDigest.ts` — the same two numbers as
+`vaultGround.ts`'s `PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP`, with nothing coupling the two pairs). An ABSENT
 `docType` renders as `not classified` and is NOT collapsed into the `"unclassified"` literal
-(schema.ts:900 — never classified is not the same as classified and unplaceable).
+(the `docType` union in `schema.ts` — never classified is not the same as classified and
+unplaceable).
 
 **Never `.collect()` the members.** `digestMembersPage` paginates at `VAULT_FOLDER_MEMBER_BATCH`,
 one page per transaction, and the ACTION carries the cursor. Convex has no projection, so a member
