@@ -196,8 +196,11 @@ describe("vaultGround (VALT-03 hybrid vector + hop-capped graph)", () => {
     ).rejects.toThrow(/unset for embeddings/);
   });
 
-  // THE LEAK GUARD for the test above. It must run immediately after it, and it drives the fixture
-  // path rather than reading `process.env`, so it fails the way a leak would actually be felt.
+  // THE LEAK GUARD for the test above. It drives the fixture path rather than reading
+  // `process.env`, so it fails the way a leak would actually be felt. It catches the leak only when
+  // it runs after the stubbing test, and nothing here enforces that ordering; `unstubEnvs: true` in
+  // `vitest.config.mts` would make it order-free for every file and is named as a follow-up — a
+  // suite-wide config change was out of scope for this closing pass.
   // MUTATION OBSERVED RED: delete the file-level `afterEach(() => vi.unstubAllEnvs())` — the stub
   // survives into this test, `offlineSeamAvailable()` is false, and the seed goes to `rag.search`,
   // which rejects with "unset for embeddings" instead of resolving `docA`.

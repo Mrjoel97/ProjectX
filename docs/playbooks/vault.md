@@ -191,19 +191,21 @@
 > CLOSED ONE DOOR OF FOUR, AND ITS OWN SUMMARY SENTENCE WAS FALSE.**
 >
 > ⚠ **THE ENTRY BELOW SAYS "a row with NO origin is the tenant's upload". THAT IS NOT TRUE AND
-> WAS NOT TRUE WHEN IT WAS WRITTEN.** `schema.ts:1971`'s "ABSENT ⇒ user-supplied (every row that
-> exists today)" was true when `origin` landed in Phase 18, because agent rows were then
-> structurally never ingested. Three later writers ingest LLM prose with NO `origin` at all and DO
+> WAS NOT TRUE WHEN IT WAS WRITTEN.** `schema.ts`'s `vaultDocuments.origin` comment — "ABSENT ⇒
+> user-supplied (every row that exists today)" — was true when `origin` landed in Phase 18, because
+> agent rows were then structurally never ingested. Three later writers ingest LLM prose with NO
+> `origin` at all and DO
 > call `startIngest`, so their rows are retrievable and were cited at `tenant_owned` — the
 > strongest class, the owner's own word:
-> `evaluations.ts:1150` (`persistNextStepMemo`, `text: plan.body`, `startIngest` at :1167),
-> `voice.ts:349` (`persistBrief`, markdown from `internal.llm.draftVoiceBrief`, :363) and
-> `onboarding.ts:492` (the `business_profile` document, :506).
+> `evaluations.ts`'s `persistNextStepMemo` (`text: plan.body`, then `startIngest`),
+> `voice.ts`'s `persistBrief` (markdown from `internal.llm.draftVoiceBrief`) and
+> `onboarding.ts`'s `writeProfileDoc` (the `business_profile` document).
 >
 > **VAULT AUTHORSHIP IS NOW ESTABLISHED POSITIVELY, NOT INFERRED FROM AN ABSENCE.** `@pikar/core`
 > exports `TENANT_AUTHORED_DOC_KINDS` = `["upload", "brain_dump", "document"]` — every retrievable
-> `vaultDocuments.kind` a TENANT-SUPPLIED path writes (`vault.ts:265` upload, `vault.ts:1174`
-> attachment, `vault.ts:186` brain dump, `smoke.ts:1196`'s upload stand-in). `authorityFor` reaches
+> `vaultDocuments.kind` a TENANT-SUPPLIED path writes (`vault.ts`'s `vaultUpload`,
+> `ingestFromAttachment` and `vaultIngestText`, plus `smoke.ts`'s `seedVoiceDocSession`, which
+> writes `kind: "document"`). `authorityFor` reaches
 > `tenant_owned` only for those; any other kind, INCLUDING one this repo has never heard of, falls
 > to `third_party_research` or weaker. The direction is the point: `kind` is `v.string()` and
 > `schema.ts` records that it "grows every phase", so a denylist costs a laundered citation when
@@ -212,7 +214,7 @@
 > writers' exact stored row shapes through the REAL `searchVaultKnowledge`, not the pure function.
 >
 > **THE TWO PLANES STILL DISAGREE ABOUT ONE DOCUMENT, AND THAT IS NOW A PINNED DECISION RATHER
-> THAN DRIFT.** `vaultDrive.ts:1169`'s folder import stores a Drive file as `kind: "upload"`,
+> THAN DRIFT.** `vaultDrive.ts`'s `landFile` stores an imported Drive file as `kind: "upload"`,
 > `source: "google"`, no origin — so the SAME stranger-shared file is `third_party_research` on the
 > Drive plane (proven by `ownedByMe`) and `tenant_owned` once imported. The search plane cannot
 > tell that row from a real upload: `vaultGroundHydrated` carries `kinds` and `origins` and NOT
@@ -226,8 +228,8 @@
 > `!TENANT_AUTHORED_DOC_KINDS.includes(meta.docKind ?? "")` to `meta.docKind === "web_research"` —
 > three backend tests and one core test fail.
 >
-> **TWO NAMED FOLLOW-UPS, both outside this plan's owned files.** (a) `evaluations.ts:1150`,
-> `voice.ts:349` and `onboarding.ts:492` should each store `origin: "agent"`, which lands them at
+> **TWO NAMED FOLLOW-UPS, both outside this plan's owned files.** (a) `persistNextStepMemo`,
+> `persistBrief` and `writeProfileDoc` should each store `origin: "agent"`, which lands them at
 > `agent_authored` — the class that names the author — instead of `third_party_research`, which is
 > true but one rank too strong. (b) `vaultDrive.ts`'s folder import should write a distinguishable
 > `kind`, or `vaultGround.ts` should carry `source` through `vaultGroundHydrated`; either one lets
@@ -3367,8 +3369,12 @@ silently drops a document it could not read makes the reader assume full coverag
 
 Parts 1 and 3 are built from PROJECTED metadata only (title, kind, docType, identityLine, status,
 failureReason, size, createdAt). Part 2 gets a bounded head slice per member under a running total
-(`DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS` in `vaultDigest.ts` — the same two numbers as
-`vaultGround.ts`'s `PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP`, with nothing coupling the two pairs). An ABSENT
+(`DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS` in `vaultDigest.ts`).
+**DEBT, not derivation:** those two literals are hand-written and happen to equal `vaultGround.ts`'s
+`PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP`; there is no import between the modules and no test over the
+pair. Setting `DIGEST_PER_DOC_CHARS` to `1400` leaves `pnpm typecheck` clean and
+`pnpm vitest run vaultDigest` green (probe run and reverted, 29-W3-TAIL-FIX). The fix is to export
+the two caps from one module and import them; `vaultDigest.ts` is outside this plan's owned files. An ABSENT
 `docType` renders as `not classified` and is NOT collapsed into the `"unclassified"` literal
 (the `docType` union in `schema.ts` — never classified is not the same as classified and
 unplaceable).

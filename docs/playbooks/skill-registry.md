@@ -2574,10 +2574,20 @@ in the code used it until the wave-3 sweep; see the next subsection for the door
 candidate's version back off the result. That is deliberate: since activation is refused, a pin is
 how a published customization reaches a model at all. What bounds it:
 
-- **A caller may name only WHICH ROW, and the validator checks it.** Every declaring site takes
-  `v.optional(v.record(v.string(), v.id("tenantSkills")))`, so a value that is not a real row of
-  that table is refused before any handler runs. No site accepts a body, a name, or a
-  `(name, version)` pair.
+- **The arg is a name → row-id map, and `v.id` is not an existence check.** The declared shape is
+  `tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills")))`: the KEY is a skill name
+  (read as `tenantSkillIds?.[skillName]` in `llm.ts`'s `runSpecialistTurn`), the VALUE is a row id.
+  `v.id` checks an id's shape and table, not that the row exists — a well-formed id for a deleted
+  row passes validation, the handler runs, and `loadTenantCandidate` throws
+  `NO_SUCH_TENANT_CANDIDATE_ERROR` from inside `skills.getTenantSkillVersion`; `skills.test.ts` pins
+  that throw. `skillVersions: v.optional(v.record(v.string(), v.number()))` sits beside it at the
+  same sites and IS a `(name, version)` pin — into the GLOBAL registry.
+  (This bullet previously read "a value that is not a real row of that table is refused before any
+  handler runs. No site accepts a body, a name, or a `(name, version)` pair". Three of those clauses
+  are false — the existence check, "a name" and "a `(name, version)` pair" — and the surviving one
+  (the validator shape at every site) is enforced by no test. It was itself written to REPLACE a
+  deleted absolute, the third time in this phase a narrowed replacement was wrong. Describe the
+  mechanism; do not narrow the guarantee.)
 - **Every declaring site is internal TODAY, and nothing enforces that it stays so.** The eight are
   `runWorkflowPack` and `__runWorkflowPackWithScript` (here), `dispatch.ts`'s `runSpecialist`,
   `runResearch`, `runMedia` and `__runSpecialistWithScript`, `llm.ts`'s `runCockpitAgent`, and

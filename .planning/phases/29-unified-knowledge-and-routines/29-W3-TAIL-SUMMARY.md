@@ -14,7 +14,7 @@ provides:
   - "packages/backend/vitest.config.mts — the suite-consent comment describes what the line does instead of asserting a repo-wide gate"
   - "docs/playbooks/skill-registry.md — the pin-door bound is the validator plus a stated gap, not an 'internalAction only' claim"
   - "packages/backend/convex/vaultGround.test.ts — afterEach-scoped env restore plus a behavioural leak guard"
-  - "docs/playbooks/knowledge-search-routines.md — zero line-number citations remain"
+  - "docs/playbooks/knowledge-search-routines.md — every citation in the BODY is a symbol; five remain inside the changelog entry, quoted there as the rotted originals"
   - "docs/playbooks/vault.md — the folder-digest cap and docType citations are symbols"
 affects: [any later plan reading these playbooks as the record of what is enforced]
 
@@ -196,10 +196,15 @@ asserts the behaviour a leak would break, not `process.env`.
 × vaultGroundHydrated > blueprint presence does not consume any of TOTAL_CHAR_CAP
 × vaultGroundHydrated > cross-tenant: an explicit foreign tenantId yields no arrays or foreign spine
 × vaultGroundHydrated citation metadata (29-02) > (4 tests)
-  ... 13 failures in total, all "unset for embeddings"
+× vaultGroundHydrated spine (BLPR-02) > returns a live spine without changing any retrieval array
+  Tests  9 failed | 13 passed (22)   — every failure "unset for embeddings"
 ```
 
-That 13-test blast radius is the latent damage the fix removes. Reverted (`cp` from a pre-mutation
+**CORRECTED 2026-08-29 (29-W3-TAIL-FIX).** This block first read "13 failures in total" and "that
+13-test blast radius": 13 is vitest's PASSED count, misread as the failed count. The real figure is
+**9 failed / 13 passed of 22**, re-measured by re-applying the same mutation — 1 new guard plus 8
+pre-existing tests, which also means the added test contributes naming rather than detection. The
+enumeration above (1 + 3 + 4 + 1) now sums to 9. Reverted (`cp` from a pre-mutation
 copy; `grep -c "MUTATION: afterEach removed"` → `0`, `afterEach(() => {` present at `:26`).
 
 `vaultGround.test.ts`: 21 → 22 tests.
@@ -223,6 +228,14 @@ Both now name the SYMBOL. The "mirroring" wording went with them: `vaultDigest.t
 as `vaultGround.ts`'s caps, and nothing couples the pairs — which is what the sentence says now,
 following the 29-01 precedent for exactly this claim one package over.
 
+**INCOMPLETE, CORRECTED 2026-08-29 (29-W3-TAIL-FIX).** This pass converted only the two citations it
+had cited itself. `vault.md`'s provenance block still carried `evaluations.ts:1150`, `voice.ts:349`
+and `onboarding.ts:492` — the same three this commit proved stale and fixed in
+`knowledge-search-routines.md`, in a file the same commit edited — plus `schema.ts:1971` (real
+line `:1966`). All six citations in that block are now symbols. Other blocks of `vault.md` still
+carry line numbers and were not swept. The "mirroring" sentence is also now labelled DEBT with the
+probe that shows nothing pins the pair.
+
 ### `knowledge-search-routines.md`
 
 The 29-FIN-06 summary claims its five remaining `*.ts:<line>` citations were checked and correct.
@@ -240,7 +253,10 @@ Every citation in the file was re-verified against HEAD:
 | `onboarding.ts:492` | inside `writeProfileDoc`, `:462` | 30 |
 
 The three-part `cards.tsx` chain the verifier reported (46 / 81 / 38) is confirmed exactly. All of
-them are now symbols; `grep -cE '\.(ts|tsx|mts|mjs):[0-9]+'` over the file returns **0**.
+them are now symbols in the BODY of the file. **CORRECTED 2026-08-29 (29-W3-TAIL-FIX):** this line
+read "`grep -cE ...` over the file returns **0**", which a grep falsifies — the five rotted originals
+are quoted verbatim inside the changelog entry this plan added, so the count is 2 lines / 5 matches.
+The changelog sentence now says so.
 
 **And the deleted claim that survived in the same file.** The "Corrected claims" list still read
 *"`renderSourceGap` and `groundedSourceProps` were described as wired. Both have ZERO callers
@@ -250,6 +266,9 @@ the deletion. `packages/core/src/workflowPacks.test.ts:216-222` calls `renderSou
 `knowledgeSearch.test.ts` calls both. Corrected to what is true: neither has a PRODUCTION caller, the
 unit tests are what exercise them, 29-09's panel is the intended one — with a note saying where the
 false version had survived, so it is not "re-corrected" back.
+**SUPERSEDED 2026-08-29 (29-W3-TAIL-FIX):** "neither has a PRODUCTION caller" stopped being true
+three commits later — 29-09's `KnowledgeSearchPanel.tsx` imports and calls both. True when written,
+wrong at branch HEAD; both the playbook bullet and the changelog sentence are corrected.
 
 ---
 

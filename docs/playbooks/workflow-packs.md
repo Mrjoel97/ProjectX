@@ -1,5 +1,13 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-29 (29-W3-TAIL-FIX — **THE `internalAction` JUSTIFICATION IS DELETED FROM
+> THE CODE, AND THE 2026-08-28 ENTRY BELOW STILL STATES IT.** The `packArgs` docstrings in
+> `workflowPackBinding.ts` no longer read "`internalAction` ⇒ never model-supplied" or "declared
+> only on the two `internalAction`s below". Every declaring site is internal today and no test fails
+> when one stops being, which `skill-registry.md`'s "The pin door IS open" records as a GAP rather
+> than a bound; read that bullet, not the sentence in the entry below. Comment-only — no behaviour
+> changed, `pnpm vitest run workflowPackBinding` is 39/39 and `pnpm typecheck` is clean.)
+
 > Last verified: 2026-08-29 (29-07 Task 2 — **THE FIXTURE VALIDATOR RAN NOWHERE, AND FOUR OF THE
 > SIX "INJECTION" CASES PLANT NO INJECTION.** `run-workflow-pack-evals.mjs --fixtures-only` is
 > offline and free and validates the whole corpus, and no CI job invokes it; `packEvalSuite.test.ts`

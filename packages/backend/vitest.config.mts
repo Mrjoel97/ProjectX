@@ -23,10 +23,8 @@ export default defineConfig({
     //
     // WHICH `SMOKE::` seams are gated on that predicate and which are still selected by CONTENT is
     // tracked in `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md` — read
-    // the register, not this comment. Several are deliberately ungated (`vault.ts`'s `vaultSearch`
-    // is driven by `apps/web/e2e/vault-redesign.spec.ts` against a real KEYED deployment, where
-    // `offlineSeamAvailable()` is false by construction), so this flag restrains only the gated
-    // ones.
+    // the register, not this comment. Several are still ungated, and the register carries them as
+    // OPEN DEBT rather than as a design choice, so this flag restrains only the converted ones.
     env: { PIKAR_OFFLINE_FIXTURES: "1" },
     testTimeout: 20_000,
     hookTimeout: 20_000,

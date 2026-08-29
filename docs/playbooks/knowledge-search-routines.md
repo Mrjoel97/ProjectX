@@ -30,9 +30,11 @@
 > THIS FILE'S OWN "CORRECTED CLAIMS" LIST, AND SIX CITATIONS HAD ROTTED.** (1) The entry recording
 > the `renderSourceGap` / `groundedSourceProps` fix still read "Both have ZERO callers repo-wide" —
 > the exact sentence that commit removed from the two docstrings for being false (`workflowPacks.ts`'s
-> test calls `renderSourceGap`). It now says what is true: neither has a PRODUCTION caller, unit
-> tests exercise both, 29-09's panel is the intended one. (2) EVERY `<file>.ts:<line>` citation in
-> this playbook is replaced by the SYMBOL it names. The `cards.tsx` chain was wrong by 46, 81 and 38
+> test calls `renderSourceGap`). It was corrected to read that neither had a PRODUCTION caller and
+> that 29-09's panel was the intended one — itself superseded hours later when that panel landed;
+> see the 29-09 entry above. (2) Every `<file>.ts:<line>` citation in the BODY of this playbook is
+> replaced by the SYMBOL it names; the five quoted in the next sentence are the rotted originals and
+> are the only ones a grep still finds. The `cards.tsx` chain was wrong by 46, 81 and 38
 > lines; `dispatch.ts:256`, `blueprint.ts:271`, `evaluations.ts:1150`, `voice.ts:349` and
 > `onboarding.ts:492` had all drifted. This phase has now produced stale citations in four rounds —
 > line numbers rot every commit, symbols do not. Prose-only; nothing on the search path changed.)
@@ -986,12 +988,13 @@ the request in front of it. The cap lives in the backend module, not `SEARCH_CAP
   the two-conjunct explanation above.
 - `knowledgeSearch.ts`'s `AdapterRef` "breaks the build here rather than at runtime" — two thirds
   true. Now states which half the type holds and names the source scan that holds the other.
-- `@pikar/core`'s `renderSourceGap` and `groundedSourceProps` were described as wired. Neither has
-  a PRODUCTION caller — unit tests are what exercise them, and `workflowPacks.test.ts` calls
-  `renderSourceGap` too; 29-09's panel is the intended caller. Both docstrings now say that.
-  (This entry itself read "Both have ZERO callers repo-wide" until the wave-3 tail: the same claim
-  29-FIN-06 deleted from the two docstrings for being false survived here, in the file that commit
-  edited.)
+- `@pikar/core`'s `renderSourceGap` and `groundedSourceProps` were described first as wired, then
+  (wave-3 tail) as having no PRODUCTION caller. Both readings are stale. 29-09's
+  `apps/web/app/(app)/dashboard/workspace/KnowledgeSearchPanel.tsx` imports and calls both — see the
+  2026-08-29 entry at the head of this file — and the two docstrings in
+  `packages/core/src/knowledgeSearch.ts` were updated with it, so they now name the panel. The
+  narrower half survives: `groundedSourceProps`' `nonVault` return has no production reader, which
+  its docstring says.
 - `llm.ts`'s "only the three USER_AUTHORABLE_SKILLS can have an overlay row at all, so every other
   specialist name resolves exactly as before" — false once a second publish channel existed.
   **The replacement written here was ALSO false** and is corrected in 29-FIN-06: 29-05 did NOT

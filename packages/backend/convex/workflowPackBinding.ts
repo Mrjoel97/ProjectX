@@ -141,7 +141,7 @@ const packArgs = {
   /** Pairs a run back to the recommendation that offered it (27-09's discovery surface). */
   recommendationId: v.optional(v.string()),
   /** 27-08: the eval runner MUST be able to pin the exact candidate, or a run certifies the ACTIVE
-   *  body while the evidence row names the candidate. `internalAction` ⇒ never model-supplied. */
+   *  body while the evidence row names the candidate. */
   skillVersions: v.optional(v.record(v.string(), v.number())),
   /** 29-05: the TENANT twin of the pin above, and the hop that runs a tenant pack candidate BODY.
    *  `<name>@<version>` cannot name a row once two tenants each own version 2, so a tenant candidate
@@ -155,8 +155,7 @@ const packArgs = {
    *  serving the global body — `skills.test.ts`
    *  ("a pack-named TENANT candidate ... is still REFUSED") asserts exactly that pair. A pinned run
    *  changes nothing that outlives it — no status patch, no evidence write — and the tool grant
-   *  still comes from `toolsForWorkflowPack`. Validated as `v.id("tenantSkills")`, never a string,
-   *  and declared only on the two `internalAction`s below.
+   *  still comes from `toolsForWorkflowPack`.
    *  NONE OF THAT IS THE ISOLATION ARGUMENT — a valid id is still a valid id for SOMEONE ELSE'S
    *  row. The tenant comparison is in `runPackTurn`, before `preCall`. */
   tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
