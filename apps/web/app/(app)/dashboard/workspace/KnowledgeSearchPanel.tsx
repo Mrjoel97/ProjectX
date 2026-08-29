@@ -28,8 +28,9 @@ import { GroundedSources } from "./cards";
 //  - not a vault browser. Only a `vault` citation becomes a `VaultDocButton` — `groundedSourceProps`
 //    is what separates them, because a Gmail message id or a Drive file id handed to `docIds` would
 //    open a vault-document modal for something that is not a vault document. Non-vault citations are
-//    still shown, as `Citation` rows carrying their own source label; the test
-//    "a mailbox citation is NOT a vault document button" pins both halves.
+//    still shown, as `Citation` rows carrying their own source label — pinned by the tests
+//    "a citation names the SYSTEM it came from" and "a mailbox citation is NOT a vault document
+//    button".
 //
 // Rendered inline in the chat pane from the existing "Chat options" menu, like
 // `SkillAuthoringPanel` — no new route and no nav entry (BRAND §4: the cockpit is two panes).
