@@ -1146,6 +1146,38 @@ describe("tax and attribution travel with the row", () => {
     expect(row?.taxabilityReason).toBeUndefined();
   });
 
+  /**
+   * `reconcileEvent` REFUSING is not the same as nothing moving, and the difference is the whole
+   * argument for the `null` arm: a ledger that writes a zero because it could not read a number is
+   * worse than one that refuses. Found by mutation — swapping the refusal for a bare `ignored`
+   * left the suite GREEN until this test existed.
+   */
+  test("an amount reconcileEvent cannot READ is dead-lettered, never written as nothing", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    // Stripe sends `total` as an integer. A string is a payload we cannot honestly total.
+    const payload = JSON.stringify({
+      id: "evt_bad_1",
+      type: "invoice.finalized",
+      created: 1_700_000_200,
+      data: {
+        object: {
+          id: "in_bad_1",
+          object: "invoice",
+          customer: CUSTOMER,
+          currency: "usd",
+          total: "4900",
+        },
+      },
+    });
+    expect((await send(t, payload)).status).toBe(200);
+
+    expect(await ledger(t)).toEqual([]);
+    const dl = await letters(t);
+    expect(dl).toHaveLength(1);
+    expect(dl[0]?.error).toBe("billing_unreconcilable_event");
+  });
+
   test("a money event for an UNKNOWN Stripe customer dead-letters and writes NO ledger row", async () => {
     const t = harness();
     await seedTenant(t); // a tenant exists, but nothing maps this customer to it
