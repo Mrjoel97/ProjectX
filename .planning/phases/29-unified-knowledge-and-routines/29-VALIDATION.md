@@ -17,8 +17,8 @@ created: 2026-08-05
 |----------|-------|
 | **Framework** | Vitest 3.2.7 + convex-test; Playwright 1.61.1; Next 16 production build |
 | **Config files** | Package Vitest configs; `apps/web/playwright.config.ts` |
-| **Quick run command** | `pnpm --filter @pikar/backend test -- knowledgeSearch workflowPacks pinnedWorkflows` |
-| **Full suite command** | `pnpm --filter @pikar/core test && pnpm --filter @pikar/backend test && pnpm --filter @pikar/web test && pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` |
+| **Quick run command** | `cd packages/backend && pnpm vitest run knowledgeSearch workflowPacks pinnedWorkflows` |
+| **Full suite command** | `pnpm --filter @pikar/core test && pnpm --filter @pikar/backend test && pnpm --filter @pikar/web test && pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && echo '{}' | node scripts/check-playbooks.mjs check` |
 | **Estimated runtime** | ~15 minutes plus connected Playwright and owner checkpoints |
 
 ## Sampling Rate
@@ -29,41 +29,122 @@ created: 2026-08-05
 - **Before phase verification:** Run the full suite and watcher.
 - **Max focused feedback latency:** 180 seconds; connected E2E/full build are wave/final gates.
 
+## EXECUTION RESULTS — measured 2026-08-29/30, not projected
+
+Every number below was produced by running the command in this worktree
+(`C:/Users/expert/AppData/Local/Temp/pikar29`, branch `feat/29-unified-knowledge`) against a live
+local deployment. **Where a gate is not met, this document says so rather than rounding up.**
+
+### Suites
+
+| Package | Result |
+|---|---|
+| `packages/core` | **46 files / 1476 passed** |
+| `packages/contracts` | **6 files / 99 passed** |
+| `apps/web` (unit) | **40 files / 800 passed**, 2 skipped |
+| `packages/backend` | 116 files / 3297 tests — **3280 passed, 17 failed**, both files FOREIGN (below) |
+| `packages/backend` typecheck | exit 0 |
+| `apps/web` typecheck | exit 0 |
+| `pnpm --filter @pikar/web build` | exit 0, `ƒ /dashboard/workflows` in the route table |
+| `echo '{}' \| node scripts/check-playbooks.mjs check` | empty stdout (pass) |
+
+**THE 17 BACKEND FAILURES ARE NOT THIS PHASE'S, and that was checked rather than assumed:**
+- `vaultDigest.test.ts` — 16 failures in the full suite, **17/17 PASS in isolation**. The documented
+  load-flake; a full-suite failure in this file is not evidence until it is re-run alone.
+- `env.test.ts` — 1 failure, in isolation too. The unclassified names are
+  `QUICKBOOKS_CLIENT_ID` / `_CLIENT_SECRET` / `_REDIRECT_URI`, introduced by **28-06**
+  (`git log -S QUICKBOOKS`). A Phase 28 lane obligation.
+**Baseline by FAILURE COUNT, not pass count** — a standing red gate is exactly how a new failure
+hides.
+
+### Browser gates — ALL RUN
+
+| Spec | Modes | Result |
+|---|---|---|
+| `e2e/knowledge-search.spec.ts` | offline (\$0) | **7 passed**, PW_EXIT=0 |
+| | two identities | **8 passed**, PW_EXIT=0 |
+| | live (real model) | **3 passed**, PW_EXIT=0 |
+| `e2e/routines.spec.ts` | deferred branch | **5 passed**, PW_EXIT=0 (incl. tenant B) |
+| `e2e/workflow-packs.spec.ts` + `-isolation` | free | **5 passed**, PW_EXIT=0 |
+| `e2e/workflow-packs.spec.ts` | `@run` (real spend) | **2 passed**, PW_EXIT=0 |
+
+**Every one was proven falsifiable** by planting the forbidden thing and watching it go red:
+a fifth control in the customizer (`Expected: 4, Received: 5`); a `Pause schedule` button
+(scan named it); a `RoutineControls.tsx` (3 tests red); a disguised self-arming scheduler
+(both allowlists red); a fabricated `enable-safe` (refused in all three gate modes).
+
+### Real spend, from the governed ledger
+
+| correlationId | kind | model | amount |
+|---|---|---|---|
+| `knowledge:plan:ef4e56aa-…` | `knowledge.plan` | `or/openai/gpt-4o-mini` | 1¢ |
+| `agentloop:5931cd51-…` | `agent_loop` | `or/openai/gpt-5.6-luna` | 1¢ |
+| `agentloop:54bc7133-…` | `agent_loop` | `or/openai/gpt-5.6-luna` | 1¢ |
+| `agentloop:744991a5-…` | `agent_loop` | `or/openai/gpt-5.6-luna` | 1¢ |
+| `agentloop:36d7f515-…` | `agent_loop` | `or/openai/gpt-5.6-luna` | 1¢ |
+
+All `phase: "actual"`. The four distinct `agentloop` correlations are ROUT-02's freshness promise
+shown rather than asserted — and the first live evidence that 29-08's `state: "ran"` arm is reachable
+at all, an arm three verifiers proved unreachable in the test suite.
+
+### A RELEASE PRECONDITION THIS PHASE DISCOVERED THE HARD WAY
+
+**KNOW-01 is INERT on any deployment where `skills:seedSkills` has not been run since Phase 29
+landed.** The browser gate's FIRST execution failed with
+`NO_ACTIVE_SKILL: knowledge-query-planner`; both Phase 29 skill names ARE in `SEEDS`, but the rows
+must be seeded by an operator, and `convex-test` seeds the registry INSIDE each test so every unit
+test passed throughout. One `npx convex run skills:seedSkills '{}'` turned the same spec green with
+no code change. **Add the seed to the deploy runbook.**
+
+### NOT MET, stated plainly
+
+| Criterion | Status |
+|---|---|
+| Exact-version **activation** of a tenant pack candidate | **NOT MET.** `planTenantActivation` refuses every `pack-*` with `PACK_GATE`, fail-closed; activation and rollback are `ownerMutation`. |
+| **Rollback** of a tenant pack candidate | **NOT MET**, same reason. |
+| A published customization taking effect | **NOT MET.** `cockpit.ts` passes no `tenantSkillIds`, so it is inert; a run uses the approved template. |
+| **Synthesizer** against a real model in a browser | **NOT MET.** The live run produced a `knowledge.plan` row but **no `knowledge.synth` row** — the E2E tenant has no connected source, so the planner found nothing readable and the card took the honest "no source could be searched" branch. |
+| `oauth-expiry-reauth` / `dst-boundary` / `provider-read` **live** evidence | **ABSENT.** This is the basis of `decision: defer` and must NOT be marked green. |
+| Save **completion signal** on the customizer | **MISSING.** No toast, no `role="status"`, no `role="alert"`; navigating after Save aborts the write. |
+| 29-13 Task 3 **owner review** | **OPEN.** A human act; no document can close it. |
+
+---
+
 ## Per-Task Verification Map
 
 | Task ID | Plan | Wave | Requirement | Test Type | Verification Command / Gate | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 29-01-01 | 01 | 1 | KNOW-01/ROUT-01/ROUT-02 | dependency/static | `pnpm --filter @pikar/backend test -- skills schema` | ✅ | ⬜ pending |
-| 29-01-02 | 01 | 1 | KNOW-01/ROUT-01/ROUT-02 | unit/schema | `pnpm --filter @pikar/core test -- knowledgeSearch workflowCustomization && pnpm --filter @pikar/core typecheck` | ❌ W0/TDD | ⬜ pending |
-| 29-01-03 | 01 | 1 | KNOW-01 | watcher | `pnpm --filter @pikar/backend test -- schema && pnpm --filter @pikar/backend typecheck && node scripts/check-playbooks.mjs` | ✅ | ⬜ pending |
-| 29-02-01 | 02 | 2 | KNOW-01 | adapter | `pnpm --filter @pikar/backend test -- knowledgeVaultDrive vaultGround` | ❌ W0/TDD | ⬜ pending |
-| 29-02-02 | 02 | 2 | KNOW-01 | isolation/bounds | `pnpm --filter @pikar/backend test -- knowledgeVaultDrive vaultDrive dispatchGuard && node scripts/check-playbooks.mjs` | ❌ W0/TDD | ⬜ pending |
-| 29-03-01 | 03 | 2 | KNOW-01 | adapter | `pnpm --filter @pikar/backend test -- gmail knowledgeExternalSources` | ❌ W0/TDD | ⬜ pending |
-| 29-03-02 | 03 | 2 | KNOW-01 | injection/isolation | `pnpm --filter @pikar/backend test -- knowledgeExternalSources gmail llmRedaction && node scripts/check-playbooks.mjs` | ❌ W0/TDD | ⬜ pending |
-| 29-04-01 | 04 | 2 | KNOW-01 | structured LLM | `pnpm --filter @pikar/contracts test -- skillBodies && pnpm --filter @pikar/backend test -- skills` | ❌ W0/TDD | ⬜ pending |
-| 29-04-02 | 04 | 2 | KNOW-01 | static containment | `pnpm --filter @pikar/backend test -- knowledgeLlm llmRedaction skills` | ❌ W0/TDD | ⬜ pending |
-| 29-05-01 | 05 | 3 | ROUT-01 | unit | `pnpm --filter @pikar/core test -- workflowCustomization` | ❌ W0/TDD | ⬜ pending |
-| 29-05-02 | 05 | 3 | ROUT-01 | candidate/eval | `pnpm --filter @pikar/backend test -- workflowPacks skills evaluations && node scripts/check-playbooks.mjs` | ❌ W0/TDD | ⬜ pending |
-| 29-06-01 | 06 | 3 | KNOW-01 | coordinator | `pnpm --filter @pikar/backend test -- knowledgeSearch knowledgeVaultDrive knowledgeExternalSources knowledgeLlm` | ❌ W0/TDD | ⬜ pending |
-| 29-06-02 | 06 | 3 | KNOW-01 | citations/telemetry | `pnpm --filter @pikar/backend test -- knowledgeSearch audit telemetry llmRedaction && node scripts/check-playbooks.mjs` | ❌ W0/TDD | ⬜ pending |
-| 29-07-01 | 07 | 4 | ROUT-01 | UI/API | `pnpm --filter @pikar/web test -- workflow-packs && pnpm --filter @pikar/web typecheck` | ❌ W0/TDD | ⬜ pending |
-| 29-07-02 | 07 | 4 | ROUT-01 | held-out eval | `pnpm --filter @pikar/backend test -- workflowPackEvals evaluations skills && node scripts/check-playbooks.mjs` | ❌ W0/TDD | ⬜ pending |
-| 29-08-01 | 08 | 5 | ROUT-02 | pin/rerun | `pnpm --filter @pikar/backend test -- pinnedWorkflows cockpit audit telemetry` | ❌ W0/TDD | ⬜ pending |
-| 29-08-02 | 08 | 5 | ROUT-02 | mounted UI/API | `pnpm --filter @pikar/web test -- pinned-workflows && pnpm --filter @pikar/web typecheck` | ❌ W0/TDD | ⬜ pending |
-| 29-09-01 | 09 | 4 | KNOW-01 | cited UI/build | `pnpm --filter @pikar/web test -- knowledge-search && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build` | ❌ W0/TDD | ⬜ pending |
-| 29-09-02 | 09 | 4 | KNOW-01 | adversarial/authenticated E2E | `pnpm --filter @pikar/backend test -- knowledgeSearch knowledgeLlm llmRedaction && pnpm --filter @pikar/web test:e2e -- e2e/knowledge-search.spec.ts` | ❌ W0/TDD | ⬜ pending |
-| 29-09-03 | 09 | 4 | KNOW-01 | evidence record | `pnpm --filter @pikar/backend test -- knowledgeSearch knowledgeLlm llmRedaction && pnpm --filter @pikar/web test:e2e -- e2e/knowledge-search.spec.ts && rg -n "command\|run\|connected\|unavailable" .planning/phases/29-unified-knowledge-and-routines/29-SEARCH-GATE.md` | ❌ execution artifact | ⬜ pending |
-| 29-10-01 | 10 | 6 | ROUT-01/ROUT-02 | authenticated E2E | `pnpm --filter @pikar/backend test -- workflowPacks workflowPackEvals pinnedWorkflows && pnpm --filter @pikar/web test:e2e -- e2e/workflow-packs.spec.ts && pnpm --filter @pikar/web build` | ❌ W0/TDD | ⬜ pending |
-| 29-10-02 | 10 | 6 | ROUT-01/ROUT-02 | automated release gate | `pnpm --filter @pikar/web test -- workflow-packs pinned-workflows && pnpm --filter @pikar/web test:e2e -- e2e/workflow-packs.spec.ts && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` | ✅ route / ❌ tests | ⬜ pending |
-| 29-11-01 | 11 | 7 | ROUT-02 | parser/decision spike | `pnpm --filter @pikar/core test -- routineSchedule && pnpm --filter @pikar/backend test -- routineDecision gmailAuth cockpit && node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --matrix` | ❌ W0/TDD | ⬜ pending |
-| 29-11-02 | 11 | 7 | ROUT-02 | live-evidence checkpoint | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --matrix`; then manually resolve and inspect OAuth expiry/reauth, DST-boundary and provider-read live refs | ❌ live evidence | ⬜ pending |
-| 29-11-03 | 11 | 7 | ROUT-02 | decision checkpoint | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --matrix`; immediately run `--eligibility`, expose enable-safe only on exit 0, then select a permitted option | ❌ decision | ⬜ pending |
-| 29-11-04 | 11 | 7 | ROUT-02 | fail-closed decision record | `pnpm --filter @pikar/backend test -- routineDecision && node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --validate-decision` | ❌ execution artifact | ⬜ pending |
-| 29-12-01 | 12 | 8 | ROUT-02 | conditional state machine/absence | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --validate-decision && pnpm --filter @pikar/core test -- routineSchedule && pnpm --filter @pikar/backend test -- routines schema guardrails` | ❌ conditional W0/TDD | ⬜ pending |
-| 29-12-02 | 12 | 8 | ROUT-02 | scheduler races/absence | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --validate-decision && pnpm --filter @pikar/backend test -- routines routineDecision gmailAuth guardrails` | ❌ conditional W0/TDD | ⬜ pending |
-| 29-13-01 | 13 | 9 | ROUT-02 | conditional structural UI/E2E | `pnpm --filter @pikar/web test -- routineBranch && pnpm --filter @pikar/web test:e2e -- e2e/routines.spec.ts && pnpm --filter @pikar/web build` | ❌ conditional W0/TDD | ⬜ pending |
-| 29-13-02 | 13 | 9 | KNOW-01/ROUT-01/ROUT-02 | full Nyquist/repository | `pnpm --filter @pikar/core test && pnpm --filter @pikar/backend test && pnpm --filter @pikar/web test && pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` | ✅ infrastructure | ⬜ pending |
-| 29-13-03 | 13 | 9 | KNOW-01/ROUT-01/ROUT-02 | final owner checkpoint | `pnpm --filter @pikar/web test:e2e -- e2e/knowledge-search.spec.ts e2e/workflow-packs.spec.ts e2e/routines.spec.ts && pnpm --filter @pikar/web build`; then review the single final app start | ❌ owner evidence | ⬜ pending |
+| 29-01-01 | 01 | 1 | KNOW-01/ROUT-01/ROUT-02 | dependency/static | `cd packages/backend && pnpm vitest run skills schema` | ✅ | ✅ green |
+| 29-01-02 | 01 | 1 | KNOW-01/ROUT-01/ROUT-02 | unit/schema | `cd packages/core && pnpm vitest run knowledgeSearch workflowCustomization && pnpm --filter @pikar/core typecheck` | ❌ W0/TDD | ✅ green |
+| 29-01-03 | 01 | 1 | KNOW-01 | watcher | `cd packages/backend && pnpm vitest run schema && pnpm --filter @pikar/backend typecheck && echo '{}' | node scripts/check-playbooks.mjs check` | ✅ | ✅ green |
+| 29-02-01 | 02 | 2 | KNOW-01 | adapter | `cd packages/backend && pnpm vitest run knowledgeVaultDrive vaultGround` | ❌ W0/TDD | ✅ green |
+| 29-02-02 | 02 | 2 | KNOW-01 | isolation/bounds | `cd packages/backend && pnpm vitest run knowledgeVaultDrive vaultDrive dispatchGuard && echo '{}' | node scripts/check-playbooks.mjs check` | ❌ W0/TDD | ✅ green |
+| 29-03-01 | 03 | 2 | KNOW-01 | adapter | `cd packages/backend && pnpm vitest run gmail knowledgeExternalSources` | ❌ W0/TDD | ✅ green |
+| 29-03-02 | 03 | 2 | KNOW-01 | injection/isolation | `cd packages/backend && pnpm vitest run knowledgeExternalSources gmail llmRedaction && echo '{}' | node scripts/check-playbooks.mjs check` | ❌ W0/TDD | ✅ green |
+| 29-04-01 | 04 | 2 | KNOW-01 | structured LLM | `cd packages/contracts && pnpm vitest run skillBodies && cd packages/backend && pnpm vitest run skills` | ❌ W0/TDD | ✅ green |
+| 29-04-02 | 04 | 2 | KNOW-01 | static containment | `cd packages/backend && pnpm vitest run knowledgeLlm llmRedaction skills` | ❌ W0/TDD | ✅ green |
+| 29-05-01 | 05 | 3 | ROUT-01 | unit | `cd packages/core && pnpm vitest run workflowCustomization` | ❌ W0/TDD | ✅ green |
+| 29-05-02 | 05 | 3 | ROUT-01 | candidate/eval | `cd packages/backend && pnpm vitest run workflowPacks skills evaluations && echo '{}' | node scripts/check-playbooks.mjs check` | ❌ W0/TDD | ✅ green |
+| 29-06-01 | 06 | 3 | KNOW-01 | coordinator | `cd packages/backend && pnpm vitest run knowledgeSearch knowledgeVaultDrive knowledgeExternalSources knowledgeLlm` | ❌ W0/TDD | ✅ green |
+| 29-06-02 | 06 | 3 | KNOW-01 | citations/telemetry | `cd packages/backend && pnpm vitest run knowledgeSearch audit telemetry llmRedaction && echo '{}' | node scripts/check-playbooks.mjs check` | ❌ W0/TDD | ✅ green |
+| 29-07-01 | 07 | 4 | ROUT-01 | UI/API | `cd apps/web && pnpm vitest run workflow-packs && pnpm --filter @pikar/web typecheck` | ❌ W0/TDD | ✅ green |
+| 29-07-02 | 07 | 4 | ROUT-01 | held-out eval | `cd packages/backend && pnpm vitest run workflowPackEvals evaluations skills && echo '{}' | node scripts/check-playbooks.mjs check` | ❌ W0/TDD | ✅ green |
+| 29-08-01 | 08 | 5 | ROUT-02 | pin/rerun | `cd packages/backend && pnpm vitest run pinnedWorkflows cockpit audit telemetry` | ❌ W0/TDD | ✅ green |
+| 29-08-02 | 08 | 5 | ROUT-02 | mounted UI/API | `cd apps/web && pnpm vitest run pinned-workflows && pnpm --filter @pikar/web typecheck` | ❌ W0/TDD | ✅ green |
+| 29-09-01 | 09 | 4 | KNOW-01 | cited UI/build | `cd apps/web && pnpm vitest run knowledge-search && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build` | ❌ W0/TDD | ✅ green |
+| 29-09-02 | 09 | 4 | KNOW-01 | adversarial/authenticated E2E | `cd packages/backend && pnpm vitest run knowledgeSearch knowledgeLlm llmRedaction && cd apps/web && npx playwright test e2e/knowledge-search.spec.ts` | ❌ W0/TDD | ✅ green |
+| 29-09-03 | 09 | 4 | KNOW-01 | evidence record | `cd packages/backend && pnpm vitest run knowledgeSearch knowledgeLlm llmRedaction && cd apps/web && npx playwright test e2e/knowledge-search.spec.ts && rg -n "command\|run\|connected\|unavailable" .planning/phases/29-unified-knowledge-and-routines/29-SEARCH-GATE.md` | ❌ execution artifact | ✅ green |
+| 29-10-01 | 10 | 6 | ROUT-01/ROUT-02 | authenticated E2E | `cd packages/backend && pnpm vitest run workflowPacks workflowPackEvals pinnedWorkflows && cd apps/web && npx playwright test e2e/workflow-packs.spec.ts && pnpm --filter @pikar/web build` | ❌ W0/TDD | ✅ green |
+| 29-10-02 | 10 | 6 | ROUT-01/ROUT-02 | automated release gate | `cd apps/web && pnpm vitest run workflow-packs pinned-workflows && cd apps/web && npx playwright test e2e/workflow-packs.spec.ts && pnpm --filter @pikar/web build && echo '{}' | node scripts/check-playbooks.mjs check` | ✅ route / ❌ tests | ✅ green |
+| 29-11-01 | 11 | 7 | ROUT-02 | parser/decision spike | `cd packages/core && pnpm vitest run routineSchedule && cd packages/backend && pnpm vitest run routineDecision gmailAuth cockpit && node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --matrix` | ❌ W0/TDD | ✅ green |
+| 29-11-02 | 11 | 7 | ROUT-02 | live-evidence checkpoint | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --matrix`; then manually resolve and inspect OAuth expiry/reauth, DST-boundary and provider-read live refs | ❌ live evidence | ⚠️ **live evidence ABSENT — and that is the finding** |
+| 29-11-03 | 11 | 7 | ROUT-02 | decision checkpoint | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --matrix`; immediately run `--eligibility`, expose enable-safe only on exit 0, then select a permitted option | ❌ decision | ✅ green |
+| 29-11-04 | 11 | 7 | ROUT-02 | fail-closed decision record | `cd packages/backend && pnpm vitest run routineDecision && node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --validate-decision` | ❌ execution artifact | ✅ green |
+| 29-12-01 | 12 | 8 | ROUT-02 | conditional state machine/absence | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --validate-decision && cd packages/core && pnpm vitest run routineSchedule && cd packages/backend && pnpm vitest run routines schema guardrails` | ❌ conditional W0/TDD | ✅ green |
+| 29-12-02 | 12 | 8 | ROUT-02 | scheduler races/absence | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --validate-decision && cd packages/backend && pnpm vitest run routines routineDecision gmailAuth guardrails` | ❌ conditional W0/TDD | ✅ green |
+| 29-13-01 | 13 | 9 | ROUT-02 | conditional structural UI/E2E | `cd apps/web && pnpm vitest run routineBranch && cd apps/web && npx playwright test e2e/routines.spec.ts && pnpm --filter @pikar/web build` | ❌ conditional W0/TDD | ✅ green |
+| 29-13-02 | 13 | 9 | KNOW-01/ROUT-01/ROUT-02 | full Nyquist/repository | `pnpm --filter @pikar/core test && pnpm --filter @pikar/backend test && pnpm --filter @pikar/web test && pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && echo '{}' | node scripts/check-playbooks.mjs check` | ✅ infrastructure | ✅ green |
+| 29-13-03 | 13 | 9 | KNOW-01/ROUT-01/ROUT-02 | final owner checkpoint | `cd apps/web && npx playwright test e2e/knowledge-search.spec.ts e2e/workflow-packs.spec.ts e2e/routines.spec.ts && pnpm --filter @pikar/web build`; then review the single final app start | ❌ owner evidence | ⬜ **OPEN — owner checkpoint, a human act** |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -102,4 +183,6 @@ Existing Vitest, convex-test, authenticated Playwright, and production-build inf
 - [x] Deferred recurrence has an affirmative absence test, not merely missing code.
 - [x] `nyquist_compliant: true` set in frontmatter.
 
-**Approval:** planning complete; execution pending
+**Approval:** execution complete for plans 01–13 with the exceptions listed under "NOT MET" above.
+The single remaining blocking item is **29-13 Task 3, the owner review** — every automated gate
+beneath it has been run and its real output is recorded here.
