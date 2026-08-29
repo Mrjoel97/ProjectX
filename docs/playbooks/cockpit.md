@@ -1,4 +1,36 @@
-> Last verified: 2026-08-27 (**THE DESCRIPTION FIX MOVED THE MODEL AND DID NOT STOP IT, WHICH IS
+> Last verified: 2026-08-28 (28.1-01 — **`http.ts` GAINED A ROUTE THIS PLAYBOOK DOES NOT OWN.**
+> `POST /billing/stripe/webhook` is the Stripe webhook receiver for PIKAR'S OWN merchant account;
+> it is documented in `docs/playbooks/billing.md`, not here. It touches no cockpit surface — no
+> tool, no card, no `VERB` entry, no `agentSteps.tool` literal, no skill body. This entry exists
+> only because `watch.json` gives `http.ts` to this playbook, so the route inventory below stays
+> honest: `http.ts` now ALSO holds `POST /billing/stripe/webhook`. **No cockpit behaviour changed.**
+>
+> Last verified: 2026-08-27 (28-03 — **FOUR REVENUE VERB ENTRIES, AND NOT ONE TOOL WRITES THEM
+> YET.** `cards.tsx`'s `VERB` record gains `dispatchRevenue`, `readRevenueCrm`,
+> `readBusinessFinance` and `stageInvoiceReminder`, beside the four `agentSteps.tool` literals
+> 28-03 pre-declared in `schema.ts`. `traceParity.test.ts` asserts the two sets equal BOTH ways, so
+> either half alone is RED — that, and nothing else, is why a schema plan touches this playbook's
+> file. **No cockpit behaviour changed.**
+>
+> **WHY PRE-DECLARE AT ALL.** 28-03 is Phase 28's single serialized `schema.ts` owner, so 28-12
+> (`revenueTools`) and 28-13 (`invoiceReminders`) cannot add their own literals when they land.
+> Without them `agentSteps:record` throws an `ArgumentValidationError` inside an AI-SDK callback the
+> SDK SILENTLY swallows — prod loses the trace row while the whole suite stays green. That is the
+> trap this union has already sprung at `searchVault`, `evaluateBusiness`, `recordScorecardAnswer`
+> and `saveAsDocument`.
+>
+> **THE NAMES ARE NOW BINDING ON 28-12/28-13.** The specialist route's `stepTool` and the
+> `buildCockpitTools` keys must be exactly these four, or `cockpitTools.test.ts`'s key scan goes red
+> at those plans. Pre-declaration has exactly one failure mode — the `webResearch` one, a literal
+> that reads as a trace that exists — and it does not apply here: all four will be written by LOCAL
+> executable tools, so `onToolExecutionStart` fires for each.
+>
+> The done labels are deliberately READS, not results. A connector coverage window can be partial,
+> so none of them may imply a complete answer, and `stageInvoiceReminder` must never read "Sent":
+> REVN-06 stages a draft and stops at the existing human Approve gate. traceParity 7/7, web
+> typecheck 0.)
+>
+> PREVIOUS: 2026-08-27 (**THE DESCRIPTION FIX MOVED THE MODEL AND DID NOT STOP IT, WHICH IS
 > WHAT A DESCRIPTION FIX IS FOR.** Naming the finance figures in `recordScorecardAnswer`'s
 > description shifted `37-finance-update`'s routing — `evaluateBusiness` became `readFinance`, the
 > right DOMAIN — and the model still stored the cash position through the scorecard. A description
@@ -884,6 +916,12 @@
 > a duplicate — a second row is a permanently broken lookup, not a cosmetic problem.
 >
 # Playbook: Email Chat Cockpit
+
+> **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
+> subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
+> steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
+> behaviour change, and **this is not a re-verification of anything below.** The
+> `Last verified` line still means what it said.
 
 > Last verified: 2026-08-18 (**A BRIEF IS A SUBJECT, NOT A TASK — the media specialist was never
 > told to produce the deck.** dispatch 103/103, backend 87 files / 2041 passed, tsc clean. All four

@@ -344,7 +344,7 @@ test("the colour charset is asserted BEFORE either value reaches a filtergraph",
   // The load-bearing one. A card's WORDS are kept out of the filter string by `textfile=`, so a
   // colour is the first model-derived value that is written INTO it. Without this guard the whole
   // `expansion=none` trust boundary is reopened one option to the left.
-  expect(SH).toContain('=~ ^0x[0-9A-Fa-f]{6}$');
+  expect(SH).toContain("=~ ^0x[0-9A-Fa-f]{6}$");
   expect(SH, "a malformed colour is a caller bug and exits, never a guessed replacement").toContain(
     "--card-bg/--card-ink must be 0xRRGGBB",
   );
@@ -370,7 +370,7 @@ test("the fade is drawn INSIDE the scene and cannot move a boundary", () => {
   // card is not still arriving when it should be landing, and it is a filter on the picture — it
   // never becomes a duration term.
   expect(SH).toContain("fade=t=in:st=0:d=${CFADE}");
-  expect(SH).toContain('if(d>0.4)d=0.4');
+  expect(SH).toContain("if(d>0.4)d=0.4");
   // The card branch's own length still comes from SEC and nothing else.
   expect(SH).toContain('-an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"');
 });

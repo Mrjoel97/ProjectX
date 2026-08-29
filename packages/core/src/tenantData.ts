@@ -100,6 +100,42 @@ export const TENANT_TABLE_CLASSIFICATION = {
    * operational records are not tenant content"), which is accurate for this shape.
    */
   workflowPackEvents: "audit_immutable",
+  /**
+   * Phase-28 connector rails (28-03).
+   *
+   * `connectorConnections` is `tenant_credential` for the same reason `gmailTokens` is: it holds
+   * the tenant's grant. The material at rest is AES-256-GCM ciphertext, which changes the blast
+   * radius of a leaked backup but changes NOTHING about erasure — the row still rides the normal
+   * deletion walk, and the category is what puts it there.
+   *
+   * A DISCONNECT is not an erasure and does not delete the row. It clears the two ciphertext
+   * fields and keeps the metadata, because for three of the four providers Pikar cannot revoke
+   * upstream (Stripe Apps has no documented platform revoke, PayPal documents none at all,
+   * HubSpot's cascade to access tokens is unproven) and the surviving `revocation` record is the
+   * only place the honest answer lives. Erasure, unlike disconnect, removes the row entirely.
+   *
+   * `connectorOAuthStates` is `tenant_credential` rather than `tenant_owned`: it is auth-flow
+   * material, not tenant content, and an export that dumped in-flight OAuth state hashes to a
+   * user would be handing out the wrong thing.
+   *
+   * `contactProviderRefs` is ordinary tenant content — provider ids joined to Phase 19 contacts —
+   * so it exports and deletes with the rest of the CRM.
+   *
+   * `providerGates` is `global` and has NO `tenantId` column: it is the deployment's per-provider
+   * lane status. A tenant cannot own it, and a tenant erasure must not remove it.
+   */
+  connectorConnections: "tenant_credential",
+  connectorOAuthStates: "tenant_credential",
+  contactProviderRefs: "tenant_owned",
+  providerGates: "global",
+  /**
+   * Phase 28.1 — Pikar's OWN Stripe delivery log. `global`, and the reason is not "it has no
+   * tenantId" but something sharper: erasing it on a tenant deletion would let a REDELIVERED
+   * event for that tenant re-apply, because the row is the only record that the event was
+   * already seen. It holds ids, types and counts only (CLAUDE.md §4) — no tenant content and
+   * no personal data — so `global`'s "contains no tenant data" claim stays literally true.
+   */
+  billingStripeEvents: "global",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;

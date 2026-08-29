@@ -134,6 +134,9 @@ importers:
       '@openrouter/ai-sdk-provider':
         specifier: 3.0.0
         version: 3.0.0(ai@7.0.20(zod@4.4.3))(zod@4.4.3)
+      '@pikar/billing':
+        specifier: workspace:*
+        version: link:../billing
       '@pikar/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -149,6 +152,9 @@ importers:
       '@pikar/pii':
         specifier: workspace:*
         version: link:../pii
+      '@pikar/revenue':
+        specifier: workspace:*
+        version: link:../revenue
       '@pikar/vault':
         specifier: workspace:*
         version: link:../vault
@@ -190,6 +196,19 @@ importers:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
 
+  packages/billing:
+    dependencies:
+      '@pikar/core':
+        specifier: workspace:*
+        version: link:../core
+      '@pikar/revenue':
+        specifier: workspace:*
+        version: link:../revenue
+    devDependencies:
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
+
   packages/contracts:
     dependencies:
       zod:
@@ -230,6 +249,16 @@ importers:
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
 
   packages/pii:
+    dependencies:
+      '@pikar/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)
+
+  packages/revenue:
     dependencies:
       '@pikar/core':
         specifier: workspace:*

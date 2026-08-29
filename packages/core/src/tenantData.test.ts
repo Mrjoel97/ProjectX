@@ -15,10 +15,16 @@ describe("tenant table classification registry", () => {
   test("classifies every explicit schema table exactly once, in both directions", () => {
     const classifiedTables = Object.keys(TENANT_TABLE_CLASSIFICATION);
 
-    // 43 + the two BETA-01 admission tables (25-01) + workflowPackEvents (27-02, PACK-02).
+    // 43 + the two BETA-01 admission tables (25-01) + workflowPackEvents (27-02, PACK-02)
+    // + the four Phase-28 connector tables (28-03) + billingStripeEvents (28.1-01).
     // This count is a TRIPWIRE, not bookkeeping: a new table cannot reach the export/deletion
     // walks without someone deliberately bumping it and classifying the table on the way past.
-    expect(schemaTables).toHaveLength(46);
+    //
+    // 28.1-01 FOUND THIS TEST RED AT HEAD AND FIXED IT: 28-03 added four tables and classified
+    // them, but never bumped this number or the closed set below, so the tripwire had been
+    // failing on its own arithmetic ever since — and a genuinely UNCLASSIFIED table would have
+    // looked exactly the same. A tripwire nobody can distinguish from noise is not a tripwire.
+    expect(schemaTables).toHaveLength(51);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -29,7 +35,13 @@ describe("tenant table classification registry", () => {
       .map(([table]) => table)
       .sort();
 
-    expect(credentialTables).toEqual(["gmailTokens", "microsoftCalendarTokens"]);
+    expect(credentialTables).toEqual([
+      // 28-03: the tenant's connector grant (AES-256-GCM ciphertext) and its in-flight OAuth state.
+      "connectorConnections",
+      "connectorOAuthStates",
+      "gmailTokens",
+      "microsoftCalendarTokens",
+    ]);
   });
 
   // OWNER DECISION 2026-08-23 (27-02). Asserted POSITIVELY and by name, because the derived

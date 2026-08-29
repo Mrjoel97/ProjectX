@@ -3,6 +3,7 @@ import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
+import { verifyStripeSignature } from "./billingWebhook";
 import { verifyState } from "./gmailAuth";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
@@ -434,6 +435,56 @@ http.route({
         `You can close this page. If you receive another message from us, reply and tell us — ` +
         `pressing this button again is harmless but will not change anything.</p>`,
     );
+  }),
+});
+
+// ── Phase 28.1: PIKAR'S OWN Stripe merchant account, charging outward ────────────────────────────
+// NOT the Phase 28 `stripe*` connector (a tenant's account, read-only). See docs/playbooks/billing.md.
+//
+// THE ORDER OF THE FIRST FIVE LINES IS THE WHOLE SECURITY PROPERTY:
+//   secret + header present -> read the raw body ONCE -> verify against THAT EXACT STRING ->
+//   only then parse -> one transactional mutation.
+// `req.json()` followed by a re-stringify would change key order and whitespace and break the
+// HMAC; parsing before verifying would hand an unverified payload to a parser and the DB.
+//
+// This route is hand-verified with Web Crypto rather than Stripe's SDK because `http.ts` cannot be
+// "use node" — Convex HTTP actions run in the query/mutation sandbox, so the synchronous
+// `constructEvent` (Node crypto) is unreachable here and `stripe` is not a dependency.
+http.route({
+  path: "/billing/stripe/webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    // No development fallback (p25-no-dev-fallback). Unset means REFUSE, never "accept
+    // unverified" — an unconfigured deployment must be silent, not credulous.
+    const secret = process.env.BILLING_STRIPE_WEBHOOK_SECRET;
+    const header = req.headers.get("stripe-signature");
+    if (!secret || !header) return new Response("unauthorized", { status: 400 });
+
+    const raw = await req.text(); // THE RAW STRING. Read once, verified as-is.
+    if (!(await verifyStripeSignature(raw, header, secret, Math.floor(Date.now() / 1000)))) {
+      return new Response("invalid signature", { status: 400 });
+    }
+
+    // Only AFTER verification is parsing safe.
+    let event: { id?: unknown; type?: unknown; data?: { object?: { id?: unknown } } };
+    try {
+      event = JSON.parse(raw);
+    } catch {
+      return new Response("malformed", { status: 400 });
+    }
+    if (typeof event.id !== "string" || typeof event.type !== "string") {
+      return new Response("malformed", { status: 400 });
+    }
+    const objectId = event.data?.object?.id;
+
+    await ctx.runMutation(internal.billingWebhook.receiveAndApply, {
+      eventId: event.id,
+      eventType: event.type,
+      objectId: typeof objectId === "string" ? objectId : "",
+    });
+    // 2xx fast and unconditional once recorded. A non-2xx (or a timeout) is a delivery failure to
+    // Stripe and buys a retry we have already deduped away.
+    return new Response(null, { status: 200 });
   }),
 });
 

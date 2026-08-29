@@ -1,5 +1,11 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
+> subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
+> steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
+> behaviour change, and **this is not a re-verification of anything below.** The
+> `Last verified` line still means what it said.
+
 > Last verified: 2026-08-27 (**THE SUCCESSOR IS CHOSEN — `veo-3.1-lite`, ADR-026 — AND RECORDING
 > THAT DECISION ALMOST DISARMED THE ALARM THAT FOUND IT.**
 >
