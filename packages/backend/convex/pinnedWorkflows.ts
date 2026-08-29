@@ -1,13 +1,15 @@
 // PINNED WORKFLOWS (Phase 29, ROUT-02) — a manual, version-pinned RE-RUN of an approved pack.
 //
 // THE TABLE IS `savedPrompts`, NOT A NEW ONE, and that was decided one plan earlier: 29-01 added
-// the five lineage columns (`templateId`, `templateVersion`, `tenantSkillId`, `customizationHash`,
-// `sourcePreferences`) to that row with a comment saying in as many words that "a parallel
+// five lineage columns to that row with a comment saying in as many words that "a parallel
 // `pinnedWorkflows` table would duplicate all of that AND put a second pin menu in the workspace".
+// FOUR of the five are written here (`templateId`, `templateVersion`, `tenantSkillId`,
+// `customizationHash`); `sourcePreferences` is deliberately left with no writer — see `pinWorkflow`.
 // So a pinned workflow IS a pinned prompt that also names an exact approved template version and an
-// exact tenant candidate ROW — and the twenty-entry take, the code-derived title, the idempotent
-// `textHash` and, above all, "Run is an ordinary fresh turn through the existing governed send
-// path" are inherited verbatim (CLAUDE.md ladder rung 2).
+// exact tenant candidate ROW — and the code-derived title, the idempotent `textHash` and, above
+// all, "Run is an ordinary fresh turn through the existing governed send path" are inherited
+// verbatim (CLAUDE.md ladder rung 2). The bound is different and stronger: `savedPrompts.list`
+// takes twenty, while a workflow pin list can only ever be as long as `WORKFLOW_PACK_IDS`.
 //
 // THE MODULE IS SEPARATE FROM `savedPrompts.ts` ON PURPOSE. That file is deliberately tiny and
 // inert — its own header says "THERE IS DELIBERATELY NO AUTOMATION SUBSTRATE HERE", and
@@ -53,11 +55,29 @@
 // reactive readiness surface would be reading a different question and calling it the same one.
 // What readiness DOES own is the all-stop: `killSwitch` is a plain row read, so it refuses here,
 // before a thread, a plan row or a model call exists.
+//
+// ── WHAT A PRESS CAN HONESTLY REPORT, AND THE THING IT MAY NOT SAY ─────────────────────────────
+//
+// THIS SURFACE MUST NEVER TELL A USER THAT NOTHING WAS SPENT UNLESS THAT IS PROVABLE. Only two of
+// the three end states prove it:
+//
+//   - REFUSED (`ok: false`) — readiness said no, or the id is not this tenant's pin. Nothing was
+//     created: no thread, no plan row, no audit row, no spend. $0 by construction.
+//   - `state: "blocked"` — `preCall` refused INSIDE the pack loop and `runPackTurn` returned
+//     `outcome: "blocked"` with a literal `costUsd: 0`. $0 because the binding says so.
+//   - `state: "unknown"` — the turn produced NO outcome, and this is the state the surface used to
+//     lie about. `cockpit.startWorkflowPack` reports a pack-binding refusal and EVERY throw out of
+//     `runWorkflowPack` the same way (`ok:false`, no `outcome`; it never rethrows), and
+//     `runPackTurn` rethrows from AFTER `runSpecialistTurn` — i.e. after the model may have
+//     answered and `recordModelSpend` may have run. So "unknown" genuinely means unknown, the audit
+//     row records it as unknown, and the copy says so instead of promising $0.
+//
+// A booleanising `ran` is what made that lie unmutatable: `outcome === null` collapsed into the
+// same `false` the governed stop produces, and no test could tell the two apart. The state is a
+// closed three-value enum for that reason, and `PinRunState` is what the UI branches on.
 import {
   freshRunCorrelation,
-  type PackSource,
   packPreflight,
-  packReadableSources,
   pinIdentity,
   type ReachablePackSource,
   resolveWorkflowPack,
@@ -105,22 +125,27 @@ export type PinCheck =
   | { readonly ok: false; readonly reason: "unknown_pin" }
   | ({ readonly ok: true; readonly templateId: WorkflowPackId } & PinReadiness);
 
+/**
+ * What ONE press did, as far as this server can prove. See the header: only two of these three
+ * states permit a "nothing was spent" sentence, and `"unknown"` is not one of them.
+ *
+ * - `"ran"`     the pack loop produced its own terminal outcome. "Ran and found nothing" is a run:
+ *               `outcome: "no_findings"` is `"ran"`, not `"unknown"`.
+ * - `"blocked"` the governed gate refused before the model. `outcome: "blocked"`, `costUsd: 0`.
+ * - `"unknown"` no outcome came back. The turn may have reached the model and recorded spend.
+ */
+export type PinRunState = "ran" | "blocked" | "unknown";
+
 export type RunAgainResult =
+  /** Refused BEFORE anything started. Nothing exists and nothing was spent — provably. */
   | { readonly ok: false; readonly reason: "unknown_pin" }
   | { readonly ok: false; readonly reason: "not_ready"; readonly blockers: readonly PinBlocker[] }
-  | { readonly ok: false; readonly reason: "run_failed" }
+  /** A turn was attempted. `state` is the whole of what is known about it. */
   | {
       readonly ok: true;
-      readonly threadId: string;
-      /** Minted for THIS press. Two presses can never share one — see `freshRunCorrelation`. */
-      readonly correlationId: string;
-      /** Which repeat this was, counted from the audit plane (1 on the first run). */
-      readonly ordinal: number;
-      /** Did the governed loop actually reach the model? `false` when it was stopped at the gate
-       *  (kill switch / daily budget), which is `outcome: "blocked"` and $0 spent, and `false` when
-       *  the turn produced no outcome at all. A pack that ran and found nothing is `true` with
-       *  `outcome: "no_findings"` — "ran and found nothing" is not "did not run". */
-      readonly ran: boolean;
+      /** `null` when the attempt threw before `startWorkflowPack` returned a thread. */
+      readonly threadId: string | null;
+      readonly state: PinRunState;
       /** The pack's own terminal outcome, or `null` when the turn never produced one. */
       readonly outcome: string | null;
     };
@@ -146,30 +171,6 @@ function asPin(
   return resolved.ok
     ? { row, packId: resolved.packId, templateVersion: row.templateVersion }
     : null;
-}
-
-/** The tenant's preferred sources, as the tenant's OWN customization row recorded them.
- *
- *  MEMBERSHIP IS RE-DERIVED FROM THE PACK'S OWN OPERATION MATRIX, never trusted from the stored
- *  JSON — a preference is not a grant, and a checkbox the runtime cannot honour must not survive
- *  into a pin. `schema.ts` names a LENGTH clamp as this writer's job because a Convex validator has
- *  no array-length bound; the membership filter is the stronger version of that bound, since it
- *  starts from the pack's readable list (never more than three entries) rather than from the
- *  submitted one. A `.slice(CUSTOMIZATION_CAPS.maxValuesPerField)` on top could not bind on any of
- *  the six packs, and a cap that can never bind is the thing this repo keeps mistaking for a
- *  guard. */
-function preferredSources(packId: WorkflowPackId, valuesJson: string | undefined): PackSource[] {
-  if (valuesJson === undefined) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(valuesJson);
-  } catch {
-    return [];
-  }
-  if (typeof parsed !== "object" || parsed === null) return [];
-  const chosen = (parsed as Record<string, unknown>).preferred_sources;
-  if (!Array.isArray(chosen)) return [];
-  return packReadableSources(packId).filter((s) => chosen.includes(s));
 }
 
 /** The tenant's newest customization row for one pack, or `undefined`. The same descending
@@ -269,10 +270,19 @@ async function readinessFor(
  * The pinned TEXT is the pack's code-owned `opener`, the same string the workspace quick-start
  * sends. A pin is "run this approved workflow again", not a saved prompt with a workflow attached.
  *
- * Idempotent per tenant on the FULL LINEAGE: `textHash` folds all five fields via
- * `pinIdentity`, which is exactly the collision `schema.ts` warned the first lineage-bearing writer
- * about — hashing the text alone would make two pins of the same pack with different
- * customizations, versions or source sets collapse onto one row.
+ * ONE PIN PER PACK, PER TENANT — re-pinning REPLACES. The previous version kept every lineage a
+ * tenant ever pinned, and each extra row was invisible (the surface renders one row per PACK and
+ * takes the newest pin of it), unremovable (`savedPrompts.list` filters workflow pins out of the
+ * only other menu) and functionally identical: `runAgain` sends the pack id and re-resolves to the
+ * ACTIVE version, so a pin of version 4 and a pin of version 5 run the same thing. The pinned
+ * version is a DISPLAY fact — "this is the version you pinned, and here is the one that will run" —
+ * not a selector, so keeping a second one bought nothing and cost an unbounded row count on a table
+ * whose other reader is a bounded menu.
+ *
+ * `textHash` still folds the whole lineage via `pinIdentity` (the collision `schema.ts` warned the
+ * first lineage-bearing writer about: the opener is a code-owned constant, so a text-only hash
+ * would collide across packs' customizations). Its remaining job is idempotence — pressing Pin
+ * twice with nothing changed must not rewrite the row.
  */
 export const pinWorkflow = tenantMutation({
   args: {
@@ -297,7 +307,6 @@ export const pinWorkflow = tenantMutation({
     if (active === null) return { ok: false, reason: "template_not_active" };
 
     const mine = await newestCustomization(ctx, ctx.tenantId, packId);
-    const sourcePreferences = preferredSources(packId, mine?.customizationValues);
     const identity = pinIdentity({
       templateId: packId,
       templateVersion: active.version,
@@ -306,7 +315,16 @@ export const pinWorkflow = tenantMutation({
       // `@pikar/core` cannot import Convex's. The double cast is the whole conversion.
       tenantSkillId: (mine?._id ?? null) as unknown as TenantSkillRef | null,
       customizationHash: mine?.customizationHash ?? "",
-      sourcePreferences,
+      // EMPTY ON PURPOSE, and the field is not stored on the row either. A source preference is
+      // read out of `mine.customizationValues`, and `customizationHash` is the hash of exactly
+      // those values on exactly that row — so a preference change ALREADY changes this identity
+      // through the hash, and a second copy of the same fact could only ever agree with it. The
+      // pinned list was also read by nothing: no runtime honours it (`runAgain` sends the pack id
+      // and the code-owned opener), and the surface never rendered it, so storing it would have
+      // been a promise the run does not keep.
+      // ponytail: the parameter stays because `pinIdentity` lives in `@pikar/core`, which this plan
+      // does not own. Upgrade path: drop the field from `WorkflowPin` when core is next touched.
+      sourcePreferences: [],
     });
     const textHash = await contentHash(identity);
 
@@ -318,6 +336,17 @@ export const pinWorkflow = tenantMutation({
       .unique();
     if (existing) return { ok: true, id: existing._id, inserted: false };
 
+    // The lineage changed, so this pack's OLD pin is replaced rather than joined. Tenant-first
+    // index, so this can only ever reach the caller's own rows.
+    for (const stale of await ctx.db
+      .query("savedPrompts")
+      .withIndex("by_tenant_template", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("templateId", packId),
+      )
+      .collect()) {
+      await ctx.db.delete(stale._id);
+    }
+
     const id = await ctx.db.insert("savedPrompts", {
       tenantId: ctx.tenantId,
       text: spec.opener,
@@ -328,7 +357,6 @@ export const pinWorkflow = tenantMutation({
       ...(mine === undefined
         ? {}
         : { tenantSkillId: mine._id, customizationHash: mine.customizationHash }),
-      sourcePreferences,
       createdAt: Date.now(),
     });
     return { ok: true, id, inserted: true };
@@ -359,15 +387,20 @@ export type PinnedWorkflowView = {
   readonly templateId: WorkflowPackId;
   readonly title: string;
   readonly createdAt: number;
-  readonly sourcePreferences: readonly PackSource[];
 } & PinReadiness;
 
 /**
- * This tenant's workflow pins, newest first, each resolved against what is live now.
+ * This tenant's workflow pins, in the product's own pack order, each resolved against what is
+ * live now.
  *
  * SIX INDEXED READS, ONE PER APPROVED TEMPLATE, off `by_tenant_template` — the index 29-01 added
  * for exactly this. The alternative (take the newest 20 `savedPrompts` rows and filter) would drop
  * a pin the moment twenty plain prompt pins were newer than it.
+ *
+ * THE LIST IS BOUNDED BY `WORKFLOW_PACK_IDS`, not by a `take`: `pinWorkflow` keeps at most one pin
+ * per pack, so six reads return at most six rows. There is no "newest first" sort any more — with
+ * one pin per pack there is no second row of a pack to be newer than, and an ordering rule nothing
+ * can violate is an ordering rule no test can defend.
  */
 export const listPins = tenantQuery({
   args: {},
@@ -383,7 +416,6 @@ export const listPins = tenantQuery({
           .collect()),
       );
     }
-    rows.sort((a, b) => b.createdAt - a.createdAt);
 
     const runtime = await probeSourcesFor(ctx, ctx.tenantId);
     const { killSwitch } = await getGuardrailConfig(ctx);
@@ -396,7 +428,6 @@ export const listPins = tenantQuery({
         templateId: pin.packId,
         title: row.title,
         createdAt: row.createdAt,
-        sourcePreferences: row.sourcePreferences ?? [],
         ...(await readinessFor(ctx, ctx.tenantId, pin, runtime, killSwitch)),
       });
     }
@@ -421,17 +452,25 @@ export const checkReadiness = tenantQuery({
   },
 });
 
+/** The audit event one manual re-run writes. Refs, ids, counts and flags only (CLAUDE.md §4) — the
+ *  pin TITLE is user-visible product copy and the pinned TEXT is a request; neither goes on the log
+ *  plane, and there is no field here for either to arrive in. */
+export const PIN_RUN_EVENT = "workflow_pin.run";
+
 /**
  * How many times this pin has been run, counted from the AUDIT plane.
  *
- * There is no run-history table and none may be added (schema.ts:359). The audit log already
- * records every run of every pin as one insert-only row whose `correlationId` starts with this
- * pin's own prefix, so the repeat ordinal is a range read over `by_correlation` — the pin's own
- * rows and nothing else. The prefix is DERIVED from `freshRunCorrelation` rather than re-typed, so
- * the counter and the minter cannot drift apart.
+ * There is no run-history table and none may be added (the `savedPrompts` comment at schema.ts:442
+ * says so in as many words). The audit log already records every run of every pin as one
+ * insert-only row whose `correlationId` starts with this pin's own prefix, so the repeat ordinal is
+ * a range read over `by_correlation`. The prefix is DERIVED from `freshRunCorrelation` rather than
+ * re-typed, so the counter and the minter cannot drift apart.
  *
- * The row id is what makes the range tenant-safe: it is globally unique and the caller has already
- * compared `row.tenantId` before reaching here, so no other tenant's rows can share the prefix.
+ * TWO NARROWINGS, AND BOTH ARE DRIVEN BY A TEST RATHER THAN ARGUED IN THIS COMMENT:
+ *   - the prefix contains the pin's own row id, which is globally unique, so a second pin's runs
+ *     and another tenant's runs both fall outside the range ("two pins, two tenants, one ordinal");
+ *   - `eventType` is compared, so a future writer that reuses this correlation for a different
+ *     event cannot silently inflate the ordinal.
  *
  * ponytail: `.collect()`, bounded by ONE pin's own run count. Ceiling: a pin run thousands of times
  * reads thousands of rows for a display number. Upgrade path if that ever happens: keep the count
@@ -440,23 +479,18 @@ export const checkReadiness = tenantQuery({
 export const runCount = internalQuery({
   args: { pinId: v.id("savedPrompts") },
   handler: async (ctx, { pinId }): Promise<number> => {
-    // `￿` is the upper bound of the prefix range, written as an ESCAPE: the literal
-    // character is invisible in a diff and is exactly the kind of thing an editor re-encodes.
     const prefix = freshRunCorrelation(pinId, "");
     const rows = await ctx.db
       .query("audit")
       .withIndex("by_correlation", (q) =>
-        q.gte("correlationId", prefix).lt("correlationId", `${prefix}￿`),
+        // The upper bound is written as the ESCAPE `\uffff`, never the literal
+        // character: the literal is invisible in a diff and editors re-encode it.
+        q.gte("correlationId", prefix).lt("correlationId", `${prefix}\uffff`),
       )
       .collect();
-    return rows.length;
+    return rows.filter((r) => r.eventType === PIN_RUN_EVENT).length;
   },
 });
-
-/** The audit event one manual re-run writes. Refs, ids, counts and flags only (CLAUDE.md §4) — the
- *  pin TITLE is user-visible product copy and the pinned TEXT is a request; neither goes on the log
- *  plane, and there is no field here for either to arrive in. */
-export const PIN_RUN_EVENT = "workflow_pin.run";
 
 /**
  * RUN AGAIN. One argument, and that is the whole replay story: there is no `threadId`, `planId`,
@@ -486,7 +520,6 @@ export const runAgain = tenantAction({
     const startedAt = Date.now();
 
     let threadId: string | null = null;
-    let ran = false;
     let outcome: string | null = null;
     try {
       // The EXISTING twin of `sendCockpitMessage` — a pack turn is a different (allow-listed)
@@ -498,35 +531,19 @@ export const runAgain = tenantAction({
       });
       threadId = res.threadId;
       outcome = res.outcome ?? null;
-      // `startWorkflowPack` reports `ok: true` for a GOVERNED STOP as well — the stop is a normal
-      // pack result (`outcome: "blocked"`, `costUsd: 0`), not a failure. Reading `res.ok` alone
-      // would record a run that was refused at the budget gate as a run that happened.
-      ran = res.ok && outcome !== null && outcome !== "blocked";
     } catch {
-      // The twin already converts a failed turn into a non-dead-ending reply, so reaching here
-      // means the turn never started. Recorded as a run that did not run, then refused as data.
-      await ctx.runMutation(internal.audit.log, {
-        tenantId: ctx.tenantId,
-        correlationId,
-        eventType: PIN_RUN_EVENT,
-        actor: "user",
-        payload: {
-          pinId: id,
-          templateId: check.templateId,
-          templateVersion: check.templateVersion,
-          ordinal,
-          ran: false,
-          started: false,
-          outcome: null,
-          noticeCount: check.notices.length,
-          sourceUnavailableCount: check.sourceUnavailableCount,
-          customizationPinned: check.customizationPinned,
-          customizationApplied: false,
-          latencyMs: Date.now() - startedAt,
-        },
-      });
-      return { ok: false, reason: "run_failed" };
+      // A throw here is NOT proof that nothing happened. `startWorkflowPack` swallows the pack
+      // loop's own throws, so what reaches this catch comes from its thread/plan/message plumbing —
+      // and `cockpitAgent.saveMessage` and `notifyIfAgentTimeout` both run AFTER the loop. So this
+      // arm lands in exactly the same `unknown` state as `outcome === null`, and writes the same
+      // row. Two arms with two different stories is how the last version told a $0 lie.
     }
+    // `res.ok` is deliberately not read: `startWorkflowPack` sets `outcome` only when the loop
+    // produced one, so the outcome IS the discriminant, and one discriminant cannot disagree with
+    // itself. `"blocked"` is the only value that proves $0 (`runPackTurn` returns `costUsd: 0`
+    // literally on that path); anything else with no outcome is unknown, not free.
+    const state: PinRunState =
+      outcome === null ? "unknown" : outcome === "blocked" ? "blocked" : "ran";
 
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
@@ -541,8 +558,10 @@ export const runAgain = tenantAction({
         templateVersion: check.templateVersion,
         activeVersion: check.activeVersion,
         ordinal,
-        ran,
-        started: true,
+        // ONE field, the same closed enum the caller gets. The pair it replaced (`ran` + `started`
+        // booleans) could not express "we do not know", so the log said `ran: false` about turns
+        // that may have reached the model.
+        state,
         outcome,
         threadId,
         noticeCount: check.notices.length,
@@ -555,6 +574,6 @@ export const runAgain = tenantAction({
       },
     });
 
-    return { ok: true, threadId, correlationId, ordinal, ran, outcome };
+    return { ok: true, threadId, state, outcome };
   },
 });

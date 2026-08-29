@@ -1,5 +1,23 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-29 (29-08 FIX — **THE PIN SURFACE SAID "NOTHING WAS SPENT" ABOUT A RUN
+> THAT MAY HAVE BEEN BILLED, AND THE BRANCH WAS UNMUTATABLE.** Full account in
+> `docs/playbooks/workflow-packs.md`. In short: `ran` was a boolean, so a turn that produced no
+> outcome (`cockpit.startWorkflowPack` never rethrows, and `runPackTurn` rethrows from after the
+> model may have answered) collapsed into the same `false` as the $0 governed stop. It is now
+> `state: "ran" | "blocked" | "unknown"` on both the result and the audit payload; only a refusal
+> and `"blocked"` may claim $0. Also in this round: one pin per pack (re-pinning REPLACES),
+> `sourcePreferences` has no writer again, `savedPrompts.list` filters BEFORE its take so a pin no
+> longer evicts a saved prompt, and `runCount` is scoped by a real two-pin/two-tenant test.
+>
+> TWO CORRECTIONS TO THE 29-08 SECTION BELOW. (1) Its **Files:** line names
+> `PinnedWorkflowButton.container.test.ts`; that file has never existed — the container test IS
+> `PinnedWorkflowButton.test.ts` (the `.container.test.ts` in that directory belongs to
+> `WorkflowPackCustomizer`), and the counts are now 43 backend / 30 web tests. (2) It lists
+> `checkReadiness` among what the surface uses: the component is NOT wired to it, readiness arrives
+> embedded in `listPins`, and that deviation from the plan is recorded rather than blessed by a
+> test.)
+
 > Last verified: 2026-08-29 (29-08 — **A PINNED WORKFLOW IS A `savedPrompts` ROW, AND A RE-RUN IS
 > STRUCTURALLY INCAPABLE OF REPLAYING ONE.** `packages/backend/convex/pinnedWorkflows.ts` ships
 > `pinWorkflow` / `unpinWorkflow` / `listPins` / `checkReadiness` / `runAgain` over the SAME table
@@ -1110,10 +1128,12 @@ mean editing `packages/backend/package.json`, which the `defer` branch forbids t
 
 ## Plan 29-08 — the manual pin, and the three things it refuses to pretend (2026-08-29)
 
-**Files:** `packages/backend/convex/pinnedWorkflows.ts` (+ `.test.ts`, 34 tests),
+**Files:** `packages/backend/convex/pinnedWorkflows.ts` (+ `.test.ts`),
 `packages/backend/convex/savedPrompts.ts` (one filter),
-`apps/web/app/(app)/dashboard/workflows/PinnedWorkflowButton.tsx` (+ `.test.ts`,
-`.container.test.ts`), `apps/web/app/(app)/dashboard/workflows/page.tsx`.
+`apps/web/app/(app)/dashboard/workflows/PinnedWorkflowButton.tsx` (+ `.test.ts`, which IS the jsdom
+container test), `apps/web/app/(app)/dashboard/workflows/page.tsx`. (Corrected 29-08 FIX: the
+`.container.test.ts` named here was never produced by this plan; test counts are in the entry at
+the top of this file.)
 
 ### The table decision, made against the plan's own file list
 

@@ -1,5 +1,65 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-29 (29-08 FIX — **THE PIN SURFACE TOLD A USER "NOTHING WAS SPENT" ABOUT A
+> RUN THAT MAY HAVE BEEN BILLED.** Three independent verifiers found it. `runAgain` computed
+> `ran = res.ok && outcome !== null && outcome !== "blocked"`, and `cockpit.startWorkflowPack`
+> reports a pack-binding refusal and EVERY throw out of `runWorkflowPack` the same way (`ok:false`,
+> no `outcome`; it never rethrows) — while `runPackTurn` rethrows from AFTER `runSpecialistTurn`,
+> i.e. after the model may have answered and `recordModelSpend` may have run. So `outcome === null`
+> collapsed into the same `false` as the $0 governed stop, the UI rendered "Pikar stopped this run
+> before it started. Nothing ran and nothing was spent", and the audit row said `ran:false`.
+> Deleting `outcome !== null &&` left the suite 34/34 green: the branch was unmutatable.
+>
+> **The boolean is gone.** `RunAgainResult` now carries `state: PinRunState = "ran" | "blocked" |
+> "unknown"`, and so does the audit payload (the `ran` + `started` pair is deleted, not narrowed).
+> Only two states may claim $0, and both can prove it: `ok:false` (refused before a thread, a plan
+> row or a model call exists) and `"blocked"` (`runPackTurn` returns `costUsd: 0` literally).
+> `"unknown"` renders "This run did not finish, and Pikar cannot tell whether it reached the model.
+> It may have used part of today's budget — open your workspace to see what happened before running
+> it again." and does not navigate. The `run_failed` refusal reason is DELETED: it was reachable
+> only from a transport throw, which `transport` already covers, and its copy made the same
+> unprovable promise.
+>
+> **ONE PIN PER PACK, PER TENANT — re-pinning REPLACES.** The backend used to insert a row per
+> distinct lineage while the surface rendered one row per pack, so every extra pin was invisible,
+> unremovable (the prompt menu filters workflow pins out) and functionally identical — `runAgain`
+> sends the pack id and re-resolves to the ACTIVE version, so a pin of v4 and a pin of v5 run the
+> same thing. The pinned version is a DISPLAY fact, not a selector. `listPins` therefore lost its
+> `createdAt` sort (with one pin per pack there is nothing to order) and returns rows in
+> `WORKFLOW_PACK_IDS` order, bounded by six.
+>
+> **`sourcePreferences` has no writer again**, and `schema.ts`'s "no writer of this field yet"
+> comment is true once more. It was stored, folded into `pinIdentity` and read by NOTHING: no
+> runtime honours a preference, and the surface never rendered it. `customizationHash` already
+> hashes the exact values it was derived from, so it could only ever agree with the hash.
+>
+> **The unfalsifiable guards are guards now.** `runCount`'s prefix (`freshRunCorrelation(pinId,"")`)
+> is pinned by a two-pin/two-tenant test — replacing it with a constant `"pin:"` counted every pin
+> in the deployment across tenants and left 34/34 green; it is RED now. The range also compares
+> `eventType`. The audit payload is asserted as a whole VALUE (`toEqual`, every field), plus a
+> second run with three notices and two differing versions, so `noticeCount: 0` and
+> `activeVersion: 999` are both RED. `newestCustomization`'s `templateId === packId` and
+> `readinessFor`'s foreign-tenant check each have their own test.
+>
+> **Also:** the write-only `pinButtons` ref map is deleted; the `runCount` docstring's `schema.ts:359`
+> citation was wrong (the comment is at `schema.ts:442`) and is fixed; the U+FFFF range bound is now
+> actually written as the escape its comment claimed (commit `cdcf7dd`'s message said that change
+> had been made and it had not — the message cannot be rewritten, so it is corrected here).
+>
+> **DEVIATIONS FROM 29-08's PLAN, RECORDED RATHER THAN BLESSED.** (1) The component is NOT wired to
+> `checkReadiness`; readiness arrives embedded in `listPins` and a second read would be redundant.
+> The source-scan assertion that froze that omission as "the four functions it MAY reach" is
+> DELETED — the `convex/react` stub already enforces the closed set behaviourally, in every test, by
+> throwing on any unexpected function path. (2) The plan's "shows last/manual-run outcome" is NOT
+> met: the repeat ordinal and the last outcome live on the audit plane only, the surface has no
+> persisted memory of them, and `ordinal`/`correlationId` are no longer returned to the browser at
+> all rather than shipped as dead payload. Reading them back would need a per-pin audit range read
+> on every reactive `listPins`.
+>
+> Gates: `pinnedWorkflows` 43 tests, `apps/web PinnedWorkflowButton` 30 tests. THIRTEEN mutations
+> observed RED, listed in `.planning/phases/29-unified-knowledge-and-routines/29-08-FIX-SUMMARY.md`.
+> STILL UNRUN: the browser. This route has no Playwright spec and is still absent from the nav.)
+
 > Last verified: 2026-08-29 (29-08 — **`/dashboard/workflows` GAINED PIN AND RUN AGAIN CONTROLS,
 > AND THEY SAY WHAT A RE-RUN ACTUALLY RUNS.** `PinnedWorkflowButton.tsx` is mounted above the
 > customizer on this route and reaches exactly five functions: `listPacks`, and the four

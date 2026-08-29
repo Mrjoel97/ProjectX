@@ -4,7 +4,7 @@ import { api } from "@pikar/backend/api";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "next/navigation";
-import { type CSSProperties, useId, useRef, useState } from "react";
+import { type CSSProperties, useId, useState } from "react";
 import { WorkflowPackPreflight } from "../workspace/WorkflowPackPreflight";
 
 // ROUT-02: pin an approved workflow, and run it again BY HAND.
@@ -25,6 +25,11 @@ import { WorkflowPackPreflight } from "../workspace/WorkflowPackPreflight";
 //      re-resolves to M; the pin is stale and says so, naming both numbers.
 //   3. `sources_unavailable` — the run happens without those planes. The pack's own preflight is
 //      rendered underneath, so the gap comes with the thing that would lift it.
+//   4. `state: "unknown"` — a run that did not finish is NOT told it was free. Only two states may
+//      say "nothing was spent": a refusal (`ok: false`, decided before anything is created) and
+//      `state: "blocked"` (the pack binding returns `costUsd: 0` literally). A turn that produced
+//      no outcome may have reached the model and been billed, so its sentence says "may have" and
+//      sends the user to look. This surface's whole purpose is not lying about what a rerun did.
 //
 // AND THE ONE IT REFUSES TO SAY: there is no activation, approval or rollback control here, and
 // none is possible — `activateTenantCandidate` and `rollbackTenantSkill` are `ownerMutation`s. A
@@ -54,8 +59,12 @@ export type PinAction =
   | { readonly kind: "pinRefused"; readonly result: Extract<PinResult, { ok: false }> }
   | { readonly kind: "unpinMissing" }
   | { readonly kind: "runRefused"; readonly result: Extract<RunResult, { ok: false }> }
-  /** The run started and was stopped at the governed gate before the model. Nothing was spent. */
+  /** The run started and was stopped at the governed gate before the model. `$0` is PROVABLE here:
+   *  the pack binding returns `costUsd: 0` on that path, which is why this copy may say so. */
   | { readonly kind: "runBlocked" }
+  /** The turn produced no outcome. It may have reached the model and it may have spent money —
+   *  the server does not know, so this copy must not claim either way. */
+  | { readonly kind: "runUnknown" }
   /** A throw, not a refusal: every refusal these channels produce comes back as DATA. */
   | { readonly kind: "transport" };
 
@@ -68,6 +77,13 @@ const TRANSPORT_ERROR = "That did not go through. Check your connection and try 
 
 const BLOCKED_RUN =
   "Pikar stopped this run before it started. Nothing ran and nothing was spent — try again shortly.";
+
+/** THE ONE SENTENCE THIS FILE IS NOT ALLOWED TO MAKE COMFORTABLE. `state: "unknown"` means the turn
+ *  produced no outcome, and the server cannot tell a refusal that never reached the model from a
+ *  failure after it answered — so this says "may have", names the consequence, and points at the
+ *  place the answer actually is. Saying "nothing was spent" here is what the previous version did. */
+const UNKNOWN_RUN =
+  "This run did not finish, and Pikar cannot tell whether it reached the model. It may have used part of today's budget — open your workspace to see what happened before running it again.";
 
 /** A blocker refuses the run. Both are server-resolved states, not guesses made here. */
 function blockerLine(blocker: Pin["blockers"][number]): string {
@@ -99,14 +115,16 @@ function noticeLine(notice: Pin["notices"][number], pin: Pin): string {
   }
 }
 
+/** `ok: false` is the REFUSED family and only that: readiness said no, or the pin is not this
+ *  tenant's. Both are decided before a thread, a plan row or a model call exists, which is why
+ *  these two sentences may promise that nothing happened. A failed run is not in here — it comes
+ *  back `ok: true` with `state: "unknown"`, because the server cannot promise the same thing. */
 function runRefusalLine(result: Extract<RunResult, { ok: false }>): string {
   switch (result.reason) {
     case "unknown_pin":
       return "That pin is no longer there. Pin the workflow again.";
     case "not_ready":
       return `That cannot run right now. ${result.blockers.map(blockerLine).join(" ")}`;
-    case "run_failed":
-      return "That could not be started. Nothing ran — try again.";
     default:
       return "That could not be started.";
   }
@@ -134,6 +152,8 @@ export function actionLine(action: PinAction): string | null {
       return "Starting a new run…";
     case "runBlocked":
       return BLOCKED_RUN;
+    case "runUnknown":
+      return UNKNOWN_RUN;
     case "runRefused":
       return runRefusalLine(action.result);
     case "pinRefused":
@@ -395,15 +415,9 @@ export function PinnedWorkflowButton() {
   // looked once and gave up (the first version of this) left focus on the document body in the real
   // app. The ref callback runs when the replacement button MOUNTS, which is exactly the moment the
   // row flips — so the request is honoured when it can be, and never earlier.
-  const pinButtons = useRef(new Map<string, HTMLButtonElement>());
   const [focusPack, setFocusPack] = useState<string | null>(null);
   const registerPinButton = (packId: string, el: HTMLButtonElement | null) => {
-    if (el === null) {
-      pinButtons.current.delete(packId);
-      return;
-    }
-    pinButtons.current.set(packId, el);
-    if (focusPack === packId) {
+    if (el !== null && focusPack === packId) {
       el.focus();
       setFocusPack(null);
     }
@@ -446,14 +460,23 @@ export function PinnedWorkflowButton() {
         setAction(packId, { kind: "runRefused", result: res });
         return;
       }
-      if (!res.ran) {
-        // The turn started and the governed gate stopped it before the model. There IS a thread,
-        // but sending the user to a conversation whose only reply is "I've paused for a moment"
-        // hides the one fact that matters: nothing was spent and nothing happened.
-        setAction(packId, { kind: "runBlocked" });
+      // THREE STATES, THREE SENTENCES, and the middle one is the reason this is not a boolean.
+      // `blocked` is the governed gate before the model ($0, provable); `unknown` is a turn that
+      // produced no outcome and may have spent money. Collapsing them — which is what `!res.ran`
+      // did — told a user "nothing was spent" about a run that may have been billed.
+      if (res.state !== "ran") {
+        // Either way there is no navigation: for `blocked` the thread's only reply is "I've paused
+        // for a moment", and for `unknown` there may be no thread at all.
+        setAction(packId, { kind: res.state === "blocked" ? "runBlocked" : "runUnknown" });
         return;
       }
       setAction(packId, { kind: "idle" });
+      // `state: "ran"` is the only branch with a guaranteed thread; the type still allows null,
+      // so the run is reported rather than navigated to if one ever arrives without one.
+      if (res.threadId === null) {
+        setAction(packId, { kind: "runUnknown" });
+        return;
+      }
       router.push(threadHref(res.threadId));
     } catch {
       setAction(packId, { kind: "transport" });

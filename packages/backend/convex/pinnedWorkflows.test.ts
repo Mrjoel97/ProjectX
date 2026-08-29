@@ -120,6 +120,12 @@ const killSwitchOn = (t: T) =>
 
 const pinRows = (t: T) => t.run((ctx) => ctx.db.query("savedPrompts").collect());
 const auditRows = (t: T) => t.run((ctx) => ctx.db.query("audit").collect());
+/** The pin-run rows in the order they were INSERTED (`_creationTime`, not the payload's own
+ *  ordinal — sorting by the number under test would make it sort itself into being correct). */
+const pinRunEvents = async (t: T) =>
+  (await auditRows(t))
+    .filter((r) => r.eventType === "workflow_pin.run")
+    .sort((a, b) => a._creationTime - b._creationTime);
 const planRows = (t: T) => t.run((ctx) => ctx.db.query("plans").collect());
 const spendRows = (t: T) => t.run((ctx) => ctx.db.query("spendEvents").collect());
 
@@ -170,10 +176,13 @@ describe("pinWorkflow captures lineage the caller cannot choose", () => {
     expect(row?.title).toBe("Brand review");
     expect(row?.text).toBe("Review a piece of my copy.");
     expect(row?.tenantSkillId).toBeUndefined();
-    expect(row?.sourcePreferences).toEqual([]);
+    // 29-08 round 2: the field has NO writer again. It was stored, folded into the pin identity
+    // and read by nothing — `runAgain` sends the pack id and the code-owned opener, and no runtime
+    // honours a preference. `schema.ts`'s "no writer of this field yet" comment is true again.
+    expect(row?.sourcePreferences).toBeUndefined();
   });
 
-  test("a tenant's customization is captured BY ROW ID, with its hash and its readable sources", async () => {
+  test("a tenant's customization is captured BY ROW ID and by hash, and nothing else", async () => {
     const t = setup();
     await seedPack(t, "pack-business-pulse", packBusinessPulseSkillBody, 4);
     const candidateId = await seedCustomization(t, A, {
@@ -191,10 +200,11 @@ describe("pinWorkflow captures lineage the caller cannot choose", () => {
     const [row] = await pinRows(t);
     expect(row?.tenantSkillId).toBe(candidateId);
     expect(row?.customizationHash).toBe("hash_bp_1");
-    // Filtered to what business-pulse actually reads, in the pack's own manifest order — NOT the
-    // order the user submitted. MUTATION: drop the `packReadableSources` filter in
-    // `preferredSources` → red, `crm` and the URL land on the row.
-    expect(row?.sourcePreferences).toEqual(["vault", "finance-inputs"]);
+    // NOTHING ELSE OFF THAT JSON REACHES THE ROW. The stored values include a `PackSource` this
+    // pack cannot read and a URL, and neither is copied anywhere: the pin names the ROW, and the
+    // row is where its own values live.
+    expect(row?.sourcePreferences).toBeUndefined();
+    expect(JSON.stringify(row)).not.toContain("evil.example");
   });
 
   test("a `system` baseline is not a customization — it carries no template lineage", async () => {
@@ -241,7 +251,7 @@ describe("pinWorkflow captures lineage the caller cannot choose", () => {
   // from `pinIdentity` (all five fields), not from the text: the opener is a code-owned constant,
   // so two pins of one pack ALWAYS have byte-identical text and a text-only hash would make every
   // customization of a pack collapse onto the first pin ever taken of it.
-  test("a pin taken after the customization changed is a DIFFERENT pin", async () => {
+  test("a pin taken after the customization changed REPLACES the old one", async () => {
     const t = setup();
     await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
     const before = await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, {
@@ -257,18 +267,46 @@ describe("pinWorkflow captures lineage the caller cannot choose", () => {
     });
     // MUTATION: hash `spec.opener` instead of `pinIdentity(...)` → red, `after` returns `before`.
     expect(before.ok && after.ok && before.id === after.id).toBe(false);
-    expect(await pinRows(t)).toHaveLength(2);
+    // ONE PIN PER PACK. MUTATION: delete the stale-row loop in `pinWorkflow` → red (two rows).
+    // The old row was invisible (the surface takes one pin per pack) and unremovable (the prompt
+    // menu filters workflow pins out), and it ran identically: `runAgain` re-resolves to ACTIVE.
+    expect(await pinRows(t)).toHaveLength(1);
+    expect((await pinRows(t))[0]?._id).toBe(after.ok ? after.id : null);
+    expect((await pinRows(t))[0]?.customizationHash).toBe("hash_br_1");
   });
 
-  test("a republished template makes a new pin, and the old one keeps the version it pinned", async () => {
+  test("re-pinning after a republish moves the pin to the new version — it does not add a row", async () => {
     const t = setup();
     const skillId = await seedPack(t, "pack-brand-review", packBrandReviewSkillBody, 4);
     await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "brand-review" });
     await t.run((ctx) => ctx.db.patch(skillId, { version: 5 }));
     await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "brand-review" });
 
-    const versions = (await pinRows(t)).map((r) => r.templateVersion).sort();
-    expect(versions).toEqual([4, 5]);
+    expect((await pinRows(t)).map((r) => r.templateVersion)).toEqual([5]);
+  });
+
+  // The replacement is TENANT-SCOPED and PACK-SCOPED. MUTATION: drop the `.eq("templateId", packId)`
+  // from the stale-row read → red (B's pin, or A's other pack, is deleted by A pinning this one).
+  test("replacing a pin touches neither another tenant's pin nor this tenant's other packs", async () => {
+    const t = setup();
+    const skillId = await seedPack(t, "pack-brand-review", packBrandReviewSkillBody, 4);
+    await seedPack(t, "pack-business-pulse", packBusinessPulseSkillBody, 4);
+    await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "brand-review" });
+    await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "business-pulse" });
+    await as(t, B).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "brand-review" });
+
+    await t.run((ctx) => ctx.db.patch(skillId, { version: 5 }));
+    await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "brand-review" });
+
+    const rows = await pinRows(t);
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((r) => r.tenantId === B).map((r) => r.templateVersion)).toEqual([4]);
+    expect(
+      rows
+        .filter((r) => r.tenantId === A)
+        .map((r) => `${r.templateId}@${r.templateVersion}`)
+        .sort(),
+    ).toEqual(["brand-review@5", "business-pulse@4"]);
   });
 
   test("two tenants pinning the same pack get two rows, and neither sees the other's", async () => {
@@ -458,6 +496,40 @@ describe("checkReadiness answers about now, not about what the pin remembers", (
     expect(check.ok && check.notices).toEqual(["customization_missing"]);
   });
 
+  // MUTATION: drop `newest.templateId === packId &&` from `newestCustomization` → red. The row
+  // carries a hash and an author, so `customizationHash !== undefined` alone does not discriminate:
+  // a candidate written against ANOTHER template would be pinned as this pack's customization.
+  test("a candidate row naming a different template is not this pack's customization", async () => {
+    const t = setup();
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
+    await seedCustomization(t, A, {
+      name: "pack-brand-review",
+      templateId: "business-pulse",
+      hash: "hash_other_template",
+    });
+    const id = await pinBrandReview(t);
+    const check = await as(t, A).query(api.pinnedWorkflows.checkReadiness, { id });
+    expect(check.ok && check.customizationPinned).toBe(false);
+    expect(check.ok && check.notices).toEqual([]);
+    expect((await pinRows(t))[0]?.customizationHash).toBeUndefined();
+  });
+
+  // MUTATION: drop `|| mine.tenantId !== tenantId` from the `customization_missing` branch → red.
+  // A row that still EXISTS but is no longer this tenant's must not be described as "your saved
+  // settings" — the deleted-row half of that condition cannot see this case at all.
+  test("a customization row that is no longer this tenant's reads as MISSING, not 'not applied'", async () => {
+    const t = setup();
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
+    const candidateId = await seedCustomization(t, A, {
+      name: "pack-brand-review",
+      templateId: "brand-review",
+    });
+    const id = await pinBrandReview(t);
+    await t.run((ctx) => ctx.db.patch(candidateId, { tenantId: B }));
+    const check = await as(t, A).query(api.pinnedWorkflows.checkReadiness, { id });
+    expect(check.ok && check.notices).toEqual(["customization_missing"]);
+  });
+
   test("another tenant's pin id is unknown here — the answer is not an existence oracle", async () => {
     const t = setup();
     await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
@@ -482,6 +554,46 @@ describe("checkReadiness answers about now, not about what the pin remembers", (
     expect(pulse?.templateVersion).toBe(2);
     expect(pulse?.notices).toEqual(["sources_unavailable"]);
     expect(pulse?.runnable).toBe(true);
+  });
+
+  // The list is built by walking `WORKFLOW_PACK_IDS`, in which `business-pulse` comes FIRST and
+  // `brand-review` LAST — so pinning them in the other order is what tells the two rules apart.
+  // MUTATION: add back `rows.sort((a, b) => b.createdAt - a.createdAt)` → red (brand-review first).
+  test("the list comes back in the product's own pack order, not in pin order", async () => {
+    const t = setup();
+    await seedPack(t, "pack-business-pulse", packBusinessPulseSkillBody, 2);
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody, 4);
+    await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "business-pulse" });
+    await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "brand-review" });
+
+    const pins = await as(t, A).query(api.pinnedWorkflows.listPins);
+    expect(pins.map((p) => p.templateId)).toEqual(["business-pulse", "brand-review"]);
+  });
+
+  // THE PROMPT MENU MUST NOT SHRINK BECAUSE A WORKFLOW WAS PINNED. `savedPrompts.list` filters
+  // workflow pins out; doing that AFTER its `take(SAVED_PROMPT_LIST_LIMIT)` meant every pin ate one
+  // of the twenty slots and a prompt silently vanished from the workspace menu.
+  // MUTATION: move the `q.eq(q.field("templateId"), undefined)` filter back after the take → red
+  // (19 prompts).
+  test("pinning a workflow evicts nothing from the twenty-entry prompt menu", async () => {
+    const t = setup();
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
+    for (let i = 0; i < 20; i++) {
+      await t.run((ctx) =>
+        ctx.db.insert("savedPrompts", {
+          tenantId: A,
+          text: `prompt ${i}`,
+          title: `prompt ${i}`,
+          textHash: `hash_${i}`,
+          createdAt: 1000 + i,
+        }),
+      );
+    }
+    expect(await as(t, A).query(api.savedPrompts.list)).toHaveLength(20);
+    await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, { templateId: "brand-review" });
+    const prompts = await as(t, A).query(api.savedPrompts.list);
+    expect(prompts).toHaveLength(20);
+    expect(prompts.every((r) => r.title.startsWith("prompt "))).toBe(true);
   });
 });
 
@@ -571,35 +683,36 @@ describe("two presses are two runs", { timeout: 120_000 }, () => {
 
     // MUTATION: pass `threadId: <the pin's last thread>` to `startWorkflowPack` → red on all three.
     expect(first.threadId).not.toBe(second.threadId);
-    expect(first.correlationId).not.toBe(second.correlationId);
     const plans = await planRows(t);
     expect(plans).toHaveLength(2);
     expect(new Set(plans.map((p) => p.threadId)).size).toBe(2);
     // Nothing was approved, cloned or reopened: a fresh pack plan row starts at `collecting`.
     expect(plans.every((p) => p.status === "collecting")).toBe(true);
 
-    // Both correlations belong to THIS pin and to no other row.
-    expect(first.correlationId.startsWith(`pin:${pinId}:`)).toBe(true);
-    expect(second.correlationId.startsWith(`pin:${pinId}:`)).toBe(true);
+    // Read off the AUDIT ROWS, not off the return value: the correlation the log actually carries
+    // is the one a later reader joins on, and it is no longer returned to the browser at all.
+    const correlations = (await pinRunEvents(t)).map((e) => e.correlationId);
+    expect(new Set(correlations).size).toBe(2);
+    for (const c of correlations) expect(c.startsWith(`pin:${pinId}:`)).toBe(true);
   });
 
   test("the repeat ordinal counts up, and it is read from the audit plane", async () => {
     const t = setupRun();
-    const { first, second } = await runTwice(t);
-    // MUTATION: return a constant `1` from `runCount` → red on the second.
-    expect(first.ordinal).toBe(1);
-    expect(second.ordinal).toBe(2);
-
-    const events = (await auditRows(t)).filter((r) => r.eventType === "workflow_pin.run");
+    await runTwice(t);
+    // MUTATION: return a constant `1` from `runCount` → red (`[1, 1]`). Ordered by insert time,
+    // never by the ordinal itself — sorting by the number under test sorts it into being right.
+    const events = await pinRunEvents(t);
     expect(events).toHaveLength(2);
-    expect(events.map((e) => e.payload.ordinal).sort()).toEqual([1, 2]);
+    expect(events.map((e) => e.payload.ordinal)).toEqual([1, 2]);
   });
 
   test("the governed stop is reported honestly, and NOTHING was spent by the run", async () => {
     const t = setupRun();
     const { first } = await runTwice(t);
-    // `preCall` refused inside the pack loop: the turn started, the model never did.
-    expect(first.ran).toBe(false);
+    // `preCall` refused inside the pack loop: the turn started, the model never did. This is the
+    // ONE run state that may be described as free, and it is free because the binding returns
+    // `costUsd: 0` on it. MUTATION: make `state` unconditionally `"ran"` → red.
+    expect(first.state).toBe("blocked");
     expect(first.outcome).toBe("blocked");
     // The only spend row is the one the test itself wrote to exhaust the budget.
     const spends = await spendRows(t);
@@ -607,35 +720,65 @@ describe("two presses are two runs", { timeout: 120_000 }, () => {
     expect(spends[0]?.amountCents).toBe(2000);
   });
 
-  test("the audit payload carries refs, counts and flags — and no request text at all", async () => {
+  // EVERY VALUE, not just every key. The previous version asserted `Object.keys().sort()` plus two
+  // fields, so `noticeCount: 0`, `sourceUnavailableCount: 0` and `activeVersion: 999` were all
+  // surviving mutations — a log that always recorded zero notices shipped green.
+  test("the audit payload carries refs, counts and flags — every value, and no request text", async () => {
     const t = setupRun();
     const { pinId, first } = await runTwice(t);
-    const event = (await auditRows(t)).find((r) => r.correlationId === first.correlationId);
+    const [event] = await pinRunEvents(t);
     expect(event?.eventType).toBe("workflow_pin.run");
     expect(event?.tenantId).toBe(A);
-    expect(Object.keys(event?.payload ?? {}).sort()).toEqual([
-      "activeVersion",
-      "customizationApplied",
-      "customizationPinned",
-      "latencyMs",
-      "noticeCount",
-      "ordinal",
-      "outcome",
-      "pinId",
-      "ran",
-      "sourceUnavailableCount",
-      "started",
-      "templateId",
-      "templateVersion",
-      "threadId",
-    ]);
-    expect(event?.payload.pinId).toBe(pinId);
-    // THE HONEST CONSTANT: the run took the approved global template, never a tenant body.
-    expect(event?.payload.customizationApplied).toBe(false);
+    expect(event?.actor).toBe("user");
+    expect(event?.payload).toEqual({
+      pinId,
+      templateId: "brand-review",
+      templateVersion: 4,
+      activeVersion: 4,
+      ordinal: 1,
+      state: "blocked",
+      outcome: "blocked",
+      threadId: first.threadId,
+      noticeCount: 0,
+      sourceUnavailableCount: 0,
+      customizationPinned: false,
+      // THE HONEST CONSTANT: the run took the approved global template, never a tenant body.
+      customizationApplied: false,
+      latencyMs: expect.any(Number),
+    });
     // §4: no user-supplied or product prose on the log plane.
     const serialized = JSON.stringify(event?.payload);
     expect(serialized).not.toContain("Review a piece of my copy.");
     expect(serialized).not.toContain("Brand review");
+  });
+
+  // The counts are only real if a run that HAS notices records them. MUTATION: hardcode
+  // `noticeCount: 0` / `sourceUnavailableCount: 0` / `activeVersion: 999` → red here, and the
+  // all-zero test above stays green, which is exactly why that one is not enough on its own.
+  test("a pin with notices logs how many, and both versions when they differ", async () => {
+    const t = setupRun();
+    const skillId = await seedPack(t, "pack-business-pulse", packBusinessPulseSkillBody, 4);
+    await seedCustomization(t, A, {
+      name: "pack-business-pulse",
+      templateId: "business-pulse",
+      hash: "hash_bp_notices",
+    });
+    const pin = await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, {
+      templateId: "business-pulse",
+    });
+    if (!pin.ok) throw new Error("pin failed");
+    await t.run((ctx) => ctx.db.patch(skillId, { version: 9 }));
+    await exhaustBudget(t, A);
+
+    await as(t, A).action(api.pinnedWorkflows.runAgain, { id: pin.id });
+    const [event] = await pinRunEvents(t);
+    // template_republished + customization_not_applied + sources_unavailable (finance-inputs).
+    expect(event?.payload.noticeCount).toBe(3);
+    expect(event?.payload.sourceUnavailableCount).toBe(1);
+    expect(event?.payload.templateVersion).toBe(4);
+    expect(event?.payload.activeVersion).toBe(9);
+    expect(event?.payload.customizationPinned).toBe(true);
+    expect(event?.payload.customizationApplied).toBe(false);
   });
 
   test("a pinned customization does not change what runs", async () => {
@@ -653,6 +796,111 @@ describe("two presses are two runs", { timeout: 120_000 }, () => {
     const event = (await auditRows(t)).find((r) => r.eventType === "workflow_pin.run");
     expect(event?.payload.customizationPinned).toBe(true);
     expect(event?.payload.customizationApplied).toBe(false);
+  });
+});
+
+// ── A run that did not finish, and the sentence it is not allowed to earn ──────────────────
+
+// THE DEFECT THIS REPLACES. `ran` was a boolean, so a turn that produced NO outcome collapsed into
+// the same `false` the governed budget stop produces, and the surface told the user "nothing ran
+// and nothing was spent" about it. `cockpit.startWorkflowPack` never rethrows: a pack-binding
+// refusal AND every throw out of `runWorkflowPack` both come back as `ok:false` with no `outcome`,
+// and `runPackTurn` rethrows from after `runSpecialistTurn` — i.e. after `recordModelSpend` may
+// already have run. So `outcome === null` is genuinely UNKNOWN cost, and it now says so.
+describe("a run that produced no outcome is UNKNOWN, never free", () => {
+  // The agent component is deliberately NOT registered, so `ensureThreadAndPlan` throws inside
+  // `startWorkflowPack` — a real infrastructure failure on the thread/plan plumbing, which is one
+  // of the throws that reaches `runAgain`'s catch in production.
+  test("a turn that throws returns state 'unknown' with no thread, and logs it as unknown", async () => {
+    const t = setup();
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody, 4);
+    const pin = await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, {
+      templateId: "brand-review",
+    });
+    if (!pin.ok) throw new Error("pin failed");
+
+    const res = await as(t, A).action(api.pinnedWorkflows.runAgain, { id: pin.id });
+    // MUTATION: `outcome === null ? "blocked"` (or `"ran"`) in the state derivation → red.
+    // MUTATION: drop the catch arm's fall-through so the throw escapes → red (the action rejects).
+    expect(res).toEqual({ ok: true, threadId: null, state: "unknown", outcome: null });
+
+    // The LOG is the half that used to be wrong in the same way: it recorded `ran:false` and
+    // `started:false` about a turn whose cost nobody knows.
+    const [event] = await pinRunEvents(t);
+    expect(event?.payload.state).toBe("unknown");
+    expect(event?.payload.outcome).toBe(null);
+    expect(event?.payload.threadId).toBe(null);
+    expect(event?.payload.ordinal).toBe(1);
+  });
+
+  // An unknown run still HAPPENED, so it counts. MUTATION: skip the audit write on the catch path
+  // → red (the second press reports ordinal 1 and the run vanishes from the log).
+  test("an unknown run is still counted as a run of this pin", async () => {
+    const t = setup();
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody, 4);
+    const pin = await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, {
+      templateId: "brand-review",
+    });
+    if (!pin.ok) throw new Error("pin failed");
+    await as(t, A).action(api.pinnedWorkflows.runAgain, { id: pin.id });
+    await as(t, A).action(api.pinnedWorkflows.runAgain, { id: pin.id });
+    expect((await pinRunEvents(t)).map((e) => e.payload.ordinal)).toEqual([1, 2]);
+  });
+});
+
+// ── The repeat ordinal is scoped to ONE pin, in ONE tenant ─────────────────────────────────
+
+// The module header claims the range read returns "the pin's own rows and nothing else" and that
+// "the row id is what makes the range tenant-safe". Both were claims a comment made and nothing
+// enforced: every drive used exactly one pin, so replacing the derived prefix with a constant
+// `"pin:"` left the whole suite green while the ordinal counted every pin in the deployment,
+// across tenants. This is that claim as a test.
+describe("runCount counts this pin's runs and no others", () => {
+  const seedAuditRuns = (
+    t: T,
+    tenantId: string,
+    pinId: Id<"savedPrompts">,
+    count: number,
+    eventType = "workflow_pin.run",
+  ) =>
+    t.run(async (ctx) => {
+      for (let i = 0; i < count; i++) {
+        await ctx.db.insert("audit", {
+          tenantId,
+          correlationId: `pin:${pinId}:${eventType}_${i}`,
+          eventType,
+          actor: "user",
+          payload: { pinId },
+          ts: 1_000 + i,
+        });
+      }
+    });
+
+  const pinFor = async (t: T, tenantId: string, templateId: string) => {
+    const res = await as(t, tenantId).mutation(api.pinnedWorkflows.pinWorkflow, { templateId });
+    if (!res.ok) throw new Error("pin failed");
+    return res.id;
+  };
+
+  test("another pin's runs, another tenant's runs and another event type are all excluded", async () => {
+    const t = setup();
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
+    await seedPack(t, "pack-business-pulse", packBusinessPulseSkillBody);
+    const mine = await pinFor(t, A, "brand-review");
+    const myOtherPack = await pinFor(t, A, "business-pulse");
+    const theirs = await pinFor(t, B, "brand-review");
+
+    await seedAuditRuns(t, A, mine, 3);
+    await seedAuditRuns(t, A, myOtherPack, 2);
+    await seedAuditRuns(t, B, theirs, 4);
+    // A different writer reusing this pin's correlation prefix. MUTATION: drop the
+    // `r.eventType === PIN_RUN_EVENT` filter → red (8).
+    await seedAuditRuns(t, A, mine, 5, "workflow_pin.something_else");
+
+    // MUTATION: `const prefix = "pin:"` → red (14). That mutation was previously invisible.
+    expect(await t.query(internal.pinnedWorkflows.runCount, { pinId: mine })).toBe(3);
+    expect(await t.query(internal.pinnedWorkflows.runCount, { pinId: myOtherPack })).toBe(2);
+    expect(await t.query(internal.pinnedWorkflows.runCount, { pinId: theirs })).toBe(4);
   });
 });
 

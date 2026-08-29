@@ -45,7 +45,6 @@ type PinRow = {
   templateId: string;
   title: string;
   createdAt: number;
-  sourcePreferences: readonly string[];
   runnable: boolean;
   blockers: readonly string[];
   notices: readonly string[];
@@ -74,7 +73,6 @@ const PIN: PinRow = {
   templateId: "brand-review",
   title: "Brand review",
   createdAt: 1,
-  sourcePreferences: [],
   runnable: true,
   blockers: [],
   notices: [],
@@ -323,16 +321,7 @@ describe("run again", () => {
   // MUTATION `onClick={() => onRun(pack.packId)}` → `() => {}`: red here. Nothing is ever sent.
   test("pressing Run again sends the PIN id, and lands on the fresh conversation", async () => {
     server.pins = [PIN];
-    runResults = [
-      {
-        ok: true,
-        threadId: "thread_new_1",
-        correlationId: "pin:pin_1:abc",
-        ordinal: 1,
-        ran: true,
-        outcome: "useful",
-      },
-    ];
+    runResults = [{ ok: true, threadId: "thread_new_1", state: "ran", outcome: "useful" }];
     await mount();
     await click(button("Run again"));
 
@@ -345,15 +334,8 @@ describe("run again", () => {
 
   test("two presses send two requests — nothing is cached, reused or replayed on the client", async () => {
     server.pins = [PIN];
-    const ok = (threadId: string, ordinal: number) => ({
-      ok: true,
-      threadId,
-      correlationId: `pin:pin_1:${threadId}`,
-      ordinal,
-      ran: true,
-      outcome: "useful",
-    });
-    runResults = [ok("thread_a", 1), ok("thread_b", 2)];
+    const ok = (threadId: string) => ({ ok: true, threadId, state: "ran", outcome: "useful" });
+    runResults = [ok("thread_a"), ok("thread_b")];
     await mount();
     await click(button("Run again"));
     await click(button("Run again"));
@@ -366,25 +348,51 @@ describe("run again", () => {
   });
 
   // The governed stop. There IS a thread, and navigating to it would hide the one fact that
-  // matters. MUTATION: navigate on `res.ok` instead of on `res.ran` → red.
+  // matters. `$0` is provable ONLY here: the pack binding returns `costUsd: 0` on this path.
+  // MUTATION: navigate whenever `res.ok` instead of on `res.state === "ran"` → red.
   test("a run stopped at the gate says nothing was spent, and does NOT navigate", async () => {
     server.pins = [PIN];
-    runResults = [
-      {
-        ok: true,
-        threadId: "thread_blocked",
-        correlationId: "pin:pin_1:xyz",
-        ordinal: 1,
-        ran: false,
-        outcome: "blocked",
-      },
-    ];
+    runResults = [{ ok: true, threadId: "thread_blocked", state: "blocked", outcome: "blocked" }];
     await mount();
     await click(button("Run again"));
 
     expect(text()).toContain(
       "Pikar stopped this run before it started. Nothing ran and nothing was spent — try again shortly.",
     );
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  // THE BLOCKER THIS ROUND FIXES. `state: "unknown"` is a turn that produced no outcome:
+  // `cockpit.startWorkflowPack` reports a pack-binding refusal and every throw out of the pack loop
+  // identically, and the loop rethrows from AFTER the model may have answered and spend may have
+  // been recorded. The previous version collapsed this into the same `!res.ran` branch as the
+  // governed stop and rendered "Nothing ran and nothing was spent" over a possibly-billed run.
+  // MUTATION: `setAction(packId, { kind: "runBlocked" })` for every non-`ran` state → red on the
+  // second assertion, which is the one that matters.
+  test("a run that did not finish is NOT told it was free", async () => {
+    server.pins = [PIN];
+    runResults = [{ ok: true, threadId: "thread_half", state: "unknown", outcome: null }];
+    await mount();
+    await click(button("Run again"));
+
+    expect(text()).toContain(
+      "This run did not finish, and Pikar cannot tell whether it reached the model. It may have used part of today's budget — open your workspace to see what happened before running it again.",
+    );
+    expect(text()).not.toContain("nothing was spent");
+    expect(text()).not.toContain("Nothing ran");
+    // No navigation either: there may be no thread at all, and landing in a conversation would
+    // hide the sentence the user needs.
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  // The same state, arriving without a thread at all — the throw happened before one existed.
+  test("an unfinished run with no thread renders the same honest sentence", async () => {
+    server.pins = [PIN];
+    runResults = [{ ok: true, threadId: null, state: "unknown", outcome: null }];
+    await mount();
+    await click(button("Run again"));
+    expect(text()).toContain("This run did not finish");
+    expect(text()).not.toContain("nothing was spent");
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -407,13 +415,16 @@ describe("run again", () => {
     expect(text()).toContain("That pin is no longer there. Pin the workflow again.");
   });
 
-  test("a failed start says nothing ran", async () => {
+  // `run_failed` USED TO LIVE HERE and it is deleted, not narrowed. It was reachable only from a
+  // transport throw, which the `transport` state already covers, and its copy ("Nothing ran") made
+  // the same unprovable promise as the blocked line. A failed run is `state: "unknown"` now.
+  test("the refusal family cannot promise anything about a run that started", async () => {
     server.pins = [PIN];
-    runResults = [{ ok: false, reason: "run_failed" }];
+    runResults = [{ ok: false, reason: "unknown_pin" }];
     await mount();
     await click(button("Run again"));
-    expect(text()).toContain("That could not be started. Nothing ran — try again.");
-    expect(push).not.toHaveBeenCalled();
+    expect(text()).toContain("That pin is no longer there. Pin the workflow again.");
+    expect(text()).not.toContain("nothing was spent");
   });
 });
 
@@ -474,7 +485,7 @@ describe("what a screen reader hears, and what nobody may read", () => {
 
   test("the outcome is announced in a live region tied to the control that produced it", async () => {
     server.pins = [PIN];
-    runResults = [{ ok: false, reason: "run_failed" }];
+    runResults = [{ ok: true, threadId: null, state: "unknown", outcome: null }];
     await mount();
     await click(button("Run again"));
 
@@ -483,7 +494,9 @@ describe("what a screen reader hears, and what nobody may read", () => {
     const status = document.getElementById(describedBy as string);
     expect(status?.getAttribute("role")).toBe("status");
     expect(status?.getAttribute("aria-live")).toBe("polite");
-    expect(status?.textContent).toBe("That could not be started. Nothing ran — try again.");
+    expect(status?.textContent).toBe(
+      "This run did not finish, and Pikar cannot tell whether it reached the model. It may have used part of today's budget — open your workspace to see what happened before running it again.",
+    );
   });
 
   test("a pending press is announced as busy, not just visually disabled", async () => {
@@ -503,7 +516,7 @@ describe("what a screen reader hears, and what nobody may read", () => {
     expect(text()).toContain("Starting a new run…");
 
     await act(async () => {
-      release({ ok: false, reason: "run_failed" });
+      release({ ok: true, threadId: null, state: "unknown", outcome: null });
     });
     expect(button("Run again").disabled).toBe(false);
   });
@@ -572,15 +585,11 @@ describe("what a screen reader hears, and what nobody may read", () => {
     ]) {
       expect(source, `${forbidden} is reachable from this surface`).not.toContain(forbidden);
     }
-    // The four functions it MAY reach, and no fifth.
-    const calls = [...source.matchAll(/api\.[a-zA-Z]+\.[a-zA-Z]+/g)].map((m) => m[0]).sort();
-    expect([...new Set(calls)]).toEqual([
-      "api.pinnedWorkflows.listPins",
-      "api.pinnedWorkflows.pinWorkflow",
-      "api.pinnedWorkflows.runAgain",
-      "api.pinnedWorkflows.unpinWorkflow",
-      "api.workflowPackDiscovery.listPacks",
-    ]);
+    // The set of functions this component may reach is NOT asserted here any more. It was, as a
+    // sorted list of five names — and since `checkReadiness` was not on it, that assertion froze a
+    // dropped plan requirement ("wire it to checkReadiness") as if it were the design. Deleted
+    // rather than narrowed: the `convex/react` stub at the top of this file already enforces the
+    // same closed set BEHAVIOURALLY and in every test, by throwing on any unexpected function path.
   });
 
   test("the page mounts this surface", () => {

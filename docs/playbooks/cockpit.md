@@ -1,3 +1,19 @@
+> Last verified: 2026-08-29 (29-08 FIX — **PINNING A WORKFLOW WAS EVICTING A SAVED PROMPT FROM THIS
+> MENU.** Correcting the entry after this one. `savedPrompts.list` applied its
+> `templateId === undefined` filter to the page it had already taken, so each workflow pin consumed
+> one of the twenty slots and a prompt silently disappeared from the workspace menu — driven, not
+> reasoned: 20 prompts returned 20, then one pin returned 19. The defence written into that entry
+> ("the take is the cap this menu has always had") was true of the TAKE and false of the CAP, which
+> shrank with every pin.
+>
+> The filter is now a `.filter((q) => q.eq(q.field("templateId"), undefined))` on the same indexed
+> range, BEFORE `.order("desc").take(SAVED_PROMPT_LIST_LIMIT)`. One predicate, one bounded read, no
+> second query. Mutation observed RED: moving it back after the take makes the new
+> `pinnedWorkflows.test.ts` case "pinning a workflow evicts nothing from the twenty-entry prompt
+> menu" report 19.
+>
+> `cockpit.ts` is STILL unchanged by 29-08, and both facts pinned by tests that read it still hold.)
+
 > Last verified: 2026-08-29 (29-08 — **THE WORKSPACE'S PINNED-PROMPT MENU NOW LISTS PROMPT PINS
 > ONLY.** `savedPrompts.list` gained one filter: a row carrying `templateId` is a pinned WORKFLOW
 > (29-08, `packages/backend/convex/pinnedWorkflows.ts`), and Run in this menu is an ordinary
