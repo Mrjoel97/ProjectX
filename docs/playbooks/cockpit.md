@@ -1,3 +1,16 @@
+> Last verified: 2026-08-30 (29-10 — **TWO NEW E2E SPECS UNDER THIS PLAYBOOK'S WATCHED PATH, AND ONE
+> PRODUCT GAP THEY FOUND.** `apps/web/e2e/workflow-packs.spec.ts` and `workflow-packs-isolation.spec.ts`
+> gate `/dashboard/workflows` (5 passed, PW_EXIT=0). The detail that belongs HERE rather than only in
+> `workflow-packs.md`, because it is a pattern any cockpit surface can repeat:
+> **the customization save emits NO completion signal** — no toast, no `role="status"`, no
+> `role="alert"` — so success and still-in-flight are indistinguishable in the DOM, and navigating
+> straight after the click ABORTS the in-flight mutation. A spec can wait before navigating and retry
+> the read; a user who presses Save and leaves simply loses the write.
+> Also measured on this surface: the form prefills ASYNCHRONOUSLY and overwrites typing that lands
+> first, and there is exactly ONE `tenantSkills` row per (tenant, pack) so two customization tests
+> are two writers of one row and cannot run under `fullyParallel: true`.
+> Full write-up, including the unexplained serial-worker hang, in `docs/playbooks/workflow-packs.md`.)
+
 > Last verified: 2026-08-30 (29-13 — **THE DEFERRED-RECURRENCE BROWSER PROOF, AND A SETTLE SIGNAL
 > THAT PROVED NOTHING.** `apps/web/e2e/routines.spec.ts` is the deferred branch's browser evidence:
 > `/dashboard/workflows` still offers a manual **Run again**, and no control on it schedules, pauses,

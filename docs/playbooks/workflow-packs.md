@@ -1,5 +1,44 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-30 (29-10 — **THE PACK SURFACE HAS ITS BROWSER GATE, AUTHORED AGAINST THE
+> RENDERED DOM AND PROVEN IN BOTH DIRECTIONS.** `apps/web/e2e/workflow-packs.spec.ts` +
+> `workflow-packs-isolation.spec.ts`: **5 passed, PW_EXIT=0**. Every locator was read off a live run
+> of the page BEFORE the spec was written — `--list` proves a file parses, never that a locator
+> resolves, and `knowledge-search.spec.ts` was dead on its first line while `--list` was happy.
+> Falsified deliberately: an `<input type="url" aria-label="Webhook endpoint">` planted inside the
+> customizer turned the closed-schema count RED (`Expected: 4, Received: 5`); reverted, rebuilt, green.
+>
+> **THE SPEC WENT RED FIVE TIMES FOR FIVE DIFFERENT REAL REASONS, and three of them are facts about
+> this surface that no source reading would have surfaced:**
+> 1. **The prefill is asynchronous and CLOBBERS TYPING.** `choose()` fills the form from
+>    `myCustomizationValues` when the query lands; type before that and the value is silently
+>    replaced, so the save writes the OLD string and a later reload "passes" on a value nobody
+>    entered. Any test here must prove the typed value stuck before pressing Save.
+> 2. **THERE IS NO SAVE COMPLETION SIGNAL — no toast, no `role="status"`, no `role="alert"`.**
+>    Success and still-in-flight are indistinguishable in the DOM, and navigating straight after the
+>    click ABORTS the in-flight mutation. A test can wait before navigating and retry the read; a
+>    user who presses Save and navigates simply loses the write. **This is a product gap, recorded
+>    here rather than absorbed by a sleep.**
+> 3. **One tenant + one pack = ONE `tenantSkills` row**, so two customization tests are two writers
+>    of the same row and cannot run under `fullyParallel: true`. The file is `mode: "serial"`.
+> Plus the 30s default timeout (which presents as a locator failure), and a serial-WORKER
+> interaction that hangs tenant A's pack list, survives a fresh browser context, and disappears when
+> the test runs in its own file — **root cause NOT established**, written into
+> `workflow-packs-isolation.spec.ts` so the green tick does not imply otherwise.
+>
+> **WHAT THE GATE DELIBERATELY DOES NOT ASSERT.** The plan asks for exact-version activation and
+> rollback. Neither is reachable: `planTenantActivation` refuses every `pack-*` with `PACK_GATE`,
+> both are `ownerMutation`, and `cockpit.ts` passes no `tenantSkillIds` so a published customization
+> is INERT. The gate asserts the honest consequences — no control offers activation, and the surface
+> never says "pending review" / "awaiting approval" / "once approved" — and 29-10-SUMMARY.md records
+> the criteria as NOT MET rather than faking a path.
+>
+> **A PRECONDITION THAT DECIDES WHETHER ANY OF THIS CAN RUN:** `listPacks` returns ACTIVE packs only.
+> With no active `pack-*` row the surface renders "No approved workflows are available to you yet."
+> with ZERO controls and every assertion is unreachable; `settle()` accepts that state and the tests
+> skip loudly rather than failing as if the product were broken. Five packs are active locally.
+> The `@run` block (pin + two reruns, real model spend) is written and TAGGED but NOT YET RUN.)
+
 > Last verified: 2026-08-30 (29-13 — **THE WORKFLOWS ROUTE HAS ITS FIRST BROWSER EVIDENCE, AND IT
 > IS AN ABSENCE PROOF.** `routineBranch.test.ts` reads `29-RECURRENCE-DECISION.md` and asserts the
 > branch that artifact selects (`defer`), so it is not hard-coded to one outcome; the deferred branch
