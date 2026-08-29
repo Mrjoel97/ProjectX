@@ -1,3 +1,32 @@
+> Last verified: 2026-08-29 (29-09 — **THE COCKPIT GAINED A THIRD INLINE CARD: UNIFIED KNOWLEDGE
+> SEARCH (KNOW-01).** `KnowledgeSearchPanel.tsx` is opened from the same "Chat options" menu as
+> `SkillAuthoringPanel`, mounted in the same place in `page.tsx`, on the same terms — session state,
+> not a route, so the thread and every open subscription survive the toggle. It is wrapped in
+> `ErrorBoundary` with a `null` fallback, like `WorkflowPackQuickStarts`: a failing search control
+> degrades itself, never the cockpit.
+>
+> WHAT IT ADDS TO THE PANE, and what it deliberately does not:
+>
+> - It calls `api.knowledgeSearch.search` (a `tenantAction`) and reads `api.knowledgeSearch.listByThread`.
+>   It holds no `useMutation`, does not go through `useSendCockpitMessage`, and imports nothing from
+>   `api.cockpit` — `KnowledgeSearchPanel.test.ts` scans the shipped source for each of those three.
+> - The `threadId` it passes is the cockpit's own when there is one. With a fresh workspace there is
+>   no thread yet, so the panel mints `ks_<uuid>` ON SUBMIT (not in a `useState` initializer, which
+>   would run on the server and hydrate to a different id).
+> - The honest-gap copy is NOT restated in the UI. `renderSourceGap` and `groundedSourceProps` in
+>   `@pikar/core/knowledgeSearch` own the sentences and the citation mapping; the panel renders what
+>   they return. `KnowledgeSearchPanel.test.ts` asserts the panel source does not contain the
+>   substrings `so it was not searched` or `only the first`.
+> - Only a `vault` citation reaches `GroundedSources({titles, docIds})` and therefore
+>   `VaultDocButton`. Every citation — vault included — also gets a provenance line carrying the
+>   source label, authority class and freshness, because an agent-promoted document lives in the
+>   vault and `agent_authored` is the class that must be visible there.
+>
+> UNPROVEN AND STATED AS SUCH: `apps/web`'s vitest is node-only, so what is verified is the string
+> `renderToStaticMarkup` emits, not pixels, not focus order and not the live action call. The browser
+> gate is `apps/web/e2e/knowledge-search.spec.ts` and it is UNRUN — see
+> `.planning/phases/29-unified-knowledge-and-routines/29-SEARCH-GATE.md`.)
+
 > Last verified: 2026-08-29 (**WAVE-3 FINAL — THE COPY-DRIFT GUARD IS DELETED. Copy-drift is
 > UNGUARDED, and this entry exists so nobody reads a green `lib/models.test.ts` as protection.**
 >
