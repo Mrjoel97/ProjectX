@@ -24,11 +24,16 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CUSTOMIZATION_REJECTIONS, type CustomizationValues, WORKFLOW_PACK_IDS } from "@pikar/core";
+import {
+  CUSTOMIZATION_REJECTIONS,
+  type CustomizationValues,
+  packCustomizationFields,
+  WORKFLOW_PACK_IDS,
+} from "@pikar/core";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { CustomizerView, type CustomizerViewProps } from "./WorkflowPackCustomizer";
+import { CustomizerView, type CustomizerViewProps, prefillFrom } from "./WorkflowPackCustomizer";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const componentSource = readFileSync(join(here, "WorkflowPackCustomizer.tsx"), "utf8");
@@ -711,5 +716,75 @@ describe("the route exists and stays out of the nav until its authenticated gate
     // Positive control: the scan can see a route that IS in the nav.
     expect(layoutSource).toContain('"/dashboard/vault"');
     expect(layoutSource).not.toContain("/dashboard/workflows");
+  });
+});
+
+describe("the prior settings a repeat edit opens with", () => {
+  const schema = {
+    templateId: "business-pulse" as const,
+    templateVersion: 4,
+    fields: packCustomizationFields("business-pulse"),
+  };
+
+  test("a row written by this build round-trips", () => {
+    expect(
+      prefillFrom(
+        JSON.stringify({
+          business_terms: "jobs",
+          tone: "warm",
+          priority_count: 3,
+          preferred_sources: ["vault"],
+        }),
+        schema,
+      ),
+    ).toEqual({
+      business_terms: "jobs",
+      tone: "warm",
+      priority_count: 3,
+      preferred_sources: ["vault"],
+    });
+  });
+
+  // A row written against an OLDER template. Sending a dropped key straight back would be refused
+  // as `unknown_field` and a re-kinded value as `wrong_type` — i.e. the form would open in a state
+  // it cannot save from, which is the failure this narrowing exists to prevent.
+  test.each([
+    ["a key this schema no longer declares", '{"business_terms":"jobs","gone_field":"x"}'],
+    ["a value whose kind changed", '{"business_terms":"jobs","priority_count":"three"}'],
+    ["a list where a string is declared", '{"business_terms":"jobs","tone":["warm"]}'],
+    ["a non-string inside a source list", '{"business_terms":"jobs","preferred_sources":[1]}'],
+  ])("%s is dropped, and the rest survives", (_label, json) => {
+    expect(prefillFrom(json, schema)).toEqual({ business_terms: "jobs" });
+  });
+
+  test.each([
+    ["no row at all", null],
+    ["unparseable text", "{not json"],
+    ["a JSON array", "[1,2,3]"],
+    ["JSON null", "null"],
+    ["a JSON string", '"business_terms"'],
+  ])("%s opens an empty form rather than throwing", (_label, json) => {
+    expect(prefillFrom(json, schema)).toEqual({});
+  });
+
+  test("no schema means nothing to narrow against, so nothing is prefilled", () => {
+    expect(prefillFrom('{"business_terms":"jobs"}', null)).toEqual({});
+  });
+
+  // MECHANISM, NOT BEHAVIOUR, and it is labelled as such. `apps/web` has no DOM runner, so the
+  // container's handlers cannot be driven here: choosing a pack, saving, and adopting the server's
+  // base version are proved only by these three scans plus `workflowPackDiscovery.test.ts`'s
+  // server-side assertions. A live interaction is the Playwright spec's job and it has NOT run.
+  test("the container wires the three things a render cannot reach", () => {
+    // 1. Choosing a pack prefills from the row the server returned.
+    expect(component).toContain("prefillFrom(pack?.myCustomizationValues ?? null, packSchema)");
+    // 2. The publish sends the server's per-name version unless a refusal has moved it.
+    expect(component).toContain(
+      "baseCandidateVersion: adoptedBase === undefined ? selected.myBaseVersion : adoptedBase",
+    );
+    // 3. A stale-base refusal adopts what the server says it holds, so the retry can win.
+    expect(component).toContain(
+      'if (res.reason === "stale_base_version") setAdoptedBase(res.currentBaseVersion);',
+    );
   });
 });

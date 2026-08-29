@@ -558,8 +558,16 @@ export function CustomizerView(props: CustomizerViewProps) {
  * template: a key the schema has since dropped would be sent straight back and refused as
  * `unknown_field`, and a value whose kind changed would be refused as `wrong_type`. Narrowing here
  * means a template revision drops the stale settings instead of jamming the form.
+ *
+ * EXPORTED, unlike every copy function in this file, and the difference is deliberate: this is not
+ * a sentence, it is a PARSER at a trust boundary. Its input is a JSON string off a database row
+ * written by an older build, so what it does with a wrong shape is behaviour worth pinning
+ * directly. Its call site is scanned separately.
  */
-function prefillFrom(json: string | null, schema: CustomizationSchema | null): CustomizationValues {
+export function prefillFrom(
+  json: string | null,
+  schema: CustomizationSchema | null,
+): CustomizationValues {
   if (json === null || schema === null) return {};
   let parsed: unknown;
   try {
@@ -567,7 +575,11 @@ function prefillFrom(json: string | null, schema: CustomizationSchema | null): C
   } catch {
     return {};
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+  // NO `Array.isArray` guard. Deleting it changed nothing that any test could see, because the
+  // loop below is over the SCHEMA's keys and no declared key is an array index — so an array falls
+  // through to `{}` on its own. A branch whose removal is invisible is a claim with nothing behind
+  // it; the schema-driven loop is the actual bound.
+  if (typeof parsed !== "object" || parsed === null) return {};
   const raw = parsed as Record<string, unknown>;
   const out: Record<string, string | number | readonly string[]> = {};
   for (const field of schema.fields) {
