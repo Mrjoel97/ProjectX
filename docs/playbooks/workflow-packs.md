@@ -1,7 +1,70 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-29 (29-08 FIX2 — **THE ENUM THAT REPLACED THE BOOLEAN HAD THE SAME HOLE,
+> ONE ARM OVER.** Three independent verifiers applied the identical mutation:
+> `outcome === null ? "unknown" : outcome === "blocked" ? "blocked" : "ran"` →
+> `outcome === null ? "unknown" : "blocked"`, and `pinnedWorkflows` stayed **43/43 GREEN**. Under it
+> a run that reached the model, answered and recorded spend rendered "Pikar stopped this run before
+> it started. Nothing ran and nothing was spent" and wrote `state: "blocked"` to the audit plane —
+> the same $0 falsehood the round before existed to kill. **No test in this repo had ever produced
+> `state: "ran"` from the server**, because every $0 drive either exhausts the budget (→ `blocked`)
+> or throws before a thread (→ `null`). A discriminant whose happy arm nothing reaches is not a
+> discriminant.
+>
+> **Both halves of the close are in the tree.** (1) The derivation is the exported pure function
+> `pinRunState(outcome: string | null)`, with all three arms asserted directly — `useful`,
+> `partial`, `no_findings` and `failed` are each RAN, which also makes the module header's
+> "`no_findings` is `ran`, not `unknown`" an enforced invariant rather than a comment. (2) **A
+> COMPLETED TURN IS NOW DRIVEN END TO END, OFFLINE, FOR $0 OF REAL MONEY.**
+> `pinnedWorkflows.test.ts` mocks `lib/models.resolveModel` to a scripted `MockLanguageModelV4` (the
+> `knowledgeSearch.test.ts` idiom, and the same swap `__runWorkflowPackWithScript` performs); every
+> other line is shipped code, so `runAgain` returns `state: "ran"`, `outcome: "useful"` **beside a
+> real priced `spendEvents` row**. Zeroing the scripted token counts turns both assertions red, so
+> the row is `priceUsage`'s, not a fixture's.
+>
+> **`"unknown"` had the mirror-image hole and it is closed the same way.** Both existing `unknown`
+> drives kill the agent component, i.e. throw BEFORE any model call — so the one state whose whole
+> purpose is "we cannot tell whether money was spent" had only ever been observed where money
+> provably was NOT. The new drive lets the model answer, lets `recordModelSpend` run, and then
+> throws from AFTER `runSpecialistTurn` (the exact seam the module header names). The state is still
+> `unknown`, the audit row is still `unknown`, and a non-zero spend row sits beside it. The
+> verifier's mutation `outcome === null ? (threadId === null ? "unknown" : "blocked")` — which
+> re-instates the original lie on precisely the cockpit-swallowed-throw path — is RED on that test.
+>
+> **The "nothing runs by itself" scan now sees the copy a user actually reads.** It enumerated four
+> READINESS states plus empty, all of them pre-press, so `BLOCKED_RUN`, `UNKNOWN_RUN`,
+> `TRANSPORT_ERROR` and every `actionLine` branch were outside it: a verifier put "Pikar will retry
+> this automatically every day" into the blocked copy and the web suite stayed 30/30 green. The scan
+> now runs over every `PinAction` kind through `actionLine` (a `Record<PinAction["kind"], …>`, so a
+> new kind fails the typecheck rather than going unscanned) AND over the DOM after a real press in
+> five run-result states. That mutation is RED on both.
+>
+> **THREE CLAIMS DELETED RATHER THAN NARROWED.** (1) `latencyMs` is gone from the audit payload:
+> nothing read it and its only assertion was `expect.any(Number)`, so `Date.now() - startedAt` → `0`
+> survived. (2) `pinWorkflow`'s docstring no longer says the pin captures "the source preferences
+> that row recorded" — that field lost its writer last round and the sentence was left standing.
+> (3) `TRANSPORT_ERROR` no longer says "That did not go through": a browser that never saw the reply
+> cannot know that. It now reads "Pikar could not confirm that. Reload the page to see whether it
+> went through." and it is reachable from PIN and UNPIN only — **a throw out of the run channel now
+> sets `runUnknown`**, because `runAgain`'s audit write sits outside its try, so a completed and
+> possibly billed run can reject after the turn happened.
+>
+> **The `"blocked" ⇒ $0` absolute has a guard at last** (the two weaker `cockpit.ts` absolutes had
+> one and the one carrying the money sentence did not): a scan asserts `workflowPackBinding.ts`
+> writes `outcome: "blocked"` at exactly two sites, both BEFORE `runSpecialistTurn(`, with the
+> literal `costUsd: 0` between the second and the model. Its reach is stated where it lives: a
+> literal second producer is RED (and so are the two completed-run drives); a producer that builds
+> the value from a variable is NOT seen by the scan, and only a drive that takes that path would
+> catch it.
+>
+> Gates: `pinnedWorkflows` **53 tests** (was 43), `apps/web PinnedWorkflowButton` **33** (was 30).
+> Mutations observed RED are listed in `29-08-FIX2-SUMMARY.md`. **STILL UNRUN: the browser** — this
+> route has no Playwright spec and is still absent from the nav; and the web suite remains
+> fixture-driven (its fixtures are now the server's own `FunctionReturnType`s, so a renamed state
+> fails the typecheck, but only the backend suite proves a state is ever PRODUCED).)
+
 > Last verified: 2026-08-29 (29-08 FIX — **THE PIN SURFACE TOLD A USER "NOTHING WAS SPENT" ABOUT A
-> RUN THAT MAY HAVE BEEN BILLED.** Three independent verifiers found it. `runAgain` computed
+> RUN THAT MAY HAVE BEEN BILLED.** Two independent verifiers found it. `runAgain` computed
 > `ran = res.ok && outcome !== null && outcome !== "blocked"`, and `cockpit.startWorkflowPack`
 > reports a pack-binding refusal and EVERY throw out of `runWorkflowPack` the same way (`ok:false`,
 > no `outcome`; it never rethrows) — while `runPackTurn` rethrows from AFTER `runSpecialistTurn`,

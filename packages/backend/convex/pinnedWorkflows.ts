@@ -75,6 +75,12 @@
 // A booleanising `ran` is what made that lie unmutatable: `outcome === null` collapsed into the
 // same `false` the governed stop produces, and no test could tell the two apart. The state is a
 // closed three-value enum for that reason, and `PinRunState` is what the UI branches on.
+//
+// THE ENUM ALONE DID NOT CLOSE IT. Every $0 drive of `runAgain` ends in `"blocked"` or a pre-thread
+// throw, so the `"ran"` arm was reached by nothing and collapsing it into `"blocked"` left the suite
+// green over the same lie. The derivation is now the exported pure function `pinRunState`, asserted
+// arm by arm, AND a completed turn is driven end to end against a scripted model — so `"ran"` and
+// its `spendEvents` row are produced by a run, not by a fixture.
 import {
   freshRunCorrelation,
   packPreflight,
@@ -135,6 +141,26 @@ export type PinCheck =
  * - `"unknown"` no outcome came back. The turn may have reached the model and recorded spend.
  */
 export type PinRunState = "ran" | "blocked" | "unknown";
+
+/**
+ * THE WHOLE MONEY DISCRIMINANT, as a pure function of one string — and it is a function, exported
+ * and asserted arm by arm, because the version that lived inline was HALF-COVERED and that half was
+ * the dangerous one.
+ *
+ * Every $0 drive of `runAgain` either exhausts the budget (`"blocked"`) or throws before a thread
+ * (`null`), so the `"ran"` arm was reached by no test at all: collapsing it into `"blocked"`
+ * (`outcome === null ? "unknown" : "blocked"`) left the whole backend suite green while a run that
+ * reached the model, answered and recorded spend was rendered as "Nothing ran and nothing was
+ * spent". That is the same $0 lie the enum replaced the boolean to kill, one layer down.
+ *
+ * Both halves of the close are in the tests, not here: all three arms are asserted directly against
+ * this function, AND a completed turn is driven end to end against a scripted model so `"ran"` is
+ * produced by a real run — with a real `spendEvents` row beside it — and not only by a fixture.
+ */
+export function pinRunState(outcome: string | null): PinRunState {
+  if (outcome === null) return "unknown";
+  return outcome === "blocked" ? "blocked" : "ran";
+}
 
 export type RunAgainResult =
   /** Refused BEFORE anything started. Nothing exists and nothing was spent — provably. */
@@ -262,10 +288,10 @@ async function readinessFor(
 /**
  * Pin one approved workflow. `templateId` is the ONLY argument.
  *
- * EVERY LINEAGE FIELD IS SERVER-DERIVED — the live approved version, the tenant's own newest
- * customization row id and hash, and the source preferences that row recorded. A caller cannot name
- * a version, a candidate row or a source list, so there is no field here through which a browser
- * could pin someone else's row or a version that was never approved.
+ * EVERY LINEAGE FIELD IS SERVER-DERIVED — the live approved version, and the tenant's own newest
+ * customization row id and hash. A caller cannot name a version or a candidate row, so there is no
+ * field here through which a browser could pin someone else's row or a version that was never
+ * approved. (Source preferences are NOT among them: nothing writes that field — see below.)
  *
  * The pinned TEXT is the pack's code-owned `opener`, the same string the workspace quick-start
  * sends. A pin is "run this approved workflow again", not a saved prompt with a workflow attached.
@@ -517,7 +543,6 @@ export const runAgain = tenantAction({
     // from here — nothing accepts a `runId` from a caller.
     const correlationId = freshRunCorrelation(id, crypto.randomUUID());
     const ordinal = (await ctx.runQuery(internal.pinnedWorkflows.runCount, { pinId: id })) + 1;
-    const startedAt = Date.now();
 
     let threadId: string | null = null;
     let outcome: string | null = null;
@@ -542,8 +567,7 @@ export const runAgain = tenantAction({
     // produced one, so the outcome IS the discriminant, and one discriminant cannot disagree with
     // itself. `"blocked"` is the only value that proves $0 (`runPackTurn` returns `costUsd: 0`
     // literally on that path); anything else with no outcome is unknown, not free.
-    const state: PinRunState =
-      outcome === null ? "unknown" : outcome === "blocked" ? "blocked" : "ran";
+    const state = pinRunState(outcome);
 
     await ctx.runMutation(internal.audit.log, {
       tenantId: ctx.tenantId,
@@ -570,7 +594,6 @@ export const runAgain = tenantAction({
         // A CONSTANT, and it is the honest one: see the header. `cockpit.ts` passes no
         // `tenantSkillIds`, so a pinned customization never reaches the model on this path.
         customizationApplied: false,
-        latencyMs: Date.now() - startedAt,
       },
     });
 

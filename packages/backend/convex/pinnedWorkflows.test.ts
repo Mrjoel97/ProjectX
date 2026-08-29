@@ -19,13 +19,69 @@ import { fileURLToPath } from "node:url";
 import { packBrandReviewSkillBody } from "@pikar/contracts/skills/packBrandReview";
 import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusinessPulse";
 import { convexTest, type TestConvex } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { pinRunState } from "./pinnedWorkflows";
 import schema from "./schema";
+
+// ── THE OFFLINE SEAM THAT MAKES A COMPLETED RUN REACHABLE ──────────────────────────────────
+//
+// Two mocks, and between them they buy the ONE state the previous round could not produce.
+//
+// `resolveModel` → a scripted `MockLanguageModelV4`, the `knowledgeSearch.test.ts` idiom and the
+// same swap `__runWorkflowPackWithScript` performs: EVERYTHING else on the path is the shipped
+// code — `guardrails.preCall`, the preflight, `runAgentLoop`, `priceUsage`,
+// `guardrails.recordSpend`, `outcomeFor`, the pack event log, `cockpit.startWorkflowPack`'s thread
+// and plan row, and `runAgain`'s own derivation and audit write. The model is the only fake, which
+// is why the `spendEvents` row a completed run leaves behind is a REAL priced row.
+//
+// `runSpecialistTurn` → the real function, plus an opt-in throw AFTER it returns. That is not an
+// arbitrary failure point: it is the exact seam this module's header names as the reason `unknown`
+// may not claim $0 ("`runPackTurn` rethrows from AFTER `runSpecialistTurn` — i.e. after the model
+// may have answered and `recordModelSpend` may have run"). Injecting there is how that sentence
+// becomes a test instead of a claim.
+const seam = vi.hoisted(() => ({
+  /** The scripted model's steps, consumed in order. Replaced per test. */
+  script: [] as unknown[],
+  /** When true, the pack loop throws from after the model answered and spend was recorded. */
+  throwAfterModel: false,
+}));
+
+vi.mock("./lib/models", async (importOriginal) => {
+  const { MockLanguageModelV4 } = await import("ai/test");
+  return {
+    ...(await importOriginal<typeof import("./lib/models")>()),
+    resolveModel: () => new MockLanguageModelV4({ doGenerate: seam.script as never }),
+  };
+});
+
+vi.mock("./llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./llm")>();
+  return {
+    ...actual,
+    runSpecialistTurn: async (...args: Parameters<typeof actual.runSpecialistTurn>) => {
+      const res = await actual.runSpecialistTurn(...args);
+      if (seam.throwAfterModel) throw new Error("PACK_FAILED_AFTER_THE_MODEL_ANSWERED");
+      return res;
+    },
+  };
+});
+
+/** One scripted model step that answers with text and stops. The token counts are what
+ *  `priceUsage` charges, so they are what makes a completed run leave a real spend row. */
+const textStep = (text: string) => ({
+  content: text === "" ? [] : [{ type: "text", text }],
+  finishReason: { unified: "stop", raw: "stop" },
+  usage: {
+    inputTokens: { total: 900, noCache: 900, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 300, text: 300, reasoning: 0 },
+  },
+  warnings: [],
+});
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const agentModules = import.meta.glob(
@@ -744,7 +800,9 @@ describe("two presses are two runs", { timeout: 120_000 }, () => {
       customizationPinned: false,
       // THE HONEST CONSTANT: the run took the approved global template, never a tenant body.
       customizationApplied: false,
-      latencyMs: expect.any(Number),
+      // `latencyMs` USED TO BE HERE and it is deleted from the payload, not asserted harder. Its
+      // only assertion anywhere was `expect.any(Number)`, so `Date.now() - startedAt` → `0`
+      // survived; nothing read the field, on any surface. Deleted rather than narrowed.
     });
     // §4: no user-supplied or product prose on the log plane.
     const serialized = JSON.stringify(event?.payload);
@@ -796,6 +854,121 @@ describe("two presses are two runs", { timeout: 120_000 }, () => {
     const event = (await auditRows(t)).find((r) => r.eventType === "workflow_pin.run");
     expect(event?.payload.customizationPinned).toBe(true);
     expect(event?.payload.customizationApplied).toBe(false);
+  });
+});
+
+// ── The state derivation, arm by arm ───────────────────────────────────────────────────────
+
+// THE BLOCKER THIS ROUND FIXES, HALF ONE. `runAgain`'s state is a pure function of one string, and
+// the previous round asserted it only through drives that can reach two of its three values. So
+// `outcome === null ? "unknown" : "blocked"` — which renders "Nothing ran and nothing was spent"
+// over a run that answered and was billed — left 43/43 green. Three verifiers applied that exact
+// mutation. Here it is red on the second case.
+describe("pinRunState maps a pack outcome to what may be said about money", () => {
+  test("no outcome is UNKNOWN — the turn may have reached the model", () => {
+    expect(pinRunState(null)).toBe("unknown");
+  });
+
+  // The ONLY value that proves $0, and it proves it because `runPackTurn` returns `costUsd: 0`
+  // literally on that path (asserted against that module's own source further down).
+  test("the governed stop is BLOCKED", () => {
+    expect(pinRunState("blocked")).toBe("blocked");
+  });
+
+  // Every terminal the pack loop can actually produce. `no_findings` is the trap the module header
+  // names: a run that found nothing RAN, and calling it "unknown" would be honest-sounding and
+  // wrong. MUTATION: `outcome === null ? "unknown" : "blocked"` → red on all three.
+  test.each(["useful", "partial", "no_findings", "failed"])("%s is RAN, not unknown", (outcome) => {
+    expect(pinRunState(outcome)).toBe("ran");
+  });
+});
+
+// ── A run that actually completed, offline, with a real priced spend row ───────────────────
+
+// THE BLOCKER THIS ROUND FIXES, HALF TWO — and the half a pure function cannot buy. Until now no
+// test in this repo had ever observed `runAgain` return `state: "ran"` from the server: every drive
+// exhausted the budget first or threw before a thread. The scripted model closes that (see the seam
+// at the top of this file); the rest of the path is the shipped code, so the spend row below is a
+// real `priceUsage` result recorded by the real `guardrails.recordSpend`.
+describe("a completed turn is reported as RAN, and it was not free", { timeout: 120_000 }, () => {
+  const pinBrandReview = async (t: T) => {
+    await seedPack(t, "pack-brand-review", packBrandReviewSkillBody, 4);
+    const pin = await as(t, A).mutation(api.pinnedWorkflows.pinWorkflow, {
+      templateId: "brand-review",
+    });
+    if (!pin.ok) throw new Error("pin failed");
+    return pin.id;
+  };
+
+  test("the model answers, the run is RAN, and a priced spend row exists for it", async () => {
+    seam.script = [textStep("Three things about that copy, and one of them is the headline.")];
+    seam.throwAfterModel = false;
+    const t = setupRun();
+    const pinId = await pinBrandReview(t);
+
+    const res = await as(t, A).action(api.pinnedWorkflows.runAgain, { id: pinId });
+    // MUTATION: `outcome === null ? "unknown" : "blocked"` in `pinRunState` → red HERE, on a run
+    // that reached the model. This is the assertion the previous round did not have.
+    expect(res).toEqual({
+      ok: true,
+      threadId: expect.any(String),
+      state: "ran",
+      outcome: "useful",
+    });
+
+    // THE MONEY, MEASURED. The budget was never exhausted in this test, so every row on the
+    // plane belongs to the run — and it is non-zero, which is precisely what makes the
+    // "nothing was spent" sentence a lie about this state.
+    const spends = await spendRows(t);
+    expect(spends).toHaveLength(1);
+    expect(spends[0]?.amountCents).toBeGreaterThan(0);
+
+    // The log plane says the same thing the caller was told.
+    const [event] = await pinRunEvents(t);
+    expect(event?.payload.state).toBe("ran");
+    expect(event?.payload.outcome).toBe("useful");
+    expect(event?.payload.threadId).toBe(res.ok ? res.threadId : null);
+  });
+
+  // Trap (4) in the module header — "`outcome: 'no_findings'` is `'ran'`, not `'unknown'`" — was an
+  // invariant a comment asserted and nothing enforced. A run whose reply is empty is exactly that
+  // case, and it is driven here rather than argued.
+  test("a run that found nothing still RAN — it is not reported as unknown", async () => {
+    seam.script = [textStep("")];
+    seam.throwAfterModel = false;
+    const t = setupRun();
+    const pinId = await pinBrandReview(t);
+
+    const res = await as(t, A).action(api.pinnedWorkflows.runAgain, { id: pinId });
+    expect(res.ok && res.outcome).toBe("no_findings");
+    expect(res.ok && res.state).toBe("ran");
+    expect((await pinRunEvents(t))[0]?.payload.state).toBe("ran");
+  });
+
+  // THE SECOND BLOCKER. Both `unknown` drives below kill the agent component, so the one state
+  // whose whole purpose is "we cannot tell whether money was spent" had only ever been observed
+  // where money provably was NOT. Here the model ANSWERS, `recordModelSpend` runs, and the pack
+  // loop then throws from after `runSpecialistTurn` — the exact seam the module header names. The
+  // state must still be `unknown`, and it must still be `unknown` in the log.
+  test("a throw AFTER the model answered and spend was recorded is still UNKNOWN, never free", async () => {
+    seam.script = [textStep("An answer that was paid for before everything fell over.")];
+    seam.throwAfterModel = true;
+    const t = setupRun();
+    const pinId = await pinBrandReview(t);
+
+    const res = await as(t, A).action(api.pinnedWorkflows.runAgain, { id: pinId });
+    // MUTATION: `outcome === null ? "blocked"` → red. The user would be told $0 about this.
+    expect(res.ok && res.state).toBe("unknown");
+    expect(res.ok && res.outcome).toBe(null);
+
+    // THE POINT: money WAS spent on the very run being reported as unknown.
+    const spends = await spendRows(t);
+    expect(spends).toHaveLength(1);
+    expect(spends[0]?.amountCents).toBeGreaterThan(0);
+
+    const [event] = await pinRunEvents(t);
+    expect(event?.payload.state).toBe("unknown");
+    expect(event?.payload.outcome).toBe(null);
   });
 });
 
@@ -913,7 +1086,31 @@ describe("the sentences this surface renders about other modules are still true 
   const here = dirname(fileURLToPath(import.meta.url));
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   const cockpit = strip(readFileSync(join(here, "cockpit.ts"), "utf8"));
+  const binding = strip(readFileSync(join(here, "workflowPackBinding.ts"), "utf8"));
   const mine = strip(readFileSync(join(here, "pinnedWorkflows.ts"), "utf8"));
+
+  // THE ABSOLUTE THAT CARRIES THE MONEY SENTENCE, and until now the only one of the three with no
+  // guard: `state: "blocked"` is rendered as "Nothing ran and nothing was spent", and that is true
+  // ONLY because `outcome: "blocked"` is produced from one place in `workflowPackBinding.ts`,
+  // BEFORE `runSpecialistTurn`, returning a literal `costUsd: 0`. A second producer added after the
+  // model would make the copy false with the whole suite green — no drive reaches a post-model
+  // blocked path, and none can be written, because there is no such path to reach.
+  // MUTATION (applied, red): return `outcome: "blocked"` from the completed-run return below
+  // `runSpecialistTurn(` → red here AND red on the two completed-run drives above, which is the
+  // stronger half. WHAT THIS SCAN CANNOT SEE: a producer that builds the value instead of writing
+  // the literal — `outcome: someVar` where `someVar` can be `"blocked"`. That mutation was applied
+  // too and this test stayed green (the drives are what would catch it, and only on a path they
+  // take). The scan is a tripwire on the cheap shape, not a proof about the module.
+  test("workflowPackBinding.ts still emits outcome 'blocked' only BEFORE the model, at $0", () => {
+    const sites = [...binding.matchAll(/outcome: "blocked"/g)].map((m) => m.index ?? -1);
+    // Two: the `run_failed` event row and the returned governed stop. Both in the `preCall` arm.
+    expect(sites).toHaveLength(2);
+    const model = binding.indexOf("runSpecialistTurn(");
+    expect(model).toBeGreaterThan(-1);
+    for (const at of sites) expect(at).toBeLessThan(model);
+    // The literal $0 is in the same returned object as the last of them.
+    expect(binding.slice(sites[1] ?? 0, model)).toContain("costUsd: 0");
+  });
 
   // If this goes red, `customization_not_applied` has become a lie and the copy must change with
   // it — a pinned customization would now reach the model.

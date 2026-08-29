@@ -17,6 +17,27 @@
 > equality / the containment separator / the `:line` ref form are pinned. Gate self-check 25/25;
 > backend `routineDecision` 82 + `routines` 7; core `routineSchedule` 19.)
 
+> Last verified: 2026-08-29 (29-08 FIX2 — **THE THREE-VALUE `state` HAD AN UNREACHABLE HAPPY ARM,
+> AND COLLAPSING IT RE-CREATED THE $0 LIE.** Full account in `docs/playbooks/workflow-packs.md`. In
+> short: no test had ever produced `state: "ran"` from the server — every $0 drive of `runAgain`
+> exhausts the budget or throws before a thread — so `outcome === null ? "unknown" : "blocked"` left
+> the backend suite green while a billed run was told "nothing was spent". Closed two ways: the
+> derivation is the exported pure function `pinRunState` with all three arms asserted, and a
+> COMPLETED turn is now driven offline through the shipped path with a scripted model, returning
+> `"ran"` beside a real priced `spendEvents` row. The mirror case is closed too — a throw injected
+> AFTER the model answered and spend was recorded still reports `unknown`, on both the result and
+> the audit row.
+>
+> Also in this round: the web surface's "nothing runs by itself" scan now covers every `actionLine`
+> branch and five pressed run-result states (it only ever saw pre-press readiness copy, so
+> "automatically every day" could be added to the blocked sentence with the suite green);
+> `latencyMs` is deleted from the audit payload (unread, unmutatable); a throw out of the RUN
+> channel now renders the honest `unknown` sentence instead of "That did not go through", which is a
+> promise a browser cannot keep about a possibly-billed action; and `workflowPackBinding.ts`'s
+> `outcome: "blocked"` sites are pinned by a scan, with that scan's limits written beside it.
+> Backend `pinnedWorkflows` 53 tests, web `PinnedWorkflowButton` 33. The browser remains UNRUN for
+> this route.)
+
 > Last verified: 2026-08-29 (29-08 FIX — **THE PIN SURFACE SAID "NOTHING WAS SPENT" ABOUT A RUN
 > THAT MAY HAVE BEEN BILLED, AND THE BRANCH WAS UNMUTATABLE.** Full account in
 > `docs/playbooks/workflow-packs.md`. In short: `ran` was a boolean, so a turn that produced no

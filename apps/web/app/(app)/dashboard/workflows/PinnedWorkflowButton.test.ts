@@ -19,7 +19,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getFunctionName } from "convex/server";
+import type { api as backendApi } from "@pikar/backend/api";
+import { type FunctionReturnType, getFunctionName } from "convex/server";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -40,19 +41,14 @@ type Listing = {
   myCustomizationValues: string | null;
 };
 
-type PinRow = {
-  id: string;
-  templateId: string;
-  title: string;
-  createdAt: number;
-  runnable: boolean;
-  blockers: readonly string[];
-  notices: readonly string[];
-  templateVersion: number;
-  activeVersion: number | null;
-  sourceUnavailableCount: number;
-  customizationPinned: boolean;
-};
+// THE FIXTURES ARE THE SERVER'S OWN RETURN TYPES, not hand-written twins. They used to be twins,
+// and that is one of the mechanisms that hid the `state: "ran"` hole: `"ran"` existed in this repo
+// only as a string in a literal below, never as a value any handler had been observed to return.
+// Typed this way, dropping or renaming a state on the server fails this file's typecheck. It still
+// does not prove the server ever PRODUCES one — that is the backend suite's job, and as of this
+// round `pinnedWorkflows.test.ts` drives a completed turn that returns `"ran"` for real.
+type PinRow = FunctionReturnType<typeof backendApi.pinnedWorkflows.listPins>[number];
+type RunResult = FunctionReturnType<typeof backendApi.pinnedWorkflows.runAgain>;
 
 const PACK: Listing = {
   packId: "brand-review",
@@ -90,7 +86,7 @@ const server: { packs: readonly Listing[] | undefined; pins: readonly PinRow[] |
 
 let pinResults: unknown[] = [];
 let unpinResults: unknown[] = [];
-let runResults: unknown[] = [];
+let runResults: RunResult[] = [];
 
 const nextOf = (queue: unknown[], name: string) => {
   const next = queue.shift();
@@ -139,7 +135,8 @@ vi.mock("convex/react", async () => {
   };
 });
 
-const { PinnedWorkflowButton } = await import("./PinnedWorkflowButton");
+const { PinnedWorkflowButton, actionLine } = await import("./PinnedWorkflowButton");
+type PinAction = Parameters<typeof actionLine>[0];
 const { api } = await import("@pikar/backend/api");
 
 test("the stub answers the exact function paths the component asks for", () => {
@@ -230,13 +227,19 @@ describe("pin", () => {
     expect(button("Pin this workflow").disabled).toBe(false);
   });
 
-  test("a throw is reported as a transport failure, not as a refusal", async () => {
+  // A LOST REPLY IS NOT A FAILED REQUEST. The browser cannot tell a pin that never arrived from a
+  // pin that was written and whose answer was lost, so the sentence claims neither.
+  // MUTATION: restore "That did not go through." → red on the second assertion.
+  test("a throw says what is true — nothing was confirmed — and does not claim it failed", async () => {
     pinWorkflow.mockImplementationOnce(async () => {
       throw new Error("offline");
     });
     await mount();
     await click(button("Pin this workflow"));
-    expect(text()).toContain("That did not go through. Check your connection and try again.");
+    expect(text()).toContain(
+      "Pikar could not confirm that. Reload the page to see whether it went through.",
+    );
+    expect(text()).not.toContain("did not go through.");
   });
 });
 
@@ -426,6 +429,25 @@ describe("run again", () => {
     expect(text()).toContain("That pin is no longer there. Pin the workflow again.");
     expect(text()).not.toContain("nothing was spent");
   });
+
+  // A THROW OUT OF THE RUN CHANNEL IS THE UNKNOWN STATE, NOT A TRANSPORT FAILURE. `runAgain`'s own
+  // audit write sits outside its try, so the action can reject after the turn ran and was billed;
+  // and a dropped connection cannot tell a request that never arrived from an answer that was lost.
+  // MUTATION: `setAction(packId, { kind: "transport" })` in `doRun`'s catch → red on both.
+  test("a run whose reply never arrives is UNKNOWN, not 'that did not go through'", async () => {
+    server.pins = [PIN];
+    runAgain.mockImplementationOnce(async () => {
+      throw new Error("offline");
+    });
+    await mount();
+    await click(button("Run again"));
+
+    expect(text()).toContain(
+      "This run did not finish, and Pikar cannot tell whether it reached the model. It may have used part of today's budget — open your workspace to see what happened before running it again.",
+    );
+    expect(text()).not.toContain("nothing was spent");
+    expect(push).not.toHaveBeenCalled();
+  });
 });
 
 // ── Unpinning, and the focus that must not be lost ──────────────────────────────────────────
@@ -531,10 +553,28 @@ describe("what a screen reader hears, and what nobody may read", () => {
     );
   });
 
+  const BANNED = [
+    "every",
+    "daily",
+    "weekly",
+    "automatically",
+    "runs on",
+    "schedule",
+    "recurring",
+    "next run",
+  ];
+  const scan = (rendered: string, where: string) => {
+    for (const banned of BANNED) {
+      expect(rendered.toLowerCase(), `"${banned}" reached the screen in ${where}`).not.toContain(
+        banned,
+      );
+    }
+  };
+
   // NO RECURRING LANGUAGE, ANYWHERE. Asserted against the RENDERED text of every state this
   // surface can be in, not against the source — a comment explaining the ban would otherwise fail
   // its own scan, and the only way back to green would be deleting the explanation.
-  test("no state of this surface implies anything runs by itself", async () => {
+  test("no READINESS state of this surface implies anything runs by itself", async () => {
     const states: PinRow[] = [
       PIN,
       { ...PIN, notices: ["customization_not_applied", "sources_unavailable"] },
@@ -551,22 +591,73 @@ describe("what a screen reader hears, and what nobody may read", () => {
     await mount();
     seen.push(text());
 
-    for (const rendered of seen) {
-      for (const banned of [
-        "every",
-        "daily",
-        "weekly",
-        "automatically",
-        "runs on",
-        "schedule",
-        "recurring",
-        "next run",
-      ]) {
-        expect(rendered.toLowerCase(), `"${banned}" reached the screen`).not.toContain(banned);
-      }
-    }
+    for (const rendered of seen) scan(rendered, "a readiness state");
     // And the surface DOES say the true thing in its place.
     expect(seen[0]).toContain("Nothing starts by itself — you press Run again.");
+  });
+
+  // THE HALF THE SCAN ABOVE COULD NOT SEE, and a verifier proved it: the four readiness states are
+  // all PRE-PRESS, so every sentence shown AFTER the button is pressed — the blocked line, the
+  // unknown line, the refusals, the transport line — sat outside the phase's own absolute. Putting
+  // "Pikar will retry this automatically every day" into `BLOCKED_RUN` left this file 30/30 green.
+  //
+  // `actionLine` is the one place every one of those sentences is produced, and its input is a
+  // closed union. The `Record` below is TOTAL by type, so adding a `PinAction` kind and not listing
+  // it here fails the typecheck rather than silently leaving the new sentence unscanned.
+  test("no RUN-RESULT sentence this surface can announce implies anything runs by itself", () => {
+    const cases: Record<PinAction["kind"], PinAction> = {
+      idle: { kind: "idle" },
+      pinning: { kind: "pinning" },
+      unpinning: { kind: "unpinning" },
+      running: { kind: "running" },
+      pinRefused: { kind: "pinRefused", result: { ok: false, reason: "template_not_active" } },
+      unpinMissing: { kind: "unpinMissing" },
+      runRefused: {
+        kind: "runRefused",
+        result: { ok: false, reason: "not_ready", blockers: ["paused", "template_not_active"] },
+      },
+      runBlocked: { kind: "runBlocked" },
+      runUnknown: { kind: "runUnknown" },
+      transport: { kind: "transport" },
+    };
+    // Every OTHER shape of the two refusal families, so no arm of either switch is unscanned.
+    const more: PinAction[] = [
+      { kind: "pinRefused", result: { ok: false, reason: "unknown_template" } },
+      { kind: "runRefused", result: { ok: false, reason: "unknown_pin" } },
+    ];
+
+    for (const action of [...Object.values(cases), ...more]) {
+      scan(actionLine(action) ?? "", `actionLine(${action.kind})`);
+    }
+    // THE CONTROL: the scan is reading real sentences, not a pile of nulls. Every kind but `idle`
+    // announces something.
+    expect(Object.values(cases).filter((a) => actionLine(a) !== null)).toHaveLength(9);
+  });
+
+  // And the same three sentences again, this time as the DOM actually renders them after a real
+  // press — mechanism coverage above, behaviour coverage here.
+  test("no sentence a PRESS puts on screen implies anything runs by itself", async () => {
+    const results: RunResult[] = [
+      { ok: true, threadId: "t1", state: "blocked", outcome: "blocked" },
+      { ok: true, threadId: "t2", state: "unknown", outcome: null },
+      { ok: false, reason: "not_ready", blockers: ["paused"] },
+      { ok: false, reason: "unknown_pin" },
+    ];
+    for (const result of results) {
+      server.pins = [PIN];
+      runResults = [result];
+      await mount();
+      await click(button("Run again"));
+      scan(text(), `a pressed run returning ${JSON.stringify(result)}`);
+    }
+    // The transport arm too, which no result value can reach.
+    server.pins = [PIN];
+    runAgain.mockImplementationOnce(async () => {
+      throw new Error("offline");
+    });
+    await mount();
+    await click(button("Run again"));
+    scan(text(), "a run whose reply never arrived");
   });
 
   // A control that could activate, approve or roll back a candidate is impossible from here —

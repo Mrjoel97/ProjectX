@@ -14,7 +14,7 @@ import { WorkflowPackPreflight } from "../workspace/WorkflowPackPreflight";
 // `PinnedWorkflowButton.test.ts` scans this file for those words. The server has no cadence,
 // timezone, next-run or enabled field for a UI to have been reading in the first place.
 //
-// THREE TRUE THINGS THIS SURFACE SAYS THAT ARE UNCOMFORTABLE, and each one is a state the server
+// FOUR TRUE THINGS THIS SURFACE SAYS THAT ARE UNCOMFORTABLE, and each one is a state the server
 // resolves rather than a sentence this file decided:
 //
 //   1. `customization_not_applied` — a pinned run takes the APPROVED GLOBAL TEMPLATE. A tenant's
@@ -65,7 +65,10 @@ export type PinAction =
   /** The turn produced no outcome. It may have reached the model and it may have spent money —
    *  the server does not know, so this copy must not claim either way. */
   | { readonly kind: "runUnknown" }
-  /** A throw, not a refusal: every refusal these channels produce comes back as DATA. */
+  /** A throw out of PIN or UNPIN, not a refusal: every refusal those channels produce comes back
+   *  as DATA. A throw out of RUN is deliberately NOT in here — it lands in `runUnknown`, because
+   *  the action may have completed server-side and been billed before the browser lost the reply,
+   *  and "that did not go through" would be the same $0 promise in a different shape. */
   | { readonly kind: "transport" };
 
 // ── The copy ────────────────────────────────────────────────────────────────────────────────
@@ -73,7 +76,12 @@ export type PinAction =
 const INTRO =
   "Pinning a workflow remembers the approved version it runs. Nothing starts by itself — you press Run again.";
 
-const TRANSPORT_ERROR = "That did not go through. Check your connection and try again.";
+/** PIN AND UNPIN ONLY, and it does not claim the request failed to arrive — a browser that never
+ *  saw the reply cannot know that. It says what is actually true (nothing was confirmed) and names
+ *  the way to find out. The version this replaces ("That did not go through") made, for a pin, the
+ *  same unprovable promise the deleted `run_failed` copy made for a run. */
+const TRANSPORT_ERROR =
+  "Pikar could not confirm that. Reload the page to see whether it went through.";
 
 const BLOCKED_RUN =
   "Pikar stopped this run before it started. Nothing ran and nothing was spent — try again shortly.";
@@ -479,7 +487,11 @@ export function PinnedWorkflowButton() {
       }
       router.push(threadHref(res.threadId));
     } catch {
-      setAction(packId, { kind: "transport" });
+      // NOT `transport`. A throw here is the browser losing the answer, not the server refusing:
+      // `runAgain`'s own audit write sits outside its try, so a completed — possibly billed — run
+      // can reject after the turn happened. `unknown` is exactly what that is, and it is the
+      // sentence that says so and sends the user to look.
+      setAction(packId, { kind: "runUnknown" });
     }
   };
 
