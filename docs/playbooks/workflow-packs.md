@@ -1,5 +1,34 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-29 (29-08 — **`/dashboard/workflows` GAINED PIN AND RUN AGAIN CONTROLS,
+> AND THEY SAY WHAT A RE-RUN ACTUALLY RUNS.** `PinnedWorkflowButton.tsx` is mounted above the
+> customizer on this route and reaches exactly five functions: `listPacks`, and the four
+> `pinnedWorkflows` verbs (`listPins`, `pinWorkflow`, `unpinWorkflow`, `runAgain`) — asserted as
+> the complete `api.*.*` set in the shipped source, so a sixth cannot appear unnoticed. There is
+> still NO activation, approval or rollback control here, and none is possible: both mutations are
+> `ownerMutation`s.
+>
+> A run goes through `cockpit.startWorkflowPack` with no `threadId`, so each press is a fresh
+> thread, a fresh `plans` row and a fresh correlation; the surface then navigates to
+> `/dashboard/workspace?thread=<new>`. A run stopped at the governed gate does NOT navigate — it
+> says "Nothing ran and nothing was spent", because sending the user to a conversation whose only
+> reply is "I've paused for a moment" hides the fact that matters.
+>
+> `PinnedWorkflowButton.test.ts` is a jsdom CONTAINER test (the 29-07-FIX2 idiom: `createRoot`,
+> real click events, only `convex/react` and `next/navigation` stubbed) — 28 tests. Nine mutations
+> observed RED, including both click handlers cut to no-ops, `router.push` deleted, navigating on
+> `res.ok` instead of `res.ran`, the runnable check dropped from the Run button's `disabled`, and
+> the focus restore deleted. The no-recurrence scan runs over the RENDERED text of five states, not
+> over the source, so the comment explaining the ban cannot fail its own check.
+>
+> ONE REAL DEFECT WAS FOUND BY THAT SUITE AND FIXED: the focus restore after "Remove pin" was
+> written as an effect that looked once, and the unpin mutation resolves BEFORE the live `listPins`
+> query pushes the removal — so there was no replacement button to focus yet and focus fell to the
+> document body. It is now done in the button's own ref callback, which runs when the replacement
+> mounts.
+>
+> STILL UNRUN: the browser. This route has no Playwright spec and is still absent from the nav.)
+
 > Last verified: 2026-08-29 (29-07-FIX2 — **THE CONTAINER HALF OF `/dashboard/workflows` WAS
 > UNPINNED, AND THE OPTIMISTIC-CONCURRENCY REFUSAL COULD NOT FIRE.** Four mutations that make the
 > route functionally inert all passed the customizer suite: `onChoose`, `onSet` and `onSubmit` cut
