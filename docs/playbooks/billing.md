@@ -47,6 +47,9 @@ name or an env prefix:
   `SIGNATURE_TOLERANCE_S`. No `ctx`, no `fetch`, no Convex import (CLAUDE.md §1).
 - `packages/billing/src/events.ts` — `HANDLED_EVENT_TYPES` (the closed v1-snapshot list) and
   `classifyEvent`, whose default arm is `{ kind: "ignored" }`.
+- `packages/billing/src/tax.ts` — `taxPosture` + `renderTaxPosture` + the written-out
+  `TAXABILITY_REASONS` table. BILL-05's whole code surface. Pure; the product tax code is an
+  ARGUMENT, never read from config inside the function.
 - `packages/billing/src/config.ts` — the DASHBOARD mirrored as code-owned constants
   (`STRIPE_API_VERSION`, `PRODUCT_TAX_CODE`, `HEAD_OFFICE_COUNTRY`, `BANK_TRANSFER_ENABLED`,
   `TRIAL_DAYS`, `NONTAXABLE_TAX_CODE`, `STRIPE_API_BASE`). Products, prices, tax category, head
@@ -135,6 +138,12 @@ Run `graphify query "billing webhook"` for the current subgraph. Couplings graph
 | An unknown event type is `ignored`, never thrown | Stripe adds event types; a throw turns a new type into a 500 and a retry storm | `events.test.ts` + "unhandled type ⇒ 200 with `status: "ignored"`" |
 | No development fallback for the secret | `p25-no-dev-fallback`; a fallback accepts unverified input | "secret unset ⇒ 400 and the body is never read" |
 | `billingStripeEvents` rows carry ids, types and counts only | CLAUDE.md §4 — a raw Stripe payload must never become a PII honeypot | the table has no payload field at all |
+| `not_collecting` + a REAL product tax code reads *not owed, unregistered*; `not_collecting` + `txcd_00000000` reads *we declared it nontaxable* | Stripe's own docs call `not_collecting` ambiguous; the product code is the ONLY disambiguator, so a one-argument `taxPosture` cannot be honest | `tax.test.ts` — both halves, with `txcd_00000000` written out as a literal |
+| `not_collecting` with an UNCONFIGURED (`null`) product tax code is `unknown`, never `unregistered` | `PRODUCT_TAX_CODE` is still `null`. Guessing "unregistered" asserts a registration gap we have no evidence for — missing history is unknown, never zero | `tax.test.ts` — "an unconfigured (null) product tax code = unknown" |
+| `zero_rated` / `not_subject_to_tax` / `reverse_charge` / `customer_exempt` / `product_exempt` / `not_supported` are **calculated zero**, a different statement from not-owed | A calculation ran. Collapsing it into "not owed" claims a registration posture Stripe never reported | `tax.test.ts` — every published reason has an asserted posture, and the two never render the same sentence |
+| A positive tax amount beats ANY reason | Money that was charged was charged, whatever Stripe said about why | `tax.test.ts` — "a positive amount wins over reason …" |
+| **No zero posture ever renders a bare `0.00`** | BILL-05's promise is about what a human READS; a perfect enum behind a `$0.00` has delivered nothing. Every zero arm of `renderTaxPosture` emits no amount at all, so the bare number is unreachable rather than discouraged | `tax.test.ts` — "NO zero-tax posture renders a bare 0.00 anywhere", asserted across the whole reason × product-code grid |
+| There is **no** tax-threshold monitor, constant or subscription anywhere | Stripe publishes no `tax.threshold.*` event, monitoring is live-mode only, and notification is gated at $10k prior-year revenue — a monitor here could not fire. See Operations below | `grep -rn "tax.threshold" packages/ apps/` returns nothing |
 
 ## How to change safely
 
