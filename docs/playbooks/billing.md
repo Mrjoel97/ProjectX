@@ -6,7 +6,9 @@
 > behaviour change, and **this is not a re-verification of anything below.** The
 > `Last verified` line still means what it said.
 
-> Last verified: 2026-08-29 against 28.1-05 (`billingCustomers` — the tenant↔Stripe-customer
+> Last verified: 2026-08-30 against 28.1-06 (`billingEvents` / `billingCoverage` /
+> `billingUnapplied` — the billing BOOK OF RECORD, the money arms of the effect switch, and
+> `unappliedFunds`; offline at $0) — after 28.1-05 (`billingCustomers` — the tenant↔Stripe-customer
 > mapping — plus the refusal to auto-provision, `eventFacts` as the redact-then-write boundary,
 > and the first four arms of the effect switch; offline at $0, 28 mutations run, 0 survivors) —
 > after 28.1-04 (the outbound transport `billingApi.ts` and the two
@@ -91,12 +93,27 @@ name or an env prefix:
   default arm is `unknown`. `MAPPING_EVENT_TYPES` is the exact four-member subset the mapping arm
   acts on; it is a Set membership test, never a `startsWith`.
 - `packages/billing/src/reconcile.ts` — `reconcileEvent`, `PAYMENT_METHOD_BANK_TRANSFER`,
-  `UNRECONCILED_RETURN_DAYS` / `UNRECONCILED_SWEEP_DAYS`. BILL-03's pure half: one Stripe event in,
-  ledger movements + observations out. Stateless per event (Stripe does not guarantee order) and
-  `nowMs` is an ARGUMENT — no clock read inside.
+  `UNRECONCILED_RETURN_DAYS` / `UNRECONCILED_SWEEP_DAYS`, `unappliedStage`, `REF_TOKEN`.
+  BILL-03's pure half: one Stripe event in, ledger movements + observations out. Stateless per
+  event (Stripe does not guarantee order) and `nowMs` is an ARGUMENT — no clock read inside.
+  **28.1-06 is its first caller** and changed none of its decisions: `unappliedStage` was
+  extracted from the inline ternary so the 75/90 boundaries have ONE definition, and
+  `REF_TOKEN` was exported so the Convex adapter validates against the same pattern that
+  built the values instead of a third copy.
 - `packages/billing/src/tax.ts` — `taxPosture` + `renderTaxPosture` + the written-out
   `TAXABILITY_REASONS` table. BILL-05's whole code surface. Pure; the product tax code is an
-  ARGUMENT, never read from config inside the function.
+  ARGUMENT, never read from config inside the function. **28.1-06 added
+  `invoiceTaxabilityReason` + `INVOICE_TAX_FIELD`**: the invoice tax breakdown is
+  `total_taxes[]` from `2025-03-31.basil` onward and `total_tax_amounts[]` before it, and the
+  pre-Basil name is deliberately NOT read — `tax.test.ts` pins `STRIPE_API_VERSION` and the
+  field name side by side, so a version change is RED rather than a silent `null` on every
+  invoice. It returns `null` when several tax entries DISAGREE: there is no single reason to
+  claim, and picking the first would print a confident sentence about the wrong half.
+- `packages/backend/convex/billingLedger.ts` — `recordBillingMovement`,
+  `ensureBillingCoverage`, `billingCoverageFor`, `listBillingEventsFor`,
+  `BILLING_EVENT_PAGE_LIMIT`. The Convex adapter for the book of record; mirrors
+  `spendLedger.ts` symbol for symbol over a different table. **Append-only** — it exposes no
+  `patch`/`replace`/`delete` and `billingLedger.test.ts` scans its source for one.
 - `packages/billing/src/config.ts` — the DASHBOARD mirrored as code-owned constants
   (`STRIPE_API_VERSION`, `PRODUCT_TAX_CODE`, `HEAD_OFFICE_COUNTRY`, `BANK_TRANSFER_ENABLED`,
   `TRIAL_DAYS`, `NONTAXABLE_TAX_CODE`, `STRIPE_API_BASE`). Products, prices, tax category, head
@@ -238,10 +255,152 @@ the tenant's `stripeCustomerId` — `null` for every tenant until 28.1-05 — so
    one that reads `outcome`.
 7. `200`, always fast. A timeout is a delivery failure to Stripe and buys a retry storm.
 
+## The Ledger — `billingEvents` is a SEPARATE book from `spendEvents` (28.1-06, BILL-03)
+
+**Owner decision, 2026-08-28. Do not reopen it.** Money-in gets its own table. It is NOT a fourth
+`revenue` rail on `spendEvents`, and the reasons are structural rather than aesthetic:
+
+- `SPEND_RAILS` is a **closed COST union** — `packages/core/src/spend.ts:16` says so verbatim:
+  *"The three metered rails. A fourth is a deliberate schema edit, not a string."*
+- `aggregateSpend` hard-codes all three rails in **five** places (`zero()`, `perRail`, `byRail`,
+  the blended `unlanded` sum, `UNLANDED_RESOLVES`). A fourth member is not a data change.
+- **Phase 26 Finance renders those totals as *what Pikar SPENDS*, today.** A revenue rail would add
+  money-in to a money-out figure on a live screen, silently.
+
+`aggregateSpend` therefore needed **no change**, and `billing.test.ts` proves it two ways: a
+written-out `SPEND_RAILS` literal, and a `finance.summary` call whose `tracked` payload is
+byte-identical for a tenant with and without a full `billingEvents` history in a currency the
+spend plane has never heard of.
+
+### The phase vocabulary
+
+`SPEND_PHASES` **verbatim** — no phase name is invented for billing, because "what does `reserved`
+mean" must have one answer. Every amount is POSITIVE in the currency's MINOR units; direction lives
+in the phase, never in the sign.
+
+| Stripe signal | Phase | `kind` | Why |
+| --- | --- | --- | --- |
+| `invoice.finalized` | `estimated` | `invoice-finalized` | What we expect to collect. Not money, not yet. |
+| `invoice.paid`, CARD | `actual` | `invoice-paid-card` | A positively-identified non-cash-balance payment IS collection. |
+| `invoice.paid`, BANK TRANSFER | **nothing** | — | The money is in the customer's cash balance, not ours. One `awaiting-cash-application` observation. |
+| `invoice.paid`, method UNDETERMINABLE | **nothing** | — | Unknown is never card. Books nothing and writes a `billing_undetermined_payment_method` dead letter. |
+| `customer_cash_balance_transaction.created` `funded` | `reserved` | `cash-funded` | Money EXISTS but is not ours yet. |
+| … `applied_to_payment` | `actual` | `cash-applied` | **THE collection signal on this rail.** Correlates on the PaymentIntent. |
+| … `funding_reversed` | `refunded` | `funding-reversed` | The transfer was pulled back. Never dropped. |
+| … `unapplied_from_payment` / `refunded_from_payment` | `refunded` | `cash-unapplied` / `cash-refunded` | Money leaving a payment it had been applied to. |
+| `cash_balance.funds_available` | **nothing** | — | LEFTOVER money, not an arrival. One `billingUnapplied` row. |
+| `charge.refunded` | `refunded` | `charge-refunded` | Positive amount; the phase carries the direction. |
+| `credit_note.created` | `refunded` | `credit-note` | Same. |
+| `invoice.payment_failed` | **nothing** | — | A failed attempt is not a movement in either direction. |
+
+**THE CENTRAL LAW: `invoice.paid` is not cash in hand.** `BANK_TRANSFER_ENABLED` is `true`
+(owner-confirmed 2026-08-29), so this is live code on a live path, not defensive code. Booking
+`actual` on a bank-transfer `invoice.paid` records money we do not have, in an append-only table
+that cannot quietly correct it — and `funding_reversed` is what turns that from a theoretical
+error into a real one.
+
+### Identity, and why it is not the correlation alone
+
+`(tenantId, correlationId, phase)`. A bank transfer ARRIVING (`reserved`) and the same money being
+COLLECTED (`actual`) share one correlation **on purpose** — that is what makes them reconcilable —
+so a correlation-only guard would swallow every collection this merchant ever makes. A replay
+returns the stored id and **ignores the replayed amount**: a retry reporting a different number is
+an upstream bug, and letting it through would rewrite recorded money.
+
+A currency MISMATCH inside one correlation is **refused, never summed** — two currencies are not a
+number anyone can add up, and picking a winner would invent an exchange rate.
+
+### `audit_immutable`, and the two obligations it carries
+
+`billingEvents` and `billingCoverage` are `audit_immutable` in `packages/core/src/tenantData.ts`.
+`spendEvents` next door is `tenant_owned` because it records what Pikar SPENT ON a tenant;
+`billingEvents` records what the tenant PAID PIKAR, which is Pikar's own accounting record of its
+own revenue. An erasure that rewrote it would let a customer delete the merchant's books. The
+tenant is not deprived: their invoices and receipts are served by Stripe's hosted Customer Portal,
+which 28.1-04 already opens for them.
+
+1. **The writer must be insert-only** (CLAUDE.md §3). `billingLedger.ts` is the only one, and
+   `billingLedger.test.ts` scans its source for `patch`/`replace`/`delete`.
+2. **Nothing there may ever become personal data.** It holds ids, code-owned tokens, an ISO 4217
+   code and integer minor units. A description or line-item text added later would put customer
+   content beyond the reach of every erasure request this deployment can honour.
+
+`billingUnapplied` is the opposite call and deliberately so: it is MUTABLE (a re-observed balance
+updates the amount), and the money it describes is still the CUSTOMER'S, so it is `tenant_owned` —
+it exports, and an erasure removes it rather than stranding a row that points at a live Stripe
+customer for a person who no longer exists here.
+
+### Unapplied funds and the 75/90-day clock
+
+`cash_balance.funds_available` fires — under Stripe's DEFAULT automatic reconciliation — **only
+when a positive balance REMAINS after reconciliation**. It is "money we hold that is attached to
+nothing", not "money arrived". Getting that backwards is the exact trap the research flagged.
+
+The AGE is the actionable half. Stripe emails reminders, attempts to **RETURN** unreconciled funds
+to the customer's bank at `UNRECONCILED_RETURN_DAYS` (**75**), and **SWEEPS** what it cannot return
+to the account balance by `UNRECONCILED_SWEEP_DAYS` (**90**). `unappliedFunds` (a `tenantQuery`)
+returns each amount with its `ageDays` and its `stage` (`held` / `return-attempted` / `swept`),
+bounded at `UNAPPLIED_FUNDS_PAGE_LIMIT` (100) with an explicit `truncated` flag.
+
+`observedAt` is the START of that clock and never moves. A re-observed balance updates the AMOUNT
+only — restarting the clock on every notification would hide exactly the row that is about to be
+taken away. That is why `billingUnapplied` carries a `by_tenant_object_currency` index: a
+CashBalance object has no `id`, so `billingStripeEvents`' by-object dedupe cannot see two
+notifications as the same thing, and a plain insert would report one pile of money three times.
+
+### Coverage is UNKNOWN, never zero
+
+`billingCoverageFor` returns `null` for a tenant this ledger never began watching. `unappliedFunds`
+reports `coverage: "unknown"` beside an empty list, which is a DIFFERENT statement from
+`coverage: "known"` beside an empty list ("there is genuinely nothing held"). Rendering both as
+"nothing owed" is the `CashFigure` mistake (`packages/core/src/cash.ts`): missing history is
+unknown, never zero.
+
+Unlike `spendLedger.ensureCoverage`, there is no billing GATE that can open coverage early —
+nothing in this deployment can observe that a tenant definitely paid nothing, because only Stripe
+knows that. The first recorded movement is genuinely the first moment this ledger can see anything.
+
+### Where `reconcileEvent` is called, and why it is not inside the mutation
+
+At the **HTTP boundary** (`http.ts`), beside `eventFacts`, and for the identical reason: it is the
+only thing that reads the Stripe object, and what crosses into `receiveAndApply` is its CLOSED
+OUTPUT — a phase, an integer count of minor units, an ISO 4217 code, a `billing/<id>` correlation
+and a code-owned kind token. There is nowhere in that shape to put an email, a name or a line-item
+description (CLAUDE.md §4). The 28.1-06 plan specified calling it inside the mutation; that would
+have required passing the raw Stripe object across the redaction boundary, which is precisely what
+`eventFacts` exists to prevent. **`billingWebhook.ts` never re-derives a phase or an amount — it
+only writes what it is given**, so the central law lives in exactly one place.
+
+The money arms still run INSIDE `receiveAndApply`'s single transaction, which is the other half of
+the property: the Stripe dedupe row and the ledger rows commit or fail together, so "we recorded
+the delivery" and "we booked the money" can never diverge.
+
+### Tenant resolution is the mapping row and NOTHING else
+
+A money event has no `client_reference_id` thread to fall back on, unlike the mapping arm. No
+`billingCustomers` row means the refusal path and **no ledger row**: an unattributable payment is
+visible in the dead-letter queue and is recoverable, whereas a misattributed one is written into an
+append-only table that cannot take it back.
+
 ## Invariants — what must never break
 
 | Rule | Why | Enforced by |
 | --- | --- | --- |
+| **`invoice.paid` on a bank-transfer invoice books NO `actual`** | The money is in the customer's cash balance, not ours; an append-only ledger cannot un-say that it collected | `billingWebhook.test.ts` — "books NO actual — nothing was collected" (asserts the ABSENCE) + `reconcile.test.ts` |
+| An UNDETERMINABLE payment method is never read as a card | Fail closed: "we could not tell" is not a card | `billingWebhook.test.ts` — "never read as a card — no actual, one dead letter" |
+| `applied_to_payment` is the ONLY collection signal on the cash rail | `funded` is arrival, not collection; `funding_reversed` takes it back | `billingWebhook.test.ts` — the funded/applied/reversed trio + the net-position assertion |
+| `funding_reversed` writes a NEW `refunded` row, never an edit | The history of the collection must survive its reversal | `billingWebhook.test.ts` — "net returns to nothing collected", every amount still positive |
+| Ledger identity is `(tenantId, correlationId, phase)` | A reservation and its actual SHARE a correlation on purpose | `billingLedger.test.ts` — reserve+actual coexist; two cash txns on one PaymentIntent book once |
+| A replay IGNORES the replayed amount | A retry reporting a different number would rewrite recorded money | `billingLedger.test.ts` — "inserts ONCE and ignores the replayed amount" |
+| A currency mismatch in one correlation is REFUSED, never summed | Picking a winner invents an exchange rate | `billingLedger.test.ts` — "REFUSED rather than summed" |
+| Every ledger amount is a POSITIVE safe integer of minor units | Direction lives in the phase; a float is not money | `billingLedger.test.ts` — 0, -1, 12.5, NaN and MAX_SAFE+2 all rejected |
+| Missing billing history reads as UNKNOWN, never zero | A zero that means "we were not watching" is a confident lie about revenue | `billingLedger.test.ts` (null is not 0) + `billing.test.ts` (`coverage: "unknown"` ≠ `"known"` with an empty list) |
+| `cash_balance.funds_available` books ZERO ledger rows | It is leftover money, not an arrival | `billingWebhook.test.ts` — "ONE unapplied row and ZERO ledger rows" |
+| A re-observed balance never restarts the 75/90-day clock | The clock is what makes the row actionable before Stripe takes the money back | `billingWebhook.test.ts` — "updates the amount and never restarts" |
+| `SPEND_RAILS` stays exactly the three COST rails | Phase 26 Finance renders those totals as what Pikar SPENDS | `billing.test.ts` — written-out literal + `finance.summary` byte-identical with/without `billingEvents` |
+| The billing ledger writer is INSERT-ONLY | `audit_immutable` is a lie otherwise | `billingLedger.test.ts` — source scan for `patch`/`replace`/`delete` |
+| A money event for an unmapped Stripe customer writes NO ledger row | A misattributed payment is permanent; an unattributed one is recoverable | `billingWebhook.test.ts` — "dead-letters and writes NO ledger row" |
+| The effect switch is EXHAUSTIVE over `HandledEventType` | A new money type must be a compile error, not a silently unbooked delivery | `billingWebhook.ts` — the `never` arm; `tsc --noEmit` |
 | Signature verified **before** the body is parsed | An unverified payload must never reach a parser or the DB | `billingWebhook.test.ts` — "tampered body ⇒ 400 and zero rows" |
 | The raw string is verified, never a re-serialized object | Stripe: *any manipulation of the raw body causes verification to fail* | `billingWebhook.test.ts` — the fixture body has non-canonical key order/whitespace |
 | **Every** `v1=` value is checked | A secret roll puts two `v1`s on one header; checking only the first breaks the roll | `signature.test.ts` (multi-`v1`) + `billingWebhook.test.ts` ("only the SECOND is correct ⇒ 200") |
@@ -339,6 +498,11 @@ node scripts/check-playbooks.mjs < /dev/null     # READ ITS STDOUT — it always
   a green vitest suite is not a typecheck, and a chained `$?` reports the wrong command's status.
 - `convex/billing` (no `.test.ts`) is a PREFIX and picks up `billing.test.ts`, `billingApi.test.ts`
   and `billingWebhook.test.ts` in one run. `pnpm test -- <filter>` does NOT filter — drop the `--`.
+- 28.1-06's money arms are driven through the SAME signature-verified route with fabricated,
+  correctly-signed `customer_cash_balance_transaction` and `cash_balance.funds_available`
+  events. A handler cannot tell a fabricated one from a real one — that is what makes the
+  coverage both $0 and complete for the SHAPES Stripe documents. It is NOT evidence that
+  Stripe sends those shapes.
 - Manual/live: nothing here has been verified against Stripe. A live check needs 28.1-02's
   credentials plus `stripe listen --forward-to` and `stripe trigger`.
 

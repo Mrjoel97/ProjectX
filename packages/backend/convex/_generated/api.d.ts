@@ -15,6 +15,7 @@ import type * as audit from "../audit.js";
 import type * as auth from "../auth.js";
 import type * as billing from "../billing.js";
 import type * as billingApi from "../billingApi.js";
+import type * as billingLedger from "../billingLedger.js";
 import type * as billingWebhook from "../billingWebhook.js";
 import type * as blueprint from "../blueprint.js";
 import type * as briefings from "../briefings.js";
@@ -144,6 +145,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   billing: typeof billing;
   billingApi: typeof billingApi;
+  billingLedger: typeof billingLedger;
   billingWebhook: typeof billingWebhook;
   blueprint: typeof blueprint;
   briefings: typeof briefings;

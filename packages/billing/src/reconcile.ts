@@ -48,6 +48,24 @@ export const UNRECONCILED_SWEEP_DAYS = 90;
 
 const DAY_MS = 86_400_000;
 
+/** Where unreconciled money sits on Stripe's clock. `held` is ours to chase; the other two are
+ *  Stripe acting on the customer's behalf, and both are visible before they happen. */
+export type UnappliedStage = "held" | "return-attempted" | "swept";
+
+/**
+ * The stage for an age in days. ONE definition, because the boundaries are read in two places —
+ * here, when a `funds_available` is observed, and later by the tenant-facing surface that renders
+ * a stored observation whose age has since grown. Two copies would drift by exactly the off-by-one
+ * that matters: whether day 75 is `held` or `return-attempted`.
+ *
+ * INCLUSIVE at both boundaries (`>=`): the day Stripe acts is the day it has acted.
+ */
+export function unappliedStage(ageDays: number): UnappliedStage {
+  if (ageDays >= UNRECONCILED_SWEEP_DAYS) return "swept";
+  if (ageDays >= UNRECONCILED_RETURN_DAYS) return "return-attempted";
+  return "held";
+}
+
 /**
  * `spend.ts:42` — refs, ids and code-owned tokens only. No space, so prose cannot pass.
  *
@@ -269,12 +287,7 @@ function fundsAvailable(
   const stripeObjectId = str(balance.customer) as string;
 
   const ageDays = Math.max(0, Math.floor((nowMs - createdMs) / DAY_MS));
-  const stage =
-    ageDays >= UNRECONCILED_SWEEP_DAYS
-      ? "swept"
-      : ageDays >= UNRECONCILED_RETURN_DAYS
-        ? "return-attempted"
-        : "held";
+  const stage = unappliedStage(ageDays);
 
   const observations: BillingObservation[] = [];
   for (const [currency, minor] of Object.entries(obj(balance.available))) {

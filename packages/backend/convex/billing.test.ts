@@ -8,10 +8,21 @@
 // the ONLY thread 28.1-05's webhook has back to a tenant; without it a completed checkout has
 // nothing to match and must dead-letter, which is a paid-but-unprovisioned customer.
 import { TRIAL_DAYS } from "@pikar/billing/config";
+import { SPEND_RAILS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+// The Phase 26 equality below drives `api.finance.summary`, the SHIPPED surface, so the real
+// rate-limiter component has to be present — a stub would prove nothing about what Finance
+// renders. Relative imports: the packages block deep specifiers (guardrails.test.ts idiom).
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api } from "./_generated/api";
-import { billingPeriodKey, checkoutParams, PORTAL_IDEMPOTENCY_WINDOW_MS } from "./billing";
+import {
+  billingPeriodKey,
+  checkoutParams,
+  PORTAL_IDEMPOTENCY_WINDOW_MS,
+  UNAPPLIED_FUNDS_PAGE_LIMIT,
+} from "./billing";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.*s");
@@ -24,6 +35,13 @@ const backendSources = import.meta.glob("./billing*.ts", {
 }) as Record<string, string>;
 
 const packageSources = import.meta.glob("../../billing/src/*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+/** The spend plane's own source, read so the "no revenue rail" claim is checked, not asserted. */
+const spendSource = import.meta.glob("../../core/src/spend.ts", {
   query: "?raw",
   import: "default",
   eager: true,
@@ -98,6 +116,21 @@ async function tenantOn(t: ReturnType<typeof convexTest>) {
 
 /** Boot a backend with one tenant on it. */
 const withTenant = () => tenantOn(convexTest(schema, modules));
+
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+
+/** One tenant on a backend that carries the components `api.finance.summary` needs. */
+async function withTenantOnFinance() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  return await tenantOn(t);
+}
 
 /**
  * Source with comments stripped, so a guard cannot punish its own documentation. A file that
@@ -488,5 +521,205 @@ describe("the subscription carries the tenant thread too, or an early event cann
       params.get("client_reference_id"),
     );
     expect(params.get("subscription_data[metadata][tenantId]")).toBeTruthy();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-06 — unapplied funds WITH THEIR AGE, and the guard on the owner's ledger decision.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+const DAY = 86_400_000;
+
+/** Anything that can run a transaction: the bare backend OR an identity-carrying client. */
+type Runner = Pick<ReturnType<typeof convexTest>, "run">;
+
+async function seedUnapplied(
+  t: Runner,
+  tenantId: string,
+  rows: { stripeObjectId: string; amountMinor: number; currency?: string; ageDays: number }[],
+): Promise<void> {
+  await t.run(async (ctx) => {
+    for (const row of rows) {
+      await ctx.db.insert("billingUnapplied", {
+        tenantId,
+        stripeObjectId: row.stripeObjectId,
+        amountMinor: row.amountMinor,
+        currency: row.currency ?? "USD",
+        observedAt: Date.now() - row.ageDays * DAY,
+      });
+    }
+  });
+}
+
+const openBillingCoverage = (t: Runner, tenantId: string) =>
+  t.run(async (ctx) => {
+    await ctx.db.insert("billingCoverage", { tenantId, coverageStartedAt: Date.now() - 30 * DAY });
+  });
+
+describe("unapplied funds are visible WITH their age", () => {
+  test("each amount carries its age in days and its stage on Stripe's 75/90 clock", async () => {
+    const { as, tenantId } = await withTenant();
+    const t = as;
+    await openBillingCoverage(t, tenantId);
+    await seedUnapplied(t, tenantId, [
+      { stripeObjectId: "cus_fresh", amountMinor: 2500, ageDays: 3 },
+      { stripeObjectId: "cus_returning", amountMinor: 400, ageDays: 76 },
+      { stripeObjectId: "cus_swept", amountMinor: 100, ageDays: 91 },
+    ]);
+
+    const result = await t.query(api.billing.unappliedFunds, {});
+    const byId = Object.fromEntries(result.funds.map((f) => [f.stripeObjectId, f]));
+
+    // The amount alone is not the answer: Stripe emails reminders, attempts to RETURN the money to
+    // the customer's bank at 75 days, and sweeps what it cannot return by 90.
+    expect(byId.cus_fresh).toMatchObject({ amountMinor: 2500, ageDays: 3, stage: "held" });
+    expect(byId.cus_returning).toMatchObject({ ageDays: 76, stage: "return-attempted" });
+    expect(byId.cus_swept).toMatchObject({ ageDays: 91, stage: "swept" });
+    expect(result.coverage).toBe("known");
+  });
+
+  test("the currency travels with every amount — two currencies never combine", async () => {
+    const { as, tenantId } = await withTenant();
+    await openBillingCoverage(as, tenantId);
+    await seedUnapplied(as, tenantId, [
+      { stripeObjectId: "cus_1", amountMinor: 2500, currency: "USD", ageDays: 1 },
+      { stripeObjectId: "cus_1", amountMinor: 900, currency: "EUR", ageDays: 1 },
+    ]);
+
+    const result = await as.query(api.billing.unappliedFunds, {});
+    expect(result.funds).toHaveLength(2);
+    expect(result.funds.map((f) => f.currency).sort()).toEqual(["EUR", "USD"]);
+    // No blended total anywhere in the payload: there is no honest one to compute.
+    expect(JSON.stringify(result)).not.toContain("totalMinor");
+  });
+
+  test("no billing coverage is an explicit UNKNOWN, never an empty list read as nothing owed", async () => {
+    const { as } = await withTenant();
+    const result = await as.query(api.billing.unappliedFunds, {});
+
+    expect(result.coverage).toBe("unknown");
+    expect(result.funds).toEqual([]);
+    // The pair is the point: a covered tenant with no rows is a CONFIDENT nothing, and the two
+    // must not render the same sentence.
+    const covered = await withTenant();
+    await openBillingCoverage(covered.as, covered.tenantId);
+    const known = await covered.as.query(api.billing.unappliedFunds, {});
+    expect(known.coverage).toBe("known");
+    expect(known.funds).toEqual([]);
+    expect(known).not.toEqual(result);
+  });
+
+  test("the read is bounded — a huge backlog cannot return everything", async () => {
+    const { as, tenantId } = await withTenant();
+    await openBillingCoverage(as, tenantId);
+    const over = UNAPPLIED_FUNDS_PAGE_LIMIT + 5;
+    await seedUnapplied(
+      as,
+      tenantId,
+      Array.from({ length: over }, (_, i) => ({
+        stripeObjectId: `cus_${i}`,
+        amountMinor: 100 + i,
+        ageDays: 1,
+      })),
+    );
+
+    const result = await as.query(api.billing.unappliedFunds, {});
+    expect(result.funds).toHaveLength(UNAPPLIED_FUNDS_PAGE_LIMIT);
+    expect(result.truncated).toBe(true);
+  });
+
+  test("UNAPPLIED_FUNDS_PAGE_LIMIT is 100", () => {
+    // Written out: a constant the test imports cannot be pinned by mutating it.
+    expect(UNAPPLIED_FUNDS_PAGE_LIMIT).toBe(100);
+  });
+
+  test("one tenant never sees another's held funds", async () => {
+    const t = convexTest(schema, modules);
+    const mine = await tenantOn(t);
+    const theirs = await tenantOn(t);
+    await openBillingCoverage(t, mine.tenantId);
+    await seedUnapplied(t, theirs.tenantId, [
+      { stripeObjectId: "cus_theirs", amountMinor: 9999, ageDays: 2 },
+    ]);
+
+    const result = await mine.as.query(api.billing.unappliedFunds, {});
+    expect(result.funds).toEqual([]);
+  });
+});
+
+/**
+ * THE GUARD ON THE OWNER'S LEDGER DECISION (2026-08-28).
+ *
+ * `billingEvents` is a separate book from `spendEvents` because `SPEND_RAILS` is a closed COST
+ * union, `aggregateSpend` hard-codes all three rails in five places, and Phase 26 Finance renders
+ * those totals as *what Pikar SPENDS*, today. A fourth `revenue` rail would put money-in into a
+ * money-out figure on a live screen.
+ */
+describe("the spend plane is untouched by the billing ledger", () => {
+  test("SPEND_RAILS is exactly the three cost rails, as a written-out literal", () => {
+    // NOT `[...SPEND_RAILS]` compared to itself: the literal is the oracle, so a future `revenue`
+    // rail is a RED test rather than a silent corruption of Finance.
+    expect([...SPEND_RAILS]).toEqual(["reasoning", "media", "ingest"]);
+    expect(SPEND_RAILS).toHaveLength(3);
+    expect([...SPEND_RAILS]).not.toContain("revenue");
+    expect([...SPEND_RAILS]).not.toContain("billing");
+  });
+
+  test("no source in the spend plane mentions a revenue rail", () => {
+    const spend = spendSource["../../core/src/spend.ts"] ?? "";
+    expect(spend.length).toBeGreaterThan(500); // non-vacuity
+    expect(spend).not.toContain("revenue");
+    expect(spend).toContain('SPEND_RAILS = ["reasoning", "media", "ingest"]');
+  });
+
+  test("finance.summary reports BYTE-IDENTICAL totals with and without billingEvents rows", async () => {
+    const { as, tenantId } = await withTenantOnFinance();
+    const now = Date.now();
+    await as.run(async (ctx) => {
+      await ctx.db.insert("spendCoverage", { tenantId, coverageStartedAt: now - 10 * DAY });
+      for (const [i, rail] of ["reasoning", "media", "ingest"].entries()) {
+        await ctx.db.insert("spendEvents", {
+          tenantId,
+          rail: rail as "reasoning" | "media" | "ingest",
+          phase: "actual",
+          amountCents: 100 * (i + 1),
+          correlationId: `plan:cost:${i}`,
+          createdAt: now - DAY,
+        });
+      }
+    });
+
+    const window = { sinceMs: now - 5 * DAY, untilMs: now + DAY, browserTimeZone: "UTC" };
+    const before = await as.query(api.finance.summary, window);
+
+    // The SAME tenant now also has a full billing history: an estimate, an arrival, a collection
+    // and a refund, in a currency the spend plane has never heard of.
+    await as.run(async (ctx) => {
+      await ctx.db.insert("billingCoverage", { tenantId, coverageStartedAt: now - 10 * DAY });
+      for (const [i, phase] of ["estimated", "reserved", "actual", "refunded"].entries()) {
+        await ctx.db.insert("billingEvents", {
+          tenantId,
+          phase: phase as "estimated" | "reserved" | "actual" | "refunded",
+          amountMinor: 490_000,
+          currency: "JPY",
+          correlationId: `billing/in_${i}`,
+          kind: "invoice-paid-card",
+          createdAt: now - DAY,
+        });
+      }
+    });
+
+    const after = await as.query(api.finance.summary, window);
+
+    expect(JSON.stringify(after.tracked)).toBe(JSON.stringify(before.tracked));
+    expect(after.coverageStartedAt).toBe(before.coverageStartedAt);
+    // Non-vacuity: the spend rows really were aggregated, so "identical" is not "identically empty".
+    expect(before.tracked.coverage).toBe("covered");
+    if (before.tracked.coverage === "covered") {
+      expect(before.tracked.totals.actual.amountCents).toBe(600);
+    }
+    // And the revenue is nowhere in the Finance payload at all.
+    expect(JSON.stringify(after)).not.toContain("490000");
+    expect(JSON.stringify(after)).not.toContain("JPY");
   });
 });

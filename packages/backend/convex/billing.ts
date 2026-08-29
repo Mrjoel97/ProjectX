@@ -11,10 +11,12 @@
 // a migration, not a flag flip.
 import { TRIAL_DAYS } from "@pikar/billing/config";
 import { subscriptionState } from "@pikar/billing/events";
+import { unappliedStage } from "@pikar/billing/reconcile";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
 import { stripePost } from "./billingApi";
+import { billingCoverageFor } from "./billingLedger";
 import { tenantAction, tenantQuery } from "./lib/functions";
 
 /**
@@ -260,5 +262,81 @@ export const billingStatus = tenantQuery({
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
       .first();
     return { state: subscriptionState(row?.status) };
+  },
+});
+
+/**
+ * How many held balances one read returns. A tenant has ONE Stripe customer, so in practice this
+ * is one row per currency — the cap exists because an unbounded read on a money surface is a
+ * defect waiting for a bad day, not because the number is expected to be large.
+ */
+export const UNAPPLIED_FUNDS_PAGE_LIMIT = 100;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * BILL-03: money we HOLD that is attached to nothing — with its AGE, which is the whole point.
+ *
+ * **THIS IS NOT "MONEY ARRIVED", AND GETTING IT BACKWARDS IS THE TRAP THE RESEARCH FLAGGED.**
+ * Under Stripe's DEFAULT automatic reconciliation, `cash_balance.funds_available` fires only when
+ * a positive balance REMAINS after reconciliation. So every row here is leftover bank-transfer
+ * money in the customer's cash balance that Stripe could not match to an invoice — not a payment,
+ * and not revenue. It books ZERO `billingEvents` rows for exactly that reason.
+ *
+ * THE AGE IS THE ACTIONABLE HALF. The amount alone cannot be acted on, because unreconciled money
+ * has a clock: Stripe emails reminders, attempts to RETURN the funds to the customer's bank at
+ * `UNRECONCILED_RETURN_DAYS` (75), and SWEEPS what it cannot return to the account balance by
+ * `UNRECONCILED_SWEEP_DAYS` (90). A screen that shows the number without the age reports a
+ * standing balance that is quietly about to leave.
+ *
+ * COVERAGE IS REPORTED SEPARATELY AND IS NEVER FOLDED INTO THE LIST. An empty list under
+ * `unknown` means "we have never watched this tenant's billing"; an empty list under `known` means
+ * "there is genuinely nothing held". Rendering both as "nothing owed" is the `CashFigure` mistake
+ * (`@pikar/core`'s `cash.ts`): missing history is unknown, never zero.
+ */
+export const unappliedFunds = tenantQuery({
+  args: {},
+  returns: v.object({
+    coverage: v.union(v.literal("unknown"), v.literal("known")),
+    coverageStartedAt: v.union(v.number(), v.null()),
+    funds: v.array(
+      v.object({
+        stripeObjectId: v.string(),
+        amountMinor: v.number(),
+        currency: v.string(),
+        ageDays: v.number(),
+        stage: v.union(v.literal("held"), v.literal("return-attempted"), v.literal("swept")),
+      }),
+    ),
+    /** True when the cap bit. Said out loud, because a silently partial money list is a wrong one. */
+    truncated: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const coverageStartedAt = await billingCoverageFor(ctx, ctx.tenantId);
+    const page = await ctx.db
+      .query("billingUnapplied")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .take(UNAPPLIED_FUNDS_PAGE_LIMIT + 1);
+    const now = Date.now();
+
+    return {
+      // `null` is the unknown, and it is not collapsed into a zero anywhere on the way out.
+      coverage: coverageStartedAt === null ? ("unknown" as const) : ("known" as const),
+      coverageStartedAt,
+      funds: page.slice(0, UNAPPLIED_FUNDS_PAGE_LIMIT).map((row) => {
+        // From `observedAt`, which is when the money was FIRST seen unapplied and never moves —
+        // so the clock keeps running while the row sits here, which is the behaviour that makes
+        // the 75/90 stages mean anything. Two currencies are two rows and are never combined.
+        const ageDays = Math.max(0, Math.floor((now - row.observedAt) / DAY_MS));
+        return {
+          stripeObjectId: row.stripeObjectId,
+          amountMinor: row.amountMinor,
+          currency: row.currency,
+          ageDays,
+          stage: unappliedStage(ageDays),
+        };
+      }),
+      truncated: page.length > UNAPPLIED_FUNDS_PAGE_LIMIT,
+    };
   },
 });

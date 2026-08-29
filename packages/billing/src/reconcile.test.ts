@@ -5,6 +5,7 @@ import {
   reconcileEvent,
   UNRECONCILED_RETURN_DAYS,
   UNRECONCILED_SWEEP_DAYS,
+  unappliedStage,
 } from "./reconcile";
 
 const DAY_MS = 86_400_000;
@@ -393,5 +394,37 @@ describe("the money boundary — Stripe is natively minor units", () => {
     expect(json).not.toContain("someone@example.com");
     expect(json).not.toContain("A Person");
     expect(json).not.toContain("prose");
+  });
+});
+
+/**
+ * THE BOUNDARIES THEMSELVES, at the exact days — because deletion-style mutation is blind here.
+ * Deleting either `if` still leaves most ages classified correctly, and flipping `>=` to `>` moves
+ * the answer on ONE day only. These assert that day.
+ *
+ * The literals are written out for the third blind spot: a constant the test IMPORTS moves the
+ * oracle with the subject, so mutating `UNRECONCILED_RETURN_DAYS` would never be caught by a test
+ * that only compares against it.
+ */
+describe("Stripe's unreconciled-funds clock, at the day it turns", () => {
+  test("the two constants are 75 and 90", () => {
+    expect(UNRECONCILED_RETURN_DAYS).toBe(75);
+    expect(UNRECONCILED_SWEEP_DAYS).toBe(90);
+  });
+
+  test("day 74 is held, day 75 is return-attempted — the boundary is INCLUSIVE", () => {
+    expect(unappliedStage(74)).toBe("held");
+    expect(unappliedStage(75)).toBe("return-attempted");
+  });
+
+  test("day 89 is return-attempted, day 90 is swept — inclusive again", () => {
+    expect(unappliedStage(89)).toBe("return-attempted");
+    expect(unappliedStage(90)).toBe("swept");
+  });
+
+  test("fresh money is held and very old money stays swept", () => {
+    expect(unappliedStage(0)).toBe("held");
+    expect(unappliedStage(1)).toBe("held");
+    expect(unappliedStage(365)).toBe("swept");
   });
 });
