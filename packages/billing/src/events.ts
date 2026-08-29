@@ -1,4 +1,9 @@
-// The closed set of Stripe event types this deployment acts on — PURE (CLAUDE.md §1).
+// What a Stripe delivery MEANS — PURE (CLAUDE.md §1). No ctx, no fetch, no clock, no env.
+//
+// Three things live here and they are the same subject read at three depths: which event types
+// this deployment acts on at all (`HANDLED_EVENT_TYPES` / `classifyEvent`), which ids a delivery
+// is allowed to contribute to the database (`eventFacts` — the redact-then-write boundary), and
+// what a stored subscription status means for access (`subscriptionState`).
 
 /**
  * The locked list from the phase context. Every entry is a **v1 SNAPSHOT event**: the delivery
@@ -48,4 +53,143 @@ export function classifyEvent(type: string): EventClassification {
   return (HANDLED_EVENT_TYPES as readonly string[]).includes(type)
     ? { kind: "handled", type: type as HandledEventType }
     : { kind: "ignored" };
+}
+
+/**
+ * The subset of `HANDLED_EVENT_TYPES` that carries the tenant↔Stripe-customer mapping (28.1-05).
+ *
+ * EXACT membership, exactly like `classifyEvent` above and for the same reason: a prefix rule
+ * (`type.startsWith("customer.subscription.")`) would swallow
+ * `customer.subscription.pending_update_applied` and
+ * `customer.subscription.trial_will_end` — real Stripe events that are NOT in the handled set and
+ * whose `status` field means something else.
+ */
+export const MAPPING_EVENT_TYPES = [
+  "checkout.session.completed",
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+] as const;
+
+/** The three types whose `data.object` IS a Subscription, so its `status` is a subscription one. */
+const SUBSCRIPTION_EVENT_TYPES = new Set<string>([
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+]);
+
+/**
+ * The ONLY facts a Stripe delivery is allowed to contribute to the database.
+ *
+ * This type IS the redact-then-write boundary (CLAUDE.md §4), made structural rather than
+ * procedural. A `checkout.session.completed` carries `customer_details.email`, `.name` and
+ * `.phone`; a subscription carries the default payment method's billing details. None of it can
+ * reach a row because there is nowhere in this shape to put it — `eventFacts` NAMES every field it
+ * lifts, so a field Stripe adds tomorrow is absent by default instead of present by accident.
+ *
+ * Every member is an id, an enum token or a timestamp. `null` means "the delivery did not carry
+ * it", never "empty".
+ */
+export type BillingEventFacts = {
+  /** `cus_…` — the Stripe customer this event is about. */
+  customerId: string | null;
+  /** `sub_…` — the subscription the event is about, or the one a checkout session created. */
+  subscriptionId: string | null;
+  /** A Checkout Session's `client_reference_id`: the tenant id `startCheckout` threaded through. */
+  clientReferenceId: string | null;
+  /** `metadata.tenantId` — the same thread, on the object rather than on the session. */
+  metadataTenantId: string | null;
+  /** A SUBSCRIPTION status only. Null for every other event type. */
+  subscriptionStatus: string | null;
+  /** `price_…` off the first subscription item. */
+  priceId: string | null;
+  /** `trial_end` converted from Stripe SECONDS to epoch MILLISECONDS. */
+  trialEndsAt: number | null;
+};
+
+/** A non-empty string, or null. An empty id must never become a lookup key. */
+function str(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+/**
+ * An id from either a bare string or an expanded object.
+ *
+ * We never request expansions, but a webhook endpoint can be configured with them in the
+ * Dashboard, and `{ id, email, name }` arriving where `"cus_…"` was expected is exactly how a
+ * whole object gets carried into a row. Taking `.id` either way keeps the shape closed.
+ */
+function refId(value: unknown): string | null {
+  return str(value) ?? str((value as { id?: unknown } | null | undefined)?.id);
+}
+
+/**
+ * Lift the ids out of a VERIFIED Stripe event's `data.object` and drop everything else.
+ *
+ * PURE (CLAUDE.md §1): no ctx, no fetch, no clock. Driven by `eventType` rather than by the
+ * object's own `object` discriminator, because the type is what the signature covered and the
+ * dedupe key was built from — trusting a self-describing field inside the payload to decide how
+ * to read the payload is a smaller circle than it looks.
+ */
+export function eventFacts(eventType: string, dataObject: unknown): BillingEventFacts {
+  const object: Record<string, unknown> =
+    typeof dataObject === "object" && dataObject !== null
+      ? (dataObject as Record<string, unknown>)
+      : {};
+  const metadata = (object.metadata ?? {}) as Record<string, unknown>;
+  const isSubscription = SUBSCRIPTION_EVENT_TYPES.has(eventType);
+  const items = ((object.items as { data?: unknown } | undefined)?.data ?? []) as unknown[];
+  const firstItem = (items[0] ?? null) as { price?: unknown } | null;
+  const trialEnd = object.trial_end;
+
+  return {
+    customerId: refId(object.customer),
+    // A checkout session POINTS AT its subscription; a subscription object IS one.
+    subscriptionId: isSubscription ? str(object.id) : refId(object.subscription),
+    clientReferenceId: str(object.client_reference_id),
+    metadataTenantId: str(metadata.tenantId),
+    subscriptionStatus: isSubscription ? str(object.status) : null,
+    priceId: isSubscription ? refId(firstItem?.price) : null,
+    trialEndsAt:
+      isSubscription && typeof trialEnd === "number" && Number.isFinite(trialEnd)
+        ? trialEnd * 1000
+        : null,
+  };
+}
+
+/** Stripe statuses under which the tenant has a live entitlement. */
+const SUBSCRIBED_STATUSES = new Set<string>(["trialing", "active", "past_due"]);
+
+/**
+ * …and the ones under which they demonstrably do not.
+ *
+ * `incomplete` is here, not in the set above: the first payment has not succeeded, so the
+ * subscription exists without ever having been paid for. `past_due` is in the set above because
+ * Stripe keeps the subscription ACTIVE through dunning and cancels it itself when retries run out
+ * — cutting access at the first failed retry is a product decision nobody made.
+ */
+const NOT_SUBSCRIBED_STATUSES = new Set<string>([
+  "canceled",
+  "unpaid",
+  "incomplete",
+  "incomplete_expired",
+  "paused",
+]);
+
+/**
+ * What a stored subscription status means for access — or, honestly, that we do not know.
+ *
+ * `unknown` is the DEFAULT arm, not a special case: a status Stripe adds after this code was
+ * written, and the `pending` sentinel a checkout writes before any subscription event has been
+ * seen, both land there. Falling through to `subscribed` would grant a live entitlement off a
+ * string nobody has read, and falling through to `not_subscribed` would fabricate a free tier this
+ * product does not have.
+ */
+export function subscriptionState(
+  status: string | undefined | null,
+): "unknown" | "not_subscribed" | "subscribed" {
+  if (typeof status !== "string") return "unknown";
+  if (SUBSCRIBED_STATUSES.has(status)) return "subscribed";
+  if (NOT_SUBSCRIBED_STATUSES.has(status)) return "not_subscribed";
+  return "unknown";
 }
