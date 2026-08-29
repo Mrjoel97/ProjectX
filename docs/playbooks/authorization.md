@@ -1,6 +1,17 @@
 # Playbook: Authorization (tenancy + ownership)
 
-> Last verified: 2026-08-27 (**`inspectUsersByEmail` — a READ-ONLY census of the rows sharing one
+> Last verified: 2026-08-29 (28.1-05 — **the `/ops` dead-letter card renders one more field**,
+> `source`, from the existing owner-gated `deadLetters.listAll`. No new endpoint, no new
+> authorization decision, no change to `ownerQuery`/`requireOwner`: `listAll` was already
+> owner-only and already returned the whole stored row, and `markResolved` is still
+> TENANT-scoped, so seeing another tenant's failure still does not come with the power to act
+> on it. NOTE, because it is an authorization consequence rather than a UI one: a billing dead
+> letter is filed under the code-owned sentinel tenant `billing:unattributed`, which no caller
+> can ever authenticate as — so it is permanently visible to the owner and permanently
+> unresolvable, because the only resolve is tenant-scoped. Recorded as a known gap in
+> `docs/playbooks/billing.md`, not silently fixed by widening a destructive surface.)
+>
+> Previously verified:
 > address.** `findUserIdByEmail` deliberately refuses to pick between duplicates, which left an
 > operator holding a count and no way to see what they were choosing between. This is that view:
 > ids, the owner flag, creation time. **Refs and flags only (§4)** — never the address it was asked

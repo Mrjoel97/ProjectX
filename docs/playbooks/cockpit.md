@@ -1,4 +1,13 @@
-> Last verified: 2026-08-28 (28.1-01 — **`http.ts` GAINED A ROUTE THIS PLAYBOOK DOES NOT OWN.**
+> Last verified: 2026-08-29 (28.1-05 — **`http.ts` ONLY**, and only the Stripe billing route at
+> the bottom of the file. The route now calls `eventFacts(event.type, event.data.object)` at the
+> trust boundary and passes ONLY the resulting ids into `receiveAndApply`; the parsed Stripe
+> object never crosses into Convex. `event.created` is threaded through in milliseconds as the
+> only delivery ordering Stripe provides. **The five-line security ordering above it is
+> unchanged** — secret + header present → read the raw body ONCE → verify → only then parse.
+> Nothing on the Gmail, Microsoft, agent or delivery paths was read or touched, and this is NOT
+> a re-verification of anything else in this playbook. See `docs/playbooks/billing.md`.)
+>
+> Previously verified: 2026-08-28 (28.1-01 — **`http.ts` GAINED A ROUTE THIS PLAYBOOK DOES NOT OWN.**
 > `POST /billing/stripe/webhook` is the Stripe webhook receiver for PIKAR'S OWN merchant account;
 > it is documented in `docs/playbooks/billing.md`, not here. It touches no cockpit surface — no
 > tool, no card, no `VERB` entry, no `agentSteps.tool` literal, no skill body. This entry exists

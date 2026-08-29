@@ -6,7 +6,10 @@
 > behaviour change, and **this is not a re-verification of anything below.** The
 > `Last verified` line still means what it said.
 
-> Last verified: 2026-08-29 against 28.1-04 (the outbound transport `billingApi.ts` and the two
+> Last verified: 2026-08-29 against 28.1-05 (`billingCustomers` — the tenant↔Stripe-customer
+> mapping — plus the refusal to auto-provision, `eventFacts` as the redact-then-write boundary,
+> and the first four arms of the effect switch; offline at $0, 28 mutations run, 0 survivors) —
+> after 28.1-04 (the outbound transport `billingApi.ts` and the two
 > hosted doors `billing.ts`, offline at $0 against a stubbed `fetch`, 31 mutations run) — after
 > 28.1-02 close-out (real test-mode Stripe objects created via the API, and
 > `docs/billing/stripe-dashboard-setup.md` reconciled against them), 28.1-03 (`tax.ts` and
@@ -16,10 +19,18 @@
 > · Related ADRs: none yet
 
 > **Status: PARTLY IMPLEMENTED.** At the `Last verified` sha the billing code on disk is the
-> inbound webhook receiver and its dedupe table, the pure domain modules, **and — new in 28.1-04 —
-> the outbound transport plus the two hosted doors**: `packages/backend/convex/billingApi.ts`
-> (`stripePost` / `stripeGet`) and `packages/backend/convex/billing.ts` (`startCheckout`,
-> `portalLink`, `billingStatus`).
+> inbound webhook receiver and its dedupe table, the pure domain modules, the outbound transport
+> plus the two hosted doors (`billingApi.ts`, `billing.ts`), **and — new in 28.1-05 — the
+> tenant↔Stripe-customer mapping `billingCustomers`, filled by the first four arms of the effect
+> switch.**
+>
+> **What 28.1-05 changed about the two sentences below.** `portalLink` and `billingStatus` are no
+> longer structurally dead: a tenant with a `billingCustomers` row now reaches the Customer Portal
+> and reads a real state. They remain unexercised against Stripe, and `billingStatus` still
+> answers `unknown` for every tenant on this deployment because no delivery has ever arrived.
+> The effect switch now handles FOUR event types (`checkout.session.completed` and all three
+> `customer.subscription.*`); the invoice, refund, credit-note and cash-balance arms are still
+> empty and still record `status: "ignored"` rather than a flattering `applied`.
 >
 > **NOTHING HAS EVER SPOKEN TO STRIPE, AND NOTHING IS BILLED YET.** 28.1-04 built the request; it
 > did not send one. **No `BILLING_STRIPE_*` variable is set in any deployment**, so every one of
@@ -74,7 +85,11 @@ name or an env prefix:
 - `packages/billing/src/signature.ts` — `parseStripeSignature`, `timingSafeEqualHex`,
   `SIGNATURE_TOLERANCE_S`. No `ctx`, no `fetch`, no Convex import (CLAUDE.md §1).
 - `packages/billing/src/events.ts` — `HANDLED_EVENT_TYPES` (the closed v1-snapshot list) and
-  `classifyEvent`, whose default arm is `{ kind: "ignored" }`.
+  `classifyEvent`, whose default arm is `{ kind: "ignored" }`. **28.1-05 added two more laws to
+  the same file:** `eventFacts(eventType, dataObject)` — THE redact-then-write boundary, a type
+  that names every id it lifts so no Stripe field can ride along — and `subscriptionState`, whose
+  default arm is `unknown`. `MAPPING_EVENT_TYPES` is the exact four-member subset the mapping arm
+  acts on; it is a Set membership test, never a `startsWith`.
 - `packages/billing/src/reconcile.ts` — `reconcileEvent`, `PAYMENT_METHOD_BANK_TRANSFER`,
   `UNRECONCILED_RETURN_DAYS` / `UNRECONCILED_SWEEP_DAYS`. BILL-03's pure half: one Stripe event in,
   ledger movements + observations out. Stateless per event (Stripe does not guarantee order) and
@@ -145,6 +160,32 @@ Run `graphify query "billing webhook"` for the current subgraph. Couplings graph
 
 ## Data flow
 
+### The mapping — who owns which Stripe customer (28.1-05)
+
+`billingCustomers` is the ONLY row joining a tenant to a Stripe customer, and it is written from
+exactly one place: the mapping arm inside `receiveAndApply`, in the same transaction as the
+dedupe insert.
+
+1. `startCheckout` threads the tenant id THREE ways: `client_reference_id`,
+   `metadata[tenantId]` on the session, and `subscription_data[metadata][tenantId]` on the
+   subscription. The third is not redundant — a `customer.subscription.created` that overtakes
+   its checkout session carries no `client_reference_id` at all, and Stripe does not guarantee
+   delivery order.
+2. `http.ts` calls `eventFacts(event.type, event.data.object)` at the trust boundary and passes
+   ONLY the resulting ids into the mutation. The parsed Stripe object never crosses into Convex.
+3. The mapping arm resolves the tenant from `client_reference_id`, then
+   `metadata.tenantId`, then an existing `by_customer` row — any one is enough, which is what
+   makes it order-independent.
+4. The tenant must EXIST (`normalizeId("users", …)` + `db.get`). No match ⇒ dead letter, and
+   nothing is created.
+5. Conflicts are recorded, never absorbed: a second Stripe customer for a mapped tenant, or a
+   second tenant claiming a mapped customer, dead-letters and the FIRST mapping stands.
+6. A status only moves if the delivery CARRIED one and `event.created` is not older than the
+   delivery that set the current status (`statusAt`). Without that, a re-delivered `updated`
+   arriving after a `deleted` hands a canceled customer their access back.
+7. `billingStatus` reads the row through `subscriptionState`; `portalLink` reads
+   `stripeCustomerFor`. Neither ever creates anything to make itself work.
+
 ### Outbound — subscribe (28.1-04)
 
 1. A tenant calls `api.billing.startCheckout` (a `tenantAction`, so `ctx.tenantId` is injected and
@@ -211,6 +252,14 @@ the tenant's `stripeCustomerId` — `null` for every tenant until 28.1-05 — so
 | An unknown event type is `ignored`, never thrown | Stripe adds event types; a throw turns a new type into a 500 and a retry storm | `events.test.ts` + "unhandled type ⇒ 200 with `status: "ignored"`" |
 | No development fallback for the secret | `p25-no-dev-fallback`; a fallback accepts unverified input | "secret unset ⇒ 400 and the body is never read" |
 | `billingStripeEvents` rows carry ids, types and counts only | CLAUDE.md §4 — a raw Stripe payload must never become a PII honeypot | the table has no payload field at all |
+| **A Stripe customer with no matching tenant is dead-lettered by ref and NEVER auto-provisioned** | Creating a tenant from a webhook is how a billing system invents users. The customer stays orphaned and VISIBLE, which is the point | `billingWebhook.test.ts` — "a checkout for an unknown tenant creates zero users, zero mappings, one dead letter" (asserted by COUNTS) + "the mapping module contains no way to create a user or a tenant" |
+| **No email, no name and no Stripe object may enter a dead-letter or audit payload** | `deadLetters` is `audit_immutable`: excluded from BOTH the erasure walk and the export walk, so anything personal there outlives every deletion request | `billingWebhook.test.ts` — "the stored dead letter contains NO email and NO name — whole-row string assertion" and its audit twin; `events.test.ts` — "no email, name, phone or amount survives the extraction" |
+| The redaction happens at the HTTP boundary, before the mutation | Redact-then-write is a step ORDERING. `receiveAndApply`'s validator has no argument that can carry an email, so a leak needs a deliberate two-file edit | proven by mutation: adding `customerEmail` to `BillingEventFacts` and to the payload reddens both layers |
+| The mapping resolves in BOTH directions | `by_tenant` alone cannot answer a subscription event that carries no tenant; `by_customer` alone cannot answer the portal | `billingWebhook.test.ts` drives both indexes explicitly, never a `.collect()` filter |
+| One tenant ⇔ one Stripe customer; a conflict is RECORDED, not overwritten | Overwriting strands a live Stripe customer that nothing points at any more | `billingWebhook.test.ts` — the two conflict tests; the guards kill DISJOINT test sets |
+| A status only moves forward in `event.created` order | Stripe does not guarantee order; a stale `updated` after a `deleted` restores access to a canceled customer | `billingWebhook.test.ts` — "a LATE `updated` cannot resurrect a canceled subscription" |
+| `billingStatus` answers `unknown` for a mapping that has never seen a subscription event | `pending` is a sentinel, not a tier. Reporting it as subscribed grants access off a row with no status | `billing.test.ts` + `events.test.ts` — `subscriptionState`'s default arm |
+| `billingCustomers` is `tenant_owned` | It is the only link from a person to a live merchant record; erasure must remove it. NOT `tenant_credential` — a `cus_…` grants nothing without the API key, and that category would summarise it out of the tenant's own export | `tenantData.test.ts` — "the Stripe-customer mapping is tenant-owned" |
 | `not_collecting` + a REAL product tax code reads *not owed, unregistered*; `not_collecting` + `txcd_00000000` reads *we declared it nontaxable* | Stripe's own docs call `not_collecting` ambiguous; the product code is the ONLY disambiguator, so a one-argument `taxPosture` cannot be honest | `tax.test.ts` — both halves, with `txcd_00000000` written out as a literal |
 | `not_collecting` with an UNCONFIGURED (`null`) product tax code is `unknown`, never `unregistered` | `PRODUCT_TAX_CODE` is still `null`. Guessing "unregistered" asserts a registration gap we have no evidence for — missing history is unknown, never zero | `tax.test.ts` — "an unconfigured (null) product tax code = unknown" |
 | `zero_rated` / `not_subject_to_tax` / `reverse_charge` / `customer_exempt` / `product_exempt` / `not_supported` are **calculated zero**, a different statement from not-owed | A calculation ran. Collapsing it into "not owed" claims a registration posture Stripe never reported | `tax.test.ts` — every published reason has an asserted posture, and the two never render the same sentence |
@@ -260,6 +309,15 @@ the tenant's `stripeCustomerId` — `null` for every tenant until 28.1-05 — so
   tax field shape (`total_tax_amounts` before Basil, `total_taxes` from `2025-03-31.basil` onward).
   Two tests assert the version as a WRITTEN-OUT literal and will go red — that is their point.
 - **Adding a module under `convex/`:** run `npx convex codegen`, or `api.billing` will not typecheck.
+  A new EXPORT inside an existing module needs no codegen — the generated file maps modules.
+- **Touching the mapping arm:** it is ONE function shared by the checkout and all three
+  subscription types, because the difference between them is entirely which facts the delivery
+  carried. Do not split it into two; the second copy is where the conflict guards get forgotten.
+- **Adding a field to a dead-letter or audit payload here:** it must be an id, an enum token or a
+  count. If you cannot write it into `BillingEventFacts` without adding a field that could hold
+  prose, the answer is no — that type is the boundary, not a convenience.
+- **Adding an index to `billingCustomers`:** any index not leading with `tenantId` must be named
+  in `isolation.test.ts`'s `NON_TENANT_LEADING` with a written reason, or the suite fails.
 - **Never** widen this into `connectorFetch.ts` (a GET-only read transport with a deliberately empty
   `stripe: []` allow-list) or into `SPEND_RAILS`.
 
@@ -267,7 +325,7 @@ the tenant's `stripeCustomerId` — `null` for every tenant until 28.1-05 — so
 
 ```bash
 cd packages/billing && npx vitest run && npx tsc --noEmit
-cd packages/backend && npx vitest run convex/billing convex/env.test.ts convex/importGuard.test.ts convex/dashboardSchema.test.ts
+cd packages/backend && npx vitest run convex/billing convex/env.test.ts convex/importGuard.test.ts convex/dashboardSchema.test.ts convex/deadLetters.test.ts convex/isolation.test.ts
 cd packages/backend && npx tsc --noEmit          # SEPARATELY — chaining reports the wrong exit code
 cd packages/core   && npx vitest run && npx tsc --noEmit
 node scripts/check-playbooks.mjs < /dev/null     # READ ITS STDOUT — it always exits 0
@@ -283,6 +341,34 @@ node scripts/check-playbooks.mjs < /dev/null     # READ ITS STDOUT — it always
   and `billingWebhook.test.ts` in one run. `pnpm test -- <filter>` does NOT filter — drop the `--`.
 - Manual/live: nothing here has been verified against Stripe. A live check needs 28.1-02's
   credentials plus `stripe listen --forward-to` and `stripe trigger`.
+
+## Operations — reconciling an ORPHANED Stripe customer (28.1-05)
+
+A dead letter with `source: "billing"` and `error: billing_unknown_tenant` /
+`billing_unattributable_customer` means **somebody paid and this deployment has no idea who.**
+It is filed under the code-owned sentinel tenant `billing:unattributed`, so it is invisible to
+every tenant and visible to the owner through `deadLetters.listAll` on `/ops`.
+
+There is no code path that fixes this and there is deliberately not going to be one — an
+"attach this customer to that tenant" button is the auto-provisioning door with a human in
+front of it. The recovery is manual and it is a decision, not a repair:
+
+1. Read the payload: `stripeCustomerId`, `stripeEventId`, `stripeEventType`, `stripeObjectId`.
+   Nothing else is stored, and nothing else ever will be.
+2. Look the customer up in the Stripe Dashboard by `cus_…` to see who they are. That lookup
+   happens in Stripe, NOT in this database — which is exactly why the email is not stored here.
+3. Decide which of the two real situations it is:
+   - **They have an account.** Have them sign in and run Checkout again; the new session
+     carries a `client_reference_id` and maps correctly. Then **refund or cancel the orphaned
+     subscription in the Dashboard** — otherwise they are charged twice.
+   - **They have no account.** Refund in the Dashboard and invite them. Do not create a user
+     to make the row fit.
+4. `deadLetters.markResolved` is TENANT-scoped, so an owner cannot clear the sentinel row from
+   `/ops` today. The row stays. That is a known gap, not a mystery — see below.
+
+A `billing_customer_tenant_conflict` / `billing_tenant_customer_conflict` row is a different
+problem: the tenant IS known and the mapping was NOT changed. Someone has two Stripe customers
+or two tenants share one. Resolve it in the Dashboard and leave the stored mapping alone.
 
 ## Operational notes
 
@@ -382,8 +468,22 @@ which is how `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` escaped classification entirely
 2026-08-29**, so `startCheckout` throws naming the missing variable for every caller.
 ## Known gaps & deferred work
 
-- **The effect switch is empty.** Every verified event is recorded `ignored`. Ledger writes are
-  28.1-06.
+- **The effect switch handles the four MAPPING types only.** `invoice.*`, `charge.refunded`,
+  `credit_note.created` and both cash-balance types are still recorded `ignored`. Ledger writes
+  are 28.1-06.
+- **NOTHING HAS EVER BEEN DELIVERED.** Every mapping test fabricates a `whsec_`, signs its own
+  body and drives the real route in memory. That proves what the handler DOES with a delivery;
+  it does not prove Stripe ever sends one, nor that `client_reference_id` survives a real
+  Checkout, nor that the field names on a real `data.object` match the ones `eventFacts` reads.
+  The first `stripe trigger checkout.session.completed` is where any of that becomes evidence.
+- **The sentinel dead letter cannot be cleared from `/ops`.** `deadLetters.markResolved` is
+  `tenantMutation`, so it refuses a row whose `tenantId` is `billing:unattributed` for every
+  caller including the owner. The row is visible and permanent until an owner-scoped resolve
+  exists (deliberately not added here — 25.1-CONTEXT deferred owner-scoped DLQ writes).
+- **`pending` is a status Stripe never sends.** It is a code-owned sentinel for "mapped, no
+  subscription event seen yet". If Stripe ever introduces a real `pending` status the two would
+  collide and `subscriptionState` would keep answering `unknown` — which is safe, but wrong for
+  the wrong reason.
 - **`HANDLED_EVENT_TYPES` is v1 snapshot events only.** v2 thin events (`v1.billing.meter.*`) need
   a separate endpoint and `parseEventNotification`; mixing them on this route is a defect.
 - **SHIPPED (28.1-04), NEVER EXERCISED.** The outbound transport and both doors are proven offline
@@ -393,27 +493,33 @@ which is how `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` escaped classification entirely
   Stripe accepts it.
 - **`stripeGet` has no production caller.** It exists so the read half of the transport is not
   invented in a hurry in 28.1-05/06. It is tested; it is not used.
-- **`portalLink`'s success arm is unreachable until 28.1-05.** `stripeCustomerId` returns `null` for
-  every tenant, so the door always refuses. The transport arm is driven directly in the test through
-  the exported `portalSession`, rather than left as untested dead code.
-- **`billingStatus`'s `not_subscribed` and `subscribed` arms are unreachable today** and no test
-  pretends otherwise. 28.1-05 fills the branch; the function does not need rewriting.
+- ~~**`portalLink`'s success arm is unreachable until 28.1-05.**~~ **CLOSED (28.1-05).**
+  `stripeCustomerFor` is an `internalQuery` over `billingCustomers.by_tenant`, and the success
+  path is driven end to end in `billing.test.ts` against a stubbed `fetch`, including a
+  two-tenants-on-one-backend test so a "first row in the table" implementation cannot pass.
+- ~~**`billingStatus`'s `not_subscribed` and `subscribed` arms are unreachable today.**~~
+  **CLOSED (28.1-05).** Both arms are reached from a real row. `unknown` still covers three
+  distinct cases — no row, a `pending` row, and a status `subscriptionState` does not recognise.
 - **No `automatic_tax` on the Checkout session.** Stripe Tax calculates nothing without a
   registration and there is none, so enabling it would produce `not_collecting` on every line —
   which `taxPosture` already models. Turning `automatic_tax[enabled]=true` on is a deliberate later
   edit paired with a sandbox registration, not a default to flip.
-- **Nothing stops a tenant subscribing twice.** `startCheckout` does not check for an existing
-  subscription because there is no mapping table to check against yet. The daily idempotency key
-  stops a double-click, not a second checkout tomorrow. 28.1-05/07 own this.
+- **Nothing stops a tenant subscribing twice — and 28.1-05 did not fix it, it made it VISIBLE.**
+  `startCheckout` still does not consult `billingCustomers` before opening a session. A second
+  checkout that produces a second Stripe customer is now REFUSED at the mapping arm and
+  dead-lettered (`billing_tenant_customer_conflict`) — but the customer has already been charged
+  by then. Refusing at `startCheckout` is 28.1-07's, and it is the one that prevents the charge.
 - **No UI calls either door.** `apps/web` has no `/dashboard/billing` page; `success_url` and
   `cancel_url` point at `/dashboard/settings?checkout=…`, which exists but ignores the parameter.
-- **[PLANNED]** tenant↔`customer` mapping and the dead-letter refusal to auto-provision (28.1-05).
 - **[PLANNED]** honest tax posture — `taxability_reason: "not_collecting"` is **ambiguous**, and
   threshold monitoring is live-mode-only and notification-gated at $10k/yr prior-year revenue, so
   BILL-05's "explicit alert" is a posture recorded in code, **not a signal we can receive**. No
   tax-threshold monitor is buildable from Stripe's API and none exists in this repo (28.1-03).
 - **[PLANNED]** `convex/tenantDelete.ts` says nothing about billing today; deleting a tenant would
-  leave a live subscription charging a card (28.1-08).
+  leave a live subscription charging a card (28.1-08). 28.1-05 made this SHARPER, not safer:
+  `billingCustomers` is `tenant_owned`, so the deletion page loop now removes the row holding the
+  `stripeCustomerId` — which means 28.1-08's billing arm has to cancel BEFORE the loop runs, or
+  the id it needs is already gone.
 - **`ponytail:`** the signature check is ~25 hand-written lines of Web Crypto rather than the
   `stripe` SDK. Ceiling: no typed Stripe event objects. Upgrade path: add `stripe` and use
   `constructEventAsync(..., Stripe.createSubtleCryptoProvider())` — `http.ts` cannot be

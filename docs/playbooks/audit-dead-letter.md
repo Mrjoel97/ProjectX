@@ -1,6 +1,47 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-08-27 (28-03 — **FOUR PHASE-28 TABLES CLASSIFIED, AND ONE OF THEM DOES NOT
+> Last verified: 2026-08-29 (28.1-05 — **`deadLetters.workflowId` IS NOW OPTIONAL, THE TABLE HAS A
+> `source` DISCRIMINATOR, AND `billingCustomers` IS CLASSIFIED `tenant_owned`.**
+>
+> Three changes, and the reasoning matters more than the diff.
+>
+> **1. `workflowId` became `v.optional(v.string())`.** A Stripe webhook has no workflow. The
+> alternative was synthesizing something like `billing:evt_…`, which would lie about what the
+> field MEANS to every existing reader and to this compliance surface. The field is optional
+> because the FACT is optional. This is the WIDEN step of widen→migrate→narrow and it terminates
+> here: nothing narrows, existing rows stay valid, no backfill, no migration.
+> `deadLetterRecipient` also stopped writing `workflowId: ""` — an empty string was only ever a
+> placeholder for a required column with no value to put in it.
+>
+> **2. `source: "workflow" | "billing"` is set at the WRITE site, never inferred.** "Has a
+> workflowId" and "was written by the pipeline" are different claims, and only one of them
+> survives a future writer that has both. Absent (every row before this plan) is reported as
+> `"workflow"` by `deadLetters.listAll`, which the `/ops` screen now renders — so a billing dead
+> letter is distinguishable from a pipeline one on the operator's screen rather than only in the
+> database. The `listAll` key-set pin was bumped DELIBERATELY, which is what that pin exists for.
+>
+> **3. THE TABLE IS STILL INSERT-ONLY AND MUST STILL NEVER HOLD PERSONAL DATA.** The billing
+> writer is a direct `ctx.db.insert` inside `billingWebhook.receiveAndApply`; no mutating
+> dead-letter or audit function was added (CLAUDE.md §3). Its payload is
+> `{stripeEventId, stripeEventType, stripeCustomerId, stripeObjectId}` — ids only — and a Stripe
+> `checkout.session.completed` carries an email, a name and a phone number, so this is the
+> sharpest §4 boundary in the repo. It is enforced structurally: `eventFacts` in
+> `@pikar/billing` names every id it lifts, and `receiveAndApply`'s validator has no argument
+> that could carry prose. Proven by mutation — adding a `customerEmail` field to that type and
+> to the payload reddens both a whole-object assertion in `events.test.ts` and a whole-ROW
+> assertion over the stored `deadLetters` and `audit` rows.
+>
+> **`billingCustomers` is `tenant_owned`, and the two categories it is NOT are the interesting
+> part.** Not `tenant_credential` like `connectorConnections`: that category holds the tenant's
+> GRANT (a refresh token, AES-256-GCM ciphertext), whereas a `cus_…` grants nothing without the
+> merchant's own API key — and `tenant_credential` would SUMMARISE the row out of the tenant's
+> export via `summarizeTenantCredential`, deleting the one fact they would want from it. Not
+> `audit_immutable` like `deadLetters`: this is mutable mapping state, and the erasure obligation
+> runs the other way — it is the ONLY row joining a person to a live merchant record, so an
+> erasure that left it behind would leave that link standing forever. The registry count moved
+> 51 → 52.)
+>
+> Previously verified: 2026-08-27 (28-03 — **FOUR PHASE-28 TABLES CLASSIFIED, AND ONE OF THEM DOES NOT
 > BEHAVE LIKE `gmailTokens`.** `TENANT_TABLE_CLASSIFICATION` gains `connectorConnections`
 > (`tenant_credential`), `connectorOAuthStates` (`tenant_credential`), `contactProviderRefs`
 > (`tenant_owned`) and `providerGates` (`global`). Registry-only — no export or deletion code
