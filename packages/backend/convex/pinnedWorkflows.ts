@@ -440,6 +440,8 @@ export const checkReadiness = tenantQuery({
 export const runCount = internalQuery({
   args: { pinId: v.id("savedPrompts") },
   handler: async (ctx, { pinId }): Promise<number> => {
+    // `￿` is the upper bound of the prefix range, written as an ESCAPE: the literal
+    // character is invisible in a diff and is exactly the kind of thing an editor re-encodes.
     const prefix = freshRunCorrelation(pinId, "");
     const rows = await ctx.db
       .query("audit")
