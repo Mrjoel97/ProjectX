@@ -24,7 +24,7 @@ this is *the* compile gate for a route.
 `grep -rn stageFor` over the worktree returns exactly one hit: the comment asserting it exists. I
 read the runner. What it actually does:
 
-- `seedCase` (`packages/backend/scripts/run-workflow-pack-evals.mjs:1329`) calls **three** seed
+- `seedCase` (`packages/backend/scripts/run-workflow-pack-evals.mjs:1335`) calls **three** seed
   mutations — `smoke:seedPackEvalTenant` (a figure row, one calendar event, a `gmailTokens` row),
   `smoke:seedInboxFixture` (only when the fixture declares `inbox: available`) and
   `vaultSmoke:seedCorpus` (only when an expected operation uses `searchVault`).
