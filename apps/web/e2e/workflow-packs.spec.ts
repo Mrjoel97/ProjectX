@@ -217,6 +217,11 @@ test.describe("a saved customization persists, and the surface stays honest abou
 });
 
 test.describe("@run manual reruns are fresh — COSTS MONEY", () => {
+  // A real governed pack turn is not a 30s operation: it crosses preflight, the budget gate, a
+  // model call and the plan write, twice. Playwright's default test timeout presents this as a
+  // bare `waitForURL` failure, which reads like a routing bug rather than a slow turn.
+  test.setTimeout(300_000);
+
   test("pinning and pressing Run again twice starts two separate governed runs", async ({
     page,
   }) => {
