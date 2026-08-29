@@ -54,7 +54,7 @@ async function ask(panel: import("@playwright/test").Locator, question: string) 
   const field = panel.getByLabel("What do you want to know?");
   await expect(field).toBeVisible();
   await field.fill(question);
-  const submit = panel.getByRole("button", { name: "Search" });
+  const submit = panel.getByRole("button", { name: "Search", exact: true });
   await expect(submit).toBeEnabled();
   await submit.click();
   // The answer card is the completion signal; the search fans out over real connectors.
@@ -67,7 +67,11 @@ test.describe("the search card is reachable and refuses an empty question", () =
   }) => {
     const panel = await openPanel(page);
     const field = panel.getByLabel("What do you want to know?");
-    const submit = panel.getByRole("button", { name: "Search" });
+    // `exact: true`. Playwright's `name` is a case-insensitive SUBSTRING match by default, so a
+    // bare "Search" ALSO matches `aria-label="Close knowledge search"` and every use of this
+    // locator dies with a strict-mode violation before asserting anything. `--list` cannot see
+    // that; only a run can, which is why this file's UNRUN status is stated at the top.
+    const submit = panel.getByRole("button", { name: "Search", exact: true });
 
     // No question, no search — and the reason is the disabled control, not a silent no-op.
     await expect(submit).toBeDisabled();
@@ -139,6 +143,28 @@ test.describe("offline fixture seam — deterministic gap states at $0", () => {
       els.map((el) => el.getAttribute("aria-label") ?? el.textContent?.trim() ?? ""),
     );
     expect(names.sort()).toEqual(["Close knowledge search", "Search"]);
+  });
+
+  test("an answer asked before the first chat message survives that message", async ({ page }) => {
+    // The panel mints its own `ks_` handle while the workspace has no thread; the cockpit mints a
+    // real one on the first send. Preferring the prop re-subscribed the panel to the cockpit
+    // thread and the answer already on screen became unreadable, its row stranded under `ks_`.
+    const panel = await openPanel(page);
+    await ask(panel, "SMOKE::knowledge-plan::inbox|renewal — what did we agree on renewal?");
+    await expect(panel.getByTestId("knowledge-answer")).toHaveCount(1);
+
+    // The established offline cockpit send (cockpit-briefing.spec.ts): a governed tool, no model.
+    await page.getByPlaceholder("What business outcome should we work on?").fill(
+      "SMOKE::agent::brief=today",
+    );
+    await page.keyboard.press("Enter");
+    // The thread now exists — the composer clears and the workspace is in a conversation.
+    await expect(page.getByPlaceholder("What business outcome should we work on?")).toHaveValue("");
+
+    await expect(panel.getByTestId("knowledge-answer")).toHaveCount(1);
+    await expect(
+      panel.getByText("your mailbox is not connected yet, so it was not searched."),
+    ).toBeVisible();
   });
 });
 

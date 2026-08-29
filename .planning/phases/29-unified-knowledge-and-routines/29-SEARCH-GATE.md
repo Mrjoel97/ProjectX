@@ -6,9 +6,13 @@
 29-09 could not run a browser gate: it needs a live Convex deployment, a seeded E2E user, real
 credentials and (in one mode) real model spend. None of those were available to the agent, and it
 was explicitly out of scope. `apps/web/e2e/knowledge-search.spec.ts` is written against the real
-components and the real selectors, and Playwright discovers and parses all 7 of its tests — but
+components and the real selectors, and Playwright discovers and parses all 8 of its tests — but
 **not one of them has ever been executed against a running stack.** Nothing below should be read as
 browser evidence until an operator pastes real output into §4.
+
+WARNING: **until the 29-09 fix pass the spec would have died on its first line.** See §7. A spec
+that parses is not a spec that runs, and this file previously reported `--list` in a way that read
+as more than it was.
 
 ---
 
@@ -16,14 +20,14 @@ browser evidence until an operator pastes real output into §4.
 
 | # | Command (run from the repo root unless noted) | Result |
 |---|---|---|
-| 1 | `cd apps/web && pnpm vitest run KnowledgeSearchPanel` | **1 file / 33 tests passed** |
+| 1 | `cd apps/web && pnpm vitest run KnowledgeSearchPanel` | **1 file / 33 tests passed** — SUPERSEDED by §7 (41 tests) |
 | 2 | `cd apps/web && pnpm vitest run` | **37 files / 691 tests passed** (baseline 36 / 658; this plan adds exactly 1 file / 33 tests) |
 | 3 | `cd apps/web && pnpm typecheck` | clean |
 | 4 | `cd packages/backend && pnpm vitest run knowledgeSearch.test` | **1 file / 40 tests passed** (baseline 32; this plan adds 8) |
 | 5 | `cd packages/backend && pnpm vitest run` | **113 files / 3147 tests: 3145 passed, 2 failed** — `convex/env.test.ts` (the KNOWN Phase-28 `ENV_MANIFEST` red, not this plan's; `git log -2 -- convex/lib/env.ts` names 29-FIN-W2 / 29-W2-CLEANUP) and `convex/media.test.ts` (the documented load flake — **re-run alone: 1 file / 255 tests passed**) |
 | 6 | `cd packages/backend && pnpm typecheck` | clean |
 | 7 | `cd packages/core && pnpm vitest run` | **45 files / 1457 tests passed** (unchanged from baseline — this plan changes no core source) |
-| 8 | `cd apps/web && npx playwright test --list knowledge-search` | **7 tests discovered in 2 files** (the spec parses and every test id resolves; this is NOT an execution) |
+| 8 | `cd apps/web && npx playwright test --list knowledge-search` | **7 tests discovered in 2 files.** The spec PARSES — that is ALL `--list` proves. It resolves no locator, which is why it missed the strict-mode bug in §7.2. Now 8 tests. |
 | 9 | `pnpm --filter @pikar/web build` | **passed, after an environment repair — see §5.** `/dashboard/workspace` compiles. |
 | 10 | `echo '{}' \| node scripts/check-playbooks.mjs check` | empty stdout (= pass) after `docs/playbooks/cockpit.md` and `docs/playbooks/knowledge-search-routines.md` were updated |
 
@@ -119,6 +123,7 @@ connecting your support desk.`
 | a mailbox that is not connected is never rendered as an empty mailbox | **5** `knowledge-source-state` rows, the literal not-connected sentence, the literal "None of your sources could be searched…" sentence, and the absence of both the all-empty sentence and the string `no results` |
 | the source Phase 28 never landed names its unlock | the literal not-landed + unlock sentence |
 | an unsearchable source is a gap, and the card offers no way to act on it | the card's complete button set is exactly `["Close knowledge search", "Search"]` — a search reads, it never acts |
+| an answer asked before the first chat message survives that message (added by the fix pass) | one `knowledge-answer` card before the cockpit send and the SAME one after it, still carrying its gap sentence — the panel's `ks_` handle is not abandoned when `threadId` arrives |
 | a real answer carries per-source coverage and a closed confidence label (live) | 5 coverage rows; if any claim rendered, at least one citation row and a confidence line matching `^(High\|Medium\|Low\|Not supported)` |
 | B's own searches are the only ones B can see | A's needle appears in A's panel and has **count 0** in B's |
 
@@ -172,3 +177,82 @@ app.
 - **A tenant activating a customization.** Out of this plan's scope entirely, and per Wave 4's
   standing note `planTenantActivation` refuses every `pack-*` name, so a published pack
   customization is currently inert in production. The search panel makes no claim about it.
+
+---
+
+## 7. The 29-09 fix pass (2026-08-29) — what was re-run, and the DOA locator
+
+### 7.1 Re-run, with real output
+
+| # | Command | Result |
+|---|---|---|
+| 1 | `cd apps/web && pnpm vitest run KnowledgeSearchPanel` | **1 file / 41 tests passed** (was 33; this pass adds 8) |
+| 2 | `cd apps/web && pnpm vitest run` | **36 files passed / 1 failed — 671 passed, 28 failed.** The red file is `app/(app)/dashboard/workflows/WorkflowPackCustomizer.test.ts`, which is **29-07's, in flight and UNCOMMITTED in this shared worktree** (`git status` shows that lane's `WorkflowPackCustomizer.tsx` and `workflowPackDiscovery.ts` modified). Not this plan's; not fixed by this plan. |
+| 3 | `cd apps/web && pnpm typecheck` | **every error is in `dashboard/workflows/WorkflowPackCustomizer*` (29-07's in-flight files); zero errors in any file this plan owns**, verified by re-running with that path filtered out. |
+| 4 | `cd packages/core && pnpm vitest run` | **45 files / 1457 tests passed** (unchanged — this pass only corrects comments in `knowledgeSearch.ts`) |
+| 5 | `cd packages/core && pnpm typecheck` | clean |
+| 6 | `pnpm --filter @pikar/web build` | **passed.** `/dashboard/workspace` compiles. (The `server-only` shim from §5 was still present in `node_modules`; a fresh `pnpm install` needs it again.) |
+| 7 | `cd apps/web && npx playwright test --list knowledge-search` | **8 tests discovered in 2 files** — parse only, still zero executions |
+| 8 | `echo '{}' \| node scripts/check-playbooks.mjs check` | **blocked, on two playbooks this agent does not own** — see §7.4. `docs/playbooks/cockpit.md` (this plan's) WAS updated. |
+
+### 7.2 The spec was dead on arrival, and it is fixed
+
+`panel.getByRole("button", { name: "Search" })` resolved to **TWO** elements. Playwright's `name`
+option is a case-insensitive **substring** match by default, and the panel's close control is
+`aria-label="Close knowledge search"` — which contains "search". Every test in the file reached that
+locator (directly, or through the `ask()` helper), so the whole spec would have failed on its first
+assertion with a strict-mode violation.
+
+Proven against real chromium (a throwaway script, `setContent` with the panel's own two buttons
+inside its own `section aria-label=...`, deleted afterwards):
+
+```
+loose  count = 2
+exact  count = 1
+LOOSE THROWS: Error: locator.isDisabled: Error: strict mode violation:
+  getByRole('region', { name: 'Search everything you have connected' })
+  .getByRole('button', { name: 'Search' }) resolved to 2 elements:
+EXACT isDisabled = false
+```
+
+Fixed to `{ name: "Search", exact: true }` at both sites. The rest of the file was re-read selector
+by selector against the rendered markup: `getByRole("button", {name: "Chat options"})` (the
+`HeaderMenu` trigger's `aria-label`; the menu itself is `role="menu"`, so there is no second button
+with that name), `getByRole("menuitem", {name: "Search your knowledge"})` (one of four menu items,
+and the only one containing that phrase), `getByLabel("What do you want to know?")` (the card's one
+`htmlFor`), `Close knowledge search`, and the sign-in trio, which is copied verbatim from the landed
+`e2e/auth.setup.ts` — "Sign Out" in `(app)/layout.tsx` matches `{name: "Sign out"}` because the
+default match is case-insensitive.
+
+**THE SPEC IS STILL UNRUN.** §4 is still empty. Fixing a locator is not evidence, and the plan's
+browser criterion is not met.
+
+### 7.3 What the fix pass changed in the product
+
+1. `answered` no longer reads the summary string. The card could print "The sources that were
+   searched had nothing on this." directly above cited claims, because the synthesis JSON schema
+   puts no minimum length on `summary`.
+2. The citation source label, the conflicting-evidence source label and the stored-question heading
+   are now asserted against the rendered markup. All three could previously be deleted with 33/33
+   green.
+3. The available/unavailable split is read from `@pikar/core`'s `aggregateCoverage` instead of a
+   second copy in the panel.
+4. `activeThread` is `ownThread ?? threadId ?? null`, so a search made before the first chat message
+   stays readable after it. Covered by the new (UNRUN) e2e test in §3.
+5. Three comments in `packages/core/src/knowledgeSearch.ts` saying `renderSourceGap` and
+   `groundedSourceProps` have no production caller were deleted — 29-09 created that caller.
+
+### 7.4 Named follow-ups this agent did NOT make (ownership)
+
+| File | Owner | What it needs |
+|---|---|---|
+| `docs/playbooks/knowledge-search-routines.md` | W3-TAIL / FIX-TAIL | A `Last verified` bump for the `packages/core/src/knowledgeSearch.ts` comment corrections in §7.3(5). The §9 hook blocks on it, and this agent must not cross the ownership line a second time. |
+| `packages/backend/convex/knowledgeSearch.ts:499` | not 29-09 | Still says `renderSourceGap` "has NO caller yet — 29-09's panel is where it gets wired". The caller exists. Same false claim as the two deleted in core. |
+| `docs/playbooks/workflow-packs.md` | 29-07 | The §9 hook also blocks on 29-07's in-flight `WorkflowPackCustomizer.tsx` / `workflowPackDiscovery.ts`. Not this plan's. |
+
+`groundedSourceProps().nonVault` was left in place rather than deleted or newly rendered: the panel
+already renders every non-vault citation as a `Citation` row carrying its own source label (the new
+test *"a Drive citation names Drive, so two systems on one claim are told apart"* pins that), so
+non-vault provenance is visible on the page. `nonVault` itself has no production reader, and
+deleting it would break `packages/backend/convex/knowledgeSearch.test.ts`, which this agent does not
+own. Its docstring now says that plainly instead of claiming a caller.

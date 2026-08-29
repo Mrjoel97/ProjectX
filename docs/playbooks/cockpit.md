@@ -1,3 +1,43 @@
+> Last verified: 2026-08-29 (29-09 FIX — **THE SEARCH CARD COULD DENY EVIDENCE IT WAS SHOWING, AND
+> THE THREE PROVENANCE STRINGS BELOW WERE UNTESTED.** Four corrections to the entry after this one.
+>
+> **(1) `answered` no longer reads the summary string.** It was `row.summary.length > 0`, and the
+> synthesis JSON schema in `knowledgeLlm.ts` puts no minimum length on `summary`, so a model that
+> answers only in claims stored citation-checked claims beside a blank summary — and the card
+> printed "The sources that were searched had nothing on this." directly above them, with the
+> confidence line suppressed. It is now `row.claims.length > 0 || row.summary.trim().length > 0`,
+> and the summary paragraph renders only when there is one. Two new tests in
+> `KnowledgeSearchPanel.test.ts` cover the blank-summary-with-claims and blank-summary-with-no-claims
+> cases; restoring the old expression fails the first.
+>
+> **(2) The provenance line is enforced now, not just rendered.** Deleting
+> `PACK_SOURCE_LABEL[citation.source]` from the citation, deleting `PACK_SOURCE_LABEL[row.source]`
+> from the conflicting-evidence list, or deleting the `{row.question}` heading each left the suite
+> green. The prior entry's claim that every citation carries source, authority and freshness was
+> true of the code and unenforced by the tests. Three tests now assert the RENDERED span, e.g.
+> `Re: renewal</span> — your mailbox · Something someone said, not a record · Updated in the last
+> month` — a substring the coverage sentence cannot supply. All three deletions go red.
+>
+> **(3) The available/unavailable split is read from `@pikar/core`.** The panel had its own
+> `row.sources.some((s) => s.status !== "unavailable")` beside `aggregateCoverage`'s docstring
+> claiming the distinction is made once, in core. The panel now calls `aggregateCoverage(row.sources)`
+> and reads `available + partial > 0`; a source scan fails if the inline form comes back.
+>
+> **(4) The panel's own thread handle wins.** `activeThread` was `threadId ?? ownThread`, so a search
+> made on a fresh workspace became unreadable the moment the user sent their first chat message —
+> the prop arrived, the subscription moved to the cockpit thread, and the rows stayed stranded under
+> the `ks_` handle with nothing able to query them. It is `ownThread ?? threadId ?? null` now.
+> ponytail: session-scoped — the panel unmounts on close, so the handle does not outlive the card.
+>
+> THE BROWSER GATE IS STILL UNRUN, and it was DEAD ON ARRIVAL until this pass:
+> `panel.getByRole("button", { name: "Search" })` resolved to TWO elements, because Playwright's
+> `name` is a case-insensitive SUBSTRING match and `aria-label="Close knowledge search"` contains
+> "search". Every test in the file went through that locator, so the whole spec would have failed on
+> its first line; `--list` only proves parsing, which is why it survived. Now `{ name: "Search",
+> exact: true }`, verified against real chromium with `setContent` (loose = 2 and a strict-mode
+> violation, exact = 1 and usable). An eighth test was added for correction (4). Still zero
+> executions against a running stack — see `29-SEARCH-GATE.md`.)
+>
 > Last verified: 2026-08-29 (29-09 — **THE COCKPIT GAINED A THIRD INLINE CARD: UNIFIED KNOWLEDGE
 > SEARCH (KNOW-01).** `KnowledgeSearchPanel.tsx` is opened from the same "Chat options" menu as
 > `SkillAuthoringPanel`, mounted in the same place in `page.tsx`, on the same terms — session state,

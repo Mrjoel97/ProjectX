@@ -169,6 +169,37 @@ describe("an empty answer and an unreachable one are DIFFERENT on the page", () 
     expect(html).toContain("your mailbox is not connected yet, so it was not searched.");
   });
 
+  test("a blank summary beside real claims is NOT 'the sources had nothing'", () => {
+    // The synthesis schema puts no minimum on `summary`, so a model can answer only in claims.
+    // Reading `summary.length` printed the all-empty sentence directly above the cited evidence.
+    const html = render({
+      summary: "",
+      confidence: "high",
+      sources: [{ source: "vault", status: "available", returned: 2 }],
+      claims: [
+        {
+          text: "The renewal price is $40.",
+          evidence: [cite({ label: "Rate card", sourceRef: "doc_4" })],
+          conflictEvidence: [],
+        },
+      ],
+    });
+    expect(html).toContain("The renewal price is $40.");
+    expect(html).not.toContain(ALL_EMPTY);
+    expect(html).not.toContain(ALL_UNAVAILABLE);
+    // …and the reader still gets the trust label, which the old branch suppressed too.
+    expect(html).toContain("High confidence — several sources agree and every source answered.");
+  });
+
+  test("a blank summary with no claims still says the sources were searched and empty", () => {
+    const html = render({
+      summary: "",
+      sources: [{ source: "vault", status: "available", returned: 0 }],
+      claims: [],
+    });
+    expect(html).toContain(ALL_EMPTY);
+  });
+
   test("neither sentence appears once there is an answer", () => {
     const html = render({
       summary: "Margin is 40%.",
@@ -228,6 +259,52 @@ describe("citations drill in only where a drill-in exists", () => {
     expect(html).not.toContain('data-testid="source-title"');
   });
 
+  test("a citation names the SYSTEM it came from, beside its authority and freshness", () => {
+    // The headline provenance claim of the feature. The assertion spans the citation's own label
+    // through to its authority so it cannot be satisfied by the coverage sentence, which is the
+    // other place the words "your mailbox" appear on this card.
+    const html = render({
+      summary: "s",
+      claims: [
+        {
+          text: "They asked about renewal.",
+          evidence: [
+            cite({
+              source: "inbox",
+              sourceRef: "msg_abc",
+              label: "Re: renewal",
+              authority: "correspondence",
+            }),
+          ],
+          conflictEvidence: [],
+        },
+      ],
+      sources: [{ source: "inbox", status: "available", returned: 1 }],
+    });
+    expect(html).toContain(
+      "Re: renewal</span> — your mailbox · Something someone said, not a record · Updated in the last month",
+    );
+  });
+
+  test("a Drive citation names Drive, so two systems on one claim are told apart", () => {
+    const html = render({
+      summary: "s",
+      claims: [
+        {
+          text: "Two sources agree.",
+          evidence: [
+            cite({ label: "Pricing sheet", sourceRef: "doc_9" }),
+            cite({ source: "drive", sourceRef: "file_1", label: "Q3 model.xlsx" }),
+          ],
+          conflictEvidence: [],
+        },
+      ],
+      sources: [],
+    });
+    expect(html).toContain("Pricing sheet</span> — your knowledge vault · Your own document");
+    expect(html).toContain("Q3 model.xlsx</span> — your Google Drive · Your own document");
+  });
+
   test("a mixed claim splits: the vault row drills in, the Drive row does not", () => {
     const html = render({
       summary: "s",
@@ -285,7 +362,9 @@ describe("conflicting evidence is shown, never resolved away", () => {
     });
     expect(html).toContain("Another source disagrees");
     expect(html).toContain("Rate card v2");
-    expect(html).toContain("Rate card (old copy)");
+    // WHICH source disagrees is the point of the block — a bare title is not a disagreement the
+    // reader can act on.
+    expect(html).toContain("Rate card (old copy)</span> — your Google Drive");
   });
 
   test("no disagreement block when nothing disagreed", () => {
@@ -381,6 +460,24 @@ describe("what was not answered, and what was thrown away", () => {
   });
 });
 
+// ── 6b. Every card says which question it answers ──────────────────────────────────────────
+
+describe("a stacked answer is attributable to the question that produced it", () => {
+  test("the stored question is the card's heading", () => {
+    // `listByThread` returns up to LIST_LIMIT rows into one thread, so a card with no question on
+    // it cannot be told from the one above it.
+    const html = render({ question: "Renewal price, please", summary: "s" });
+    expect(html).toContain('class="caps-label"');
+    expect(html).toContain(">Renewal price, please</p>");
+  });
+
+  test("the heading is the STORED question, not the summary", () => {
+    const html = render({ question: "What is our margin?", summary: "Margin is 40%." });
+    expect(html).toContain(">What is our margin?</p>");
+    expect(html).toContain("Margin is 40%.");
+  });
+});
+
 // ── 7. A governed stop is a sentence, not a spinner that never ends ────────────────────────
 
 describe("every refusal the backend can return has its own words", () => {
@@ -450,6 +547,21 @@ describe("the panel is wired into the workspace and stays a read", () => {
     // The exact strings `renderSourceGap` owns must not be restated here.
     expect(panel).not.toContain("so it was not searched");
     expect(panel).not.toContain("only the first");
+  });
+
+  test("the available/unavailable split is read from @pikar/core, not restated in the UI", () => {
+    // `aggregateCoverage`'s docstring claims the distinction is made there; this is what fails if
+    // the panel starts deciding it again on its own.
+    expect(panel).toContain("aggregateCoverage(row.sources)");
+    expect(panel).not.toContain('status !== "unavailable"');
+    expect(panel).not.toContain('status === "unavailable"');
+  });
+
+  test("the panel's own thread handle wins once it has minted one", () => {
+    // A search filed under the panel's `ks_` handle stays readable after the cockpit mints its
+    // thread. Reading the prop first re-subscribed the panel and the answers on screen vanished.
+    expect(panel).toContain("ownThread ?? threadId ?? null");
+    expect(panel).not.toContain("threadId ?? ownThread");
   });
 
   test("the query field is labelled and the panel is reachable by name", () => {

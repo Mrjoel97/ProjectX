@@ -1024,7 +1024,9 @@ export type SourceCoverage = {
  *
  * An `available` source that returned zero rows is COMPLETE and has no gap: "we looked and there is
  * nothing" is a true answer. An `unavailable` source with the same zero rows is a GAP. The whole
- * KNOW-01 honesty requirement is that distinction, so it is made once, here.
+ * KNOW-01 honesty requirement is that distinction, and the renderer reads it from here rather than
+ * re-deriving it — `KnowledgeSearchPanel.test.ts` ("the available/unavailable split is read from
+ * @pikar/core, not restated in the UI") is what fails if a second copy appears.
  */
 export function aggregateCoverage(states: readonly KnowledgeSourceState[]): SourceCoverage {
   let available = 0;
@@ -1086,11 +1088,9 @@ const PARTIAL_SENTENCE: Readonly<Record<PartialReason, string>> = {
  * NOT-LANDED source also names its unlock from `MISSING_SOURCE_UNLOCK`, because naming a gap
  * without naming its unlock leaves the user with a complaint instead of a next step.
  *
- * ⚠ NOT WIRED YET. The coordinator stores the raw `KnowledgeSourceState[]` on
- * `knowledgeSearches.sources`; 29-09's `KnowledgeSearchPanel` is the renderer that will call this.
- * Unit tests exercise it (`knowledgeSearch.test.ts`, and `workflowPacks.test.ts` pins the unlock
- * sentence against `MISSING_SOURCE_UNLOCK`). Do not read a comment elsewhere describing it as live
- * wiring — one did, and it was wrong.
+ * Callers: `KnowledgeSearchPanel.tsx` renders the return value per stored source state, and
+ * `knowledgeSearch.test.ts` here plus `workflowPacks.test.ts` (which pins the unlock sentence
+ * against `MISSING_SOURCE_UNLOCK`) exercise it directly.
  */
 export function renderSourceGap(state: KnowledgeSourceState): string | null {
   if (state.status === "available") return null;
@@ -1125,10 +1125,8 @@ export function renderSourceGap(state: KnowledgeSourceState): string | null {
  * component exactly the props it already takes. One card component serves both planes and no
  * caller writes its own translation.
  *
- * ⚠ AND IT IS NOT WIRED YET EITHER — unit tests are what exercise it. The sentence above
- * describes the mapping this function IMPLEMENTS, not a path anything currently walks; 29-09's
- * panel is the caller. `knowledgeSearch.ts`'s stored `StoredClaim.evidence` is a STORAGE shape and
- * is deliberately not this one, so nothing in the backend duplicates it.
+ * `KnowledgeSearchPanel.tsx` is the caller. `knowledgeSearch.ts`'s stored `StoredClaim.evidence` is
+ * a STORAGE shape and is deliberately not this one, so nothing in the backend duplicates it.
  *
  * AND IT PROJECTS VAULT EVIDENCE ONLY. The first version of this function mapped EVERY source's
  * `sourceRef` into `docIds` — committing, one plane over, the exact naming lie the paragraph above
@@ -1138,9 +1136,11 @@ export function renderSourceGap(state: KnowledgeSourceState): string | null {
  * becomes a clickable control that opens a vault-document modal for something that is not a vault
  * document. Four of the five sources would have rendered that.
  *
- * The non-vault citations are RETURNED, never dropped: `nonVault` is what the caller renders
- * through a path that does not pretend a provider ref is a document. Filtering to a silently
- * shorter list would trade a broken control for missing provenance, which is worse.
+ * The non-vault citations are RETURNED rather than filtered away, so a caller cannot end up with a
+ * silently shorter list. `KnowledgeSearchPanel` renders provenance by iterating the claim's full
+ * `evidence` and uses only `docIds`/`titles`/`count` from here, so `nonVault` currently has no
+ * production reader; it is the split's other half, kept so a caller that wants the non-document
+ * citations does not re-derive the vault test.
  *
  * `count` counts DOCUMENTS, because the card's own words are "Grounded in N documents". The total
  * number of citations is `docIds.length + nonVault.length`, and a caller that wants it says so.

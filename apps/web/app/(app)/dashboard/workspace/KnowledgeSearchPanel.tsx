@@ -4,7 +4,12 @@ import { api } from "@pikar/backend/api";
 // The gap sentence, the citation mapping and the source vocabulary are CODE in `@pikar/core`,
 // imported rather than restated. A second copy of "your mailbox is not connected yet" in this file
 // is how a backend state and the sentence describing it drift apart.
-import { groundedSourceProps, PACK_SOURCE_LABEL, renderSourceGap } from "@pikar/core";
+import {
+  aggregateCoverage,
+  groundedSourceProps,
+  PACK_SOURCE_LABEL,
+  renderSourceGap,
+} from "@pikar/core";
 import { useAction, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
@@ -18,12 +23,13 @@ import { GroundedSources } from "./cards";
 //    here; the coordinator has no tool loop, so evidence containing an instruction cannot make
 //    anything happen. `knowledgeSearch.test.ts` proves the acting planes stay empty across a run
 //    whose evidence carries a prompt injection.
-//  - not a place that invents a total. The only numbers rendered are `returned` (how many rows a
-//    source gave, code-owned) and the count of cited documents. The panel never claims to know how
-//    many results exist.
-//  - not a vault browser. Only a `vault` citation becomes a `VaultDocButton`; a Gmail message id or
-//    a Drive file id handed to `docIds` would open a vault-document modal for something that is not
-//    a vault document, which is why `groundedSourceProps` returns those separately.
+//  - not a place that invents a denominator. `KnowledgeSearchPanel.test.ts` asserts that a partial
+//    read renders "only the first 3 results were read" and NOT "of 3".
+//  - not a vault browser. Only a `vault` citation becomes a `VaultDocButton` — `groundedSourceProps`
+//    is what separates them, because a Gmail message id or a Drive file id handed to `docIds` would
+//    open a vault-document modal for something that is not a vault document. Non-vault citations are
+//    still shown, as `Citation` rows carrying their own source label; the test
+//    "a mailbox citation is NOT a vault document button" pins both halves.
 //
 // Rendered inline in the chat pane from the existing "Chat options" menu, like
 // `SkillAuthoringPanel` — no new route and no nav entry (BRAND §4: the cockpit is two panes).
@@ -179,10 +185,16 @@ function Claim({ claim }: { claim: StoredClaim }) {
 
 /** One stored answer, rendered whole. Pure — no hooks, no provider, no network. */
 export function KnowledgeSearchResult({ row }: { row: KnowledgeSearchRow }) {
-  // `summary` is "" exactly when the run had no evidence to synthesize from, so it is the
-  // coordinator's own signal that no answer was written — not a guess made here.
-  const answered = row.summary.length > 0;
-  const readSomething = row.sources.some((state) => state.status !== "unavailable");
+  // DERIVED FROM WHAT THE ROW CARRIES, never from the summary string. The synthesis JSON schema
+  // puts no minimum length on `summary` (`knowledgeLlm.ts`) and the coordinator stores it trimmed
+  // and unguarded, so a model that answers only in claims produces a row with citation-checked
+  // claims and a blank summary — and reading `summary.length` there printed "the sources that were
+  // searched had nothing on this" directly above the evidence it was rendering.
+  const answered = row.claims.length > 0 || row.summary.trim().length > 0;
+  // The "we looked and there is nothing" / "we could not look" split is @pikar/core's
+  // `aggregateCoverage`, not a second copy of the rule here.
+  const coverage = aggregateCoverage(row.sources);
+  const readSomething = coverage.available + coverage.partial > 0;
   return (
     <article
       style={{ display: "grid", gap: "0.5rem" }}
@@ -194,7 +206,7 @@ export function KnowledgeSearchResult({ row }: { row: KnowledgeSearchRow }) {
       </p>
       {answered ? (
         <>
-          <p style={body}>{row.summary}</p>
+          {row.summary.trim().length > 0 && <p style={body}>{row.summary}</p>}
           <p style={dim} data-testid="knowledge-confidence">
             {CONFIDENCE_COPY[row.confidence]}
           </p>
@@ -274,7 +286,14 @@ export function KnowledgeSearchPanel({
   // message is sent. Minted on submit rather than at mount: a `useState` initializer would run on
   // the server too and hydrate to a different id.
   const [ownThread, setOwnThread] = useState<string | null>(null);
-  const activeThread = threadId ?? ownThread;
+  // OWN HANDLE FIRST. `threadId` is undefined on a fresh workspace and becomes the cockpit thread
+  // the moment the user sends their first message; reading the prop first re-subscribed the panel
+  // to that thread and the answers already on screen became unreadable — the rows stay in the DB
+  // under the `ks_` handle and nothing could ever query them back.
+  // ponytail: session-scoped. The panel unmounts on close (`page.tsx` renders it behind
+  // `searching`), so `ownThread` lives only as long as the open card. Upgrade path if searches
+  // should follow chat-tab switches: file them under the thread and add a thread picker here.
+  const activeThread = ownThread ?? threadId ?? null;
   const rows = useQuery(
     api.knowledgeSearch.listByThread,
     activeThread === null ? "skip" : { threadId: activeThread },
