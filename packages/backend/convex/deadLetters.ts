@@ -83,6 +83,10 @@ export const listAll = ownerQuery({
         id: r._id,
         tenantId: r.tenantId,
         workflowId: r.workflowId,
+        // 28.1-05. Absent means `"workflow"` — every row written before the billing plane existed
+        // has no discriminator, and reporting those as undefined would blank the column for the
+        // entire history. A DEFAULT, not an inference: the write site sets it going forward.
+        source: r.source ?? "workflow",
         correlationId: r.correlationId,
         error: r.error,
         status: r.status,

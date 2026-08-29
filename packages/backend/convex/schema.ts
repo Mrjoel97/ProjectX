@@ -212,11 +212,29 @@ export default defineSchema({
     // (no migration; OPSG-06 moot). Backs auditSince, which previously full-scanned.
     .index("by_ts", ["ts"]),
 
-  // Dead-letter queue populated by workflow onComplete on failure. Redaction-safe payload.
+  // Dead-letter queue. Redaction-safe payload.
+  //
+  // THIS TABLE IS `audit_immutable` (packages/core/src/tenantData.ts). It is EXCLUDED FROM BOTH
+  // the tenant deletion walk and the export walk BY CONSTRUCTION, not by an `if`. Two obligations
+  // ride with that: every writer is INSERT-ONLY (CLAUDE.md §3), and **nothing written here may
+  // ever become personal data** — an email or a name landing in `payload` would be beyond the
+  // reach of an erasure request forever. Refs, hashes, ids and counts ONLY (CLAUDE.md §4).
   deadLetters: defineTable({
     tenantId: v.string(),
     correlationId: v.string(),
-    workflowId: v.string(),
+    /**
+     * OPTIONAL since 28.1-05: a Stripe webhook has no workflow. Synthesizing a fake id like
+     * `billing:evt_…` would lie about what this field MEANS to every existing reader and to the
+     * compliance surface — the field is optional because the fact is optional. This is the WIDEN
+     * step and it terminates here: nothing narrows, so no backfill and no migration.
+     */
+    workflowId: v.optional(v.string()),
+    /**
+     * Which plane wrote the row. Set at the WRITE site rather than inferred from the shape (a
+     * future writer could have both a workflow and another source). Absent on every row written
+     * before 28.1-05; readers report absent as `"workflow"`, never as a missing value.
+     */
+    source: v.optional(v.union(v.literal("workflow"), v.literal("billing"))),
     payload: v.any(),
     error: v.string(),
     status: v.union(v.literal("new"), v.literal("replayed"), v.literal("resolved")),

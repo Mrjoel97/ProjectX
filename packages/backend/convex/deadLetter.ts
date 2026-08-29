@@ -33,6 +33,7 @@ export const onPipelineComplete = internalMutation({
       tenantId: context.tenantId,
       correlationId: context.correlationId,
       workflowId,
+      source: "workflow",
       payload: context.payload, // redaction-safe: refs/synthetic only
       error,
       status: "new",
@@ -125,7 +126,10 @@ export const deadLetterRecipient = internalMutation({
     await ctx.db.insert("deadLetters", {
       tenantId,
       correlationId,
-      workflowId: workflowId ?? "",
+      // 28.1-05: pass-through, no `?? ""`. The field is optional now, and an empty string was
+      // only ever a placeholder for a required column that had no value to put in it.
+      workflowId,
+      source: "workflow",
       payload: { requestId }, // ref only — redaction-safe (CLAUDE.md §4)
       error,
       status: "new",

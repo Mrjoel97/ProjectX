@@ -85,6 +85,7 @@ function render(viewer: Viewer): { html: string; queries: string[]; mutations: s
               id: "dl_1",
               tenantId: "kn7other",
               workflowId: "media.render",
+              source: "workflow",
               correlationId: "batch_9",
               error: "route_bad_response",
               status: "new",
