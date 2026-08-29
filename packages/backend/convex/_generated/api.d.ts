@@ -74,6 +74,7 @@ import type * as opsSignals from "../opsSignals.js";
 import type * as optimizerConfig from "../optimizerConfig.js";
 import type * as optimizerEligibility from "../optimizerEligibility.js";
 import type * as owner from "../owner.js";
+import type * as pinnedWorkflows from "../pinnedWorkflows.js";
 import type * as pipeline from "../pipeline.js";
 import type * as plans from "../plans.js";
 import type * as proactiveReview from "../proactiveReview.js";
@@ -198,6 +199,7 @@ declare const fullApi: ApiFromModules<{
   optimizerConfig: typeof optimizerConfig;
   optimizerEligibility: typeof optimizerEligibility;
   owner: typeof owner;
+  pinnedWorkflows: typeof pinnedWorkflows;
   pipeline: typeof pipeline;
   plans: typeof plans;
   proactiveReview: typeof proactiveReview;

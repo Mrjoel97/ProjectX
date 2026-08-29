@@ -1,3 +1,22 @@
+> Last verified: 2026-08-29 (29-08 — **THE WORKSPACE'S PINNED-PROMPT MENU NOW LISTS PROMPT PINS
+> ONLY.** `savedPrompts.list` gained one filter: a row carrying `templateId` is a pinned WORKFLOW
+> (29-08, `packages/backend/convex/pinnedWorkflows.ts`), and Run in this menu is an ordinary
+> Executive-Agent turn through `sendCockpitMessage` — so a workflow pin listed here would offer
+> "Brand review" and then run something that is not the Brand review pack. Workflow pins live on
+> `/dashboard/workflows` and run through `cockpit.startWorkflowPack`, the allow-listed pack agent.
+>
+> The filter is applied AFTER the existing `take(SAVED_PROMPT_LIST_LIMIT)`, deliberately: the take
+> is the cap this menu has always had, and re-taking to refill it would turn a bounded read into a
+> scan. Mutation observed RED — deleting the filter makes `pinnedWorkflows.test.ts` "a workflow pin
+> never appears in the prompt menu" fail with both titles in the list.
+>
+> `cockpit.ts` itself is UNCHANGED by 29-08. `startWorkflowPack` already was the re-run door, and
+> two facts about it are now pinned by tests in `pinnedWorkflows.test.ts` that read this file: it
+> still passes NO `tenantSkillIds` to the binding (which is what makes the pin surface's
+> "your customization is not applied" sentence true), and its `threadId` is still optional with
+> `ensureThreadAndPlan` minting a new thread when it is absent (which is the whole freshness
+> mechanism behind "Run again").)
+
 > Last verified: 2026-08-29 (29-09 FIX — **THE SEARCH CARD COULD DENY EVIDENCE IT WAS SHOWING, AND
 > THE THREE PROVENANCE STRINGS BELOW WERE UNTESTED.** Four corrections to the entry after this one.
 >

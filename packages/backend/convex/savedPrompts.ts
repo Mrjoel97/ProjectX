@@ -107,12 +107,25 @@ export const list = tenantQuery({
       .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
       .order("desc")
       .take(SAVED_PROMPT_LIST_LIMIT);
-    return rows.map((r) => ({
-      id: r._id,
-      title: r.title,
-      text: r.text,
-      createdAt: r.createdAt,
-    }));
+    return (
+      rows
+        // 29-08: PROMPT pins only. A row carrying `templateId` is a pinned WORKFLOW
+        // (`pinnedWorkflows.ts`), and Run in this menu is an ordinary Executive-Agent turn through
+        // `sendCockpitMessage` — so a workflow pin listed here would offer "Business pulse" and then
+        // run something that is not the Business pulse pack. Its own surface (`/dashboard/workflows`)
+        // runs it through `startWorkflowPack`, which is the allow-listed pack agent.
+        //
+        // Filtered AFTER the take, deliberately: the take is the cap this menu has always had (see
+        // SAVED_PROMPT_LIST_LIMIT), and re-taking to refill it would quietly turn a bounded read into
+        // a scan. Workflow pins are listed by `pinnedWorkflows.listPins`, off `by_tenant_template`.
+        .filter((r) => r.templateId === undefined)
+        .map((r) => ({
+          id: r._id,
+          title: r.title,
+          text: r.text,
+          createdAt: r.createdAt,
+        }))
+    );
   },
 });
 

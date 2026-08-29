@@ -1,5 +1,28 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-29 (29-08 — **A PINNED WORKFLOW IS A `savedPrompts` ROW, AND A RE-RUN IS
+> STRUCTURALLY INCAPABLE OF REPLAYING ONE.** `packages/backend/convex/pinnedWorkflows.ts` ships
+> `pinWorkflow` / `unpinWorkflow` / `listPins` / `checkReadiness` / `runAgain` over the SAME table
+> 29-01 added the five lineage columns to. No second table, no second pin menu.
+>
+> `runAgain` declares ONE argument (`id`), so no caller can name a thread, a plan or an approval to
+> resume; it calls `cockpit.startWorkflowPack` with no `threadId`, which makes `ensureThreadAndPlan`
+> mint a fresh thread and a fresh `plans` row per press. Driven END TO END in convex-test for $0 by
+> exhausting the daily budget first — `runPackTurn` takes `preCall`'s governed stop before the model
+> — so "two presses are two runs" is a behavioural assertion: two thread ids, two `plans` rows both
+> at `collecting`, two correlations, ordinals 1 then 2, and one spend row (the test's own).
+>
+> THE HONEST STATE IS NAMED: `customization_not_applied`. `PACK_GATE` refuses to activate any
+> pack-named tenant candidate and `cockpit.ts` passes no `tenantSkillIds`, so a re-run takes the
+> APPROVED GLOBAL TEMPLATE. The claim is pinned by a test that reads `cockpit.ts` itself.
+>
+> `savedPrompts.list` now excludes rows carrying a `templateId`: a workflow pin in the workspace's
+> PROMPT menu would offer "Brand review" and then run an ordinary Executive-Agent turn on the
+> opener, never the allow-listed pack agent.
+>
+> STILL UNPROVEN: the browser. No Playwright spec covers `/dashboard/workflows`, and no model has
+> answered a pinned run.)
+
 > Last verified: 2026-08-29 (29-09 — **`renderSourceGap` AND `groundedSourceProps` NOW HAVE A
 > PRODUCTION CALLER, AND THE COORDINATOR'S OUTPUT IS TESTED AGAINST THE SENTENCE IT BECOMES.**
 > Earlier entries in this file recorded both functions as having no production caller. The caller is
@@ -1007,3 +1030,79 @@ blocklist over source text. It is kept as a cheap tripwire and its ceiling is no
 test; the real boundary is the behavioural key allowlist in `knowledgeSearch.test.ts`. Converting
 the other ~90 events in `AUDIT_VIEWER_EVENTS` to derived key sets is out of scope — only
 `knowledge.*` has an exported pure projection to derive from.
+
+## Plan 29-08 — the manual pin, and the three things it refuses to pretend (2026-08-29)
+
+**Files:** `packages/backend/convex/pinnedWorkflows.ts` (+ `.test.ts`, 34 tests),
+`packages/backend/convex/savedPrompts.ts` (one filter),
+`apps/web/app/(app)/dashboard/workflows/PinnedWorkflowButton.tsx` (+ `.test.ts`,
+`.container.test.ts`), `apps/web/app/(app)/dashboard/workflows/page.tsx`.
+
+### The table decision, made against the plan's own file list
+
+The plan named a `pinnedWorkflows` MODULE, which it gets — but 29-01 had already decided the STORAGE
+question one plan earlier, adding `templateId`, `templateVersion`, `tenantSkillId`,
+`customizationHash` and `sourcePreferences` to `savedPrompts` under a comment saying a parallel
+table "would duplicate all of that AND put a second pin menu in the workspace". So a pinned workflow
+is a pinned prompt with lineage, and it inherits the idempotent `textHash`, the code-derived title,
+the bounded list and — the part that matters — "Run is an ordinary fresh turn through the existing
+governed send path".
+
+The MODULE is separate from `savedPrompts.ts` because that file is deliberately inert and
+`savedPrompts.test.ts` scans it for every recurrence word; a readiness resolver that reads `skills`,
+`tenantSkills` and the source probe would have forced that scan to be loosened.
+
+### `textHash` folds the LINEAGE, not the text
+
+The pinned text is the pack's code-owned `opener`, so every pin of one pack has byte-identical text.
+A text-only hash would make every customization of a pack collapse onto the first pin ever taken of
+it — exactly the collision `schema.ts` warned the first lineage-bearing writer about. `pinIdentity`
+(@pikar/core, all five fields) is the hash input. Mutation observed RED: hashing `spec.opener`
+instead makes "a pin taken after the customization changed is a DIFFERENT pin" fail.
+
+### `sourcePreferences`: membership, not a length clamp
+
+The "Known gaps" row above named a `CUSTOMIZATION_CAPS.maxValuesPerField` clamp as this writer's
+job. It is NOT here, deliberately, and this supersedes that upgrade path. `preferredSources` starts
+from `packReadableSources(packId)` and filters the stored choices INTO it, so the array can never be
+longer than the pack's own readable list (three entries at most) and can never contain a source the
+pack does not read. A `.slice(0, 8)` on top of that could not bind on any of the six packs, and a
+cap that can never bind is the thing this repo keeps mistaking for a guard. Mutation observed RED:
+trusting the stored list lands `crm` and `http://evil.example` on the row.
+
+### Readiness: two lists, and the reason they are two
+
+`blockers` refuse the run; `notices` describe a run that will still happen. Collapsing them is how a
+UI turns "you should know" into "you cannot".
+
+| State | Kind | Meaning |
+|---|---|---|
+| `paused` | blocker | the all-stop kill switch is on |
+| `template_not_active` | blocker | no approved row for this pack any more |
+| `template_republished` | notice | the pin's version is not the live one; the run re-resolves |
+| `customization_not_applied` | notice | the pin names a customization the run cannot use |
+| `customization_missing` | notice | the pinned candidate row is gone or foreign |
+| `sources_unavailable` | notice | a source this pack reads is not connected (count beside it) |
+
+**The daily BUDGET is deliberately not a readiness state.** `runPackTurn` calls
+`guardrails.preCall` before the model and returns the governed stop as DATA (`outcome: "blocked"`,
+`costUsd: 0`); a Convex QUERY cannot call a mutation, so a reactive copy here would be a different,
+weaker question wearing the same name. The kill switch IS here because it is a plain row read.
+
+### How to verify
+
+```
+cd packages/backend && pnpm vitest run pinnedWorkflows savedPrompts cockpit
+cd apps/web && pnpm vitest run PinnedWorkflowButton
+```
+
+### Known gaps
+
+- **No browser has loaded the Pin / Run again controls.** `apps/web` has no Playwright spec for
+  `/dashboard/workflows`, and the route is still absent from the nav.
+- **No model has answered a pinned run.** Every backend drive here is a governed stop at $0.
+- **Cost is not recorded on the pin's audit row.** `startWorkflowPack` returns `{threadId, ok,
+  outcome}` and not the pack's `runId` or `costUsd`, so the pin plane records outcome and latency
+  only. The money is joinable through the pack's own `workflowPackEvents`/`spendEvents` `runId`.
+  Upgrade path: return the `runId` from `startWorkflowPack` — a `cockpit.ts` change this plan did
+  not own.
