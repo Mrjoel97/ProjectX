@@ -5,8 +5,10 @@
 > Dashboard drift is detectable by diffing this file against that one.
 
 **Do this in TEST MODE first, on `acct_1U9DJHV05ajSTq7I` ("Pikar-Ai").** The account exists in both
-test and live mode; `acct_1U9DJsV05pYaPPIE` is the separate sandbox. As of 2026-08-28 there are
-**zero products configured in test mode** — a clean slate, nothing to migrate or reconcile.
+test and live mode; `acct_1U9DJsV05pYaPPIE` is the separate sandbox. It was a clean slate on
+2026-08-28; on **2026-08-29 the product and price below were created via the Stripe API**, in test
+mode only. Steps 3, 4 and 6 are therefore already DONE — read them to understand what breaks, not
+as instructions to repeat. Creating a second product would split the catalogue in half.
 
 **This is the OUTBOUND direction — Pikar charging its own customers.** It is not
 `docs/playbooks/connector-stripe.md`, which reads a *tenant's* Stripe account read-only. The two
@@ -48,6 +50,12 @@ the day the Customer Portal stops being able to manage these subscriptions).
 
 **Record the `price_…` id and the trial length in days.**
 
+> **DONE 2026-08-29 via the API, test mode.** `prod_VA8pHxqMVhfHZ3` / `price_1U9oXpV05ajSTq7I4Z4U1se9`
+> — USD 4900 minor units per month, `trial_period_days: 14`, `tax_behavior: exclusive`, set as the
+> product's `default_price`. **The AMOUNT is a placeholder** and carries the Stripe metadata tag
+> `pikar_placeholder_amount: "true"` so it cannot be mistaken for a pricing decision; pricing was
+> never decided. Change it (or mint a new price) before live mode.
+
 **Breaks silently if wrong:** a *one-off* price instead of a recurring one produces a Checkout
 session that completes, charges once and never renews — a subscription that silently is not one.
 
@@ -57,10 +65,15 @@ session that completes, charges once and never renews — a subscription that si
 
 Pick a real Software-as-a-Service code. **It MUST NOT be `txcd_00000000` ("Nontaxable").**
 
-Research proposes **`txcd_10103001` (Software as a service)** at **LOW confidence** — treat it as a
-suggestion, not a fact. Open the Dashboard's own tax-code selector, pick the SaaS code it actually
-offers, and **report the exact id you selected**. If the Dashboard offers a different SaaS code,
-that one wins. The RULE is what is certain, not the id.
+Research proposed **`txcd_10103001` (Software as a service)** at **LOW confidence** — a suggestion,
+not a fact. The RULE is what was certain, not the id.
+
+> **DONE 2026-08-29.** Stripe's own tax-code list was read and **`txcd_10105002` — "Artificial
+> Intelligence as a Service (AIaaS) - Cloud Based - Business Use"** was selected over the research's
+> generic SaaS code, and set on `prod_VA8pHxqMVhfHZ3`. Stripe's description — *access to cloud-hosted
+> artificial intelligence platforms for commercial, professional, or organizational purposes* — is
+> Pikar exactly. Revisit only if the product stops being AI-centric, or gains a downloaded component
+> (that is `txcd_10105004`).
 
 **Breaks silently if wrong:** Stripe reports `taxability_reason: "not_collecting"` for **two
 different situations** — "we hold no registration in the customer's jurisdiction" and "this product
@@ -141,6 +154,24 @@ from the Dashboard — sending is what mints the customer's virtual bank account
 
 **Where:** Developers → **Webhooks** → Add endpoint.
 
+> **DELIBERATELY NOT DONE, 2026-08-29 — and this is not an oversight.** `CONVEX_SITE_URL` is
+> `http://127.0.0.1:3211`: a **local** deployment Stripe cannot reach. A registered endpoint would
+> fail every delivery, be auto-disabled by Stripe, and leave an object in the account that *looks*
+> configured. Register this only once a Convex **cloud** deployment exists.
+>
+> For local delivery in the meantime, use the Stripe CLI (installed, v1.40.2, **not yet
+> authenticated**) — it needs no registered endpoint and prints its own session `whsec_…`:
+>
+> ```bash
+> stripe login                     # interactive, browser
+> stripe listen --forward-to localhost:3211/billing/stripe/webhook
+> ```
+>
+> Nothing is blocked by this: 28.1-01 proves signature verification offline against a fabricated
+> `whsec_`, and the API version below was pinned from Stripe's versioning doc instead of read off an
+> endpoint — which is the better source anyway, since the account default is the one thing we must
+> never inherit.
+
 URL: `{CONVEX_SITE_URL}/billing/stripe/webhook` — the Convex **site** origin (`*.convex.site`), not
 the app origin. Subscribe to the locked event list: `invoice.paid`, `invoice.payment_failed`,
 `charge.refunded`, `credit_note.created`, `checkout.session.completed`,
@@ -184,18 +215,31 @@ the Operations section of `docs/playbooks/billing.md`.
 
 ---
 
-## As configured on YYYY-MM-DD
+## As configured on 2026-08-29 (TEST MODE)
 
-> **Not yet filled in.** 28.1-02 Task 3 records here exactly what the owner selected, so that a
-> later Dashboard drift is detectable by diffing this section against
-> `packages/billing/src/config.ts`. Until then every constant in that file is `null` and
-> `CONFIG_CONFIRMED` is `false`.
+This table and `packages/billing/src/config.ts` are two independent recordings of the same facts.
+**Diffing them is the drift detector** — so a stale row here does not merely mislead a reader, it
+silently disables the check. Update both together, never one.
 
-| Setting | Value | Constant |
-| --- | --- | --- |
-| Merchant country | _pending_ | `HEAD_OFFICE_COUNTRY` |
-| Bank transfer available | _pending_ | `BANK_TRANSFER_ENABLED` |
-| Product tax code | _pending_ | `PRODUCT_TAX_CODE` |
-| Webhook API version | _pending_ | `STRIPE_API_VERSION` |
-| Trial length (days) | _pending_ | `TRIAL_DAYS` |
-| Flat-rate price id | _pending_ | `BILLING_STRIPE_PRICE_ID` (env, not source) |
+| Setting | Value | Constant | How |
+| --- | --- | --- | --- |
+| Product tax code | `txcd_10105002` (AIaaS, cloud, business use) | `PRODUCT_TAX_CODE` | API |
+| API version | `2026-08-26.dahlia` | `STRIPE_API_VERSION` | pinned by us |
+| Trial length (days) | `14` | `TRIAL_DAYS` | API, on the price |
+| Bank transfer available | `true` | `BANK_TRANSFER_ENABLED` | owner, Dashboard |
+| Flat-rate price id | `price_1U9oXpV05ajSTq7I4Z4U1se9` | `BILLING_STRIPE_PRICE_ID` (env, not source) | API |
+| Product id | `prod_VA8pHxqMVhfHZ3` | _(none — reachable via the price)_ | API |
+| Merchant country | **does not exist yet** | `HEAD_OFFICE_COUNTRY` = `null` | — |
+
+`CONFIG_CONFIRMED` is still **`false`**, and `HEAD_OFFICE_COUNTRY` is the single reason. That null is
+a **fact, not a gap**: the business is not yet registered, so there is no head office to record.
+Do not invent a country to make the flag flip — the flag asserts completeness, and completeness is
+genuinely not true. `config.test.ts` format-checks each of the other five **the moment it lands**, so
+nothing escapes the guards by arriving early.
+
+### Still owner-only, still open
+
+Steps **2** (branding), **7** (Customer Portal), **8** (Smart Retries) have no API surface in the
+tooling available here, and step **11** (the three `convex env set` calls) needs secrets only the
+owner holds. None of them block the code: every plan in this phase is provable offline against a
+stubbed `fetch`. They block *live traffic*, which is a later gate.

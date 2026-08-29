@@ -1,9 +1,10 @@
 # Playbook: Billing — Pikar's OWN merchant account (Phase 28.1)
 
-> Last verified: 2026-08-29 against 28.1-03 (`tax.ts` and `reconcile.ts` — the pure tax posture
-> and the Stripe-signal-to-ledger-phase mapping, both offline at $0; 28.1-02 landed the Dashboard
-> checklist and the code-owned config mirror; 28.1-01 shipped the webhook receiver and the
-> `billingStripeEvents` idempotency table)
+> Last verified: 2026-08-29 against 28.1-02 close-out (real test-mode Stripe objects created via
+> the API, and `docs/billing/stripe-dashboard-setup.md` reconciled against them) — after 28.1-03
+> (`tax.ts` and `reconcile.ts`, the pure tax posture and the Stripe-signal-to-ledger-phase mapping,
+> both offline at $0), 28.1-02 (the Dashboard checklist and the code-owned config mirror) and
+> 28.1-01 (the webhook receiver and the `billingStripeEvents` idempotency table)
 > Build history: `.planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/`
 > · Related ADRs: none yet
 
@@ -25,6 +26,17 @@
 > switch is still empty and no movement has ever reached a table. The `billingEvents` book of
 > record and the wiring are **28.1-06**. A green `reconcile.test.ts` proves the LAW, not that any
 > money was ever reconciled.
+>
+> **28.1-02 close-out (2026-08-29): REAL TEST-MODE STRIPE OBJECTS NOW EXIST.**
+> `prod_VA8pHxqMVhfHZ3` and `price_1U9oXpV05ajSTq7I4Z4U1se9` (USD 4900/month, 14-day trial,
+> `tax_behavior: exclusive`, tax code `txcd_10105002`) were created through the Stripe API on
+> `acct_1U9DJHV05ajSTq7I`, **test mode only** — the business is not registered, so live mode is
+> empty and untouched. The price AMOUNT is a placeholder, tagged `pikar_placeholder_amount` in
+> Stripe metadata. **`CONFIG_CONFIRMED` stays `false`, and `HEAD_OFFICE_COUNTRY` is the only
+> reason** — an unregistered business has no head office, so that null is a fact rather than an
+> unanswered question. **No webhook endpoint was registered, deliberately:** `CONVEX_SITE_URL` is
+> `http://127.0.0.1:3211` and Stripe cannot reach it; a registered endpoint would fail every
+> delivery and be auto-disabled. Use `stripe listen` locally instead.
 >
 > Everything marked **[PLANNED]** below is a contract a later plan must satisfy, not a claim that
 > code exists. Do not cite a [PLANNED] line as evidence that something works.
