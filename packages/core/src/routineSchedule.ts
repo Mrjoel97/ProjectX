@@ -20,10 +20,12 @@
  * itself. Deleted in round 2; those four matrix rows now carry `manual` evidence pointing at
  * the research note, which is what they always actually had.
  *
- * Nothing imports what is left, either. `routineDecision.test.ts` scans `convex/**`,
- * `apps/web` and every package `src` recursively for the string `routineSchedule` — round 1
- * scanned only the top level of `convex/`, so `convex/lib/` and `convex/render/` could have
- * imported it in silence.
+ * Nothing imports what is left, either. `routineDecision.test.ts` scans `convex/**`, `apps/web`
+ * (including its top-level modules such as `middleware.ts`) and EVERY `packages/<pkg>/src` recursively
+ * for the string `routineSchedule`. The package roots are DERIVED from the filesystem, not typed
+ * out: round 1 scanned only the top level of `convex/`, and round 2 hardcoded four of the nine
+ * package `src` trees — a verifier added the import to `packages/revenue/src/index.ts` and the
+ * suite stayed green.
  *
  * WHY THERE IS NO `@js-temporal/polyfill` HERE. Plan 29-11 said to spike it. The native
  * platform already covers what the matrix needs, so the dependency is not installed:

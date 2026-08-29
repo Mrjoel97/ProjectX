@@ -303,5 +303,8 @@ test("the spike imports nothing, exports nothing to the barrel, and added no dep
   // NOTE: this test says nothing about IMPORTERS — it cannot see them from here. The recursive
   // "no runtime module imports the spike" scan lives in
   // `packages/backend/convex/routineDecision.test.ts`, which walks convex/, apps/web and every
-  // package src. Round 1's title claimed both halves here and only ever checked this one.
+  // `packages/*/src` — the package roots derived from the filesystem, so a package added later is
+  // scanned without anyone remembering to add it. (Round 2 said "every package src" while
+  // hardcoding four of nine; an import from `packages/revenue/src` read green.) Round 1's title
+  // claimed both halves here and only ever checked this one.
 });

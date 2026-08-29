@@ -29,13 +29,17 @@
  *   - the path stays inside this repository,
  *   - it resolves to a REGULAR FILE, not a directory,
  *   - that file is not empty,
- *   - and no two `pass` rows cite the same `evidenceRef` string.
+ *   - it is not the decision artifact under validation (a record is not its own evidence),
+ *   - and no two `pass` rows resolve to the same FILE. Round 2 keyed this on the raw string, so
+ *     `package.json#row-1 ... package.json#row-12` counted as twelve citations and a fabricated
+ *     enable-safe exited 0 in all three modes; the key is the resolved path now, and an
+ *     `#anchor` does not turn one document into two.
  *
- * That refuses every fabrication shape three verifiers demonstrated, and it forces an author
- * who wants twelve green rows to write twelve distinct real citations — a twelve-line diff a
- * human reads. It CANNOT tell whether the cited file substantiates the row's question. Nothing
- * a parser does can. That judgement is the human checkpoint's job, and §5/§7 of the decision
- * record say so.
+ * That refuses every fabrication shape four verifiers demonstrated, and it forces an author who
+ * wants twelve green rows to cite twelve distinct real FILES. It CANNOT tell whether any of them
+ * substantiates its row's question — `turbo.json` is a real, distinct, non-empty, meaningless
+ * citation and the gate says yes. Nothing a parser does can close that. That judgement is the
+ * human checkpoint's job, and §5/§7 of the decision record say so.
  *
  * WHY THE YAML READER IS HAND-WRITTEN AND HOSTILE. No YAML dependency is installed in this
  * repo and this gate is not worth adding one for. More importantly, a permissive parser is the
@@ -65,6 +69,12 @@
  *   check-routine-gate.mjs <artifact.md> --eligibility         # exit 0 ONLY if enable-safe is earned
  *   check-routine-gate.mjs <artifact.md> --validate-decision   # the recorded decision is permitted
  *   check-routine-gate.mjs --self-check                        # prove the gate can go red
+ *
+ * EXACTLY ONE MODE, AND `--self-check` TAKES NOTHING ELSE. An unrecognised flag and any
+ * combination of the above are exit 2, never a quietly weaker check. Round 2 ran `selfCheck()`
+ * on `--self-check` ANYWHERE in argv, so `<artifact> --eligibility --self-check` exited 0 without
+ * ever opening the artifact, and `<artifact> --matrix --eligibilty` silently discarded the typo
+ * and passed on `--matrix` alone.
  *
  * Exit 0 = the requested check passed. Exit 1 = it failed (every reason printed). Exit 2 = bad
  * usage (no mode, two modes, no file, two files). An absent file, a directory given as the
@@ -117,8 +127,10 @@ export const EVIDENCE_TYPES = ["automated", "live", "manual"];
 export const DECISIONS = ["defer", "enable-safe"];
 
 /**
- * Who may be recorded as having selected the outcome. `fixture` exists so the self-check's
- * synthetic matrix cannot masquerade as a real decision.
+ * Who may be recorded as having selected the outcome. `fixture` is a third member so the
+ * self-check's synthetic matrix does not have to claim `owner` or `agent`. Nothing enforces that
+ * `fixture` means synthetic in either direction — an on-disk artifact recorded as decided by
+ * `fixture` is fully valid — so this is a naming convention, not a control.
  */
 export const DECIDERS = ["owner", "agent", "fixture"];
 
@@ -232,8 +244,13 @@ export function checkEvidenceRef(ref, repoRoot = repoRootDefault) {
   return { ok: true, path };
 }
 
-/** Closed schema + enumerations + resolvable, distinct `pass` refs. Red rows are FINE here. */
-export function validateMatrix(text, { repoRoot = repoRootDefault } = {}) {
+/**
+ * Closed schema + enumerations + resolvable, distinct `pass` refs. Red rows are FINE here.
+ *
+ * @param {string} text
+ * @param {{ repoRoot?: string, artifactPath?: string | null }} [opts]
+ */
+export function validateMatrix(text, { repoRoot = repoRootDefault, artifactPath = null } = {}) {
   const { doc, errors } = parseArtifact(text);
   if (!doc) return { ok: false, doc: null, errors };
 
@@ -279,15 +296,31 @@ export function validateMatrix(text, { repoRoot = repoRootDefault } = {}) {
           `row \`${row.id}\`: status is \`pass\` but its evidenceRef ${check.reason} — ${JSON.stringify(row.evidenceRef)}`,
         );
       }
-      const prior = passRefs.get(row.evidenceRef);
+      // An artifact may not be its own evidence. This is the fabrication shape an author reaches
+      // for FIRST once refs have to resolve (the most available real file is the one already
+      // open), and unlike "does this file answer the question" it is mechanically decidable.
+      const abs = check.ok ? resolve(repoRoot, check.path) : null;
+      if (abs !== null && artifactPath !== null && abs === resolve(artifactPath)) {
+        errors.push(
+          `row \`${row.id}\`: cites the decision artifact ITSELF - ${JSON.stringify(row.evidenceRef)}. ` +
+            "A record cannot be the evidence for its own verdict.",
+        );
+      }
+      // KEYED ON THE RESOLVED PATH, not the raw string. Round 2 keyed on the string INCLUDING its
+      // `#anchor`, so `package.json#row-1 ... package.json#row-12` counted as twelve distinct
+      // citations and a fabricated enable-safe exited 0 in all three modes - while the error
+      // message below told the author exactly how to do it ("cite the specific section with a
+      // `#anchor`"). Twelve green rows now genuinely cost twelve distinct FILES.
+      const key = abs ?? row.evidenceRef;
+      const prior = passRefs.get(key);
       if (prior !== undefined) {
         errors.push(
-          `row \`${row.id}\`: cites the SAME evidence as row \`${prior}\` — ${JSON.stringify(row.evidenceRef)}. ` +
-            "One citation cannot answer two independent governance questions; cite the specific " +
-            "section with a `#anchor`.",
+          `row \`${row.id}\`: cites the SAME FILE as row \`${prior}\` - ${JSON.stringify(row.evidenceRef)}. ` +
+            "One document cannot answer two independent governance questions, and an `#anchor` " +
+            "does not make it two documents.",
         );
       } else {
-        passRefs.set(row.evidenceRef, row.id);
+        passRefs.set(key, row.id);
       }
     }
   }
@@ -337,6 +370,17 @@ export const DEPENDENCY_MANIFESTS = [
 ];
 
 /**
+ * The scheduling libraries a recurrence implementation would reach for, as a CLOSED, NAMED set.
+ * Round 2 matched `/temporal/i` alone while a test described the rule as "no scheduling
+ * DEPENDENCY" - `rrule`, `cron-parser`, `node-cron`, `croner`, `bullmq` and `@js-joda` all
+ * passed. Each name below is a package name, not a word, so `agenda` (a common English word that
+ * is also a scheduler) is deliberately EXCLUDED rather than accepted: a rule that false-positives
+ * on prose is a rule someone deletes.
+ */
+export const SCHEDULING_DEPENDENCY_RE =
+  /temporal|\brrule\b|cron-parser|node-cron|node-schedule|croner|bullmq|js-joda|toad-scheduler/i;
+
+/**
  * Absence checks the `defer` branch promises: no ADR was minted for a decision that was not
  * taken, and no scheduling dependency was installed. Cheap, and the exact things a later
  * "we sort of enabled it" drift would leave behind.
@@ -358,8 +402,12 @@ export function deferAbsenceChecks({ repoRoot = repoRootDefault } = {}) {
   }
   for (const manifest of DEPENDENCY_MANIFESTS) {
     const p = resolve(repoRoot, manifest);
-    if (existsSync(p) && /temporal/i.test(readFileSync(p, "utf8"))) {
-      errors.push(`decision is \`defer\` but ${manifest} names a temporal dependency`);
+    if (!existsSync(p)) continue;
+    const hit = SCHEDULING_DEPENDENCY_RE.exec(readFileSync(p, "utf8"));
+    if (hit) {
+      errors.push(
+        `decision is \`defer\` but ${manifest} names a scheduling dependency (${hit[0]})`,
+      );
     }
   }
   return { ok: errors.length === 0, errors };
@@ -398,18 +446,38 @@ const USAGE =
   "       check-routine-gate.mjs --self-check\n";
 
 export function main(args) {
-  if (args.includes("--self-check")) return selfCheck();
-
-  // `Object.hasOwn`, not `in`: `constructor` is on the prototype chain and used to read as a mode.
-  const modes = args.filter((a) => Object.hasOwn(MODES, a));
+  // EVERY MIS-COMPOSED COMMAND LINE IS EXIT 2. A mis-composed verify line that reads green is
+  // exactly the failure this gate exists to prevent, and round 2 had three ways to produce one:
+  // `--self-check` ANYWHERE in argv short-circuited the requested mode and exited 0 without ever
+  // opening the artifact; an unrecognised flag (`--eligibilty`) was counted by neither list and
+  // silently vanished, leaving the weaker mode to print OK; and two modes ran only the first.
+  // So: flags are a closed set, exactly one mode is required, and `--self-check` is EXCLUSIVE.
+  const flags = args.filter((a) => a.startsWith("--"));
   const files = args.filter((a) => !a.startsWith("--"));
-  if (modes.length !== 1 || files.length !== 1) {
-    // Two modes used to run only the FIRST one and print OK for it. A mis-composed verify line
-    // that reads green is exactly the failure this gate exists to prevent.
-    stdout.write(USAGE);
+  const refuse = (why) => {
+    stdout.write(`FAIL usage: ${why}
+${USAGE}`);
     return 2;
+  };
+
+  // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so `MODES` would answer to
+  // `constructor` and friends. No prototype key starts with `--`, so with the flag rule above
+  // this is belt-and-braces rather than load-bearing — round 2 claimed a test covered it and
+  // none did. What IS covered, from a spawned process, is that an unknown flag is refused.
+  const unknown = flags.filter((a) => a !== "--self-check" && !Object.hasOwn(MODES, a));
+  if (unknown.length > 0) return refuse(`unrecognised flag(s) ${unknown.join(", ")}`);
+
+  if (flags.includes("--self-check")) {
+    if (flags.length !== 1 || files.length !== 0) {
+      return refuse("--self-check runs the gate against its own fixtures and takes nothing else");
+    }
+    return selfCheck();
   }
-  const [mode] = modes;
+
+  if (flags.length !== 1 || files.length !== 1) {
+    return refuse("exactly one mode and exactly one artifact are required");
+  }
+  const [mode] = flags;
   const path = resolve(files[0]);
   let stat;
   try {
@@ -422,7 +490,8 @@ export function main(args) {
     stdout.write(`FAIL ${mode}: the decision artifact is not a file — ${files[0]}\n`);
     return 1;
   }
-  const result = MODES[mode](readFileSync(path, "utf8"));
+  // The artifact path travels with the text so a row cannot cite the artifact under validation.
+  const result = MODES[mode](readFileSync(path, "utf8"), { artifactPath: path });
   if (result.ok) {
     const decision = result.doc ? ` (decision: ${result.doc.decision})` : "";
     stdout.write(`OK ${mode}${decision}\n`);
@@ -444,16 +513,21 @@ export function main(args) {
  */
 function selfCheck() {
   const green = greenFixture();
+  const overlapRef = `evidenceRef: ${fixtureRef("overlap")}#overlap`;
   // Corrupting a row by RENAMING it also makes a required row missing, so the unknown-id and
-  // duplicate-id rules never run and both mutations survive. Both cases below APPEND a row.
+  // duplicate-id rules never run and both mutations survive. Both cases below APPEND a row, and
+  // cite the one real manifest the fixture deliberately leaves unused.
   const extraRow = (id) =>
     green.replace(
       "\n---\n",
-      `\n  - id: ${id}\n    status: pass\n    evidenceType: manual\n    evidenceRef: package.json#extra\n---\n`,
+      `\n  - id: ${id}\n    status: pass\n    evidenceType: manual\n    evidenceRef: packages/cost/package.json#extra\n---\n`,
     );
-  const oneRefForAll = green.replace(
-    /evidenceRef: package\.json#[a-z-]+/g,
-    "evidenceRef: package.json",
+  const oneRefForAll = green.replace(/evidenceRef: .*/g, "evidenceRef: package.json");
+  // The ANCHOR LOOPHOLE: one file, twelve different `#anchor`s. Round 2 read those as twelve
+  // distinct citations and let a fabricated enable-safe through all three modes.
+  const oneFileTwelveAnchors = green.replace(
+    /evidenceRef: [^\n#]*#/g,
+    "evidenceRef: package.json#",
   );
 
   const cases = [
@@ -491,39 +565,33 @@ function selfCheck() {
     ],
     [
       "validateMatrix: empty evidenceRef",
-      () =>
-        validateMatrix(green.replace("evidenceRef: package.json#overlap", "evidenceRef: ")).ok ===
-        false,
+      () => validateMatrix(green.replace(overlapRef, "evidenceRef: ")).ok === false,
     ],
     [
       "validateMatrix: a pass ref naming a file that does not exist",
-      () =>
-        validateMatrix(
-          green.replace("evidenceRef: package.json#overlap", "evidenceRef: nope/missing.md"),
-        ).ok === false,
+      () => validateMatrix(green.replace(overlapRef, "evidenceRef: nope/missing.md")).ok === false,
     ],
     [
       "validateMatrix: an ANCHOR-ONLY pass ref is a fabrication, not a citation",
-      () =>
-        validateMatrix(green.replace("evidenceRef: package.json#overlap", "evidenceRef: #where"))
-          .ok === false,
+      () => validateMatrix(green.replace(overlapRef, "evidenceRef: #where")).ok === false,
     ],
     [
       "validateMatrix: a DIRECTORY as a pass ref",
-      () =>
-        validateMatrix(green.replace("evidenceRef: package.json#overlap", "evidenceRef: docs"))
-          .ok === false,
+      () => validateMatrix(green.replace(overlapRef, "evidenceRef: docs")).ok === false,
     ],
     [
       "validateMatrix: a pass ref escaping the repo root",
       () =>
-        validateMatrix(
-          green.replace("evidenceRef: package.json#overlap", "evidenceRef: ../../../etc/hosts"),
-        ).ok === false,
+        validateMatrix(green.replace(overlapRef, "evidenceRef: ../../../etc/hosts")).ok === false,
     ],
     [
       "validateMatrix: twelve pass rows citing ONE file",
       () => validateMatrix(oneRefForAll).ok === false,
+    ],
+    [
+      "validateMatrix: twelve pass rows citing ONE file under twelve #anchors",
+      () =>
+        validateMatrix(oneFileTwelveAnchors).errors.some((e) => e.includes("cites the SAME FILE")),
     ],
     [
       "validateMatrix: extra row key",
@@ -567,7 +635,19 @@ function selfCheck() {
         false,
     ],
     [
-      "validateDecision: a genuinely green enable-safe is ACCEPTED",
+      "validateDecision: an enable-safe whose rows cite the ARTIFACT ITSELF is refused",
+      () => {
+        const self = "packages/backend/scripts/check-routine-gate.mjs";
+        const selfCiting = green.replace(/evidenceRef: .*/g, `evidenceRef: ${self}`);
+        return validateDecision(selfCiting, {
+          artifactPath: resolve(repoRootDefault, self),
+        }).errors.some((e) => e.includes("cites the decision artifact ITSELF"));
+      },
+    ],
+    [
+      // NOT "genuinely green": twelve distinct real files that say nothing about routines. This
+      // case proves the gate is not hard-coded to refuse, and nothing more. See the header.
+      "validateDecision: a SCHEMA-VALID enable-safe is ACCEPTED (the gate can say yes)",
       () => validateDecision(green).ok === true,
     ],
   ];
@@ -591,15 +671,51 @@ function selfCheck() {
 }
 
 /**
- * A synthetic all-green matrix. It exists ONLY inside the self-check and the unit tests — never
- * on disk. Each row carries a DISTINCT `evidenceRef` because `pass` rows may not share one; the
- * shared target plus a per-row `#anchor` keeps the fixture obviously synthetic (no real file in
- * this repo answers twelve governance questions) while still resolving.
+ * TWELVE DISTINCT REAL FILES, one per row, in ROW_IDS order. They are all repo-root manifests and
+ * docs, so no reader can mistake the fixture for a real evidence set - and because the duplicate
+ * rule now keys on the RESOLVED PATH, twelve distinct files is the only way a twelve-green matrix
+ * gets past `--matrix`. Round 2's fixture was `package.json#<row-id>` twelve times, which pinned
+ * the anchor loophole in place: the fixture the suite called "genuinely green" was the same shape
+ * a verifier used to fabricate one.
+ *
+ * `packages/cost/package.json` is deliberately NOT used, so a test that appends a thirteenth row
+ * has a real file left to cite without colliding.
+ */
+export const FIXTURE_REFS = [
+  "package.json",
+  "pnpm-workspace.yaml",
+  "README.md",
+  "CLAUDE.md",
+  "biome.json",
+  "tsconfig.base.json",
+  "turbo.json",
+  "docs/README.md",
+  "packages/core/package.json",
+  "packages/backend/package.json",
+  "apps/web/package.json",
+  "packages/contracts/package.json",
+];
+
+/**
+ * The fixture's citation for one row, so a test can address it without a literal path.
+ *
+ * @param {string} id
+ * @returns {string}
+ */
+export const fixtureRef = (id) => {
+  const n = ROW_IDS.indexOf(id);
+  if (n === -1) throw new Error(`fixtureRef: \`${id}\` is not a matrix row`);
+  return FIXTURE_REFS[n];
+};
+
+/**
+ * A synthetic all-green matrix. It exists ONLY inside the self-check and the unit tests - never
+ * on disk. Every row cites a DIFFERENT real file, because `pass` rows may not share one.
  */
 export function greenFixture() {
   const rows = ROW_IDS.map(
-    (id) =>
-      `  - id: ${id}\n    status: pass\n    evidenceType: ${REQUIRED_LIVE_ROWS.includes(id) ? "live" : "manual"}\n    evidenceRef: package.json#${id}`,
+    (id, n) =>
+      `  - id: ${id}\n    status: pass\n    evidenceType: ${REQUIRED_LIVE_ROWS.includes(id) ? "live" : "manual"}\n    evidenceRef: ${FIXTURE_REFS[n]}#${id}`,
   ).join("\n");
   return `---\ndecision: enable-safe\ndecidedAt: 2026-01-01\ndecidedBy: fixture\nmatrix:\n${rows}\n---\n`;
 }

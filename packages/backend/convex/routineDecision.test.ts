@@ -1,7 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
 import {
@@ -11,10 +19,13 @@ import {
   deferAbsenceChecks,
   EVIDENCE_TYPES,
   eligibility,
+  FIXTURE_REFS,
+  fixtureRef,
   greenFixture,
   parseArtifact,
   REQUIRED_LIVE_ROWS,
   ROW_IDS,
+  SCHEDULING_DEPENDENCY_RE,
   STATUSES,
   validateDecision,
   validateMatrix,
@@ -150,7 +161,7 @@ describe("--matrix fails closed on every malformation, red rows notwithstanding"
   const EXTRA = (id: string) =>
     green.replace(
       "\n---\n",
-      `\n  - id: ${id}\n    status: pass\n    evidenceType: manual\n    evidenceRef: package.json#extra\n---\n`,
+      `\n  - id: ${id}\n    status: pass\n    evidenceType: manual\n    evidenceRef: packages/cost/package.json#extra\n---\n`,
     );
 
   test("an unknown row id is refused BY NAME, with all twelve required rows still present", () => {
@@ -227,6 +238,30 @@ describe("a `pass` row's citation — the check round 1 claimed and did not have
     });
   }
 
+  test("a sibling directory sharing the repo root's NAME does not count as inside it", () => {
+    // `abs.startsWith(repoRoot)` (without the separator) accepts `<root>evil/e.md`, and the only
+    // escaping ref the suite drove was `../../../etc/hosts`, which shares no prefix — so the
+    // classic prefix-boundary bug was invisible and the mutation survived. This drives it.
+    const base = newRoot();
+    const root = join(base, "root");
+    mkdirSync(join(root, "docs"), { recursive: true });
+    mkdirSync(`${root}evil`, { recursive: true });
+    writeFileSync(`${root}evil/e.md`, "planted\n");
+    writeFileSync(join(root, "docs/real.md"), "real\n");
+    const r = validateMatrix(patchRow(green, "cost", "evidenceRef", "../rootevil/e.md"), {
+      repoRoot: root,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain("escapes the repository root");
+    // POSITIVE CONTROL: a real file INSIDE that same root is accepted, so the refusal is about
+    // containment and not about the scratch root being unreadable.
+    expect(
+      validateMatrix(patchRow(green, "cost", "evidenceRef", "docs/real.md"), {
+        repoRoot: root,
+      }).errors.join("\n"),
+    ).not.toContain("escapes");
+  });
+
   test("a pass ref resolving to an EMPTY file is refused", () => {
     const root = newRoot();
     writeFileSync(join(root, "empty.md"), "");
@@ -245,16 +280,79 @@ describe("a `pass` row's citation — the check round 1 claimed and did not have
     expect(r.errors.join("\n")).toContain("resolves to an EMPTY file");
   });
 
-  test("two `pass` rows may not cite the SAME evidence", () => {
-    const shared = patchRow(green, "cost", "evidenceRef", "package.json#overlap");
+  test("two `pass` rows may not cite the SAME file", () => {
+    const shared = patchRow(green, "cost", "evidenceRef", fixtureRef("overlap"));
     const r = validateMatrix(shared, { repoRoot });
     expect(r.ok).toBe(false);
-    expect(r.errors.join("\n")).toContain("cites the SAME evidence as row `overlap`");
+    expect(r.errors.join("\n")).toContain("cites the SAME FILE as row `overlap`");
+  });
+
+  test("THE ANCHOR LOOPHOLE: a different `#anchor` on the same file is still the same file", () => {
+    // Round 2 keyed the duplicate rule on the raw `evidenceRef` STRING, so twelve `#anchor`s on
+    // one file read as twelve distinct citations and a fabricated enable-safe exited 0 in all
+    // three modes. Worse, the error message told the author how: "cite the specific section with
+    // a `#anchor`". The key is the RESOLVED PATH now.
+    const bypass = patchRow(green, "cost", "evidenceRef", `${fixtureRef("overlap")}#cost-section`);
+    const r = validateMatrix(bypass, { repoRoot });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain("cites the SAME FILE as row `overlap`");
+    expect(r.errors.join("\n")).toContain("does not make it two documents");
+  });
+
+  test("ONE FILE, TWELVE ANCHORS: the whole round-2 bypass is refused by all three checks", () => {
+    const bypass = green
+      .replace(/evidenceRef: [^\n#]*#/g, "evidenceRef: package.json#")
+      .replace(/evidenceType: manual/g, "evidenceType: live");
+    // POSITIVE CONTROL: it really is still a well-formed twelve-row all-`pass` enable-safe, so
+    // the refusals below are about the shared file and nothing else.
+    const doc = docOf(bypass);
+    expect(doc?.matrix.length).toBe(12);
+    expect(doc?.matrix.every((row) => row.status === "pass")).toBe(true);
+    for (const check of [validateMatrix, eligibility, validateDecision]) {
+      const r = check(bypass, { repoRoot });
+      expect(r.ok).toBe(false);
+      expect(r.errors.join("\n")).toContain("cites the SAME FILE");
+    }
+  });
+
+  test("a row may not cite the DECISION ARTIFACT ITSELF", () => {
+    // The fabrication shape an author reaches for first once refs have to resolve: the most
+    // available real file is the one already open. `main()` threads the artifact path in.
+    // `packages/cost/package.json` is the one real manifest the fixture leaves unused, so the
+    // only thing that can be wrong with this row is the self-citation.
+    const selfCiting = patchRow(green, "cost", "evidenceRef", "packages/cost/package.json#cost");
+    const r = validateMatrix(selfCiting, {
+      repoRoot,
+      artifactPath: join(repoRoot, "packages/cost/package.json"),
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain("cites the decision artifact ITSELF");
+    // POSITIVE CONTROL: the SAME ref with a different artifact under validation is accepted, so
+    // the refusal is about self-citation, not about `docs/README.md` being unreadable.
+    expect(
+      validateMatrix(selfCiting, { repoRoot, artifactPath: join(repoRoot, "pnpm-lock.yaml") }).ok,
+    ).toBe(true);
+  });
+
+  test("the documented ref SUFFIX FORMS resolve — `#anchor`, `:line` and a trailing note", () => {
+    // `checkEvidenceRef` strips `#anchor`, `:line` and anything after the first space. The header
+    // documents all three and no test drove two of them: deleting the `:line` strip left the
+    // suite green, and a real citation like `docs/x.md:42` would then be refused as "does not
+    // resolve to a file in this repo" — a wrong fail-closed on genuine evidence.
+    for (const suffix of ["", "#a-section", ":42", ":1", " (the pipeline block)"]) {
+      const r = validateMatrix(patchRow(green, "cost", "evidenceRef", `turbo.json${suffix}`), {
+        repoRoot,
+      });
+      // `turbo.json` is the fixture's `run-identity` citation, so the ONLY complaint may be the
+      // shared file — which is itself the proof that the suffix was stripped and the path resolved.
+      expect(r.errors.join("\n"), suffix).toContain("cites the SAME FILE as row `run-identity`");
+      expect(r.errors.join("\n"), suffix).not.toContain("does not resolve");
+    }
   });
 
   test("twelve pass/live rows citing ONE real file — the whole fabricated matrix — is refused", () => {
     const fabricated = green
-      .replace(/evidenceRef: package\.json#[a-z-]+/g, "evidenceRef: package.json")
+      .replace(/evidenceRef: .*/g, "evidenceRef: package.json")
       .replace(/evidenceType: manual/g, "evidenceType: live");
     expect(validateMatrix(fabricated, { repoRoot }).ok).toBe(false);
     expect(eligibility(fabricated, { repoRoot }).ok).toBe(false);
@@ -274,16 +372,19 @@ describe("a `pass` row's citation — the check round 1 claimed and did not have
     expect(validateMatrix(red, { repoRoot }).ok).toBe(true);
   });
 
-  test("THE DOCUMENTED LIMIT: twelve DISTINCT real citations pass, whatever they say", () => {
+  test("THE DOCUMENTED LIMIT: twelve DISTINCT real files pass, whatever they say", () => {
     // This test asserts a WEAKNESS on purpose, so nobody reads the gate as more than it is. A
     // parser can check that a citation is a real, distinct, non-empty file inside the repo. It
-    // cannot check that the file answers the row's question — `package.json#dst-boundary` is a
-    // resolving, distinct, meaningless citation and the gate says yes.
+    // cannot check that the file ANSWERS the row's question — `turbo.json` is a resolving,
+    // distinct, meaningless citation and the gate says yes. The fixture IS exactly that shape:
+    // twelve repo manifests and READMEs, not one of which mentions a routine.
     //
     // That is why `enable-safe` still requires the human checkpoint in §5/§7 of the decision
     // record, and why the script header states this limit instead of claiming "the parser proves
-    // the evidence". The gate's job is to make fabrication COST twelve deliberate lines in a
-    // reviewable diff, not to make it impossible.
+    // the evidence". What the gate makes fabrication cost is twelve DISTINCT REAL FILES in a
+    // reviewable diff. It does not make fabrication impossible.
+    expect(FIXTURE_REFS).toContain("turbo.json");
+    expect(new Set(FIXTURE_REFS).size).toBe(12);
     expect(validateDecision(green, { repoRoot }).ok).toBe(true);
   });
 });
@@ -352,8 +453,20 @@ describe("`decidedBy` is a closed actor set, not free text", () => {
     }
   });
 
-  test("anything else is refused by name", () => {
-    for (const who of ["nobody at all", "the system", "automation", "CI"]) {
+  test("anything else is refused by name, INCLUDING a prefix of a real decider", () => {
+    // The four round-2 negatives shared no prefix with any decider, so mutating
+    // `DECIDERS.includes(decider)` to `DECIDERS.some((d) => decider.startsWith(d))` left the whole
+    // suite green while the mutated gate accepted `decidedBy: agentic automation`. The first three
+    // below are prefix-shaped and pin the membership test to EQUALITY.
+    for (const who of [
+      "agentic automation",
+      "ownership transferred to the pipeline",
+      "fixtures",
+      "nobody at all",
+      "the system",
+      "automation",
+      "CI",
+    ]) {
       const r = validateMatrix(green.replace("decidedBy: fixture", `decidedBy: ${who}`), {
         repoRoot,
       });
@@ -437,7 +550,36 @@ describe("the `defer` absence checks, observed FIRING", () => {
     }
   });
 
-  test("a temporal dependency is caught in EVERY scanned manifest, including the lockfile", () => {
+  test("the scheduling-dependency set is CLOSED and named, not just /temporal/", () => {
+    // Round 2 matched `/temporal/i` alone under a `describe` labelled "no scheduling DEPENDENCY",
+    // so `rrule`, `cron-parser`, `node-cron`, `croner`, `bullmq` and `@js-joda` all read green.
+    for (const pkg of [
+      "@js-temporal/polyfill",
+      "rrule",
+      "cron-parser",
+      "node-cron",
+      "node-schedule",
+      "croner",
+      "bullmq",
+      "@js-joda/core",
+      "toad-scheduler",
+    ]) {
+      const root = cleanRoot();
+      writeFileSync(join(root, "package.json"), `{ "dependencies": { "${pkg}": "1.0.0" } }\n`);
+      const r = deferAbsenceChecks({ repoRoot: root });
+      expect(r.ok, pkg).toBe(false);
+      expect(r.errors.join("\n")).toContain("names a scheduling dependency");
+    }
+    // And the set really is closed: `agenda` is a scheduler AND an English word, so it is
+    // deliberately OUT — a rule that false-positives on prose is a rule someone deletes.
+    const root = cleanRoot();
+    writeFileSync(join(root, "package.json"), '{ "description": "the release agenda" }\n');
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(true);
+    expect(SCHEDULING_DEPENDENCY_RE.test("agenda")).toBe(false);
+    expect(SCHEDULING_DEPENDENCY_RE.test("@js-temporal/polyfill")).toBe(true);
+  });
+
+  test("a scheduling dependency is caught in EVERY scanned manifest, including the lockfile", () => {
     // Round 1 scanned three manifests. `apps/web/package.json` and `pnpm-lock.yaml` were not
     // among them, so a dependency added under the web app, or pinned only in the lockfile, left
     // `--validate-decision` green. Each manifest is driven one at a time.
@@ -448,7 +590,7 @@ describe("the `defer` absence checks, observed FIRING", () => {
       writeFileSync(target, '{ "dependencies": { "@js-temporal/polyfill": "0.5.1" } }\n');
       const r = deferAbsenceChecks({ repoRoot: root });
       expect(r.ok, manifest).toBe(false);
-      expect(r.errors.join("\n")).toContain(`${manifest} names a temporal dependency`);
+      expect(r.errors.join("\n")).toContain(`${manifest} names a scheduling dependency`);
     }
   });
 
@@ -527,13 +669,55 @@ describe("the exit codes, read from a SPAWNED process", () => {
     }
   });
 
-  test("a prototype key is not a mode", () => {
-    // `a in MODES` walked the prototype chain, so `constructor` read as a mode and the script
-    // died with a stack trace instead of refusing.
+  test("an UNRECOGNISED FLAG is refused by name — it is not silently discarded", () => {
+    // Round 2 counted an unknown `--flag` in neither the mode list nor the file list, so it
+    // vanished and the weaker mode ran and printed OK. A typo'd mode name is the commonest
+    // mis-composition there is, and `--matrix --eligibilty` exited 0.
     const artifact = artifactFile("defer.md", deferText);
-    const r = run(artifact, "constructor");
+    const r = run(artifact, "--matrix", "--eligibilty");
     expect(r.code).toBe(2);
-    expect(r.out).toContain("usage:");
+    expect(r.out).toContain("unrecognised flag(s) --eligibilty");
+    // POSITIVE CONTROL: the same line without the typo really does run, so the refusal above is
+    // about the unknown flag and not about the artifact.
+    expect(run(artifact, "--matrix").code).toBe(0);
+  });
+
+  test("--self-check is EXCLUSIVE: combined with a mode+file it REFUSES, in either argv order", () => {
+    // THE ROUND-2 BLOCKER. `if (args.includes("--self-check")) return selfCheck();` ran before the
+    // arity check, so `--self-check` ANYWHERE in argv discarded the requested mode and exited 0
+    // WITHOUT EVER OPENING THE ARTIFACT — a mis-composed verify line silently certifying, which is
+    // the exact failure this gate exists to prevent. 29-12 and 29-13 chain this script with `&&`.
+    const artifact = artifactFile("defer.md", deferText);
+    // Control first: this artifact genuinely FAILS --eligibility, so a 0 below can only come from
+    // the short-circuit and not from the artifact being green.
+    expect(run(artifact, "--eligibility").code).toBe(1);
+    for (const args of [
+      [artifact, "--eligibility", "--self-check"],
+      ["--self-check", artifact, "--eligibility"],
+      [artifact, "--self-check"],
+      ["--self-check", "--matrix"],
+    ]) {
+      const r = run(...args);
+      expect(r.code, args.join(" ")).toBe(2);
+      expect(r.out, args.join(" ")).toContain(
+        "--self-check runs the gate against its own fixtures",
+      );
+      // And it really did not run the self-check instead.
+      expect(r.out, args.join(" ")).not.toContain("cases behaved");
+    }
+    // `--self-check` ALONE still works.
+    expect(run("--self-check").code).toBe(0);
+  });
+
+  test("a prototype key of MODES is not a mode", () => {
+    // `Object.hasOwn`, not `in`. HONEST NOTE: with flags now required to start with `--`, and no
+    // prototype key doing so, this is belt-and-braces — mutating `Object.hasOwn(MODES, a)` to
+    // `a in MODES` does NOT turn this test red. Round 2's FIX-SUMMARY claimed this case covered
+    // that guard; it never did, because `constructor` lands in `files` and dies on the two-files
+    // rule either way. What is asserted here is only the observable behaviour: it exits 2.
+    const artifact = artifactFile("defer.md", deferText);
+    expect(run(artifact, "constructor").code).toBe(2);
+    expect(run("constructor", "--matrix").code).toBe(1); // read as a FILE, and there is no such file
   });
 
   test("an absent artifact exits 1, and a DIRECTORY given as the artifact exits 1", () => {
@@ -562,7 +746,7 @@ describe("the exit codes, read from a SPAWNED process", () => {
       ),
     ],
     ["a missing enum member", green.replace("evidenceType: live", "evidenceType: vibes")],
-    ["an empty evidenceRef", green.replace("evidenceRef: package.json#cost", "evidenceRef: ")],
+    ["an empty evidenceRef", patchRow(green, "cost", "evidenceRef", "")],
     ["decidedBy outside the closed set", green.replace("decidedBy: fixture", "decidedBy: someone")],
   ];
 
@@ -586,7 +770,7 @@ describe("the exit codes, read from a SPAWNED process", () => {
     // The end-to-end version of the blocker: this is the artifact a verifier wrote by hand and
     // got a clean bill of health for in every mode. Anchor-only refs, twelve pass/live rows.
     const fabricated = green
-      .replace(/evidenceRef: package\.json#[a-z-]+/g, "evidenceRef: #the-summary")
+      .replace(/evidenceRef: .*/g, "evidenceRef: #the-summary")
       .replace(/evidenceType: manual/g, "evidenceType: live");
     const p = artifactFile("fabricated.md", fabricated);
     for (const mode of ["--matrix", "--eligibility", "--validate-decision"]) {
@@ -598,17 +782,17 @@ describe("the exit codes, read from a SPAWNED process", () => {
 
   test("a fabricated enable-safe citing ONE real file for all twelve rows exits 1 in all three", () => {
     const fabricated = green
-      .replace(/evidenceRef: package\.json#[a-z-]+/g, "evidenceRef: package.json")
+      .replace(/evidenceRef: .*/g, "evidenceRef: package.json")
       .replace(/evidenceType: manual/g, "evidenceType: live");
     const p = artifactFile("fabricated2.md", fabricated);
     for (const mode of ["--matrix", "--eligibility", "--validate-decision"]) {
       const r = run(p, mode);
       expect(r.code, mode).toBe(1);
-      expect(r.out).toContain("cites the SAME evidence");
+      expect(r.out).toContain("cites the SAME FILE");
     }
   });
 
-  test("a genuinely green enable-safe exits 0 — the gate is not hard-coded to refuse", () => {
+  test("a SCHEMA-VALID enable-safe exits 0 — the gate is not hard-coded to refuse", () => {
     const p = artifactFile("green.md", green);
     expect(run(p, "--eligibility").code).toBe(0);
     expect(run(p, "--validate-decision").code).toBe(0);
@@ -688,29 +872,39 @@ describe("the shipped decision artifact", () => {
 });
 
 describe("nothing imports the recurrence spike", () => {
-  // Round 1 scanned `readdirSync(convexDir)` — the TOP LEVEL of convex/ only. `convex/lib/`
-  // (functions.ts, env.ts, hash.ts, ...) and `convex/render/` were invisible, and `apps/web` and
-  // the other packages were never looked at. An import added to any of them read green.
+  // Round 1 scanned `readdirSync(convexDir)` — the TOP LEVEL of convex/ only, so `convex/lib/` and
+  // `convex/render/` were invisible. Round 2 fixed that along the DEPTH axis and not the BREADTH
+  // axis: it hardcoded four package `src` roots, leaving `packages/{audit,pii,extraction,revenue,
+  // voice}/src` and `apps/web`'s top level unscanned — a verifier added the import to
+  // `packages/revenue/src/index.ts` and the suite stayed green. The package roots are DERIVED FROM
+  // THE FILESYSTEM now, so a package added later is scanned without anyone remembering to add it.
   const SPIKE = join(repoRoot, "packages/core/src/routineSchedule.ts");
+  const packageSrcRoots = readdirSync(join(repoRoot, "packages"))
+    .map((pkg) => `packages/${pkg}/src`)
+    .filter((root) => existsSync(join(repoRoot, root)));
   const ROOTS = [
     "packages/backend/convex",
     "packages/backend/scripts",
     "apps/web/app",
-    "packages/core/src",
-    "packages/contracts/src",
-    "packages/cost/src",
-    "packages/vault/src",
-  ];
+    "apps/web/scripts",
+    ...packageSrcRoots,
+  ].filter((root) => existsSync(join(repoRoot, root)));
 
-  const scanned = ROOTS.flatMap((root) => {
-    const base = join(repoRoot, root);
-    return readdirSync(base, { recursive: true, encoding: "utf8" })
-      .filter((f) => /\.(ts|tsx|mjs)$/.test(f) && !/\.test\.(ts|tsx)$/.test(f))
-      .map((f) => join(base, f))
-      .filter((f) => f !== SPIKE);
-  });
+  const scanned = [
+    // `apps/web`'s own top-level modules — `middleware.ts`, `next.config.ts` — live in no `app/`
+    // directory and were never scanned.
+    ...readdirSync(join(repoRoot, "apps/web"), { withFileTypes: true })
+      .filter((e) => e.isFile())
+      .map((e) => join(repoRoot, "apps/web", e.name)),
+    ...ROOTS.flatMap((root) => {
+      const base = join(repoRoot, root);
+      return readdirSync(base, { recursive: true, encoding: "utf8" }).map((f) => join(base, f));
+    }),
+  ]
+    .filter((f) => /\.(ts|tsx|mjs)$/.test(f) && !/\.test\.(ts|tsx)$/.test(f))
+    .filter((f) => f !== SPIKE);
 
-  test("POSITIVE CONTROL: the scan reaches the files round 1 could not see", () => {
+  test("POSITIVE CONTROL: the scan reaches every root round 1 and round 2 could not see", () => {
     // If this list is ever empty, or stops containing a nested file, the scan below is vacuous
     // and would pass no matter what the tree contained.
     expect(scanned.length).toBeGreaterThan(100);
@@ -720,10 +914,22 @@ describe("nothing imports the recurrence spike", () => {
       "packages/backend/convex/schema.ts",
       "packages/backend/scripts/check-routine-gate.mjs",
       "packages/core/src/index.ts",
+      "packages/revenue/src/index.ts", // the root a verifier planted the import in
+      "packages/pii/src/index.ts",
+      "packages/audit/src/index.ts",
+      "apps/web/middleware.ts", // outside apps/web/app entirely
     ]) {
       expect(scanned, must).toContain(join(repoRoot, must));
     }
-    // And apps/web really was walked.
+    // EVERY package that has a `src` is scanned — the list is derived, not typed out.
+    for (const root of packageSrcRoots) {
+      expect(
+        scanned.some((f) => f.startsWith(join(repoRoot, root) + sep)),
+        root,
+      ).toBe(true);
+    }
+    expect(packageSrcRoots.length).toBeGreaterThanOrEqual(9);
+    // And apps/web/app really was walked.
     expect(scanned.some((f) => f.includes(join("apps", "web", "app")))).toBe(true);
   });
 

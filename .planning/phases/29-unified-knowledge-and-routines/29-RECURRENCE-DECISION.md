@@ -64,6 +64,16 @@ sentence verbatim.
 **Owner of this file:** plan 29-11. **Consumed by:** 29-12 and 29-13, which branch on the
 `decision:` key in the frontmatter above and must not guess.
 
+> **Round 3, 2026-08-29.** Three more verifiers read round 2. The verdict survived again and every
+> published number reproduced, but three fail-OPEN holes remained and several sentences in this
+> file were wrong. Fixed: `--self-check` anywhere in argv discarded the requested mode and exited 0
+> without opening the artifact; an unrecognised flag was silently dropped; the duplicate-citation
+> rule keyed on the raw string so twelve `#anchor`s on one file read as twelve citations; and
+> 29-12's absence proof was defeated three ways at once — a verifier built a complete self-arming
+> recurrence subsystem and all eight tests passed. Corrections to this file's own text are in §9.
+> **The absence proof has now been run against that subsystem**: it was re-created in this
+> worktree, watched to turn the relevant tests red, and deleted (§9).
+
 > **Round 2, 2026-08-29.** Three independent verifiers read this artifact and its gate. The
 > verdict survived — it is genuinely parser-derived and every number in §4 reproduced — but the
 > gate that produced it was fail-open, and this record overclaimed what the gate proves. Both are
@@ -94,13 +104,23 @@ escaping the repo passed too.
 
 The claim is now deleted rather than narrowed. What the parser actually checks on a `pass` row,
 and all it checks, is that the ref **names a path** (not just an `#anchor`), that the path **stays
-inside this repository**, that it resolves to a **regular, non-empty file**, and that **no two
-`pass` rows cite the same ref**. Every fabrication shape the verifiers demonstrated is now
-refused. A determined author can still write twelve distinct real citations that say nothing — no
-parser can read a file and judge whether it answers a governance question. That judgement is what
-§5's human checkpoint and §7 are for, and `routineDecision.test.ts` carries a test named
+inside this repository**, that it resolves to a **regular, non-empty file**, that it is **not this
+artifact itself**, and that **no two `pass` rows resolve to the same FILE**.
+
+That last rule was keyed on the raw `evidenceRef` **string** in round 2, anchor included, so
+`package.json#row-1 … package.json#row-12` counted as twelve distinct citations and a fabricated
+`enable-safe` exited 0 in all three modes — while the duplicate error message told the author how
+to do it ("cite the specific section with a `#anchor`"). It is keyed on the **resolved path** now.
+Round 2's summary said the gate made fabrication cost "twelve distinct real citations — a
+twelve-line diff a human reads"; that sentence was false when written and is deleted. It is true
+now, of twelve distinct **files**.
+
+A determined author can still cite twelve distinct real files that say nothing — no parser can
+read a file and judge whether it answers a governance question. That judgement is what §5's human
+checkpoint and §7 are for, and `routineDecision.test.ts` carries a test named
 `THE DOCUMENTED LIMIT` that asserts this weakness on purpose so nobody re-reads the gate as more
-than it is.
+than it is. The self-check's green fixture IS that shape — twelve repo manifests, not one of which
+mentions a routine — and it is no longer described anywhere as "genuinely green".
 
 The split between `status` and `evidenceType` is the point of the whole artifact. A row can carry
 real, good, passing automated evidence and still be `missing`, because the thing the row asks
@@ -123,7 +143,7 @@ demanding twelve green rows.
 | `dst-boundary` | missing | automated | **Required live.** The arithmetic is proven against real tzdata for New York, Berlin, a 30-minute Lord Howe gap and a Pacific/Apia date-line skip, both DST directions (`routineSchedule.test.ts`). **Nothing in this repository has ever executed across a DST boundary**, because nothing in this repository executes on a schedule at all. Simulation is `automated`; it is not `live` and this file will not call it that. |
 | `provider-read` | **pass** | **live** | The one green row. `03.2-06` CKPT-01 was human-verified on 2026-07-12: a real mailbox read against a really-connected Google account resolved a correspondent, with zero sends. See §2 for what this row does and does not cover. |
 | `missed-run` | missing | manual | Recommendation only: a missed occurrence is skipped, never burst-executed, with a grace window in which a late tick still counts as the run it was armed for. Round 1 cited a `classifyDue()` helper; deleted in round 2 (§3). There is no run to miss. |
-| `run-identity` | missing | automated | `occurrenceKey()` is proven, including the case it exists for: both 01:30s of a fall-back night produce the *same* key, so the second is a duplicate claim rather than a second run — and a local date the zone **skipped entirely** produces no key at all. The atomic claim mutation that would consume the key does not exist. |
+| `run-identity` | missing | automated | `occurrenceKey()` is proven, including the case it exists for: both 01:30s of a fall-back night produce the *same* key, so the second is a duplicate claim rather than a second run — and a local date the zone **skipped entirely** produces no key at all. **One input to that key is tenant-mutable:** `templateVersion` is part of it, so a template edited between the two 01:30s yields two keys and two runs. That is deliberate (an edited template is a different run) and asserted as such, but it is the one way the duplicate guarantee can be defeated from the product, and an enable-safe branch owes it a decision. The atomic claim mutation that would consume the key does not exist. |
 | `overlap` | missing | manual | Recommendation only: one active run per routine; a due tick that meets a live run skips and records the overlap. Round 1 cited a `classifyOverlap()` helper that was literally `active === null ? "start" : "skip_overlap"` — the requirement retyped. Deleted in round 2. There is no run state to observe. |
 | `retry` | missing | manual | Recommendation only: bounded retries for `provider_5xx` / `provider_timeout` / `internal`; `auth`, `validation`, `budget`, `paused` and `provider_refusal` terminal. Round 1 cited a `classifyRetry()` helper; deleted in round 2. No durable run state machine exists to carry an attempt count. |
 | `cost` | missing | automated | The budget primitive is real and in production: `internal.guardrails.preCall` → `recordSpend` gates four toolless callers today. What does not exist is reserving a **whole bounded run** before the first paid call and settling once — the reservation shape a routine needs. |
@@ -208,30 +228,38 @@ the moment to reconsider — not before. No manifest in this repo names a tempor
 
 ## 4. The gate, run
 
-Every command below was executed in this worktree on 2026-08-29, after the round-2 fixes.
+Every command below was executed in this worktree on 2026-08-29, after the round-3 fixes.
 `check-routine-gate.mjs` prints its verdict to stdout; do not read its exit code through a pipe.
 
 | # | Command | Result |
 |---|---|---|
-| 1 | `node packages/backend/scripts/check-routine-gate.mjs --self-check` | exit 0 — **23/23 cases behaved.** Each case is prefixed with the function it drives (`validateMatrix:` / `eligibility:` / `validateDecision:`), because round 1 reported this list as N *eligibility* results when most were *schema* results |
+| 1 | `node packages/backend/scripts/check-routine-gate.mjs --self-check` | exit 0 — **25/25 cases behaved.** Each case is prefixed with the function it drives (`validateMatrix:` / `eligibility:` / `validateDecision:`), because round 1 reported this list as N *eligibility* results when most were *schema* results |
 | 2 | `node packages/backend/scripts/check-routine-gate.mjs <this file> --matrix` | exit 0 — `OK --matrix (decision: defer)` |
 | 3 | `node packages/backend/scripts/check-routine-gate.mjs <this file> --eligibility` | **exit 1, 13 problems** — 11 rows not `pass`, and `oauth-expiry-reauth` + `dst-boundary` carry `automated` where `live` is required |
 | 4 | `node packages/backend/scripts/check-routine-gate.mjs <this file> --validate-decision` | exit 0 — `OK --validate-decision (decision: defer)` |
-| 5 | Four **fabricated** `enable-safe` artifacts (anchor-only refs; twelve rows citing one file; a directory; a path escaping the repo), each run through all three modes | **exit 1, twelve for twelve.** Under round 1 every one of these exited 0 in every mode |
-| 6 | `cd packages/core && pnpm vitest run routineSchedule` | 1 file / 19 tests passed |
-| 7 | `cd packages/backend && pnpm vitest run routineDecision` | 1 file / 74 tests passed |
+| 5 | Six **fabricated** `enable-safe` artifacts (anchor-only refs; twelve rows citing one file; **twelve `#anchor`s on one file**; **every row citing the artifact itself**; a directory; a path escaping the repo), each run through all three modes | **exit 1, eighteen for eighteen.** Round 2 published "under round 1 every one of these exited 0 in every mode"; a verifier re-ran round 1 against seven fixtures and that is false for **3 of 12 cells** — `../../../Windows/win.ini` and `../../../etc/hosts` resolve outside the user profile, so round 1's plain `existsSync` already refused them. The containment rule is load-bearing only for a **deeper** escape than either published fixture uses |
+| 6 | `node packages/backend/scripts/check-routine-gate.mjs <this file> --eligibility --self-check` (either argv order) | **exit 2.** Round 2 exited **0** here without ever opening the artifact |
+| 7 | `node packages/backend/scripts/check-routine-gate.mjs <this file> --matrix --eligibilty` (typo) | **exit 2, naming the flag.** Round 2 exited 0, having silently run `--matrix` alone |
+| 8 | `cd packages/core && pnpm vitest run routineSchedule` | 1 file / 19 tests passed |
+| 9 | `cd packages/backend && pnpm vitest run routineDecision routines` | 2 files / 89 tests passed (82 + 7) |
 
 Row 3 is the reason row 4 says `defer` and not `enable-safe`. Under `--validate-decision`, an
 `enable-safe` artifact is put through the *identical* eligibility check, so this file could not
 have recorded `enable-safe` today even if someone had typed it.
 
 Every exit code above is now asserted in `routineDecision.test.ts` by **spawning** the script and
-reading `spawnSync().status` — absent file, directory-as-artifact, bad usage, two modes, a
-prototype key as a mode, malformed YAML, unknown row, duplicate row, bad enum member, empty ref,
-bad `decidedBy`, valid defer, fabricated enable-safe and genuinely-green enable-safe. Round 1
-asserted none of them: `main()` was never invoked by a test, and `return 1` → `return 0` on the
-absent-file path was a green mutation. 29-12 chains this script with `&&`, so the exit code is the
-contract.
+reading `spawnSync().status` — absent file, directory-as-artifact, bad usage, two modes, **an
+unrecognised flag**, **`--self-check` beside a mode in either argv order**, malformed YAML,
+unknown row, duplicate row, bad enum member, empty ref, bad `decidedBy`, valid defer, fabricated
+enable-safe and schema-valid enable-safe. Round 1 asserted none of them: `main()` was never invoked
+by a test. 29-12 chains this script with `&&`, so the exit code is the contract.
+
+**One guard is deliberately recorded as UNCOVERED.** `Object.hasOwn(MODES, a)` rather than
+`a in MODES` is still the right method, but with flags now required to start with `--`, and no
+prototype key doing so, mutating it to `a in MODES` leaves all 82 tests green. Round 2's summary
+listed this as covered by the test named "a prototype key is not a mode"; that test passes for a
+different reason (`constructor` lands in the file list and dies on the two-files rule). The test is
+kept for the observable behaviour, and its comment now says exactly this.
 
 ---
 
@@ -271,18 +299,27 @@ preparation in Phase 29; ROUT-02 completes on the pinned manual rerun.
    `schedul` — fail-closed in a governance gate is the correct direction; rename it or lift the
    defer.
 2. **No dependency was installed.** `--validate-decision` greps all five manifests — root, core,
-   backend, `apps/web` and `pnpm-lock.yaml` — for `temporal` and fails if one appears.
+   backend, `apps/web` and `pnpm-lock.yaml` — for a **closed, named** set of schedulers and fails if one
+   appears: `temporal`, `rrule`, `cron-parser`, `node-cron`, `node-schedule`, `croner`, `bullmq`,
+   `js-joda`, `toad-scheduler`. Round 2 matched `/temporal/i` alone under a test heading that said
+   "no scheduling DEPENDENCY", so every other name on that list read green. `agenda` is
+   deliberately **outside** the set — it is an English word as well as a scheduler, and a rule that
+   false-positives on prose is a rule someone deletes.
 3. **No schema and no scheduler module was touched.** Round 1's diff was **seven** files: the five
    owned paths plus `docs/playbooks/watch.json` and `docs/playbooks/knowledge-search-routines.md`
-   (this record said "four files plus this record", which was wrong). Round 2 adds
-   `packages/backend/convex/routines.test.ts` and touches no implementation file.
+   (this record said "four files plus this record", which was wrong). Round 2's own commit
+   (`75d3ded`) was **six** files and did **not** contain `packages/backend/convex/routines.test.ts`
+   — 29-12 added that one commit later, in `db9185a`; the sentence here and the matching line in
+   the playbook both named a file their commit did not carry, and are corrected. Round 3 touches
+   no implementation file either: the gate script, the two test files, the spike header, this
+   record and the playbook.
 4. **29-12 and 29-13 must branch on `decision: defer`** and must not build recurrence UI, state
    or arming.
 
 ## 7. What would have to change for `enable-safe`
 
-All twelve rows `pass`, every ref resolving and distinct, and these three carrying real `live`
-evidence:
+All twelve rows `pass`, every ref resolving to a distinct real file that is not this artifact,
+and these three carrying real `live` evidence:
 
 - `oauth-expiry-reauth` — a recorded run in which a real Google token reached expiry, the routine
   moved to `awaiting_reauth`, the user reconnected explicitly, and **no catch-up burst followed**.
@@ -291,6 +328,15 @@ evidence:
   is what §3 already is.
 - `provider-read` — already `pass`. An enable-safe branch should additionally show an
   **unattended** read, because §2 is explicit that the existing trace is an attended one.
+
+**And a fourth condition, on the CLASS of evidence.** Today's single green row cites
+`.planning/phases/03.2-inbox-reading/03.2-06-SUMMARY.md` — an agent-written planning summary
+recording a human verification. The underlying event is genuine (§2), but the artifact is a
+*narrative about* a run, not a run record. §0 defines `live` as "something that actually happened
+in the real world, once, and is cited", and the gate cannot tell a trace from a document: a future
+author satisfies `evidenceType: live` by writing another `-SUMMARY.md`, which will resolve, be
+distinct and be non-empty. The enable-safe checkpoint must therefore require a **trace** for the
+two outstanding rows — a run id, a dated audit or telemetry ref, a spend row — and not a summary.
 
 **Two of those three requirements are NOT machine-enforced, and this file will not pretend
 otherwise.** `--eligibility` can see that a row says `evidenceType: live` and that its citation is
@@ -314,8 +360,33 @@ Verdict unchanged (`defer`). Matrix count unchanged (1 `pass`, 11 `missing`). Wh
 | 3 | Every advertised exit code asserted by **spawning** the script | `main()` was never invoked by a test; four exit-path mutations were green |
 | 4 | `decidedBy` constrained to the closed set `owner` / `agent` / `fixture`, and this file's value corrected to `agent (…)`; §5 states the auto-approval in prose | The agent presented and selected two checkpoints recorded as the owner's |
 | 5 | `deferAbsenceChecks` driven against fixture roots that really contain a minted ADR and a temporal manifest, one per manifest, plus `apps/web/package.json` and `pnpm-lock.yaml` added to the scan | The whole function could be replaced with `return { ok: true }` and the suite stayed green |
-| 6 | The importer scan made recursive over `convex/`, `apps/web` and every package `src`, with a positive control naming `convex/lib/functions.ts` and `convex/render/renderReel.ts` | Round 1 scanned one directory level; `convex/lib/` was invisible |
+| 6 | The importer scan made recursive over `convex/`, `apps/web/app` and **four** package `src` trees, with a positive control naming `convex/lib/functions.ts` and `convex/render/renderReel.ts` | Round 1 scanned one directory level; `convex/lib/` was invisible. (This row said "every package `src`" when it covered four of nine. Corrected here; the scan itself is fixed in §9 row 4.) |
 | 7 | `nextOccurrence` skips a local date the zone deleted; `MAX_LOOKAHEAD_DAYS` pinned; `Occurrence \| null` replaced by a throw | A date-line skip produced a phantom `localDate` and two runs on one local day |
 | 8 | `classifyOverlap` / `classifyDue` / `classifyRetry` / `materialChanges` deleted from the spike; four rows moved `automated` → `manual` | Unreachable implementation of the feature that was declined, cited by rows that are red anyway |
 | 9 | Two vacuous `--self-check` cases (unknown row id, duplicate row) rewritten to APPEND a row; every case prefixed with the function it drives | Both corruptions also made a required row missing, so the rules under test never ran |
 | 10 | `main()` refuses two modes, two files and a prototype key with exit 2; a directory artifact with exit 1 | `--matrix --eligibility` silently ran only the first and printed `OK` |
+
+## 9. What round 3 changed, exactly
+
+Verdict unchanged (`defer`). Matrix count unchanged (1 `pass`, 11 `missing`). No implementation
+file was touched. Three verifiers read round 2; two of their findings were fail-open blockers.
+
+| # | Change | Why |
+|---|---|---|
+| 1 | `--self-check` is **mutually exclusive** with a mode+file, and an **unrecognised flag** is exit 2 by name. Both asserted from a spawned process, in both argv orders | `if (args.includes("--self-check")) return selfCheck();` ran before the arity check, so `--self-check` anywhere in argv discarded the requested mode and exited **0 without opening the artifact**. `--matrix --eligibilty` exited 0 too. A mis-composed verify line silently certifying is the exact failure this gate exists to prevent, and 29-12/29-13 chain it with `&&` |
+| 2 | The duplicate-citation rule keys on the **resolved path**, not the raw string; a row may not cite the **artifact under validation**; the green fixture is twelve **distinct real files** | `package.json#row-1 … package.json#row-12` exited 0 in all three modes, and the error message named the bypass. The old fixture was that same shape, so hardening the rule would have turned the suite red — the fixture pinned the hole in place |
+| 3 | `routines.test.ts`: the convex module scan reads the **full path**, not the basename | `convex/routines/arm.ts` — a self-arming per-tenant loop in a directory named `routines` — was not "named for routines". The sibling UI scan already used the full path; the two disagreed |
+| 4 | `routines.test.ts`: **comment stripping deleted**. The one legitimate occurrence (`schema.ts`'s promise sentence) is exempted by file **and exact line**, and a second test asserts that line still exists. Tokens matched case-insensitively | The stripper deleted the WHOLE LINE for `//`, so every banned identifier was invisible behind a trailing comment (`export const nextRunAt = 1;` red, the same line plus `// comment` green), and an unanchored `/*…*/` strip ate code inside string literals. Both fail-open. A fail-closed exemption list has neither failure mode |
+| 5 | `routineDecision.test.ts`: the spike-importer roots are **derived from the filesystem** — every `packages/*/src`, `apps/web`'s top level, `apps/web/scripts` — with controls naming `packages/{revenue,pii,audit}/src` and `apps/web/middleware.ts` | Round 2 hardcoded four of nine package `src` trees; a verifier added the import to `packages/revenue/src/index.ts` and the suite stayed green |
+| 6 | **The absence proof was run against the thing it forbids.** The verifier's self-arming subsystem was re-created here (`convex/routines/arm.ts` with a `nextRunAt` type, a cadence constant, `armNextOccurrence`, `occurrenceKey`, a `ctx.scheduler.runAt` self-arm, every identifier behind a trailing `//`, and a `/*` inside a string literal), plus a spike import from `packages/audit/src` and from `apps/web/middleware.ts`, and a `tenantId` in `crons.ts`. Each turned its own test red; all were deleted | An absence test that has never seen the thing it forbids is decoration. This repo shipped one: `workflow-pack-pilot.spec.ts`'s `@dark` block passed with all six packs ACTIVE |
+| 7 | The scheduling-dependency rule is a **closed, named set** (§6.2), asserted package by package | The rule was `/temporal/i` under a heading that said "no scheduling DEPENDENCY" |
+| 8 | Pinned by new tests: `decidedBy` membership is **equality** (a prefix like `agentic automation` is refused), the containment check needs the **separator** (a sibling directory whose name extends the root is outside it), and the documented ref suffix forms `#anchor` / `:line` / trailing note all resolve | All three mutations SURVIVED round 2's suite while the mutated gate visibly misbehaved |
+| 9 | Two tests deleted from `routines.test.ts` — "no table is recurrence-shaped" and "schema.ts still carries the deferral sentence" | `schema.test.ts` owns both, over the same corpus, and this file's header claimed it deliberately did not re-implement them (ponytail rung 2) |
+| 10 | Corrected in this record: §0 (the "twelve distinct real citations / twelve-line diff" cost claim), §4 row 1 (23 → 25 cases), §4 row 5 (round 1 refused 3 of those 12 cells, not 0), §4 (the `Object.hasOwn` guard is UNCOVERED, not covered), §6.2, §6.3 (`75d3ded` did not contain `routines.test.ts`), §7 (a fourth, evidence-class condition), §8 row 6 ("every package `src`" was four of nine), and `run-identity` in §1 (`templateVersion` is a tenant-mutable input to the idempotency key) | A claim you cannot prove true is a finding |
+
+**What round 3 did NOT fix.** A `pass` row may still cite twelve distinct real files that say
+nothing about routines; that residual is disclosed in §0 and asserted as `THE DOCUMENTED LIMIT`.
+`decidedBy: fixture` neither marks an artifact synthetic nor blocks eligibility — the script header
+no longer claims it does. And `Object.hasOwn` is documented as an uncovered belt-and-braces guard
+rather than dressed up as a tested one.
+

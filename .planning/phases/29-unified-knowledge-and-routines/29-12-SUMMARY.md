@@ -107,3 +107,33 @@ scaffolded toward one.
 - §7 of the decision record names the three live traces that would have to exist, and now says
   outright that **two of them cannot be machine-enforced** — the gate can see `evidenceType: live`
   and a resolving citation, and nothing else. Whoever runs that checkpoint reads the traces.
+
+---
+
+## CORRECTION — round 3 (2026-08-29)
+
+**The absence proof did not prove the absence.** A verifier built a complete self-arming recurrence
+subsystem and **all 8 tests passed**. Three independent mechanisms, all now fixed:
+
+1. `stripComments` deleted the **whole line** for `//`, so every banned identifier was invisible
+   behind a trailing comment — `export const nextRunAt = 1;` was RED, and the identical line plus
+   `// when the routine next fires` was GREEN. Its `/\*…\*/` strip also ran unanchored, so a `/*`
+   inside a string literal ate code. Comment stripping is **deleted**; the one legitimate
+   occurrence (`schema.ts`) is exempted by file and exact line, and the tokens are matched
+   case-insensitively over raw source. Fail-closed instead of fail-open.
+2. The convex module scan read the **basename**, so `convex/routines/arm.ts` was not "named for
+   routines". It reads the full repo-relative path now, as the sibling UI scan always did.
+3. The spike-importer scan covered four of nine package `src` trees; an import from
+   `packages/revenue/src` read green. The roots are derived from the filesystem now, and
+   `apps/web`'s top-level modules are included.
+
+Two further corrections to this summary: the table's claim rows for "no table is recurrence-shaped"
+and "schema.ts still carries the deferral sentence" **duplicated `schema.test.ts`** in the file
+whose header says it deliberately does not — both tests are deleted. And "All seven mutations
+reverted" counted a claim (`expect(crons).not.toMatch(/tenantId/)`) whose "observed RED" cell was
+`—`; it has now been observed red by adding a `tenantId` argument to a cron registration.
+
+**And the proof was finally run against the thing it forbids:** the verifier's subsystem was
+re-created here, watched to turn each of its three tests red, and deleted. Full account:
+`29-RECURRENCE-DECISION.md` §9.
+

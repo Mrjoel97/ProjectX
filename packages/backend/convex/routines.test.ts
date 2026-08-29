@@ -6,8 +6,8 @@ import {
   DEPENDENCY_MANIFESTS,
   deferAbsenceChecks,
   parseArtifact,
+  SCHEDULING_DEPENDENCY_RE,
 } from "../scripts/check-routine-gate.mjs";
-import schema from "./schema";
 
 // 29-12 — THE DEFERRED BRANCH, PROVEN.
 //
@@ -25,18 +25,16 @@ import schema from "./schema";
 // there. If a control ever fails, the absence beside it means nothing.
 //
 // WHAT THIS FILE DELIBERATELY DOES NOT RE-IMPLEMENT. `schema.test.ts` already owns the exhaustive
-// storage guard: an 11-name banned-table list, a substring scan over EVERY table name, and a
-// field-name scan over the schema source for next-run/cadence/timezone-rule/scheduler-id fields.
-// Round 1 of the neighbouring `routineDecision.test.ts` rebuilt a weaker version of that (two
-// hardcoded regexes) and was blind to a `standingRoutines` table that `schema.test.ts` caught. The
-// table check below is one line against the PARSED schema object and points at that file; the rest
-// of this file covers the four things `schema.test.ts` does not look at.
+// STORAGE guard: an 11-name banned-table list, a substring scan over EVERY table name, a
+// whitespace-insensitive field-name scan for next-run/cadence/timezone-rule/scheduler-id fields,
+// and the verbatim deferral sentence from schema.ts. Round 2 of this file said that and then
+// re-asserted two of them anyway ("no table is recurrence-shaped" and "schema.ts still carries the
+// deferral sentence"), over the same corpus and the same object. Both are DELETED — `schema.test.ts`
+// is the owner. This file covers only the four things that file does not look at: the module
+// namespace, the cron registry, the UI route namespace, and next-occurrence identifiers in code.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
-
-/** Every table the deployment actually declares, read from the schema object, not from text. */
-const tableNames = Object.keys(schema.tables);
 
 /** `.ts`/`.tsx` under a root, recursively, excluding tests. Returns repo-relative paths. */
 const sourcesUnder = (root: string) =>
@@ -45,35 +43,6 @@ const sourcesUnder = (root: string) =>
     .map((f) => `${root}/${f.split(sep).join("/")}`);
 
 const RECURRENCE_SHAPED = /routine|cron|recurr|schedul/i;
-
-describe("no recurrence STORAGE", () => {
-  test("no table is recurrence-shaped, and the schema object really was read", () => {
-    // POSITIVE CONTROL first: if this list is empty or missing known tables, the absence below is
-    // meaningless. These four are load-bearing Phase-29 / baseline tables.
-    expect(tableNames.length).toBeGreaterThan(30);
-    for (const known of ["savedPrompts", "audit", "contacts", "tenantSkills"]) {
-      expect(tableNames, `${known} should exist — the schema object was not read`).toContain(known);
-    }
-    // The claim. `schema.test.ts` "recurrence storage is structurally absent" owns the exhaustive
-    // version of this (banned names + a per-field scan); this is the one-line branch guard.
-    expect(tableNames.filter((n) => RECURRENCE_SHAPED.test(n))).toEqual([]);
-  });
-
-  test("schema.ts still carries the deferral sentence, verbatim", () => {
-    // The sentence is wrapped across two comment lines at schema.ts:442-443, so it is compared
-    // with the leading `// ` and the line break normalised away — the WORDS are the promise, the
-    // wrapping is not. Anything else about the sentence changing must fail this.
-    const source = readFileSync(join(here, "schema.ts"), "utf8");
-    const prose = source
-      .split("\n")
-      .map((line) => line.trim().replace(/^\/\/ ?/, ""))
-      .join(" ")
-      .replace(/\s+/g, " ");
-    expect(prose).toContain(
-      "There is deliberately NO `routines` table, cron, trigger, recurrence, next-run timestamp, execution-history table, canvas or DSL.",
-    );
-  });
-});
 
 describe("no recurrence MODULE", () => {
   const convexSources = sourcesUnder("packages/backend/convex");
@@ -92,9 +61,13 @@ describe("no recurrence MODULE", () => {
     ]) {
       expect(convexSources, `${known} should be in the scan`).toContain(known);
     }
-    // The claim. `crons.ts` is the one legitimate scheduling file and is named as an exception
-    // below, not silently permitted by a loose pattern.
-    const named = convexSources.filter((f) => RECURRENCE_SHAPED.test(f.split("/").pop() ?? ""));
+    // The claim, tested against the FULL REPO-RELATIVE PATH. Round 2 tested the BASENAME
+    // (`f.split("/").pop()`), so a module inside a directory literally named `routines/` was not
+    // "named for routines": `convex/routines/arm.ts`, a self-arming per-tenant loop, passed. The
+    // sibling UI scan below always tested the full path; the two disagreed and this was the loose
+    // one. `crons.ts` is the one legitimate scheduling file and is named as an exception here, not
+    // silently permitted by a loose pattern.
+    const named = convexSources.filter((f) => RECURRENCE_SHAPED.test(f));
     expect(named).toEqual(["packages/backend/convex/crons.ts"]);
   });
 
@@ -114,6 +87,9 @@ describe("no recurrence MODULE", () => {
     // expressed here — Convex crons are static module-level registrations — which is exactly why
     // an enable-safe branch would have needed `ctx.scheduler` self-arming instead.
     for (const name of registered) expect(name).not.toMatch(/routine|recurr/i);
+    // The `registered` assertion above IS this claim's positive control: it proves `crons.ts` was
+    // read and parsed, so `not.toMatch` below is a real read of a real file. Mutation observed
+    // RED: adding a `tenantId` argument to any registration turns this line red.
     expect(crons).not.toMatch(/tenantId/);
   });
 });
@@ -136,27 +112,55 @@ describe("no recurrence UI ROUTE", () => {
 });
 
 describe("no next-occurrence MACHINERY", () => {
-  // Comments in this repo legitimately contain every banned word — `schema.ts:499` says
-  // "THERE IS STILL DELIBERATELY NO cadence, timezone, nextRunAt, ..." — so a raw text scan
-  // false-positives on the very sentence that promises the absence. Strip comments first.
-  const stripComments = (src: string) =>
-    src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^[^\n"'`]*\/\/.*$/gm, " ");
+  // NO COMMENT STRIPPING. Round 2 stripped comments before scanning, and the stripper was
+  // fail-open in two directions, both demonstrated:
+  //   - `/^[^\n"'`]*\/\/.*$/gm -> " "` deleted the WHOLE LINE, code included, for any line
+  //     carrying a `//`. `export const nextRunAt = 1;` was RED; the identical line with a trailing
+  //     `// comment` was GREEN. 290 real code lines across 44 files were erased before the scan.
+  //   - `/\/\*[\s\S]*?\*\//g` ran unanchored over the whole file, so a `/*` inside a string
+  //     literal ate everything up to the next `*/`.
+  //
+  // The reason it existed is that comments in this repo legitimately name the forbidden
+  // identifiers — `schema.ts` says "THERE IS STILL DELIBERATELY NO cadence, timezone, nextRunAt,
+  // ...". There is exactly ONE such line in the entire corpus (measured), so it is EXEMPTED BY
+  // NAME instead. That inverts the failure direction: a banned identifier appearing anywhere else,
+  // in code OR in a comment, goes red and a human looks. Fail-closed, and a diffable exemption
+  // list rather than a parser that can be walked around with one `//`.
+  const ALLOWED = new Map([
+    [
+      "packages/backend/convex/schema.ts",
+      "// THERE IS STILL DELIBERATELY NO cadence, timezone, nextRunAt, enabled flag, scheduler id,",
+    ],
+  ]);
 
   const code = sourcesUnder("packages/backend/convex").map((f) => ({
     file: f,
-    src: stripComments(readFileSync(join(repoRoot, f), "utf8")),
+    lines: readFileSync(join(repoRoot, f), "utf8").split("\n"),
   }));
 
-  test("no identifier anywhere computes or stores a NEXT occurrence", () => {
-    // POSITIVE CONTROL: after stripping comments the corpus still contains the real scheduling
-    // vocabulary that IS here, so a token that is absent below is absent from CODE, not absent
-    // because the strip ate everything.
-    expect(code.filter((f) => f.src.includes("ctx.scheduler")).length).toBeGreaterThan(5);
-    expect(code.find((f) => f.file.endsWith("crons.ts"))?.src).toContain("cronJobs");
+  test("the ONE exempted line is still exactly where the exemption says it is", () => {
+    // If schema.ts's promise sentence is reworded, this test fails BEFORE the scan below silently
+    // starts carrying a stale exemption. An allow-list nobody re-checks is a hole with a comment.
+    for (const [file, line] of ALLOWED) {
+      const found = code.find((f) => f.file === file);
+      expect(found, `${file} is not in the scanned corpus`).toBeDefined();
+      expect(found?.lines.map((l) => l.trim())).toContain(line);
+    }
+    expect(ALLOWED.size).toBe(1);
+  });
 
-    // The claim. Each of these is an identifier a self-arming routine needs; none is English
-    // prose, so none can be satisfied by a comment. `nextOccurrence` and `occurrenceKey` are the
-    // spike's exports in packages/core — nothing in the backend may reference them.
+  test("no identifier anywhere computes or stores a NEXT occurrence", () => {
+    // POSITIVE CONTROL: the corpus really does contain the scheduling vocabulary that IS here, so
+    // a token absent below is absent from the TREE, not absent because the scan read nothing.
+    expect(
+      code.filter((f) => f.lines.some((l) => l.includes("ctx.scheduler"))).length,
+    ).toBeGreaterThan(5);
+    expect(code.find((f) => f.file.endsWith("crons.ts"))?.lines.join("\n")).toContain("cronJobs");
+
+    // The claim. Each token is an identifier a self-arming routine needs. Matched
+    // CASE-INSENSITIVELY, so `RoutineRun` cannot slip past a scan written for `routineRun`.
+    // `nextOccurrence` and `occurrenceKey` are the spike's exports in packages/core — nothing in
+    // the backend may name them.
     for (const token of [
       "nextRunAt",
       "nextRun",
@@ -169,16 +173,30 @@ describe("no next-occurrence MACHINERY", () => {
       "routineRun",
       "standingApproval",
     ]) {
-      const hits = code.filter((f) => f.src.includes(token)).map((f) => f.file);
-      expect(hits, `${token} appears in backend code`).toEqual([]);
+      const needle = token.toLowerCase();
+      const hits = code.flatMap(({ file, lines }) =>
+        lines
+          .map((text, n) => ({ file, at: `${file}:${n + 1}`, text: text.trim() }))
+          .filter(({ text }) => text.toLowerCase().includes(needle))
+          .filter(({ file: f, text }) => ALLOWED.get(f) !== text)
+          .map(({ at }) => at),
+      );
+      expect(hits, `${token} appears in backend source`).toEqual([]);
     }
   });
 });
 
 describe("no scheduling DEPENDENCY", () => {
-  test("no manifest names temporal — and the scan covers the lockfile", () => {
+  test("no manifest names one of the NAMED schedulers — and the scan covers the lockfile", () => {
     // Reuses the gate's own rule rather than re-implementing it (ponytail rung 2). The rule is
-    // observed FIRING against fixture roots in routineDecision.test.ts.
+    // observed FIRING, package by package, in routineDecision.test.ts.
+    //
+    // THE SET IS CLOSED AND NAMED, and this describe used to overclaim: round 2's rule was
+    // `/temporal/i` alone, so `rrule`, `cron-parser`, `node-cron`, `croner`, `bullmq` and
+    // `@js-joda` all read green under a heading that said "no scheduling DEPENDENCY". It is
+    // `SCHEDULING_DEPENDENCY_RE` now; `agenda` is deliberately outside it (see the gate).
+    expect(SCHEDULING_DEPENDENCY_RE.source).toContain("rrule");
+    expect(SCHEDULING_DEPENDENCY_RE.source).toContain("cron-parser");
     expect(deferAbsenceChecks({ repoRoot })).toEqual({ ok: true, errors: [] });
     // POSITIVE CONTROL on the scan's reach: 29-12's plan gates on "package manifests or the
     // lockfile", and round 1 of the gate scanned three manifests and no lockfile.

@@ -1,5 +1,22 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-29 (29-11 + 29-12 **round 3** — **THE RECURRENCE GATE COULD BE BYPASSED
+> WITH ONE FLAG, AND THE ABSENCE PROOF WITH ONE `//`.** Three verifiers read round 2. Two blockers:
+> (1) `--self-check` anywhere in argv short-circuited the requested mode and exited **0 without
+> ever opening the artifact**, and an unrecognised flag (`--matrix --eligibilty`) was silently
+> dropped so the weaker mode printed OK — the exact mis-composed-verify-line failure the gate
+> exists to prevent, and 29-12/29-13 chain it with `&&`; (2) a verifier built a **complete
+> self-arming recurrence subsystem** and all eight of 29-12's tests passed, because the comment
+> stripper deleted the whole line for `//` (so every banned identifier was invisible behind a
+> trailing comment), the convex module scan read the **basename** (so `convex/routines/arm.ts` was
+> not "named for routines"), and the spike-importer scan covered four of nine package `src` trees.
+> All fixed, and **the absence proof was then run against that subsystem**: re-created here,
+> watched red, deleted. Also: the duplicate-citation rule keys on the RESOLVED PATH (twelve
+> `#anchor`s on one file used to pass all three modes), a row may not cite the artifact itself, the
+> scheduling-dependency rule is a closed named set instead of `/temporal/i`, and `decidedBy`
+> equality / the containment separator / the `:line` ref form are pinned. Gate self-check 25/25;
+> backend `routineDecision` 82 + `routines` 7; core `routineSchedule` 19.)
+
 > Last verified: 2026-08-29 (29-08 FIX — **THE PIN SURFACE SAID "NOTHING WAS SPENT" ABOUT A RUN
 > THAT MAY HAVE BEEN BILLED, AND THE BRANCH WAS UNMUTATABLE.** Full account in
 > `docs/playbooks/workflow-packs.md`. In short: `ran` was a boolean, so a turn that produced no
@@ -1057,8 +1074,10 @@ the other ~90 events in `AUDIT_VIEWER_EVENTS` to derived key sets is out of scop
 > `packages/backend/scripts/check-routine-gate.mjs` is the fail-closed validator, and
 > `packages/core/src/routineSchedule.ts` is the DST/run-identity spike the matrix cites. No schema,
 > no scheduler module and no dependency was touched. `schema.ts:442` still carries its
-> "deliberately NO `routines` table" sentence verbatim — asserted by `schema.test.ts` structurally
-> and by `routines.test.ts` verbatim. **Round 1 of the gate was FAIL-OPEN: an `evidenceRef` of `#`
+> "deliberately NO `routines` table" sentence verbatim — asserted by `schema.test.ts`, which owns
+> both the structural and the verbatim form. (Round 2's block here named `routines.test.ts` for
+> that; `75d3ded` did not contain that file — 29-12 added it one commit later — and round 3 deleted
+> its two duplicates of `schema.test.ts`.) **Round 1 of the gate was FAIL-OPEN: an `evidenceRef` of `#`
 > let a fully fabricated `enable-safe` clear all three modes. Fixed, and every exit code is now
 > asserted from a spawned process. See "Round 2" at the foot of this section.**)
 
@@ -1066,7 +1085,7 @@ the other ~90 events in `AUDIT_VIEWER_EVENTS` to derived key sets is out of scop
 
 | Mode | Contract |
 |---|---|
-| `--matrix` | Closed schema + enumerations, valid even when every row is red. Refuses a fifth key, an unknown row id, a duplicate row, a missing row, an unknown enum member, an empty `evidenceRef`, a `decidedBy` outside `owner`/`agent`/`fixture`, and a `pass` row whose citation does not hold up. **A citation "holds up" means exactly this and no more:** it names a path (not just an `#anchor`), the path stays inside the repo, it resolves to a regular non-empty **file**, and no two `pass` rows share it. It does **not** mean the file substantiates the row — no parser can check that, and the script header says so. |
+| `--matrix` | Closed schema + enumerations, valid even when every row is red. Refuses a fifth key, an unknown row id, a duplicate row, a missing row, an unknown enum member, an empty `evidenceRef`, a `decidedBy` outside `owner`/`agent`/`fixture`, and a `pass` row whose citation does not hold up. **A citation "holds up" means exactly this and no more:** it names a path (not just an `#anchor`), the path stays inside the repo, it resolves to a regular non-empty **file**, it is not the artifact under validation, and no two `pass` rows resolve to the same **file** (round 2 keyed this on the raw string, so twelve `#anchor`s on one file passed all three modes). It does **not** mean the file substantiates the row — no parser can check that, and the script header says so. |
 | `--eligibility` | Exit 0 **only** when all twelve rows are `pass`, every ref is non-empty, and `oauth-expiry-reauth` / `dst-boundary` / `provider-read` each carry `evidenceType: live`. |
 | `--validate-decision` | `defer` is accepted (plus absence checks: no `routine\|recurrence\|schedul` ADR, no `temporal` dependency in **five** manifests — root, core, backend, `apps/web` and `pnpm-lock.yaml`). `enable-safe` gets the **identical** eligibility check. Both absence rules are driven against fixture roots that really contain the forbidden thing, one per manifest, in `routineDecision.test.ts`. |
 
@@ -1095,10 +1114,13 @@ date with a 25-hour step. `occurrenceKey` is derived from the LOCAL occurrence, 
 the second 01:30 a duplicate claim rather than a second run.
 
 **Nothing imports the spike.** `routineDecision.test.ts` scans `convex/`, `packages/backend/scripts`,
-`apps/web/app` and the `src` of core/contracts/cost/vault **recursively** for the string
-`routineSchedule`, with a positive control asserting the scan reaches `convex/lib/functions.ts` and
-`convex/render/renderReel.ts`. Round 1 listed one directory level, so `convex/lib/` and
-`convex/render/` were invisible and an import into either read green. It is evidence, not a runtime
+`apps/web` (its top-level modules included, so `middleware.ts` is covered), `apps/web/scripts` and
+**every** `packages/<pkg>/src` **recursively** for the string `routineSchedule` — the package roots
+are derived from the filesystem, not typed out, so a package added later is scanned without anyone
+remembering. Positive controls name `convex/lib/functions.ts`, `convex/render/renderReel.ts`,
+`packages/revenue/src/index.ts`, `packages/pii/src/index.ts` and `apps/web/middleware.ts`. Round 1
+listed one directory level, so `convex/lib/` was invisible; round 2 hardcoded four of nine package
+`src` trees and an import from `packages/revenue/src` read green. It is evidence, not a runtime
 module — if a later plan wires it in, that test is the thing to update deliberately.
 
 **If you are the plan that flips this to `enable-safe`:** the ADR number is **027**, not 013 — the
@@ -1139,17 +1161,26 @@ vacuously and this repo has shipped one — `apps/web/e2e/workflow-pack-pilot.sp
 So every claim in `routines.test.ts` sits next to a positive control proving the same scan, over
 the same corpus, finds something that really is there.
 
-| Claim | Positive control | Proven to fail by |
+Round 3 rewrote this table. Two rows are **gone** — "no table name is recurrence-shaped" and
+"schema.ts still carries the deferral sentence" duplicated `schema.test.ts` over the same corpus, in
+the file whose header said it deliberately did not (ponytail rung 2). `schema.test.ts` owns storage.
+
+| Claim | Positive control | Proven to fail by (round 3, observed RED) |
 |---|---|---|
-| No table name is recurrence-shaped (read from the **parsed schema object**) | the object contains `savedPrompts`, `audit`, `contacts`, `tenantSkills` and >30 tables | planting `routines: defineTable(...)` in `schema.ts` |
-| No convex module is named for routines; `crons.ts` is the single named exception | the recursive listing contains `schema.ts`, `crons.ts`, `lib/functions.ts`, `render/renderReel.ts` | creating `convex/routines.ts` |
-| `crons.ts` holds only the five global system jobs, none per-tenant | the five job names are asserted literally, and the file has no `tenantId` | — (the literal list is the control) |
+| No convex module is named for routines; `crons.ts` is the single named exception. Matched on the **full repo-relative path** | the recursive listing contains `schema.ts`, `crons.ts`, `lib/functions.ts`, `render/renderReel.ts` | `convex/routines/arm.ts` — round 2 matched the **basename**, so a module in a directory named `routines/` was invisible and a whole self-arming subsystem there passed |
+| `crons.ts` holds only the five global system jobs, none per-tenant | the five job names asserted literally — that IS the control; it proves the file was read and parsed | adding a `tenantId` argument to a registration |
 | No UI route or component is recurrence-shaped | the walk contains `dashboard/workflows/page.tsx` and `dashboard/workspace/page.tsx` | creating `dashboard/routines/page.tsx` |
-| No identifier computes or stores a next occurrence (`nextRunAt`, `nextOccurrence`, `occurrenceKey`, `rrule`, `routineId`, ...), **comments stripped first** because `schema.ts:499` legitimately contains those words inside the sentence banning them | after stripping, the corpus still contains `ctx.scheduler` in >5 files and `cronJobs` in `crons.ts` | appending `export const nextRunAt = 0;` to `convex/lib/hash.ts` |
-| No manifest names `temporal` (reuses the gate's own `deferAbsenceChecks`, five manifests incl. the lockfile) | every scanned manifest is read and non-empty | adding `@js-temporal/polyfill` to `packages/backend/package.json` |
+| No identifier computes or stores a next occurrence (`nextRunAt`, `nextOccurrence`, `occurrenceKey`, `rrule`, `routineId`, ...), matched **case-insensitively**, over the **raw source**, with the one legitimate comment line in `schema.ts` exempted **by file and exact line** | the corpus still contains `ctx.scheduler` in >5 files and `cronJobs` in `crons.ts`, and a second test asserts the exempted line still exists verbatim | `export const nextRunAt = 1; // when the routine next fires` appended to `convex/lib/hash.ts` — round 2 stripped comments with a regex that deleted the **whole line** for `//`, so the identical line without the trailing comment was RED and with it was GREEN |
+| No manifest names one of a **closed, named** set of schedulers (`temporal`, `rrule`, `cron-parser`, `node-cron`, `node-schedule`, `croner`, `bullmq`, `js-joda`, `toad-scheduler`; `agenda` deliberately out) — reuses the gate's `deferAbsenceChecks`, five manifests incl. the lockfile | every scanned manifest is read and non-empty, and each package name is driven one at a time in `routineDecision.test.ts` | round 2's rule was `/temporal/i` alone under this heading, so every other name read green |
+| Nothing imports the spike | see the importer paragraph above | the import planted in `packages/audit/src/index.ts` and in `apps/web/middleware.ts` |
 | The recorded decision is still `defer` — the branch guard for this whole file | the record parses under the closed schema | flipping the frontmatter to `enable-safe` |
 
-All seven mutations were observed RED and reverted. Two further vacuity proofs: pointing a scan at
+**The proof was run against the thing it forbids.** Round 3 re-created the verifier's self-arming
+subsystem in this worktree — `convex/routines/arm.ts` with a `RoutineRun` type carrying `nextRunAt`,
+a cadence constant, `armNextOccurrence`, `occurrenceKey`, a `ctx.scheduler.runAt` self-arm, every
+identifier behind a trailing `//` and a `/*` opened inside a string literal — plus the two planted
+imports and the `crons.ts` `tenantId`. Each turned its own test red; all were deleted. An absence
+test that has never seen the thing it forbids is decoration. Two further vacuity proofs: pointing a scan at
 a misspelled root throws `ENOENT` rather than silently returning `[]`, and forcing every scan to
 return an empty list turns **three positive controls red** while the absence assertions themselves
 would still have "passed" — which is the exact shape of the pack-pilot defect.

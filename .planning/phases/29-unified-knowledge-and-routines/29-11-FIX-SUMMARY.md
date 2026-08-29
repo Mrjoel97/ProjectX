@@ -140,3 +140,31 @@ after the commit shows only the sibling lane's files).
 | `cd packages/core && pnpm typecheck` | clean |
 | `npx biome check` on the four code files | clean |
 | `echo '{}' \| node scripts/check-playbooks.mjs check` | silent (passed) |
+
+---
+
+## CORRECTION — round 3 (2026-08-29)
+
+Three more verifiers read this round. Four claims above are **wrong** and are corrected here rather
+than edited in place, so the record of what was claimed survives beside what was true.
+
+1. **"Under round 1 every one of these exited **0** in every mode" (line 36) is false for 3 of the
+   12 cells.** A verifier extracted `75d3ded^`'s script to a sibling path and re-ran seven
+   fixtures: `../../../Windows/win.ini` and `../../../etc/hosts` resolve outside the user profile,
+   so round 1's plain `existsSync` already refused them. The containment rule is load-bearing only
+   for a **deeper** escape than either published fixture uses.
+2. **`Object.hasOwn` was NOT covered** (line 82 says "FIXED … all asserted from a spawned
+   process"). Mutating it to `a in MODES` leaves the whole suite green; the test named for it
+   passes for a different reason — `constructor` lands in the file list and dies on the two-files
+   rule. Round 3 keeps the guard, documents it as an uncovered belt-and-braces check, and covers
+   what is actually load-bearing instead: an unrecognised flag is refused by name.
+3. **The gate did not cost "twelve distinct real citations".** The duplicate rule keyed on the raw
+   `evidenceRef` string, so `package.json#row-1 … package.json#row-12` exited 0 in all three modes,
+   and the error message named the bypass. Round 3 keys it on the resolved path and rebuilds the
+   fixture from twelve distinct real files, which makes the sentence true.
+4. **The self-check was bypassable.** `--self-check` anywhere in argv discarded the requested mode
+   and exited 0 without opening the artifact; an unrecognised flag was silently dropped. Both are
+   exit 2 now, asserted from a spawned process in both argv orders.
+
+Full account: `29-RECURRENCE-DECISION.md` §9.
+
