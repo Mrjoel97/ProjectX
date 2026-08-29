@@ -28,6 +28,22 @@ export const STRIPE_API_BASE = "https://api.stripe.com";
 export const NONTAXABLE_TAX_CODE = "txcd_00000000";
 
 /**
+ * TEST-MODE OBJECTS, created via the Stripe API on 2026-08-29 against `acct_1U9DJHV05ajSTq7I`.
+ *
+ * The business is NOT yet registered, so nothing here exists in live mode and `HEAD_OFFICE_COUNTRY`
+ * stays null — there is no head office to record yet. These ids are real test-mode objects, not
+ * fixtures: a test-mode Checkout session against them actually works.
+ *
+ *   product  prod_VA8pHxqMVhfHZ3   "Pikar AI", tax_code txcd_10105002
+ *   price    price_1U9oXpV05ajSTq7I4Z4U1se9   usd 4900/month, 14-day trial, tax_behavior exclusive
+ *
+ * The PRICE AMOUNT (49.00 USD) IS A PLACEHOLDER, tagged `pikar_placeholder_amount` in Stripe
+ * metadata. Pricing was never decided — change the price object (or create a new one) before live.
+ * The price id itself lives in `BILLING_STRIPE_PRICE_ID`, not here: it is deployment config, and a
+ * test id must never be readable as a live one.
+ */
+
+/**
  * Have the Dashboard answers below been reported by the account owner and landed here?
  *
  * Deliberately an EXPLICIT flag rather than something derived from the values (`x !== null`): a
@@ -42,27 +58,40 @@ export const CONFIG_CONFIRMED: boolean = false;
  *
  * Pinned by us, never inherited from the Dashboard default: the version decides whether the invoice
  * tax field is `total_tax_amounts` or `total_taxes`, so an account-level version bump would silently
- * change the shape our parser reads. UNCONFIRMED — the webhook endpoint reports the version, and
- * only the owner can read it. Set in 28.1-02 Task 3.
+ * change the shape our parser reads.
+ *
+ * CONFIRMED 2026-08-29: `2026-08-26.dahlia`, Stripe's current version per its own versioning doc.
+ * We PIN it rather than reading it off an endpoint, which is what the original note assumed — the
+ * account default is exactly the thing we must not inherit. Upgrading is a deliberate edit here,
+ * paired with re-reading the invoice tax field shape.
  */
-export const STRIPE_API_VERSION: string | null = null;
+export const STRIPE_API_VERSION: string | null = "2026-08-26.dahlia";
 
 /**
  * The tax category configured on the Pikar product, e.g. a Software-as-a-Service code.
  *
  * The RULE is certain and is enforced by `config.test.ts`: it MUST NOT be `NONTAXABLE_TAX_CODE`.
- * The specific id is not — research proposed `txcd_10103001` at LOW confidence and the Dashboard's
- * own tax-code selector wins. UNCONFIRMED. Set in 28.1-02 Task 3.
+ *
+ * CONFIRMED 2026-08-29: `txcd_10105002` — "Artificial Intelligence as a Service (AIaaS) - Cloud
+ * Based - Business Use", set on `prod_VA8pHxqMVhfHZ3` via the API and read back from Stripe's own
+ * tax-code list. Research had proposed `txcd_10103001` (generic SaaS - business use) at LOW
+ * confidence; the AIaaS code is a strictly better match for "AI-powered business management system,
+ * cloud-hosted, browser-accessed, commercial use" and was chosen over it deliberately. Revisit if
+ * the product stops being AI-centric or gains a downloaded component (that is `txcd_10105004`).
  */
-export const PRODUCT_TAX_CODE: string | null = null;
+export const PRODUCT_TAX_CODE: string | null = "txcd_10105002";
 
 /**
  * The merchant's head-office / origin country, ISO 3166-1 alpha-2.
  *
  * Load-bearing twice over. (1) Threshold monitoring EXCLUDES the home jurisdiction — the origin
  * address is what leaves it out, not just what brings others in. (2) Bank-transfer eligibility is
- * COUNTRY-DEPENDENT, and this repo cannot read the account's country. UNCONFIRMED. Set in
- * 28.1-02 Task 3.
+ * COUNTRY-DEPENDENT.
+ *
+ * STILL NULL, and correctly so as of 2026-08-29: THE BUSINESS IS NOT YET REGISTERED, so there is no
+ * head office to record. This is not an unanswered question — it is a fact that does not exist yet.
+ * It is the ONLY reason `CONFIG_CONFIRMED` is still false. Set it when registration completes and
+ * a real origin address goes into Tax -> Settings.
  */
 export const HEAD_OFFICE_COUNTRY: string | null = null;
 
@@ -90,7 +119,10 @@ export const BANK_TRANSFER_ENABLED: boolean | null = true;
 /**
  * Free-trial length in days, as configured on the price/Checkout session.
  *
- * The trial collects a card up front and auto-converts (a trial, not freemium). UNCONFIRMED.
- * Set in 28.1-02 Task 3.
+ * The trial collects a card up front and auto-converts (a trial, not freemium).
+ *
+ * CONFIRMED 2026-08-29: 14, set as `recurring.trial_period_days` on
+ * `price_1U9oXpV05ajSTq7I4Z4U1se9`. Chosen as a conventional default, NOT specified by the owner —
+ * it is the one value here that no external fact pins, so change it freely.
  */
-export const TRIAL_DAYS: number | null = null;
+export const TRIAL_DAYS: number | null = 14;
