@@ -1357,9 +1357,7 @@ async function fetchStock(
   let assetId: string;
   try {
     const body = (await search.json()) as Record<string, unknown>;
-    const picked = isVideo
-      ? pickStockVideo(body, spec.seconds)
-      : pickStockPhoto(body);
+    const picked = isVideo ? pickStockVideo(body, spec.seconds) : pickStockPhoto(body);
     if (picked === null) return { ok: false, code: "stock_no_match", blocked: false };
     ({ link, assetId } = picked);
   } catch {

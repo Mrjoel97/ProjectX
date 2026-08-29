@@ -254,8 +254,12 @@ function liveRun({ environment, tenantId, doRevoke }) {
   const connected = reads.some((r) => r.state !== "unavailable");
   if (!connected) {
     console.error("LIVE_EVIDENCE_NOT_PRODUCED: no QuickBooks grant is connected for this tenant.");
-    console.error("  Connect one first (quickbooksAuth:beginConnect -> Intuit consent -> callback),");
-    console.error("  and check the five env names in this file's header are set on the deployment.");
+    console.error(
+      "  Connect one first (quickbooksAuth:beginConnect -> Intuit consent -> callback),",
+    );
+    console.error(
+      "  and check the five env names in this file's header are set on the deployment.",
+    );
     console.error("  This script does not fake a read. Offline proof of its guards: --self-test");
     process.exit(2);
   }
@@ -387,11 +391,7 @@ const CASES = [
     mutate((d) => (d.revocation.upstream = "not_attempted")),
     1,
   ],
-  [
-    "a missing clearedLocally is refused",
-    mutate((d) => delete d.revocation.clearedLocally),
-    1,
-  ],
+  ["a missing clearedLocally is refused", mutate((d) => delete d.revocation.clearedLocally), 1],
   [
     "evidence CLAIMING the open condition is resolved is refused",
     mutate((d) => (d.openCondition.resolved = true)),
@@ -436,7 +436,9 @@ function selfTest(outPath) {
   console.log(`  the open condition ${OPEN_CONDITION} stays UNRESOLVED.`);
   if (outPath) {
     writeFileSync(outPath, `${JSON.stringify(GOOD(), null, 2)}\n`);
-    console.log(`\n  Wrote the stub evidence to ${outPath} (mode "self-test" — not lane evidence).`);
+    console.log(
+      `\n  Wrote the stub evidence to ${outPath} (mode "self-test" — not lane evidence).`,
+    );
   }
 }
 

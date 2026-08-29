@@ -1,5 +1,11 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
+> **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
+> subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
+> steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
+> behaviour change, and **this is not a re-verification of anything below.** The
+> `Last verified` line still means what it said.
+
 > Last verified: 2026-08-28 against 28-07 (`boundedWindow`, `normalizeAll` and
 > `separateByCurrency` hoisted from `providers/quickbooks.ts` to `providers/shared.ts` and
 > re-exported — no behaviour change), on top of 28-06 complete (OAuth, bounded reads, gate script)

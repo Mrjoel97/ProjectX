@@ -917,6 +917,12 @@
 >
 # Playbook: Email Chat Cockpit
 
+> **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
+> subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
+> steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
+> behaviour change, and **this is not a re-verification of anything below.** The
+> `Last verified` line still means what it said.
+
 > Last verified: 2026-08-18 (**A BRIEF IS A SUBJECT, NOT A TASK — the media specialist was never
 > told to produce the deck.** dispatch 103/103, backend 87 files / 2041 passed, tsc clean. All four
 > claims mutation-proven.)

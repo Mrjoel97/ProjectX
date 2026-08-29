@@ -26,14 +26,16 @@
 //
 // NOT "use node": `readPages` uses the platform fetch and `openCredential` uses `crypto.subtle`,
 // both available in the default Convex runtime.
+
+import type { Result } from "@pikar/core/result";
 import {
-  agingReport,
   type Aging,
+  agingReport,
   CAPS,
-  coverageOf,
   type Currency,
-  financeResult,
+  coverageOf,
   type FinanceResult,
+  financeResult,
   type Invoice,
   type Money,
   type Obligation,
@@ -61,12 +63,11 @@ import {
   type ReadWindow,
   separateByCurrency,
 } from "@pikar/revenue/providers/quickbooks";
-import type { Result } from "@pikar/core/result";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { type ActionCtx, internalAction } from "./_generated/server";
-import { readPages } from "./connectorFetch";
 import { requireCredentialKey } from "./connectorCredentials";
+import { readPages } from "./connectorFetch";
 import { tenantAction } from "./lib/functions";
 import { ACCESS_REFRESH_SKEW_MS, parseQbCredential } from "./quickbooksAuth";
 
@@ -222,9 +223,11 @@ async function readEntityRows<K extends keyof Rows>(
 
   const asOfMs = Date.now();
   const window = boundedWindow(asOfMs, args.windowDays);
-  if (!window.ok) return { projection: unavailable("the requested read window is out of bounds"), rejected: 0 };
+  if (!window.ok)
+    return { projection: unavailable("the requested read window is out of bounds"), rejected: 0 };
   const base = buildEntityQuery(args.entity, window.value);
-  if (!base.ok) return { projection: unavailable("that QuickBooks entity is not readable"), rejected: 0 };
+  if (!base.ok)
+    return { projection: unavailable("that QuickBooks entity is not readable"), rejected: 0 };
 
   // Intuit paginates INSIDE the query text (`STARTPOSITION`/`MAXRESULTS`), so the transport's
   // cursor IS the next query string and `cursorParam` is `query`. `readPages` replaces rather than
@@ -274,8 +277,10 @@ async function readEntityRows<K extends keyof Rows>(
   const split = separateByCurrency(normalized.rows, currencyOfRow, home);
 
   const missing: string[] = [];
-  if (read.stoppedBy?.kind === "cap") missing.push(`the read stopped at the ${read.stoppedBy.reason}`);
-  if (read.stoppedBy?.kind === "failure") missing.push(`QuickBooks returned ${read.stoppedBy.failureClass}`);
+  if (read.stoppedBy?.kind === "cap")
+    missing.push(`the read stopped at the ${read.stoppedBy.reason}`);
+  if (read.stoppedBy?.kind === "failure")
+    missing.push(`QuickBooks returned ${read.stoppedBy.failureClass}`);
   if (normalized.rejected > 0) {
     missing.push(`${normalized.rejected} QuickBooks row(s) could not be read`);
   }
@@ -289,9 +294,7 @@ async function readEntityRows<K extends keyof Rows>(
     retrievedAt: asOfMs,
     window: { startMs: window.value.startMs, endMs: window.value.endMs },
     capped: read.capped,
-    sources: split.kept
-      .slice(0, CAPS.maxSources)
-      .map((row) => (row as { ref: SourceRef }).ref),
+    sources: split.kept.slice(0, CAPS.maxSources).map((row) => (row as { ref: SourceRef }).ref),
   };
   const projection: Projection<Rows[K]> =
     missing.length === 0
@@ -302,7 +305,11 @@ async function readEntityRows<K extends keyof Rows>(
   // capped read marked `ready`, an over-wide window, a ref carrying content — must not reach a
   // consumer, and catching it here is cheaper than discovering it in a rendered figure.
   const valid = validateProjection(projection);
-  if (!valid.ok) return { projection: unavailable("this QuickBooks read could not be validated"), rejected: normalized.rejected };
+  if (!valid.ok)
+    return {
+      projection: unavailable("this QuickBooks read could not be validated"),
+      rejected: normalized.rejected,
+    };
   return { projection, rejected: normalized.rejected };
 }
 

@@ -13,16 +13,15 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { VISUAL_KINDS } from "./storyboard";
 import { describe, expect, it } from "vitest";
 import {
   buildSandboxOptions,
   CAPTION_MAX_ASS_BYTES,
-  convexSiteOrigin,
   CARD_COLOR,
   CARD_DEFAULT_BG,
   CARD_DEFAULT_INK,
   cardColorsOf,
+  convexSiteOrigin,
   deckStillNeedsJob,
   handleRenderRequest,
   isRenderableCardText,
@@ -41,6 +40,7 @@ import {
   TRANSIENT_RENDER_CODES,
   validateRenderReturn,
 } from "./render";
+import { VISUAL_KINDS } from "./storyboard";
 
 const fixture = (name: string) =>
   readFileSync(

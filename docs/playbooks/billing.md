@@ -1,5 +1,11 @@
 # Playbook: Billing — Pikar's OWN merchant account (Phase 28.1)
 
+> **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
+> subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
+> steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
+> behaviour change, and **this is not a re-verification of anything below.** The
+> `Last verified` line still means what it said.
+
 > Last verified: 2026-08-29 against 28.1-04 (the outbound transport `billingApi.ts` and the two
 > hosted doors `billing.ts`, offline at $0 against a stubbed `fetch`, 31 mutations run) — after
 > 28.1-02 close-out (real test-mode Stripe objects created via the API, and

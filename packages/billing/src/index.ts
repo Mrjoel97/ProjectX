@@ -7,6 +7,6 @@
 // package takes none of them, and a mention in a comment is indistinguishable from a use.
 export * from "./config";
 export * from "./events";
-export * from "./signature";
 export * from "./reconcile";
+export * from "./signature";
 export * from "./tax";

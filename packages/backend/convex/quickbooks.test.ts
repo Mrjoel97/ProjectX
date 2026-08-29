@@ -188,10 +188,10 @@ describe("the lane modules contain no write verb and no transport of their own",
   // enforced by the test suite as well as by the lane gate — a gate that only runs at release is a
   // gate someone discovers at release.
   test.each([
-    ['a quoted POST verb', '"POST"'],
-    ['a quoted PUT verb', '"PUT"'],
-    ['a quoted PATCH verb', '"PATCH"'],
-    ['a quoted DELETE verb', '"DELETE"'],
+    ["a quoted POST verb", '"POST"'],
+    ["a quoted PUT verb", '"PUT"'],
+    ["a quoted PATCH verb", '"PATCH"'],
+    ["a quoted DELETE verb", '"DELETE"'],
     ["a direct transport call", "fetch("],
     ["a method parameter", "method:"],
   ])("no lane module contains %s", (_label, marker) => {
@@ -228,7 +228,10 @@ describe("realm ids", () => {
     ["letters", "realm9130"],
     ["empty", ""],
     ["absurdly long", "9".repeat(33)],
-    ["a number", 9130350000000001],
+    // A realm id must be a STRING. The value is irrelevant to that — it only has to be a number,
+    // so keep it inside Number.MAX_SAFE_INTEGER rather than a 16-digit literal that silently
+    // becomes a DIFFERENT number than the one written here (lint/correctness/noPrecisionLoss).
+    ["a number", 9130350],
     ["absent", undefined],
   ])("%s is refused before it can become a path segment", (_label, value) => {
     expect(isRealmId(value)).toBe(false);
@@ -262,12 +265,16 @@ describe("grant parsing", () => {
     expect(parseQbGrant(body, now)?.accessExpiresAt).toBe(now + ACCESS_TOKEN_TTL_S * 1000);
   });
 
-  test.each([[null], [undefined], ["{}"], [7], [[]], [{ access_token: "" }]])(
-    "a malformed body %s is refused",
-    (body) => {
-      expect(parseQbGrant(body, now)).toBeNull();
-    },
-  );
+  test.each([
+    [null],
+    [undefined],
+    ["{}"],
+    [7],
+    [[]],
+    [{ access_token: "" }],
+  ])("a malformed body %s is refused", (body) => {
+    expect(parseQbGrant(body, now)).toBeNull();
+  });
 });
 
 describe("token failures are classified without ever reading a provider body", () => {
@@ -454,9 +461,7 @@ describe("the callback", () => {
     const { t, asA, tenantA } = await harness();
     const connectionId = await seedConnection(t, tenantA);
     const state = await mintState(asA);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(grantBody(ACCESS_2, REFRESH_2)));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(grantBody(ACCESS_2, REFRESH_2)));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await t.action(internal.quickbooksAuth.handleCallback, {
@@ -803,7 +808,11 @@ describe("a failed refresh is never retried", () => {
     await seedConnection(t, tenantA);
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 })),
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 }),
+        ),
     );
 
     await t.action(internal.quickbooksAuth.refreshConnection, {
@@ -1170,13 +1179,15 @@ describe("a bounded read that fell short is PARTIAL, never zero and never short-
     await seedConnection(t, tenantA);
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        queryResponse("Invoice", [
-          invoiceRow({ Id: "a" }),
-          invoiceRow({ Id: "b", Balance: -5 }),
-          invoiceRow({ Id: "c", TxnDate: undefined }),
-        ]),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          queryResponse("Invoice", [
+            invoiceRow({ Id: "a" }),
+            invoiceRow({ Id: "b", Balance: -5 }),
+            invoiceRow({ Id: "c", TxnDate: undefined }),
+          ]),
+        ),
     );
 
     const projection = await asA.action(api.quickbooks.readEntity, {
@@ -1198,13 +1209,15 @@ describe("a bounded read that fell short is PARTIAL, never zero and never short-
     await seedConnection(t, tenantA);
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        queryResponse("Invoice", [
-          invoiceRow({ Id: "usd", CurrencyRef: { value: "USD" } }),
-          invoiceRow({ Id: "eur", CurrencyRef: { value: "EUR" } }),
-          invoiceRow({ Id: "jpy", CurrencyRef: { value: "JPY" }, TotalAmt: 100, Balance: 100 }),
-        ]),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          queryResponse("Invoice", [
+            invoiceRow({ Id: "usd", CurrencyRef: { value: "USD" } }),
+            invoiceRow({ Id: "eur", CurrencyRef: { value: "EUR" } }),
+            invoiceRow({ Id: "jpy", CurrencyRef: { value: "JPY" }, TotalAmt: 100, Balance: 100 }),
+          ]),
+        ),
     );
 
     const projection = await asA.action(api.quickbooks.readEntity, {
@@ -1226,7 +1239,10 @@ describe("a bounded read that fell short is PARTIAL, never zero and never short-
     // A FRESH Response per call. `mockResolvedValue` hands back the same object every time and a
     // Response body reads once, so the second page would arrive as a transport error and this test
     // would silently assert something else entirely.
-    vi.stubGlobal("fetch", vi.fn(async () => queryResponse("Invoice", page)));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => queryResponse("Invoice", page)),
+    );
 
     const projection = await asA.action(api.quickbooks.readEntity, {
       environment: "sandbox",
@@ -1278,12 +1294,14 @@ describe("derived figures", () => {
     await seedConnection(t, tenantA);
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        queryResponse("Invoice", [
-          invoiceRow({ Id: "old", TxnDate: "2026-01-05", DueDate: "2026-01-06", Balance: 100 }),
-          invoiceRow({ Id: "settled", Balance: 0 }),
-        ]),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          queryResponse("Invoice", [
+            invoiceRow({ Id: "old", TxnDate: "2026-01-05", DueDate: "2026-01-06", Balance: 100 }),
+            invoiceRow({ Id: "settled", Balance: 0 }),
+          ]),
+        ),
     );
 
     const summary = await asA.action(api.quickbooks.receivablesSummary, {

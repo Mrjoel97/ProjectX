@@ -34,14 +34,11 @@ import {
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { type ActionCtx, internalAction } from "./_generated/server";
+import { hashExternalAccountId, requireCredentialKey } from "./connectorCredentials";
 import {
-  hashExternalAccountId,
-  requireCredentialKey,
-} from "./connectorCredentials";
-import {
+  type ConnectResult,
   callbackRedirectPath,
   classifyRevokeOutcome,
-  type ConnectResult,
   postTokenForm,
 } from "./connectorOAuth";
 import { tenantAction } from "./lib/functions";
@@ -165,7 +162,9 @@ export function parseQbGrant(body: unknown, nowMs: number): QbGrant | null {
   if (!isNonEmptyString(grant.access_token)) return null;
   if (!isNonEmptyString(grant.refresh_token)) return null;
   const accessSeconds =
-    typeof grant.expires_in === "number" && Number.isFinite(grant.expires_in) && grant.expires_in > 0
+    typeof grant.expires_in === "number" &&
+    Number.isFinite(grant.expires_in) &&
+    grant.expires_in > 0
       ? grant.expires_in
       : ACCESS_TOKEN_TTL_S;
   // 100 days, rolling, extended on each use.

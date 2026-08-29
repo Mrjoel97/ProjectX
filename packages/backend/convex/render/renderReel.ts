@@ -340,8 +340,7 @@ export const batchToRender = internalQuery({
     // a palette written in words ("warm amber") degrades to exactly the reel we shipped before
     // rather than refusing a render over a styling detail.
     const cards_ = cards.length === 0 ? undefined : cardColorsOf(plan.artDirection?.palette);
-    const card =
-      cards_ === undefined || cards_.bg === CARD_DEFAULT_BG ? undefined : cards_;
+    const card = cards_ === undefined || cards_.bg === CARD_DEFAULT_BG ? undefined : cards_;
 
     return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards, music, card } };
   },

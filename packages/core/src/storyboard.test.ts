@@ -10,7 +10,6 @@ import {
   GENERATED_CLIP_SECONDS,
   GENERIC_DECK_REFUSAL,
   hasAssetSource,
-  statesCheckableClaim,
   isPaidBlock,
   isPaidScene,
   MAX_CHARS_PER_BLOCK,
@@ -29,6 +28,7 @@ import {
   parseVariations,
   SHOT_TYPES,
   sceneNarrationChars,
+  statesCheckableClaim,
   TARGET_DURATIONS,
   VISUAL_KINDS,
 } from "./storyboard";
@@ -1845,7 +1845,10 @@ describe("statesCheckableClaim: a number is not a claim until it measures someth
       "Ninety minutes a day is a full working week every month.",
     ];
     for (const line of sourcedInExamples) {
-      expect(statesCheckableClaim(line), `a SOURCED example line must flag when uncited: ${line}`).toBe(true);
+      expect(
+        statesCheckableClaim(line),
+        `a SOURCED example line must flag when uncited: ${line}`,
+      ).toBe(true);
     }
   });
 });
