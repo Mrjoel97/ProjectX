@@ -316,6 +316,16 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks:
       "The Stripe billing webhook refuses every delivery, so no subscription, invoice or payment outcome is ever recorded.",
   },
+  {
+    // The write-capable key. It CHARGES CARDS, so there is deliberately no development fallback
+    // (`p25-no-dev-fallback`) — `billingApi.ts` throws before `fetch` rather than degrading.
+    // Classified in the SAME commit as its first literal read: `env.test.ts` is bidirectional and
+    // a row with no consumer is as red as a consumer with no row.
+    name: "BILLING_STRIPE_SECRET_KEY",
+    tier: "feature",
+    whatBreaks:
+      "Every outbound Stripe call from Pikar's own account. No tenant can start Checkout or open the Customer Portal; the surface refuses loudly rather than half-working.",
+  },
 
   // ── Convex-provided and build-time. Present without operator action. ────────────────────────
   {

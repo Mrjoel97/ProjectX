@@ -68,6 +68,14 @@ function stubForbiddenFetch(): void {
   });
 }
 
+/** The n-th recorded request. Throws rather than returning undefined, so a test that asserts on a
+ * call that never happened fails loudly instead of on a confusing property access. */
+function sent(index = 0): Recorded {
+  const call = calls[index];
+  if (!call) throw new Error(`no request was recorded at index ${index}`);
+  return call;
+}
+
 beforeEach(() => {
   calls = [];
   vi.stubEnv("BILLING_STRIPE_SECRET_KEY", SECRET);
@@ -91,7 +99,7 @@ describe("stripePost speaks Stripe's actual wire format", () => {
 
     expect(result.ok).toBe(true);
     expect(calls).toHaveLength(1);
-    const call = calls[0];
+    const call = sent();
     expect(call.method).toBe("POST");
     expect(call.url).toBe("https://api.stripe.com/v1/checkout/sessions");
     // Exact equality, never `.includes` — a loose matcher survives a deletion mutation correctly
@@ -107,9 +115,9 @@ describe("stripePost speaks Stripe's actual wire format", () => {
     // assertion silently follows it, so the pin is never actually pinned by anything.
     stubStripe({ status: 200, body: {} });
     await stripePost("/v1/checkout/sessions", {}, { idempotencyKey: "k" });
-    expect(calls[0].headers["Stripe-Version"]).toBe("2026-08-26.dahlia");
+    expect(sent().headers["Stripe-Version"]).toBe("2026-08-26.dahlia");
     // …and the wiring half: the header really is fed from config, not typed twice.
-    expect(calls[0].headers["Stripe-Version"]).toBe(STRIPE_API_VERSION);
+    expect(sent().headers["Stripe-Version"]).toBe(STRIPE_API_VERSION);
     expect(STRIPE_API_BASE).toBe("https://api.stripe.com");
   });
 
@@ -121,7 +129,7 @@ describe("stripePost speaks Stripe's actual wire format", () => {
       { idempotencyKey: "k" },
     );
 
-    const body = calls[0].body;
+    const body = sent().body;
     expect(body).not.toContain("{");
     expect(body).not.toContain('"mode"');
     const parsed = new URLSearchParams(body);
@@ -137,11 +145,11 @@ describe("stripePost speaks Stripe's actual wire format", () => {
     await stripePost("/v1/x", { b: "2", a: "1" }, { idempotencyKey: "same" });
     await stripePost("/v1/x", { a: "1", b: "2" }, { idempotencyKey: "same" });
 
-    expect(calls[0].body).toBe(calls[1].body);
-    expect(calls[0].headers["Idempotency-Key"]).toBe(calls[1].headers["Idempotency-Key"]);
+    expect(sent().body).toBe(sent(1).body);
+    expect(sent().headers["Idempotency-Key"]).toBe(sent(1).headers["Idempotency-Key"]);
     // Anti-vacuity: the bodies are equal because they encode the same pair, not because both are
     // empty.
-    expect(calls[0].body.length).toBeGreaterThan(4);
+    expect(sent().body.length).toBeGreaterThan(4);
   });
 });
 
@@ -151,11 +159,11 @@ describe("stripeGet is the read half and carries no idempotency key", () => {
     const result = await stripeGet("/v1/invoices", { limit: "3" });
 
     expect(result.ok).toBe(true);
-    expect(calls[0].method).toBe("GET");
-    expect(calls[0].url).toBe("https://api.stripe.com/v1/invoices?limit=3");
-    expect(calls[0].headers["Idempotency-Key"]).toBeUndefined();
-    expect(calls[0].headers.Authorization).toBe(`Bearer ${SECRET}`);
-    expect(calls[0].headers["Stripe-Version"]).toBe("2026-08-26.dahlia");
+    expect(sent().method).toBe("GET");
+    expect(sent().url).toBe("https://api.stripe.com/v1/invoices?limit=3");
+    expect(sent().headers["Idempotency-Key"]).toBeUndefined();
+    expect(sent().headers.Authorization).toBe(`Bearer ${SECRET}`);
+    expect(sent().headers["Stripe-Version"]).toBe("2026-08-26.dahlia");
   });
 });
 
@@ -164,14 +172,14 @@ describe("every refusal fires on its own, before anything reaches the network", 
     vi.stubEnv("BILLING_STRIPE_SECRET_KEY", "");
     stubForbiddenFetch();
 
-    await expect(
-      stripePost("/v1/checkout/sessions", {}, { idempotencyKey: "k" }),
-    ).rejects.toThrow(/BILLING_STRIPE_SECRET_KEY/);
+    await expect(stripePost("/v1/checkout/sessions", {}, { idempotencyKey: "k" })).rejects.toThrow(
+      /BILLING_STRIPE_SECRET_KEY/,
+    );
     await expect(stripeGet("/v1/invoices")).rejects.toThrow(/BILLING_STRIPE_SECRET_KEY/);
     expect(calls).toEqual([]);
   });
 
-  test("GUARD 1b: a whitespace-only secret is UNSET — `convex env set X \" \"` is the classic false-ready", async () => {
+  test('GUARD 1b: a whitespace-only secret is UNSET — `convex env set X " "` is the classic false-ready', async () => {
     vi.stubEnv("BILLING_STRIPE_SECRET_KEY", "   ");
     stubForbiddenFetch();
     await expect(stripePost("/v1/x", {}, { idempotencyKey: "k" })).rejects.toThrow(
