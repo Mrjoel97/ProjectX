@@ -210,8 +210,14 @@ async function loadRegistry() {
   }
 }
 
-/** The registry, projected into the shape the validator asks questions of. */
-function projectRegistry(mod) {
+/**
+ * The registry, projected into the shape the validator asks questions of.
+ *
+ * EXPORTED for `convex/workflowPackEvals.test.ts`, which passes it `@pikar/core` directly rather
+ * than going through `loadRegistry` — the test already holds the module, and the file:// import
+ * this script uses to strip TS types natively is not something vitest should be doing.
+ */
+export function projectRegistry(mod) {
   const packs = new Map();
   for (const packId of mod.WORKFLOW_PACK_IDS) {
     const spec = mod.WORKFLOW_PACKS[packId];
@@ -1829,8 +1835,15 @@ async function main() {
   console.log(`fixtures-only: ${fixtures.length} valid — ${summary}`);
 }
 
-main().catch((err) => {
-  console.error(`FAIL ${err.message}`);
-  // The documented contract: 0 all green · 1 a fixture (or self-test) failed · 2 environment abort.
-  process.exit(err instanceof EnvironmentAbort ? 2 : 1);
-});
+// RUN ONLY WHEN NODE WAS POINTED AT THIS FILE. `main()` at module scope made the script
+// unimportable: a test importing `validateFixture` would have run `main()`, parsed vitest's own
+// argv, thrown `EnvironmentAbort` and killed the worker — which is why the corpus checker used to
+// carry a second copy of the traversal instead. `import.meta.main` would say this in one word but
+// needs Node >= 24.2, and this script's floor is 22.6, so the comparison is spelled out.
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(`FAIL ${err.message}`);
+    // The documented contract: 0 all green · 1 a fixture (or self-test) failed · 2 environment abort.
+    process.exit(err instanceof EnvironmentAbort ? 2 : 1);
+  });
+}
