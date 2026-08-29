@@ -65,7 +65,7 @@ const PACK: Listing = {
 };
 
 const PIN: PinRow = {
-  id: "pin_1",
+  id: "pin_1" as PinRow["id"],
   templateId: "brand-review",
   title: "Brand review",
   createdAt: 1,
@@ -337,7 +337,12 @@ describe("run again", () => {
 
   test("two presses send two requests — nothing is cached, reused or replayed on the client", async () => {
     server.pins = [PIN];
-    const ok = (threadId: string) => ({ ok: true, threadId, state: "ran", outcome: "useful" });
+    const ok = (threadId: string): RunResult => ({
+      ok: true,
+      threadId,
+      state: "ran",
+      outcome: "useful",
+    });
     runResults = [ok("thread_a"), ok("thread_b")];
     await mount();
     await click(button("Run again"));
