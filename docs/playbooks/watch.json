@@ -375,7 +375,10 @@
   "knowledge-search-routines.md": [
     "packages/core/src/knowledgeSearch",
     "packages/core/src/workflowCustomization",
+    "packages/core/src/routineSchedule",
+    "packages/backend/convex/routineDecision",
     "packages/backend/convex/pinnedWorkflows",
+    "packages/backend/scripts/check-routine-gate.mjs",
     "packages/backend/convex/knowledgeSearch",
     "packages/backend/convex/knowledgeExternalSources",
     "packages/backend/convex/knowledgeLlm",

@@ -777,7 +777,7 @@ plans 29-02 onward, and every recurrence live proof in 29-11.
 | **The `mediaJobs.provider` reflow in commit `1e914f9` was not reverted.** It is an unrequested formatting-only edit outside Phase 29's blast radius, and the audit was right to flag it — but `biome@2.5.3` at `lineWidth: 100` REQUIRES the collapsed single line (verified: reverting it makes `biome format packages/backend/convex/schema.ts` red). Reverting would ship formatter-red code that the next save flips back. | 29-01-SUMMARY.md, "deliberately not fixed". |
 | **`sourcePreferences` array LENGTH is unbounded at the storage boundary.** Membership is closed (invariant 22); a Convex validator has no array-length bound, so 10000 repeats of `"vault"` is storable. Claiming a length bound in a comment is the defect invariant 22 exists to record, so it is recorded here instead. | `ponytail:` comment on the field. The real ceiling is `CUSTOMIZATION_CAPS.maxValuesPerField` (8) in `validateCustomization`; there is no writer of this field yet. Upgrade path: clamp in the `savedPrompts` mutation when plan 29-08 writes the first pin, and assert the refusal there. |
 | **`packages/backend/convex/schema.ts` is NOT watched by the §9 hook.** It is registered under `watch._unassigned` — explicitly acknowledged rather than left as a silent hole. | `watch.json` prefixes are per-file and `schema.ts` holds all 47 tables, so assigning it to this playbook would demand a knowledge-search bump for every unrelated table edit repo-wide — noise that trains readers to ignore the hook. The Phase-29 tables' real gate is `schema.test.ts`, which IS watched here and which now fails on enum drift, header drift and value drift. |
-| **Recurrence is entirely deferred**, by decision, not by omission. | Plan 29-11's decision record; invariant 15. |
+| **Recurrence is entirely deferred**, by decision, not by omission. **CLOSED as a decision on 2026-08-29:** `.planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md` records `decision: defer` and `packages/backend/scripts/check-routine-gate.mjs --validate-decision` is what permits it. `--eligibility` exits NON-ZERO today (11 rows not `pass`; `oauth-expiry-reauth` and `dst-boundary` carry `automated` where `live` is required), so `enable-safe` was never offerable. | Plan 29-11's decision record; invariant 15; the 2026-08-29 section at the foot of this file. |
 
 ## Plan 29-05, Task 1 — the six APPROVED PACK TEMPLATE schemas (2026-08-28)
 
@@ -1030,6 +1030,57 @@ blocklist over source text. It is kept as a cheap tripwire and its ceiling is no
 test; the real boundary is the behavioural key allowlist in `knowledgeSearch.test.ts`. Converting
 the other ~90 events in `AUDIT_VIEWER_EVENTS` to derived key sets is out of scope — only
 `knowledge.*` has an exported pure projection to derive from.
+
+## Plan 29-11 — the recurrence decision gate, and why it says `defer` (2026-08-29)
+
+> Last verified: 2026-08-29 (29-11 — **RECURRENCE IS DEFERRED BY A PARSER, NOT BY A SENTENCE.**
+> `.planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md` carries a closed
+> twelve-row YAML matrix in its frontmatter and `decision: defer`.
+> `packages/backend/scripts/check-routine-gate.mjs` is the fail-closed validator, and
+> `packages/core/src/routineSchedule.ts` is the DST/identity/overlap/retry spike the matrix cites.
+> No schema, no scheduler module and no dependency was touched. `schema.ts:442` still carries its
+> "deliberately NO `routines` table" sentence verbatim, and `routineDecision.test.ts` asserts it.)
+
+**What the gate is.** Three modes over one artifact:
+
+| Mode | Contract |
+|---|---|
+| `--matrix` | Closed schema + enumerations, valid even when every row is red. Refuses a fifth key, an unknown row id, a duplicate row, a missing row, an unknown enum member, an empty `evidenceRef`, and a `pass` row whose ref does not resolve to a file in this repo. |
+| `--eligibility` | Exit 0 **only** when all twelve rows are `pass`, every ref is non-empty, and `oauth-expiry-reauth` / `dst-boundary` / `provider-read` each carry `evidenceType: live`. |
+| `--validate-decision` | `defer` is accepted (plus absence checks: no `routine\|recurrence\|schedul` ADR, no `temporal` dependency in the root/core/backend manifests). `enable-safe` gets the **identical** eligibility check. |
+
+**The distinction the whole artifact turns on.** `status` says whether the evidence meets the row's
+requirement; `evidenceType` says what class the best available evidence is. A row can carry good,
+passing, automated evidence and still be `missing`, because a code path is not a trace and a
+simulation is not an execution. That is why `--eligibility` demands `live` on three named rows
+rather than merely demanding twelve green rows — the failure mode this gate exists to prevent is
+relabelling `automated` as `live`, and eleven green rows would not catch it.
+
+**Today's matrix: 1 `pass`, 11 `missing`.** The one green row is `provider-read`
+(`.planning/phases/03.2-inbox-reading/03.2-06-SUMMARY.md` — CKPT-01, human-verified 2026-07-12, a
+real mailbox read against a really-connected account with zero sends). It is green because the
+question it asks is genuinely answered; marking it red to make the matrix read uniformly would have
+been the same dishonesty pointed the other way. It is also **attended** — no read in this product
+has ever happened with nobody present — and §2 of the decision record says so.
+
+**The Temporal spike ran and installed nothing.** `Intl.DateTimeFormat(zone).formatToParts()`
+resolves real IANA wall time against full ICU tzdata, so `routineSchedule.ts` has **zero imports**
+and `packages/core/package.json` names no temporal dependency (asserted). Proven in
+`routineSchedule.test.ts`: New York and Berlin spring-forward gaps resolve to the transition
+instant; a **30-minute** Lord Howe gap does too (an implementation assuming "DST means one hour"
+fails there); both fall-back repeats resolve to the first instant; 08:30 New York stays 08:30 across
+the transition on a 23-hour day; and 01:30 New York across fall-back yields one occurrence per local
+date with a 25-hour step. `occurrenceKey` is derived from the LOCAL occurrence, which is what makes
+the second 01:30 a duplicate claim rather than a second run.
+
+**Nothing imports the spike.** `routineDecision.test.ts` scans every non-test `.ts` in `convex/` for
+the string `routineSchedule` and fails if one appears. It is evidence, not a runtime module — if a
+later plan wires it in, that test is the thing to update deliberately.
+
+**If you are the plan that flips this to `enable-safe`:** the ADR number is **027**, not 013 — the
+29-11 plan text names `013-standing-routine-governance.md` and **013 is taken** by
+`013-the-render-worker.md`. Never edit an accepted ADR. And read §7 of the decision record first: it
+names exactly which three live traces have to exist.
 
 ## Plan 29-08 — the manual pin, and the three things it refuses to pretend (2026-08-29)
 
