@@ -97,15 +97,18 @@ describe("taxPosture — a number beats a reason", () => {
     });
   });
 
-  test.each(["not_collecting", "zero_rated", "not_subject_to_tax", "", "nonsense"])(
-    "a positive amount wins over reason %s — a non-zero number is never 'not owed'",
-    (reason) => {
-      expect(taxPosture(reason, NONTAXABLE_TAX_CODE, 1)).toEqual({
-        state: "collected",
-        minor: 1,
-      });
-    },
-  );
+  test.each([
+    "not_collecting",
+    "zero_rated",
+    "not_subject_to_tax",
+    "",
+    "nonsense",
+  ])("a positive amount wins over reason %s — a non-zero number is never 'not owed'", (reason) => {
+    expect(taxPosture(reason, NONTAXABLE_TAX_CODE, 1)).toEqual({
+      state: "collected",
+      minor: 1,
+    });
+  });
 
   test("a negative or non-integer tax amount is unknown, never collected and never zero", () => {
     for (const bad of [-1, 12.5, Number.NaN, Number.POSITIVE_INFINITY]) {
@@ -118,15 +121,18 @@ describe("taxPosture — a number beats a reason", () => {
 });
 
 describe("taxPosture — unknown is not zero", () => {
-  test.each([null, undefined, "", "made_up_reason", "NOT_COLLECTING"])(
-    "an absent or unrecognised reason %s with a zero amount is explicitly unknown",
-    (reason) => {
-      expect(taxPosture(reason, REAL_CODE, 0)).toEqual({
-        state: "unknown",
-        reason: "unrecognised-taxability-reason",
-      });
-    },
-  );
+  test.each([
+    null,
+    undefined,
+    "",
+    "made_up_reason",
+    "NOT_COLLECTING",
+  ])("an absent or unrecognised reason %s with a zero amount is explicitly unknown", (reason) => {
+    expect(taxPosture(reason, REAL_CODE, 0)).toEqual({
+      state: "unknown",
+      reason: "unrecognised-taxability-reason",
+    });
+  });
 });
 
 describe("renderTaxPosture — what a human actually reads (BILL-05)", () => {
@@ -186,9 +192,9 @@ describe("renderTaxPosture — what a human actually reads (BILL-05)", () => {
   });
 
   test("a collected amount in an unusable currency says so rather than inventing one", () => {
-    expect(renderTaxPosture({ state: "collected", minor: 1250 }, "dollars").toLowerCase()).toContain(
-      "unrecognised currency",
-    );
+    expect(
+      renderTaxPosture({ state: "collected", minor: 1250 }, "dollars").toLowerCase(),
+    ).toContain("unrecognised currency");
   });
 
   // Whatever the owner has (or has not) configured today, this line can never lie.

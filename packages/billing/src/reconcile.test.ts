@@ -92,14 +92,20 @@ describe("invoice.paid — the central law of this phase", () => {
     expect(movements.filter((m) => m.phase === "actual")).toEqual([]);
     expect(movements).toEqual([]);
     expect(observations).toEqual([
-      { kind: "awaiting-cash-application", correlationId: "billing/in_123", stripeObjectId: "in_123" },
+      {
+        kind: "awaiting-cash-application",
+        correlationId: "billing/in_123",
+        stripeObjectId: "in_123",
+      },
     ]);
   });
 
   test("customer_balance among SEVERAL allowed methods still books no actual", () => {
     // `payment_settings.payment_method_types` is what was ALLOWED, not what was USED. If bank
     // transfer was on the table we cannot prove a card paid it, and unprovable is not `actual`.
-    const inv = invoice({ payment_settings: { payment_method_types: ["card", "customer_balance"] } });
+    const inv = invoice({
+      payment_settings: { payment_method_types: ["card", "customer_balance"] },
+    });
     expect(run("invoice.paid", inv).movements).toEqual([]);
   });
 
@@ -132,7 +138,10 @@ describe("invoice.paid — the central law of this phase", () => {
 
 describe("customer_cash_balance_transaction.created — where bank-transfer money really moves", () => {
   test("funded is ARRIVAL, not collection: reserved", () => {
-    const { movements } = run("customer_cash_balance_transaction.created", cashTxn({ type: "funded" }));
+    const { movements } = run(
+      "customer_cash_balance_transaction.created",
+      cashTxn({ type: "funded" }),
+    );
     expect(movements).toEqual([
       {
         phase: "reserved",
@@ -285,7 +294,13 @@ describe("refunds — direction lives in the phase, never in the sign", () => {
   });
 
   test("credit_note.created is a POSITIVE refunded movement correlated on the invoice", () => {
-    const note = { id: "cn_1", object: "credit_note", currency: "usd", total: 500, invoice: "in_123" };
+    const note = {
+      id: "cn_1",
+      object: "credit_note",
+      currency: "usd",
+      total: 500,
+      invoice: "in_123",
+    };
     expect(run("credit_note.created", note).movements[0]).toMatchObject({
       phase: "refunded",
       amount: { minor: 500, currency: "USD" },

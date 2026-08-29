@@ -120,7 +120,13 @@ function movement(
   if (objectId === null || !REF_TOKEN.test(objectId)) return err(`${kind}: unusable object id`);
 
   return ok([
-    { phase, amount: money.value, correlationId: correlationId.value, kind, stripeObjectId: objectId },
+    {
+      phase,
+      amount: money.value,
+      correlationId: correlationId.value,
+      kind,
+      stripeObjectId: objectId,
+    },
   ]);
 }
 
@@ -182,18 +188,34 @@ function cashBalanceTransaction(txn: Obj): Result<Reconciliation, string> {
     case "funded":
       // Money EXISTS but is not ours: precisely `reserved`. There is no PaymentIntent yet, so the
       // customer is the only thing to correlate on.
-      return moved(movement("reserved", "cash-funded", txn.net_amount, txn.currency, txn.customer, txn.id));
+      return moved(
+        movement("reserved", "cash-funded", txn.net_amount, txn.currency, txn.customer, txn.id),
+      );
     case "applied_to_payment":
       // The PaymentIntent is the ONLY tie back to the invoice. Without it there is no honest
       // correlation, and an uncorrelated `actual` in an append-only ledger can never be paired up.
       return moved(
-        movement("actual", "cash-applied", txn.net_amount, txn.currency, pi("applied_to_payment"), txn.id),
+        movement(
+          "actual",
+          "cash-applied",
+          txn.net_amount,
+          txn.currency,
+          pi("applied_to_payment"),
+          txn.id,
+        ),
       );
     case "funding_reversed":
       // The incoming transfer was pulled back. NEVER silently dropped — this is the event that
       // makes "record actual on invoice.paid" a real financial error.
       return moved(
-        movement("refunded", "funding-reversed", txn.net_amount, txn.currency, txn.customer, txn.id),
+        movement(
+          "refunded",
+          "funding-reversed",
+          txn.net_amount,
+          txn.currency,
+          txn.customer,
+          txn.id,
+        ),
       );
     case "unapplied_from_payment":
       return moved(
@@ -230,7 +252,11 @@ function cashBalanceTransaction(txn: Obj): Result<Reconciliation, string> {
  * balance REMAINS. One observation per currency — the "separate" answer to mixed currency; two
  * currencies never combine into one figure.
  */
-function fundsAvailable(balance: Obj, createdMs: number, nowMs: number): Result<Reconciliation, string> {
+function fundsAvailable(
+  balance: Obj,
+  createdMs: number,
+  nowMs: number,
+): Result<Reconciliation, string> {
   const correlationId = ref(balance.customer);
   if (!correlationId.ok) return correlationId;
   const stripeObjectId = str(balance.customer) as string;
@@ -278,7 +304,16 @@ export function reconcileEvent(event: unknown, nowMs: number): Result<Reconcilia
   switch (str(e.type)) {
     case "invoice.finalized":
       // What we EXPECT to collect. Not money, not yet.
-      return moved(movement("estimated", "invoice-finalized", object.total, object.currency, object.id, object.id));
+      return moved(
+        movement(
+          "estimated",
+          "invoice-finalized",
+          object.total,
+          object.currency,
+          object.id,
+          object.id,
+        ),
+      );
     case "invoice.paid":
       return invoicePaid(object);
     case "customer_cash_balance_transaction.created":
@@ -298,7 +333,14 @@ export function reconcileEvent(event: unknown, nowMs: number): Result<Reconcilia
       );
     case "credit_note.created":
       return moved(
-        movement("refunded", "credit-note", object.total, object.currency, object.invoice ?? object.id, object.id),
+        movement(
+          "refunded",
+          "credit-note",
+          object.total,
+          object.currency,
+          object.invoice ?? object.id,
+          object.id,
+        ),
       );
     default:
       // `invoice.payment_failed`, the subscription/checkout lifecycle, and everything Stripe adds
