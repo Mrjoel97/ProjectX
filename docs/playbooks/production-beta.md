@@ -1,6 +1,20 @@
 # Playbook: Production Beta Readiness (25-10)
 
-> Last verified: 2026-08-28 (28-08 PayPal rail; 28-05 HubSpot rail — **THREE NEW `feature`-TIER MANIFEST NAMES:**
+> Last verified: 2026-08-29 (28.1-04 billing — **TWO NEW `feature`-TIER MANIFEST NAMES:**
+> `BILLING_STRIPE_SECRET_KEY` and `BILLING_STRIPE_PRICE_ID`, added to `ENV_MANIFEST` in
+> `convex/lib/env.ts`. A **FOURTH** credential family, and the one that CHARGES CARDS: it is Pikar's
+> OWN merchant account, not the Phase 28 `STRIPE_APP_*` connector into a tenant's account. Both are
+> `feature` — unset, `startCheckout` and `portalLink` throw naming the variable and no request
+> reaches Stripe, which is the correct current state since **neither is set in any deployment**.
+> There is no development fallback (`p25-no-dev-fallback`); a fallback key here would charge a real
+> card from a misconfigured deployment. Convex deployment vars set from `packages/backend`, never
+> Vercel, never `.env`.
+>
+> `env.test.ts` is BIDIRECTIONAL — a row nothing reads is as red as a read nobody classified — so
+> each row had to land in the SAME commit as its first LITERAL `process.env.X`. A computed
+> `process.env[name]` is invisible to that scan; see `docs/playbooks/billing.md`.
+>
+> Previously verified 2026-08-28 (28-08 PayPal rail; 28-05 HubSpot rail — **THREE NEW `feature`-TIER MANIFEST NAMES:**
 > `HUBSPOT_OAUTH_CLIENT_ID`, `HUBSPOT_OAUTH_CLIENT_SECRET`, `HUBSPOT_OAUTH_REDIRECT_URI`, added to
 > `ENV_MANIFEST` in `convex/lib/env.ts`. Caught the same way `PEXELS_API_KEY` was: `env.test.ts`
 > scans source for literal `process.env.X` and reds on any consumed name nobody classified.

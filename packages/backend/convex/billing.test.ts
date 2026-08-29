@@ -84,12 +84,35 @@ const sessionReply = (url: string = SESSION_URL) => ({
   },
 });
 
-/** Boot a tenant and return a client already carrying its identity. */
-async function withTenant() {
-  const t = convexTest(schema, modules);
+/**
+ * Add a tenant to an EXISTING backend and return a client carrying its identity.
+ *
+ * Taking `t` rather than booting one is what makes the two-tenant tests mean anything: a second
+ * `convexTest(...)` is a second empty database, so its first `users` row gets the SAME id as the
+ * first backend's — and "two tenants differ" then fails against code that is perfectly correct.
+ */
+async function tenantOn(t: ReturnType<typeof convexTest>) {
   const userId = await t.run((ctx) => ctx.db.insert("users", {}));
   return { as: t.withIdentity({ subject: `${userId}|session` }), tenantId: String(userId) };
 }
+
+/** Boot a backend with one tenant on it. */
+const withTenant = () => tenantOn(convexTest(schema, modules));
+
+/**
+ * Source with comments stripped, so a guard cannot punish its own documentation. A file that
+ * WARNS against card data or against reusing the read rail reads exactly like one that does it.
+ *
+ * Line comments FIRST, and the order is load-bearing (`env.test.ts` measured this): stripping
+ * block comments first lets a `/*` inside a `//` comment open a block that runs to the next
+ * closing marker anywhere in the file, swallowing real code in between.
+ */
+const codeOf = (content: string): string =>
+  content
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*"))
+    .join("\n")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
 
 beforeEach(() => {
   calls = [];
@@ -135,8 +158,9 @@ describe("startCheckout opens a hosted Stripe Checkout with a trial and a card u
     // Anti-vacuity for the assertion above: two tenants must produce two different values, or
     // `toBe(tenantId)` could be passing against a hardcoded string.
     stubStripe(sessionReply());
-    const a = await withTenant();
-    const b = await withTenant();
+    const backend = convexTest(schema, modules);
+    const a = await tenantOn(backend);
+    const b = await tenantOn(backend);
     await a.as.action(api.billing.startCheckout, {});
     await b.as.action(api.billing.startCheckout, {});
 
@@ -179,11 +203,13 @@ describe("startCheckout opens a hosted Stripe Checkout with a trial and a card u
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-29T09:00:00Z"));
     stubStripe(sessionReply());
-    const a = await withTenant();
-    const b = await withTenant();
+    const backend = convexTest(schema, modules);
+    const a = await tenantOn(backend);
+    const b = await tenantOn(backend);
     await a.as.action(api.billing.startCheckout, {});
     await b.as.action(api.billing.startCheckout, {});
 
+    expect(a.tenantId).not.toBe(b.tenantId);
     expect(sent(0).headers["Idempotency-Key"]).not.toBe(sent(1).headers["Idempotency-Key"]);
   });
 
@@ -305,11 +331,13 @@ describe("portalLink is the Customer Portal door, and it never provisions to mak
   test("no billing module ever POSTs to /v1/customers", async () => {
     const offenders = Object.entries(backendSources)
       .filter(([path]) => !path.endsWith(".test.ts"))
-      .filter(([, content]) => content.includes("/v1/customers"))
+      .filter(([, content]) => codeOf(content).includes("/v1/customers"))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
     // Anti-vacuity: the scan really did read the modules it claims to have cleared.
-    expect(Object.keys(backendSources).filter((p) => !p.endsWith(".test.ts")).length).toBeGreaterThanOrEqual(3);
+    expect(
+      Object.keys(backendSources).filter((p) => !p.endsWith(".test.ts")).length,
+    ).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -329,9 +357,9 @@ describe("no card data and no 3DS exists anywhere in this subsystem", () => {
   const FORBIDDEN = ["card_number", "cvc", "exp_month", "exp_year", "three_d_secure", "3ds"];
   const pattern = new RegExp(FORBIDDEN.join("|"), "i");
 
-  const scanned = Object.entries({ ...backendSources, ...packageSources }).filter(
-    ([path]) => !path.endsWith(".test.ts"),
-  );
+  const scanned = Object.entries({ ...backendSources, ...packageSources })
+    .filter(([path]) => !path.endsWith(".test.ts"))
+    .map(([path, content]) => [path, codeOf(content)] as const);
 
   test("the scan actually read both halves of the subsystem", () => {
     // Without this the assertion below is a green light over an empty glob.
@@ -343,9 +371,7 @@ describe("no card data and no 3DS exists anywhere in this subsystem", () => {
   });
 
   test("Stripe-hosted means card data never touches this codebase", () => {
-    const offenders = scanned
-      .filter(([, content]) => pattern.test(content))
-      .map(([path]) => path);
+    const offenders = scanned.filter(([, content]) => pattern.test(content)).map(([path]) => path);
     expect(offenders).toEqual([]);
   });
 
@@ -361,7 +387,7 @@ describe("no card data and no 3DS exists anywhere in this subsystem", () => {
   test("billingApi.ts is the ONLY module that names Stripe's origin", () => {
     const namers = Object.entries(backendSources)
       .filter(([path]) => !path.endsWith(".test.ts"))
-      .filter(([, content]) => content.includes("STRIPE_API_BASE") || content.includes("api.stripe.com"))
+      .filter(([, content]) => /STRIPE_API_BASE|api\.stripe\.com/.test(codeOf(content)))
       .map(([path]) => path);
     expect(namers).toEqual(["./billingApi.ts"]);
   });

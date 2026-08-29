@@ -326,6 +326,15 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks:
       "Every outbound Stripe call from Pikar's own account. No tenant can start Checkout or open the Customer Portal; the surface refuses loudly rather than half-working.",
   },
+  {
+    // Not a secret — deployment CONFIG. It lives here rather than in `packages/billing/src/config.ts`
+    // (which mirrors the rest of the Dashboard) for one reason: a TEST price id must never be
+    // readable as a live one, and the two deployments hold different objects under this one name.
+    name: "BILLING_STRIPE_PRICE_ID",
+    tier: "feature",
+    whatBreaks:
+      "Subscribing. `startCheckout` throws naming this variable rather than opening a Checkout against a guessed or stale price.",
+  },
 
   // ── Convex-provided and build-time. Present without operator action. ────────────────────────
   {
