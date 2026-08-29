@@ -14,13 +14,19 @@ export default defineConfig({
     // 5s and fail — then pass alone, which is what made it read as a bad test rather than a bad
     // budget. Raised ONCE here instead of sprinkling per-test `{ timeout }` overrides: the
     // constraint is the harness's fixed cost, not any single test's logic.
-    // THE OFFLINE-FIXTURE CONSENT, FOR THE WHOLE SUITE. Every `SMOKE::` seam under `convex/` is
-    // gated on `lib/models.ts`'s `offlineSeamAvailable()` — the operator flag AND no model
-    // credential — so that tenant-supplied text can never select a fabrication path on a keyed
-    // deployment. A test run IS an operator consenting to fixtures, and stating it here rather
-    // than in ~14 `beforeEach` blocks is what let the gate close on `vaultGround.ts`. A test that
-    // needs the consent ABSENT stubs it off (`vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "")`), which is
-    // what `knowledgeLlm.test.ts` and `lib/models.test.ts` already do.
+    // THE OFFLINE-FIXTURE CONSENT, FOR THE WHOLE SUITE. This line turns the operator flag ON for
+    // every backend test file: a test run IS an operator consenting to fixtures. It is what the
+    // `offlineSeamAvailable()` gates in `lib/models.ts` read, and stating it here rather than in
+    // ~14 `beforeEach` blocks is what let the gate close on `vaultGround.ts`. A test that needs
+    // the consent ABSENT stubs it off (`vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "")`), which is what
+    // `knowledgeLlm.test.ts`, `lib/models.test.ts` and `vaultGround.test.ts` already do.
+    //
+    // WHICH `SMOKE::` seams are gated on that predicate and which are still selected by CONTENT is
+    // tracked in `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md` — read
+    // the register, not this comment. Several are deliberately ungated (`vault.ts`'s `vaultSearch`
+    // is driven by `apps/web/e2e/vault-redesign.spec.ts` against a real KEYED deployment, where
+    // `offlineSeamAvailable()` is false by construction), so this flag restrains only the gated
+    // ones.
     env: { PIKAR_OFFLINE_FIXTURES: "1" },
     testTimeout: 20_000,
     hookTimeout: 20_000,
