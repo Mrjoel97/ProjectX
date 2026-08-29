@@ -28,10 +28,13 @@
 import { AUDIT_VIEWER_EVENTS } from "@pikar/contracts/auditProjection";
 import { KNOWLEDGE_QUERY_PLANNER_SKILL, KNOWLEDGE_SYNTHESIZER_SKILL } from "@pikar/contracts/skill";
 import {
+  groundedSourceProps,
   KNOWLEDGE_ADAPTERS,
   KNOWLEDGE_SOURCES,
+  type KnowledgeSourceState,
   NOT_LANDED_SOURCES,
   redactedSearchEvent,
+  renderSourceGap,
   SEARCH_CAPS,
 } from "@pikar/core";
 import { convexTest } from "convex-test";
@@ -1103,5 +1106,186 @@ describe("one bounded content-plane row per run, scoped to its tenant", () => {
     await expect(
       h.t.action(api.knowledgeSearch.search, { threadId: "t", question: "q" }),
     ).rejects.toThrow(/UNAUTHENTICATED/);
+  });
+});
+
+// -- 9. WHAT 29-09's PANEL WILL PUT ON THE SCREEN, taken from a real run --------------------
+//
+// Sections 1-8 prove the coordinator's STATE. This one proves the SENTENCE and the CONTROL that
+// state becomes, because a `{status:"unavailable", reason:"provider_error"}` that renders as "no
+// results" is the exact failure KNOW-01 exists to prevent and no assertion above could see it.
+// `renderSourceGap` and `groundedSourceProps` had no production caller when they landed; this is
+// where the coordinator's real output meets them, and every expected string here is a LITERAL.
+
+type SourceStates = { sources: readonly KnowledgeSourceState[] };
+
+describe("the honest gap survives all the way to the words the user reads", () => {
+  const inboxSentence = (out: SourceStates) =>
+    renderSourceGap(out.sources.find((s) => s.source === "inbox") as KnowledgeSourceState);
+
+  test("ALL-EMPTY renders no gap for a searched source - 'we looked' owes no explanation", async () => {
+    const h = await harness();
+    await seedGoogle(h, h.tenantA);
+    stubGoogle([]);
+    planSearches({ source: "inbox", query: "widgets" }, { source: "drive", query: "widgets" });
+
+    const out = await search(h, "anything about widgets?");
+    if (!out.ok) throw new Error(out.reason);
+    const bySource = new Map(out.sources.map((s) => [s.source, renderSourceGap(s)]));
+    expect(bySource.get("inbox")).toBeNull();
+    expect(bySource.get("drive")).toBeNull();
+    // The unplanned ones still say why, so the page never implies the whole business was read.
+    expect(bySource.get("vault")).toBe("your knowledge vault was not part of this search.");
+  });
+
+  test("ALL-UNAVAILABLE renders a reason for every source, and never the word 'nothing'", async () => {
+    const h = await harness();
+    stubGoogle([]);
+    planSearches(
+      { source: "inbox", query: "widgets" },
+      { source: "drive", query: "widgets" },
+      { source: "crm-facts", query: "widgets" },
+    );
+
+    const out = await search(h, "anything about widgets?");
+    if (!out.ok) throw new Error(out.reason);
+    const rendered = out.sources.map(renderSourceGap);
+    expect(rendered.every((line) => line !== null)).toBe(true);
+    const page = rendered.join(" ");
+    // THE PAIR, at the only layer the user meets it: this run and the one above return the same
+    // zero rows and the same `unsupported` confidence, and read completely differently.
+    expect(page).toContain("your mailbox is not connected yet, so it was not searched.");
+    expect(page).toContain("your Google Drive is not connected yet, so it was not searched.");
+    expect(page).not.toContain("no results");
+    expect(page).not.toContain("nothing");
+  });
+
+  test("a provider error reads as an error, not as an empty mailbox", async () => {
+    const h = await harness();
+    await seedGoogle(h, h.tenantA);
+    stubGoogle([], { listStatus: 500 });
+    planSearches({ source: "inbox", query: "invoice" });
+
+    const out = await search(h, "unpaid invoices?");
+    if (!out.ok) throw new Error(out.reason);
+    expect(inboxSentence(out)).toBe("your mailbox returned an error, so it was not searched.");
+  });
+
+  test("the source Phase 28 never landed names its unlock rather than leaving a complaint", async () => {
+    const h = await harness();
+    planSearches({ source: "support-desk", query: "tickets" });
+
+    const out = await search(h, "any open tickets?");
+    if (!out.ok) throw new Error(out.reason);
+    const desk = out.sources.find((s) => s.source === "support-desk") as KnowledgeSourceState;
+    expect(renderSourceGap(desk)).toBe(
+      "your connected support inbox is not available in Pikar yet, so it was not searched. It would need connecting your support desk.",
+    );
+  });
+
+  test("only the VAULT citation of a mixed claim becomes a vault document control", async () => {
+    const h = await harness();
+    const docId = await seedDoc(h, h.tenantA, { title: "Rate card", text: "The rate is 40." });
+    await seedGoogle(h, h.tenantA);
+    stubGoogle([{ id: "m1", subject: "Rate", body: "we said 40", internalDate: NOW }]);
+    planSearches({ source: "vault", query: `SMOKE::${docId}` }, { source: "inbox", query: "rate" });
+    synthesizeClaims([{ text: "The rate is 40.", evidenceIds: ["vault-1", "inbox:0"] }]);
+
+    const out = await search(h, "what is the rate?");
+    if (!out.ok) throw new Error(out.reason);
+    const claim = out.claims[0];
+    if (claim === undefined) throw new Error("no claim");
+    expect(claim.evidence).toHaveLength(2);
+
+    // The projection the panel renders through, over the STORED citations of a real run.
+    const props = groundedSourceProps(claim.evidence);
+    expect(props.docIds).toEqual([docId]);
+    expect(props.titles).toEqual(["Rate card"]);
+    expect(props.count).toBe(1);
+    // The mail ref is returned, never dropped and never dressed as a document id.
+    expect(props.nonVault.map((row) => row.source)).toEqual(["inbox"]);
+    expect(props.docIds).not.toContain(props.nonVault[0]?.sourceRef);
+  });
+
+  test("two tenants asking the same question in the same thread read different coverage", async () => {
+    // Isolation as the USER meets it: A has a mailbox, B does not, and the page says so.
+    const h = await harness();
+    await seedGoogle(h, h.tenantA);
+    stubGoogle([{ id: "m1", subject: "Renewal", body: "renews in June", internalDate: NOW }]);
+    planSearches({ source: "inbox", query: "renewal" });
+    synthesizeClaims([{ text: "It renews in June.", evidenceIds: ["inbox:0"] }]);
+    const outA = await search(h, "when does it renew?", "thread_shared", "A");
+    if (!outA.ok) throw new Error(outA.reason);
+
+    planSearches({ source: "inbox", query: "renewal" });
+    synthesizeClaims([]);
+    const outB = await search(h, "when does it renew?", "thread_shared", "B");
+    if (!outB.ok) throw new Error(outB.reason);
+
+    expect(inboxSentence(outA)).toBeNull(); // searched in full - nothing to explain
+    expect(inboxSentence(outB)).toBe("your mailbox is not connected yet, so it was not searched.");
+    expect(outA.claims).toHaveLength(1);
+    expect(outB.claims).toEqual([]);
+    expect(JSON.stringify(outB)).not.toContain("renews in June");
+  });
+});
+
+// -- 10. Evidence carrying an instruction cannot make anything happen -----------------------
+
+describe("an injected instruction inside evidence moves no other plane", () => {
+  /** Every table a cockpit turn writes when it ACTS. A search may write to none of them. */
+  const ACTING_TABLES = [
+    "requests",
+    "plans",
+    "agentSteps",
+    "notifications",
+    "followUps",
+    "attachments",
+  ] as const;
+
+  test("the run answers and cites, and every acting plane stays empty", async () => {
+    const h = await harness();
+    const docId = await seedDoc(h, h.tenantA, { title: "Playbook", text: INJECTION });
+    planSearches({ source: "vault", query: `SMOKE::${docId}` });
+    synthesizeClaims([{ text: "The playbook says something.", evidenceIds: ["vault-1"] }]);
+
+    const out = await search(h, "what does the playbook say?");
+    if (!out.ok) throw new Error(out.reason);
+
+    // PRESENCE CONTROL FIRST. Without this the absences below would also hold for a run that
+    // never happened, which is how an absence test passes while proving nothing.
+    expect(out.claims).toHaveLength(1);
+    expect(out.claims[0]?.evidence[0]?.sourceRef).toBe(docId);
+    const stored = await h.t.run((ctx) => ctx.db.query("knowledgeSearches").collect());
+    expect(stored).toHaveLength(1);
+    expect((await auditRows(h)).filter((r) => r.eventType === "knowledge.searched")).toHaveLength(
+      1,
+    );
+
+    // ...and now the absence. No email, no plan, no approval, no tool step.
+    for (const table of ACTING_TABLES) {
+      const rows = await h.t.run((ctx) => ctx.db.query(table).collect());
+      expect({ table, count: rows.length }).toEqual({ table, count: 0 });
+    }
+  });
+
+  test("an uncited echo of the instruction is dropped and counted, never rendered", async () => {
+    // The synthesizer is a mock here, so this does NOT prove a model resists the injection - it
+    // proves the SHAPE: a claim only survives by citing minted evidence, so an instruction the
+    // model echoed with no citation is dropped and counted rather than carried to the panel.
+    const h = await harness();
+    const docId = await seedDoc(h, h.tenantA, { title: "Playbook", text: INJECTION });
+    planSearches({ source: "vault", query: `SMOKE::${docId}` });
+    synthesizeClaims([
+      { text: INJECTION, evidenceIds: ["not-a-real-id"] },
+      { text: "The playbook is a document.", evidenceIds: ["vault-1"] },
+    ]);
+
+    const out = await search(h, "what does the playbook say?");
+    if (!out.ok) throw new Error(out.reason);
+    expect(out.claims.map((c) => c.text)).toEqual(["The playbook is a document."]);
+    expect(out.unsupportedCount).toBe(1);
+    expect(out.invalidCitationCount).toBe(1);
+    expect(JSON.stringify(out.claims)).not.toContain("IGNORE ALL PREVIOUS");
   });
 });

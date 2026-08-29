@@ -1,5 +1,31 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-29 (29-09 — **`renderSourceGap` AND `groundedSourceProps` NOW HAVE A
+> PRODUCTION CALLER, AND THE COORDINATOR'S OUTPUT IS TESTED AGAINST THE SENTENCE IT BECOMES.**
+> Earlier entries in this file recorded both functions as having no production caller. The caller is
+> `apps/web/app/(app)/dashboard/workspace/KnowledgeSearchPanel.tsx`, mounted from the cockpit's
+> "Chat options" menu (see `docs/playbooks/cockpit.md`).
+>
+> WHAT `knowledgeSearch.test.ts` GAINED (sections 9 and 10, 8 tests): the states a REAL run returns
+> are put through `renderSourceGap`, so an `available` source renders `null` while `provider_error`,
+> `not_connected` and `not_landed` each render their own literal sentence, and the not-landed one
+> carries its `MISSING_SOURCE_UNLOCK` clause. `groundedSourceProps` is run over the STORED citations
+> of a mixed vault+inbox claim: the vault ref is the only thing in `docIds`, and the mail ref comes
+> back under `nonVault`. Two tenants running the same question in the same thread read different
+> coverage sentences. And a run whose evidence carries a prompt injection writes its own content and
+> audit rows (the presence control) while `requests`, `plans`, `agentSteps`, `notifications`,
+> `followUps` and `attachments` all stay empty.
+>
+> Mutations observed RED for each: unavailable-re-minted-as-available, the gap sentence replaced by
+> "no results", the unlock clause dropped, every ref treated as a vault doc id, `nonVault` emptied,
+> the content-plane insert removed, the inbox adapter ignoring its `tenantId`, and the unknown-id
+> `continue` deleted from `validateSynthesis`. Every one was reverted.
+>
+> STILL UNPROVEN: the browser. `apps/web/e2e/knowledge-search.spec.ts` is written and UNRUN — it
+> needs a live deployment, a seeded E2E user and real credentials. See
+> `.planning/phases/29-unified-knowledge-and-routines/29-SEARCH-GATE.md`.)
+
+
 > Last verified: 2026-08-29 (29-W3-TAIL — **A CLAIM 29-FIN-06 DELETED FROM THE CODE SURVIVED IN
 > THIS FILE'S OWN "CORRECTED CLAIMS" LIST, AND SIX CITATIONS HAD ROTTED.** (1) The entry recording
 > the `renderSourceGap` / `groundedSourceProps` fix still read "Both have ZERO callers repo-wide" —
