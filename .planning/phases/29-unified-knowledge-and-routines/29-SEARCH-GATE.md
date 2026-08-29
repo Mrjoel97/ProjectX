@@ -1,14 +1,13 @@
 # 29-SEARCH-GATE — release evidence for unified knowledge search (KNOW-01)
 
 **Owner of this file:** plan 29-09. **Consumed by:** plan 13's single final owner checkpoint.
-**Status: THE BROWSER GATE IS UNRUN. The plan's browser criterion is NOT met.**
+**Status: THE BROWSER GATE HAS BEEN RUN AND IS GREEN (2026-08-29). All three modes executed;
+every test in the file has passed in at least one configuration. See §4.**
 
-29-09 could not run a browser gate: it needs a live Convex deployment, a seeded E2E user, real
-credentials and (in one mode) real model spend. None of those were available to the agent, and it
-was explicitly out of scope. `apps/web/e2e/knowledge-search.spec.ts` is written against the real
-components and the real selectors, and Playwright discovers and parses all 8 of its tests — but
-**not one of them has ever been executed against a running stack.** Nothing below should be read as
-browser evidence until an operator pastes real output into §4.
+29-09 itself could not run a browser gate: it needs a live Convex deployment, a seeded E2E user,
+real credentials and (in one mode) real model spend, none of which were available to that agent.
+**The orchestrator ran it on 2026-08-29** against a worktree-local copy of the local deployment.
+§4 carries the real runner output. The history below (§7, §8) is kept as written.
 
 WARNING: **until the 29-09 fix pass the spec would have died on its first line.** See §7. A spec
 that parses is not a spec that runs, and this file previously reported `--list` in a way that read
@@ -129,16 +128,69 @@ connecting your support desk.`
 
 ---
 
-## 4. Operator results — TO BE FILLED IN. EMPTY MEANS UNRUN.
+## 4. Operator results — FILLED IN 2026-08-29. All three modes green.
 
 | Date | Mode | Deployment | Command | Result (paste the runner's own summary line) |
 |---|---|---|---|---|
-| — | offline | — | — | **UNRUN** |
-| — | live | — | — | **UNRUN** |
-| — | two identities | — | — | **UNRUN — no second loggable account exists (§2.4)** |
+| 2026-08-29 | offline | `local-joel_feruzi-pikar_ai_50c69-1` (worktree copy) | `npx playwright test e2e/knowledge-search.spec.ts --reporter=list,json` | **`2 skipped / 7 passed (29.6s)` · PW_EXIT=0** |
+| 2026-08-29 | two identities | same | same, plus `E2E_USER_B_EMAIL` / `E2E_USER_B_PASSWORD` | **`1 skipped / 8 passed (31.1s)` · PW_EXIT=0** |
+| 2026-08-29 | live | same, model keys restored | same, plus `PIKAR_E2E_KNOWLEDGE_MODE=live` | **`5 skipped / 3 passed (22.9s)` · PW_EXIT=0** |
 
-Until at least the offline row is filled in with real runner output, KNOW-01 is proven in the
-backend and in the rendered-markup layer only, and **not** in a browser.
+### 4.1 The first run was RED, and that is the non-vacuity proof
+
+The gate's first execution FAILED — four tests, all at `ask()`, waiting for a `knowledge-answer`
+that never rendered. The backend log named the cause:
+
+```
+[CONVEX Q(skills:getActiveSkill)]              Uncaught Error: NO_ACTIVE_SKILL: knowledge-query-planner
+[CONVEX A(knowledgeLlm:planKnowledgeSearch)]   ... at handler (convex/knowledgeLlm.ts:322)
+[CONVEX A(knowledgeSearch:search)]             ... at handler (convex/knowledgeSearch.ts:421)
+```
+
+`KNOWLEDGE_QUERY_PLANNER_SKILL` and `KNOWLEDGE_SYNTHESIZER_SKILL` **are** both in `SEEDS`
+(`skills.ts`, entries 30 and 31) — the code is correct. The rows simply did not exist in this
+database, because `skills:seedSkills` is an `internalMutation` that an operator must run and this
+deployment's data predates Phase 29. One `npx convex run skills:seedSkills '{}'` turned the same
+spec green with no code change.
+
+**This is what makes the green above meaningful.** The identical file was RED 25 minutes earlier;
+the only thing between the two runs was seeding the registry. No mutation exercise was needed to
+show the gate can fail — it did.
+
+It is also a genuine operational finding: **KNOW-01 is inert on any deployment where `seedSkills`
+has not been run since Phase 29 landed.** Every unit test passes regardless, because
+`convex-test` seeds the registry inside the test. Plan 13's validation must include the seed step.
+
+### 4.2 What the live run actually proves, and what it does not
+
+The live row is a real model call, priced and recorded on the governed ledger:
+
+| field | value |
+|---|---|
+| `kind` | `knowledge.plan` |
+| `correlationId` | `knowledge:plan:ef4e56aa-eef9-4105-a074-f30debbd559d` |
+| `model` | `or/openai/gpt-4o-mini` |
+| `amountCents` | 1 |
+| `phase` | `actual` |
+
+**There is no `knowledge.synth` row, and that is the honest limit of this run.** The E2E tenant has
+no connected sources, so the planner ran, found nothing readable, and the card took the
+"no source could be searched" branch — which is exactly the behaviour §3 asks for, and which the
+live assertion permits via `knowledge-empty`. It does mean the **synthesizer body has not been
+exercised against a real model in a browser**. Closing that needs a tenant with a connected source
+(§2.5), which remains the open item it already was.
+
+### 4.3 Preconditions that were true for these runs
+
+- Offline rows: `PIKAR_OFFLINE_FIXTURES=1` **and both model keys unset on the deployment** —
+  `offlineSeamAvailable()` requires both halves.
+- Live row: both model keys restored, which makes `offlineSeamAvailable()` false. The two modes
+  therefore cannot share a deployment env, exactly as the spec header states.
+- The E2E tenant has **no Gmail connection**, which is what makes the "your mailbox is not
+  connected yet" assertion the correct expectation rather than a weaker match.
+- The second identity is `e2e-w6b@pikar.test`, provisioned through the real invite + signup seams
+  and then **stripped of owner** via `owner:revokeOwner` so the isolation test runs as an ordinary
+  tenant. `bootstrapOwner` is additive, so tenant A's owner grant was unaffected.
 
 ---
 
@@ -244,8 +296,9 @@ and the only one containing that phrase), `getByLabel("What do you want to know?
 `e2e/auth.setup.ts` — "Sign Out" in `(app)/layout.tsx` matches `{name: "Sign out"}` because the
 default match is case-insensitive.
 
-**THE SPEC IS STILL UNRUN.** §4 is still empty. Fixing a locator is not evidence, and the plan's
-browser criterion is not met.
+**AS OF THAT PASS the spec was still unrun** — fixing a locator is not evidence. It has since been
+executed: see §4 (2026-08-29, green in all three modes). This paragraph is kept as the record of
+what was true when §7 was written.
 
 ### 7.3 What the fix pass changed in the product
 
@@ -258,7 +311,7 @@ browser criterion is not met.
 3. The available/unavailable split is read from `@pikar/core`'s `aggregateCoverage` instead of a
    second copy in the panel.
 4. `activeThread` is `ownThread ?? threadId ?? null`, so a search made before the first chat message
-   stays readable after it. Covered by the new (UNRUN) e2e test in §3.
+   stays readable after it. Covered by the e2e test in §3 — **executed and passing**, see §4.
 5. Three comments in `packages/core/src/knowledgeSearch.ts` saying `renderSourceGap` and
    `groundedSourceProps` have no production caller were deleted — 29-09 created that caller.
 
@@ -313,4 +366,5 @@ All three reverted; `git diff --stat` on both files shows only the intended edit
   `KnowledgeSearchPanel.tsx:260`. Three verifiers have now reported it. **No Wave-4 agent owns that
   file**, and 29-09's ownership list excludes it, so it survives another round. The fix is to delete
   the clause "and it has NO caller yet — 29-09's panel is where it gets wired" from that sentence.
-- The browser gate. §4 is still empty. Unchanged by this pass and still **UNRUN**.
+- ~~The browser gate. §4 is still empty.~~ **RUN 2026-08-29 and green in all three modes — see §4.**
+  The one thing still unproven live is the SYNTHESIZER against a connected source (§4.2).
