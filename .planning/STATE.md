@@ -2821,6 +2821,23 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 
 ## Session Continuity
 
+Last session: 2026-08-29T20:00:00.000Z
+Stopped at: **28.1-04 CLOSED** (`c726f2c`..`a5af3a4`) — `billingApi.ts` (the ONE outbound transport,
+form-encoded, pinned `Stripe-Version`, idempotency key REQUIRED by type) + `billing.ts`
+(`startCheckout` / `portalLink` / `billingStatus`). backend 3000/3000, billing 107/107, `tsc --noEmit`
+exit 0 (re-verified independently), **31 mutations, 31 RED**, all three blind spots covered.
+Before it: **28.1-02 closed PARTIAL** (`48dd3b6`) — real TEST-MODE Stripe objects exist
+(`prod_VA8pHxqMVhfHZ3`, `price_1U9oXpV05ajSTq7I4Z4U1se9`, tax code `txcd_10105002`, API version
+`2026-08-26.dahlia` pinned); `CONFIG_CONFIRMED` stays false and `HEAD_OFFICE_COUNTRY` is the ONLY
+reason — the business is unregistered, so that null is a FACT, not a gap. **DO NOT RE-RUN 28.1-02:**
+it would mint a second product. Also `79a3373` — `intake.test.ts` was flapping 0/6/9 on a 20s cap
+against a ~12.7s idle measurement; raised to 60s. A timeout there abandons the action mid-flight and
+the vault assertions cascade into `expected [] to have length 1`, which reads exactly like a
+capability break. **NOTHING HAS EVER SPOKEN TO STRIPE ON A BILLING PATH** — no `BILLING_STRIPE_*` is
+set in any deployment and `CONVEX_SITE_URL` is `http://127.0.0.1:3211`. BILL-01/BILL-02 stay PENDING.
+Next: 28.1-05 (tenant<->customer mapping) — it also closes `billingStatus`, whose `not_subscribed` /
+`subscribed` arms are advertised by the validator but UNREACHABLE today.
+
 Last session: 2026-08-22T16:30:00.000Z
 Stopped at: 26-14 CLOSED. The work already existed, uncommitted and green, from a prior session — and a
 43-agent adversarial audit found 25 confirmed findings in it (13 distinct defects). **Defect 1 had been
