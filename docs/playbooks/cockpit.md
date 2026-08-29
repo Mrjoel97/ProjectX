@@ -23,8 +23,16 @@
 >   vault and `agent_authored` is the class that must be visible there.
 >
 > UNPROVEN AND STATED AS SUCH: `apps/web`'s vitest is node-only, so what is verified is the string
-> `renderToStaticMarkup` emits, not pixels, not focus order and not the live action call. The browser
-> gate is `apps/web/e2e/knowledge-search.spec.ts` and it is UNRUN — see
+> `renderToStaticMarkup` emits, not pixels, not focus order and not the live action call.
+>
+> THE BROWSER GATE IS `apps/web/e2e/knowledge-search.spec.ts`, AND IT IS UNRUN. Playwright discovers
+> and parses its 7 tests; not one has executed against a running stack. It opens the card through the
+> same "Chat options" keyboard path `skill-authoring.spec.ts` uses and writes zero auth code (the
+> `setup` project's `storageState`). It has two modes on two DIFFERENT deployments, because
+> `offlineSeamAvailable()` requires fixture consent AND no model key: `PIKAR_E2E_KNOWLEDGE_MODE=offline`
+> drives the `SMOKE::knowledge-plan::` planner fixture at $0, and `=live` spends real money. Its
+> two-identity block is skipped rather than faked — no second loggable account exists on this
+> project's deployments. Commands, env vars, preconditions and the empty results table are in
 > `.planning/phases/29-unified-knowledge-and-routines/29-SEARCH-GATE.md`.)
 
 > Last verified: 2026-08-29 (**WAVE-3 FINAL — THE COPY-DRIFT GUARD IS DELETED. Copy-drift is
