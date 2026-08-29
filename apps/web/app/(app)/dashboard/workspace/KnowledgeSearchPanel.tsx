@@ -289,8 +289,10 @@ export function KnowledgeSearchPanel({
   const [ownThread, setOwnThread] = useState<string | null>(null);
   // OWN HANDLE FIRST. `threadId` is undefined on a fresh workspace and becomes the cockpit thread
   // the moment the user sends their first message; reading the prop first re-subscribed the panel
-  // to that thread and the answers already on screen became unreadable — the rows stay in the DB
-  // under the `ks_` handle and nothing could ever query them back.
+  // to that thread, so the answers already on screen stopped being listed. The rows themselves are
+  // untouched in the DB under the `ks_` handle, and `listByThread` is a tenant query that takes any
+  // thread string — what changes here is only that no path in this component asks for the cockpit
+  // thread once the panel has minted its own.
   // ponytail: session-scoped. The panel unmounts on close (`page.tsx` renders it behind
   // `searching`), so `ownThread` lives only as long as the open card. Upgrade path if searches
   // should follow chat-tab switches: file them under the thread and add a thread picker here.

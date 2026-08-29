@@ -1023,10 +1023,15 @@ export type SourceCoverage = {
  * Roll per-source states into the honest-coverage summary the answer is rendered beside.
  *
  * An `available` source that returned zero rows is COMPLETE and has no gap: "we looked and there is
- * nothing" is a true answer. An `unavailable` source with the same zero rows is a GAP. The whole
- * KNOW-01 honesty requirement is that distinction, and the renderer reads it from here rather than
- * re-deriving it — `KnowledgeSearchPanel.test.ts` ("the available/unavailable split is read from
- * @pikar/core, not restated in the UI") is what fails if a second copy appears.
+ * nothing" is a true answer. An `unavailable` source with the same zero rows is a GAP. That
+ * distinction is the KNOW-01 honesty requirement, and the tests under "aggregateCoverage keeps an
+ * unavailable source from reading as an empty one" in `knowledgeSearch.test.ts` are what fail if
+ * this function stops making it.
+ *
+ * Whether a renderer in another package re-derives the same rule inline instead of calling this is
+ * not something any test in @pikar/core checks. An earlier version of this docstring said
+ * `KnowledgeSearchPanel.test.ts` enforced that; it does not — it bans two literal substrings from
+ * the component source, which a differently-spelled re-derivation walks past.
  */
 export function aggregateCoverage(states: readonly KnowledgeSourceState[]): SourceCoverage {
   let available = 0;
@@ -1136,11 +1141,11 @@ export function renderSourceGap(state: KnowledgeSourceState): string | null {
  * becomes a clickable control that opens a vault-document modal for something that is not a vault
  * document. Four of the five sources would have rendered that.
  *
- * The non-vault citations are RETURNED rather than filtered away, so a caller cannot end up with a
- * silently shorter list. `KnowledgeSearchPanel` renders provenance by iterating the claim's full
- * `evidence` and uses only `docIds`/`titles`/`count` from here, so `nonVault` currently has no
- * production reader; it is the split's other half, kept so a caller that wants the non-document
- * citations does not re-derive the vault test.
+ * Both halves come back. `nonVault` has no production reader today: `KnowledgeSearchPanel` renders
+ * provenance by iterating the claim's full `evidence` and takes only `docIds`/`titles`/`count` from
+ * here. It is kept so a caller that wants the non-document citations does not re-derive the vault
+ * test — not as a guarantee about how long any caller's rendered list ends up being, which this
+ * function does not decide.
  *
  * `count` counts DOCUMENTS, because the card's own words are "Grounded in N documents". The total
  * number of citations is `docIds.length + nonVault.length`, and a caller that wants it says so.

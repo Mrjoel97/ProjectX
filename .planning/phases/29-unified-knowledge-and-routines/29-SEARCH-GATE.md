@@ -142,26 +142,46 @@ backend and in the rendered-markup layer only, and **not** in a browser.
 
 ---
 
-## 5. The build gate needed an environment repair, and it is not committed
+## 5. The build gate needed a one-line worktree repair, and nothing is committed for it
 
-`pnpm --filter @pikar/web build` first failed with three `Module not found: Can't resolve
-'server-only'` errors, from `@convex-dev/auth/dist/nextjs/server/index.js` (via `middleware.ts`) and
-Next's own `resolve-metadata.js` (via `app/layout.tsx`). None of the three names any Phase-29 file.
+`pnpm --filter @pikar/web build` first failed **in this git worktree** with three `Module not found:
+Can't resolve 'server-only'` errors, from `@convex-dev/auth/dist/nextjs/server/index.js` (via
+`middleware.ts`) and Next's own `resolve-metadata.js` (via `app/layout.tsx`). None of the three names
+a Phase-29 file.
 
-Cause: Next aliases `server-only` to `next/dist/compiled/server-only/empty`, and `empty.js` is
-absent from that directory in this worktree's install — it is listed in the shim's own
-`package.json` `files` array, and the real `server-only@0.0.1` in the pnpm store is missing it too.
+Mechanism, read off the error itself: Next aliases the bare specifier `server-only` to its own
+`next/dist/compiled/server-only/empty` (`Import map: aliased to module 'next' with subpath
+'/dist/compiled/server-only/empty' inside of [project]/apps/web`). That target is a legitimately
+shipped **0-byte** file. It is present in the main working tree — store-linked by pnpm — where the
+app builds; CI builds; Phase 26 shipped to production from this app. `pnpm install
+--frozen-lockfile` into this freshly created worktree left `index.js` and `package.json` in that
+directory but did not materialise `empty.js`.
 
-Repair applied (node_modules only, git-ignored, nothing committed):
+So this is an **install artifact of this worktree**. It is not a repo defect, not a missing
+dependency, and not something CI or the main tree is exposed to.
+
+Repair — `node_modules` only, git-ignored, nothing committed. Create it EMPTY, matching upstream:
 
 ```
-printf 'module.exports = {};\n' > "$(readlink -f apps/web/node_modules/next)/dist/compiled/server-only/empty.js"
+: > "$(readlink -f apps/web/node_modules/next)/dist/compiled/server-only/empty.js"
 ```
 
-The build then passed. **A fresh `pnpm install` will remove this file again and the build will fail
-again the same way.** It is an install/store defect, not a source defect, and it is recorded here
-rather than papered over because it also blocks 29-07's build gate and any CI that builds the web
-app.
+The build then compiles (`Compiled successfully`, with `/dashboard/workspace` in the route table).
+A hand-written `module.exports = {};` shim also works but does not match what upstream ships. If a
+later `pnpm install` **in this worktree** drops the file again, run the same line again.
+
+Two fixes that do NOT work — both were tried and reverted; do not propose them again:
+
+- adding `server-only` to `apps/web/package.json`: the import resolves from inside
+  `@convex-dev/auth`, and pnpm's strict layout only lets a package see its own declared deps;
+- a `packageExtensions` entry adding `server-only` to `@convex-dev/auth`: it installs correctly into
+  that package's `node_modules` and the build still fails, because Next's alias map redirects the
+  specifier before resolution reaches it.
+
+Nothing is to be committed for this: no dependency, no lockfile edit, no `pnpm-workspace.yaml`
+change. An earlier revision of this section warned that "a fresh `pnpm install` will remove this
+file again and the build will fail again the same way" and called it a store defect that blocks CI.
+That was true of this worktree and false as a general claim; it is corrected here.
 
 ---
 
@@ -191,7 +211,7 @@ app.
 | 3 | `cd apps/web && pnpm typecheck` | **every error is in `dashboard/workflows/WorkflowPackCustomizer*` (29-07's in-flight files); zero errors in any file this plan owns**, verified by re-running with that path filtered out. |
 | 4 | `cd packages/core && pnpm vitest run` | **45 files / 1457 tests passed** (unchanged — this pass only corrects comments in `knowledgeSearch.ts`) |
 | 5 | `cd packages/core && pnpm typecheck` | clean |
-| 6 | `pnpm --filter @pikar/web build` | **passed.** `/dashboard/workspace` compiles. (The `server-only` shim from §5 was still present in `node_modules`; a fresh `pnpm install` needs it again.) |
+| 6 | `pnpm --filter @pikar/web build` | **passed.** `/dashboard/workspace` compiles. (§5's one-line `empty.js` repair was already in place in this worktree's `node_modules`; nothing committed for it.) |
 | 7 | `cd apps/web && npx playwright test --list knowledge-search` | **8 tests discovered in 2 files** — parse only, still zero executions |
 | 8 | `echo '{}' \| node scripts/check-playbooks.mjs check` | **blocked, on two playbooks this agent does not own** — see §7.4. `docs/playbooks/cockpit.md` (this plan's) WAS updated. |
 
@@ -256,3 +276,41 @@ test *"a Drive citation names Drive, so two systems on one claim are told apart"
 non-vault provenance is visible on the page. `nonVault` itself has no production reader, and
 deleting it would break `packages/backend/convex/knowledgeSearch.test.ts`, which this agent does not
 own. Its docstring now says that plainly instead of claiming a caller.
+
+---
+
+## 8. The 29-09 second fix pass (2026-08-29) — claims deleted, one new oracle
+
+The first fix pass replaced two false claims with *narrower* claims that were also false. This pass
+deletes rather than narrows.
+
+### 8.1 What changed
+
+| # | Site | Was | Is |
+|---|---|---|---|
+| 1 | `packages/core/src/knowledgeSearch.ts` `aggregateCoverage` docstring | cited `KnowledgeSearchPanel.test.ts` as "what fails if a second copy appears" | cites the same-file `knowledgeSearch.test.ts` describe that really does fail, and says outright that no test in `@pikar/core` can see whether another package re-derives the rule |
+| 2 | `packages/core/src/knowledgeSearch.ts` `groundedSourceProps` docstring | "so a caller cannot end up with a silently shorter list" | states that both halves are returned and that this function does not decide what a caller renders — the absolute is gone, not narrowed |
+| 3 | `KnowledgeSearchPanel.tsx` `activeThread` comment | "the rows stay in the DB … and nothing could ever query them back" | `listByThread` takes any thread string; what changes is that no path in the component asks for the cockpit thread once the panel minted its own |
+| 4 | `KnowledgeSearchPanel.test.ts` header | "EVERY assertion below is over the STRING `renderToStaticMarkup` emits" | §§1-7 are; §8 is a source scan that proves spelling, stated in the header, in the section banner, and in every §8 test title (`scan:`) |
+| 5 | `KnowledgeSearchPanel.test.ts` §2 | the blank-summary guard had no oracle | new test *"a blank summary renders no paragraph at all, not an empty one"* renders `""` and `"   "` and rejects `/<p[^>]*>\s*<\/p>/` |
+| 6 | `KnowledgeSearchPanel.test.ts` §8 | banned two literal comparisons | also bans `.status` anywhere in the panel source, which is what a re-derivation has to read |
+| 7 | §5 of this document | "a fresh `pnpm install` will remove this file again and the build will fail again the same way … it also blocks any CI that builds the web app" | a worktree install artifact with a one-line repair; the main tree and CI are unaffected |
+
+### 8.2 Mutations run, and observed RED
+
+| Mutation | Result |
+|---|---|
+| drop the `row.summary.trim().length > 0 &&` guard at `KnowledgeSearchPanel.tsx:210` | **RED**, 1 test — *a blank summary renders no paragraph at all, not an empty one* (`expected … not to match /<p[^>]*>\s*<\/p>/`). This is the mutation that was green before this pass. |
+| replace `coverage.available + coverage.partial > 0` with the verifier's `row.sources.filter((s) => s.status === "available" \|\| s.status === "partial").length > 0` | **RED**, 1 test — the widened §8 scan. Reported as a SCAN hit, not behavioural coverage: it is a grep. Under the old two-comparison form this exact mutation was green. |
+| `aggregateCoverage` stops distinguishing `unavailable` (count it as `available`, push no gap) | **RED**, 2 tests in *aggregateCoverage keeps an unavailable source from reading as an empty one* — the describe the corrected docstring now cites. |
+
+All three reverted; `git diff --stat` on both files shows only the intended edits.
+
+### 8.3 Still open
+
+- `packages/backend/convex/knowledgeSearch.ts:498-499` still says `renderSourceGap` "has NO caller
+  yet — 29-09's panel is where it gets wired". The caller is
+  `KnowledgeSearchPanel.tsx:260`. Three verifiers have now reported it. **No Wave-4 agent owns that
+  file**, and 29-09's ownership list excludes it, so it survives another round. The fix is to delete
+  the clause "and it has NO caller yet — 29-09's panel is where it gets wired" from that sentence.
+- The browser gate. §4 is still empty. Unchanged by this pass and still **UNRUN**.

@@ -6,10 +6,16 @@
 // failure that config was written to stop (`preflightCopy.test.ts`, 15.3-07). 29-09's plan names
 // `.test.tsx`; the plan is wrong about this repo and the deviation is recorded in the summary.
 //
-// EVERY assertion below is over the STRING `renderToStaticMarkup` emits (the `groundedSources.test`
-// idiom), never over a helper's return value and never over this file's own fixture. Expected
-// sentences are LITERALS: if `renderSourceGap`'s copy changes, this file must change with it, which
-// is the point — an oracle imported from the subject can never fail.
+// SECTIONS 1-7 assert over the STRING `renderToStaticMarkup` emits (the `groundedSources.test`
+// idiom), not over a helper's return value and not over this file's own fixture. Expected sentences
+// are LITERALS: if `renderSourceGap`'s copy changes, this file must change with it, which is the
+// point — an oracle imported from the subject can never fail.
+//
+// SECTION 8 IS WEAKER AND IS NOT THAT. It greps the component and page SOURCE for literal
+// substrings, so it proves SPELLING. It sees no behaviour, and a re-derivation written with
+// different words walks past it. When reporting a mutation that only §8 catches, report it as a
+// scan hit, not as behavioural coverage — an earlier summary in this phase did not, and the
+// sentence you are reading replaced the blanket "EVERY assertion below" claim that made that easy.
 //
 // WHAT IS *NOT* PROVEN HERE: pixels, focus order in a real browser, and the live action call. The
 // container half (`KnowledgeSearchPanel`) needs a Convex provider and is covered by source scan
@@ -189,6 +195,29 @@ describe("an empty answer and an unreachable one are DIFFERENT on the page", () 
     expect(html).not.toContain(ALL_UNAVAILABLE);
     // …and the reader still gets the trust label, which the old branch suppressed too.
     expect(html).toContain("High confidence — several sources agree and every source answered.");
+  });
+
+  test("a blank summary renders no paragraph at all, not an empty one", () => {
+    // The other half of the same edit as the test above, and it needs its own oracle: without the
+    // guard on the summary line the answered branch still emits `<p style=...></p>`, an element
+    // that shows the reader nothing and that a screen reader walks into for no reason.
+    for (const blank of ["", "   "]) {
+      const html = render({
+        summary: blank,
+        confidence: "high",
+        sources: [{ source: "vault", status: "available", returned: 2 }],
+        claims: [
+          {
+            text: "The renewal price is $40.",
+            evidence: [cite({ label: "Rate card", sourceRef: "doc_4" })],
+            conflictEvidence: [],
+          },
+        ],
+      });
+      // Not vacuous: the answered branch really did render.
+      expect(html).toContain("The renewal price is $40.");
+      expect(html).not.toMatch(/<p[^>]*>\s*<\/p>/);
+    }
   });
 
   test("a blank summary with no claims still says the sources were searched and empty", () => {
@@ -516,9 +545,14 @@ describe("every refusal the backend can return has its own words", () => {
   });
 });
 
-// ── 8. The surface is mounted, and it is not a second door into the agent ──────────────────
+// ── 8. SOURCE SCAN. The surface is mounted, and it is not a second door into the agent ─────
+//
+// Everything below greps `KnowledgeSearchPanel.tsx` / `page.tsx` as text. It pins SPELLING. It does
+// not execute the container (that needs a Convex provider) and it cannot see behaviour, so a
+// mutation caught only here has been caught by a grep, not by an oracle. Titles say `scan:` so a
+// failure line reports itself honestly.
 
-describe("the panel is wired into the workspace and stays a read", () => {
+describe("the panel is wired into the workspace and stays a read (source scan)", () => {
   const panel = stripComments(panelSource);
   const page = stripComments(pageSource);
 
@@ -527,12 +561,12 @@ describe("the panel is wired into the workspace and stays a read", () => {
     expect(panel.length).toBeGreaterThan(2000);
   });
 
-  test("page.tsx imports and renders the panel", () => {
+  test("scan: page.tsx imports and renders the panel", () => {
     expect(page).toContain('from "./KnowledgeSearchPanel"');
     expect(page).toContain("<KnowledgeSearchPanel");
   });
 
-  test("it calls the landed coordinator, and nothing else", () => {
+  test("scan: it calls the landed coordinator, and nothing else", () => {
     expect(panel).toContain("api.knowledgeSearch.search");
     expect(panel).toContain("api.knowledgeSearch.listByThread");
     // No cockpit send, no mutation, no tool grant: a search reads, it never acts.
@@ -541,7 +575,7 @@ describe("the panel is wired into the workspace and stays a read", () => {
     expect(panel).not.toContain("api.cockpit");
   });
 
-  test("the gap sentences come from @pikar/core, not from a second copy in the UI", () => {
+  test("scan: the gap sentences come from @pikar/core, not from a second copy in the UI", () => {
     expect(panel).toContain("renderSourceGap");
     expect(panel).toContain("groundedSourceProps");
     // The exact strings `renderSourceGap` owns must not be restated here.
@@ -549,22 +583,26 @@ describe("the panel is wired into the workspace and stays a read", () => {
     expect(panel).not.toContain("only the first");
   });
 
-  test("the available/unavailable split is read from @pikar/core, not restated in the UI", () => {
-    // `aggregateCoverage`'s docstring claims the distinction is made there; this is what fails if
-    // the panel starts deciding it again on its own.
+  test("scan: the panel calls aggregateCoverage and never reads a source's status itself", () => {
     expect(panel).toContain("aggregateCoverage(row.sources)");
+    // Re-deriving the available/unavailable rule here means reading `status` off a source state.
+    // Banning the property access catches more spellings than banning the two comparisons did —
+    // including `s.status === "available" || s.status === "partial"`, which slipped past the older
+    // form. It is still a grep: a re-derivation that destructures or aliases the field would pass,
+    // and nothing in this file would notice.
+    expect(panel).not.toContain(".status");
     expect(panel).not.toContain('status !== "unavailable"');
     expect(panel).not.toContain('status === "unavailable"');
   });
 
-  test("the panel's own thread handle wins once it has minted one", () => {
+  test("scan: the panel's own thread handle wins once it has minted one", () => {
     // A search filed under the panel's `ks_` handle stays readable after the cockpit mints its
     // thread. Reading the prop first re-subscribed the panel and the answers on screen vanished.
     expect(panel).toContain("ownThread ?? threadId ?? null");
     expect(panel).not.toContain("threadId ?? ownThread");
   });
 
-  test("the query field is labelled and the panel is reachable by name", () => {
+  test("scan: the query field is labelled and the panel is reachable by name", () => {
     expect(panel).toContain("htmlFor=");
     expect(panel).toContain('aria-label="Search everything you have connected"');
   });
