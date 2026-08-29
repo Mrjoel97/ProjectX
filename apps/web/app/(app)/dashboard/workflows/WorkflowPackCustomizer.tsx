@@ -11,10 +11,11 @@ import {
   packCustomizationFields,
   resolveWorkflowPack,
   WORKFLOW_PACKS,
-  type WorkflowPackId,
 } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
-import { useId, useMemo, useState } from "react";
+import type { FunctionReturnType } from "convex/server";
+import { type CSSProperties, useId, useMemo, useState } from "react";
+import { adaptationBytes } from "../workspace/SkillAuthoringPanel";
 import { WorkflowPackPreflight } from "../workspace/WorkflowPackPreflight";
 
 // ROUT-01: the tenant's ONE surface for adapting an approved workflow pack.
@@ -26,36 +27,59 @@ import { WorkflowPackPreflight } from "../workspace/WorkflowPackPreflight";
 // because a check rejects one, but because no such field is declared and the server's arg validator
 // (`values: v.record(string, string|number|string[])`) has no shape for one to arrive in.
 //
+// TWO COMPONENTS, AND THE SPLIT IS THE TEST STORY. `WorkflowPackCustomizer` holds the hooks and the
+// handlers; `CustomizerView` holds ALL of the JSX and every user-facing sentence, and takes its
+// whole state as props. `WorkflowPackCustomizer.test.ts` RENDERS the view (react-dom/server) at each
+// state and asserts the text a user would read. The previous revision exported its copy as pure
+// functions and asserted those instead — a verifier stripped six of them out of the JSX at once and
+// all 59 tests stayed green. Nothing below is exported for a test to call directly.
+//
 // THE HONEST PART, AND IT IS THE HARD PART. A saved customization is a `tenantSkills` CANDIDATE:
 //
 //   - `planTenantActivation` (convex/skills.ts) throws `PACK_GATE` for every name in
 //     `WORKFLOW_PACK_SKILL_NAMES`, ahead of its mode switch — so in this release there is no
 //     activation path for one, with or without evidence.
-//   - `cockpit.ts` is the only production caller of `runWorkflowPack` and it passes `skillVersions`
-//     (a global, owner-only preview pin) and never `tenantSkillIds` — so no workflow a user starts
-//     reads what they saved here.
+//   - `cockpit.ts` is the only production caller of `runWorkflowPack` and it does not pass
+//     `tenantSkillIds`, so no workflow a user starts reads what they saved here. That is an
+//     absolute about ANOTHER module, so it is pinned by a test that reads that module:
+//     "the sentence this route renders about cockpit.ts is still true of cockpit.ts".
 //
 // Copy that said "pending approval" or "awaiting review" would describe a queue that does not
-// exist. `ACTIVATION_NOTE` says the true thing instead, once, at the top of the form, and
-// `WorkflowPackCustomizer.test.ts` fails if either phrase reappears.
+// exist. `ACTIVATION_NOTE` says the true thing instead, once, at the top of the form.
 //
 // NO ACTIVATION OR ROLLBACK CONTROL, and none is possible from here: `activateTenantCandidate` and
 // `rollbackTenantSkill` are `ownerMutation`s. A disabled button implying "not yet" would be the
 // same lie in a different shape, so there is no button.
 //
-// BRAND: tokens only (`--card`, `--rule`, `--ink`, `--ink-soft`, `--canvas`), the tracked-caps
-// section label (§3), cards on canvas (§4), status carried in WORDS not colour (§6). Amber
-// (`--held`) is the approval gate's alone and appears nowhere here.
+// BRAND: tokens only (`--card`, `--rule`, `--ink`, `--ink-soft`), the tracked-caps section label
+// (§3), cards on canvas (§4), status carried in WORDS not colour (§6). Amber (`--held`) is the
+// approval gate's alone and appears nowhere here.
 
-// ── The copy. Exported so it is asserted as LITERAL strings, and rendered below so the assertion
-//    is about the shipped surface rather than about an unused helper. ──────────────────────────
+type PackListing = FunctionReturnType<typeof api.workflowPackDiscovery.listPacks>[number];
+type SavedRow = FunctionReturnType<typeof api.skills.myUserSkills>[number];
+/** The mutation's OWN result type. A new refusal reason on the server makes `refusalMessage`'s
+ *  switch non-exhaustive and `pnpm typecheck` fails — which is the point of not hand-writing it. */
+type PublishResult = FunctionReturnType<typeof api.skills.publishPackCustomization>;
+type PublishRefusal = Extract<PublishResult, { ok: false }>;
+type PublishSuccess = Extract<PublishResult, { ok: true }>;
 
-/** The one true sentence about what saving does. Rendered once; never restated per row. */
-export const ACTIVATION_NOTE =
+/** What the last save attempt did. One prop instead of three booleans that can contradict. */
+export type PublishOutcome =
+  | { readonly kind: "none" }
+  | { readonly kind: "saved"; readonly saved: PublishSuccess }
+  | { readonly kind: "refused"; readonly refusal: PublishRefusal }
+  /** A throw, not a refusal: every refusal this channel produces comes back as DATA. */
+  | { readonly kind: "transport" };
+
+// ── The copy. Deliberately module-private: it is proved by rendering the view, not by calling it. ──
+
+const ACTIVATION_NOTE =
   "Pikar cannot make a workflow customization live in this release. Saving one records your settings; no workflow you start uses them yet.";
 
+const TRANSPORT_ERROR = "That could not be saved. Check your connection and try again.";
+
 /** The approved template's own name. An unknown id is NAMED as unknown, never echoed as a title. */
-export function packTitle(packId: string): string {
+function packTitle(packId: string): string {
   const resolved = resolveWorkflowPack(packId);
   return resolved.ok ? WORKFLOW_PACKS[resolved.packId].title : "Unknown workflow";
 }
@@ -64,7 +88,7 @@ export function packTitle(packId: string): string {
  * What one saved row IS. Four statuses the `tenantSkills` row can carry, plus an honest fallback:
  * describing an unrecognised status as a draft is how a UI quietly reports the wrong state.
  */
-export function draftStateLine(row: { version: number; status: string }): string {
+function draftStateLine(row: { version: number; status: string }): string {
   switch (row.status) {
     case "candidate":
       return `Version ${row.version} is saved as a draft.`;
@@ -79,8 +103,19 @@ export function draftStateLine(row: { version: number; status: string }): string
   }
 }
 
+/**
+ * The eval half of a saved row's state, from the row's OWN `gatePassed` boolean rather than from an
+ * assumption about what a pack row can carry. `myUserSkills` computes it with
+ * `hasPassingTenantEvidence`, which fails closed on an absent or mismatched pin.
+ */
+function evaluationLine(row: { gatePassed: boolean }): string {
+  return row.gatePassed
+    ? "An evaluation has certified this version."
+    : "No evaluation has certified this version.";
+}
+
 /** Which approved template this edit derives from, and which of the tenant's drafts it builds on. */
-export function lineageLine(
+function lineageLine(
   packId: string,
   templateVersion: number,
   baseCandidateVersion: number | null,
@@ -93,12 +128,29 @@ export function lineageLine(
 }
 
 /**
- * The before/after semantic diff, from the REAL classifier rather than a second comparison here.
- * The baseline is the empty set, which is what absence means to the renderer: "use the template's
- * default". `material` is the classifier's own word for "this changes what the workflow does".
+ * THE REPLACEMENT WARNING, and it is not decoration.
+ *
+ * `renderCustomization` emits a section only for the keys present in the submitted map, and
+ * `readTenantPublishState` composes that onto the GLOBAL pack body — never onto the tenant's own
+ * previous `authoredBody`. So a save carries exactly what is on the form and nothing else. The form
+ * therefore REOPENS with the settings the last save stored (`myCustomizationValues`), and says so.
  */
-export function changeSummary(schema: CustomizationSchema, values: CustomizationValues): string {
-  const diff = classifyCustomizationChange(schema, {}, values);
+function prefillLine(baseCandidateVersion: number): string {
+  return `These are the settings you saved in version ${baseCandidateVersion}. Saving replaces all of them with what is on this form.`;
+}
+
+/**
+ * The before/after semantic diff, from the REAL classifier rather than a second comparison here.
+ * The baseline is what the form OPENED with — the last saved settings, or the empty set on a first
+ * customization, which is what absence means to the renderer ("use the template's default").
+ * `material` is the classifier's own word for "this changes what the workflow does".
+ */
+function changeSummary(
+  schema: CustomizationSchema,
+  baseline: CustomizationValues,
+  values: CustomizationValues,
+): string {
+  const diff = classifyCustomizationChange(schema, baseline, values);
   if (diff.changed.length === 0) return "You have not changed anything yet.";
   const labels = schema.fields
     .filter((f) => diff.changed.includes(f.key))
@@ -118,20 +170,12 @@ export function changeSummary(schema: CustomizationSchema, values: Customization
  * identity two planes already agree on. Ceiling: the user cannot verify the full digest from this
  * screen; upgrade path is showing the whole 64 characters if a support flow ever needs it.
  */
-export function changeIdLine(customizationHash: string): string {
+function changeIdLine(customizationHash: string): string {
   return `Change id ${customizationHash.slice(0, 12)}.`;
 }
 
 /** Every refusal `publishPackCustomization` can return, as an instruction the user can act on. */
-export function refusalMessage(
-  res:
-    | { ok: false; reason: "unknown_template" }
-    | { ok: false; reason: "template_not_active" }
-    | { ok: false; reason: "stale_template_version"; approvedVersion: number }
-    | { ok: false; reason: "stale_base_version"; currentBaseVersion: number | null }
-    | { ok: false; reason: "empty_customization" }
-    | { ok: false; reason: "invalid_values"; errors: readonly unknown[] },
-): string {
+function refusalMessage(res: PublishRefusal): string {
   switch (res.reason) {
     case "unknown_template":
       return "That workflow is not one Pikar offers.";
@@ -140,9 +184,12 @@ export function refusalMessage(
     case "stale_template_version":
       return `Pikar updated this workflow while you were editing. Reload the page and make your changes against version ${res.approvedVersion}.`;
     case "stale_base_version":
+      // The server returns the version it actually holds, and the handler adopts it, so the retry
+      // this sentence asks for is one the client can now win. Before 29-07's fix the base version
+      // came from a truncated list and "reload" reproduced the same wrong value forever.
       return res.currentBaseVersion === null
-        ? "This workflow's drafts changed while you were editing. Reload the page before saving again."
-        : `A newer draft of this workflow was saved (version ${res.currentBaseVersion}). Reload the page before saving again.`;
+        ? "Another draft of this workflow changed while you were editing. Pikar has caught up — press save again."
+        : `A newer draft of this workflow was saved (version ${res.currentBaseVersion}). Pikar has caught up — press save again.`;
     case "empty_customization":
       return "Change at least one setting before saving.";
     case "invalid_values":
@@ -151,7 +198,7 @@ export function refusalMessage(
 }
 
 /** Every rejection the pure validator can attach to one field, in words rather than as an enum. */
-export function fieldErrorMessage(reason: CustomizationRejection): string {
+function fieldErrorMessage(reason: CustomizationRejection): string {
   switch (reason) {
     case "too_many_fields":
       return "This form sent more settings than Pikar accepts. Reload the page.";
@@ -174,30 +221,49 @@ export function fieldErrorMessage(reason: CustomizationRejection): string {
   }
 }
 
-/** UTF-8 bytes of the trimmed value — exactly what the server's cap counts. */
-export const valueBytes = (text: string) => new TextEncoder().encode(text.trim()).length;
+/**
+ * The live hint under a control: the cap or the range, so the refusal is never the first news.
+ *
+ * THE UNIT IS BYTES AND THE WORD IS "bytes". It used to say "characters" while counting bytes, over
+ * a control capped with `maxLength` — which counts UTF-16 code units. 400 CJK characters passed the
+ * control and read "1200 of 400 characters used", a reading the control itself permitted. The
+ * wrong-unit cap is gone; the counter says what the server counts (`adaptationBytes`, the same
+ * function `SkillAuthoringPanel` uses against the same `USER_SKILL_ADAPTATION_MAX_BYTES` family).
+ */
+function fieldHint(
+  field: CustomizationField,
+  value: string | number | readonly string[] | undefined,
+): string {
+  switch (field.kind) {
+    case "terminology":
+    case "instruction": {
+      const used = adaptationBytes(typeof value === "string" ? value : "");
+      return used > field.maxBytes
+        ? `${used} of ${field.maxBytes} bytes used. Shorten this before saving.`
+        : `${used} of ${field.maxBytes} bytes used.`;
+    }
+    case "threshold":
+      return `A whole number between ${field.min} and ${field.max}.`;
+    case "tone":
+      return "Leave this alone to keep the workflow's usual tone.";
+    case "source_preference":
+      return "Leave every box clear to let the workflow use all of them.";
+  }
+}
 
 // ── The surface ────────────────────────────────────────────────────────────────────────────
 
-type PackRow = {
-  packId: string;
-  title: string;
-  blurb: string;
-  version: number;
-  sources: readonly { source: string; label: string; state: string; unlock: string | null }[];
-};
-
-const card = {
+const card: CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--rule)",
   borderRadius: "1rem",
   padding: "1.25rem",
   display: "flex",
-  flexDirection: "column" as const,
+  flexDirection: "column",
   gap: "0.75rem",
 };
-const dim = { margin: 0, fontSize: "0.85rem", color: "var(--ink-soft)" } as const;
-const control = {
+const dim: CSSProperties = { margin: 0, fontSize: "0.85rem", color: "var(--ink-soft)" };
+const control: CSSProperties = {
   padding: "0.5rem",
   borderRadius: "0.375rem",
   border: "1px solid var(--rule)",
@@ -207,100 +273,62 @@ const control = {
   fontSize: "0.9rem",
 };
 
-export function WorkflowPackCustomizer() {
-  const packs = useQuery(api.workflowPackDiscovery.listPacks) as PackRow[] | undefined;
-  const mine = useQuery(api.skills.myUserSkills);
-  const publish = useMutation(api.skills.publishPackCustomization);
+export type CustomizerViewProps = {
+  /** Stable id root. The container passes `useId()`; a test passes a literal so the label/describe
+   *  wiring can be asserted on the RENDERED node rather than scanned for as a bare attribute name. */
+  idPrefix: string;
+  packs: readonly PackListing[] | undefined;
+  mine: readonly SavedRow[] | undefined;
+  selectedPackId: string | null;
+  /** What the form opened with — the last saved settings, or `{}` on a first customization. */
+  baseline: CustomizationValues;
+  values: CustomizationValues;
+  busy: boolean;
+  outcome: PublishOutcome;
+  fieldErrors: Readonly<Record<string, CustomizationRejection>>;
+  onChoose: (packId: string) => void;
+  onSet: (key: string, value: string | number | readonly string[]) => void;
+  onClear: (key: string) => void;
+  onSubmit: () => void;
+};
 
-  const [packId, setPackId] = useState<string | null>(null);
-  const [values, setValues] = useState<Record<string, string | number | string[]>>({});
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, CustomizationRejection>>({});
-  const idPrefix = useId();
+export function CustomizerView(props: CustomizerViewProps) {
+  const {
+    idPrefix,
+    packs,
+    mine,
+    selectedPackId,
+    baseline,
+    values,
+    busy,
+    outcome,
+    fieldErrors,
+    onChoose,
+    onSet,
+    onClear,
+    onSubmit,
+  } = props;
 
-  const selected = packs?.find((p) => p.packId === packId) ?? null;
+  const selected = packs?.find((p) => p.packId === selectedPackId) ?? null;
+  const resolved = selected === null ? null : resolveWorkflowPack(selected.packId);
+  const schema: CustomizationSchema | null =
+    selected === null || resolved === null || !resolved.ok
+      ? null
+      : {
+          templateId: resolved.packId,
+          templateVersion: selected.version,
+          fields: packCustomizationFields(resolved.packId),
+        };
 
-  // The tenant's own rows for THIS pack. `myUserSkills` returns their adaptations only; the base
-  // and composed bodies never cross that boundary, so nothing here can render a registry prompt.
-  const myRows = useMemo(
-    () =>
-      selected === null
-        ? []
-        : (mine ?? [])
-            .filter((r) => r.name === `pack-${selected.packId}`)
-            .sort((a, b) => b.version - a.version),
-    [mine, selected],
-  );
-  const baseCandidateVersion = myRows[0]?.version ?? null;
-
-  const schema: CustomizationSchema | null = useMemo(() => {
-    if (selected === null) return null;
-    const resolved = resolveWorkflowPack(selected.packId);
-    if (!resolved.ok) return null;
-    return {
-      templateId: resolved.packId as WorkflowPackId,
-      templateVersion: selected.version,
-      fields: packCustomizationFields(resolved.packId),
-    };
-  }, [selected]);
-
-  const choose = (id: string) => {
-    setPackId(id);
-    setValues({});
-    setNotice(null);
-    setFormError(null);
-    setFieldErrors({});
-  };
-
-  const setValue = (key: string, value: string | number | string[]) => {
-    setValues((prev) => ({ ...prev, [key]: value }));
-    setFieldErrors((prev) => {
-      const { [key]: _drop, ...rest } = prev;
-      return rest;
-    });
-  };
-
-  const clearValue = (key: string) =>
-    setValues((prev) => {
-      const { [key]: _drop, ...rest } = prev;
-      return rest;
-    });
-
-  const submit = async () => {
-    if (selected === null || schema === null) return;
-    setBusy(true);
-    setNotice(null);
-    setFormError(null);
-    setFieldErrors({});
-    try {
-      const res = await publish({
-        templateId: selected.packId,
-        templateVersion: selected.version,
-        baseCandidateVersion,
-        values,
-      });
-      if (res.ok) {
-        setNotice(
-          `${draftStateLine({ version: res.version, status: res.status })} ${changeIdLine(res.customizationHash)}`,
-        );
-        return;
-      }
-      setFormError(refusalMessage(res));
-      if (res.reason === "invalid_values") {
-        const next: Record<string, CustomizationRejection> = {};
-        for (const e of res.errors) if (e.key !== "") next[e.key] = e.reason;
-        setFieldErrors(next);
-      }
-    } catch {
-      // The user's own words never reach an error string or a log (CLAUDE.md §4). Every refusal
-      // this channel produces comes back as DATA above; a throw here is a transport failure.
-      setFormError("That could not be saved. Check your connection and try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  // The tenant's own rows for THIS pack, from the RECENT window `myUserSkills` returns.
+  // `selected.myBaseVersion` is the server's exact per-name answer and is what the lineage and the
+  // save use; this list is presentation only, and says so when the two disagree.
+  const myRows =
+    selected === null
+      ? []
+      : (mine ?? [])
+          .filter((r) => r.name === `pack-${selected.packId}`)
+          .sort((a, b) => b.version - a.version);
 
   return (
     <section style={{ display: "grid", gap: "1rem" }} aria-label="Customize a workflow">
@@ -322,14 +350,14 @@ export function WorkflowPackCustomizer() {
               <li key={p.packId}>
                 <button
                   type="button"
-                  onClick={() => choose(p.packId)}
-                  aria-pressed={p.packId === packId}
+                  onClick={() => onChoose(p.packId)}
+                  aria-pressed={p.packId === selectedPackId}
                   style={{
                     ...control,
                     width: "100%",
                     textAlign: "left",
                     cursor: "pointer",
-                    borderColor: p.packId === packId ? "var(--ink)" : "var(--rule)",
+                    borderColor: p.packId === selectedPackId ? "var(--ink)" : "var(--rule)",
                   }}
                 >
                   <span style={{ fontWeight: 600 }}>{p.title}</span>
@@ -348,28 +376,31 @@ export function WorkflowPackCustomizer() {
           <p className="caps-label" style={{ margin: 0 }}>
             {selected.title}
           </p>
-          <p style={dim}>{lineageLine(selected.packId, selected.version, baseCandidateVersion)}</p>
+          <p style={dim}>
+            {lineageLine(selected.packId, selected.version, selected.myBaseVersion)}
+          </p>
+          {Object.keys(baseline).length > 0 && selected.myBaseVersion !== null && (
+            <p style={dim}>{prefillLine(selected.myBaseVersion)}</p>
+          )}
 
           <div>
             <p className="caps-label" style={{ margin: "0 0 0.35rem" }}>
               What this workflow can read
             </p>
             {/* Reused, not re-rendered: the same component the cockpit's quick starts use, fed the
-                same server-resolved states, so a source can never read one way here and another
-                there. */}
-            <WorkflowPackPreflight
-              sources={selected.sources.map((s) => ({
-                source: s.source,
-                label: s.label,
-                state: s.state as "available" | "partial" | "unavailable",
-                unlock: s.unlock,
-              }))}
-            />
+                server's own rows with no cast in between, so a new `SourceState` breaks this route
+                at compile time exactly as it breaks the workspace. */}
+            <WorkflowPackPreflight sources={selected.sources} />
           </div>
 
-          {formError !== null && (
+          {outcome.kind === "refused" && (
             <p role="alert" style={{ ...dim, color: "var(--ink)", fontWeight: 600 }}>
-              {formError}
+              {refusalMessage(outcome.refusal)}
+            </p>
+          )}
+          {outcome.kind === "transport" && (
+            <p role="alert" style={{ ...dim, color: "var(--ink)", fontWeight: 600 }}>
+              {TRANSPORT_ERROR}
             </p>
           )}
 
@@ -383,13 +414,14 @@ export function WorkflowPackCustomizer() {
                 {field.kind === "source_preference" ? (
                   <fieldset
                     style={{ border: "none", margin: 0, padding: 0 }}
-                    aria-describedby={note === null ? undefined : noteId}
+                    aria-describedby={noteId}
+                    aria-invalid={error !== undefined}
                   >
                     <legend style={{ fontSize: "0.8rem", fontWeight: 600, padding: 0 }}>
                       {field.label}
                     </legend>
                     {field.sources.map((source) => {
-                      const chosen = (values[field.key] as string[] | undefined) ?? [];
+                      const chosen = (values[field.key] as readonly string[] | undefined) ?? [];
                       return (
                         <label
                           key={source}
@@ -410,8 +442,8 @@ export function WorkflowPackCustomizer() {
                               const next = e.target.checked
                                 ? [...chosen, source]
                                 : chosen.filter((s) => s !== source);
-                              if (next.length === 0) clearValue(field.key);
-                              else setValue(field.key, next);
+                              if (next.length === 0) onClear(field.key);
+                              else onSet(field.key, next);
                             }}
                           />
                           {PACK_SOURCE_LABEL[source]}
@@ -427,12 +459,11 @@ export function WorkflowPackCustomizer() {
                     {renderControl({
                       field,
                       id: fieldId,
-                      noteId: note === null ? undefined : noteId,
+                      noteId,
                       invalid: error !== undefined,
                       busy,
                       value: values[field.key],
-                      onChange: (v) =>
-                        v === null ? clearValue(field.key) : setValue(field.key, v),
+                      onChange: (v) => (v === null ? onClear(field.key) : onSet(field.key, v)),
                     })}
                   </>
                 )}
@@ -444,7 +475,7 @@ export function WorkflowPackCustomizer() {
           })}
 
           <p style={{ ...dim, color: "var(--ink)" }} aria-live="polite">
-            {changeSummary(schema, values as CustomizationValues)}
+            {changeSummary(schema, baseline, values)}
           </p>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -461,12 +492,14 @@ export function WorkflowPackCustomizer() {
                 opacity: busy ? 0.5 : 1,
               }}
               disabled={busy}
-              onClick={() => void submit()}
+              onClick={onSubmit}
             >
               {busy ? "Saving…" : "Save these settings"}
             </button>
             <p style={dim} aria-live="polite">
-              {notice ?? ""}
+              {outcome.kind === "saved"
+                ? `${draftStateLine(outcome.saved)} ${changeIdLine(outcome.saved.customizationHash)}`
+                : ""}
             </p>
           </div>
 
@@ -477,7 +510,15 @@ export function WorkflowPackCustomizer() {
             {mine === undefined ? (
               <p style={dim}>Loading…</p>
             ) : myRows.length === 0 ? (
-              <p style={dim}>You have not customized this workflow yet.</p>
+              <p style={dim}>
+                {selected.myBaseVersion === null
+                  ? "You have not customized this workflow yet."
+                  : // `myUserSkills` returns the tenant's 50 most recent rows across every skill
+                    // name, so a busy account's pack row can be outside it while the server still
+                    // holds one. Saying "nothing saved" here would contradict the lineage line
+                    // above it.
+                    `Version ${selected.myBaseVersion} is saved for this workflow, but it is outside the recent list this page shows.`}
+              </p>
             ) : (
               <ul
                 style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.5rem" }}
@@ -490,6 +531,7 @@ export function WorkflowPackCustomizer() {
                     <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: 600 }}>
                       {draftStateLine(r)}
                     </p>
+                    <p style={dim}>{evaluationLine(r)}</p>
                     {/* The tenant's OWN rendered settings, which is what `authoredBody` holds for a
                         pack row. The base and composed bodies are an owner-only boundary and
                         `myUserSkills` does not return them. */}
@@ -509,22 +551,158 @@ export function WorkflowPackCustomizer() {
   );
 }
 
-/** The live hint under a control: the cap or the range, so the refusal is never the first news. */
-function fieldHint(
-  field: CustomizationField,
-  value: string | number | string[] | undefined,
-): string {
-  switch (field.kind) {
-    case "terminology":
-    case "instruction":
-      return `${valueBytes(typeof value === "string" ? value : "")} of ${field.maxBytes} characters used.`;
-    case "threshold":
-      return `A whole number between ${field.min} and ${field.max}.`;
-    case "tone":
-      return "Leave this alone to keep the workflow's usual tone.";
-    case "source_preference":
-      return "Leave every box clear to let the workflow use all of them.";
+/**
+ * The settings a previous save stored, narrowed to what this schema still declares.
+ *
+ * `myCustomizationValues` is the tenant's own row, but it was written against a possibly OLDER
+ * template: a key the schema has since dropped would be sent straight back and refused as
+ * `unknown_field`, and a value whose kind changed would be refused as `wrong_type`. Narrowing here
+ * means a template revision drops the stale settings instead of jamming the form.
+ */
+function prefillFrom(json: string | null, schema: CustomizationSchema | null): CustomizationValues {
+  if (json === null || schema === null) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return {};
   }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+  const raw = parsed as Record<string, unknown>;
+  const out: Record<string, string | number | readonly string[]> = {};
+  for (const field of schema.fields) {
+    if (!Object.hasOwn(raw, field.key)) continue;
+    const v = raw[field.key];
+    if (field.kind === "threshold") {
+      if (typeof v === "number") out[field.key] = v;
+    } else if (field.kind === "source_preference") {
+      if (Array.isArray(v) && v.every((s) => typeof s === "string")) out[field.key] = v as string[];
+    } else if (typeof v === "string") {
+      out[field.key] = v;
+    }
+  }
+  return out;
+}
+
+export function WorkflowPackCustomizer() {
+  const packs = useQuery(api.workflowPackDiscovery.listPacks);
+  const mine = useQuery(api.skills.myUserSkills);
+  const publish = useMutation(api.skills.publishPackCustomization);
+
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [values, setValues] = useState<CustomizationValues>({});
+  const [baseline, setBaseline] = useState<CustomizationValues>({});
+  /** Adopted from a `stale_base_version` refusal so the retry can win. `undefined` = use the
+   *  server's `myBaseVersion` for the selected pack. */
+  const [adoptedBase, setAdoptedBase] = useState<number | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<PublishOutcome>({ kind: "none" });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, CustomizationRejection>>({});
+  const idPrefix = useId();
+
+  const selected = packs?.find((p) => p.packId === selectedPackId) ?? null;
+
+  const schema: CustomizationSchema | null = useMemo(() => {
+    if (selected === null) return null;
+    const resolved = resolveWorkflowPack(selected.packId);
+    if (!resolved.ok) return null;
+    return {
+      templateId: resolved.packId,
+      templateVersion: selected.version,
+      fields: packCustomizationFields(resolved.packId),
+    };
+  }, [selected]);
+
+  const choose = (id: string) => {
+    const pack = packs?.find((p) => p.packId === id) ?? null;
+    const resolved = pack === null ? null : resolveWorkflowPack(pack.packId);
+    const packSchema: CustomizationSchema | null =
+      pack === null || resolved === null || !resolved.ok
+        ? null
+        : {
+            templateId: resolved.packId,
+            templateVersion: pack.version,
+            fields: packCustomizationFields(resolved.packId),
+          };
+    // REOPEN WITH WHAT WAS SAVED. A blank form plus a save that carries only the re-typed fields
+    // silently discarded everything else; `prefillLine` states the replacement, and this is what
+    // makes the statement survivable.
+    const prior = prefillFrom(pack?.myCustomizationValues ?? null, packSchema);
+    setSelectedPackId(id);
+    setBaseline(prior);
+    setValues(prior);
+    setAdoptedBase(undefined);
+    setOutcome({ kind: "none" });
+    setFieldErrors({});
+  };
+
+  const setValue = (key: string, value: string | number | readonly string[]) => {
+    setValues((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors((prev) => {
+      const { [key]: _drop, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const clearValue = (key: string) =>
+    setValues((prev) => {
+      const { [key]: _drop, ...rest } = prev;
+      return rest;
+    });
+
+  const submit = async () => {
+    if (selected === null || schema === null) return;
+    setBusy(true);
+    setOutcome({ kind: "none" });
+    setFieldErrors({});
+    try {
+      const res = await publish({
+        templateId: selected.packId,
+        templateVersion: selected.version,
+        baseCandidateVersion: adoptedBase === undefined ? selected.myBaseVersion : adoptedBase,
+        values: values as Record<string, string | number | string[]>,
+      });
+      if (res.ok) {
+        setOutcome({ kind: "saved", saved: res });
+        // The row this edit is now based on. Without it a second save from the same open form
+        // sends the version it started with and is refused.
+        setAdoptedBase(res.version);
+        setBaseline(values);
+        return;
+      }
+      setOutcome({ kind: "refused", refusal: res });
+      if (res.reason === "stale_base_version") setAdoptedBase(res.currentBaseVersion);
+      if (res.reason === "invalid_values") {
+        const next: Record<string, CustomizationRejection> = {};
+        for (const e of res.errors) if (e.key !== "") next[e.key] = e.reason;
+        setFieldErrors(next);
+      }
+    } catch {
+      // The user's own words never reach an error string or a log (CLAUDE.md §4). Every refusal
+      // this channel produces comes back as DATA above; a throw here is a transport failure.
+      setOutcome({ kind: "transport" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <CustomizerView
+      idPrefix={idPrefix}
+      packs={packs}
+      mine={mine}
+      selectedPackId={selectedPackId}
+      baseline={baseline}
+      values={values}
+      busy={busy}
+      outcome={outcome}
+      fieldErrors={fieldErrors}
+      onChoose={choose}
+      onSet={setValue}
+      onClear={clearValue}
+      onSubmit={() => void submit()}
+    />
+  );
 }
 
 /**
@@ -537,10 +715,10 @@ function renderControl(props: {
    *  a type rather than as a comment, so the fallback arm below cannot silently receive one. */
   field: Exclude<CustomizationField, { kind: "source_preference" }>;
   id: string;
-  noteId: string | undefined;
+  noteId: string;
   invalid: boolean;
   busy: boolean;
-  value: string | number | string[] | undefined;
+  value: string | number | readonly string[] | undefined;
   onChange: (v: string | number | null) => void;
 }) {
   const { field, id, noteId, invalid, busy, value, onChange } = props;
@@ -583,13 +761,16 @@ function renderControl(props: {
     );
   }
 
+  // NO `maxLength`. The schema's cap is in BYTES and `maxLength` counts UTF-16 code units, so it
+  // permitted 3x the cap in CJK while the counter beside it read past the limit. The byte counter
+  // in `fieldHint` is the ceiling the user is shown, and the server's `too_large` is the one that
+  // enforces it.
   if (field.kind === "instruction") {
     return (
       <textarea
         {...shared}
         rows={4}
         value={typeof value === "string" ? value : ""}
-        maxLength={field.maxBytes}
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
         style={{ ...shared.style, resize: "vertical" }}
       />
@@ -601,7 +782,6 @@ function renderControl(props: {
       {...shared}
       type="text"
       value={typeof value === "string" ? value : ""}
-      maxLength={field.maxBytes}
       onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
     />
   );

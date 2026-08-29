@@ -113,6 +113,26 @@ export const listPacks = tenantQuery({
         .unique();
       if (active === null) continue;
 
+      // THE TENANT'S OWN CUSTOMIZATION OF THIS PACK, resolved BY NAME.
+      //
+      // 29-07 FIX. `/dashboard/workflows` used to derive this from `skills.myUserSkills`, which
+      // takes the 50 most recent rows across ALL of a tenant's skill names and then filters. Once a
+      // pack's row fell out of that window the form sent `baseCandidateVersion: null` forever and
+      // `publishPackCustomization` refused every save with `stale_base_version` — a refusal whose
+      // copy says "reload", which reproduces the same window. This is the SAME descending
+      // `by_tenant_name_version` `take(1)` `readTenantPublishState` (skills.ts) performs when it
+      // computes the `currentBaseVersion` the mutation compares against, so the form now sends the
+      // value the server is about to check rather than a truncated view of it.
+      const newestMine = (
+        await ctx.db
+          .query("tenantSkills")
+          .withIndex("by_tenant_name_version", (q) =>
+            q.eq("tenantId", ctx.tenantId).eq("name", spec.skillName),
+          )
+          .order("desc")
+          .take(1)
+      )[0];
+
       const flight = packPreflight(packId, runtime);
       const missingKnown = new Set<string>(flight.missingKnown);
       out.push({
@@ -138,6 +158,17 @@ export const listPacks = tenantQuery({
         missingKnownCount: flight.missingKnown.length,
         /** Reachable in principle, not connected for this tenant. The fixable half. */
         missingRuntimeCount: flight.missingRuntime.length,
+        /** The optimistic-concurrency token `publishPackCustomization` expects back, or `null`
+         *  when this tenant has no row for this pack at all. NOT filtered by author: the server's
+         *  comparand is the newest row by version, which on a first customization is the
+         *  code-authored `system` rollback baseline. */
+        myBaseVersion: newestMine?.version ?? null,
+        /** The settings the tenant last submitted, as the JSON `publishPackCustomization` stored on
+         *  their own row, so the form can REOPEN with them instead of starting blank and silently
+         *  dropping every field the user does not re-type. `null` on a `system` baseline, which
+         *  carries no template lineage. Content plane, and the tenant's own words — the same
+         *  disclosure class as `myUserSkills.authoredBody`. It never reaches an audit payload. */
+        myCustomizationValues: newestMine?.customizationValues ?? null,
       });
     }
     return out;
