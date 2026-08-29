@@ -1,5 +1,41 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-30 (29-13 — **THE WORKFLOWS ROUTE HAS ITS FIRST BROWSER EVIDENCE, AND IT
+> IS AN ABSENCE PROOF.** `routineBranch.test.ts` reads `29-RECURRENCE-DECISION.md` and asserts the
+> branch that artifact selects (`defer`), so it is not hard-coded to one outcome; the deferred branch
+> asserts `RoutineControls.tsx` does not exist, nothing binds a recurrence lifecycle API, and
+> `PinnedWorkflowButton` is STILL MOUNTED — the manual rerun surface ROUT-02 actually shipped.
+>
+> **PROVEN IN BOTH DIRECTIONS, ON A REAL BROWSER, BY THE ORCHESTRATOR (2026-08-30).**
+> Green: `e2e/routines.spec.ts` **5 passed**, PW_EXIT=0, including the two-identity case (tenant B,
+> an ordinary non-owner, sees the same surface with the same absence).
+> Red on demand: a `<button>Pause schedule</button>` planted in `workflows/page.tsx`, rebuilt and
+> re-served, turned the scan RED naming it (`+ "Pause schedule"`); reverted, rebuilt, 5/5 green again.
+> `routineBranch.test.ts` likewise: planting a `RoutineControls.tsx` turned **3** tests red, then it
+> was deleted. Two full `next build` + restart cycles per direction — `@pikar/core` exports raw TS so
+> Next BUNDLES it, and without a rebuild the browser tests the previous bundle.
+>
+> **THE SETTLE SIGNAL WAS ITSELF VACUOUS, AND ONLY THE POSITIVE CONTROL CAUGHT IT.**
+> `routines.spec.ts` waited for `main.getByText("Run again")` before scanning for absence — but the
+> pinned surface's always-present intro reads *"Nothing starts by itself — you press Run again."* So
+> the settle matched STATIC COPY, fired before a single Convex query resolved, and every
+> `toHaveCount(0)` below it ran against a page still rendering "Loading your workflows…". The scan's
+> own positive control (`expect(names.length).toBeGreaterThan(0)`) refused: **0 controls found**.
+> Without that control this would have been a green absence proof over a DOM the spec never read —
+> the exact defect `workflow-pack-pilot.spec.ts`'s `@dark` block shipped, which passed with all six
+> packs ACTIVE because `toHaveCount(0)` succeeds on its first poll.
+> FIXED by settling on a CONTROL, not prose: a `button` named "Pin this workflow"/"Run again", or the
+> empty-state sentence. None of those can render before `listPins`/`listPacks` answer; prose can be
+> anywhere. **Rule this cost us: a settle signal must match something that CANNOT exist before the
+> thing you are waiting for.**
+>
+> **A precondition worth knowing before reading this route's gates:** `listPacks` returns ACTIVE packs
+> only (`by_name_status`, exact status — never "newest row", which would surface a candidate and undo
+> the dark pilot). On a deployment where no `pack-*` skill has an active row the whole surface renders
+> "No approved workflows are available to you yet." with ZERO controls, and any control-level browser
+> assertion is unreachable. Five packs are active on the local deployment, which is why these gates
+> could run at all.)
+
 > Last verified: 2026-08-29 (29-08 FIX2 — **THE ENUM THAT REPLACED THE BOOLEAN HAD THE SAME HOLE,
 > ONE ARM OVER.** Three independent verifiers applied the identical mutation:
 > `outcome === null ? "unknown" : outcome === "blocked" ? "blocked" : "ran"` →

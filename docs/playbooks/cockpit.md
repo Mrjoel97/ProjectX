@@ -1,3 +1,33 @@
+> Last verified: 2026-08-30 (29-13 — **THE DEFERRED-RECURRENCE BROWSER PROOF, AND A SETTLE SIGNAL
+> THAT PROVED NOTHING.** `apps/web/e2e/routines.spec.ts` is the deferred branch's browser evidence:
+> `/dashboard/workflows` still offers a manual **Run again**, and no control on it schedules, pauses,
+> resumes or revokes a repeating run. **THE SETTLE SIGNAL WAS ITSELF VACUOUS, AND ONLY THE POSITIVE CONTROL CAUGHT IT.**
+> `routines.spec.ts` waited for `main.getByText("Run again")` before scanning for absence — but the
+> pinned surface's always-present intro reads *"Nothing starts by itself — you press Run again."* So
+> the settle matched STATIC COPY, fired before a single Convex query resolved, and every
+> `toHaveCount(0)` below it ran against a page still rendering "Loading your workflows…". The scan's
+> own positive control (`expect(names.length).toBeGreaterThan(0)`) refused: **0 controls found**.
+> Without that control this would have been a green absence proof over a DOM the spec never read —
+> the exact defect `workflow-pack-pilot.spec.ts`'s `@dark` block shipped, which passed with all six
+> packs ACTIVE because `toHaveCount(0)` succeeds on its first poll.
+> FIXED by settling on a CONTROL, not prose: a `button` named "Pin this workflow"/"Run again", or the
+> empty-state sentence. None of those can render before `listPins`/`listPacks` answer; prose can be
+> anywhere. **Rule this cost us: a settle signal must match something that CANNOT exist before the
+> thing you are waiting for.**
+>
+> **PROVEN IN BOTH DIRECTIONS, ON A REAL BROWSER, BY THE ORCHESTRATOR (2026-08-30).**
+> Green: `e2e/routines.spec.ts` **5 passed**, PW_EXIT=0, including the two-identity case (tenant B,
+> an ordinary non-owner, sees the same surface with the same absence).
+> Red on demand: a `<button>Pause schedule</button>` planted in `workflows/page.tsx`, rebuilt and
+> re-served, turned the scan RED naming it (`+ "Pause schedule"`); reverted, rebuilt, 5/5 green again.
+> `routineBranch.test.ts` likewise: planting a `RoutineControls.tsx` turned **3** tests red, then it
+> was deleted. Two full `next build` + restart cycles per direction — `@pikar/core` exports raw TS so
+> Next BUNDLES it, and without a rebuild the browser tests the previous bundle.
+>
+> The recorded decision is `defer` and the spec asserts that FIRST — as a failing assertion, not a
+> skip: if the decision ever flips to `enable-safe` this absence proof is the wrong proof and must be
+> replaced by a lifecycle spec, and going red is how that gets noticed.)
+
 > Last verified: 2026-08-29 (29-08 FIX — **PINNING A WORKFLOW WAS EVICTING A SAVED PROMPT FROM THIS
 > MENU.** Correcting the entry after this one. `savedPrompts.list` applied its
 > `templateId === undefined` filter to the page it had already taken, so each workflow pin consumed
