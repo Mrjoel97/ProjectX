@@ -1,5 +1,56 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-29 (29-07-FIX2 — **THE CONTAINER HALF OF `/dashboard/workflows` WAS
+> UNPINNED, AND THE OPTIMISTIC-CONCURRENCY REFUSAL COULD NOT FIRE.** Four mutations that make the
+> route functionally inert all passed the customizer suite: `onChoose`, `onSet` and `onSubmit` cut
+> to no-ops, and `setBaseline(values)` deleted from the save's success arm. A user could open the
+> page, click a workflow, type and press save with nothing happening, and every gate stayed green —
+> the SSR suite renders `CustomizerView` from props and fires no event, so it was never able to say
+> whether the container is wired to it. Three of the four were disclosed as "SOURCE-SCAN coverage,
+> not behaviour coverage"; an honest label on a hole is not a fix.
+>
+> **`WorkflowPackCustomizer.container.test.ts` (new, 12 tests) MOUNTS THE REAL CONTAINER** under
+> jsdom with `createRoot`, dispatches real click and `input` events, and reads the text back out of
+> the document. `convex/react` is the only stub, and `useQuery` answers by the function reference's
+> OWN path (`getFunctionName`), not by a hand-kept map. All four inert-making mutations go RED,
+> observed, along with four more on the concurrency fix below. `jsdom` is the ONE dependency added
+> (an `apps/web` devDependency); `react`/`react-dom` were already here and no testing-library is
+> used. `apps/web/vitest.config.mts` named jsdom as the upgrade path for exactly this case.
+>
+> **`stale_base_version` WAS UNREACHABLE FOR THE CONTAINER PATH.** `submit()` read
+> `selected.myBaseVersion` off the LIVE reactive `listPacks` query at save time, while the form's
+> contents were snapshotted at open time by `choose()`. A concurrent publish moved the token without
+> moving the data it describes, so the save carried the OTHER draft's version, the server accepted
+> it, and the guard that exists for this exact race could never trip — silent last-write-wins, the
+> failure `publishPackCustomization`'s own docstring calls the version of that failure nobody
+> notices. The base version is now snapshotted in `choose()` beside `setBaseline(prior)`, passed to
+> the view as `baseVersion`, and moved only by a save success (together with the baseline) or by
+> `adoptedBase` on a refusal. **THE SURFACE ALSO RENDERED A FALSE SENTENCE** in that state, naming a
+> version whose settings were not on the form; `lineageLine` now reads "This edit is based on your
+> saved version N" — true after a refusal, where "your latest saved version is N" was not — and
+> every saved-version sentence on the surface reads the frozen prop.
+>
+> **THE `server-only` BUILD STORY IS SETTLED, AND BOTH PREVIOUS RECORDS OF IT WERE WRONG.** It is
+> neither "the gate cannot run here" nor "nothing imports it, ignore it". The mechanism, the
+> one-line repair and the two fixes that do NOT work are now under *How to verify*, where an
+> operator hitting the failure will look. Nothing was committed for it.
+>
+> **A §9 VIOLATION IS REPAIRED HERE TOO.** The previous round's code commit changed two files under
+> this playbook's watched path without touching this file — its playbook commit landed BEFORE its
+> code commit, and the Stop hook only inspects the working tree, so nothing could see it. That left
+> a stale `apps/web 97/97` recorded as a package-level result; it is retracted in the 29-07-FIX
+> block below.
+>
+> Measured on this tip: `WorkflowPackCustomizer.test.ts` 109/109 · `WorkflowPackCustomizer
+> .container.test.ts` 12/12 · `apps/web` package 38 files / 762 tests (that package total moves with
+> two sibling agents' uncommitted work in this worktree — trust the two FILE counts) ·
+> `convex/workflowPackDiscovery.test.ts` 12/12, unchanged, and unchanged for a reason: the defect
+> was entirely client-side and the server's per-name base-version resolution is already pinned
+> there (mutation: `myBaseVersion: null` → 3 of 12 RED, observed) · `apps/web` typecheck clean ·
+> `pnpm --filter @pikar/web build` EXIT=0 with `f /dashboard/workflows` in the route table.
+> **STILL UNRUN: the authenticated browser gate.** jsdom is not a browser — no layout, no paint, no
+> real focus ring — and no Playwright spec has loaded this route.)
+
 > Last verified: 2026-08-29 (29-07-FIX — **TWO RECORDED FACTS IN THIS FILE WERE FALSE; BOTH ARE
 > RETRACTED ABOVE.** (a) The Next production build DOES run here: `pnpm --filter @pikar/web build`
 > exits 0 and `ƒ /dashboard/workflows` is in its route table, measured on this tip. It is the
@@ -44,10 +95,15 @@
 > `myCustomizationValues`, the form reopens with them, the diff is against what it opened with, and
 > the surface says saving replaces the whole set.
 >
-> apps/web 97/97 · workflowPackEvals 22/22 · workflowPackDiscovery 12/12 · both typechecks clean ·
+> workflowPackEvals 22/22 · workflowPackDiscovery 12/12 · both typechecks clean ·
 > `pnpm --filter @pikar/web build` EXIT=0. **STILL UNRUN: the authenticated browser gate.** No
 > Playwright spec has been executed against `/dashboard/workflows`, and this release's honesty
-> claims about what a user SEES rest on SSR renders, not on a live page.)
+> claims about what a user SEES rest on SSR renders, not on a live page.
+> (An `apps/web 97/97` figure stood here and was stale before it was written: it was the customizer
+> FILE's count at the commit that wrote this block, and the next commit of the same fix took that
+> file to 109 while the package itself was 749. Re-measured numbers are in the 29-07-FIX2 block at
+> the top. Record a FILE count under the file's name and a PACKAGE count under the package's, never
+> one number under the other's label.))
 
 > Last verified: 2026-08-29 (29-W3-TAIL-FIX — **THE `internalAction` JUSTIFICATION IS DELETED FROM
 > THE CODE, AND THE 2026-08-28 ENTRY BELOW STILL STATES IT.** The `packArgs` docstrings in
@@ -95,12 +151,14 @@
 > does not link to it, with a positive control that the scan can see a route that IS linked. Adding
 > the href IS the activation, and rollback is deleting it — the `dashboard-pages.md` rule.
 >
-> **UNRUN:** no browser has loaded this route. **The claim that once stood here — that `pnpm
-> --filter @pikar/web build` "cannot run in this worktree at all" because `server-only` is missing
-> — WAS FALSE and is deleted.** The build runs; see the 29-07-FIX block at the top. Nothing imports
-> `server-only`; it appears once, in a comment. A false gate RESULT is worse than a false
-> invariant: it tells the next operator that a working verification path is unavailable, which is
-> how a gate stops being run.)
+> **UNRUN:** no browser has loaded this route. **TWO CLAIMS THAT STOOD HERE ABOUT THE BUILD WERE
+> BOTH WRONG AND ARE BOTH RETRACTED** — first "the build cannot run in this worktree at all", then
+> "the build runs, nothing imports `server-only`". `server-only` IS imported, from inside
+> `@convex-dev/auth`, reached by `middleware.ts` and `app/layout.tsx`; the build's dependence on it
+> is real. What was wrong was calling that a repo defect. The mechanism and the one-line repair are
+> under *How to verify*. A false gate RESULT is worse than a false invariant in either direction:
+> "unavailable" stops the gate being run, and "fine, ignore it" deletes the repair the next fresh
+> worktree needs.)
 
 > Last verified: 2026-08-29 (29-W3-TAIL — **`workflowPackBinding.ts`'s `TENANT_SKILL_PIN_FOREIGN`
 > THROW NO LONGER JUSTIFIES ITSELF WITH AN UNENFORCED CLAIM.** The comment above it read *"both
@@ -1508,11 +1566,30 @@ cd packages/backend && npx vitest run convex/workflowPackEvals.test.ts       # t
 cd packages/backend && npx vitest run convex/workflowPackDiscovery.test.ts  # listPacks + base version
 cd packages/backend && node scripts/run-workflow-pack-evals.mjs --fixtures-only --self-test
 cd apps/web && pnpm vitest run WorkflowPackCustomizer   # renders the surface; asserts its sentences
+cd apps/web && pnpm vitest run WorkflowPackCustomizer.container  # jsdom; drives the real container
 pnpm --filter @pikar/web build                          # RUNS. `f /dashboard/workflows` is in the
                                                         # route table. The dev server OOMs on the
                                                         # workspace page, so this is THE compile
                                                         # gate for a route — do not skip it.
 ```
+
+**IF THAT BUILD FAILS WITH `Module not found: Can't resolve 'server-only'`, IT IS AN INSTALL
+ARTIFACT OF A FRESHLY CREATED GIT WORKTREE, NOT A REPO DEFECT AND NOT A MISSING DEPENDENCY.** Next
+aliases the bare specifier `server-only` — imported from inside `@convex-dev/auth`, reached by
+`middleware.ts` and `app/layout.tsx` — to `next/dist/compiled/server-only/empty`, a
+legitimately-shipped **0-byte** file. `pnpm install --frozen-lockfile` has been observed not to
+materialise that file in a new worktree, while the main tree has it (store-linked) and CI builds.
+The repair is one line, in `node_modules`, committed nowhere:
+
+```
+: > "$(readlink -f apps/web/node_modules/next)/dist/compiled/server-only/empty.js"
+```
+
+Create it EMPTY, matching what upstream ships. Two fixes that were tried, reverted, and should not
+be proposed again: adding `server-only` to `apps/web/package.json` (pnpm's strict layout only lets
+`@convex-dev/auth` see its own declared deps) and a `packageExtensions` entry adding it to
+`@convex-dev/auth` (it installs, and the build still fails, because Next's alias map redirects the
+specifier before resolution reaches the package).
 
 **The browser gate has not been run for `/dashboard/workflows`.** No Playwright spec has loaded it
 authenticated. Everything above is SSR and source; a live page is still owed.

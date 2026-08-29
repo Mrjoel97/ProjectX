@@ -5,14 +5,17 @@
 // calling an exported copy function; a verifier stripped SIX of those functions out of the JSX at
 // once (including replacing `refusalMessage(res)` with the raw enum) and all 59 tests stayed green.
 // So `CustomizerView` is now the whole surface, it takes its state as props, and every sentence
-// below is read out of the HTML `renderToStaticMarkup` produces. None of the copy functions is
-// exported any more — there is nothing here to call instead of rendering.
+// below is read out of the HTML `renderToStaticMarkup` produces.
 //
-// WHAT SSR CAN AND CANNOT PROVE. `apps/web`'s vitest config is node-only: no jsdom, no
-// testing-library, so there is no click and no typing here. `react-dom/server` gives the real first
-// paint for a given state, which is enough for the two things that kept going wrong — the SENTENCE
-// a user reads and the ARIA a screen reader announces, both on the rendered node. Interaction is
-// the Playwright spec's job and that spec has NOT been run for this route.
+// WHAT THIS FILE PROVES, AND WHAT IT DOES NOT. `renderToStaticMarkup` gives the real first paint
+// for a given state — the SENTENCE a user reads and the ARIA a screen reader announces, both on the
+// rendered node — and nothing else: it fires no event and runs no handler. The CONTAINER's
+// behaviour (choose, edit, save, refusal, retry) is driven as a real interaction next door in
+// `WorkflowPackCustomizer.container.test.ts`, under jsdom. Neither file is a browser: the
+// authenticated Playwright gate for this route has NOT been run.
+//
+// `prefillFrom` is the ONE thing here called directly, and it says why at its definition: it is a
+// parser at a trust boundary, not a sentence.
 //
 // THREE KINDS OF ASSERTION, and the difference matters:
 //   1. RENDERED TEXT. Expected values are LITERALS, never a re-import of the constant the
@@ -116,6 +119,7 @@ const BASE: CustomizerViewProps = {
   mine: [],
   selectedPackId: "business-pulse",
   baseline: {},
+  baseVersion: null,
   values: {},
   busy: false,
   outcome: { kind: "none" },
@@ -261,10 +265,23 @@ describe("lineage — which approved template, which version, what the server ho
     );
   });
 
-  test("a repeat edit names the version the SERVER holds for this exact pack", () => {
-    expect(visible(render({ packs: withSaved(7, null) }))).toContain(
-      "Based on the approved Business pulse template, version 4. Your latest saved version is 7.",
+  test("a repeat edit names the version the form OPENED from", () => {
+    expect(visible(render({ baseVersion: 7 }))).toContain(
+      "Based on the approved Business pulse template, version 4. This edit is based on your saved version 7.",
     );
+  });
+
+  // THE CONCURRENCY SNAPSHOT, at the view boundary. `baseVersion` is frozen by the container when
+  // the form opens; the pack row keeps updating reactively. Every saved-version sentence reads the
+  // frozen prop, so a row that has moved on cannot put a number on screen whose settings are not
+  // the ones in the controls.
+  test("a pack row that moved on after the form opened does not reach any sentence", () => {
+    const html = visible(
+      render({ packs: withSaved(9, '{"business_terms":"NEW"}'), baseVersion: 2, mine: [] }),
+    );
+    expect(html).toContain("This edit is based on your saved version 2.");
+    expect(html).not.toContain("version 9");
+    expect(html).not.toContain("Version 9");
   });
 
   // THE 50-ROW TRUNCATION DEFECT. `myUserSkills` returns the tenant's 50 most recent rows across
@@ -273,12 +290,12 @@ describe("lineage — which approved template, which version, what the server ho
   // `by_tenant_name_version` take(1) the mutation compares against — and the saved list says which
   // of the two it is looking at instead of contradicting the lineage line above it.
   test("an empty recent list does not claim nothing is saved when the server holds a version", () => {
-    const html = visible(render({ packs: withSaved(51, null), mine: [] }));
+    const html = visible(render({ baseVersion: 51, mine: [] }));
     expect(html).toContain(
       "Version 51 is saved for this workflow, but it is outside the recent list this page shows.",
     );
     expect(html).not.toContain("You have not customized this workflow yet.");
-    expect(html).toContain("Your latest saved version is 51.");
+    expect(html).toContain("This edit is based on your saved version 51.");
   });
 
   test("an empty recent list AND no server version reads as never customized", () => {
@@ -325,23 +342,21 @@ describe("a repeat customization opens with what was saved, and says it replaces
   const prior: CustomizationValues = { business_terms: "jobs", tone: "warm" };
 
   test("the replacement is stated, naming the version the form opened from", () => {
-    expect(
-      visible(render({ packs: withSaved(2, null), baseline: prior, values: prior })),
-    ).toContain(
+    expect(visible(render({ baseVersion: 2, baseline: prior, values: prior }))).toContain(
       "These are the settings you saved in version 2. Saving replaces all of them with what is on this form.",
     );
   });
 
   test("the prefilled values are in the controls, not just in the copy", () => {
-    const html = render({ packs: withSaved(2, null), baseline: prior, values: prior });
+    const html = render({ baseVersion: 2, baseline: prior, values: prior });
     expect(tagWithId(html, "p-business_terms")).toContain('value="jobs"');
     expect(html).toContain('<option value="warm" selected="">warm</option>');
   });
 
   test("a form that opened with prior settings and changed nothing says nothing changed", () => {
-    expect(
-      visible(render({ packs: withSaved(2, null), baseline: prior, values: prior })),
-    ).toContain("You have not changed anything yet.");
+    expect(visible(render({ baseVersion: 2, baseline: prior, values: prior }))).toContain(
+      "You have not changed anything yet.",
+    );
   });
 
   test("the diff is against what the form OPENED with, not against the empty set", () => {
@@ -350,7 +365,7 @@ describe("a repeat customization opens with what was saved, and says it replaces
     expect(
       visible(
         render({
-          packs: withSaved(2, null),
+          baseVersion: 2,
           baseline: prior,
           values: { ...prior, tone: "formal" },
         }),
@@ -683,7 +698,10 @@ describe("the surface cannot offer capability authority", () => {
     expect(component).toContain("schema.fields.map");
   });
 
-  test("no copy function is exported for a test to assert instead of the render", () => {
+  // A CLOSED LIST, not a general claim: this scans eleven names it knows about, so it catches a
+  // rename or a deletion of any of them (positive control: adding `export` to `refusalMessage`
+  // turns it red) and it CANNOT see a twelfth copy function added tomorrow.
+  test("none of the eleven copy functions this surface has is exported", () => {
     for (const name of [
       "lineageLine",
       "draftStateLine",
@@ -771,20 +789,8 @@ describe("the prior settings a repeat edit opens with", () => {
     expect(prefillFrom('{"business_terms":"jobs"}', null)).toEqual({});
   });
 
-  // MECHANISM, NOT BEHAVIOUR, and it is labelled as such. `apps/web` has no DOM runner, so the
-  // container's handlers cannot be driven here: choosing a pack, saving, and adopting the server's
-  // base version are proved only by these three scans plus `workflowPackDiscovery.test.ts`'s
-  // server-side assertions. A live interaction is the Playwright spec's job and it has NOT run.
-  test("the container wires the three things a render cannot reach", () => {
-    // 1. Choosing a pack prefills from the row the server returned.
-    expect(component).toContain("prefillFrom(pack?.myCustomizationValues ?? null, packSchema)");
-    // 2. The publish sends the server's per-name version unless a refusal has moved it.
-    expect(component).toContain(
-      "baseCandidateVersion: adoptedBase === undefined ? selected.myBaseVersion : adoptedBase",
-    );
-    // 3. A stale-base refusal adopts what the server says it holds, so the retry can win.
-    expect(component).toContain(
-      'if (res.reason === "stale_base_version") setAdoptedBase(res.currentBaseVersion);',
-    );
-  });
+  // The container's own wiring — choosing a pack, prefilling from the server's row, the base
+  // version the save carries, and adopting the server's on a refusal — is driven as a real
+  // interaction in `WorkflowPackCustomizer.container.test.ts`. It used to be three `toContain`
+  // scans here, which four inert-making mutations walked straight past.
 });

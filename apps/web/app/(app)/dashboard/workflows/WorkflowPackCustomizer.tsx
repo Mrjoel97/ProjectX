@@ -32,7 +32,12 @@ import { WorkflowPackPreflight } from "../workspace/WorkflowPackPreflight";
 // whole state as props. `WorkflowPackCustomizer.test.ts` RENDERS the view (react-dom/server) at each
 // state and asserts the text a user would read. The previous revision exported its copy as pure
 // functions and asserted those instead — a verifier stripped six of them out of the JSX at once and
-// all 59 tests stayed green. Nothing below is exported for a test to call directly.
+// all 59 tests stayed green.
+//
+// THE CONTAINER IS DRIVEN AS AN INTERACTION, in `WorkflowPackCustomizer.container.test.ts`: jsdom,
+// a real `createRoot`, real click and input events, `convex/react` stubbed. It exists because four
+// mutations that made this route inert (`onChoose`, `onSet`, `onSubmit` cut to no-ops, and
+// `setBaseline(values)` deleted from the success arm) left the SSR suite at 109/109 green.
 //
 // THE HONEST PART, AND IT IS THE HARD PART. A saved customization is a `tenantSkills` CANDIDATE:
 //
@@ -120,10 +125,14 @@ function lineageLine(
   templateVersion: number,
   baseCandidateVersion: number | null,
 ): string {
+  // "This edit is based on" rather than "your latest saved version is": the number is the one the
+  // form OPENED from, frozen with the settings it prefilled. After a `stale_base_version` refusal
+  // the server holds a newer one, and a sentence claiming this is the latest would be false in
+  // exactly the state the refusal exists to report. The refusal names the newer version itself.
   const base =
     baseCandidateVersion === null
       ? "You have not customized this workflow before."
-      : `Your latest saved version is ${baseCandidateVersion}.`;
+      : `This edit is based on your saved version ${baseCandidateVersion}.`;
   return `Based on the approved ${packTitle(packId)} template, version ${templateVersion}. ${base}`;
 }
 
@@ -282,6 +291,13 @@ export type CustomizerViewProps = {
   selectedPackId: string | null;
   /** What the form opened with — the last saved settings, or `{}` on a first customization. */
   baseline: CustomizationValues;
+  /**
+   * The saved version `baseline` CAME FROM, frozen by the container when the form opened, not read
+   * live off the pack row. The two travel together or the surface names a version whose settings
+   * are not on the form; `null` = never customized. Every sentence on this surface that carries a
+   * saved-version number reads this prop.
+   */
+  baseVersion: number | null;
   values: CustomizationValues;
   busy: boolean;
   outcome: PublishOutcome;
@@ -299,6 +315,7 @@ export function CustomizerView(props: CustomizerViewProps) {
     mine,
     selectedPackId,
     baseline,
+    baseVersion,
     values,
     busy,
     outcome,
@@ -376,11 +393,9 @@ export function CustomizerView(props: CustomizerViewProps) {
           <p className="caps-label" style={{ margin: 0 }}>
             {selected.title}
           </p>
-          <p style={dim}>
-            {lineageLine(selected.packId, selected.version, selected.myBaseVersion)}
-          </p>
-          {Object.keys(baseline).length > 0 && selected.myBaseVersion !== null && (
-            <p style={dim}>{prefillLine(selected.myBaseVersion)}</p>
+          <p style={dim}>{lineageLine(selected.packId, selected.version, baseVersion)}</p>
+          {Object.keys(baseline).length > 0 && baseVersion !== null && (
+            <p style={dim}>{prefillLine(baseVersion)}</p>
           )}
 
           <div>
@@ -511,13 +526,13 @@ export function CustomizerView(props: CustomizerViewProps) {
               <p style={dim}>Loading…</p>
             ) : myRows.length === 0 ? (
               <p style={dim}>
-                {selected.myBaseVersion === null
+                {baseVersion === null
                   ? "You have not customized this workflow yet."
                   : // `myUserSkills` returns the tenant's 50 most recent rows across every skill
                     // name, so a busy account's pack row can be outside it while the server still
                     // holds one. Saying "nothing saved" here would contradict the lineage line
                     // above it.
-                    `Version ${selected.myBaseVersion} is saved for this workflow, but it is outside the recent list this page shows.`}
+                    `Version ${baseVersion} is saved for this workflow, but it is outside the recent list this page shows.`}
               </p>
             ) : (
               <ul
@@ -604,8 +619,18 @@ export function WorkflowPackCustomizer() {
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [values, setValues] = useState<CustomizationValues>({});
   const [baseline, setBaseline] = useState<CustomizationValues>({});
-  /** Adopted from a `stale_base_version` refusal so the retry can win. `undefined` = use the
-   *  server's `myBaseVersion` for the selected pack. */
+  /**
+   * The saved version `baseline` came from, SNAPSHOTTED when the form opened.
+   *
+   * It used to be read live off `selected.myBaseVersion` at save time while the form contents were
+   * frozen at open time, so a concurrent publish moved the token without moving the data it
+   * describes: the save then carried the other draft's version, the server accepted it, and
+   * `stale_base_version` — the refusal that exists for exactly this race — could not fire. The
+   * token and the contents it describes now move together.
+   */
+  const [baseVersion, setBaseVersion] = useState<number | null>(null);
+  /** Adopted from a `stale_base_version` refusal so the retry can win. `undefined` = send the
+   *  snapshotted `baseVersion`. */
   const [adoptedBase, setAdoptedBase] = useState<number | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<PublishOutcome>({ kind: "none" });
@@ -642,6 +667,7 @@ export function WorkflowPackCustomizer() {
     const prior = prefillFrom(pack?.myCustomizationValues ?? null, packSchema);
     setSelectedPackId(id);
     setBaseline(prior);
+    setBaseVersion(pack?.myBaseVersion ?? null);
     setValues(prior);
     setAdoptedBase(undefined);
     setOutcome({ kind: "none" });
@@ -671,14 +697,17 @@ export function WorkflowPackCustomizer() {
       const res = await publish({
         templateId: selected.packId,
         templateVersion: selected.version,
-        baseCandidateVersion: adoptedBase === undefined ? selected.myBaseVersion : adoptedBase,
+        baseCandidateVersion: adoptedBase === undefined ? baseVersion : adoptedBase,
         values: values as Record<string, string | number | string[]>,
       });
       if (res.ok) {
         setOutcome({ kind: "saved", saved: res });
-        // The row this edit is now based on. Without it a second save from the same open form
-        // sends the version it started with and is refused.
-        setAdoptedBase(res.version);
+        // The row this edit is now based on, and the settings that row holds. Both move, together:
+        // without the version a second save from the same open form sends the version it started
+        // with and is refused, and without the baseline the change summary keeps reporting a diff
+        // against settings that are no longer what is saved.
+        setBaseVersion(res.version);
+        setAdoptedBase(undefined);
         setBaseline(values);
         return;
       }
@@ -705,6 +734,7 @@ export function WorkflowPackCustomizer() {
       mine={mine}
       selectedPackId={selectedPackId}
       baseline={baseline}
+      baseVersion={baseVersion}
       values={values}
       busy={busy}
       outcome={outcome}
