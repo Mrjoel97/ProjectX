@@ -11,11 +11,21 @@
 // (listVaultDocs / vaultStats / vaultDownloadUrl / docEntities / vaultSearch).
 import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+
+// The suite-wide offline-fixture consent lives in `vitest.config.mts`; one test below removes it
+// with `vi.stubEnv`. Restoring it HERE rather than as that test's last statement is the point: an
+// `await expect(...)` that fails aborts the body, so an inline `vi.unstubAllEnvs()` never runs and
+// `PIKAR_OFFLINE_FIXTURES=""` leaks into every later test in the file — which would make the
+// fixture seam unreachable and turn unrelated failures into "unset for embeddings". Pinned by
+// "the operator consent is RESTORED for the tests that follow" below.
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const TENANT = "tenant_a";
 const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
@@ -184,7 +194,22 @@ describe("vaultGround (VALT-03 hybrid vector + hop-capped graph)", () => {
     await expect(
       asTenant(t).action(api.vaultGround.vaultGround, { query: `SMOKE::${docA}` }),
     ).rejects.toThrow(/unset for embeddings/);
-    vi.unstubAllEnvs();
+  });
+
+  // THE LEAK GUARD for the test above. It must run immediately after it, and it drives the fixture
+  // path rather than reading `process.env`, so it fails the way a leak would actually be felt.
+  // MUTATION OBSERVED RED: delete the file-level `afterEach(() => vi.unstubAllEnvs())` — the stub
+  // survives into this test, `offlineSeamAvailable()` is false, and the seed goes to `rag.search`,
+  // which rejects with "unset for embeddings" instead of resolving `docA`.
+  test("the operator consent is RESTORED for the tests that follow", async () => {
+    const t = convexTest(schema, modules);
+    const { docA } = await seedChain(t);
+
+    const { docIds } = await asTenant(t).action(api.vaultGround.vaultGround, {
+      query: `SMOKE::${docA}`,
+    });
+
+    expect(docIds).toContain(docA);
   });
 
   // ponytail: the CREDENTIAL half of `offlineSeamAvailable()` is NOT re-tested here. It belongs to
