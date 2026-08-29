@@ -409,9 +409,9 @@ async function runPackTurn(
 }
 
 /**
- * PRODUCTION entry point. `internalAction`, so the model can never supply the tenant, the plan or a
- * version pin (the `runSpecialist` precedent, ADR-008). The public door is
- * `cockpit.startWorkflowPack`, which owns the thread, the plan row and the reply turn.
+ * PRODUCTION entry point. The public door is `cockpit.startWorkflowPack`, which owns the thread,
+ * the plan row and the reply turn. (The `internalAction` justification that used to sit here is
+ * deleted for the reason recorded at `runPackTurn`'s pin check: nothing enforces it.)
  */
 export const runWorkflowPack = internalAction({
   args: packArgs,
@@ -419,8 +419,9 @@ export const runWorkflowPack = internalAction({
 });
 
 /**
- * The offline twin. A `LanguageModel` is not Convex-serializable, so the production action can never
- * be driven offline; this shim swaps ONLY the model and shares every other line above.
+ * The offline twin. A `LanguageModel` is not Convex-serializable, so the offline path passes a
+ * scripted response array instead of a model; this shim swaps ONLY that and shares every other
+ * line above.
  */
 export const __runWorkflowPackWithScript = internalAction({
   args: { ...packArgs, primary: v.array(v.any()), fallback: v.optional(v.array(v.any())) },

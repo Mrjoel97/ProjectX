@@ -4251,9 +4251,11 @@ describe("workflow-pack candidate lifecycle", () => {
 // verbatim under the adaptation marker — a probe put "Disregard earlier framing…" into a candidate
 // body through this channel. The property that is actually true, and that these tests hold, is
 // narrower: the prose is BOUNDED (1600 bytes across the two, against the free-text door's 4000),
-// CONTENT-SCANNED, and confined to keys the schema declared. A tenant chooses the words, never the
-// field, the size or the position — and since the pack gate has no tenant lane, the body they
-// compose can never become the one a specialist runs.
+// CONTENT-SCANNED, and confined to keys the schema declared. A tenant chooses the words, not the
+// field, the size or the position. What the pack gate bounds is narrower still: `planTenantActivation`
+// throws `PACK_GATE` for every `pack-*` name, so the composed body does not go ACTIVE — but it IS
+// runnable under a `tenantSkillIds` pin (`workflowPackBinding.test.ts`, "the pinned CANDIDATE body
+// runs"). Do not read the gate as "this body never reaches a model".
 describe("publishPackCustomization — schema-driven pack candidates (29-05)", () => {
   // High-entropy needles, for the same reason 21-02 uses them: content that leaks across a tenant
   // boundary or into an audit payload has to be findable by an exact string.

@@ -194,17 +194,30 @@ guard catches the leak only while it runs after the stubbing test) and names the
 
 **I did NOT apply `unstubEnvs: true`.** It is a suite-wide behaviour change across 112 backend test
 files in a closing pass, with two sibling agents committing into the same worktree. It is recorded
-as a follow-up below — and it is the better fix, because it also covers `blueprint.test.ts`, which
-carries the identical unprotected `vi.stubEnv` / trailing `unstubAllEnvs()` pattern.
+as a follow-up below.
 
-**`vitest.config.mts:25-31`** — the comment called the surviving content-selected `SMOKE::` seams
-"deliberately ungated" and used `vault.ts`'s `vaultSearch` as the exemplar. The register
-(`29-SMOKE-SEAM-DEBT.md`) classifies them as **open debt** and does not enumerate `vaultSearch` at
-all (its numbered instances are `vaultLlm.ts` ×2, `vaultRag.ts`, `gmail.ts`, `vaultGround.ts`
-(closed) and `knowledgeLlm.ts`). The comment now says "still ungated, and the register carries them
-as OPEN DEBT rather than as a design choice" and names no seam the register does not carry. The
-register is the source of truth and it is unowned in wave 4, so I did not add a `vaultSearch` entry
-to it — see follow-ups.
+> **CORRECTED 2026-08-29 (29-W3-TAIL-FIX2).** This paragraph originally justified the deferral with
+> "it also covers `blueprint.test.ts`, which carries the identical unprotected `vi.stubEnv` /
+> trailing `unstubAllEnvs()` pattern". FALSE — I did not open that file. `blueprint.test.ts` has one
+> stubbing site and it is the PROTECTED shape: a `beforeEach` that stubs, paired with an `afterEach`
+> in the same `describe` calling `vi.unstubAllGlobals()` / `vi.unstubAllEnvs()`. There is no trailing
+> inline unstub anywhere in it. The deferral stands on its own reason (suite-wide blast radius in a
+> closing pass); the outstanding env-leak debt is ONE file, not two.
+
+**`vitest.config.mts`'s consent comment** — it called the surviving content-selected `SMOKE::`
+seams "deliberately ungated" and used `vault.ts`'s `vaultSearch` as the exemplar. Only the word
+"deliberately" was false: the register (`29-SMOKE-SEAM-DEBT.md`) carries them as **open debt**, not
+as a design choice.
+
+> **CORRECTED 2026-08-29 (29-W3-TAIL-FIX2).** This item originally added that the register "does not
+> enumerate `vaultSearch` at all (its numbered instances are `vaultLlm.ts` ×2, `vaultRag.ts`,
+> `gmail.ts`, `vaultGround.ts` (closed) and `knowledgeLlm.ts`)", and deleted the exemplar on that
+> basis. FALSE — only the NUMBERED TABLE omits it. The register's prose carries `vaultSearch`
+> explicitly under **"NOT closed by this"**, naming the bare `query.startsWith("SMOKE::")` and the
+> `apps/web/e2e/vault-redesign.spec.ts` coupling, and calls it "the sibling instance this register's
+> coupling warning is about". A true, register-sourced exemplar was removed from the code on a false
+> premise. FIX2 restores it in the register's own framing (open coupling debt, E2E-coupled) and drops
+> the "deliberately". No entry needs adding to the register.
 
 ---
 
@@ -253,18 +266,18 @@ comment, where a mutation is not defined; I am not going to manufacture one.
 ## What I did NOT close, and why
 
 - **`unstubEnvs: true` in `packages/backend/vitest.config.mts`** — the order-free root fix for the
-  env-leak class, covering `blueprint.test.ts:741-749` as well. Suite-wide blast radius across 112
-  files, in a closing pass, in a worktree two other agents are committing to. Named in the test
-  comment and here; not applied.
+  env-leak class. Suite-wide blast radius across 112 files, in a closing pass, in a worktree two
+  other agents are committing to. Named in the test comment and here; not applied. (**CORRECTED
+  2026-08-29:** this bullet claimed the fix also covered `blueprint.test.ts:741-749`. It does not —
+  that file already uses the protected `beforeEach`/`afterEach` shape. One file, not two.)
 - **`vault.md`'s other line-number citations** — the provenance block is clean, but a grep still
   finds citations elsewhere in the file (`vaultGround.ts:29`, `schema.ts:900`, `vaultRag.ts:390` ×3,
   `vaultDrive.ts:697`, `blueprint.ts:540`, `evaluations.ts:295`, `llm.ts:3873`, `voiceDoc.ts:75`,
   `DocGrid.tsx:101/148`, and more). Sweeping the whole 3.4k-line playbook is a different job from
   the finding, and an unverified conversion is how stale citations get minted. **Stated as open.**
-- **`29-SMOKE-SEAM-DEBT.md` does not enumerate `vault.ts`'s `vaultSearch`.** I made the comment
-  agree with the register (the register is source of truth, per the brief) instead of editing the
-  register, which is not in my ownership list. If the phase wants `vaultSearch` carried as instance
-  #7, that is a one-entry edit for whoever owns the register.
+- ~~**`29-SMOKE-SEAM-DEBT.md` does not enumerate `vault.ts`'s `vaultSearch`.**~~ **RETRACTED
+  2026-08-29 (29-W3-TAIL-FIX2): it does**, in prose under "NOT closed by this". No register edit is
+  owed and none was ever needed; the comment that deferred to it has been restored.
 - **`packages/core/src/knowledgeSearch.ts`** — no change needed; 29-09 already fixed both docstrings.
 - **`convex/env.test.ts`** stays red. Phase 28's, not mine.
 - **`docs/playbooks/production-beta.md`** still owes a bump for Phase 28's `lib/env.ts` change.

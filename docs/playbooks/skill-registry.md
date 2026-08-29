@@ -1,5 +1,13 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-29 (29-W3-TAIL-FIX2 — **`skills.test.ts` STILL CARRIED THE "DARK
+> CANDIDATE" ABSOLUTE**, in the `publishPackCustomization` header: *"since the pack gate has no
+> tenant lane, the body they compose can never become the one a specialist runs."* That is the same
+> claim 29-FIN-05 deleted from `skills.ts` and `workflowPackBinding.ts` and that "The pin door IS
+> open" below contradicts — a `pack-*` row DOES reach `runSpecialistTurn` under a `tenantSkillIds`
+> pin. Replaced with what the gate actually bounds (`planTenantActivation` throws `PACK_GATE`, so the
+> body does not go ACTIVE) plus the test that runs one. Comment-only; 170/170 unchanged.)
+
 > Last verified: 2026-08-29 (29-W3-TAIL — **THE REPLACEMENT FOR A DELETED ABSOLUTE WAS ITSELF
 > FALSE.** "The pin door IS open" said *"Every entry point declaring the arg is an `internalAction`
 > (`runWorkflowPack`, `__runWorkflowPackWithScript`, `dispatchArgs`' four, `runCockpitAgent`). No

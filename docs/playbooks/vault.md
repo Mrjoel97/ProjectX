@@ -1,3 +1,12 @@
+> Last verified: 2026-08-29 (29-W3-TAIL-FIX2 — citation sweep, prose only, no vault code changed.
+> The four `vaultRag.ts:390` citations for `vaultRag.embedDoc`'s `SMOKE::` short-circuit are now the
+> SYMBOL (`SMOKE_PREFIX`); the line was still correct today, which is exactly when a line number is
+> cheapest to remove. The rest of this 4.3k-line playbook still carries line-number citations in
+> older sections and they are NOT swept here — an unverified conversion is how stale citations get
+> minted, so they stay recorded as open in `29-W3-TAIL-FIX2-SUMMARY.md`. One known-stale citation is
+> outside this playbook and outside this agent's ownership: `vaultDigest.ts`'s cap comment cites
+> `vaultGround.ts:29-30` for `PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP`, which are at `:39-40`.)
+
 > Last verified: 2026-08-29 (29-W3-TAIL — **TWO STALE CITATIONS IN THE FOLDER-DIGEST SECTION.**
 > 29-FIN-06 inserted a nine-line header into `vaultGround.ts` and edited this file in the same
 > commit without moving the two constants it cites: `vaultGround.ts:29-30` was already
@@ -32,7 +41,7 @@
 > `SMOKE::` seam (`query.startsWith("SMOKE::")`, ~`:729`), because `apps/web/e2e/vault-redesign.
 > spec.ts` types those sentinels into the search box against a REAL KEYED deployment, where
 > `offlineSeamAvailable()` is false by construction. `vaultRag.embedDoc`, `vaultLlm.extractGraph` /
-> `identifyDoc` and `vaultRag.ts:390` are the other content-selected paths; see
+> `identifyDoc` are the other content-selected paths; see
 > `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.)
 
 > Last verified: 2026-08-29 (**WAVE-3 FINAL — THE COPY-DRIFT GUARD IS DELETED; `vaultDigest.ts`'s
@@ -82,7 +91,7 @@
 > identified them as wrong (`:705`/`:888`, and the store TRUNCATES to 200 chars rather than storing
 > "verbatim"). All fixed here.
 >
-> **Not fixed, recorded:** `vaultRag.embedDoc` (`vaultRag.ts:390`) still selects a fabrication path
+> **Not fixed, recorded:** `vaultRag.embedDoc` (its `SMOKE_PREFIX` short-circuit) still selects a fabrication path
 > from CONTENT with no operator gate at all, on a fully landed path — pre-existing (d1e8826,
 > 2026-07-14), disclosed, and instance #3 in `29-SMOKE-SEAM-DEBT.md`. It needs an owner, not a
 > cleanup patch.)
@@ -112,7 +121,7 @@
 > **A FALSE CLAIM WAS ALSO CORRECTED, IN THREE PLACES.** `vaultDigest.ts`'s header, the
 > `vaultDigest.test.ts` seam comment and `29-SMOKE-SEAM-DEBT.md` all said the fabricated digest was
 > "stored, EMBEDDED and served back through retrieval". It was not. `smokeDigestFixture` begins
-> `SMOKE::graph::`, and `vaultRag.embedDoc` (`vaultRag.ts:390`) short-circuits ANY `SMOKE::` text to
+> `SMOKE::graph::`, and `vaultRag.embedDoc` (its `SMOKE_PREFIX` short-circuit) short-circuits ANY `SMOKE::` text to
 > `{ entryId: "smoke::<hash>", costUsd: 0 }` with no vector — so the fabricated digest was **stored
 > and DISPLAYED, never embedded and never vector-retrievable**, holding a `ragEntryId` that merely
 > READS groundable. Corrected, not softened.
@@ -3447,7 +3456,7 @@ was performed)", with no model call, no spend and no trace that synthesis was sk
 
 ⚠ **TWO CORRECTIONS TO THE SENTENCE ABOVE, MADE RATHER THAN SOFTENED.** (a) It read "STORED,
 EMBEDDED and served back through retrieval". It was never embedded: `smokeDigestFixture` begins
-`SMOKE::graph::` and `vaultRag.embedDoc` (`vaultRag.ts:390`) short-circuits ANY `SMOKE::` text to
+`SMOKE::graph::` and `vaultRag.embedDoc` (its `SMOKE_PREFIX` short-circuit) short-circuits ANY `SMOKE::` text to
 `{ entryId: "smoke::<hash>", costUsd: 0 }` with no vector, so the fabricated digest was invisible to
 vector search while holding a `ragEntryId` that READS groundable. (b) It cited `vaultDrive.ts:697`
 and `:880`; the real lines are `:705` (the `name: v.string()` arg) and `:888` (the store, which

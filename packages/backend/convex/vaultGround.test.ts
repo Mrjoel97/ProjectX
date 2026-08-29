@@ -4,7 +4,8 @@
 // (Pitfall 4) drives the graph-expand + fuse path deterministically WITHOUT rag.search / an
 // embedding network call. The seed doc(s) ride in the query as `SMOKE::<docId,docId,...>` and are
 // tenant-scoped exactly as `namespace = tenantId` scopes the real search — a cross-tenant seed
-// resolves to nothing, so a different tenant's corpus can never enter a grounding result.
+// resolves to nothing, which the "cross-tenant" and "a passage is attached only to a doc the TENANT
+// owns" tests below drive.
 //
 // These tests seed a graph via internal.vaultGraph.upsertGraph and assert: vector-seed + ≤2-hop
 // graph merge, hop-cap exclusion, cross-tenant isolation, plus the cheap metadata read plane

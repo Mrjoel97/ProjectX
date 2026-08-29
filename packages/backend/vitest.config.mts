@@ -17,14 +17,18 @@ export default defineConfig({
     // THE OFFLINE-FIXTURE CONSENT, FOR THE WHOLE SUITE. This line turns the operator flag ON for
     // every backend test file: a test run IS an operator consenting to fixtures. It is what the
     // `offlineSeamAvailable()` gates in `lib/models.ts` read, and stating it here rather than in
-    // ~14 `beforeEach` blocks is what let the gate close on `vaultGround.ts`. A test that needs
-    // the consent ABSENT stubs it off (`vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "")`), which is what
-    // `knowledgeLlm.test.ts`, `lib/models.test.ts` and `vaultGround.test.ts` already do.
+    // ~14 `beforeEach` blocks is what let the gate close on `vaultGround.ts`. A test that needs the
+    // consent ABSENT stubs it off: `vaultGround.test.ts` with `""`, `vaultDigest.test.ts` with
+    // `undefined`, `lib/models.test.ts` with both. `knowledgeLlm.test.ts` reaches the same state
+    // from the OTHER half of `offlineSeamAvailable()` instead — it plants a model credential.
     //
     // WHICH `SMOKE::` seams are gated on that predicate and which are still selected by CONTENT is
     // tracked in `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md` — read
     // the register, not this comment. Several are still ungated, and the register carries them as
-    // OPEN DEBT rather than as a design choice, so this flag restrains only the converted ones.
+    // OPEN DEBT rather than as a design choice, so this flag restrains only the converted ones. Its
+    // worked example is `vault.ts`'s `vaultSearch`, whose bare `query.startsWith("SMOKE::")` is
+    // E2E-coupled: `apps/web/e2e/vault-redesign.spec.ts` types those sentinels against a REAL KEYED
+    // deployment, where `offlineSeamAvailable()` is false.
     env: { PIKAR_OFFLINE_FIXTURES: "1" },
     testTimeout: 20_000,
     hookTimeout: 20_000,
