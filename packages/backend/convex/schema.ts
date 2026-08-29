@@ -2888,4 +2888,100 @@ export default defineSchema({
   })
     .index("by_tenant", ["tenantId"])
     .index("by_customer", ["stripeCustomerId"]),
+  /**
+   * Phase 28.1 (BILL-03) — THE BOOK OF RECORD for Pikar's own merchant revenue.
+   *
+   * A SEPARATE table from `spendEvents`, by owner decision (2026-08-28), and the separation is the
+   * requirement rather than a preference: `SPEND_RAILS` is a CLOSED COST union ("A fourth is a
+   * deliberate schema edit, not a string" — `spend.ts:16`), `aggregateSpend` hard-codes all three
+   * rails in five places, and Phase 26 Finance renders those totals as *what Pikar SPENDS*, today.
+   * A `revenue` rail would silently add money-in to a money-out figure on a live screen.
+   *
+   * APPEND-ONLY, like `audit` and `spendEvents` (CLAUDE.md §3). `billingLedger.ts` is the only
+   * writer and exposes no `patch`/`replace`/`delete`; `billingLedger.test.ts` scans it. A
+   * correction is a new `refunded` or `adjustment` row, never an overwrite.
+   *
+   * CLAUDE.md §4: ids, code-owned tokens, an ISO 4217 code and integer minor units only. There is
+   * deliberately no description, no line-item text, no customer name and no email — everything
+   * written here comes through `@pikar/billing`'s `reconcileEvent`, whose output type has nowhere
+   * to put any of them.
+   */
+  billingEvents: defineTable({
+    tenantId: v.string(),
+    /** `SPEND_PHASES` VERBATIM (`@pikar/core`'s `spend.ts:25`). No phase name is invented for
+     *  billing: the vocabulary that describes money moving is the same vocabulary either way, and
+     *  a second one would be two answers to "what does `reserved` mean". */
+    phase: v.union(
+      v.literal("estimated"),
+      v.literal("reserved"),
+      v.literal("actual"),
+      v.literal("refunded"),
+      v.literal("adjustment"),
+    ),
+    /** ALWAYS POSITIVE, in the currency's MINOR units. Direction lives in the phase, never in the
+     *  sign (`spend.ts:25`), so no consumer has to guess whether a negative number is a credit or
+     *  a bug. Stripe is natively minor units, so nothing is converted on the way in. */
+    amountMinor: v.number(),
+    /** EXPLICIT, unlike `spendEvents` (which is USD cents by construction). Stripe can send any
+     *  currency, and an implicit currency is a fabricated one. Canonicalised uppercase by
+     *  `@pikar/revenue`'s `normalizeCurrency` before it reaches a row. */
+    currency: v.string(),
+    /** `billing/<stripe id>`. Identity is (tenantId, correlationId, phase) — NOT correlationId
+     *  alone, because a `reserved` arrival and its later `actual` collection SHARE one correlation
+     *  on purpose, and a correlation-only guard would swallow the collection. */
+    correlationId: v.string(),
+    /** The code-owned token naming which Stripe signal produced this row (`cash-applied`,
+     *  `invoice-paid-card`, ...). Never caller-supplied, never prose. */
+    kind: v.string(),
+    stripeObjectId: v.optional(v.string()),
+    /** Stripe's `taxability_reason` for the invoice, verbatim, when the delivery carried one.
+     *  A bare `Tax: 0.00` is never presentable — the reason travels with the number or there is
+     *  no number (`@pikar/billing`'s `taxPosture`). Absent means the delivery carried none. */
+    taxabilityReason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_correlation", ["correlationId"]),
+  /**
+   * One durable start per tenant, opened by the first recorded billing movement. A missing row
+   * means the billing ledger has not begun watching this tenant; it NEVER means their revenue was
+   * zero. `spendCoverage` next door, same law, different book.
+   */
+  billingCoverage: defineTable({
+    tenantId: v.string(),
+    coverageStartedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
+  /**
+   * Money we HOLD that is attached to nothing — bank-transfer funds left over after Stripe's
+   * automatic reconciliation, observed from `cash_balance.funds_available`.
+   *
+   * NOT an arrival signal, and getting that backwards is the trap the research flagged: under
+   * default automatic reconciliation this event fires only when a positive balance REMAINS. It
+   * therefore produces ZERO `billingEvents` rows and one row here.
+   *
+   * `observedAt` is the START OF THE CLOCK, not the last sighting: Stripe attempts to RETURN
+   * unreconciled funds to the customer's bank at 75 days and SWEEPS unreturnable funds to the
+   * account balance by 90 (`UNRECONCILED_RETURN_DAYS` / `UNRECONCILED_SWEEP_DAYS`). A re-observed
+   * balance updates the AMOUNT and leaves `observedAt` alone, or every notification would restart
+   * a clock that is actually running.
+   *
+   * MUTABLE by design — which is exactly why it is `tenant_owned` rather than `audit_immutable`.
+   */
+  billingUnapplied: defineTable({
+    tenantId: v.string(),
+    /** The `cus_…` whose cash balance holds it. Half of the re-observation key below. */
+    stripeObjectId: v.string(),
+    amountMinor: v.number(),
+    currency: v.string(),
+    observedAt: v.number(),
+  })
+    // `by_tenant`, NOT the `by_tenant_observedAt` 28.1-06's plan specified. `tenant_owned` puts
+    // this table on the erasure and export walks, and BOTH hard-code `.withIndex("by_tenant")`
+    // (`tenantDelete.ts:223`, `tenantExport.ts:108`) — a compound-only index makes the
+    // classification fail to typecheck. Nothing is lost: a tenant holds one Stripe customer, so
+    // this table is a handful of rows and the age travels on each row rather than in the ordering.
+    .index("by_tenant", ["tenantId"])
+    // The re-observation key. Currency is part of it because two currencies never combine into one
+    // figure (`@pikar/revenue`'s law), so a EUR balance is a different row from a USD one.
+    .index("by_tenant_object_currency", ["tenantId", "stripeObjectId", "currency"]),
 });

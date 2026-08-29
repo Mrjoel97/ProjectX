@@ -25,7 +25,8 @@ describe("tenant table classification registry", () => {
     // failing on its own arithmetic ever since — and a genuinely UNCLASSIFIED table would have
     // looked exactly the same. A tripwire nobody can distinguish from noise is not a tripwire.
     // + billingCustomers (28.1-05, the tenant<->Stripe-customer mapping).
-    expect(schemaTables).toHaveLength(52);
+    // + billingEvents, billingCoverage, billingUnapplied (28.1-06, the billing book of record).
+    expect(schemaTables).toHaveLength(55);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -73,6 +74,27 @@ describe("tenant table classification registry", () => {
     // erasing it would let a redelivered event for that tenant re-apply.
     expect(TENANT_TABLE_CLASSIFICATION.billingStripeEvents).toBe("global");
     expect(deletableTables()).not.toContain("billingStripeEvents");
+  });
+
+  /**
+   * 28.1-06, asserted POSITIVELY and by name for the same reason the two above are.
+   *
+   * The pair is the property. `billingEvents` is Pikar's OWN record of what a customer PAID it —
+   * erasure must not let a customer delete the merchant's books, and the tenant's own copy of that
+   * history is Stripe's hosted Customer Portal, not this table. `billingUnapplied` is the opposite
+   * call on purpose: it is mutable, and the money it describes is still the customer's, so it
+   * exports and it deletes.
+   */
+  test("the billing book of record is immutable; unapplied funds are the tenant's own", () => {
+    expect(TENANT_TABLE_CLASSIFICATION.billingEvents).toBe("audit_immutable");
+    expect(TENANT_TABLE_CLASSIFICATION.billingCoverage).toBe("audit_immutable");
+    expect(deletableTables()).not.toContain("billingEvents");
+    // Coverage and its events must delete together or never. Never is the answer, and a split
+    // would report "unknown coverage" over rows that are sitting right there.
+    expect(deletableTables()).not.toContain("billingCoverage");
+
+    expect(TENANT_TABLE_CLASSIFICATION.billingUnapplied).toBe("tenant_owned");
+    expect(deletableTables()).toContain("billingUnapplied");
   });
 
   test("exposes only tenant-owned and credential tables to deletion, with identity last", () => {

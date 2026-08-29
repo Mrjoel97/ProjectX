@@ -158,6 +158,50 @@ export const TENANT_TABLE_CLASSIFICATION = {
    * holding the id it needs.
    */
   billingCustomers: "tenant_owned",
+  /**
+   * Phase 28.1 (28.1-06) — the BOOK OF RECORD for Pikar's own merchant revenue, and its coverage
+   * companion. `audit_immutable`, and the neighbour that is NOT is the argument.
+   *
+   * `spendEvents` next door is `tenant_owned` because it records what PIKAR SPENT ON that tenant —
+   * usage facts about them, which they may export and whose deletion costs Pikar only a number it
+   * chose to keep. `billingEvents` records the opposite direction: what the tenant PAID PIKAR. That
+   * is Pikar's own accounting record of its own revenue, and a tenant erasure that rewrote it would
+   * let a customer delete Pikar's books. Financial records are also exactly the case the erasure
+   * right carves out for a retention obligation, so the honest posture is that this table is
+   * outside the erasure walk BY CONSTRUCTION rather than by an `if` somebody can move.
+   *
+   * The tenant is not deprived by the export omission: their own invoices, receipts and payment
+   * history are served by Stripe's hosted Customer Portal, which 28.1-04 already opens for them.
+   * This table is the merchant side of the same transaction, not a second copy of theirs.
+   *
+   * `billingCoverage` takes the same category because it is only meaningful WITH the events. If
+   * erasure removed the coverage row and could not remove the events, the ledger would report
+   * "unknown coverage" over rows that are sitting right there; if a later movement then re-opened
+   * coverage, every window before the new start would silently become unknown. Deleting together
+   * or never is the only coherent pair, and `billingEvents` cannot be deleted.
+   *
+   * THE TWO OBLIGATIONS THIS CATEGORY CARRIES (identical to `workflowPackEvents` above, and not
+   * optional):
+   *   1. The writer must be INSERT-ONLY (CLAUDE.md §3). `convex/billingLedger.ts` is the only one,
+   *      and `billingLedger.test.ts` scans its source for `patch`/`replace`/`delete`.
+   *   2. Nothing here may ever become personal data. It holds ids, code-owned tokens, an ISO 4217
+   *      code and integer minor units — a description or line-item text added later would put
+   *      customer content beyond the reach of every erasure request this deployment can honour.
+   */
+  billingEvents: "audit_immutable",
+  billingCoverage: "audit_immutable",
+  /**
+   * Phase 28.1 (28.1-06) — bank-transfer money we HOLD that is attached to nothing yet.
+   *
+   * `tenant_owned`, deliberately NOT joining the two above, and there are two independent reasons.
+   * It is MUTABLE observational state (a re-observed cash balance updates the amount), so it fails
+   * `audit_immutable`'s insert-only obligation on its face. And the money it describes is still the
+   * CUSTOMER'S — Stripe may return it to their bank at 75 days — so it is a fact about their money
+   * that belongs in their export, and an erasure that left it behind would strand a row pointing at
+   * a live Stripe customer for a person who no longer exists here, which is the same orphaned-link
+   * problem `billingCustomers` is deletable to avoid.
+   */
+  billingUnapplied: "tenant_owned",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;

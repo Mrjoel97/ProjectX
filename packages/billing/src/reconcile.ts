@@ -48,8 +48,15 @@ export const UNRECONCILED_SWEEP_DAYS = 90;
 
 const DAY_MS = 86_400_000;
 
-/** `spend.ts:42` — refs, ids and code-owned tokens only. No space, so prose cannot pass. */
-const REF_TOKEN = /^[A-Za-z0-9._:@/-]+$/;
+/**
+ * `spend.ts:42` — refs, ids and code-owned tokens only. No space, so prose cannot pass.
+ *
+ * EXPORTED so `convex/billingLedger.ts` validates its trust boundary against the SAME pattern that
+ * built the values, rather than a third copy of it. `spend.ts`'s own `TOKEN` is private and that
+ * file is deliberately not being edited by 28.1-06 (the spend plane must show an empty diff), so
+ * this is the one definition the billing plane can share.
+ */
+export const REF_TOKEN = /^[A-Za-z0-9._:@/-]+$/;
 
 export interface BillingMovement {
   phase: SpendPhase;

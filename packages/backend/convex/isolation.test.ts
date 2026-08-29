@@ -193,6 +193,14 @@ const NON_TENANT_LEADING: Record<string, string> = {
   // caller. The tenant it then acts as comes FROM the row, never from the request.
   "billingCustomers.by_customer":
     "Stripe webhook resolves a customer id to its tenant; no tenant in the delivery",
+  // 28.1-06. Identical in shape and reason to `spendEvents.by_correlation` above: the idempotence
+  // read is by correlation because that is what a Stripe retry carries, and the TENANT CHECK IS
+  // PART OF THE IDENTITY rather than part of the index — `recordBillingMovement` filters the
+  // bounded `take(32)` to `row.tenantId === args.tenantId` before it looks at anything else, so a
+  // correlation colliding across tenants can neither dedupe nor currency-clash across them. There
+  // is no tenant-facing caller: the only reader is `recordBillingMovement`, inside the webhook's
+  // internalMutation.
+  "billingEvents.by_correlation": "correlation identity read, internal; tenant filtered in code",
 };
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {
