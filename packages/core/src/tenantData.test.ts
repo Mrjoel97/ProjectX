@@ -24,7 +24,8 @@ describe("tenant table classification registry", () => {
     // them, but never bumped this number or the closed set below, so the tripwire had been
     // failing on its own arithmetic ever since — and a genuinely UNCLASSIFIED table would have
     // looked exactly the same. A tripwire nobody can distinguish from noise is not a tripwire.
-    expect(schemaTables).toHaveLength(51);
+    // + billingCustomers (28.1-05, the tenant<->Stripe-customer mapping).
+    expect(schemaTables).toHaveLength(52);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -51,6 +52,27 @@ describe("tenant table classification registry", () => {
   test("workflow-pack events sit on the audit plane — erasure and export cannot reach them", () => {
     expect(TENANT_TABLE_CLASSIFICATION.workflowPackEvents).toBe("audit_immutable");
     expect(deletableTables()).not.toContain("workflowPackEvents");
+  });
+
+  /**
+   * 28.1-05, asserted POSITIVELY and by name for the same reason `workflowPackEvents` is above:
+   * the derived equality in the next test reads the classification itself and would stay green if
+   * the category silently flipped.
+   *
+   * The property is a compliance one. `billingCustomers` is the ONLY row joining a tenant to its
+   * Stripe customer id, so a tenant erasure that left it behind would leave an orphaned link to a
+   * live merchant record. It is NOT `tenant_credential`: `cus_...` grants no access to anything
+   * without the secret key, and the credential category SUMMARISES rows on export
+   * (`summarizeTenantCredential`), which would replace the one fact the tenant actually wants to
+   * see with `{connected, updatedAt, scopeHalves: []}`.
+   */
+  test("the Stripe-customer mapping is tenant-owned — erasure removes it, export shows it", () => {
+    expect(TENANT_TABLE_CLASSIFICATION.billingCustomers).toBe("tenant_owned");
+    expect(deletableTables()).toContain("billingCustomers");
+    // The delivery log next door is deliberately the OPPOSITE call, and the pair is the point:
+    // erasing it would let a redelivered event for that tenant re-apply.
+    expect(TENANT_TABLE_CLASSIFICATION.billingStripeEvents).toBe("global");
+    expect(deletableTables()).not.toContain("billingStripeEvents");
   });
 
   test("exposes only tenant-owned and credential tables to deletion, with identity last", () => {

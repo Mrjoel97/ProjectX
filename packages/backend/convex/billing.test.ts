@@ -392,3 +392,101 @@ describe("no card data and no 3DS exists anywhere in this subsystem", () => {
     expect(namers).toEqual(["./billingApi.ts"]);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-05 filled the two arms 28.1-04 left unreachable: `billingStatus` reads a real
+// `billingCustomers` row, and `portalLink` resolves a real `stripeCustomerId`.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Seed a mapping row the way `billingWebhook.receiveAndApply` would. */
+async function mapCustomer(
+  t: ReturnType<typeof convexTest>,
+  tenantId: string,
+  stripeCustomerId: string,
+  status: string,
+) {
+  await t.run((ctx) =>
+    ctx.db.insert("billingCustomers", {
+      tenantId,
+      stripeCustomerId,
+      status,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+  );
+}
+
+describe("billingStatus reads the mapping 28.1-05 landed, and still refuses to guess", () => {
+  async function stateFor(status: string) {
+    const t = convexTest(schema, modules);
+    const { as, tenantId } = await tenantOn(t);
+    await mapCustomer(t, tenantId, "cus_status", status);
+    return await as.query(api.billing.billingStatus, {});
+  }
+
+  test("a trialing or an active mapping is `subscribed`", async () => {
+    expect(await stateFor("trialing")).toEqual({ state: "subscribed" });
+    expect(await stateFor("active")).toEqual({ state: "subscribed" });
+  });
+
+  test("a canceled mapping is `not_subscribed` — the arm 28.1-04 could not reach", async () => {
+    expect(await stateFor("canceled")).toEqual({ state: "not_subscribed" });
+  });
+
+  test("a mapping that has seen no subscription event yet is `unknown`, never subscribed", async () => {
+    // The window between `checkout.session.completed` and the first `customer.subscription.*`.
+    // Reporting it as subscribed would grant access off a row that has never carried a status.
+    expect(await stateFor("pending")).toEqual({ state: "unknown" });
+  });
+
+  test("ANOTHER tenant's mapping is not this tenant's status", async () => {
+    // Two tenants on ONE backend, so the two ids genuinely differ.
+    const t = convexTest(schema, modules);
+    const mine = await tenantOn(t);
+    const theirs = await tenantOn(t);
+    expect(mine.tenantId).not.toBe(theirs.tenantId);
+    await mapCustomer(t, theirs.tenantId, "cus_theirs", "active");
+    expect(await mine.as.query(api.billing.billingStatus, {})).toEqual({ state: "unknown" });
+  });
+});
+
+describe("portalLink opens the portal for a MAPPED tenant, and only for a mapped one", () => {
+  test("a mapped tenant reaches Stripe with its OWN customer id", async () => {
+    const t = convexTest(schema, modules);
+    const { as, tenantId } = await tenantOn(t);
+    await mapCustomer(t, tenantId, "cus_portal", "active");
+    stubStripe({ status: 200, body: { id: "bps_1", url: PORTAL_URL } });
+
+    expect(await as.action(api.billing.portalLink, {})).toEqual({ ok: true, url: PORTAL_URL });
+    expect(sent().url).toContain("/v1/billing_portal/sessions");
+    expect(form().get("customer")).toBe("cus_portal");
+  });
+
+  test("the portal is opened with the CALLER's customer, not with the first mapping in the table", async () => {
+    const t = convexTest(schema, modules);
+    const first = await tenantOn(t);
+    const second = await tenantOn(t);
+    await mapCustomer(t, first.tenantId, "cus_first", "active");
+    await mapCustomer(t, second.tenantId, "cus_second", "active");
+    stubStripe({ status: 200, body: { id: "bps_1", url: PORTAL_URL } });
+
+    await second.as.action(api.billing.portalLink, {});
+    expect(form().get("customer")).toBe("cus_second");
+  });
+});
+
+describe("the subscription carries the tenant thread too, or an early event cannot be attributed", () => {
+  test("startCheckout puts tenantId on subscription_data metadata as well as the session", async () => {
+    // Stripe does not guarantee delivery order. A `customer.subscription.created` that overtakes
+    // its `checkout.session.completed` has NO `client_reference_id` and no mapping to fall back
+    // on — this is the only thread it can be attributed by, and without it it dead-letters.
+    const { as } = await withTenant();
+    stubStripe(sessionReply());
+    await as.action(api.billing.startCheckout, {});
+    const params = form();
+    expect(params.get("subscription_data[metadata][tenantId]")).toBe(
+      params.get("client_reference_id"),
+    );
+    expect(params.get("subscription_data[metadata][tenantId]")).toBeTruthy();
+  });
+});

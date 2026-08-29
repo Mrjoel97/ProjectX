@@ -2842,4 +2842,50 @@ export default defineSchema({
   })
     .index("by_event", ["eventId"])
     .index("by_object_type", ["objectId", "eventType"]),
+  /**
+   * Phase 28.1 (BILL-01) — THE tenant ↔ Stripe-customer mapping.
+   *
+   * The single row that says which Stripe customer belongs to which tenant, written only from
+   * `billingWebhook.receiveAndApply` and only for a tenant that already EXISTS. A Stripe customer
+   * with no matching tenant is dead-lettered by ref; nothing here is ever created from a webhook
+   * alone, because creating a tenant from a webhook is how a billing system invents users.
+   *
+   * TWO indexes because the mapping must resolve in BOTH directions, and that is the requirement
+   * rather than a convenience: `by_tenant` answers "what is this tenant's Stripe customer" (the
+   * Customer Portal and the status read), `by_customer` answers "whose is this" for a subscription
+   * event that carries no tenant thread at all.
+   *
+   * `tenant_owned` in `packages/core/src/tenantData.ts`: it holds no secret — a `cus_…` grants
+   * nothing without the API key — and a tenant erasure MUST remove it, or an orphaned link to a
+   * live merchant record survives the erasure. That is also why a future billing arm of the
+   * deletion walk has to run BEFORE the page loop: the loop deletes the row holding the id it
+   * needs to cancel the subscription with.
+   *
+   * CLAUDE.md §4: ids, enum tokens and timestamps only. No email, no name, no amount, no Stripe
+   * object — the extraction that fills it (`@pikar/billing`'s `eventFacts`) has nowhere to put one.
+   */
+  billingCustomers: defineTable({
+    /** The `users._id` string every other tenant table is keyed by. */
+    tenantId: v.string(),
+    /** Stripe's `cus_…`. Half of the mapping, and the id the Customer Portal is opened with. */
+    stripeCustomerId: v.string(),
+    /** `sub_…`, once a subscription exists. Absent between checkout and the subscription event. */
+    subscriptionId: v.optional(v.string()),
+    /** Stripe's SUBSCRIPTION status verbatim, or the `pending` sentinel a checkout writes before
+     *  any subscription event has been seen. A free string, not a union, for `billingStripeEvents`'
+     *  reason: Stripe adds statuses, and a union would make a new one a schema violation — i.e. a
+     *  500 and a retry storm. `subscriptionState()` is the closed set we ACT on, and it answers
+     *  `unknown` for anything it does not recognise rather than guessing. */
+    status: v.string(),
+    priceId: v.optional(v.string()),
+    trialEndsAt: v.optional(v.number()),
+    /** `event.created` of the delivery that last set `status`, in ms. THE ORDERING GUARD: Stripe
+     *  does not guarantee delivery order, so a late `customer.subscription.updated` arriving after
+     *  a `deleted` would otherwise resurrect a canceled subscription and hand back access. */
+    statusAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_customer", ["stripeCustomerId"]),
 });

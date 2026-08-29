@@ -10,7 +10,10 @@
 // must move to the Subscription Update API. v1 avoids this by keeping metering internal. That is
 // a migration, not a flag flip.
 import { TRIAL_DAYS } from "@pikar/billing/config";
+import { subscriptionState } from "@pikar/billing/events";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { internalQuery } from "./_generated/server";
 import { stripePost } from "./billingApi";
 import { tenantAction, tenantQuery } from "./lib/functions";
 
@@ -101,6 +104,12 @@ export function checkoutParams(input: {
     // tenant; without it a paid checkout has nothing to match and must dead-letter.
     client_reference_id: tenantId,
     "metadata[tenantId]": tenantId,
+    // THE SAME THREAD, ON THE SUBSCRIPTION. `client_reference_id` lives on the Checkout Session
+    // only, and Stripe does not guarantee delivery order: a `customer.subscription.created` that
+    // overtakes its `checkout.session.completed` carries no session, so without this it cannot be
+    // attributed to a tenant at all and must dead-letter. Added in 28.1-05 (deviation Rule 2) —
+    // "order-independent" is not achievable with one thread.
+    "subscription_data[metadata][tenantId]": tenantId,
     success_url: `${origin}/dashboard/settings?checkout=success`,
     cancel_url: `${origin}/dashboard/settings?checkout=cancel`,
   };
@@ -171,13 +180,25 @@ export function portalSession(
 /**
  * The tenant's Stripe customer id, or null.
  *
- * 28.1-05 creates the `billingCustomers` table and fills this in. Until then there is no table to
- * read, so it is null for every tenant — and null must NEVER become "create one". Provisioning a
- * customer to make a portal call succeed mints a Stripe object nothing maps back to.
+ * An `internalQuery` rather than a helper because `portalLink` is an ACTION and an action has no
+ * `ctx.db` — the same shape `requireOwnerAction` takes for the same reason. Not client-callable,
+ * so there is no second door to authorize; `tenantId` arrives from `tenantAction`'s own identity
+ * resolution and is never caller-supplied.
+ *
+ * Null must NEVER become "create one". Provisioning a Stripe customer to make a portal call
+ * succeed mints a merchant-side object that nothing in this database maps back to.
  */
-function stripeCustomerId(_tenantId: string): string | null {
-  return null;
-}
+export const stripeCustomerFor = internalQuery({
+  args: { tenantId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { tenantId }) => {
+    const row = await ctx.db
+      .query("billingCustomers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .first();
+    return row?.stripeCustomerId ?? null;
+  },
+});
 
 /** BILL-01: start a Stripe-hosted Checkout for the flat-rate plan. */
 export const startCheckout = tenantAction({
@@ -204,7 +225,9 @@ export const portalLink = tenantAction({
   args: {},
   returns: doorReturns,
   handler: async (ctx): Promise<Door> => {
-    const customerId = stripeCustomerId(ctx.tenantId);
+    const customerId = await ctx.runQuery(internal.billing.stripeCustomerFor, {
+      tenantId: ctx.tenantId,
+    });
     if (customerId === null) return { ok: false, reason: "no_stripe_customer" };
     const origin = requireAppOrigin();
     const window = Math.floor(Date.now() / PORTAL_IDEMPOTENCY_WINDOW_MS);
@@ -219,15 +242,23 @@ export const portalLink = tenantAction({
 /**
  * BILL-01: what this tenant's billing state is — or, honestly, that we do not know.
  *
- * `unknown` is NOT `not_subscribed` and is never a free tier or a zero. 28.1-05 creates
- * `billingCustomers`; today there is no row to read for anyone, so `unknown` is the only answer
- * the code has evidence for. The other two literals are the contract 28.1-05 fills in — they are
- * UNREACHABLE today and no test pretends otherwise.
+ * `unknown` is NOT `not_subscribed` and is never a free tier or a zero, and 28.1-05 did not change
+ * that — it only gave the other two arms a row to be reached from. THREE things still answer
+ * `unknown`: no mapping at all, a mapping written by a checkout that has not yet seen a
+ * `customer.subscription.*` (status `pending`), and any status Stripe adds after
+ * `subscriptionState` was written. The classification is @pikar/billing's; this handler only reads
+ * the row.
  */
 export const billingStatus = tenantQuery({
   args: {},
   returns: v.object({
     state: v.union(v.literal("unknown"), v.literal("not_subscribed"), v.literal("subscribed")),
   }),
-  handler: async () => ({ state: "unknown" as const }),
+  handler: async (ctx) => {
+    const row = await ctx.db
+      .query("billingCustomers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .first();
+    return { state: subscriptionState(row?.status) };
+  },
 });

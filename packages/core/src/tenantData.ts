@@ -136,6 +136,28 @@ export const TENANT_TABLE_CLASSIFICATION = {
    * no personal data — so `global`'s "contains no tenant data" claim stays literally true.
    */
   billingStripeEvents: "global",
+  /**
+   * Phase 28.1 (28.1-05) — the tenant ↔ Stripe-customer mapping. `tenant_owned`, and the two
+   * categories it is NOT are the interesting part.
+   *
+   * NOT `tenant_credential`, unlike `connectorConnections` next door. That category is for the
+   * tenant's GRANT: `gmailTokens` holds a refresh token, `connectorConnections` holds AES-256-GCM
+   * ciphertext. `stripeCustomerId` is a `cus_…` — an identifier that grants nothing without the
+   * merchant's own API key, which lives in the deployment env and not in any row. Filing it as a
+   * credential would also SUMMARISE it out of the export (`summarizeTenantCredential` replaces the
+   * row with `{connected, updatedAt, scopeHalves}`), deleting from the tenant's own data export
+   * the single fact they would actually want from it.
+   *
+   * NOT `audit_immutable`, unlike `deadLetters` and `billingStripeEvents`. This is MUTABLE mapping
+   * state — a subscription status moves — not an append-only log, and the erasure obligation runs
+   * the other way: it is the ONLY row joining a person to a live merchant record, so an erasure
+   * that left it behind would leave that link standing forever.
+   *
+   * Being deletable is load-bearing for a later billing arm of the deletion walk: it must cancel
+   * the subscription BEFORE the page loop reaches this table, because the loop deletes the row
+   * holding the id it needs.
+   */
+  billingCustomers: "tenant_owned",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;

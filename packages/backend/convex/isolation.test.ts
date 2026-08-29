@@ -185,6 +185,14 @@ const NON_TENANT_LEADING: Record<string, string> = {
   // tenant it then acts as comes FROM the row rather than from the request.
   "connectorOAuthStates.by_state":
     "OAuth callback resolves a server-minted nonce; no tenant in the request",
+  // 28.1-05. A `customer.subscription.*` delivery carries a `cus_...` and NOTHING that names a
+  // tenant — no session, no cookie, no client_reference_id — so the reverse lookup cannot lead
+  // with tenantId; that is the entire reason the mapping row exists. Same shape as
+  // `connectorOAuthStates.by_state`: the consumer is `billingWebhook.receiveAndApply`, an
+  // internalMutation reached only from the signature-verified webhook route, with no tenant-facing
+  // caller. The tenant it then acts as comes FROM the row, never from the request.
+  "billingCustomers.by_customer":
+    "Stripe webhook resolves a customer id to its tenant; no tenant in the delivery",
 };
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {

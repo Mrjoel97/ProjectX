@@ -1,3 +1,4 @@
+import { eventFacts } from "@pikar/billing/events";
 import { GOOGLE_SCOPES, type MicrosoftCallbackError, notificationMessage } from "@pikar/core";
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
@@ -466,7 +467,7 @@ http.route({
     }
 
     // Only AFTER verification is parsing safe.
-    let event: { id?: unknown; type?: unknown; data?: { object?: { id?: unknown } } };
+    let event: { id?: unknown; type?: unknown; created?: unknown; data?: { object?: unknown } };
     try {
       event = JSON.parse(raw);
     } catch {
@@ -475,12 +476,20 @@ http.route({
     if (typeof event.id !== "string" || typeof event.type !== "string") {
       return new Response("malformed", { status: 400 });
     }
-    const objectId = event.data?.object?.id;
+    const dataObject = event.data?.object as { id?: unknown } | undefined;
+    const objectId = dataObject?.id;
 
+    // REDACT THEN WRITE, and this line is the ordering. `eventFacts` lifts ids and enum tokens out
+    // of the Stripe object HERE, at the trust boundary; the parsed object never crosses into the
+    // mutation, so `customer_details.email`, the customer name and the amount have no route to a
+    // row even by accident (CLAUDE.md §4). `receiveAndApply`'s validator refuses any other shape.
     await ctx.runMutation(internal.billingWebhook.receiveAndApply, {
       eventId: event.id,
       eventType: event.type,
       objectId: typeof objectId === "string" ? objectId : "",
+      // Stripe sends `created` in SECONDS. It is the only delivery ordering Stripe provides.
+      eventCreatedAt: typeof event.created === "number" ? event.created * 1000 : undefined,
+      facts: eventFacts(event.type, dataObject),
     });
     // 2xx fast and unconditional once recorded. A non-2xx (or a timeout) is a delivery failure to
     // Stripe and buys a retry we have already deduped away.
