@@ -1,13 +1,29 @@
 /**
  * routineSchedule — the RECURRENCE SPIKE for plan 29-11's decision gate (ROUT-02).
  *
- * WHAT THIS IS AND IS NOT. This module is EVIDENCE, not a scheduler. Nothing imports it at
- * runtime; no Convex module, cron, trigger or table references it. It exists so the
- * `dst-boundary`, `run-identity`, `overlap`, `retry`, `missed-run` and `material-change`
- * rows of `.planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md`
- * can cite an executable answer instead of prose. `schema.ts:442` still carries, verbatim
- * and untouched, "There is deliberately NO `routines` table, cron, trigger, recurrence,
- * next-run timestamp, execution-history table, canvas or DSL" — and 29-11 keeps it that way.
+ * WHAT THIS IS AND IS NOT. This module is EVIDENCE, not a scheduler. It exists so the
+ * `dst-boundary` and `run-identity` rows of
+ * `.planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md` can cite an
+ * executable answer instead of prose. `schema.ts:442` still carries, verbatim and untouched,
+ * "There is deliberately NO `routines` table, cron, trigger, recurrence, next-run timestamp,
+ * execution-history table, canvas or DSL" — and 29-11 keeps it that way.
+ *
+ * WHAT WAS DELETED FROM IT, AND WHY. Round 1 also shipped `classifyOverlap`, `classifyDue`,
+ * `classifyRetry` and `materialChanges`/`MATERIAL_FIELDS` here. Those were not a spike — they
+ * were the implementation of the feature the gate then decided NOT to build, written so the
+ * `overlap` / `retry` / `missed-run` / `material-change-reapproval` rows would have something
+ * to cite, and every one of those rows is red regardless. `classifyOverlap` was literally
+ * `active === null ? "start" : "skip_overlap"`: the requirement retyped, not evidence about it.
+ * They were unreachable (no import anywhere), they carried real defects nothing could observe
+ * — `materialChanges` normalised `["a b"]` and `["a","b"]` to the same string, so a change to
+ * the recipient list could report as immaterial — and CLAUDE.md §8 says later can scaffold for
+ * itself. Deleted in round 2; those four matrix rows now carry `manual` evidence pointing at
+ * the research note, which is what they always actually had.
+ *
+ * Nothing imports what is left, either. `routineDecision.test.ts` scans `convex/**`,
+ * `apps/web` and every package `src` recursively for the string `routineSchedule` — round 1
+ * scanned only the top level of `convex/`, so `convex/lib/` and `convex/render/` could have
+ * imported it in silence.
  *
  * WHY THERE IS NO `@js-temporal/polyfill` HERE. Plan 29-11 said to spike it. The native
  * platform already covers what the matrix needs, so the dependency is not installed:
@@ -202,8 +218,15 @@ function assertRule(rule: LocalRecurrenceRule): void {
 /**
  * The next occurrence strictly AFTER `afterUtcMs`. Walks LOCAL calendar dates — never `+24h` —
  * so a day that is 23 or 25 hours long does not shift the wall time.
+ *
+ * Throws when no occurrence resolves within `MAX_LOOKAHEAD_DAYS`. That is a broken rule, not a
+ * wait, and a `null` in the return type would only push a branch onto every caller that can
+ * never be taken (`assertRule` already rejects every unsatisfiable cadence).
+ * ponytail: unreachable by construction today — daily resolves on day 0 or 1, weekly within 7.
+ * If a cadence with real gaps is ever added (month-end, "last Friday"), that is the moment this
+ * throw becomes reachable and needs a test, not before.
  */
-export function nextOccurrence(afterUtcMs: number, rule: LocalRecurrenceRule): Occurrence | null {
+export function nextOccurrence(afterUtcMs: number, rule: LocalRecurrenceRule): Occurrence {
   assertRule(rule);
   const start = wallPartsAt(afterUtcMs, rule.timeZone);
   let cursor = Date.UTC(start.y, start.mo - 1, start.d);
@@ -217,8 +240,16 @@ export function nextOccurrence(afterUtcMs: number, rule: LocalRecurrenceRule): O
       rule.cadence.frequency === "daily" || day.getUTCDay() === rule.cadence.weekday;
     if (cadenceAllows) {
       const resolved = resolveLocalInstant(y, mo, d, rule.hour, rule.minute, rule.timeZone);
-      if (resolved.utcMs > afterUtcMs) {
-        const actual = wallPartsAt(resolved.utcMs, rule.timeZone);
+      const actual = wallPartsAt(resolved.utcMs, rule.timeZone);
+      // A local date the zone SKIPPED ENTIRELY has no occurrence at all. Pacific/Apia deleted
+      // 2011-12-30 when it crossed the date line, and `resolveLocalInstant` gap-shifts the whole
+      // missing day onto the transition — i.e. onto 12-31. Returning that would emit an
+      // `Occurrence` whose `localDate` never existed AND fire a second time on 12-31 with a
+      // DIFFERENT `occurrenceKey`, which is exactly the duplicate the key exists to prevent.
+      // The `gap_shifted` branch stays for the ordinary case (New York 02:30 -> 03:00 the SAME
+      // local date); only a shift that lands on another local date is skipped.
+      const sameLocalDate = wallDate(actual) === wallDate({ y, mo, d });
+      if (resolved.utcMs > afterUtcMs && sameLocalDate) {
         return {
           utcMs: resolved.utcMs,
           localDate: wallDate({ y, mo, d }),
@@ -230,7 +261,10 @@ export function nextOccurrence(afterUtcMs: number, rule: LocalRecurrenceRule): O
     }
     cursor += DAY_MS;
   }
-  return null;
+  throw new Error(
+    `routineSchedule: no occurrence within ${MAX_LOOKAHEAD_DAYS} local days of ` +
+      `${new Date(afterUtcMs).toISOString()} in ${rule.timeZone} — the rule is broken, not late`,
+  );
 }
 
 /**
@@ -245,84 +279,4 @@ export function occurrenceKey(input: {
   templateVersion: number;
 }): string {
   return `${input.routineId}|${input.localDate}T${input.localTime}|v${input.templateVersion}`;
-}
-
-/** One active run per routine. A due tick that meets a live run skips and records the overlap. */
-export type ActiveRunState = "claimed" | "running" | "awaiting_approval";
-export function classifyOverlap(active: ActiveRunState | null): "start" | "skip_overlap" {
-  return active === null ? "start" : "skip_overlap";
-}
-
-/**
- * Missed occurrences are SKIPPED, never burst-executed. `graceMs` is the window in which a late
- * tick still counts as the run it was armed for.
- */
-export function classifyDue(
-  occurrenceUtcMs: number,
-  nowUtcMs: number,
-  graceMs: number,
-): "pending" | "due" | "missed" {
-  if (nowUtcMs < occurrenceUtcMs) return "pending";
-  return nowUtcMs - occurrenceUtcMs <= graceMs ? "due" : "missed";
-}
-
-/** The closed failure vocabulary. Anything not listed here is not retryable. */
-export type FailureKind =
-  | "provider_5xx"
-  | "provider_timeout"
-  | "internal"
-  | "auth"
-  | "validation"
-  | "budget"
-  | "paused"
-  | "provider_refusal";
-
-const RETRYABLE: readonly FailureKind[] = ["provider_5xx", "provider_timeout", "internal"];
-
-export function classifyRetry(
-  kind: FailureKind,
-  attempt: number,
-  maxAttempts: number,
-): "retry" | "terminal" {
-  return RETRYABLE.includes(kind) && attempt < maxAttempts ? "retry" : "terminal";
-}
-
-/**
- * The fields whose change invalidates a standing approval. Closed on purpose: a field that is
- * not listed cannot silently become "not material".
- */
-export type ApprovalSnapshot = {
-  templateId: string;
-  templateVersion: number;
-  candidateVersion: number;
-  actionType: string;
-  recipients: readonly string[];
-  sourceSet: readonly string[];
-  threshold: number;
-  timeZone: string;
-  cadence: string;
-  outputContract: string;
-};
-
-export const MATERIAL_FIELDS: readonly (keyof ApprovalSnapshot)[] = [
-  "templateId",
-  "templateVersion",
-  "candidateVersion",
-  "actionType",
-  "recipients",
-  "sourceSet",
-  "threshold",
-  "timeZone",
-  "cadence",
-  "outputContract",
-];
-
-/** The changed material fields, sorted. Non-empty means the standing approval is void. */
-export function materialChanges(
-  previous: ApprovalSnapshot,
-  next: ApprovalSnapshot,
-): (keyof ApprovalSnapshot)[] {
-  const normalize = (v: unknown) =>
-    Array.isArray(v) ? [...v].map(String).sort().join(" ") : String(v);
-  return MATERIAL_FIELDS.filter((f) => normalize(previous[f]) !== normalize(next[f])).sort();
 }

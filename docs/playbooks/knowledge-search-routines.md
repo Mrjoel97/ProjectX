@@ -1033,21 +1033,24 @@ the other ~90 events in `AUDIT_VIEWER_EVENTS` to derived key sets is out of scop
 
 ## Plan 29-11 — the recurrence decision gate, and why it says `defer` (2026-08-29)
 
-> Last verified: 2026-08-29 (29-11 — **RECURRENCE IS DEFERRED BY A PARSER, NOT BY A SENTENCE.**
-> `.planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md` carries a closed
-> twelve-row YAML matrix in its frontmatter and `decision: defer`.
+> Last verified: 2026-08-29 (29-11 **round 2** — **RECURRENCE IS DEFERRED BY A PARSER, NOT BY A
+> SENTENCE.** `.planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md` carries
+> a closed twelve-row YAML matrix in its frontmatter and `decision: defer`.
 > `packages/backend/scripts/check-routine-gate.mjs` is the fail-closed validator, and
-> `packages/core/src/routineSchedule.ts` is the DST/identity/overlap/retry spike the matrix cites.
-> No schema, no scheduler module and no dependency was touched. `schema.ts:442` still carries its
-> "deliberately NO `routines` table" sentence verbatim, and `routineDecision.test.ts` asserts it.)
+> `packages/core/src/routineSchedule.ts` is the DST/run-identity spike the matrix cites. No schema,
+> no scheduler module and no dependency was touched. `schema.ts:442` still carries its
+> "deliberately NO `routines` table" sentence verbatim — asserted by `schema.test.ts` structurally
+> and by `routines.test.ts` verbatim. **Round 1 of the gate was FAIL-OPEN: an `evidenceRef` of `#`
+> let a fully fabricated `enable-safe` clear all three modes. Fixed, and every exit code is now
+> asserted from a spawned process. See "Round 2" at the foot of this section.**)
 
 **What the gate is.** Three modes over one artifact:
 
 | Mode | Contract |
 |---|---|
-| `--matrix` | Closed schema + enumerations, valid even when every row is red. Refuses a fifth key, an unknown row id, a duplicate row, a missing row, an unknown enum member, an empty `evidenceRef`, and a `pass` row whose ref does not resolve to a file in this repo. |
+| `--matrix` | Closed schema + enumerations, valid even when every row is red. Refuses a fifth key, an unknown row id, a duplicate row, a missing row, an unknown enum member, an empty `evidenceRef`, a `decidedBy` outside `owner`/`agent`/`fixture`, and a `pass` row whose citation does not hold up. **A citation "holds up" means exactly this and no more:** it names a path (not just an `#anchor`), the path stays inside the repo, it resolves to a regular non-empty **file**, and no two `pass` rows share it. It does **not** mean the file substantiates the row — no parser can check that, and the script header says so. |
 | `--eligibility` | Exit 0 **only** when all twelve rows are `pass`, every ref is non-empty, and `oauth-expiry-reauth` / `dst-boundary` / `provider-read` each carry `evidenceType: live`. |
-| `--validate-decision` | `defer` is accepted (plus absence checks: no `routine\|recurrence\|schedul` ADR, no `temporal` dependency in the root/core/backend manifests). `enable-safe` gets the **identical** eligibility check. |
+| `--validate-decision` | `defer` is accepted (plus absence checks: no `routine\|recurrence\|schedul` ADR, no `temporal` dependency in **five** manifests — root, core, backend, `apps/web` and `pnpm-lock.yaml`). `enable-safe` gets the **identical** eligibility check. Both absence rules are driven against fixture roots that really contain the forbidden thing, one per manifest, in `routineDecision.test.ts`. |
 
 **The distinction the whole artifact turns on.** `status` says whether the evidence meets the row's
 requirement; `evidenceType` says what class the best available evidence is. A row can carry good,
@@ -1073,14 +1076,37 @@ the transition on a 23-hour day; and 01:30 New York across fall-back yields one 
 date with a 25-hour step. `occurrenceKey` is derived from the LOCAL occurrence, which is what makes
 the second 01:30 a duplicate claim rather than a second run.
 
-**Nothing imports the spike.** `routineDecision.test.ts` scans every non-test `.ts` in `convex/` for
-the string `routineSchedule` and fails if one appears. It is evidence, not a runtime module — if a
-later plan wires it in, that test is the thing to update deliberately.
+**Nothing imports the spike.** `routineDecision.test.ts` scans `convex/`, `packages/backend/scripts`,
+`apps/web/app` and the `src` of core/contracts/cost/vault **recursively** for the string
+`routineSchedule`, with a positive control asserting the scan reaches `convex/lib/functions.ts` and
+`convex/render/renderReel.ts`. Round 1 listed one directory level, so `convex/lib/` and
+`convex/render/` were invisible and an import into either read green. It is evidence, not a runtime
+module — if a later plan wires it in, that test is the thing to update deliberately.
 
 **If you are the plan that flips this to `enable-safe`:** the ADR number is **027**, not 013 — the
 29-11 plan text names `013-standing-routine-governance.md` and **013 is taken** by
 `013-the-render-worker.md`. Never edit an accepted ADR. And read §7 of the decision record first: it
 names exactly which three live traces have to exist.
+
+**Round 2 (2026-08-29) — what three verifiers found, and what changed.** The *verdict* survived
+every attack: `--eligibility` really does exit 1 on the shipped artifact, `enable-safe` really was
+unreachable, and every number in §4 of the decision record reproduced. The *gate* did not.
+
+| Defect | Fix |
+|---|---|
+| **The anti-fabrication citation check was fail-open.** `existsSync(resolve(root, ref.split("#")[0]))` accepts `""` (an anchor-only ref resolves to the repo root), a directory, `.`, and a path escaping the repo. A twelve-row `pass`/`live` fabrication cleared `--matrix`, `--eligibility` AND `--validate-decision`. | `checkEvidenceRef`: non-empty path, inside the repo, `statSync().isFile()`, non-empty file, and `pass` refs must be **distinct**. Four fabricated artifacts × three modes = twelve refusals, recorded in §4 row 5 of the decision record. |
+| **Every advertised exit code was unasserted.** No test invoked `main()`; `return 1` → `return 0` on the absent-file path and `return 2` → `return 0` on bad usage were both green mutations. 29-12 chains this script with `&&`. | A `spawnSync` block asserts all of them — including two modes, two files and a prototype key as a mode (all exit 2) and a directory as the artifact (exit 1). Never read this script's exit code through a pipe. |
+| **`deferAbsenceChecks` was 100% unproven.** Replacing its body with `return { ok: true }` left the suite green, and the test named "they would catch a minted ADR" drove a root with **no** `docs/decisions` and asserted `ok === true`. | Driven against fixture roots that really contain `027-standing-routine-governance.md` and a `@js-temporal/polyfill` manifest, one per scanned manifest, asserting the exact error strings — plus a clean-root positive control that goes red when one forbidden file is added. |
+| **`decidedBy: owner`** on two checkpoints an agent both presented and resolved, under a real owner pre-ruling. The parser only checked the field was non-empty. | `DECIDERS = ["owner","agent","fixture"]` is enforced; the artifact reads `agent (29-11 executor), under owner pre-ruling …` and §5 states in prose that both checkpoints were auto-approved with no human attending. A closed set cannot stop a lie — it makes one a deliberate, diffable line. |
+| **`nextOccurrence` fired twice on one local day** across a date-line skip (Pacific/Apia deleted local 2011-12-30): the `gap_shifted` branch, written for a 30-minute-to-2-hour transition, shifted the whole missing date onto 12-31 and emitted a phantom `localDate`. | A local date the zone deleted yields no occurrence at all. Ordinary same-date gaps (New York 02:30 → 03:00) still resolve, with a control test beside it. |
+| **Half of `routineSchedule.ts` was the deferred feature's implementation** — `classifyOverlap` (literally `active === null ? "start" : "skip_overlap"`), `classifyDue`, `classifyRetry`, `materialChanges` — unreachable, cited by four rows that are red anyway, and `materialChanges` normalised `["a b"]` and `["a","b"]` identically so a recipient-list change could report as immaterial. | Deleted (CLAUDE.md §8). Those four rows now carry `manual` evidence pointing at the research note, which is what they always actually had. |
+
+**What is still true and deliberately not "fixed":** the ADR rule matches ADR **filenames** against
+`routine|recurrence|schedul`, so an unrelated future `0NN-scheduled-*.md` will trip
+`--validate-decision`. Fail-closed in a governance gate is the correct direction — rename the ADR
+or lift the defer. And the gate is in no CI workflow and no npm script: its automatic run is
+`routineDecision.test.ts`, which does execute under `pnpm test` in `ci.yml`. Adding a script would
+mean editing `packages/backend/package.json`, which the `defer` branch forbids touching.
 
 ## Plan 29-08 — the manual pin, and the three things it refuses to pretend (2026-08-29)
 

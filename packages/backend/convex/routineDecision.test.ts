@@ -1,9 +1,13 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import {
+  DECIDERS,
   DECISIONS,
+  DEPENDENCY_MANIFESTS,
   deferAbsenceChecks,
   EVIDENCE_TYPES,
   eligibility,
@@ -16,7 +20,7 @@ import {
   validateMatrix,
 } from "../scripts/check-routine-gate.mjs";
 
-// 29-11 Task 1 — THE RECURRENCE GATE, PROVEN IN BOTH DIRECTIONS.
+// 29-11 — THE RECURRENCE GATE, PROVEN IN BOTH DIRECTIONS, INCLUDING ITS PLUMBING.
 //
 // The gate this file covers exists because of a failure this repo has already paid for twice:
 // `scripts/check-playbooks.mjs` exits 0 on every terminal path and can only ever read green, and
@@ -24,18 +28,23 @@ import {
 // gate here is not "it passed" — it is "it was watched to FAIL for each specific reason it claims
 // to catch, and watched to PASS when the evidence is genuinely there".
 //
-// Both halves are below and neither is optional:
-//   - Every malformation, missing row, duplicate row, unknown enum member, empty ref and dangling
-//     `pass` ref is asserted RED.
-//   - A synthetic all-green matrix with `live` refs is asserted GREEN, and each required-live row
-//     is flipped one at a time to prove the `live` demand is real and not decoration.
-//
-// The second half is what stops this from being a rubber stamp for a foregone `defer`.
+// ROUND 1 OF THIS FILE MET THAT STANDARD FOR THE TWELVE RULES AND NOT AT ALL FOR THE PLUMBING.
+// Three independent verifiers found the same three holes, and every one of them is a section
+// below:
+//   1. The anti-fabrication citation check was defeated by the single character `#`, so a fully
+//      fabricated `enable-safe` passed all three modes. No test drove an anchor-only, directory,
+//      escaping or shared ref. -> "a `pass` row's citation".
+//   2. Every exit code the script advertises was unasserted — `main()` was never invoked — and
+//      29-12 chains this script with `&&`. -> "the exit codes, read from a spawned process".
+//   3. `deferAbsenceChecks` could be replaced by `return { ok: true }` with a green suite, and the
+//      test named "they would catch a minted ADR" drove a root with no ADR directory at all and
+//      asserted `ok === true`. -> "the `defer` absence checks, observed FIRING".
 //
 // Nothing here spends money, needs a deployment, or calls convex.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
+const SCRIPT = join(repoRoot, "packages/backend/scripts/check-routine-gate.mjs");
 const ARTIFACT = join(
   repoRoot,
   ".planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md",
@@ -63,8 +72,19 @@ const patchRow = (text: string, id: string, field: string, value: string) => {
   return text.slice(0, start) + patched + text.slice(start + block.length);
 };
 
+/** Scratch roots for the absence checks and the spawned-CLI cases. Removed in afterAll. */
+const scratch: string[] = [];
+const newRoot = () => {
+  const dir = mkdtempSync(join(tmpdir(), "routine-gate-"));
+  scratch.push(dir);
+  return dir;
+};
+afterAll(() => {
+  for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
+});
+
 describe("the closed schema is genuinely closed", () => {
-  test("the row set, statuses, evidence types and decisions are exactly these", () => {
+  test("the row set, statuses, evidence types, decisions and DECIDERS are exactly these", () => {
     // Pinned literally. Widening any of these is a governance change and must break this test.
     expect(ROW_IDS).toEqual([
       "standing-approval",
@@ -84,6 +104,15 @@ describe("the closed schema is genuinely closed", () => {
     expect(STATUSES).toEqual(["pass", "fail", "missing"]);
     expect(EVIDENCE_TYPES).toEqual(["automated", "live", "manual"]);
     expect(DECISIONS).toEqual(["defer", "enable-safe"]);
+    expect(DECIDERS).toEqual(["owner", "agent", "fixture"]);
+    // The lockfile and apps/web are in the dependency scan, not just the three round-1 manifests.
+    expect(DEPENDENCY_MANIFESTS).toEqual([
+      "package.json",
+      "packages/core/package.json",
+      "packages/backend/package.json",
+      "apps/web/package.json",
+      "pnpm-lock.yaml",
+    ]);
     // The three required-live rows must actually be rows.
     for (const id of REQUIRED_LIVE_ROWS) expect(ROW_IDS).toContain(id);
   });
@@ -121,7 +150,7 @@ describe("--matrix fails closed on every malformation, red rows notwithstanding"
   const EXTRA = (id: string) =>
     green.replace(
       "\n---\n",
-      `\n  - id: ${id}\n    status: pass\n    evidenceType: manual\n    evidenceRef: package.json\n---\n`,
+      `\n  - id: ${id}\n    status: pass\n    evidenceType: manual\n    evidenceRef: package.json#extra\n---\n`,
     );
 
   test("an unknown row id is refused BY NAME, with all twelve required rows still present", () => {
@@ -151,14 +180,6 @@ describe("--matrix fails closed on every malformation, red rows notwithstanding"
     expect(r.errors.join("\n")).toContain("evidenceRef is empty");
   });
 
-  test("a `pass` row citing a file that does not exist is refused as a fabricated citation", () => {
-    const r = validateMatrix(patchRow(green, "cost", "evidenceRef", "docs/does-not-exist.md"), {
-      repoRoot,
-    });
-    expect(r.ok).toBe(false);
-    expect(r.errors.join("\n")).toContain("evidenceRef does not resolve");
-  });
-
   test("a RED row's ref is not required to resolve — --matrix validates shape, not verdicts", () => {
     const red = patchRow(
       patchRow(green, "cost", "status", "missing"),
@@ -175,6 +196,95 @@ describe("--matrix fails closed on every malformation, red rows notwithstanding"
     red = red.replace("decision: enable-safe", "decision: defer");
     expect(validateMatrix(red, { repoRoot }).ok).toBe(true);
     expect(eligibility(red, { repoRoot }).ok).toBe(false);
+  });
+});
+
+describe("a `pass` row's citation — the check round 1 claimed and did not have", () => {
+  const green = greenFixture();
+
+  // Round 1 resolved a pass ref as `existsSync(resolve(repoRoot, ref.split("#")[0]))`. Each row
+  // below is a ref shape that check accepted. With every row set to one of them, a fully
+  // fabricated twelve-green `enable-safe` matrix passed --matrix, --eligibility AND
+  // --validate-decision. Every one is a named error now.
+  const fabrications: Array<[string, string, string]> = [
+    [
+      "an anchor-only ref strips to the repo ROOT and used to pass",
+      "#see-the-summary",
+      "names no file",
+    ],
+    ["a bare `#`", "#", "names no file"],
+    ["a directory", "docs", "resolves to a directory"],
+    ["the repo root itself", ".", "resolves to a directory"],
+    ["a path escaping the repository", "../../../etc/hosts", "escapes the repository root"],
+    ["a file that is simply not there", "docs/does-not-exist.md", "does not resolve to a file"],
+  ];
+
+  for (const [name, ref, reason] of fabrications) {
+    test(`${name} is refused, by reason`, () => {
+      const r = validateMatrix(patchRow(green, "cost", "evidenceRef", ref), { repoRoot });
+      expect(r.ok).toBe(false);
+      expect(r.errors.join("\n")).toContain(reason);
+    });
+  }
+
+  test("a pass ref resolving to an EMPTY file is refused", () => {
+    const root = newRoot();
+    writeFileSync(join(root, "empty.md"), "");
+    writeFileSync(join(root, "real.md"), "content");
+    // Positive control in the same test: the non-empty sibling in the same root IS accepted, so
+    // the refusal below is about emptiness and not about the scratch root being unreadable.
+    expect(
+      validateMatrix(patchRow(green, "cost", "evidenceRef", "real.md"), {
+        repoRoot: root,
+      }).errors.join("\n"),
+    ).not.toContain("cost");
+    const r = validateMatrix(patchRow(green, "cost", "evidenceRef", "empty.md"), {
+      repoRoot: root,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain("resolves to an EMPTY file");
+  });
+
+  test("two `pass` rows may not cite the SAME evidence", () => {
+    const shared = patchRow(green, "cost", "evidenceRef", "package.json#overlap");
+    const r = validateMatrix(shared, { repoRoot });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain("cites the SAME evidence as row `overlap`");
+  });
+
+  test("twelve pass/live rows citing ONE real file — the whole fabricated matrix — is refused", () => {
+    const fabricated = green
+      .replace(/evidenceRef: package\.json#[a-z-]+/g, "evidenceRef: package.json")
+      .replace(/evidenceType: manual/g, "evidenceType: live");
+    expect(validateMatrix(fabricated, { repoRoot }).ok).toBe(false);
+    expect(eligibility(fabricated, { repoRoot }).ok).toBe(false);
+    const r = validateDecision(fabricated, { repoRoot });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain("rewrite the artifact to `defer`");
+  });
+
+  test("a RED row may share a ref with anything — the rule is scoped to `pass`", () => {
+    // The shipped artifact has several `missing` rows citing the same research note, and that is
+    // legitimate: the rule is about green rows carrying independent evidence.
+    let red = green.replace("decision: enable-safe", "decision: defer");
+    for (const id of ROW_IDS) {
+      red = patchRow(red, id, "status", "missing");
+      red = patchRow(red, id, "evidenceRef", "package.json");
+    }
+    expect(validateMatrix(red, { repoRoot }).ok).toBe(true);
+  });
+
+  test("THE DOCUMENTED LIMIT: twelve DISTINCT real citations pass, whatever they say", () => {
+    // This test asserts a WEAKNESS on purpose, so nobody reads the gate as more than it is. A
+    // parser can check that a citation is a real, distinct, non-empty file inside the repo. It
+    // cannot check that the file answers the row's question — `package.json#dst-boundary` is a
+    // resolving, distinct, meaningless citation and the gate says yes.
+    //
+    // That is why `enable-safe` still requires the human checkpoint in §5/§7 of the decision
+    // record, and why the script header states this limit instead of claiming "the parser proves
+    // the evidence". The gate's job is to make fabrication COST twelve deliberate lines in a
+    // reviewable diff, not to make it impossible.
+    expect(validateDecision(green, { repoRoot }).ok).toBe(true);
   });
 });
 
@@ -224,6 +334,44 @@ describe("--eligibility: the green path is reachable, and the live demand is rea
   });
 });
 
+describe("`decidedBy` is a closed actor set, not free text", () => {
+  const green = greenFixture();
+
+  test("`owner`, `agent` and `fixture` are accepted, with or without a qualifying clause", () => {
+    for (const who of [
+      "owner",
+      "agent",
+      "fixture",
+      'agent (29-11 executor), under owner pre-ruling "let the gate decide"',
+      "owner (attended the checkpoint on 2026-08-29)",
+    ]) {
+      const r = validateMatrix(green.replace("decidedBy: fixture", `decidedBy: ${who}`), {
+        repoRoot,
+      });
+      expect(r.errors.join("\n"), who).not.toContain("decidedBy");
+    }
+  });
+
+  test("anything else is refused by name", () => {
+    for (const who of ["nobody at all", "the system", "automation", "CI"]) {
+      const r = validateMatrix(green.replace("decidedBy: fixture", `decidedBy: ${who}`), {
+        repoRoot,
+      });
+      expect(r.ok, who).toBe(false);
+      expect(r.errors.join("\n")).toContain("does not begin with one of owner | agent | fixture");
+    }
+  });
+
+  test("the closed set cannot stop a false claim — it makes one a deliberate, diffable line", () => {
+    // Stated as a test so the limit is not read as a guarantee: `owner` on a decision no human
+    // attended still parses. What the enum removes is the third option, where the field is free
+    // text and nobody notices it drifted.
+    expect(
+      validateMatrix(green.replace("decidedBy: fixture", "decidedBy: owner"), { repoRoot }).ok,
+    ).toBe(true);
+  });
+});
+
 describe("--validate-decision", () => {
   const green = greenFixture();
 
@@ -252,27 +400,228 @@ describe("--validate-decision", () => {
   });
 });
 
-describe("the `defer` absence checks are real checks, not comments", () => {
-  test("today they pass: no routine/recurrence ADR, no temporal dependency", () => {
-    const r = deferAbsenceChecks({ repoRoot });
-    expect(r.errors).toEqual([]);
-    expect(r.ok).toBe(true);
+describe("the `defer` absence checks, observed FIRING", () => {
+  /** A root that has the two things the rules look at, and neither forbidden thing in them. */
+  const cleanRoot = () => {
+    const root = newRoot();
+    mkdirSync(join(root, "docs/decisions"), { recursive: true });
+    writeFileSync(join(root, "docs/decisions/026-something-else.md"), "# an unrelated ADR\n");
+    writeFileSync(join(root, "package.json"), '{ "name": "x", "dependencies": {} }\n');
+    return root;
+  };
+
+  test("a clean root is clean — and the rules really did look (positive control)", () => {
+    const root = cleanRoot();
+    expect(deferAbsenceChecks({ repoRoot: root })).toEqual({ ok: true, errors: [] });
+    // The control: the SAME root with one forbidden file added goes red, so the green above is
+    // a real read of a real directory, not a short-circuit on a missing path.
+    writeFileSync(join(root, "docs/decisions/027-standing-routine-governance.md"), "# no\n");
+    expect(deferAbsenceChecks({ repoRoot: root }).ok).toBe(false);
   });
 
-  test("they would catch a minted ADR", () => {
-    // Driven against a fake root that HAS the forbidden file, so the rule is observed firing
-    // rather than merely asserted to exist.
-    const fake = join(here, "__routineGateFixture__");
-    const r = deferAbsenceChecks({ repoRoot: fake });
-    // The fake root has no docs/decisions and no manifests, so it is vacuously clean — which is
-    // itself worth pinning: absence checks must not invent failures either.
-    expect(r.ok).toBe(true);
-    // And the real root's ADR directory genuinely contains no routine/recurrence/schedule ADR.
+  test("a minted routine ADR is caught, by filename, with the reason", () => {
+    const root = cleanRoot();
+    writeFileSync(join(root, "docs/decisions/027-standing-routine-governance.md"), "# minted\n");
+    const r = deferAbsenceChecks({ repoRoot: root });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain(
+      "docs/decisions/027-standing-routine-governance.md exists — no ADR may be minted",
+    );
+  });
+
+  test("`recurrence` and `schedul` in an ADR filename are caught too", () => {
+    for (const name of ["030-recurrence-rules.md", "031-scheduled-preparation.md"]) {
+      const root = cleanRoot();
+      writeFileSync(join(root, "docs/decisions", name), "# minted\n");
+      expect(deferAbsenceChecks({ repoRoot: root }).errors.join("\n")).toContain(name);
+    }
+  });
+
+  test("a temporal dependency is caught in EVERY scanned manifest, including the lockfile", () => {
+    // Round 1 scanned three manifests. `apps/web/package.json` and `pnpm-lock.yaml` were not
+    // among them, so a dependency added under the web app, or pinned only in the lockfile, left
+    // `--validate-decision` green. Each manifest is driven one at a time.
+    for (const manifest of DEPENDENCY_MANIFESTS) {
+      const root = cleanRoot();
+      const target = join(root, manifest);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, '{ "dependencies": { "@js-temporal/polyfill": "0.5.1" } }\n');
+      const r = deferAbsenceChecks({ repoRoot: root });
+      expect(r.ok, manifest).toBe(false);
+      expect(r.errors.join("\n")).toContain(`${manifest} names a temporal dependency`);
+    }
+  });
+
+  test("`defer` over a root carrying a minted ADR is refused end to end", () => {
+    // The rule is only worth having if `validateDecision` actually calls it. Round 1's
+    // `deferAbsenceChecks` could be replaced with `return { ok: true }` and the suite stayed
+    // green — including this path, which nothing exercised.
+    const root = cleanRoot();
+    writeFileSync(join(root, "docs/decisions/027-standing-routine-governance.md"), "# minted\n");
+    let red = greenFixture().replace("decision: enable-safe", "decision: defer");
+    for (const id of ROW_IDS) red = patchRow(red, id, "status", "missing");
+    const r = validateDecision(red, { repoRoot: root });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain("no ADR may be minted");
+  });
+
+  test("today the REAL repo root is clean", () => {
+    const r = deferAbsenceChecks({ repoRoot });
+    expect(r.errors).toEqual([]);
+    // Positive control: the real ADR directory was read and is not empty, and 013 is taken by the
+    // render worker — so a later enable-safe branch must mint 027, never overwrite 013.
     const adrs = readdirSync(join(repoRoot, "docs/decisions"));
-    expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([]);
-    // 013 is taken by the render worker, so the plan text naming 013 for routine governance is
-    // wrong. Recorded here so a later enable-safe branch does not overwrite an accepted ADR.
+    expect(adrs.length).toBeGreaterThan(20);
     expect(adrs).toContain("013-the-render-worker.md");
+    expect(adrs.filter((f) => /routine|recurrence|schedul/i.test(f))).toEqual([]);
+  });
+});
+
+describe("the exit codes, read from a SPAWNED process", () => {
+  // 29-12's verify line is `node check-routine-gate.mjs ... --validate-decision && pnpm ...`, so
+  // the exit code IS the contract. Round 1 never invoked `main()`: `return 1` -> `return 0` on the
+  // absent-file path, `return 2` -> `return 0` on bad usage, and `if (result.ok)` -> `if (true)`
+  // were all green mutations. `spawnSync().status` is the process's real code — no shell, no
+  // pipe, nothing that can hand back a fake zero.
+  const run = (...args: string[]) => {
+    const r = spawnSync(process.execPath, [SCRIPT, ...args], { encoding: "utf8" });
+    expect(r.error, `spawn failed: ${r.error?.message}`).toBeUndefined();
+    return { code: r.status, out: `${r.stdout}${r.stderr}` };
+  };
+
+  /** Write an artifact into a scratch dir; refs still resolve against the REAL repo root. */
+  const artifactFile = (name: string, text: string) => {
+    const root = newRoot();
+    const p = join(root, name);
+    writeFileSync(p, text);
+    return p;
+  };
+
+  const green = greenFixture();
+  const deferText = (() => {
+    let t = green.replace("decision: enable-safe", "decision: defer");
+    for (const id of ROW_IDS) t = patchRow(t, id, "status", "missing");
+    return t;
+  })();
+
+  test("--self-check exits 0 and says so", () => {
+    const r = run("--self-check");
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("cases behaved");
+    // Positive control: it really ran the cases rather than printing a banner.
+    expect(r.out).toContain("eligibility: a fully green fixture IS eligible");
+  });
+
+  test("bad usage exits 2: no args, a mode with no file, TWO modes, TWO files", () => {
+    const artifact = artifactFile("defer.md", deferText);
+    for (const args of [
+      [],
+      ["--matrix"],
+      [artifact],
+      [artifact, "--matrix", "--eligibility"],
+      [artifact, artifact, "--matrix"],
+    ]) {
+      const r = run(...args);
+      expect(r.code, args.join(" ")).toBe(2);
+      expect(r.out).toContain("usage:");
+    }
+  });
+
+  test("a prototype key is not a mode", () => {
+    // `a in MODES` walked the prototype chain, so `constructor` read as a mode and the script
+    // died with a stack trace instead of refusing.
+    const artifact = artifactFile("defer.md", deferText);
+    const r = run(artifact, "constructor");
+    expect(r.code).toBe(2);
+    expect(r.out).toContain("usage:");
+  });
+
+  test("an absent artifact exits 1, and a DIRECTORY given as the artifact exits 1", () => {
+    const root = newRoot();
+    expect(run(join(root, "nope.md"), "--matrix").code).toBe(1);
+    expect(run(join(root, "nope.md"), "--matrix").out).toContain("does not exist");
+    expect(run(root, "--matrix").code).toBe(1);
+    expect(run(root, "--matrix").out).toContain("is not a file");
+  });
+
+  const badArtifacts: Array<[string, string]> = [
+    ["malformed — no frontmatter", "# just prose\n"],
+    ["malformed — frontmatter never closed", "---\ndecision: defer\n"],
+    [
+      "an unknown row id",
+      green.replace(
+        "\n---\n",
+        "\n  - id: not-a-row\n    status: missing\n    evidenceType: manual\n    evidenceRef: package.json\n---\n",
+      ),
+    ],
+    [
+      "a duplicate row",
+      green.replace(
+        "\n---\n",
+        "\n  - id: overlap\n    status: missing\n    evidenceType: manual\n    evidenceRef: package.json\n---\n",
+      ),
+    ],
+    ["a missing enum member", green.replace("evidenceType: live", "evidenceType: vibes")],
+    ["an empty evidenceRef", green.replace("evidenceRef: package.json#cost", "evidenceRef: ")],
+    ["decidedBy outside the closed set", green.replace("decidedBy: fixture", "decidedBy: someone")],
+  ];
+
+  for (const [name, text] of badArtifacts) {
+    test(`${name} exits 1 under --matrix`, () => {
+      const r = run(artifactFile("bad.md", text), "--matrix");
+      expect(r.code).toBe(1);
+      expect(r.out).toContain("FAIL --matrix");
+    });
+  }
+
+  test("a valid `defer` artifact exits 0 under --matrix and --validate-decision, 1 under --eligibility", () => {
+    const p = artifactFile("defer.md", deferText);
+    expect(run(p, "--matrix").code).toBe(0);
+    expect(run(p, "--validate-decision").code).toBe(0);
+    expect(run(p, "--validate-decision").out).toContain("OK --validate-decision (decision: defer)");
+    expect(run(p, "--eligibility").code).toBe(1);
+  });
+
+  test("a FABRICATED enable-safe exits 1 in ALL THREE modes", () => {
+    // The end-to-end version of the blocker: this is the artifact a verifier wrote by hand and
+    // got a clean bill of health for in every mode. Anchor-only refs, twelve pass/live rows.
+    const fabricated = green
+      .replace(/evidenceRef: package\.json#[a-z-]+/g, "evidenceRef: #the-summary")
+      .replace(/evidenceType: manual/g, "evidenceType: live");
+    const p = artifactFile("fabricated.md", fabricated);
+    for (const mode of ["--matrix", "--eligibility", "--validate-decision"]) {
+      const r = run(p, mode);
+      expect(r.code, mode).toBe(1);
+      expect(r.out).toContain("names no file at all");
+    }
+  });
+
+  test("a fabricated enable-safe citing ONE real file for all twelve rows exits 1 in all three", () => {
+    const fabricated = green
+      .replace(/evidenceRef: package\.json#[a-z-]+/g, "evidenceRef: package.json")
+      .replace(/evidenceType: manual/g, "evidenceType: live");
+    const p = artifactFile("fabricated2.md", fabricated);
+    for (const mode of ["--matrix", "--eligibility", "--validate-decision"]) {
+      const r = run(p, mode);
+      expect(r.code, mode).toBe(1);
+      expect(r.out).toContain("cites the SAME evidence");
+    }
+  });
+
+  test("a genuinely green enable-safe exits 0 — the gate is not hard-coded to refuse", () => {
+    const p = artifactFile("green.md", green);
+    expect(run(p, "--eligibility").code).toBe(0);
+    expect(run(p, "--validate-decision").code).toBe(0);
+    expect(run(p, "--validate-decision").out).toContain("(decision: enable-safe)");
+  });
+
+  test("the SHIPPED artifact: --matrix 0, --eligibility 1, --validate-decision 0", () => {
+    // §4 of the decision record publishes exactly these three results. This is the assertion
+    // that they stay true, run the way a plan's verify line runs them.
+    expect(run(ARTIFACT, "--matrix").code).toBe(0);
+    expect(run(ARTIFACT, "--eligibility").code).toBe(1);
+    expect(run(ARTIFACT, "--validate-decision").code).toBe(0);
+    expect(run(ARTIFACT, "--validate-decision").out).toContain("(decision: defer)");
   });
 });
 
@@ -298,6 +647,18 @@ describe("the shipped decision artifact", () => {
     expect(r.ok).toBe(true);
   });
 
+  test("it attributes the decision to the ACTOR that selected it, not to a standing ruling", () => {
+    // Round 1 recorded `decidedBy: owner` for two checkpoints an agent presented and an agent
+    // resolved, under a real owner pre-ruling. The pre-ruling is disclosed either way; what
+    // changed is that the field now names who actually chose.
+    const doc = docOf(artifactText());
+    expect(doc?.decidedBy.startsWith("agent")).toBe(true);
+    expect(doc?.decidedBy).toContain("owner pre-ruling");
+    // And §5 says in prose that the checkpoints were auto-approved, so the attribution is not
+    // only machine-readable.
+    expect(artifactText()).toContain("auto-approved");
+  });
+
   // THE LIVE TRIPWIRE. If someone later edits the artifact to `enable-safe`, this test demands
   // the eligibility check actually be met. It is not an assertion that the answer is `defer`.
   test("if the recorded decision is enable-safe, eligibility must actually be met", () => {
@@ -315,6 +676,7 @@ describe("the shipped decision artifact", () => {
     // not exist yet — but this artifact does not, and a rotted ref should be noticed.
     const doc = docOf(artifactText());
     expect(doc).not.toBeNull();
+    expect(doc?.matrix.length).toBe(12);
     for (const row of doc?.matrix ?? []) {
       const path = row.evidenceRef.split("#")[0] ?? "";
       expect(
@@ -325,23 +687,48 @@ describe("the shipped decision artifact", () => {
   });
 });
 
-describe("deferral means the absence is still in the tree", () => {
-  test("schema.ts still says there is deliberately no routines table", () => {
-    const schema = readFileSync(join(here, "schema.ts"), "utf8");
-    expect(schema).toContain(
-      "There is deliberately NO `routines` table, cron, trigger, recurrence, next-run timestamp",
-    );
-    // And no table by that name was defined behind the comment's back.
-    expect(schema).not.toMatch(/^\s*routines:\s*defineTable/m);
-    expect(schema).not.toMatch(/^\s*routineRuns:\s*defineTable/m);
+describe("nothing imports the recurrence spike", () => {
+  // Round 1 scanned `readdirSync(convexDir)` — the TOP LEVEL of convex/ only. `convex/lib/`
+  // (functions.ts, env.ts, hash.ts, ...) and `convex/render/` were invisible, and `apps/web` and
+  // the other packages were never looked at. An import added to any of them read green.
+  const SPIKE = join(repoRoot, "packages/core/src/routineSchedule.ts");
+  const ROOTS = [
+    "packages/backend/convex",
+    "packages/backend/scripts",
+    "apps/web/app",
+    "packages/core/src",
+    "packages/contracts/src",
+    "packages/cost/src",
+    "packages/vault/src",
+  ];
+
+  const scanned = ROOTS.flatMap((root) => {
+    const base = join(repoRoot, root);
+    return readdirSync(base, { recursive: true, encoding: "utf8" })
+      .filter((f) => /\.(ts|tsx|mjs)$/.test(f) && !/\.test\.(ts|tsx)$/.test(f))
+      .map((f) => join(base, f))
+      .filter((f) => f !== SPIKE);
   });
 
-  test("the spike module is not wired into any convex module", () => {
-    const files = readdirSync(here).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
-    for (const f of files) {
-      expect(readFileSync(join(here, f), "utf8"), `${f} imports the spike`).not.toContain(
-        "routineSchedule",
-      );
+  test("POSITIVE CONTROL: the scan reaches the files round 1 could not see", () => {
+    // If this list is ever empty, or stops containing a nested file, the scan below is vacuous
+    // and would pass no matter what the tree contained.
+    expect(scanned.length).toBeGreaterThan(100);
+    for (const must of [
+      "packages/backend/convex/lib/functions.ts", // nested — invisible to round 1
+      "packages/backend/convex/render/renderReel.ts", // nested — invisible to round 1
+      "packages/backend/convex/schema.ts",
+      "packages/backend/scripts/check-routine-gate.mjs",
+      "packages/core/src/index.ts",
+    ]) {
+      expect(scanned, must).toContain(join(repoRoot, must));
     }
+    // And apps/web really was walked.
+    expect(scanned.some((f) => f.includes(join("apps", "web", "app")))).toBe(true);
+  });
+
+  test("no non-test source file anywhere names the spike", () => {
+    const importers = scanned.filter((f) => readFileSync(f, "utf8").includes("routineSchedule"));
+    expect(importers.map((f) => f.slice(repoRoot.length + 1))).toEqual([]);
   });
 });

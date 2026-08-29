@@ -2,12 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
-  type ApprovalSnapshot,
-  classifyDue,
-  classifyOverlap,
-  classifyRetry,
-  MATERIAL_FIELDS,
-  materialChanges,
+  MAX_LOOKAHEAD_DAYS,
   nextOccurrence,
   type Occurrence,
   occurrenceKey,
@@ -89,12 +84,7 @@ describe("nextOccurrence: the wall time is what is preserved, not the interval",
   const daily = (hour: number, minute: number, timeZone: string) =>
     ({ timeZone, hour, minute, cadence: { frequency: "daily" } }) as const;
 
-  /** `nextOccurrence` returns null only past MAX_LOOKAHEAD_DAYS; every rule here resolves. */
-  const must = (afterUtcMs: number, rule: Parameters<typeof nextOccurrence>[1]): Occurrence => {
-    const o = nextOccurrence(afterUtcMs, rule);
-    if (!o) throw new Error("nextOccurrence returned null for a rule that must resolve");
-    return o;
-  };
+  const must = nextOccurrence;
 
   const walk = (fromIso: string, rule: Parameters<typeof nextOccurrence>[1], count: number) => {
     const out: Occurrence[] = [];
@@ -216,77 +206,85 @@ describe("occurrenceKey: the run identity that makes a repeated wall hour a no-o
   });
 });
 
-describe("the classifiers the matrix rows cite", () => {
-  test("overlap: any live run blocks the next tick", () => {
-    expect(classifyOverlap(null)).toBe("start");
-    for (const state of ["claimed", "running", "awaiting_approval"] as const) {
-      expect(classifyOverlap(state)).toBe("skip_overlap");
-    }
-  });
-
-  test("missed runs are skipped, not caught up", () => {
-    const due = Date.parse("2026-03-08T12:30:00Z");
-    const grace = 5 * 60_000;
-    expect(classifyDue(due, due - 1, grace)).toBe("pending");
-    expect(classifyDue(due, due, grace)).toBe("due");
-    expect(classifyDue(due, due + grace, grace)).toBe("due");
-    expect(classifyDue(due, due + grace + 1, grace)).toBe("missed");
-  });
-
-  test("retry is bounded and only for transient classes", () => {
-    expect(classifyRetry("provider_5xx", 1, 3)).toBe("retry");
-    expect(classifyRetry("provider_timeout", 2, 3)).toBe("retry");
-    expect(classifyRetry("internal", 1, 3)).toBe("retry");
-    expect(classifyRetry("provider_5xx", 3, 3)).toBe("terminal");
-    for (const kind of ["auth", "validation", "budget", "paused", "provider_refusal"] as const) {
-      expect(classifyRetry(kind, 1, 3)).toBe("terminal");
-    }
-  });
-
-  test("material change: every governed field voids a standing approval", () => {
-    const base: ApprovalSnapshot = {
-      templateId: "pack_a",
-      templateVersion: 3,
-      candidateVersion: 12,
-      actionType: "prepare_brief",
-      recipients: ["a@example.com"],
-      sourceSet: ["vault", "drive"],
-      threshold: 0.2,
-      timeZone: "America/New_York",
-      cadence: "daily 08:30",
-      outputContract: "brief_v1",
-    };
-    expect(materialChanges(base, { ...base })).toEqual([]);
-    // Array order is not a change; array CONTENT is.
-    expect(materialChanges(base, { ...base, sourceSet: ["drive", "vault"] })).toEqual([]);
-    expect(materialChanges(base, { ...base, sourceSet: ["drive", "vault", "gmail"] })).toEqual([
-      "sourceSet",
-    ]);
-    expect(
-      materialChanges(base, { ...base, threshold: 0.5, recipients: ["b@example.com"] }),
-    ).toEqual(["recipients", "threshold"]);
-    // No field may quietly stop being material: each one, alone, is detected.
-    const bumped: Record<string, unknown> = {
-      templateId: "pack_b",
-      templateVersion: 4,
-      candidateVersion: 13,
-      actionType: "send_email",
-      recipients: ["c@example.com"],
-      sourceSet: ["vault"],
-      threshold: 0.9,
-      timeZone: "Europe/Berlin",
-      cadence: "weekly Mon 08:30",
-      outputContract: "brief_v2",
-    };
-    for (const field of MATERIAL_FIELDS) {
-      expect(
-        materialChanges(base, { ...base, [field]: bumped[field] } as ApprovalSnapshot),
-      ).toEqual([field]);
-    }
+describe("the boundaries the module documents, pinned so they cannot drift silently", () => {
+  test("MAX_LOOKAHEAD_DAYS is 400 — the broken-rule bound, pinned to a literal", () => {
+    // Round 1 left this free: 400 -> 8 was a surviving mutation, because nothing asserted the
+    // value and every rule under test resolves within a week. It is exported and documented as
+    // the boundary between "a late run" and "a broken rule", so it is pinned literally here.
+    // It must stay comfortably above 7 (weekly) with room for a cadence that skips.
+    expect(MAX_LOOKAHEAD_DAYS).toBe(400);
+    expect(MAX_LOOKAHEAD_DAYS).toBeGreaterThan(7);
   });
 });
 
-test("the spike is pure and unwired: it imports nothing and no runtime module imports it", () => {
+describe("a local date the zone SKIPPED has no occurrence at all", () => {
+  // Pacific/Apia jumped the international date line at the end of 2011: local 2011-12-30 never
+  // existed. Round 1 answered that day by gap-shifting the whole missing date onto the
+  // transition, which produced an Occurrence whose `localDate` was "2011-12-30" but which read
+  // back as 00:00 on 12-31 — and then fired AGAIN at 08:30 on 12-31 under a DIFFERENT
+  // occurrenceKey. Two runs on one local day, from the module that exists to prove they cannot
+  // happen. These are absolute instants, checkable by hand: Apia was UTC-10 through 12-29 and
+  // UTC+14 from 12-31, so 08:30 local on 12-31 is 2011-12-30T18:30Z.
+  const apia = {
+    timeZone: "Pacific/Apia",
+    hour: 8,
+    minute: 30,
+    cadence: { frequency: "daily" },
+  } as const;
+
+  test("the skipped date is absent, every remaining date appears exactly once", () => {
+    const out: Occurrence[] = [];
+    let t = Date.parse("2011-12-28T00:00:00Z");
+    for (let i = 0; i < 4; i++) {
+      const o = nextOccurrence(t, apia);
+      out.push(o);
+      t = o.utcMs;
+    }
+    expect(out.map((o) => o.localDate)).toEqual([
+      "2011-12-28",
+      "2011-12-29",
+      "2011-12-31",
+      "2012-01-01",
+    ]);
+    // Every one is the wall time that was asked for, on the date it claims to be on.
+    expect(out.map((o) => o.resolvedLocalTime)).toEqual(["08:30", "08:30", "08:30", "08:30"]);
+    expect(out.map((o) => iso(o.utcMs))).toEqual([
+      "2011-12-28T18:30:00.000Z",
+      "2011-12-29T18:30:00.000Z",
+      "2011-12-30T18:30:00.000Z",
+      "2011-12-31T18:30:00.000Z",
+    ]);
+    // The occurrence key is what a claim mutation would insert under: four dates, four keys.
+    const keys = out.map((o) =>
+      occurrenceKey({
+        routineId: "rt_1",
+        localDate: o.localDate,
+        localTime: o.localTime,
+        templateVersion: 1,
+      }),
+    );
+    expect(new Set(keys).size).toBe(4);
+    expect(keys).not.toContain("rt_1|2011-12-30T08:30|v1");
+  });
+
+  test("an ORDINARY gap still shifts within its own local date — the fix did not delete that", () => {
+    // The control for the test above: New York 02:30 on 2026-03-08 also does not exist, but the
+    // shift lands on 03:00 the SAME local date, so it is a real occurrence and must survive.
+    const o = nextOccurrence(Date.parse("2026-03-07T12:00:00Z"), {
+      timeZone: "America/New_York",
+      hour: 2,
+      minute: 30,
+      cadence: { frequency: "daily" },
+    });
+    expect([o.localDate, o.resolvedLocalTime, o.disambiguation]).toEqual([
+      "2026-03-08",
+      "03:00",
+      "gap_shifted",
+    ]);
+  });
+});
+
+test("the spike imports nothing, exports nothing to the barrel, and added no dependency", () => {
   const src = readFileSync(fileURLToPath(new URL("./routineSchedule.ts", import.meta.url)), "utf8");
   // CLAUDE.md section 1: pure TS, no Convex. And no dependency was installed for the spike.
   expect(src).not.toMatch(/^\s*import\s/m);
@@ -295,7 +293,15 @@ test("the spike is pure and unwired: it imports nothing and no runtime module im
   // so its absence from the manifest is part of the deliverable, not an accident of this file.
   const manifest = readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8");
   expect(manifest).not.toContain("temporal");
+  // POSITIVE CONTROL: this really is the core manifest and really was read, not an empty string
+  // that trivially contains nothing.
+  expect(manifest).toContain('"@pikar/core"');
   // It is not exported from the package barrel either, so nothing can reach it by accident.
   const barrel = readFileSync(fileURLToPath(new URL("./index.ts", import.meta.url)), "utf8");
   expect(barrel).not.toContain("routineSchedule");
+  expect(barrel).toMatch(/export/); // the barrel exists and exports things; the spike is not one
+  // NOTE: this test says nothing about IMPORTERS — it cannot see them from here. The recursive
+  // "no runtime module imports the spike" scan lives in
+  // `packages/backend/convex/routineDecision.test.ts`, which walks convex/, apps/web and every
+  // package src. Round 1's title claimed both halves here and only ever checked this one.
 });
