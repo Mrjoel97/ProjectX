@@ -248,7 +248,7 @@ async function applyEffect(
       return await applyMapping(ctx, args, facts);
     case "invoice.finalized":
     case "invoice.paid":
-    case "charge.refunded":
+    case "refund.created":
     case "credit_note.created":
     case "customer_cash_balance_transaction.created":
     case "cash_balance.funds_available":

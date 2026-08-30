@@ -211,10 +211,14 @@ function cashBalanceTransaction(txn: Obj): Result<Reconciliation, string> {
 
   switch (type) {
     case "funded":
-      // Money EXISTS but is not ours: precisely `reserved`. There is no PaymentIntent yet, so the
-      // customer is the only thing to correlate on.
+      // Money EXISTS but is not ours: precisely `reserved`. There is no PaymentIntent yet — but
+      // the TRANSACTION is the movement, and `txn.id` is unique per arrival. Correlating on
+      // `txn.customer` (as this did until 28.1-11) collapses every transfer that customer will
+      // ever make onto ONE `(tenant, correlation, reserved)` identity, and `billingLedger.ts:142`
+      // answers a repeat by returning the stored row and IGNORING the amount — so only the first
+      // transfer is ever booked, silently, forever.
       return moved(
-        movement("reserved", "cash-funded", txn.net_amount, txn.currency, txn.customer, txn.id),
+        movement("reserved", "cash-funded", txn.net_amount, txn.currency, txn.id, txn.id),
       );
     case "applied_to_payment":
       // The PaymentIntent is the ONLY tie back to the invoice. Without it there is no honest
@@ -231,16 +235,10 @@ function cashBalanceTransaction(txn: Obj): Result<Reconciliation, string> {
       );
     case "funding_reversed":
       // The incoming transfer was pulled back. NEVER silently dropped — this is the event that
-      // makes "record actual on invoice.paid" a real financial error.
+      // makes "record actual on invoice.paid" a real financial error. Per-TRANSACTION, for the
+      // same reason as `funded`: on the customer, the first reversal blocks every later one.
       return moved(
-        movement(
-          "refunded",
-          "funding-reversed",
-          txn.net_amount,
-          txn.currency,
-          txn.customer,
-          txn.id,
-        ),
+        movement("refunded", "funding-reversed", txn.net_amount, txn.currency, txn.id, txn.id),
       );
     case "unapplied_from_payment":
       return moved(
@@ -249,7 +247,9 @@ function cashBalanceTransaction(txn: Obj): Result<Reconciliation, string> {
           "cash-unapplied",
           txn.net_amount,
           txn.currency,
-          pi("unapplied_from_payment") ?? txn.customer,
+          // The PaymentIntent ties back to the invoice when it is there; the fallback is the
+          // TRANSACTION, never the customer — see `funded`.
+          pi("unapplied_from_payment") ?? txn.id,
           txn.id,
         ),
       );
@@ -260,7 +260,7 @@ function cashBalanceTransaction(txn: Obj): Result<Reconciliation, string> {
           "cash-refunded",
           txn.net_amount,
           txn.currency,
-          pi("refunded_from_payment") ?? txn.customer,
+          pi("refunded_from_payment") ?? txn.id,
           txn.id,
         ),
       );
@@ -340,26 +340,36 @@ export function reconcileEvent(event: unknown, nowMs: number): Result<Reconcilia
       return cashBalanceTransaction(object);
     case "cash_balance.funds_available":
       return fundsAvailable(object, createdMs, nowMs);
-    case "charge.refunded":
+    case "refund.created":
+      // `refund.created`, NOT `charge.refunded` (28.1-11 #6, and Stripe's own note on
+      // `charge.refunded` says to listen here for the refund's detail). A charge's
+      // `amount_refunded` is the RUNNING TOTAL and one `ch_` emits the event once per refund, so
+      // that arm booked a cumulative figure onto a correlation the first refund already owned —
+      // which the ledger answers by discarding the second refund entirely. A refund's `amount` is
+      // its own delta and its `re_` is unique, so each partial refund is one movement.
       return moved(
         movement(
           "refunded",
-          "charge-refunded",
-          object.amount_refunded,
+          "refund-created",
+          object.amount,
           object.currency,
-          object.payment_intent ?? object.id,
+          object.id,
           object.id,
         ),
       );
     case "credit_note.created":
+      // Correlated on the CREDIT NOTE, because the credit note is the movement. Stripe permits
+      // several against one invoice, and on `object.invoice` the second landed on the first's
+      // `(tenant, correlation, refunded)` identity and was returned without an insert. The invoice
+      // survives as `stripeObjectId`, so the tie-back is kept rather than traded away.
       return moved(
         movement(
           "refunded",
           "credit-note",
           object.total,
           object.currency,
-          object.invoice ?? object.id,
           object.id,
+          object.invoice ?? object.id,
         ),
       );
     default:

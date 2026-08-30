@@ -26,7 +26,11 @@ export const HANDLED_EVENT_TYPES = [
   "invoice.finalized",
   "invoice.paid",
   "invoice.payment_failed",
-  "charge.refunded",
+  // `refund.created`, NOT `charge.refunded` (28.1-11 #6). A charge's `amount_refunded` is the
+  // RUNNING TOTAL and the event repeats on one `ch_`, so booking it recorded a cumulative figure
+  // under a correlation the first refund already owned — and the ledger's phase identity answers a
+  // repeat by keeping the first row. A refund's own `amount` is the delta and `re_` is unique.
+  "refund.created",
   "credit_note.created",
   // Bank transfer: funds land in the customer CASH BALANCE, not on the invoice. These two are why
   // `invoice.paid` alone must never be recorded as cash in hand.

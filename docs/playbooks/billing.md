@@ -398,7 +398,7 @@ in the phase, never in the sign.
 | … `funding_reversed` | `refunded` | `funding-reversed` | The transfer was pulled back. Never dropped. |
 | … `unapplied_from_payment` / `refunded_from_payment` | `refunded` | `cash-unapplied` / `cash-refunded` | Money leaving a payment it had been applied to. |
 | `cash_balance.funds_available` | **nothing** | — | LEFTOVER money, not an arrival. One `billingUnapplied` row. |
-| `charge.refunded` | `refunded` | `charge-refunded` | Positive amount; the phase carries the direction. |
+| `refund.created` | `refunded` | `refund-created` | Positive amount; the phase carries the direction. Correlated on the `re_`, so a SECOND partial refund on one charge is its own movement. **`charge.refunded` is deliberately NOT handled** — its `amount_refunded` is a running total, not this refund's delta (28.1-11 #6). |
 | `credit_note.created` | `refunded` | `credit-note` | Same. |
 | `invoice.payment_failed` | **nothing** | — | A failed attempt is not a movement in either direction. |
 

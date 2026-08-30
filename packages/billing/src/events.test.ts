@@ -20,11 +20,18 @@ describe("HANDLED_EVENT_TYPES", () => {
       "invoice.finalized",
       "invoice.paid",
       "invoice.payment_failed",
-      "charge.refunded",
+      "refund.created",
       "credit_note.created",
       "customer_cash_balance_transaction.created",
       "cash_balance.funds_available",
     ]);
+  });
+
+  test("charge.refunded is NOT handled — it carries a cumulative total (28.1-11 #6)", () => {
+    // The Dashboard endpoint may still be subscribed to it; ignoring it here is what stops a
+    // running `amount_refunded` from being booked as if it were one refund's delta.
+    expect(classifyEvent("charge.refunded")).toEqual({ kind: "ignored" });
+    expect([...HANDLED_EVENT_TYPES]).not.toContain("charge.refunded");
   });
 
   test("holds no duplicates", () => {

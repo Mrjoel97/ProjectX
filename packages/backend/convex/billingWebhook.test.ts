@@ -1025,21 +1025,22 @@ describe("the money arms write OUR ledger, and Stripe is only the processor", ()
     expect(held[0]?.observedAt).toBe(1_700_000_000_000);
   });
 
-  test("charge.refunded and credit_note.created are refunds, POSITIVE, direction in the phase", async () => {
+  test("refund.created and credit_note.created are refunds, POSITIVE, direction in the phase", async () => {
     const t = harness();
     await seedMappedTenant(t);
     const charge = JSON.stringify({
       id: "evt_ref_1",
-      type: "charge.refunded",
+      type: "refund.created",
       created: 1_700_000_500,
       data: {
         object: {
-          id: "ch_1",
-          object: "charge",
+          id: "re_1",
+          object: "refund",
           customer: CUSTOMER,
           currency: "usd",
+          charge: "ch_1",
           payment_intent: "pi_ref_1",
-          amount_refunded: 1200,
+          amount: 1200,
         },
       },
     });
@@ -1064,7 +1065,7 @@ describe("the money arms write OUR ledger, and Stripe is only the processor", ()
     const rows = await ledger(t);
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.phase === "refunded" && r.amountMinor > 0)).toBe(true);
-    expect(rows.map((r) => r.kind).sort()).toEqual(["charge-refunded", "credit-note"]);
+    expect(rows.map((r) => r.kind).sort()).toEqual(["credit-note", "refund-created"]);
   });
 });
 
