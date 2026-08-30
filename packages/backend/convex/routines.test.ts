@@ -77,6 +77,17 @@ const sourcesUnder = (root: string) =>
 //
 // Adding a module to this list is not forbidden — it is REQUIRED, in the same diff, by whoever
 // adds the module. That is the whole point: the reviewer sees the name.
+// EIGHT NAMES ADDED 2026-08-30 when the Phase 29 lane merged `origin/main` (Phase 28 + 28.1):
+// `billing.ts`, `billingApi.ts`, `billingWebhook.ts`, `paypalAuth.ts`, `paypalConnector.ts`,
+// `quickbooks.ts`, `stripeAuth.ts`, `stripeConnector.ts`. This list going red on a merge is the
+// pin DOING ITS JOB — a new convex module cannot arrive silently under any name.
+//
+// EACH WAS CHECKED, not pasted: `grep -cE "ctx\.scheduler|cronJobs|runAfter|runAt|interval\(|
+// daily\(|hourly\(|crons\."` returns **0 for all eight**, and `cronJobs` still appears in exactly
+// one non-test module (`crons.ts`). The scheduler/cron allowlist tests below stayed GREEN across
+// the merge, which is the same fact reached independently. So Phase 28's connector and billing
+// rails add no recurrence mechanism, and `decision: defer` survives the merge on evidence rather
+// than on the pin having been quietly refreshed.
 const CONVEX_MODULES = [
   "_generated/api.d.ts",
   "_generated/dataModel.d.ts",
@@ -87,6 +98,9 @@ const CONVEX_MODULES = [
   "audit.ts",
   "auth.config.ts",
   "auth.ts",
+  "billing.ts",
+  "billingApi.ts",
+  "billingWebhook.ts",
   "blueprint.ts",
   "briefings.ts",
   "calendar.ts",
@@ -151,12 +165,15 @@ const CONVEX_MODULES = [
   "optimizerConfig.ts",
   "optimizerEligibility.ts",
   "owner.ts",
+  "paypalAuth.ts",
+  "paypalConnector.ts",
   "pinnedWorkflows.ts",
   "pipeline.ts",
   "plans.ts",
   "proactiveReview.ts",
   "proposals.ts",
   "providerGates.ts",
+  "quickbooks.ts",
   "quickbooksAuth.ts",
   "reliabilitySweep.ts",
   "render/assembleScript.ts",
@@ -176,6 +193,8 @@ const CONVEX_MODULES = [
   "smoke.ts",
   "smokeAssert.ts",
   "spendLedger.ts",
+  "stripeAuth.ts",
+  "stripeConnector.ts",
   "telemetry.ts",
   "tenantDelete.ts",
   "tenantExport.ts",

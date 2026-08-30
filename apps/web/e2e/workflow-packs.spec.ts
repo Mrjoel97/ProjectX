@@ -77,9 +77,9 @@ async function settle(page: Page): Promise<Locator | null> {
   await page.setViewportSize({ width: 1280, height: 1400 });
   await page.goto("/dashboard/workflows");
   const main = page.locator("main.canvas-main");
-  await expect(page.getByRole("heading", { name: "Make a workflow fit your business" })).toBeVisible(
-    { timeout: 20_000 },
-  );
+  await expect(
+    page.getByRole("heading", { name: "Make a workflow fit your business" }),
+  ).toBeVisible({ timeout: 20_000 });
   // SETTLE ON A CONTROL, NEVER ON PROSE. Measured 2026-08-30 in `routines.spec.ts`: settling on
   // `getByText("Run again")` matched the pinned surface's static intro ("…you press Run again."),
   // fired before any query resolved, and every assertion after it ran against a loading page. A

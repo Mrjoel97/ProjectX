@@ -6600,7 +6600,9 @@ describe("pickStockPhoto: the rendition the Ken Burns path actually needs", () =
   });
 
   test("falls all the way down the ladder rather than failing on a partial src", () => {
-    expect(pickStockPhoto({ photos: [{ id: 12, src: { original: "o.jpg" } }] })?.link).toBe("o.jpg");
+    expect(pickStockPhoto({ photos: [{ id: 12, src: { original: "o.jpg" } }] })?.link).toBe(
+      "o.jpg",
+    );
     expect(pickStockPhoto({ photos: [{ id: 13, src: {} }] })).toBeNull();
   });
 

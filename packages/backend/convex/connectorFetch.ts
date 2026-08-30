@@ -83,14 +83,59 @@ export const PROVIDER_READ_PATHS: Record<Provider, readonly string[]> = {
   // Query and reports ONLY. No entity path, because `/v3/company/{}/invoice` is also the CREATE
   // route and the scope that reads it can write it.
   quickbooks: ["/v3/company/{}/query", "/v3/company/{}/reports/{}"],
-  // EMPTY BY DECISION, not by omission. The Stripe route is an unbuilt Stripe App with `*_read`
-  // permissions and its server-initiated revocation condition is still open
-  // (docs/connectors/stripe-suitability.md). 28-07 lands the concrete paths when the route is
-  // settled; until then Stripe can read nothing and every call fails closed.
-  stripe: [],
+  // FILLED BY 28-07, when the route settled. This list was `[]` BY DECISION from 28-04 until then,
+  // and `providerGates` reads its LENGTH into the eligibility rule — so an empty list is a provider
+  // that fails closed no matter what the owner approved.
+  //
+  // LIST AND RETRIEVE ONLY, one path per entity, each with a parser in
+  // `@pikar/revenue/providers/stripe`. `STRIPE_READ_PATHS` there is compared against this list in
+  // BOTH directions by `stripeConnector.test.ts`, so a path can never exist here with nothing to
+  // read it, or there with nothing to allow it.
+  //
+  // Every Stripe write shares its path with the read and differs ONLY by HTTP verb, so this table
+  // is not the boundary a QuickBooks-style allow-list is: the boundary is the Stripe App's `*_read`
+  // manifest permissions, which make a write impossible AT THE VENDOR, plus `readPages` hardcoding
+  // GET. There is no per-object action path here (`/v1/charges/{}/refunds`, `/v1/invoices/{}/pay`,
+  // `/v1/disputes/{}/close`) and there must never be — those exist only to be written to.
+  //
+  // `payment_intents` and `balance_transactions` are deliberately absent; the reason is in the pure
+  // module's header.
+  stripe: ["/v1/balance", "/v1/charges", "/v1/invoices", "/v1/payouts", "/v1/disputes"],
   // The only two endpoints PayPal publishes for this data.
   paypal: ["/v1/reporting/transactions", "/v1/reporting/balances"],
 };
+
+/**
+ * The ONE header a caller may influence, and it is not a header parameter.
+ *
+ * Stripe pins its API version with a `Stripe-Version` request header — there is no query-parameter
+ * form, unlike Intuit's `minorversion`. Without a pin, a read silently takes whichever version the
+ * CONNECTED ACCOUNT's dashboard is set to, which the tenant can change under us, and Stripe ships
+ * breaking changes per version.
+ *
+ * So this is a single typed VALUE with a fixed header name and a validated shape, not a header map.
+ * A caller still cannot name a header, cannot add one, and cannot reach any provider but Stripe
+ * with it — which keeps "there is no header parameter" true in the sense that matters.
+ */
+const STRIPE_VERSION_HEADER = "Stripe-Version";
+const STRIPE_VERSION_SHAPE = /^\d{4}-\d{2}-\d{2}(\.[a-z0-9_]+)?$/;
+
+function versionHeaders(
+  provider: Provider,
+  stripeApiVersion: string | undefined,
+): Record<string, string> {
+  if (stripeApiVersion === undefined) return {};
+  if (provider !== "stripe") {
+    // Passing it for another provider means the caller thinks it does something it does not.
+    throw new Error("Only the Stripe lane pins its API version by header.");
+  }
+  if (!STRIPE_VERSION_SHAPE.test(stripeApiVersion)) {
+    // Refusing beats sending a malformed pin: Stripe would answer with an error the caller would
+    // classify as a provider fault, and the deployment misconfiguration would stay invisible.
+    throw new Error("A Stripe API version pin must be a dated Stripe version.");
+  }
+  return { [STRIPE_VERSION_HEADER]: stripeApiVersion };
+}
 
 /**
  * Legal characters in one path segment. Deliberately excludes `%`: a percent-encoded `%2f` is the
@@ -237,6 +282,12 @@ export type ReadPagesOptions<T> = {
   fetchImpl?: typeof fetch;
   /** Test seam only, so retry timing is asserted without waiting. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * The Stripe API version to pin this read to. Stripe ONLY. Validated by `versionHeaders`, which
+   * throws on a malformed pin and on any other provider — see its note for why this is a single
+   * value rather than the header map `readPages` deliberately does not have.
+   */
+  stripeApiVersion?: string;
   maxPages?: number;
   maxItems?: number;
   maxBytes?: number;
@@ -281,6 +332,7 @@ async function fetchOnce<T>(
   parsePage: (raw: unknown) => ParsedPage<T>,
   fetchImpl: typeof fetch,
   byteBudget: number,
+  extraHeaders: Record<string, string>,
 ): Promise<Attempt<T>> {
   let response: Response;
   try {
@@ -291,6 +343,8 @@ async function fetchOnce<T>(
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
+        // Built by `versionHeaders` from a validated value, never from a caller-named header.
+        ...extraHeaders,
       },
     });
   } catch (error) {
@@ -353,10 +407,15 @@ export async function readPages<T>(options: ReadPagesOptions<T>): Promise<ReadPa
     parsePage,
     fetchImpl = fetch,
     sleep = defaultSleep,
+    stripeApiVersion,
     maxPages = CAPS.maxPages,
     maxItems = CAPS.maxItems,
     maxBytes = CAPS.maxBytes,
   } = options;
+
+  // Built ONCE and before any request: a malformed version pin must fail the whole read rather
+  // than fail the first page and look like a provider outage.
+  const extraHeaders = versionHeaders(provider, stripeApiVersion);
 
   const items: T[] = [];
   const seenCursors = new Set<string>();
@@ -373,13 +432,13 @@ export async function readPages<T>(options: ReadPagesOptions<T>): Promise<ReadPa
     const target = buildReadUrl(provider, environment, path, params);
 
     const budget = maxBytes - bytesRead;
-    let attempt = await fetchOnce(target, accessToken, parsePage, fetchImpl, budget);
+    let attempt = await fetchOnce(target, accessToken, parsePage, fetchImpl, budget, extraHeaders);
     while (attempt.kind === "failure" && attempt.retriable && retries < MAX_RETRIES) {
       const delay = retryDelayMs(retries, attempt.retryAfter);
       if (delay === null) break;
       retries += 1;
       await sleep(delay);
-      attempt = await fetchOnce(target, accessToken, parsePage, fetchImpl, budget);
+      attempt = await fetchOnce(target, accessToken, parsePage, fetchImpl, budget, extraHeaders);
     }
 
     if (attempt.kind === "failure") {

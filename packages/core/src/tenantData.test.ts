@@ -16,11 +16,25 @@ describe("tenant table classification registry", () => {
     const classifiedTables = Object.keys(TENANT_TABLE_CLASSIFICATION);
 
     // 43 + the two BETA-01 admission tables (25-01) + workflowPackEvents (27-02, PACK-02)
+    //    + the four Phase-28 connector tables (28-03) + billingStripeEvents (28.1-01)
     //    + knowledgeSearches (29-01, KNOW-01 — `tenant_owned`: it holds the user's question, the
     //      answer they were shown and their own document titles).
+    // 43 + 2 + 1 + 4 + 1 + 1 = 52.
     // This count is a TRIPWIRE, not bookkeeping: a new table cannot reach the export/deletion
     // walks without someone deliberately bumping it and classifying the table on the way past.
-    expect(schemaTables).toHaveLength(51);
+    //
+    // 28.1-01 FOUND THIS TEST RED AT HEAD AND FIXED IT: 28-03 added four tables and classified
+    // them, but never bumped this number or the closed set below, so the tripwire had been
+    // failing on its own arithmetic ever since — and a genuinely UNCLASSIFIED table would have
+    // looked exactly the same. A tripwire nobody can distinguish from noise is not a tripwire.
+    //
+    // THE PHASE-28/29 MERGE IS THE SAME HAZARD IN ITS MOST LIKELY FORM: two lanes each added
+    // tables and each bumped this number for their own, so either side's figure resolves the
+    // conflict "cleanly" and is wrong by the other side's count. 52 was DERIVED from the merged
+    // `schema.ts` and `tenantData.ts` — 52 tables, 52 classifications, nothing unclassified in
+    // either direction — not carried over from a branch. Re-derive it the same way after any
+    // future merge; do not pick a side.
+    expect(schemaTables).toHaveLength(52);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -32,6 +46,9 @@ describe("tenant table classification registry", () => {
       .sort();
 
     expect(credentialTables).toEqual([
+      // 28-03: the tenant's connector grant (AES-256-GCM ciphertext) and its in-flight OAuth state.
+      // Phase 29 added NO credential table — `knowledgeSearches` is `tenant_owned`, and a knowledge
+      // search reads through the connectors' own credentials rather than holding one of its own.
       "connectorConnections",
       "connectorOAuthStates",
       "gmailTokens",

@@ -125,6 +125,78 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     tier: "feature",
     whatBreaks: "The HubSpot consent callback lands nowhere.",
   },
+  {
+    name: "QUICKBOOKS_CLIENT_ID",
+    tier: "feature",
+    whatBreaks: "Connecting a QuickBooks company, and therefore every accounting read.",
+  },
+  {
+    name: "QUICKBOOKS_CLIENT_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "The Intuit token exchange, the rolling refresh and the revoke. Disconnect stops working upstream.",
+  },
+  {
+    name: "QUICKBOOKS_REDIRECT_URI",
+    tier: "feature",
+    whatBreaks: "The Intuit consent callback lands nowhere.",
+  },
+  {
+    // Not a secret and not an endpoint: the ISO 4217 code the company's books are kept in, which
+    // QuickBooks omits from every row when multicurrency is off. Unset, reads assume USD — right
+    // for Intuit's sandbox companies and wrong for a euro-denominated tenant, which is a WRONG
+    // FIGURE rather than an outage, so it is classified even though nothing throws without it.
+    name: "QUICKBOOKS_HOME_CURRENCY",
+    tier: "feature",
+    whatBreaks:
+      "Nothing visibly. Amounts from a non-USD company are labelled USD, which mislabels money rather than failing.",
+  },
+
+  // ── The tenant's own Stripe account, READ-ONLY ──────────────────────────────────────────────
+  //
+  // `STRIPE_APP_*` is this repo's read-only Stripe App, reading a TENANT'S account. It is NOT
+  // Pikar's own merchant account: that is the write-capable `BILLING_STRIPE_*` family and it must
+  // never be substituted here. The prefix split is the boundary.
+  {
+    name: "STRIPE_APP_CLIENT_ID",
+    tier: "feature",
+    whatBreaks: "Connecting a tenant's Stripe account, and therefore every payment-rail read.",
+  },
+  {
+    name: "STRIPE_APP_SECRET_KEY",
+    tier: "feature",
+    whatBreaks:
+      "The Stripe Apps token exchange and the rolling refresh. A connection cannot be made or renewed.",
+  },
+  {
+    name: "STRIPE_APP_REDIRECT_URI",
+    tier: "feature",
+    whatBreaks: "The Stripe Apps consent callback lands nowhere.",
+  },
+  {
+    // Not a secret: the Stripe API version this lane's parsers were written against. Unset, the
+    // lane REFUSES to read rather than silently taking whichever version the connected account's
+    // dashboard is on — Stripe ships breaking changes per version and the tenant can move it.
+    name: "STRIPE_APP_API_VERSION",
+    tier: "feature",
+    whatBreaks: "Every Stripe read fails closed rather than running against an unpinned shape.",
+  },
+
+  // ── The tenant's own PayPal merchant, READ-ONLY ─────────────────────────────────────────────
+  //
+  // ONE name, and it is not a credential. There is deliberately no `PAYPAL_CLIENT_ID`/`_SECRET`
+  // here because nothing in this repository mints a PayPal token: a client-credentials token reads
+  // PIKAR'S OWN PayPal account, and storing one against a tenant is the exact defect the lane
+  // exists to prevent. See `paypalAuth.ts`.
+  {
+    // Pikar's OWN merchant id — the account a bare client-credentials token would reach. It is what
+    // `classifyGrantSubject` compares against, so unset, the app's own account and a tenant's
+    // merchant become indistinguishable. Not a secret; it is a public payer id.
+    name: "PAYPAL_PARTNER_MERCHANT_ID",
+    tier: "feature",
+    whatBreaks:
+      "Every PayPal read fails closed rather than risk attributing Pikar's own transactions to a tenant.",
+  },
 
   // ── Governed delivery ───────────────────────────────────────────────────────────────────────
   {
@@ -233,6 +305,36 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "Vertex-backed model access.",
   },
   { name: "GOOGLE_VERTEX_LOCATION", tier: "feature", whatBreaks: "Vertex region selection." },
+
+  // ── Phase 28.1 Pikar's OWN merchant account (billing*, NOT the Phase 28 stripe* connector) ──
+  // A FOURTH credential family. It charges money OUT of Pikar's Stripe account; STRIPE_APP_* (the
+  // Phase 28 connector) reads a TENANT's. Keeping the prefixes apart is what stops the wrong
+  // secret reaching the wrong code path.
+  {
+    name: "BILLING_STRIPE_WEBHOOK_SECRET",
+    tier: "feature",
+    whatBreaks:
+      "The Stripe billing webhook refuses every delivery, so no subscription, invoice or payment outcome is ever recorded.",
+  },
+  {
+    // The write-capable key. It CHARGES CARDS, so there is deliberately no development fallback
+    // (`p25-no-dev-fallback`) — `billingApi.ts` throws before `fetch` rather than degrading.
+    // Classified in the SAME commit as its first literal read: `env.test.ts` is bidirectional and
+    // a row with no consumer is as red as a consumer with no row.
+    name: "BILLING_STRIPE_SECRET_KEY",
+    tier: "feature",
+    whatBreaks:
+      "Every outbound Stripe call from Pikar's own account. No tenant can start Checkout or open the Customer Portal; the surface refuses loudly rather than half-working.",
+  },
+  {
+    // Not a secret — deployment CONFIG. It lives here rather than in `packages/billing/src/config.ts`
+    // (which mirrors the rest of the Dashboard) for one reason: a TEST price id must never be
+    // readable as a live one, and the two deployments hold different objects under this one name.
+    name: "BILLING_STRIPE_PRICE_ID",
+    tier: "feature",
+    whatBreaks:
+      "Subscribing. `startCheckout` throws naming this variable rather than opening a Checkout against a guessed or stale price.",
+  },
 
   // ── Convex-provided and build-time. Present without operator action. ────────────────────────
   {
@@ -366,6 +468,12 @@ export const ORIGIN_ENV: readonly string[] = [
   // Same class as the two above: an OAuth callback minted from an ephemeral preview URL stops
   // resolving, and the consent that used it can never come back.
   "HUBSPOT_OAUTH_REDIRECT_URI",
+  // Intuit matches the redirect URI EXACTLY against the one registered on the app, so an ephemeral
+  // origin here does not merely fail to resolve — the exchange is refused before the browser moves.
+  "QUICKBOOKS_REDIRECT_URI",
+  // Stripe matches the redirect against the app manifest's `allowed_redirect_uris`, so an ephemeral
+  // preview origin is refused at the consent screen rather than merely failing to resolve later.
+  "STRIPE_APP_REDIRECT_URI",
 ];
 
 /**

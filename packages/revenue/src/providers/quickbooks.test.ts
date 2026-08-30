@@ -405,12 +405,14 @@ describe("cash on hand", () => {
     expect(a.ok && a.value.balance).toEqual({ minor: 420075, currency: "USD" });
   });
 
-  test.each([["Credit Card"], ["Accounts Receivable"], ["Other Current Asset"], [undefined]])(
-    "an account of type %s is not cash on hand",
-    (accountType) => {
-      expect(normalizeCashAccount(accountRow({ AccountType: accountType }), "USD").ok).toBe(false);
-    },
-  );
+  test.each([
+    ["Credit Card"],
+    ["Accounts Receivable"],
+    ["Other Current Asset"],
+    [undefined],
+  ])("an account of type %s is not cash on hand", (accountType) => {
+    expect(normalizeCashAccount(accountRow({ AccountType: accountType }), "USD").ok).toBe(false);
+  });
 
   test("a missing balance is refused, never read as zero cash", () => {
     expect(normalizeCashAccount(accountRow({ CurrentBalance: undefined }), "USD").ok).toBe(false);
@@ -472,8 +474,20 @@ describe("mixed currency is separated and named, never summed", () => {
 
 describe("normalized rows feed the deterministic finance core unchanged", () => {
   const rows = [
-    invoiceRow({ Id: "a", TxnDate: "2026-01-05", DueDate: "2026-02-05", TotalAmt: 100, Balance: 100 }),
-    invoiceRow({ Id: "b", TxnDate: "2026-04-05", DueDate: "2026-07-05", TotalAmt: 200, Balance: 200 }),
+    invoiceRow({
+      Id: "a",
+      TxnDate: "2026-01-05",
+      DueDate: "2026-02-05",
+      TotalAmt: 100,
+      Balance: 100,
+    }),
+    invoiceRow({
+      Id: "b",
+      TxnDate: "2026-04-05",
+      DueDate: "2026-07-05",
+      TotalAmt: 200,
+      Balance: 200,
+    }),
     invoiceRow({ Id: "c", TxnDate: "2026-03-05", DueDate: "2026-05-05", TotalAmt: 50, Balance: 0 }),
   ];
 

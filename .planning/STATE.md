@@ -2,10 +2,184 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 28
-current_plan: 8 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail) -- 28 IN PROGRESS
+current_phase: 28.1
+current_plan: 3 of 8 executed (28.1-01 webhook receiver + dedupe table, 28.1-02 Dashboard config mirror, 28.1-03 pure tax posture + event-to-phase mapping) -- 28.1 IN PROGRESS
 status: executing
-stopped_at: "28-05 SEALED (`ccb0281` rail, `362dee8` smoke+docs, `0dca7bd` env manifest), on top of 28-26's `1bb8b3b`/`40047f3`.
+stopped_at: "28.1-03 COMPLETE (`e78046c` RED tax, `2eb10b0` GREEN tax, `b9a7189` RED reconcile,
+`c601223` GREEN reconcile, `0188139` biome). TDD, RED observed per-test against deliberate stubs
+before each implementation. Two PURE modules, 66 new tests, ALL OFFLINE AT $0; billing 41/41 ->
+107/107, `tsc --noEmit` run SEPARATELY with the exit code read on its OWN LINE (0).
+**THE CENTRAL LAW IS NOW CODE, AND IT IS A LIVE PATH** (`BANK_TRANSFER_ENABLED` was confirmed `true`
+by the owner on 2026-08-29, so this is shipped code, not recorded dead code): `invoice.paid` on a
+bank-transfer invoice books **NO `actual`** -- zero movements plus one `awaiting-cash-application`
+observation. Funds are in the customer CASH BALANCE; collection is `applied_to_payment` ALONE,
+`funded` is arrival -> `reserved`, `funding_reversed` -> `refunded` and is never dropped, and
+`cash_balance.funds_available` is LEFTOVER money (zero movements, one observation carrying a
+75/90-day age), NOT an arrival -- the trap the research says is easiest to get backwards.
+**A THIRD FAIL-CLOSED BRANCH THE PLAN DID NOT HAVE.** `payment_settings.payment_method_types` is what
+was ALLOWED, not what was USED, so an UNDETERMINABLE payment method also books no `actual`: unknown
+is never card. Resolution is three tiers, most specific first (charge `payment_method_details.type`
+-> expanded PI types -> the invoice allow-list). The bank-transfer guard and the undeterminable guard
+were disabled INDEPENDENTLY and killed DISJOINT tests (3 and 1), so neither hides behind the other.
+**BILL-05: `not_collecting` IS AMBIGUOUS IN STRIPE'S OWN WORDS** -- no registration OR the Nontaxable
+code `txcd_00000000` -- so `taxPosture` takes the product code as an ARGUMENT and structurally
+refuses to be written with one. Because `PRODUCT_TAX_CODE` is STILL `null` (owner deferred), the
+honest live answer today is a THIRD state, `unknown`, never a guessed 'unregistered'. Every other
+published reason with a zero amount is `calculated-zero` -- a real calculation ran, a different
+claim. `renderTaxPosture` makes a bare `0.00` UNREACHABLE rather than discouraged: no zero arm emits
+an amount at all, asserted across the whole reason x product-code grid.
+**15 RENAME/BOUNDARY MUTATIONS, ALL RED, ALL RESTORED.** Backup size-verified BEFORE mutating;
+restore verified by `git status` (tax.ts) and by `cmp` against the backup (reconcile.ts, whose HEAD
+was still the RED stub so `git status` correctly reads M) -- never by the harness's own output.
+Includes the SUBSTRING class deletion-only mutation is blind to (`.includes` -> `methods[0]`, 1 red)
+and both `>=`->`>` off-by-ones on the 75-day return and 90-day sweep boundaries.
+**FORBIDDEN FILES PROVEN UNTOUCHED:** `git diff --stat c3a63d9` over `spend.ts`, `spendLedger.ts`,
+`finance.ts`, `stripeAuth.ts`, `stripeConnector.ts` and `providers/stripe.ts` is EMPTY. `SPEND_PHASES`
+reused verbatim. `git diff --stat HEAD -- '*.ts'` empty after every commit (verify the COMMIT, not
+the tree). ZERO lines of threshold-monitoring code and the literal `tax.threshold` is not written
+anywhere -- a mention in a comment is indistinguishable from a use by grep, so the fact is stated
+without the string.
+**NOTHING CALLS EITHER FUNCTION.** `receiveAndApply`'s effect switch is still EMPTY, no movement has
+reached a table, and nothing in this phase has ever spoken to Stripe -- every event object is
+fabricated. A green `reconcile.test.ts` proves the LAW, not that any money was reconciled. The
+`billingEvents` book of record is 28.1-06.
+`requirements-completed: []` -- **BILL-03 AND BILL-05 BOTH STAY PENDING**: BILL-03 needs 28.1-06's
+ledger wiring, BILL-05 needs the owner's product tax code. `requirements mark-complete` was
+deliberately NOT called.
+**NEXT: 28.1-04** (outbound Stripe transport + hosted Checkout and Customer Portal, Wave 4).
+NOTE: this top block was STALE -- it still reported 28-08 and never recorded 28.1-01 or 28.1-02, both
+of which are complete on disk. `completed_plans` was incremented by ONE for this plan only; the
+frontmatter counter (421) does not match the 430 PLAN / 353 SUMMARY files on disk and was not
+reconciled here.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-29T05:10:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 421
+  completed_plans: 328
+  percent: 78
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28.1
+current_plan: 1 of 8 executed (28.1-01 Stripe webhook receiver + billingStripeEvents) -- 28.1 IN PROGRESS
+status: executing
+stopped_at: "28.1-01 SEALED (`1a2130e` scaffold+playbook, `bf15767` RED, `cd3b3e1` pure signature/event law, `8f9fbc2` table+route+receiver).
+**THE WEBHOOK RECEIVER EXISTS AND IT HAS NEVER SPOKEN TO STRIPE.** Every one of the 59 new tests
+(36 pure + 23 route) is offline at $0 against a FABRICATED `whsec_test_...`; a green suite proves the
+handler cannot tell a fabricated delivery from a real one, NOT that Stripe accepts anything.
+`BILLING_STRIPE_WEBHOOK_SECRET` is set in NO deployment, so the route currently refuses every
+delivery -- which is the correct state, not a bug.
+**NO `stripe` DEPENDENCY, AND THAT IS FORCED, NOT PREFERENCE:** `http.ts` CANNOT be `\"use node\"`
+(Convex HTTP actions run in the query/mutation sandbox), so the synchronous `constructEvent` is
+unreachable there. The HMAC is hand-rolled Web Crypto over the EXISTING `hmacHex` (gmailAuth.ts) --
+the rung every other provider in this repo sits on.
+**ORDER IS THE WHOLE SECURITY PROPERTY:** secret+header present -> `req.text()` ONCE -> verify THAT
+EXACT string -> only then `JSON.parse`. Never `json()`-then-restringify.
+**IDEMPOTENCY IS STRUCTURAL AND HAS TWO KEYS.** `receiveAndApply` is ONE `internalMutation` owning
+the dedupe insert AND the effect switch -- an httpAction is not transactional, so a split lets a
+crash leave a dedupe row that suppresses Stripe's retry while nothing was applied. `event.id` alone
+is NOT a complete dedupe (Stripe's own guidance), so `by_object_type` catches the same transition
+arriving as a DIFFERENT Event object.
+**A VACUOUS TEST WAS CAUGHT BEFORE IT SHIPPED.** The plan's `{inserted: boolean}` return made the
+by-object branch UNOBSERVABLE while the effect switch is empty (`status` is `ignored` on every
+path), so no assertion over the rows could tell it from the ordinary path. Widened to a three-value
+`outcome` (new/duplicate_event/duplicate_object); the index-column-swap mutation now kills EXACTLY
+one test. **28.1-06 gates its effects on `outcome === \"new\"`.**
+**TWO PRE-EXISTING RED GATES FOUND AND FIXED.** (1) `packages/core/src/tenantData.test.ts` -- the
+schema-drift TRIPWIRE -- has been RED since 28-03 (46 vs 50 tables, stale credential set), so a
+genuinely unclassified table was indistinguishable from the standing failure. (2) The `http.ts`
+route-count pin (7) refused the new route; bumped to 8 with the justification, which is the guard
+working. `npx convex codegen` CANNOT RUN HERE (no local backend on :3210), so the two
+`_generated/api.d.ts` lines were hand-added exactly as codegen emits them.
+**12 NON-DELETION MUTATIONS, ALL RED, ALL RESTORED, all three blind spots covered:** renames not
+deletions (header name, env name, event literals, route path); the TOLERANCE and SIGNATURE guards
+disabled INDEPENDENTLY, each killing only its own 2 tests (neither absorbs the other); and the 300s
+window pinned to written-out literals (301 rejected / 299 accepted), not just the imported constant.
+**A CRASHED MUTATION HARNESS POISONED THE BATTERY ONCE** -- it died on a Windows cp1252 decode error
+AFTER applying mutation 1, so the re-run snapshotted the already-mutated tree as its baseline and all
+8 results plus the post-restore check were meaningless. Read the FILE, never trust the harness.
+`tsc --noEmit` run SEPARATELY in billing/core/backend, all exit 0 (it caught 3 real errors a green
+suite was silent over). Backend 2833/2833 (107 files; up from 2809/2809 in 106), core 1232/1232,
+billing 36/36, `check-playbooks` STDOUT empty. `SPEND_RAILS` untouched; `git diff --stat HEAD --
+\"*.ts\"` empty after committing.
+`requirements-completed: []` -- **BILL-02 STAYS PENDING**: it also needs 28.1-04's outbound
+`Idempotency-Key` transport, so `requirements mark-complete` was deliberately NOT called.
+**NEXT: 28.1-02 is a CHECKPOINT (`autonomous: false`) -- Stripe Dashboard configuration and
+credentials.** It must produce the endpoint pointing at the Convex SITE origin
+(`/billing/stripe/webhook`) and then `npx convex env set BILLING_STRIPE_WEBHOOK_SECRET whsec_...`
+from packages/backend (never Vercel, never `.env`). Do NOT run any `gsd-tools state *` subcommand
+against this file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-28T14:25:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 421
+  completed_plans: 325
+  percent: 77
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 9 of 29 executed (28-17 readiness gate, 28-18 playbook/watch ownership, 28-01 provider admission, 28-02 deterministic finance core, 28-03 encrypted credentials + connector schema, 28-04 shared OAuth state + bounded read transport, 28-26 provider eligibility gate, 28-05 read-only HubSpot rail, 28-06 read-only QuickBooks rail) -- 28 IN PROGRESS
+status: executing
+stopped_at: "28-06 SEALED (`e19af8b` normalizer, `d18a70e` OAuth, `e842993` reads, `3905c23` gate+docs).
+**THE ACCOUNTING RAIL EXISTS AND IT HAS NEVER SPOKEN TO INTUIT.**
+`node scripts/check-provider-lane.mjs --provider quickbooks` reads `consistent` -- decision,
+evidence life, absence, adapter, read-only, allow-list and parity all OK, open condition `PEND`.
+CONSISTENT IS NOT PASSED. 163 tests added (73 revenue + 90 backend), every one offline at $0.
+**TASK 3 COULD NOT RUN: THERE IS NO INTUIT CREDENTIAL IN THIS DEPLOYMENT.** The owner's 2026-08-27
+attestation that Pikar holds Intuit production credentials is TESTIMONY, not a grant -- `.env` holds
+OPENAI/UNSUBSCRIBE/FOGLAMP/OPENROUTER only. So the plan built the gate instead of faking one:
+`scripts/smoke-quickbooks-read.mjs --self-test` assembles a stub through the SAME builder a live run
+uses, fires all 22 validator guards, and PRINTS IN ITS OWN OUTPUT \"THIS IS NOT A LIVE PASS\"; the stub
+is stamped `mode: self-test` and `--verify-evidence` prints \"THIS FILE IS A STUB, NOT A LIVE PASS\";
+a bare run exits 2 with `LIVE_EVIDENCE_NOT_PRODUCED`. The validator refuses any file claiming the
+open condition resolved AND any file asserting an App Partner Program tier -- Builder's 500,000
+CorePlus calls/workspace/month is a ceiling for ONE tier, not this app's entitlement, and the tier
+is still unknown. `partner-tier-and-poll-budget` STAYS UNCLEARED; the lane row stays `parked`;
+REVN-02/REVN-05 STAY PENDING; 28-23 owns the seal.
+**BEFORE A LIVE RUN the owner must `npx convex env set` (from packages/backend):**
+`QUICKBOOKS_CLIENT_ID`, `QUICKBOOKS_CLIENT_SECRET`, `QUICKBOOKS_REDIRECT_URI` (must match the
+registered Intuit URI EXACTLY or the exchange is refused before the browser moves), optional
+`QUICKBOOKS_HOME_CURRENCY` (unset MISLABELS a non-USD company's money as USD rather than failing),
+and `CONNECTOR_CREDENTIAL_KEY_V1`. A live run ALSO needs the `/quickbooks/callback` route, which does
+not exist -- `handleCallback` is an `internalAction` with NO caller (28-09).
+**THERE IS NO READ-ONLY ACCOUNTING SCOPE, so the compile-time allow-list is the ONLY write boundary.**
+`com.intuit.quickbooks.accounting` grants the whole Accounting API including writes; what holds it is
+NO request-method parameter, NO path parameter and NO entity create/update export -- a caller names an
+entity from a CLOSED UNION of four and the path is built from a pinned template plus the realm read
+out of the CIPHERTEXT. Enforced twice: the lane checker AND a mirrored source scan in the test file.
+**REFRESH: lease + revision fence + exactly ONE attempt on every failure class.** Intuit revokes the
+whole grant when two refreshes race the rolling refresh token, so a retry does not degrade the
+connection, it KILLS it. Lease, fence and one-attempt each observed refusing ALONE.
+**A DEFECT FOUND AND FIXED IN-PLAN -- THE GATE WAS CIRCULAR.** The prior session checked
+`providerGates` inside the SHARED read, but a lane only becomes `passed` once a live read and revoke
+are observed THROUGH that read, so the only way to ever seal QuickBooks would have been to seal it
+FIRST and verify after -- publishing it into `availableProviders` for every tenant on evidence nobody
+has. The gate moved to the three TENANT actions (`gatedRead`); the new internal
+`quickbooksReadEvidence` keeps the same allow-list, caps and GET-only transport and skips ONLY the
+lane check. Two tests read the SAME unsealed state through each door and require OPPOSITE answers.
+28-05 had already reached this conclusion for HubSpot -- read the sibling lane before re-deciding.
+**A SECOND DEFECT: `convex/env.test.ts` WAS RED on four unclassified `QUICKBOOKS_*` names.** The
+filtered Task-1/2 runs never loaded that file, so the prior session's green was green OVER A RED ONE.
+This is 28-05's `0dca7bd` recurring one plan later: a new `process.env.X` literal needs an
+`ENV_MANIFEST` row in the same commit, and a filtered vitest run cannot tell you.
+Two non-deletion (RENAME) mutations observed RED then restored: gate literal `passed`->`parked` killed
+12 of 90 tests; validator `resolved !== false`->`!== null` failed the self-test.
+`tsc --noEmit` run SEPARATELY per package, both exit 0. Backend 2809/2809 (106 files; the 1 reported
+error is the PRE-EXISTING worker-teardown `process is not defined`), revenue 226/226,
+`check-playbooks` exit 0, `check-phase28-readiness` exit 0.
+NEXT: 28-07 (Stripe) / 28-08 (PayPal) are the remaining wave-6 rails."
+previous_stopped_at: "28-05 SEALED (`ccb0281` rail, `362dee8` smoke+docs, `0dca7bd` env manifest), on top of 28-26's `1bb8b3b`/`40047f3`.
 **THE FIRST PROVIDER RAIL EXISTS AND IT HAS NEVER SPOKEN TO HUBSPOT.**
 `node scripts/check-provider-lane.mjs --provider hubspot` reads `consistent` -- decision, evidence
 life, absence, adapter, read-only, allow-list and parity all OK, open condition `PEND`. CONSISTENT
@@ -66,76 +240,12 @@ before and after. Note 28-07 starts with `PROVIDER_READ_PATHS.stripe = []` by de
 module over an empty allow-list is a RED row, so the paths and the module must land together. Do NOT
 run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times. Working
 branch feat/27-02-pack-contracts."
-previous_stopped_at: "28-26 SEALED (`1bb8b3b`, `40047f3`), on top of 28-04's `48f5ef0` and 28-03's `82d14a6`.
-**PROVIDER AVAILABILITY IS NOW ONE SERVER-OWNED ANSWER, AND THE TWO AXES ARE HELD APART BY CODE.**
-`admission` (the owner's suitability DECISION -- permission to start) and `lane` (whether a
-controlled LIVE read/revoke was observed) are separate `providerGates` fields, and
-`resolveProviderEligibility` in `@pikar/revenue` is the ONLY place they are ever combined. Do not add
-a convenience boolean, do not let a UI derive availability from `admission`, and do not let any tool
-read the stored `lane` -- read the passed-only `availableProviders` projection (provider +
-environment and NOTHING else; a surface that could see `reviewBy` would start rendering
-`expiring soon` and treating an admission as a status).
-**FIVE RESOLVED STATES OVER THREE STORED ONES, and the two extra ones CANNOT be stored.** `pending`
-is the ABSENCE of a row (a row saying pending would be a row claiming a judgment exists -- which is
-also why there is no `undecided` schema literal), and `expired` is resolved against `now` (a stored
-freshness flag is true when written and false an hour later). A `failed` lane OUTRANKS expiry: a
-lane that broke is an incident, one that never ran is silence.
-**THE COMPOSITE RULE, all six, refusal names EVERY axis that refused:** row exists; lane passed;
-`reviewBy > now`; admission permits that environment (approved_beta reaches sandbox ONLY);
-`readPathCount > 0`; and every `PROVIDER_OPEN_CONDITIONS[provider]` id present in the row's
-`clearedConditions`. **`readPathCount` is passed IN, not imported** -- that is what keeps the pure
-rule Convex-free AND makes it impossible to contradict `PROVIDER_READ_PATHS.stripe = []`, so Stripe
-cannot be made available today whatever the owner approved.
-**`sealGate` VALIDATES A PASS BY RUNNING THE SAME RESOLVER THE READERS RUN.** One rule, one
-implementation -- a pass can never be recorded that a reader would then refuse. Parking is NEVER
-blocked (a lane discovered broken must always be switchable off) and `recordLaneFailure` carries NO
-CAS on purpose (refusing to record a failure on a stale revision would leave a known-broken lane
-readable) but it DOES bump `revision`, so an owner seal already in flight fails rather than
-resurrecting the lane.
-**THE FOUR OPEN ADMISSION CONDITIONS ARE NOW LOAD-BEARING, NOT PROSE.** hubspot
-`revoke-cascades-to-access-tokens` (28-22), quickbooks `partner-tier-and-poll-budget` (28-23),
-stripe `platform-initiated-revocation` (28-24), paypal `no-documented-revoke-endpoint` (28-25).
-28-22..25 CANNOT seal a passed lane without naming theirs with evidence. Ids are pinned by a
-WRITTEN-OUT LITERAL in `contracts.test.ts` and the provider/plan mapping is parity-tested against
-the register's own markdown table.
-**SCHEMA: TWO ADDITIVE FIELDS on a table that had never held a row** -- `lane` widened with `failed`,
-`clearedConditions` optional. 28-03 stays the connector-schema owner; this was flagged, not assumed.
-**`node scripts/check-provider-lane.mjs --all` IS EXIT 0 TODAY WITH 13 PENDING ROWS AND ZERO GREEN
-LANES -- CONSISTENT IS NOT PASSED.** Three statuses because `not built` and `wrong` are different
-facts; at `--stage final` a pending IS red. `--seal-decision from-owner` resolves an ADMITTED
-provider to **park, always** -- an admission is permission to start, never a passed lane, and
-turning one into the other here is the laundering the register exists to prevent.
-**MUTATION: 9 non-deletion mutations, ALL RED, ZERO SURVIVORS**, plus 11 CLI row mutations and 9 seal
-combinations. All three known blind spots addressed: renames are non-substring
-(`passed`->`parked`, `failed`->`broken`) and the builder-import scan compares the WHOLE imported set
-rather than banning substrings; the CAS and composite guards were disabled INDEPENDENTLY (M8 -> 1
-test, no composite; M5 -> 7 tests, no CAS); and because a constant the test imports moves with its
-own mutation, the condition ids are pinned to LITERALS and M9 mutates the SCHEMA literal instead.
-**`tsc --noEmit` RUN SEPARATELY in both packages, exit 0 -- it caught 41 real errors under a fully
-green 24-test suite** (`readonly string[]`, and 40 `Property providerGates does not exist` because
-`npx convex codegen` needs a running backend and timed out; the two `_generated/api.d.ts` lines were
-added by hand exactly as codegen emits them). Backend full run: **104/104 files, 2668/2668 tests
-pass**. The `Errors 1 error` (`ReferenceError: process is not defined`, worker teardown) is
-PRE-EXISTING and was attributed BY EXCLUSION -- re-running with `--exclude providerGates.test.ts`
-reproduces it identically (103 files, 2644 tests, same 1 error).
-**FOUND INSIDE THIS PLAN: the CLI condition row and the runtime resolver disagreed** -- the CLI
-ignored `--clear-condition` so a pass could never be sealed, while the resolver clears via the row.
-Two mechanisms for one rule, exactly the drift class this plan closes. Fixed, and a self-test case
-now proves the pass path is REACHABLE (a gate that refuses everything is broken, not safe).
-`requirements-completed: []` -- REVN-01/02/03/05 STAY PENDING. No adapter, no callback route, no
-connections UI, no live read; all four open conditions survive untouched.
-**NEXT: Wave 6 (28-05..08 provider rails).** Each rail still runs `check-phase28-readiness.mjs`
-FIRST, unpiped, and should now ALSO run `check-provider-lane.mjs --provider <slug>` before and after
--- the `absence`/`adapter`/`read-only`/`allow-list` rows are about the module it is adding, and the
-read-only scan (playbook invariant 1) is ARMED BUT HAS NEVER BITTEN: there is no lane module in the
-tree for it to scan, so wave 6 is its first real test. Do NOT run any `gsd-tools state *` subcommand
-against this file -- it has corrupted it seven times. Working branch feat/27-02-pack-contracts."
-last_updated: "2026-08-27T23:10:00.000Z"
+last_updated: "2026-08-28T00:20:00.000Z"
 progress:
   total_phases: 53
   completed_phases: 35
   total_plans: 413
-  completed_plans: 323
+  completed_plans: 324
   percent: 78
 ---
 
@@ -2710,6 +2820,23 @@ Full log in PROJECT.md Key Decisions. Recent decisions affecting v2.0:
 - **MS Graph subject format (Phase 25):** invite->subject reconciliation needs the delegated-flow response shape verified before binding logic.
 
 ## Session Continuity
+
+Last session: 2026-08-29T20:00:00.000Z
+Stopped at: **28.1-04 CLOSED** (`c726f2c`..`a5af3a4`) — `billingApi.ts` (the ONE outbound transport,
+form-encoded, pinned `Stripe-Version`, idempotency key REQUIRED by type) + `billing.ts`
+(`startCheckout` / `portalLink` / `billingStatus`). backend 3000/3000, billing 107/107, `tsc --noEmit`
+exit 0 (re-verified independently), **31 mutations, 31 RED**, all three blind spots covered.
+Before it: **28.1-02 closed PARTIAL** (`48dd3b6`) — real TEST-MODE Stripe objects exist
+(`prod_VA8pHxqMVhfHZ3`, `price_1U9oXpV05ajSTq7I4Z4U1se9`, tax code `txcd_10105002`, API version
+`2026-08-26.dahlia` pinned); `CONFIG_CONFIRMED` stays false and `HEAD_OFFICE_COUNTRY` is the ONLY
+reason — the business is unregistered, so that null is a FACT, not a gap. **DO NOT RE-RUN 28.1-02:**
+it would mint a second product. Also `79a3373` — `intake.test.ts` was flapping 0/6/9 on a 20s cap
+against a ~12.7s idle measurement; raised to 60s. A timeout there abandons the action mid-flight and
+the vault assertions cascade into `expected [] to have length 1`, which reads exactly like a
+capability break. **NOTHING HAS EVER SPOKEN TO STRIPE ON A BILLING PATH** — no `BILLING_STRIPE_*` is
+set in any deployment and `CONVEX_SITE_URL` is `http://127.0.0.1:3211`. BILL-01/BILL-02 stay PENDING.
+Next: 28.1-05 (tenant<->customer mapping) — it also closes `billingStatus`, whose `not_subscribed` /
+`subscribed` arms are advertised by the validator but UNREACHABLE today.
 
 Last session: 2026-08-22T16:30:00.000Z
 Stopped at: 26-14 CLOSED. The work already existed, uncommitted and green, from a prior session — and a

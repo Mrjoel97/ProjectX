@@ -142,6 +142,14 @@ export const TENANT_TABLE_CLASSIFICATION = {
   connectorOAuthStates: "tenant_credential",
   contactProviderRefs: "tenant_owned",
   providerGates: "global",
+  /**
+   * Phase 28.1 — Pikar's OWN Stripe delivery log. `global`, and the reason is not "it has no
+   * tenantId" but something sharper: erasing it on a tenant deletion would let a REDELIVERED
+   * event for that tenant re-apply, because the row is the only record that the event was
+   * already seen. It holds ids, types and counts only (CLAUDE.md §4) — no tenant content and
+   * no personal data — so `global`'s "contains no tenant data" claim stays literally true.
+   */
+  billingStripeEvents: "global",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;

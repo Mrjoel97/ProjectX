@@ -3225,8 +3225,7 @@ describe("groundMediaBrief: research lands in the vault BEFORE the deck is writt
     return made;
   };
 
-  const vaultDocs = (t: T) =>
-    t.run(async (ctx) => await ctx.db.query("vaultDocuments").collect());
+  const vaultDocs = (t: T) => t.run(async (ctx) => await ctx.db.query("vaultDocuments").collect());
 
   test("a researched brief becomes a CITABLE vault document", async () => {
     // The whole point: `media-director`'s only tool is `searchVault`, so findings are useless to

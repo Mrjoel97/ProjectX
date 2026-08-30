@@ -1,8 +1,9 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-28 against 28-06 (the QuickBooks lane, plus `postTokenForm`'s optional
-> Basic-auth and JSON-body inputs) and 28-05 (HubSpot read-only), on top of 28-26's provider gate
-> plane, 28-04's OAuth state and read transport and 28-03's credential envelope and four tables
+> Last verified: 2026-08-28 against 28-07 (the read-only Stripe App lane, `postTokenForm`'s
+> `bearerAuth` input and `readPages`' Stripe version pin), 28-06 (QuickBooks) and 28-05 (HubSpot),
+> on top of 28-26's provider gate plane, 28-04's OAuth state and read transport and 28-03's
+> credential envelope and four tables
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` · Related ADRs: none yet
 
 > **Status: PARTLY IMPLEMENTED.** At the `Last verified` sha the Phase 28 code on disk is the
@@ -58,6 +59,17 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
   `Figure<V>`/`MoneyFigure`, `Coverage`, the closed `FINANCE_CONFIDENCES` set with
   `CONFIDENCE_RANK`, `DECISION_SUPPORT_NOTICE`, and the `Invoice`/`Payment`/`Obligation` shapes.
   **A capped read is `partial`, never `ready` — a prefix of reality is not a total.**
+- `packages/revenue/src/providers/shared.ts` — the three provider-AGNOSTIC helpers every rail needs:
+  `boundedWindow` (refuses anything wider than `CAPS.maxWindowDays`, so nobody can ask for "since
+  forever" and present a capped answer as complete), `normalizeAll` (returns a reject COUNT beside
+  the rows, because a row that silently vanished understates what a tenant is owed and leaves
+  nothing to say so) and `separateByCurrency` (the "separate" half of reject-or-separate: other
+  currencies are NAMED, never dropped and never totalled in). Written for QuickBooks in 28-06,
+  hoisted here by 28-07 when Stripe became the second rail to need them, and re-exported from
+  `providers/quickbooks.ts` so existing imports still resolve. **It belongs to THIS playbook, not to
+  any one connector's** — a per-lane copy is how the item cap, the reject count and the
+  mixed-currency rule stop meaning the same thing in three files. Nothing provider-specific may
+  enter it: no URL, no verb, no vendor field name.
 - `packages/revenue/src/index.ts`, `package.json`, `tsconfig.json`, `vitest.config.ts` — the package
   boundary.
 
@@ -315,8 +327,10 @@ is available only when EVERY one of these holds, and a refusal names each axis t
 3. `reviewBy > now` (resolved against the clock, never stored — an expired record is `expired`);
 4. the admission permits that environment (`approved_production` for production; `approved_beta`
    reaches sandbox only);
-5. the provider has at least one allow-listed read path — **this is why Stripe cannot be made
-   available today whatever the owner approved**: `PROVIDER_READ_PATHS.stripe` is `[]` by decision;
+5. the provider has at least one allow-listed read path — an empty list is a provider that fails
+   closed on every call whatever the owner approved. `PROVIDER_READ_PATHS.stripe` was `[]` **by
+   decision** from 28-04 until 28-07 settled the Stripe App route and filled it with five
+   list/retrieve paths; Stripe is still unavailable, now on rule 6 alone;
 6. every entry in `PROVIDER_OPEN_CONDITIONS[provider]` appears in the row's `clearedConditions`.
 
 Rule 6 is what makes the four surviving admission conditions load-bearing rather than advisory:
@@ -481,10 +495,17 @@ vendor-side stops it. Rules for extending the table:
   match — a rename mutation walks straight through those and this repo has shipped that defect.
 - **QuickBooks stays inside `query` and `reports`.** Every other Accounting-API path has a write
   sibling reachable with the same token.
-- `PROVIDER_READ_PATHS.stripe` is `[]` **by decision, not by omission** — the Stripe route is an
-  unbuilt Stripe App with `*_read` permissions and its server-initiated revocation condition is
-  still open. 28-07 lands its paths when the route is settled. Until then Stripe reads nothing and
-  fails closed.
+- **`PROVIDER_READ_PATHS.stripe` was `[]` by decision until 28-07** and is now five list/retrieve
+  paths (`/v1/balance`, `/v1/charges`, `/v1/invoices`, `/v1/payouts`, `/v1/disputes`). Every Stripe
+  write shares its path with the read and differs only by verb, so this table is the SECOND boundary
+  there, not the only one: the first is the Stripe App's `*_read` manifest permissions, which make a
+  write impossible at the vendor. No per-object action path (`/v1/charges/{}/refunds`,
+  `/v1/invoices/{}/pay`) may ever appear — those exist only to be written to.
+- **`readPages` takes ONE version value, `stripeApiVersion`, and it is not a header parameter.**
+  Stripe pins its API version by request header with no query-parameter form, and an unpinned read
+  silently takes whichever version the CONNECTED ACCOUNT's dashboard is on. It is a single typed
+  value with a fixed header name and a validated shape, rejected for any provider but Stripe. Do not
+  generalise it into a header map — that is the parameter this module exists without.
 - Adding an entry is a **security change**: it needs the same review as a scope change, not a
   drive-by edit.
 

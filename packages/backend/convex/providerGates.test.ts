@@ -148,20 +148,41 @@ describe("providerGates.sealGate — a seal cannot invent a pass", () => {
     ).rejects.toThrow(/admission_does_not_permit/);
   });
 
-  // The point of contact with 28-04. Stripe is `approved_production` by OWNER OVERRIDE and its read
-  // allow-list is EMPTY BY DECISION until 28-07 settles the Stripe App route.
-  test("cannot seal Stripe passed while its read allow-list is empty by decision", async () => {
+  // The point of contact with 28-04 and 28-07. Stripe's allow-list was EMPTY BY DECISION until
+  // 28-07 settled the Stripe App route, and while it was, no seal could make Stripe passed.
+  test("an empty read allow-list still refuses a pass, whatever the owner approved", () => {
+    // Asserted against the pure rule rather than against a provider, because no provider's list is
+    // empty any more — and the guard must outlive the one that happened to be empty.
+    const verdict = resolveProviderEligibility(
+      {
+        provider: "stripe",
+        environment: "production",
+        admission: "approved_production",
+        lane: "passed",
+        reviewBy: Date.now() + 86_400_000,
+        clearedConditions: [...openConditionIdsFor("stripe")],
+      },
+      { now: Date.now(), readPathCount: 0, openConditions: openConditionIdsFor("stripe") },
+    );
+    expect(verdict.state).toBe("parked");
+    expect(verdict.reasons).toContain("no_read_paths");
+  });
+
+  test("with the allow-list filled, a fully evidenced Stripe seal is accepted", async () => {
     const { asOwner } = await harness();
-    expect(PROVIDER_READ_PATHS.stripe).toEqual([]);
-    await expect(
-      asOwner.mutation(
-        api.providerGates.sealGate,
-        sealArgs({
-          provider: "stripe",
-          clearedConditions: [...openConditionIdsFor("stripe")],
-        }),
-      ),
-    ).rejects.toThrow(/no_read_paths/);
+    expect(PROVIDER_READ_PATHS.stripe.length).toBeGreaterThan(0);
+    await asOwner.mutation(
+      api.providerGates.sealGate,
+      sealArgs({
+        provider: "stripe",
+        clearedConditions: [...openConditionIdsFor("stripe")],
+      }),
+    );
+    const seen = await asOwner.query(api.providerGates.inspectGate, {
+      provider: "stripe",
+      environment: "production",
+    });
+    expect(seen.eligibility.state).toBe("passed");
   });
 
   test("parking a provider is always allowed — a refusal must never be blocked", async () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type Locator, type Page, expect, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 // Phase 29 (ROUT-02) — THE BROWSER HALF OF THE DEFERRED RECURRENCE BRANCH.
 //
@@ -75,9 +75,9 @@ async function openWorkflows(page: Page): Promise<Locator> {
 
   // LANDMARK 1 — the route rendered at all (static headline, so this alone proves nothing about
   // the queries).
-  await expect(page.getByRole("heading", { name: "Make a workflow fit your business" })).toBeVisible(
-    { timeout: 20_000 },
-  );
+  await expect(
+    page.getByRole("heading", { name: "Make a workflow fit your business" }),
+  ).toBeVisible({ timeout: 20_000 });
   // LANDMARK 2 — `PinnedWorkflowButton` is mounted. ROUT-02's deferred branch requires the manual
   // rerun surface to still be there, so this is an assertion, not only a wait.
   await expect(

@@ -24,8 +24,8 @@
 // the place to introduce a weaker one.
 import { err, ok, type Result } from "./result";
 import {
-  packPreflight,
   type PackSource,
+  packPreflight,
   REACHABLE_PACK_SOURCES,
   type ReachablePackSource,
   resolveWorkflowPack,

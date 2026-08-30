@@ -1,5 +1,25 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-30 (**MERGE-ONLY ENTRY — the Phase 29 lane integrating `origin/main`.** No
+> behaviour in this subsystem changed on the 29 side. Two things landed here and both are recorded
+> because the classification registry is the export/deletion walk's only map:
+>
+> 1. From `origin/main` (Phase 28.1, already reviewed in PR #31): `billingStripeEvents: "global"`,
+>    with the reason stated on the entry — erasing it on a tenant deletion would let a REDELIVERED
+>    Stripe event re-apply, since the row is the only record the event was already seen. **This
+>    entry does not re-verify that decision**; it records that the merge carried it in.
+> 2. RESOLVED HERE, and it is the hazard this file has hit before: `tenantData.test.ts`'s table-count
+>    tripwire conflicted because BOTH lanes added tables and each bumped the number for its own.
+>    Either side's figure resolves the conflict "cleanly" and is wrong by the other side's count —
+>    the same shape as the red 28.1-01 found, where the tripwire had been failing on its own
+>    arithmetic and a genuinely unclassified table would have looked identical. **52 was DERIVED
+>    from the merged `schema.ts` and `tenantData.ts`** (52 tables, 52 classifications, nothing
+>    unclassified in either direction), not carried over from a branch, and the test comment now
+>    says to re-derive it the same way after any future merge rather than pick a side.
+>
+> `tenantData.test.ts` 4/4, `packages/core` 1476/1476 on the merged tree.)
+
+
 > Last verified: 2026-08-28 (29-06 REMEDIATION — **A SECOND KNOWLEDGE EVENT, AND THE FIRST
 > KEY-ALLOWLIST TEST IN THIS TABLE.**
 >

@@ -43,6 +43,7 @@
     "@convex-dev/workflow": "0.4.4",
     "@convex-dev/workpool": "0.4.7",
     "@openrouter/ai-sdk-provider": "3.0.0",
+    "@pikar/billing": "workspace:*",
     "@pikar/contracts": "workspace:*",
     "@pikar/core": "workspace:*",
     "@pikar/cost": "workspace:*",

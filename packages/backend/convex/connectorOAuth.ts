@@ -384,6 +384,16 @@ export async function postTokenForm(input: {
    */
   basicAuth?: { clientId: string; clientSecret: string };
   /**
+   * A single bearer credential, when the provider authenticates its token endpoint the same way it
+   * authenticates every other API request. Stripe does: the Stripe Apps token exchange and refresh
+   * are ordinary `api.stripe.com` calls signed with the app developer's secret key.
+   *
+   * Mutually exclusive with `basicAuth` — sending both would be a caller that does not know which
+   * credential it holds, and picking one for it is how the wrong secret reaches the wire. The value
+   * is consumed into a header inside this function and is never returned or logged.
+   */
+  bearerAuth?: string;
+  /**
    * Send `form`'s pairs as a flat JSON object instead of `application/x-www-form-urlencoded`.
    *
    * One flag rather than a second body type, because the only caller that needs it is Intuit's
@@ -404,6 +414,18 @@ export async function postTokenForm(input: {
       input.asJson === true ? "application/json" : "application/x-www-form-urlencoded",
     Accept: "application/json",
   };
+  if (input.basicAuth !== undefined && input.bearerAuth !== undefined) {
+    throw new Error("A connector token endpoint takes one client credential, not two.");
+  }
+  if (input.bearerAuth !== undefined) {
+    if (input.bearerAuth === "") {
+      // Same reasoning as the empty-Basic refusal below: `Bearer ` alone produces a 401 the caller
+      // would classify as the tenant's dead grant, sending them to reconnect over a deployment
+      // fault that reconnecting cannot fix.
+      throw new Error("A connector token endpoint needs a non-empty bearer credential.");
+    }
+    headers.Authorization = `Bearer ${input.bearerAuth}`;
+  }
   if (input.basicAuth !== undefined) {
     const { clientId, clientSecret } = input.basicAuth;
     if (clientId === "" || clientSecret === "") {

@@ -199,6 +199,59 @@ served from `https://static.developer.intuit.com/JSONObjects/` and return 403 to
 
 ---
 
+## Lane gate status — 2026-08-28 (28-06)
+
+**NO LIVE GRANT WAS AVAILABLE. THE LANE HAS NEVER SPOKEN TO INTUIT.**
+
+The rail is built and offline-proven: `packages/revenue/src/providers/quickbooks.ts` (73 tests),
+`convex/quickbooksAuth.ts` + `convex/quickbooks.ts` (90 tests), and
+`scripts/smoke-quickbooks-read.mjs` (22 validator cases). Every one of those ran at $0 against a
+stubbed transport. **None of them is evidence about QuickBooks.**
+
+The owner ATTESTED on 2026-08-27 that Pikar holds Intuit production credentials. That attestation
+is recorded above as testimony and is not a grant: on 2026-08-28 no Intuit credential is loaded in
+this deployment, so 28-06 could not run the live report/revoke gate it was asked for. It built the
+gate instead, proved the gate's own guards against a stub, and stopped.
+
+Consequently:
+
+- `providerGates.quickbooks` lane stays **`parked`**. `availableProviders` does not list QuickBooks
+  and every tenant-facing read returns `unavailable`.
+- The open condition **`partner-tier-and-poll-budget` stays UNCLEARED.** The App Partner Program
+  tier is still unknown; the Builder-tier 500,000 CorePlus calls/workspace/month figure is a
+  documented ceiling for **one** tier, not this app's entitlement.
+- **REVN-02 and REVN-05 stay PENDING.** 28-23 owns the live seal.
+
+### What the owner must set before the gate can run
+
+All on the **deployment**, not `.env.local` (`cd packages/backend`):
+
+| `npx convex env set` | Why | Without it |
+|---|---|---|
+| `QUICKBOOKS_CLIENT_ID` | Intuit app identity | `beginConnect` throws naming the variable |
+| `QUICKBOOKS_CLIENT_SECRET` | Token exchange, rolling refresh, revoke | No connect, no refresh, no upstream revoke |
+| `QUICKBOOKS_REDIRECT_URI` | `https://<deployment>.convex.site/quickbooks/callback` | Intuit refuses the exchange — it matches the registered URI **exactly** |
+| `QUICKBOOKS_HOME_CURRENCY` | ISO 4217 of the company's books; optional | Amounts default to `USD`, which **mislabels money** for a non-USD company rather than failing |
+| `CONNECTOR_CREDENTIAL_KEY_V1` | Credential envelope key (already required phase-wide) | No credential can be sealed or opened |
+
+Then connect a company and run:
+
+```
+node scripts/smoke-quickbooks-read.mjs --tenant <tenantId> --environment sandbox
+node scripts/smoke-quickbooks-read.mjs --tenant <tenantId> --environment sandbox --revoke   # DESTRUCTIVE
+```
+
+`--self-test` and `--verify-evidence <file>` are offline and require none of the above. A file
+recorded in `self-test` mode is refused as lane evidence by name.
+
+### Still not landed
+
+The HTTP callback route. `quickbooksAuth.handleCallback` is an `internalAction` and **nothing
+calls it yet** — registering `/quickbooks/callback` on the router touches `http.ts`, which 28-06
+does not own (28-09). A live run needs that route first.
+
+---
+
 ## Evidence URLs
 
 - https://developer.intuit.com/app/developer/qbo/docs/learn/scopes · https://static.developer.intuit.com/output_html/qbo/docs/learn/scopes.html

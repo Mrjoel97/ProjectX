@@ -213,6 +213,52 @@ refunds, no credits** — those are explicitly deferred by 28-CONTEXT.
 
 ---
 
+## What plan 28-08 actually built — 2026-08-28
+
+**The lane is BUILT, PARKED, and cannot connect. That is the deliverable, not a shortfall.**
+
+| Landed | What it is |
+|---|---|
+| `packages/revenue/src/providers/paypal.ts` | Pure normalizer for the two published reporting responses. Decimal strings through `parseMoney` (BigInt/string; no float ever holds an amount). `PAYPAL_PARTNER_TRANSACTIONS_PATH = null` — **the gap as a value**. |
+| `packages/backend/convex/paypalAuth.ts` | The authorization model. `classifyGrantSubject` fails CLOSED to `app_owner`; `beginConnect` refuses and names the gap; `disconnect` is a local clear recorded `unsupported`. No token is minted anywhere. |
+| `packages/backend/convex/paypalConnector.ts` | Bounded reads, gated for tenants and ungated for the evidence door. Re-checks the grant subject after decryption and refuses an app-owner credential **before the request leaves**. |
+| `scripts/smoke-paypal-read.mjs` | Runnable-on-credentials. `--self-test` is 31 offline cases, every guard observed refusing. A bare run exits **2**. |
+
+**No live run has happened and none can happen today.** `beginConnect` refuses because the
+third-party read surface is unpublished (carried-forward item 3 below). A client-credentials token
+would read **Pikar's own PayPal account**; wiring one into a tenant connection so that something
+reads is the data-disclosure defect this lane exists to prevent, and it would have produced a green
+suite and a working smoke run.
+
+### New finding from implementation — the invoice half of the read surface was DROPPED
+
+The approved read surface names invoices. PayPal's `rest_endpoint_features_enum` has **no read-only
+invoice member**: the only feature that reaches an invoice is `INVOICE_READ_WRITE`, which also grants
+invoice dispatch — a write 28-CONTEXT explicitly defers. So `INVOICE_READ_WRITE` is on
+`PAYPAL_REFUSED_FEATURES` and the invoice entity does not exist. The read surface built is
+**transactions and balances only**. This narrows the approval; it does not widen it.
+
+### Deployment configuration — TWO names, and neither is a credential family
+
+```
+cd packages/backend
+npx convex env set PAYPAL_PARTNER_MERCHANT_ID   <Pikar's OWN PayPal merchant id>
+npx convex env set CONNECTOR_CREDENTIAL_KEY_V1  <base64 32-byte key>   # if not already set
+```
+
+There is deliberately **no `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`**, because nothing in this
+repository mints a PayPal token. `PAYPAL_PARTNER_MERCHANT_ID` is a public merchant id, not a secret;
+it exists so `classifyGrantSubject` can tell Pikar's ledger apart from a tenant's, and every read
+fails closed while it is unset.
+
+### Nothing above clears anything
+
+`no-documented-revoke-endpoint` remains **UNRESOLVED**, the `providerGates` lane row remains
+**`parked`**, and the `approved_production` marker still rests on owner testimony. A sandbox run
+could not change any of that: PayPal states sandbox calls work *before* approval.
+
+---
+
 ## Evidence URLs
 
 - https://developer.paypal.com/api/transaction-search/v1/

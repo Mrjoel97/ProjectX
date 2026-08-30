@@ -1,12 +1,26 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
-> Last verified: 2026-08-28 against 28-06 Task 2 (the pure read normalizer landed)
+> **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
+> subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
+> steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
+> behaviour change, and **this is not a re-verification of anything below.** The
+> `Last verified` line still means what it said.
+
+> Last verified: 2026-08-28 against 28-07 (`boundedWindow`, `normalizeAll` and
+> `separateByCurrency` hoisted from `providers/quickbooks.ts` to `providers/shared.ts` and
+> re-exported — no behaviour change), on top of 28-06 complete (OAuth, bounded reads, gate script)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-06, 28-23) · Related ADRs: none yet
 
-> **Status: PARTLY BUILT.** The pure normalizer (`packages/revenue/src/providers/quickbooks.ts`) is
-> landed and offline-proven. Everything still marked **[PLANNED]** is a contract a later plan must
-> satisfy, not a claim of landed behaviour. Shared credential, OAuth-state, fetch, telemetry and
-> release rules live in `revenue-connectors.md` and are not repeated here.
+> **Status: BUILT AND OFFLINE-PROVEN. THE LANE HAS NOT RUN LIVE.** The normalizer, the OAuth
+> module, the read adapter and the lane gate script are landed with 90 backend + 73 pure tests and
+> 22 gate-validator cases — every one $0 against a stub. **Nothing here has ever spoken to Intuit,
+> and on 2026-08-28 no Intuit credential was loaded in this deployment,** so 28-06 could not run
+> the live report/revoke gate it was asked for. The `providerGates` lane row stays `parked`, the
+> open condition `partner-tier-and-poll-budget` stays UNCLEARED, REVN-02/05 stay PENDING, and
+> 28-23 owns the live seal. The env names a live run needs are in
+> `docs/connectors/quickbooks-suitability.md`.
+> Shared credential, OAuth-state, fetch, telemetry and release rules live in
+> `revenue-connectors.md` and are not repeated here.
 
 ## Purpose
 
@@ -21,12 +35,23 @@ naive shared implementation destroys connections.
   allow-listed query entities into named normalized fields. No Convex imports, no URL, no request
   verb, no arithmetic — `finance.ts` owns every number.
 
+- `packages/backend/convex/quickbooksAuth.ts` — **LANDED.** Realm-bound
+  `beginConnect` / `handleCallback` / `refreshConnection` / `disconnect`. Contains no request verb
+  and no transport: the only non-GET in the connector plane is `connectorOAuth.postTokenForm`.
+- `packages/backend/convex/quickbooks.ts` (+ `quickbooks.test.ts`) — **LANDED.** Bounded reads.
+  `readEntity` over a four-member closed entity union, plus `receivablesSummary` and `cashOnHand`,
+  which return `finance.ts`'s figures and compute none of their own.
+
+- `scripts/smoke-quickbooks-read.mjs` — **LANDED, NEVER RUN LIVE.** The lane evidence producer:
+  `--self-test` and `--verify-evidence` are offline; a normal run needs credentials and a connected
+  company. It refuses to fake a read, and `--verify-evidence` prints **"THIS FILE IS A STUB, NOT A
+  LIVE PASS"** on anything recorded in `self-test` mode.
+
 **[PLANNED]**
 
-- `packages/backend/convex/quickbooksAuth.ts` — realm-bound authorize/callback/refresh/revoke.
-- `packages/backend/convex/quickbooks.ts` (+ `.test.ts`) — Node actions performing bounded reads.
-- `scripts/smoke-quickbooks-read.mjs` — controlled live read + revoke evidence for the lane gate.
-- `docs/connectors/quickbooks-suitability.md` — the suitability record (28-01 drafts, 28-23 decides).
+- The HTTP callback route. `handleCallback` is an `internalAction` and **nothing calls it yet** —
+  registering `/quickbooks/callback` on the router touches `http.ts`, which 28-06 does not own.
+  A live gate run needs that route first.
 
 ## Dependencies & blast radius
 
@@ -78,15 +103,33 @@ Two things the approval did **not** dissolve:
 
 ## Invariants — what must never break
 
-1. **Refresh needs a per-connection lease/CAS.** Concurrent refresh attempts with the same token
-   produce `invalid_grant` and **may invalidate the connection permanently**. Access and refresh
-   ciphertext must be replaced atomically on the same row. *Enforced by:* [PLANNED] concurrent-refresh
-   test (28-06). **Other providers must not inherit this logic** — see `revenue-connectors.md`.
-2. **Compile-time endpoint allow-list.** GET/query/report only. **No general request-method parameter**
-   and no entity create/update export exists in the module. This is the only thing standing between a
-   full-Accounting-API scope and a write. *Enforced by:* [PLANNED] 28-26 reachability test.
-3. **Realm binding.** Every read asserts the stored `realmId`. A projection may never be attributed to
-   a company it did not come from. *Enforced by:* [PLANNED] two-tenant test.
+1. **Refresh needs a per-connection lease/CAS, and exactly ONE attempt.** Concurrent refresh
+   attempts with the same token produce `invalid_grant` and **may invalidate the connection
+   permanently** — a racing or RETRIED refresh does not degrade the connection, it kills it. The
+   lease stops a second request existing; the `revision` fence stops a refresher that slept past its
+   lease from committing stale tokens; both ciphertexts replace atomically in one blob.
+   **There is no retry on any failure class.** *Enforced by:* `quickbooks.test.ts` — the lease, the
+   fence and the one-attempt rule each observed refusing ALONE, with `commitRefresh` also driven
+   directly so neither guard can be satisfied by the other (28-03 shipped a fence test that was).
+   **Other providers must not inherit this logic** — see `revenue-connectors.md`.
+2. **Compile-time endpoint allow-list, and no verb anywhere in the lane.** GET/query only. **No
+   request-method parameter, no path parameter, no entity create/update export.** A caller picks an
+   entity from a four-member closed union; the path is built from a pinned template. This is the
+   only thing standing between a full-Accounting-API scope and a write. *Enforced by:* the
+   `read-only` row of `scripts/check-provider-lane.mjs` **and** a mirrored source scan in
+   `quickbooks.test.ts` — a gate that only runs at release is a gate discovered at release.
+3. **Realm binding.** The realm is read out of the CIPHERTEXT, never from a caller argument, and is
+   validated as a plain numeric id BEFORE the single-use code is spent — it becomes a path segment.
+   Re-consent with a different realm is terminal (`account_mismatch`), not a silent re-seal. A
+   refresh can never rebind the company. *Enforced by:* two-tenant and realm-swap tests.
+   **3a. TENANT-FACING reads fail closed on the gate — and only those.** `readEntity`,
+   `receivablesSummary` and `cashOnHand` go through `gatedRead` and return `unavailable` unless
+   `providerGates.gateEligibility` resolves `passed`. The lane-evidence action
+   `quickbooksReadEvidence` deliberately does NOT check it: the gate governs CONSUMPTION, and
+   gating the evidence producer on the pass it produces would force 28-23 to seal FIRST and verify
+   afterwards — publishing QuickBooks to every tenant on evidence nobody has. 28-05 reached the
+   same conclusion for HubSpot. *Enforced by:* a pair of tests that read the SAME unsealed state
+   twice, once through each door, and require opposite answers.
 4. **Bounded requests.** Dates, pages, rows and total bytes are all capped.
    `QB_DEFAULT_WINDOW_DAYS = 180` is **this repo's choice, not a vendor recommendation.** The
    widely-repeated "Intuit recommends six months for report requests" figure is **UNSOURCED** — it
@@ -124,9 +167,11 @@ Two things the approval did **not** dissolve:
 | Command | Proves | Needs |
 |---|---|---|
 | `cd packages/revenue && pnpm vitest run src/providers/quickbooks` | Query-text construction, pagination, row normalization, missing-vs-zero, mixed currency, and that the module contains no request verb. 73 tests, all offline. | offline |
-| backend `pnpm test quickbooks` [PLANNED] | Realm binding, rotating-refresh CAS, revoke ordering, two-tenant isolation. | offline |
-| `node scripts/smoke-quickbooks-read.mjs` [PLANNED] | Sandbox or controlled live read + revoke. Lane evidence. | live creds |
-| `node scripts/check-provider-lane.mjs quickbooks` [PLANNED] | `passed` or `parked`. | offline |
+| `cd packages/backend && npx vitest run convex/quickbooks.test.ts` | Realm binding, the lease and the fence each refusing alone, one-attempt refresh, revoke ordering, gate fail-closed, 429-is-partial, mixed currency, two-tenant isolation, and the no-write-verb scan. 86 tests, all offline. | offline |
+| `node scripts/smoke-quickbooks-read.mjs --self-test` | The evidence builder and all 22 validator guards, each observed refusing. Prints that it is **not** a live pass. | offline |
+| `node scripts/smoke-quickbooks-read.mjs --verify-evidence <file>` | Schema, freshness, environment, revoke ordering, no leaked realm/token/email. Refuses a stub as lane evidence. | offline |
+| `node scripts/smoke-quickbooks-read.mjs --tenant <id>` **[NEVER RUN]** | Controlled live read; `--revoke` adds a real, destructive revoke. Lane evidence. | live creds + connected company + the callback route |
+| `node scripts/check-provider-lane.mjs --provider quickbooks --stage engineering` | Consistency, not a pass. Currently `consistent`, 1 row pending. | offline |
 
 ## Operational notes
 

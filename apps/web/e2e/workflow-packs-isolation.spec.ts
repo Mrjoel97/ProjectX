@@ -63,9 +63,9 @@ async function settle(page: Page): Promise<Locator | null> {
   await page.setViewportSize({ width: 1280, height: 1400 });
   await page.goto("/dashboard/workflows");
   const main = page.locator("main.canvas-main");
-  await expect(page.getByRole("heading", { name: "Make a workflow fit your business" })).toBeVisible(
-    { timeout: 20_000 },
-  );
+  await expect(
+    page.getByRole("heading", { name: "Make a workflow fit your business" }),
+  ).toBeVisible({ timeout: 20_000 });
   // SETTLE ON A CONTROL, NEVER ON PROSE. Measured 2026-08-30 in `routines.spec.ts`: settling on
   // `getByText("Run again")` matched the pinned surface's static intro ("…you press Run again."),
   // fired before any query resolved, and every assertion after it ran against a loading page. A
@@ -153,7 +153,9 @@ test.describe("two identities — one tenant's customization is not another's", 
       await pageB.getByLabel("Email Address").fill(emailB as string);
       await pageB.getByLabel("Password", { exact: true }).fill(passwordB as string);
       await pageB.getByRole("button", { name: /sign in/i }).click();
-      await expect(pageB.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15_000 });
+      await expect(pageB.getByRole("button", { name: "Sign out" })).toBeVisible({
+        timeout: 15_000,
+      });
 
       const mainB = (await settle(pageB)) as Locator;
       test.skip(mainB === null, "no pack is active for B");
@@ -167,4 +169,3 @@ test.describe("two identities — one tenant's customization is not another's", 
     }
   });
 });
-

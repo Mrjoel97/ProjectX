@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
@@ -61,7 +61,9 @@ function readDecision(): { decision: Decision; frontmatter: string } {
   if (line === null) throw new Error(`${decisionPath} frontmatter has no \`decision:\` line`);
   const value = line[1] as string;
   if (!(DECISIONS as readonly string[]).includes(value)) {
-    throw new Error(`${decisionPath} records decision "${value}", not one of ${DECISIONS.join("/")}`);
+    throw new Error(
+      `${decisionPath} records decision "${value}", not one of ${DECISIONS.join("/")}`,
+    );
   }
   return { decision: value as Decision, frontmatter };
 }

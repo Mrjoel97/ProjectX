@@ -117,6 +117,14 @@ describe("intakeDb round-trip (Wave-0 seed check)", () => {
 describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> merge", () => {
   // Slower than the default 5000ms: this is the only test exercising the FULL happy path
   // (extract -> redact -> persist -> audit -> merge) plus every assertion query afterward.
+  //
+  // 60s, RAISED FROM 20s ON 2026-08-29 — and the margin is the whole point. Measured at ~12.7s in
+  // an IDLE isolated run, i.e. 1.6x under the old cap; in a full-suite run (109 files, forks pool)
+  // the same work exceeds 20s and times out. A timeout here does not fail one test: it abandons the
+  // action mid-flight and the file's later vault assertions cascade to `expected [] to have length
+  // 1`, which reads exactly like "attachToThread stopped writing vault docs". That is the real cost
+  // — while this file flaps between 0, 6 and 9 failures, a GENUINE intake regression is
+  // indistinguishable from the flake. Do not shave this back to hug the measured number.
   test("a SMOKE::extract:: fixture carrying PII is redacted before persist/audit/merge (§4 honeypot)", async () => {
     const t = setup();
     const { asT, threadId } = await seedThread(t);
@@ -165,7 +173,7 @@ describe("attachToThread (INTK-02) — extract -> redact -> persist -> audit -> 
     const merged = page.page.find((m) => m.text?.includes("receipt.png"));
     expect(merged?.text).toContain("[EMAIL_1]");
     expect(merged?.text).not.toContain(RAW_EMAIL);
-  }, 20000);
+  }, 60000);
 
   test("fail-closed: a poisoned fixture forces scanText's own Err path -> failed, no safeText, no merge, ONE refs-only audit row (OPSG-02)", async () => {
     const t = setup();

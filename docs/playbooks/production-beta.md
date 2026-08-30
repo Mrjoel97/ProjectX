@@ -75,6 +75,47 @@
 > model keys, which turned a lost-credentials misconfiguration into silent fabrication; see
 > `docs/playbooks/vault.md`'s wave-3 block. NOTHING ELSE in the readiness surface changed, and this
 > entry does NOT discharge the separate bump this playbook owes for Phase 28's `lib/env.ts` change.)
+> Last verified: 2026-08-29 (28.1-04 billing — **TWO NEW `feature`-TIER MANIFEST NAMES:**
+> `BILLING_STRIPE_SECRET_KEY` and `BILLING_STRIPE_PRICE_ID`, added to `ENV_MANIFEST` in
+> `convex/lib/env.ts`. A **FOURTH** credential family, and the one that CHARGES CARDS: it is Pikar's
+> OWN merchant account, not the Phase 28 `STRIPE_APP_*` connector into a tenant's account. Both are
+> `feature` — unset, `startCheckout` and `portalLink` throw naming the variable and no request
+> reaches Stripe, which is the correct current state since **neither is set in any deployment**.
+> There is no development fallback (`p25-no-dev-fallback`); a fallback key here would charge a real
+> card from a misconfigured deployment. Convex deployment vars set from `packages/backend`, never
+> Vercel, never `.env`.
+>
+> `env.test.ts` is BIDIRECTIONAL — a row nothing reads is as red as a read nobody classified — so
+> each row had to land in the SAME commit as its first LITERAL `process.env.X`. A computed
+> `process.env[name]` is invisible to that scan; see `docs/playbooks/billing.md`.
+>
+> Previously verified 2026-08-28 (28-08 PayPal rail; 28-05 HubSpot rail — **THREE NEW `feature`-TIER MANIFEST NAMES:**
+> `HUBSPOT_OAUTH_CLIENT_ID`, `HUBSPOT_OAUTH_CLIENT_SECRET`, `HUBSPOT_OAUTH_REDIRECT_URI`, added to
+> `ENV_MANIFEST` in `convex/lib/env.ts`. Caught the same way `PEXELS_API_KEY` was: `env.test.ts`
+> scans source for literal `process.env.X` and reds on any consumed name nobody classified.
+>
+> **A THIRD credential family**, unrelated to sign-in or mailboxes: Phase 28 connector grants. All
+> three are `feature` — with none set the app runs and the HubSpot rail refuses to connect loudly
+> (`requireHubSpotConfig` throws naming the variable). No development fallback, per
+> `p25-no-dev-fallback`. Convex deployment vars (`npx convex env set`), never Vercel.
+>
+> **THE GAP THIS PLAYBOOK MUST CARRY: the connector credential ENCRYPTION key is NOT in the**
+> **manifest and cannot be.** `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` are read through a *computed*
+> `process.env[name]` in `connectorCredentials.requireCredentialKey`, so the literal scan in
+> `env.test.ts` is structurally blind to them — the drift gate that catches every other name will
+> stay green if these are unset or lost. Losing them is unrecoverable: every stored connector
+> credential is AES-256-GCM ciphertext bound to that key. Setup, rotation and loss operations live
+> in docs/playbooks/revenue-connectors.md; this playbook records only that the manifest does not
+> and will not cover them.
+>
+> QuickBooks and Stripe added their own `feature`-tier names as 28-06/28-07 landed. **28-08 adds
+> exactly ONE: `PAYPAL_PARTNER_MERCHANT_ID`** — and it is NOT a credential. It is Pikar's own
+> PayPal merchant id, the account a bare client-credentials token would reach, and
+> `paypalAuth.classifyGrantSubject` compares against it to tell the app's own account apart from a
+> tenant's merchant. Unset, every PayPal read fails closed rather than risk attributing Pikar's own
+> transactions to a tenant. There is deliberately **no `PAYPAL_CLIENT_ID`/`_SECRET`**: nothing in
+> this repository mints a PayPal token, because the only token it could mint reads Pikar's account.
+> Nothing else in this playbook's scope was re-read against this change.)
 
 > Last verified: 2026-08-26 (**ONE NEW `feature`-TIER MANIFEST NAME: `PEXELS_API_KEY`**, added to
 > `ENV_MANIFEST` in `convex/lib/env.ts` for the free stock-footage scenes. The row is mandatory

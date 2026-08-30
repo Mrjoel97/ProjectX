@@ -89,8 +89,7 @@ const TRANSPORT_ERROR = "That could not be saved. Check your connection and try 
  *  `ACTIVATION_NOTE`'s "no workflow uses them yet": that sentence is already on screen, above the
  *  form, and saying it twice on success reads as a warning about the save rather than about the
  *  release. */
-const SAVED_CONFIRMATION = (version: number) =>
-  `Saved. Your settings are version ${version}.`;
+const SAVED_CONFIRMATION = (version: number) => `Saved. Your settings are version ${version}.`;
 
 /** The approved template's own name. An unknown id is NAMED as unknown, never echoed as a title. */
 function packTitle(packId: string): string {

@@ -126,6 +126,11 @@ describe("the closed schema is genuinely closed", () => {
       "apps/web/package.json",
       "packages/audit/package.json",
       "packages/backend/package.json",
+      // ADDED 2026-08-30 by the merge of `origin/main` (Phase 28.1's new workspace package).
+      // Read before pinning, because a dependency manifest is exactly where a scheduler
+      // library would enter: `@pikar/billing` declares only `@pikar/core`, `@pikar/revenue`
+      // and vitest — no timer, cron or queue dependency.
+      "packages/billing/package.json",
       "packages/contracts/package.json",
       "packages/core/package.json",
       "packages/cost/package.json",

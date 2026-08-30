@@ -121,6 +121,13 @@
 >    MUTATIONS OBSERVED RED: insert `Gmail` into the planner body; remove the whitespace collapse.
 >
 > PREVIOUS: 2026-08-27 (**SUPERSEDES "A FILTERED PROBE OF AN EMAIL FIXTURE MUST CARRY A PIN"
+> **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
+> subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
+> steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
+> behaviour change, and **this is not a re-verification of anything below.** The
+> `Last verified` line still means what it said.
+
+> Last verified: 2026-08-27 (**SUPERSEDES "A FILTERED PROBE OF AN EMAIL FIXTURE MUST CARRY A PIN"
 > BELOW. THAT RULE IS GONE, BECAUSE THE THING THAT MADE IT NECESSARY IS FIXED.** An unpinned run no
 > longer withholds the email rail: `isPinnedCockpitEvaluation` became
 > `isHarnessDrivenEvaluation(tenantId)`, keyed on the `eval-` tenant prefix alone. Any run shape —

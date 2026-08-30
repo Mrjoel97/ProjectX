@@ -154,9 +154,9 @@ test.describe("offline fixture seam — deterministic gap states at $0", () => {
     await expect(panel.getByTestId("knowledge-answer")).toHaveCount(1);
 
     // The established offline cockpit send (cockpit-briefing.spec.ts): a governed tool, no model.
-    await page.getByPlaceholder("What business outcome should we work on?").fill(
-      "SMOKE::agent::brief=today",
-    );
+    await page
+      .getByPlaceholder("What business outcome should we work on?")
+      .fill("SMOKE::agent::brief=today");
     await page.keyboard.press("Enter");
     // The thread now exists — the composer clears and the workspace is in a conversation.
     await expect(page.getByPlaceholder("What business outcome should we work on?")).toHaveValue("");

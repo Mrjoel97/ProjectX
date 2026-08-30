@@ -230,6 +230,82 @@ update, transfer, payout-create, customer update, or a generic request method. D
 
 ---
 
+## Lane gate status — 2026-08-28 (plan 28-07)
+
+**THE LANE WAS BUILT. IT HAS NEVER RUN LIVE.** There is no Stripe App credential in this deployment,
+so `scripts/smoke-stripe-read.mjs` could not be run against Stripe at all. The plan's Task 3 became:
+create the gate, prove it offline, and stop — the same shape 28-05 and 28-06 used for HubSpot and
+QuickBooks.
+
+`node scripts/check-provider-lane.mjs --provider stripe` reads **`consistent`, 1 row pending**.
+Consistent is NOT passed. The `providerGates` lane row stays `parked` and the open condition
+`platform-initiated-revocation` stays **UNCLEARED**. 28-24 owns the seal.
+
+### What the route turned out to be
+
+The 2026-08-05 remedy ("become a Connect Extension") is a closed door. 28-07 built the **Stripe App**
+route instead: `marketplace.stripe.com/oauth/v2/authorize` for consent,
+`POST api.stripe.com/v1/oauth/token` for the exchange and the rolling refresh, and manifest
+permissions that are all `*_read`. Nothing in the lane references
+`connect.stripe.com/oauth/deauthorize`, and a source scan keeps it that way.
+
+Three rows of the lane check moved from pending to OK: `adapter`, `read-only` and `allow-list`.
+`PROVIDER_READ_PATHS.stripe` was `[]` **by decision** from 28-04 — 28-26 wired its LENGTH into
+`resolveProviderEligibility`, so Stripe could read nothing and failed closed on every call whatever
+the owner approved. It now holds five list/retrieve paths: `/v1/balance`, `/v1/charges`,
+`/v1/invoices`, `/v1/payouts`, `/v1/disputes`. Every one has a parser, and the pure module's table is
+compared against the transport's allow-list in both directions by a test.
+
+### The open condition is IMPLEMENTED, not closed
+
+`disconnect` makes **zero** upstream requests and records `revocation.upstream = "unsupported"`.
+There is no documented platform-initiated revoke for Stripe Apps, so there is no request that could
+have returned a 200 (`confirmed`) or an error (`attempted_failed`), and `not_attempted` would claim
+an endpoint exists that we skipped. `classifyRevokeOutcome` makes `confirmed` unreachable for this
+provider before it examines a status code, and the smoke validator rejects any evidence file whose
+`revocation.upstream` is not `unsupported`.
+
+**A local ciphertext clear is never reported as an upstream revocation.** The evidence file must also
+carry `grantRemainsLiveUpstream: true`, because that is the sentence the tenant is owed: Pikar
+stopped using and deleted its copy; the grant stays live on Stripe until the *user* uninstalls the
+app. **None of this resolves the condition.** 28-24 still owes a Stripe support answer or an explicit
+tenant-visible statement, and no test in this repository can prove an API that is not documented to
+exist.
+
+### The API version pin has NO DEFAULT, deliberately
+
+`STRIPE_APP_API_VERSION` is required, format-validated, and absent it the lane returns `unavailable`
+and makes no request. This repository cannot verify a currently-valid Stripe version string offline,
+and inventing one would be a fabricated fact; leaving it unset would silently read against whichever
+version the **connected account's** dashboard is on, which the tenant can change under us. The
+evidence file records the pin it was read against, and the validator rejects a file without one.
+
+### The poll budget, sized against the allocation
+
+Not against the 100 req/s rate limit — against **500 reads per transaction with a 10,000/month
+floor**, aggregated across connected accounts over a rolling 30 days. `limit=100`, at most 5 pages
+per entity, 5 entities: a full poll costs at most **25 requests**, so an account on the floor
+tolerates roughly 400 polls a month. Raising either bound spends that budget.
+
+### What the owner must set for a live run
+
+On the **deployment** (`cd packages/backend`, then `npx convex env set …`):
+
+| Name | Note |
+|---|---|
+| `STRIPE_APP_CLIENT_ID` | The Stripe App's OAuth client id. |
+| `STRIPE_APP_SECRET_KEY` | The **app developer's** `sk_…` secret key. **NOT** `BILLING_STRIPE_SECRET_KEY` — that is phase 28.1's write-capable merchant credential and pointing this lane at it would read Pikar's own books. |
+| `STRIPE_APP_REDIRECT_URI` | Must appear in the app manifest's `allowed_redirect_uris`. |
+| `STRIPE_APP_API_VERSION` | A dated Stripe API version. No default; the lane refuses to read without it. |
+| `CONNECTOR_CREDENTIAL_KEY_V1` | If not already set. |
+
+A live run ALSO needs two things that do not exist yet: the **Stripe App itself must be registered**
+with the `*_read` manifest permissions listed in `STRIPE_APP_PERMISSIONS` (an owner action, not a
+repo artefact), and the `/stripe/callback` route — `handleCallback` is an `internalAction` with **no
+caller** (28-09).
+
+---
+
 ## Evidence URLs
 
 - https://docs.stripe.com/connect/oauth-reference

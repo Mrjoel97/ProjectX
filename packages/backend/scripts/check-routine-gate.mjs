@@ -286,8 +286,7 @@ export function checkEvidenceRef(ref, repoRoot = repoRootDefault) {
   } catch {
     return { ok: false, path, id, reason: "does not resolve to a file in this repo" };
   }
-  if (!stat.isFile())
-    return { ok: false, path, id, reason: "resolves to a directory, not a file" };
+  if (!stat.isFile()) return { ok: false, path, id, reason: "resolves to a directory, not a file" };
   if (stat.size === 0) return { ok: false, path, id, reason: "resolves to an EMPTY file" };
   return { ok: true, path, id };
 }
