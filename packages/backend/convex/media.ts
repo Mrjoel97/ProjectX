@@ -873,9 +873,19 @@ export const listJobs = internalQuery({
 
 // ── Media provider adapters ────────────────────────────────────────────────────────────
 //
-// Submit new visual and audio lines to OpenAI. GPT Image 2 returns image bytes synchronously;
-// Sora returns a video id, so clips are polled and copied into Convex storage before their rows land.
+// Submit new visual and audio lines. TWO vendors live here as of 33.1-03, and which one an arm
+// talks to decides which credential it reads:
+//   - image  -> OPENROUTER, `openrouter.ai/api/v1/images`, on OPENROUTER_API_KEY. Bytes come back
+//               synchronously in `data[0].b64_json`, byte-identically to the OpenAI shape it
+//               replaced (measured 2026-08-30, see 33.1-PRICE-EVIDENCE.md).
+//   - video  -> still OpenAI's Videos API on OPENAI_API_KEY. That endpoint is WITHDRAWN 2026-09-24
+//               and plan 33.1-05 moves it; it is deliberately untouched here.
+//   - tts/stt-> still OpenAI, on OPENAI_API_KEY. Not part of this migration.
 // The legacy Wan poller remains only for tasks submitted before the provider cutover.
+//
+// ponytail: two vendors, two hardcoded hosts, selected by `spec.kind` — not a provider registry.
+// `pollWanTask` beside `pollOpenAiVideoTask` is this file's own precedent for a retained sibling
+// adapter. Upgrade path: a THIRD vendor is a third branch; only a fourth earns a table.
 
 /** The `gmailAuth.requireEnv` idiom with a media-worded message. Provider credentials are Convex
  *  deployment env vars (`npx convex env set`), never client-visible variables. */
@@ -921,6 +931,17 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
         size: { "480p": "480x854", "720p": "720x1280", "1080p": "1080x1920" }[spec.resolution],
       };
     case "image":
+      // NO `.replace(/^openai\//, "")` here, and that asymmetry with the `tts` arm below is the
+      // point: `tts` posts to OpenAI's OWN API, which does not know a route prefix, while this arm
+      // posts to OpenRouter, which does. Stripping here would send `gpt-image-2` to a gateway that
+      // has never heard of that id.
+      //
+      // `size` and NOT `aspect_ratio`, and never both. Measured 2026-08-30 (33.1-PRICE-EVIDENCE.md):
+      // they are NOT interchangeable — `aspect_ratio: "9:16"` returns 864x1536 at $0.003735, `size`
+      // returns 1024x1536 at $0.004875. `size` reproduces MEDIA_DEFAULT_IMAGE's exact geometry, so
+      // the migration changes the transport and not the picture. (The 9:16 option is both cheaper
+      // and better-composed for a 1080x1920 reel; it is deferred to its own phase because it changes
+      // what every generated still LOOKS like, and improvements do not ride in on a migration.)
       return {
         model: spec.model,
         prompt: text,
@@ -988,10 +1009,15 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-/** Submit one new visual line to OpenAI. Images return their bytes synchronously; Sora returns an
- *  asynchronous video id which `pollOpenAiVideoTask` owns. */
+/** Submit one new visual line. IMAGES go to OpenRouter and return their bytes synchronously;
+ *  VIDEO still goes to OpenAI and returns an asynchronous video id which `pollOpenAiVideoTask`
+ *  owns. The credential follows the vendor, not the function. */
 export async function submitLine(spec: VisualSpec, text: string): Promise<SubmitResult> {
-  const key = requireEnvMedia("OPENAI_API_KEY");
+  // ONE read, keyed on the vendor the branch below actually posts to. Deliberately still ABOVE the
+  // fixture short-circuit: "fixture mode is free but still requires configured credentials" is an
+  // existing invariant with its own test, and an offline run that stops proving the credential
+  // exists is an offline run that stops catching the misconfiguration it was there to catch.
+  const key = requireEnvMedia(spec.kind === "image" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY");
 
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
     return spec.kind === "image"
@@ -1015,7 +1041,7 @@ export async function submitLine(spec: VisualSpec, text: string): Promise<Submit
         body: form,
       });
     } else {
-      response = await fetch("https://api.openai.com/v1/images/generations", {
+      response = await fetch("https://openrouter.ai/api/v1/images", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1046,7 +1072,9 @@ export async function submitLine(spec: VisualSpec, text: string): Promise<Submit
     }
     return {
       ok: true,
-      requestId: response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`,
+      // The 2026-08-30 probe did NOT record whether OpenRouter returns `x-request-id`, so this
+      // fallback is load-bearing rather than decorative — and it must not name OpenAI.
+      requestId: response.headers.get("x-request-id") ?? `openrouter-${crypto.randomUUID()}`,
       asset: { bytes: decodeBase64(encoded), mimeType: "image/png" },
     };
   }

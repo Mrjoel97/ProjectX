@@ -1,5 +1,24 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-30 (33.1-03 — **`OPENROUTER_API_KEY` IS NOW REQUIRED BY TWO INDEPENDENT
+> PLANES, AND THAT RETIRES THE CONDITIONAL BELOW.** The 2026-08-24 block says the tier "must drop
+> back to `feature` on the same edit that reverts those pins". **It must not.** The still-image
+> submit (`submitLine`, `packages/backend/convex/media.ts`) moved from `api.openai.com` to
+> `openrouter.ai/api/v1/images` and reads `OPENROUTER_API_KEY`, so the key is `required` by the
+> media plane whatever the model pins do. Reverting `stealth/ox-alpha` no longer makes it optional.
+>
+> **`OPENAI_API_KEY` IS NOT NOW OPTIONAL, and an operator reading the readiness screen must not
+> conclude that it is.** It still carries voiceover (TTS, `generateOpenAiVoice`), captions (STT,
+> `submitCaptions`) and — until 33.1-05 lands the Grok video path — the video submit and its poller.
+> Only the IMAGE arm moved. `submitLine` picks its credential from `spec.kind`, so the two keys are
+> read on the same code path and neither substitutes for the other.
+>
+> Why the move: the OpenAI account is out of credit (`credit_balance_exhausted` on the two most
+> recent `mediaJobs` rows), so the image plane bought nothing at all. Both keys are Convex deployment
+> env vars (`npx convex env set`), never Vercel. Nothing else in this playbook's scope was re-read
+> against this change; the price row and the request shape are in docs/playbooks/media.md and
+> .planning/.../33.1-PRICE-EVIDENCE.md.)
+
 > Last verified: 2026-08-26 (**ONE NEW `feature`-TIER MANIFEST NAME: `PEXELS_API_KEY`**, added to
 > `ENV_MANIFEST` in `convex/lib/env.ts` for the free stock-footage scenes. The row is mandatory
 > rather than documentation — `env.test.ts` scans source for `process.env.X` and reds on any
