@@ -25,13 +25,13 @@
     "semantic_hash": ""
   },
   "apps/web/next.config.ts": {
-    "mtime": 1788092233.5488796,
-    "ast_hash": "a91b8841493ae5d4f891227eaed985f6",
+    "mtime": 1788110435.9571576,
+    "ast_hash": "3dd3baba372051584a92b3da42c79d8c",
     "semantic_hash": ""
   },
   "apps/web/package.json": {
-    "mtime": 1788092233.5775244,
-    "ast_hash": "281647ce2444b3f9b9b0547463acf145",
+    "mtime": 1788110435.9561348,
+    "ast_hash": "b64c1dbc79cb9d8220acfd07fcfef7cc",
     "semantic_hash": ""
   },
   "apps/web/tsconfig.json": {
@@ -1445,7 +1445,7 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/plans.ts": {
-    "mtime": 1788095578.433872,
+    "mtime": 1788105613.1470308,
     "ast_hash": "1ec419d1625e4155e8687bdfaebdb649",
     "semantic_hash": ""
   },
@@ -1510,8 +1510,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpit.test.ts": {
-    "mtime": 1788092235.0402722,
-    "ast_hash": "2ce30c2364a083047489933a261a1747",
+    "mtime": 1788113993.8339226,
+    "ast_hash": "226f9be803fe8e7b6bd3e983b1e805d1",
     "semantic_hash": ""
   },
   ".planning/phases/03.1-cockpit-core/03.1-07-SUMMARY.md": {
@@ -1585,8 +1585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1788095693.2882364,
-    "ast_hash": "dd3017c98ed369b6a72ee78c14279f6d",
+    "mtime": 1788110927.0781105,
+    "ast_hash": "0442c09e8d3238079ac55ff5ea23b3a3",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -4535,8 +4535,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatch.test.ts": {
-    "mtime": 1788095815.3672826,
-    "ast_hash": "c061bb6b6cd94a0b2d9957364b506eb9",
+    "mtime": 1788111080.3838308,
+    "ast_hash": "164ea14dfcbcac9b5bac305cafa4863e",
     "semantic_hash": ""
   },
   "packages/backend/convex/dispatch.ts": {
@@ -6205,8 +6205,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/media.md": {
-    "mtime": 1788099579.717164,
-    "ast_hash": "4262656287565e82172850e0f75dba2a",
+    "mtime": 1788114633.4084127,
+    "ast_hash": "55d763ead85f2986868d09d77833ab0a",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-08-02-profile-tabs-blueprint-segments-design.md": {
@@ -6220,13 +6220,13 @@
     "semantic_hash": ""
   },
   "packages/core/src/storyboard.test.ts": {
-    "mtime": 1788092238.4068615,
-    "ast_hash": "cd4d01eaa50977c61bc3331b75d4b6b0",
+    "mtime": 1788111080.289382,
+    "ast_hash": "f4ed8d8348941730a6424a4f2116504e",
     "semantic_hash": ""
   },
   "packages/core/src/storyboard.ts": {
-    "mtime": 1788092238.4170196,
-    "ast_hash": "0f3c4cbf92175644ee351640d4791dbe",
+    "mtime": 1788111080.0917675,
+    "ast_hash": "8949bec3169c1b47f9216719cf2139a4",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-08-02-profile-tabs-blueprint-segments.md": {
@@ -6235,8 +6235,8 @@
     "semantic_hash": ""
   },
   "packages/cost/src/media.fixtures.json": {
-    "mtime": 1788092238.5433657,
-    "ast_hash": "161210c78ec7797f7ff34cfee83dcc4b",
+    "mtime": 1788113425.4900508,
+    "ast_hash": "5e6555868dd10a8e7fa75b03a81de98c",
     "semantic_hash": ""
   },
   "packages/backend/vitest.diag.mts": {
@@ -6260,13 +6260,13 @@
     "semantic_hash": ""
   },
   "packages/cost/src/media.test.ts": {
-    "mtime": 1788092238.5433657,
-    "ast_hash": "569f2240b56828a97848760917407c8a",
+    "mtime": 1788113401.9272337,
+    "ast_hash": "ab772c8706cd66c0aabdf1e7e59ffae3",
     "semantic_hash": ""
   },
   "packages/cost/src/media.ts": {
-    "mtime": 1788092238.5433657,
-    "ast_hash": "ed69702e756aa77b057e180c00571a87",
+    "mtime": 1788113265.510112,
+    "ast_hash": "f43d3cbb0bd5d4fb8fcf1f21e4bd6c9f",
     "semantic_hash": ""
   },
   ".planning/phases/20-media-canvas/20-01-SUMMARY.md": {
@@ -6375,13 +6375,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/media.ts": {
-    "mtime": 1788092235.407398,
-    "ast_hash": "5fc6b01f88f0c8c600f3fa9f1c56803c",
+    "mtime": 1788112844.7697423,
+    "ast_hash": "06e72ad5ec8f2a1386c42dee028dcc6f",
     "semantic_hash": ""
   },
   "packages/backend/convex/media.test.ts": {
-    "mtime": 1788092235.407398,
-    "ast_hash": "aa14fe7ae266a88aa529bde56b61ffaa",
+    "mtime": 1788114691.5099945,
+    "ast_hash": "f4d8262f1cc848eaa4388406c05d7ad9",
     "semantic_hash": ""
   },
   ".planning/phases/20-media-canvas/20-04-SUMMARY.md": {
@@ -8645,8 +8645,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/mediaCanvas.test.ts": {
-    "mtime": 1788092233.2119968,
-    "ast_hash": "a3e0117c9d7af935186a2e3fa6a006fb",
+    "mtime": 1788112943.8846524,
+    "ast_hash": "0d366a5628049a9e39f0c4c2a98a082d",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitCapabilities.test.ts": {
@@ -8760,13 +8760,13 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/mediaCanvasView.ts": {
-    "mtime": 1788092233.2184274,
-    "ast_hash": "bfcf8913f9b215747d3565ac3f538d3e",
+    "mtime": 1788112997.777694,
+    "ast_hash": "8a8b4f887832a8a1b642747344557d32",
     "semantic_hash": ""
   },
   "apps/web/e2e/media-canvas.spec.ts": {
-    "mtime": 1788092233.5074258,
-    "ast_hash": "206bba77db88c5e6c0fee1a976704b02",
+    "mtime": 1788115429.2774856,
+    "ast_hash": "65800340f9ed55b458b07269c274b050",
     "semantic_hash": ""
   },
   "packages/backend/convex/microsoftAuth.test.ts": {
@@ -9305,8 +9305,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/lib/env.ts": {
-    "mtime": 1788092235.3753364,
-    "ast_hash": "b50447c08e672cab78618586119cfbf2",
+    "mtime": 1788105809.878483,
+    "ast_hash": "3bba7b95fb63a4ca259294859d5888c1",
     "semantic_hash": ""
   },
   "packages/backend/convex/ops.ts": {
@@ -9320,8 +9320,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/production-beta.md": {
-    "mtime": 1788092234.087265,
-    "ast_hash": "04b1bdd394d9ac39af004cd1e326b8e2",
+    "mtime": 1788102839.9303155,
+    "ast_hash": "686e4e9496acec0b552d7f7b9a82511f",
     "semantic_hash": ""
   },
   ".planning/phases/25-private-beta-productionization/25-OWNER-GATES.md": {
@@ -10330,8 +10330,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/deferred-items.md": {
-    "mtime": 1788096120.529699,
-    "ast_hash": "adc1bec657116ce2e7c340a5a193ab4e",
+    "mtime": 1788115573.7490132,
+    "ast_hash": "fb932909eb68eac4312951a4fc8e889e",
     "semantic_hash": ""
   },
   ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-01-SUMMARY.md": {
@@ -10347,6 +10347,21 @@
   ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-02-SUMMARY.md": {
     "mtime": 1788099706.102004,
     "ast_hash": "6bdbb23312117dded0f288579c3a9803",
+    "semantic_hash": ""
+  },
+  ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-PRICE-EVIDENCE.md": {
+    "mtime": 1788101584.1492326,
+    "ast_hash": "81155fc1c17f520860d007be92088e1a",
+    "semantic_hash": ""
+  },
+  ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-03-SUMMARY.md": {
+    "mtime": 1788105944.8810942,
+    "ast_hash": "1cfde38c3d43df13bbecc2a2bc34dd8e",
+    "semantic_hash": ""
+  },
+  ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-AUDIT.md": {
+    "mtime": 1788107772.107505,
+    "ast_hash": "ebaf46f3471697646187745c114eb3f5",
     "semantic_hash": ""
   }
 }
