@@ -4741,9 +4741,15 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
       asA.mutation(api.skills.activateTenantCandidate, { candidateId: res.tenantSkillId }),
     ).rejects.toThrow();
 
-    // And the owner cannot activate it either. Until the 29-05 remediation the blocker here was
-    // `EVAL_GATE` (nothing certified this exact row); it is now the STRICTER `PACK_GATE`, which
-    // fires on the NAME before evidence is looked at, so no evidence can move a pack tenant row.
+    // And the owner cannot activate it either — this row has no evidence on any plane.
+    //
+    // THE REASON CHANGED ON 2026-08-30 AND THE OLD ONE IS NOW FALSE. It used to read: "`PACK_GATE`
+    // ... fires on the NAME before evidence is looked at, so no evidence can move a pack tenant
+    // row." Evidence CAN move it now: `assertTenantPackActivationEvidence` demands the same three
+    // planes a global pack body clears (provenance recomputed, a pinned eval run, an authenticated
+    // multi-viewport browser run of this exact row). What this test still proves is that a row with
+    // NONE of them is refused — see the block below for the earnable half, without which this
+    // assertion would be satisfied by a gate nobody can ever pass.
     const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
     await expect(
       t
@@ -4753,6 +4759,146 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
 
     const row = await t.run((ctx) => ctx.db.get(res.tenantSkillId));
     expect(row!.status).toBe("candidate");
+  });
+
+  // ── THE TENANT PACK LANE IS EARNABLE (2026-08-30) ───────────────────────────────────────────
+  //
+  // `PACK_GATE` used to refuse every `pack-*` tenant row unconditionally, and its comment named the
+  // price of a lane: "the two evidence columns plus a tenant-scoped pack eval runner". Measured, only
+  // ONE column was owed — provenance needs none, because the row already stores `templateId`,
+  // `templateVersion`, `customizationValues` and `customizationHash`, so it is RECOMPUTED rather
+  // than trusted. That is stronger than the GLOBAL provenance plane, which checks a stored blob's
+  // shape and admits in its own docstring that it never verifies the hash against the body.
+  //
+  // THE POSITIVE WITNESS COMES FIRST ON PURPOSE. Every refusal below is satisfied by a gate that
+  // refuses everything, so without an activation that SUCCEEDS this whole block would be vacuous —
+  // the exact shape this phase kept finding.
+  const ownerOf = (t: TestConvex<typeof schema>) =>
+    t.run((ctx) => ctx.db.insert("users", { owner: true }));
+
+  const evidenceFor = (id: string, tenantId: string, version: number) =>
+    JSON.stringify({
+      runner: "eval:golden",
+      runId: "r1",
+      pass: true,
+      casesPassed: 36,
+      casesTotal: 36,
+      tenantTarget: {
+        candidateId: id,
+        registryTenantId: tenantId,
+        name: "pack-business-pulse",
+        version,
+      },
+    });
+
+  const browserFor = (id: string, version: number) =>
+    JSON.stringify({
+      pass: true,
+      authenticated: true,
+      viewports: 2,
+      tenantTarget: { candidateId: id, name: "pack-business-pulse", version },
+    });
+
+  /** Publish a real row (so provenance is genuinely correct), then attach the other two planes. */
+  const fullyEvidenced = async () => {
+    const h = await harness();
+    const res = await publish(h.asA);
+    if (!res.ok) throw new Error("publish failed");
+    const id = res.tenantSkillId;
+    const row = await h.t.run((ctx) => ctx.db.get(id));
+    await h.t.run((ctx) =>
+      ctx.db.patch(id, {
+        evidence: evidenceFor(String(id), row!.tenantId, row!.version),
+        browserEvidence: browserFor(String(id), row!.version),
+      }),
+    );
+    return { ...h, id, row: row! };
+  };
+
+  test("THE POSITIVE WITNESS: all three planes present, the owner activates it", async () => {
+    const { t, id } = await fullyEvidenced();
+    const ownerId = await ownerOf(t);
+    await t
+      .withIdentity({ subject: `${ownerId}|session_o` })
+      .mutation(api.skills.activateTenantCandidate, { candidateId: id });
+    expect((await t.run((ctx) => ctx.db.get(id)))!.status).toBe("active");
+  });
+
+  test("EVAL missing — refused, and the message names which plane", async () => {
+    const { t, id } = await fullyEvidenced();
+    await t.run((ctx) => ctx.db.patch(id, { evidence: undefined }));
+    const ownerId = await ownerOf(t);
+    await expect(
+      t
+        .withIdentity({ subject: `${ownerId}|session_o` })
+        .mutation(api.skills.activateTenantCandidate, { candidateId: id }),
+    ).rejects.toThrow(/PACK_GATE.*eval/);
+  });
+
+  test("BROWSER missing — refused", async () => {
+    const { t, id } = await fullyEvidenced();
+    await t.run((ctx) => ctx.db.patch(id, { browserEvidence: undefined }));
+    const ownerId = await ownerOf(t);
+    await expect(
+      t
+        .withIdentity({ subject: `${ownerId}|session_o` })
+        .mutation(api.skills.activateTenantCandidate, { candidateId: id }),
+    ).rejects.toThrow(/PACK_GATE.*browser/);
+  });
+
+  test("PROVENANCE: values edited underneath their hash — refused, which a stored blob could not catch", async () => {
+    const { t, id } = await fullyEvidenced();
+    // The hash stays; the values it was computed over change. A provenance plane that merely
+    // CHECKED THE SHAPE of a stored record would pass this happily.
+    await t.run((ctx) =>
+      ctx.db.patch(id, { customizationValues: JSON.stringify({ business_terms: "swapped" }) }),
+    );
+    const ownerId = await ownerOf(t);
+    await expect(
+      t
+        .withIdentity({ subject: `${ownerId}|session_o` })
+        .mutation(api.skills.activateTenantCandidate, { candidateId: id }),
+    ).rejects.toThrow(/PACK_GATE.*provenance/);
+  });
+
+  test("PROVENANCE: the template was republished since — the candidate is stale and refused", async () => {
+    const { t, id, globalId } = await fullyEvidenced();
+    // Approve a NEWER template version. The candidate's adaptation was composed against the old one,
+    // and putting yesterday's adaptation on today's approved body is exactly what this catches.
+    await t.run(async (ctx) => {
+      await ctx.db.patch(globalId, { status: "archived" });
+      await ctx.db.insert("skills", {
+        name: "pack-business-pulse",
+        version: TEMPLATE_VERSION + 1,
+        body: "REPUBLISHED",
+        status: "active",
+        createdAt: 1,
+      });
+    });
+    const ownerId = await ownerOf(t);
+    await expect(
+      t
+        .withIdentity({ subject: `${ownerId}|session_o` })
+        .mutation(api.skills.activateTenantCandidate, { candidateId: id }),
+    ).rejects.toThrow(/PACK_GATE.*provenance/);
+  });
+
+  test("ANOTHER ROW'S browser evidence cannot certify this one, at the same name AND version", async () => {
+    const { t, id, row } = await fullyEvidenced();
+    // Same name, same version, DIFFERENT candidate id — the case a name@version pin would wave
+    // through, and the reason the tenant predicate keys on the row id. Two tenants can each own
+    // version 2 of `pack-business-pulse`.
+    await t.run((ctx) =>
+      ctx.db.patch(id, {
+        browserEvidence: browserFor("kn7otherrowidnotthisone000000000", row.version),
+      }),
+    );
+    const ownerId = await ownerOf(t);
+    await expect(
+      t
+        .withIdentity({ subject: `${ownerId}|session_o` })
+        .mutation(api.skills.activateTenantCandidate, { candidateId: id }),
+    ).rejects.toThrow(/PACK_GATE.*browser/);
   });
 
   test("the audit row is refs, ids, counts and hashes ONLY — the tenant's words never reach it", async () => {

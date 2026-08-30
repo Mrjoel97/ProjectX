@@ -408,6 +408,18 @@ export default defineSchema({
     templateVersion: v.optional(v.number()),
     customizationValues: v.optional(v.string()),
     customizationHash: v.optional(v.string()),
+    /**
+     * The THIRD activation plane for a tenant pack candidate (2026-08-30). A passing, authenticated,
+     * multi-viewport browser run of THIS EXACT ROW, same JSON shape as `skills.browserEvidence`
+     * plus a `tenantTarget` that pins the candidate id.
+     *
+     * `PACK_GATE`'s comment named "two evidence columns" as the price of a tenant pack lane. Only
+     * ONE is owed: PROVENANCE for a tenant row needs no column at all, because the row already
+     * stores `templateId`, `templateVersion`, `customizationValues` and `customizationHash` — so it
+     * is RECOMPUTED at activation and compared, which is strictly stronger than trusting a stored
+     * blob. A hash that is checked beats a provenance record that is merely present.
+     */
+    browserEvidence: v.optional(v.string()),
     basedOnScope: v.union(v.literal("global"), v.literal("tenant")),
     basedOnName: v.string(),
     basedOnVersion: v.number(),

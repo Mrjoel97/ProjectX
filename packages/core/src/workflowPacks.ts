@@ -797,6 +797,44 @@ export function hasPassingPackBrowserEvidence(
 }
 
 /**
+ * The tenant-scope twin of `hasPassingPackBrowserEvidence`, pinned to a ROW ID.
+ *
+ * WHY NOT REUSE THE GLOBAL ONE. It pins `skillVersions[name] === version`, and at tenant scope that
+ * is not an identity: two tenants can each own version 2 of `pack-brand-review`, so a browser run
+ * against one tenant's candidate would certify the other's. The row id is the only thing that
+ * distinguishes them, which is the same reason `hasPassingTenantEvidence` keys on `candidateId`.
+ *
+ * Everything else is deliberately identical to the global predicate — `pass`, `authenticated`, and
+ * at least two viewports. A tenant candidate is not held to a weaker browser standard than a global
+ * pack body; if it were, the cheap way to ship an uncertified body would be to author it as a
+ * tenant row.
+ */
+export function hasPassingTenantPackBrowserEvidence(
+  browserEvidence: string | undefined,
+  target: { candidateId: string; name: string; version: number },
+): boolean {
+  if (browserEvidence === undefined) return false;
+  try {
+    const parsed = JSON.parse(browserEvidence) as Partial<PackBrowserEvidence> & {
+      tenantTarget?: { candidateId?: string; name?: string; version?: number };
+    };
+    const t = parsed.tenantTarget;
+    return (
+      parsed.pass === true &&
+      parsed.authenticated === true &&
+      typeof parsed.viewports === "number" &&
+      parsed.viewports >= 2 &&
+      t !== undefined &&
+      t.candidateId === target.candidateId &&
+      t.name === target.name &&
+      t.version === target.version
+    );
+  } catch {
+    return false; // unparseable -> fail closed
+  }
+}
+
+/**
  * Is this provenance complete and pinned to EXACTLY this (name, version)?
  *
  * ponytail: the server checks SHAPE and the VERSION PIN, not that `bodySha256` is the hash of the

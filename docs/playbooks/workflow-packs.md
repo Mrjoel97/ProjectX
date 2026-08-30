@@ -1,5 +1,37 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-31 (**THE TENANT PACK LANE EXISTS AND IS EARNABLE.** `planTenantActivation`
+> refused every `pack-*` tenant row unconditionally; `assertTenantPackActivationEvidence` now demands
+> the SAME THREE PLANES a global pack body clears, keyed to the row id. `PACK_GATE_ERROR` is still
+> the literal, so every caller and test matching on it still sees a refusal — what changed is that it
+> can now be satisfied.
+>
+> THE PRICE WAS SMALLER THAN RECORDED. The old comment named "the two evidence columns plus a
+> tenant-scoped pack eval runner". Measured, ONE column was owed:
+>  1. PROVENANCE — no column. The row already stores `templateId`, `templateVersion`,
+>     `customizationValues`, `customizationHash`, so it is RECOMPUTED at activation. That is STRONGER
+>     than the global plane, whose own docstring admits it "checks SHAPE and the VERSION PIN, not that
+>     `bodySha256` is the hash of the body it sits beside". Values edited underneath their hash are
+>     refused here; a stored-blob check could not see it. It also refuses a candidate composed against
+>     a template that has since been republished — yesterday's adaptation on today's approved body.
+>  2. EVAL — `hasPassingTenantEvidence`, which already existed and only became TRUSTWORTHY on
+>     2026-08-30, when `shouldRecordEvidence` learned to verify the pinned body was actually loaded.
+>     Before that this plane was a certificate anyone could mint.
+>  3. BROWSER — the one new column, `tenantSkills.browserEvidence`, checked by
+>     `hasPassingTenantPackBrowserEvidence`, which pins the ROW ID and not name@version. Two tenants
+>     can each own version 2; a browser run against one must never certify the other, and a test
+>     drives exactly that case.
+>
+> SIX TESTS, POSITIVE WITNESS FIRST — without an activation that SUCCEEDS every refusal below it is
+> satisfied by a gate nobody can pass, which is the shape this phase kept finding. Dropping the
+> browser plane reddens three, including a pre-existing one.
+>
+> ⚠ WHAT IS NOT BUILT YET, so nobody reads this as finished: nothing PRODUCES tenant pack evidence.
+> The golden runner still refuses `pack-`-named rows (it drives `llm:runCockpitAgent` and never runs a
+> pack specialist), and no browser gate emits a `tenantTarget`-pinned artifact. So the lane is open
+> and correct, and in practice still unreachable until an evidence producer exists for planes 2 and 3.
+> That is a smaller, better-defined job than it was — but it is a job, not a detail.)
+
 > Last verified: 2026-08-30 (**A SAVED CUSTOMIZATION NOW TAKES EFFECT — AND NOT BY ACTIVATING
 > ANYTHING.** Phase 29 shipped the customizer with the gap admitted on screen: *"Pikar cannot make a
 > workflow customization live in this release."* Two routes could close it and they are not
