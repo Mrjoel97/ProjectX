@@ -398,13 +398,18 @@ Plans:
 
 ### Phase 33.1: Media provider migration to OpenRouter: grok-imagine-video replaces sora-2 before the Videos API withdrawal, gpt-image-2 onto OpenRouter with native batching, and the persistDeck music-field fix (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Every media generation in this product runs through OpenRouter on a funded key, and a storyboard that parses is a storyboard that persists — `grok-imagine-video` replaces `sora-2` before the Videos API is withdrawn on 2026-09-24, `gpt-image-2` moves onto OpenRouter, and `persistDeck` accepts the `music` field its own parser emits.
+**Requirements**: A1-A9 (acceptance criteria in `33.1-PRD.md`; no REQUIREMENTS.md IDs minted — inserted urgent phase, like 25.1)
 **Depends on:** Phase 33
-**Plans:** 0 plans
+**Plans:** 6 plans in 5 waves
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 33.1 to break down)
+- [ ] 33.1-01-PLAN.md — The `music` fix: widen `persistDeck`'s validator and close the seam it shipped through (A1, A2) (Wave 1)
+- [ ] 33.1-02-PLAN.md — ADR-027, superseding ADR-026's video half, with both costs stated (A9) (Wave 1)
+- [ ] 33.1-03-PLAN.md — Images onto OpenRouter, priced from a real invoice (A4) (Wave 2, owner-gated: one live paid call)
+- [ ] 33.1-04-PLAN.md — The duration grid widens to 1-15, and a runway tripwire a repin cannot silence (A5) (Wave 3)
+- [ ] 33.1-05-PLAN.md — The video adapter, the succession flag, and the routing assertion (A7, A8) (Wave 4, owner-gated: one live paid call)
+- [ ] 33.1-06-PLAN.md — The skill body, the owner-timed merge, and the live image and reel (A3, A6) (Wave 5, owner-gated)
 
 ### Phase 1: Foundation & Governance Substrate
 **Goal**: The governed data + orchestration substrate exists so every later feature inherits tenant isolation, immutable audit, durable workflows, and failure handling for free â the decisions that are cheap now and expensive to retrofit.
