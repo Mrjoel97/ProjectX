@@ -1,5 +1,19 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-30 (`knowledge-query-planner` -> **v2**, and a lesson about how to verify
+> ANY body edit. THE EDIT: v1 priced omission at zero — *"a source you leave out is reported to the
+> user, plainly, as not searched — which is honest and cheap"* — while giving inclusion the only
+> stated cost, so the model omitted the tenant's own vault on an ordinary business question. v2
+> states both costs and names the cheaper mistake. Measured on the failing question: vault planned
+> **1/3 runs on v1, 3/3 on v2**; non-vacuity control — a public-fact question still leaves all four
+> tenant sources `unplanned`. THE LESSON, which is the part that generalises: **the first run after
+> the edit planned the vault and was still running v1.** `seedSkills` diffs `newest.body === body`
+> and the running `convex dev` had not yet rebuilt the `@pikar/contracts` change, so the seed was a
+> no-op and the run was sampling variance. ALWAYS read the ACTIVE ROW back —
+> `npx convex run internal.skills.getActiveSkill '{"name":"..."}'` — and confirm the version AND a
+> distinctive string from the new body BEFORE attributing any behaviour change to it. A body edit
+> that never reached the deployment is indistinguishable from one that did nothing.)
+
 > Last verified: 2026-08-29 (29-W3-TAIL-FIX2 — **`skills.test.ts` STILL CARRIED THE "DARK
 > CANDIDATE" ABSOLUTE**, in the `publishPackCustomization` header: *"since the pack gate has no
 > tenant lane, the body they compose can never become the one a specialist runs."* That is the same

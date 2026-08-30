@@ -207,8 +207,16 @@ Only *"What do our saved documents and notes say about…"* planned the vault.
 
 Nothing lied — every source correctly reported its own state — but **a user asking about their own
 documents in ordinary words can be told nothing was found while the answer sits in their vault.**
-The planner is a registry skill (`knowledge-query-planner`), so this is tunable through the skill
-body and the eval gate rather than through code. Recorded for whoever owns that body next.
+**CLOSED THE SAME DAY as `knowledge-query-planner@2`.** The v1 body priced omission at zero
+("honest and cheap") and gave inclusion the only stated cost, so a parsimonious model omitted;
+v2 states both costs and names the cheaper mistake. On the failing question the vault went from
+**1 of 3 runs to 3 of 3**, `crm-facts` was ADDED-to rather than displaced (still `not_connected`,
+still said so), and a public-fact control still leaves all four tenant sources `unplanned`.
+The full run table is in `29-VERIFICATION.md` under "The planner gap, closed".
+
+The first post-edit run looked like a fix and was not: `getActiveSkill` showed **version 1** still
+active, because `seedSkills` diffs bodies and `convex dev` had not yet rebuilt the
+`@pikar/contracts` change. Verify the ACTIVE VERSION, never the outcome of one run.
 
 The browser could not be used for this run: `auth:store retrieveAccountWithCredentials` began timing
 out at Convex's 1s mutation limit (8 consecutive times) while the backend was busy embedding, so

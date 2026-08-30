@@ -114,3 +114,7 @@ Skills/*.pdf
 # Verified against `git ls-files`: both patterns match ZERO tracked files.
 .foglamp/
 .uat-*/
+# `.playwright/` is the Playwright JSON reporter's output (PLAYWRIGHT_JSON_OUTPUT_NAME): one
+# file per live browser gate, regenerable by re-running the gate. Verified against `git ls-files`:
+# ZERO tracked files match.
+.playwright/

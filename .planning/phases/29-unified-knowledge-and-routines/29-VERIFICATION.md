@@ -44,7 +44,8 @@ retrieval, not only by unit tests and the offline fixture seam.
 
 **A BEHAVIOURAL FINDING THE ATTEMPT SURFACED, worth more than the gate it closed.** The FIRST live
 question — *"What have we agreed with customers about pricing and discounts?"* — returned
-`evidenceCount: 0` and no synthesis, because the planner marked **`vault: unplanned`** and planned
+`evidenceCount: 0` and no synthesis, because the planner marked **`vault: unplanned`** (SINCE FIXED —
+see "The planner gap, closed" below) and planned
 `crm-facts` instead, which is not connected. The tenant's own pricing document was sitting in the
 vault, embedded and retrievable, and the natural phrasing of the question never reached it. Only
 *"What do our saved documents and notes say about…"* planned the vault.
@@ -58,6 +59,42 @@ The browser half of this run could not be used: `auth:store retrieveAccountWithC
 timing out at Convex's 1s mutation limit (8 consecutive times) while the backend was busy embedding,
 so sign-in failed. The search was driven directly through `knowledgeSearch:search` with an
 `--identity`, which exercises the same tenantAction the panel calls.
+
+### The planner gap, closed — `knowledge-query-planner@2` (2026-08-30)
+
+**What was actually wrong.** The v1 body told the model only ONE side of the trade: *"A source you
+leave out is reported to the user, plainly, as not searched — which is honest and cheap. A source you
+name for no reason returns unrelated material the answer then has to explain around."* Omission is
+priced at zero there and inclusion carries the only stated cost, so a parsimonious model omits. But
+omission is not free — it spends the user's own evidence. v2 states both costs and says which mistake
+is cheaper, and adds that a business's own saved material answers questions about that business even
+when the question never says "document".
+
+**Measured, not assumed — and the first measurement was wrong.** Run 1 after the edit planned the
+vault, and it would have been easy to record that as the fix. It was not: `getActiveSkill` showed the
+active row was still **version 1**, because `seedSkills` compares bodies and the running `convex dev`
+had not yet rebuilt the `@pikar/contracts` change when it was called. Runs 2 and 3, also on v1,
+reverted. So v1's real rate is **1 of 3**, not 0 — a materially different fact, and the only reason
+it is known is that the version was checked rather than the outcome believed.
+
+| body | vault planned on *"What have we agreed with customers about pricing and discounts?"* |
+|---|---|
+| `knowledge-query-planner@1` | **1 of 3** runs |
+| `knowledge-query-planner@2` | **3 of 3** runs, `evidenceCount: 1`, correct cited answer |
+
+`crm-facts` is still planned on v2 and comes back `not_connected` — the vault was ADDED, not
+swapped in, so the user still gets the actionable "your contact and pipeline records is not connected
+yet" sentence alongside the answer.
+
+**The non-vacuity control, because "include more sources" is the easy way to fake this.** A public
+fact question — *"What is the current central bank base interest rate?"* — leaves **all four** tenant
+sources `unplanned` on v2. The body did not degenerate into naming everything; it discriminates.
+
+**No unit test is added, deliberately.** Anything assertable offline here would check the SPELLING of
+the guidance, which is the defect class this phase kept finding. The claim is a model-behaviour
+claim, so its evidence is the run table above. The one thing a test does own — that the `.md` and the
+shipped `.ts` constant never drift — is already `skillBodies.test.ts`, and it passes (34/34).
+
 - **CRM and support projections are `not_landed`**, as the owner ruled on 2026-08-27. Phase 28's
   connector rails do not exist; the search rail is Vault + Drive + Gmail.
 
@@ -168,8 +205,8 @@ that cannot already be true.*
 |---|---|
 | ~~29-13 Task 3 — owner review~~ | **APPROVED 2026-08-30.** Covers the reviewed surfaces only; the rows below are unaffected. |
 | ~~Synthesizer against a real model~~ | **CLOSED 2026-08-30** — proven via a real vault ingest + embed; see KNOW-01 above |
-| Planner leaves the vault `unplanned` for ordinary phrasings | open — a registry skill body (`knowledge-query-planner`), tunable through the eval gate |
-| Save completion signal on the customizer | product fix, not scoped here |
-| Unexplained serial-worker hang in the pack isolation spec | root cause not established; see spec header |
-| `env.test.ts` `QUICKBOOKS_*` red | **Phase 28 lane** (added by 28-06) |
-| `vaultDigest.test.ts` full-suite load flake | unowned; 17/17 in isolation |
+| ~~Planner leaves the vault `unplanned` for ordinary phrasings~~ | **CLOSED 2026-08-30** — `knowledge-query-planner@2`, measured 1/3 -> 3/3 on the failing question with a non-vacuity control; see below |
+| ~~Save completion signal on the customizer~~ | **CLOSED 2026-08-30** — the `saved` state existed and nothing rendered it; now a `role="status"` line, asserted absent before the save |
+| ~~Unexplained serial-worker hang in the pack isolation spec~~ | **ROOT-CAUSED 2026-08-30** — a rapid `page.goto` loop poisons the NEXT page in the same browser context (14 -> 14 -> 0 buttons); recorded in `cockpit.md` because it binds every e2e spec |
+| `env.test.ts` `QUICKBOOKS_*` red | **Phase 28 lane** (added by 28-06). Owner decision 2026-08-30: **left pending** — the QuickBooks registration is still in progress, so the names cannot yet be classified honestly. |
+| ~~`vaultDigest.test.ts` full-suite load flake~~ | **CLOSED 2026-08-30** — measured idle, its first test costs **7.29s** against a 20s suite budget, so crossing under ~10 parallel workers is arithmetic. `testTimeout` raised 20s -> 60s in `vitest.config.mts`, where the same argument already raised 5s -> 20s. Full suite after: **3299/3300**, the one red being the row below. |

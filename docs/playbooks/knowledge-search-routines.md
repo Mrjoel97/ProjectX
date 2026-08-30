@@ -1,5 +1,21 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-30 (**THE PLANNER WAS SKIPPING THE TENANT'S OWN VAULT**, found by the live
+> synthesizer run and closed the same day. *"What have we agreed with customers about pricing and
+> discounts?"* returned `evidenceCount: 0` while the answering document sat embedded and retrievable
+> in that tenant's vault: the planner marked `vault: unplanned` and planned only the unconnected
+> `crm-facts`. Nothing lied — every source reported its own state correctly — but the user is told
+> nothing was found in material they own, which is the exact failure this subsystem exists to
+> prevent. Root cause was in `knowledge-query-planner`'s body, not in code:
+> `plannerPrompt`/`settlePlan`/`clampSearchPlan` are unchanged. `knowledge-query-planner@2` measured
+> **1/3 -> 3/3** on that question, with `crm-facts` ADDED-to rather than displaced so the actionable
+> "not connected yet" sentence survives; a public-fact control still leaves all four tenant sources
+> `unplanned`. WHEN CHANGING PLANNER BEHAVIOUR: it is a model-behaviour claim, so run the question
+> **at least three times per body** and read `internal.skills.getActiveSkill` to confirm which
+> version answered — one run proves nothing and a stale seed reads exactly like a green. An offline
+> assertion here can only check the guidance's SPELLING, which is the defect class this phase kept
+> finding; the evidence is the run table in `29-VERIFICATION.md`.)
+
 > Last verified: 2026-08-30 (29-11 + 29-12 **round 4** — **THE BLOCKLISTS BECAME ALLOWLISTS, AND
 > THE CITATION CHECK NOW CANONICALISES THE PATH.** Round 3 was defeated twice more: three
 > independent verifiers built recurrence subsystems that simply DID NOT USE the ten banned tokens
