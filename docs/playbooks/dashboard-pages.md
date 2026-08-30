@@ -1,5 +1,69 @@
 # Playbook: Connected dashboard pages
 
+> **IN FLIGHT 2026-08-30 — `/dashboard/settings` is gaining a BillingPanel (plan 28.1-09).**
+> Recorded here because **this playbook, not `billing.md`, is the one that watches
+> `apps/web/app/(app)/dashboard/settings/`** — `billing.md` watches only `packages/billing`,
+> `packages/backend/convex/billing` and `docs/billing/`. The 28.1-09 plan named the wrong playbook;
+> the Stop hook caught it. Both need to carry the surface: `billing.md` owns the billing DOMAIN,
+> this playbook owns the PAGE.
+>
+> What is landing: subscription state, a Customer Portal link, unapplied bank-transfer funds with
+> their age, the honest tax posture, hosted invoice links, and an acknowledgement of the
+> `?checkout=` return that 28.1-04 has been redirecting here and this page has been ignoring.
+>
+> **Two rules this surface must not break.** (1) `--held` amber is the APPROVAL GATE'S ALONE
+> (BRAND §2) — unapplied funds feel like a warning and must NOT take it. (2) Unknown is not zero:
+> `billingStatus` has an `unknown` state and it renders as unknown, never `$0` and never a free
+> tier. A redirect back from Stripe is NOT evidence a subscription is active — only `billingStatus`
+> may say that.
+>
+> This entry is a `Last verified` bump plus a forward record, NOT a verification of the sections
+> below. The plan's own SUMMARY carries the completed detail.
+
+> **LANDED 2026-08-30 — 28.1-09 is complete.** `apps/web/app/(app)/dashboard/settings/BillingPanel.tsx`
+> is on `/dashboard/settings` above `<DataControls />`, and the page header no longer says the page
+> is about data export. It reads `api.billing.billingStatus`, `api.billing.unappliedFunds`,
+> `api.billing.invoices` and calls the `api.billing.portalLink` action.
+>
+> **THE PATTERN WORTH COPYING, and the reason this surface has real coverage.** `apps/web` has no
+> jsdom and no testing-library, and `vitest.config.mts` scopes the runner to `.ts` (never `.tsx`)
+> deliberately — a `.tsx` test here executes nowhere while reading as coverage in the diff. So
+> `BillingPanel.tsx` is split in two: the connected `BillingPanel` (hooks, `useQuery`/`useAction`)
+> and a **hook-free `BillingPanelView` taking every value as a prop**, which
+> `billingPanel.test.ts` renders to a STRING with `renderToStaticMarkup` — the same idiom
+> `../finance/cashView.test.ts` already uses. That is what makes an assertion about the RENDERED
+> markup possible without a DOM. A pure helper returning the right sentence proves nothing about
+> what a browser paints; every refusal on this surface is pinned twice, once on the helper and once
+> on the markup.
+>
+> **The four refusals, and what holds each.** (1) `checkoutNotice` answers only the EXACT tokens
+> `success` / `cancel` — `"SUCCESS"`, `"success "` and `"successful"` all render **no element at
+> all**, asserted by the absence of `data-checkout-notice` in the markup. (2) The success
+> acknowledgement is asserted NOT to contain the literal `subscriptionCopy("subscribed").headline`
+> — the two sentences are disjoint by test, because a redirect is not evidence. (3) The Customer
+> Portal control is disabled when `billingStatus` is `unknown`, **and** `manage()` carries the same
+> guard as an early return, because `disabled` is presentation a devtools user can strip and
+> `portalLink` must never be nudged into provisioning a Stripe customer. (4) No amber: a source scan
+> over `BillingPanel.tsx` and `page.tsx` for `--held` / the amber hex, with a non-vacuity guard that
+> checks file CONTENT (not just "the list is non-empty") and fires the pattern on a positive control
+> — the 28.1-07 `codeOf` bug is why.
+>
+> **Reuse, not reimplementation.** The held-balance count renders through `FigureTile`, imported
+> from `../finance/CashView` — unknown coverage gets the em-dash and a prompt, never a zero. Money
+> amounts do NOT go through `FigureTile`: its `formatUsdAmount` rounds to whole dollars, which is
+> right for a business metric and a lie for money we are holding, so `heldAmountCopy` formats exact
+> minor units through `@pikar/revenue/money`.
+>
+> **Dependencies:** `apps/web` gained `@pikar/billing` and `@pikar/revenue` as WORKSPACE deps. No
+> external dependency was added — specifically no jsdom and no testing-library. Adding those is a
+> deliberate upgrade decision, not a side effect of a plan.
+>
+> **Known ceiling, stated plainly:** nothing here has been exercised against a live Stripe or a live
+> Convex deployment. No `BILLING_STRIPE_*` variable is set in any deployment, so on this stack
+> `billingStatus` answers `unknown` for every tenant and both lists are empty under
+> `coverage: "unknown"`. What is proven is the derivation and the markup; what is NOT proven is the
+> browser, the portal redirect and the query wiring. See `billing.md` for the domain-side ceiling.
+
 > Last verified: 2026-08-23 (**THE EMAIL CHANNEL NO LONGER OUTRANKS THE BUSINESS WORK.**
 > `HOME_PRIORITY_ORDER` is now unresolved-dead-letters > stale-approval > scheduled-risk >
 > diagnostic-blocker > binding-constraint > **connection-failure** > workspace. This SUPERSEDES the

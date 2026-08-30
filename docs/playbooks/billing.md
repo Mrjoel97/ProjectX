@@ -6,7 +6,62 @@
 > behaviour change, and **this is not a re-verification of anything below.** The
 > `Last verified` line still means what it said.
 
-> Last verified: 2026-08-30 against 28.1-07 (`billingPeriods` — the DURABLE INVOICE CLAIM ROW —
+> **28.1-09, 2026-08-30 — THE SUBSYSTEM HAS A TENANT-FACING SURFACE FOR THE FIRST TIME.**
+> Until this plan, `unappliedFunds` (28.1-06), `renderTaxPosture` (28.1-03) and `billing.invoices`
+> (28.1-07) had **zero callers in `apps/web`**, and `?checkout=` — the `success_url` / `cancel_url`
+> 28.1-04 hands Stripe — landed on `/dashboard/settings`, which ignored the parameter and showed a
+> page about data export. A capability nobody can reach is not shipped, and 28.1-08 was about to
+> seal the phase over that hole.
+>
+> **The surface is `apps/web/app/(app)/dashboard/settings/BillingPanel.tsx`, and its own playbook is
+> `dashboard-pages.md`, not this one** — `watch.json` gives this file `packages/billing`,
+> `packages/backend/convex/billing` and `docs/billing/`; the page lives under
+> `apps/web/app/(app)/dashboard/settings/`, which `dashboard-pages.md` watches. Both carry the
+> surface: this file owns the billing DOMAIN, `dashboard-pages.md` owns the PAGE. The 28.1-09 plan
+> named only this one and was wrong.
+>
+> **What the domain now promises a reader, and what still holds it:**
+>
+> - `billingStatus`'s `unknown` arm is rendered as **unknown** — never `$0`, never a no-cost tier.
+>   Three different causes answer `unknown` (no mapping, a checkout whose `customer.subscription.*`
+>   has not arrived, a status Stripe added after `subscriptionState` was written) and none of them
+>   is a zero.
+> - `unappliedFunds` is rendered **with its age**, which was always the actionable half: Stripe
+>   returns unreconciled money to the sending bank at `UNRECONCILED_RETURN_DAYS` (75) and sweeps
+>   what it cannot return at `UNRECONCILED_SWEEP_DAYS` (90). The panel derives the stage by calling
+>   `unappliedStage` — the ONE definition, exactly as its JSDoc anticipated ("later by the
+>   tenant-facing surface that renders a stored observation whose age has since grown"). It does
+>   **not** re-implement the boundaries, and the web test asserts them against written-out `75`/`90`
+>   rather than importing the constants, so moving either constant is RED.
+> - `renderTaxPosture` finally has a renderer. The posture is built from `CONFIG_CONFIRMED` and
+>   nothing else: while it is false the business holds no tax registration anywhere
+>   (`HEAD_OFFICE_COUNTRY` is null), so `{ state: "not-owed", because: "unregistered" }` is a
+>   code-owned fact. **It is deliberately NOT derived by feeding `taxPosture` a `"not_collecting"`
+>   reason** — Stripe never said that here, and inventing a provider signal to reach a conclusion is
+>   fabrication even when the conclusion happens to be right. The day `CONFIG_CONFIRMED` flips, the
+>   page answers `unknown` (it does not read invoice tax lines) rather than carrying the old
+>   sentence forward.
+> - `portalLink` is offered **only** when `billingStatus` is `not_subscribed` or `subscribed` —
+>   the two states that can only come from a stored status string, which means a Stripe customer
+>   exists. `unknown` gets a disabled control and a reason, and the panel's `manage()` repeats the
+>   guard as an early return. The refusal to auto-provision a customer is now protected on both
+>   sides of the wire.
+> - `billing.invoices` serves **one anchor tag per invoice** and nothing else. The `billing.test.ts`
+>   scan that used to assert `billing.invoices` had NO caller in `apps/web` now asserts it has
+>   EXACTLY ONE (`BillingPanel.tsx`), that the caller contains `hostedInvoiceUrl`, and that it
+>   contains no line-item / subtotal / tax-amount renderer. The old assertion was true and was the
+>   gap, not the goal.
+>
+> **Ceiling, unchanged:** nothing here has spoken to Stripe. No `BILLING_STRIPE_*` variable is set
+> in any deployment, so on the live stack `billingStatus` answers `unknown` for every tenant and
+> both lists are empty under `coverage: "unknown"`. 28.1-09 was proven offline at $0 against the
+> derivations and the rendered markup; the browser, the portal redirect and the query wiring are
+> NOT proven. **This is a `Last verified` bump for the surface only, not a re-verification of the
+> sections below.**
+
+> Last verified: 2026-08-30 against 28.1-09 (the tenant-facing `BillingPanel` — the first caller
+> `unappliedFunds`, `renderTaxPosture` and `billing.invoices` have ever had in `apps/web`; offline
+> at $0, 15 mutations run, 0 survivors) — after 28.1-07 (`billingPeriods` — the DURABLE INVOICE CLAIM ROW —
 > plus `convex/billingRollup.ts`, the `billing-invoice-rollup` cron and `billing.invoices`;
 > offline at $0, 17 mutations run) — after 28.1-06 (`billingEvents` / `billingCoverage` /
 > `billingUnapplied` — the billing BOOK OF RECORD, the money arms of the effect switch, and
