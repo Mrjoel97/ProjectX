@@ -59,7 +59,9 @@
 > NOT proven. **This is a `Last verified` bump for the surface only, not a re-verification of the
 > sections below.**
 
-> Last verified: 2026-08-30 against 28.1-09 (the tenant-facing `BillingPanel` — the first caller
+> Last verified: 2026-08-30 against 28.1-11 (the ADVERSARIAL-AUDIT FIX WAVE — 15 confirmed defects
+> across waves 1-7, every one seen RED before its fix; the correlation defects, the double-invoice
+> path, the cleared-hold clock, and four guards that could not fail) — after 28.1-09 (the tenant-facing `BillingPanel` — the first caller
 > `unappliedFunds`, `renderTaxPosture` and `billing.invoices` have ever had in `apps/web`; offline
 > at $0, 15 mutations run, 0 survivors) — after 28.1-07 (`billingPeriods` — the DURABLE INVOICE CLAIM ROW —
 > plus `convex/billingRollup.ts`, the `billing-invoice-rollup` cron and `billing.invoices`;
@@ -451,11 +453,33 @@ to the account balance by `UNRECONCILED_SWEEP_DAYS` (**90**). `unappliedFunds` (
 returns each amount with its `ageDays` and its `stage` (`held` / `return-attempted` / `swept`),
 bounded at `UNAPPLIED_FUNDS_PAGE_LIMIT` (100) with an explicit `truncated` flag.
 
-`observedAt` is the START of that clock and never moves. A re-observed balance updates the AMOUNT
-only — restarting the clock on every notification would hide exactly the row that is about to be
-taken away. That is why `billingUnapplied` carries a `by_tenant_object_currency` index: a
-CashBalance object has no `id`, so `billingStripeEvents`' by-object dedupe cannot see two
-notifications as the same thing, and a plain insert would report one pile of money three times.
+`observedAt` is the START of that clock and never moves *while the hold lasts*. A re-observed
+balance updates the AMOUNT only — restarting the clock on every notification would hide exactly the
+row that is about to be taken away. That is why `billingUnapplied` carries a
+`by_tenant_object_currency` index: a CashBalance object has no `id`, so `billingStripeEvents`'
+by-object dedupe cannot see two notifications as the same thing, and a plain insert would report one
+pile of money three times.
+
+**A ZERO CLEARS THE HOLD, and the row stays at zero (28.1-11 #8/#13).** `fundsAvailable` used to
+skip a zero balance — and this event is the *only* notification that a hold has cleared, so a
+balance Stripe applied months ago went on being reported, and went on aging toward `swept`, for as
+long as the row lived. Zero is now carried as an observation and `observeUnapplied` decides what it
+means. Three rules hold together and none of them survives alone:
+
+1. **The cleared row is ZEROED, not deleted.** Deleting it deletes `amountAt` with it, and Stripe
+   redelivers for days — the pre-clear event arriving afterwards would re-insert the old figure as
+   a brand-new hold that no later delivery is going to clear again.
+2. **`amountAt` is the ordering guard.** It carries the `event.created` of the delivery that set
+   the amount; an older delivery is ignored rather than believed. Without it, a redelivered
+   `funds_available` reporting 50000 overwrites a newer 500 and the surface shows money that has
+   already moved. This is the same problem the mapping arm solves with `statusIsFresh`/`statusAt`.
+3. **Reopening a cleared row restarts `observedAt`.** Money held again after the balance reached
+   zero is a *different* hold on a fresh clock; carrying the old date forward would render brand-new
+   money as already returned or swept — the dangerous direction.
+
+**Readers exclude zeros.** `unappliedFunds` filters `amountMinor !== 0` before paging: a zeroed row
+is a guard, not a balance, and it must never reach a surface wearing an age and a 75/90 stage over
+an amount of nothing.
 
 ### Coverage is UNKNOWN, never zero
 
@@ -506,6 +530,9 @@ append-only table that cannot take it back.
 | Missing billing history reads as UNKNOWN, never zero | A zero that means "we were not watching" is a confident lie about revenue | `billingLedger.test.ts` (null is not 0) + `billing.test.ts` (`coverage: "unknown"` ≠ `"known"` with an empty list) |
 | `cash_balance.funds_available` books ZERO ledger rows | It is leftover money, not an arrival | `billingWebhook.test.ts` — "ONE unapplied row and ZERO ledger rows" |
 | A re-observed balance never restarts the 75/90-day clock | The clock is what makes the row actionable before Stripe takes the money back | `billingWebhook.test.ts` — "updates the amount and never restarts" |
+| A CLEARED balance stops being reported and stops aging | `funds_available` at zero is the only signal that a hold ended; skipping it reported money we no longer hold | `billingWebhook.test.ts` — "a funds_available of ZERO clears the hold"; `reconcile.test.ts` — "a balance that has gone to ZERO is an observation" |
+| An OUT-OF-ORDER redelivery never lowers a newer amount, and never resurrects a cleared hold | Stripe does not guarantee delivery order and a CashBalance carries no `id`, so only an exact same-`eventId` redelivery is caught upstream | `billingWebhook.test.ts` — "neither lowers a newer amount nor restarts the clock" |
+| Money held AGAIN after a clear gets a NEW 75/90 clock | Carrying the old date forward renders fresh money as already swept | `billingWebhook.test.ts` — "starts a NEW clock, not the cleared hold's" |
 | One period produces exactly ONE invoice | The most expensive defect this subsystem can ship is a second bill for one month | `billingRollup.test.ts` — double tick queues ONE post; a `posted` period is never re-claimed and refuses a re-post BEFORE fetch |
 | The cron points at a MUTATION, never at the action | A scheduled action is at-most-once and never retried — a dropped period is silent | `billingRollup.test.ts` — `crons.ts` must name `.tick` and must NOT name `postInvoice`; `tick` is asserted callable as a mutation AND declared `internalMutation` by name |
 | `postInvoice` is the ONLY action in the module | Each action is another at-most-once link in the chain | `billingRollup.test.ts` — exactly one `internalAction(` in the source |
@@ -598,6 +625,20 @@ append-only table that cannot take it back.
   in `isolation.test.ts`'s `NON_TENANT_LEADING` with a written reason, or the suite fails.
 - **Never** widen this into `connectorFetch.ts` (a GET-only read transport with a deliberately empty
   `stripe: []` allow-list) or into `SPEND_RAILS`.
+- **Writing or touching a SOURCE SCAN** (`expect(src).not.toMatch(...)`): import `codeOf` from
+  `packages/backend/__fixtures__/sourceScan.ts`. Do not paste a stripper. That helper has been
+  wrong twice — once eating 63% of a module including every export, once truncating every line at
+  `https://` — and each repair reached only the copies its author was looking at, which is how a
+  guard on the never-auto-provision law sat blind through three plans (28.1-11 #10, #12). Every
+  negative scan pairs with a POSITIVE tripwire and a `nonBlankLines` floor: a blanked file passes
+  every `not.toMatch` ever written. `spendLedger.test.ts` still carries a private copy; whoever
+  next touches that file should point it here.
+- **Asserting a table is never mutated:** Convex patches by `_id`, so no regex can say "never patch
+  a `deadLetters` row" — the table name is nowhere in the call. Ban the bare call name
+  (`/db\.patch\(/`) where the module has no legitimate patch, and where it does, pin the CENSUS
+  (`expect(src.match(/db\.patch\(/g) ?? []).toHaveLength(2)`) with each site named in a comment. A
+  pattern that asks for a table-name argument has zero reachable matches and discharges the
+  `audit_immutable` obligation by being unable to fail (28.1-11 #11).
 
 ## How to verify
 
@@ -797,15 +838,18 @@ which is how `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` escaped classification entirely
   page serves card payment and the transfer instructions simply do not appear. The code path stays,
   because the law it encodes (we serve a link, we never render a payment surface) is what makes it
   safe to enable later.
-- **`billing.invoices` has no caller in `apps/web` either**, and a test asserts that — so the
-  invoice list is a query nobody calls, exactly like `unappliedFunds`.
+- ~~**`billing.invoices` has no caller in `apps/web` either.**~~ **CLOSED by 28.1-09** — it renders
+  in `BillingPanel.tsx`, and `billing.test.ts` now asserts the caller set is exactly
+  `["BillingPanel.tsx"]` rather than asserting it is empty.
 - **The invoice list filters `posted` AFTER paging.** A tenant with more than
   `INVOICE_PAGE_LIMIT` (50) unposted periods could push posted ones off the page. Marked
   `ponytail:` at the site with `by_tenant_status` as the upgrade path; not reachable while no
   producer exists.
-- **No UI renders any of the ledger.** `unappliedFunds` has no caller in `apps/web`, so the
-  75/90-day clock is visible only to a query nobody calls. `taxPosture`/`renderTaxPosture` still
-  have no renderer either (28.1-03's gap, unchanged).
+- ~~**No UI renders any of the ledger.**~~ **CLOSED by 28.1-09** — `BillingPanel.tsx` on
+  `/dashboard/settings` renders subscription state, the portal link, unapplied funds *with* their
+  75/90-day age, and `renderTaxPosture`'s words. The `billingEvents` rows themselves are still not
+  rendered, and deliberately are not: a tenant's payment history is Stripe's hosted Customer
+  Portal, not a table we re-derive.
 - **A ledger write that throws is a 500 and a Stripe retry.** `recordBillingMovement` throws rather
   than coercing (the `spendLedger.recordMovement` posture), and `receiveAndApply` does not catch.
   Every caller today comes through `reconcileEvent`, which pre-validates amount and currency, so a

@@ -11,6 +11,7 @@
 //      therefore cannot refuse anything on day two.
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { codeOf } from "../__fixtures__/sourceScan";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -33,10 +34,6 @@ const backendSources = import.meta.glob("./billing*.ts", {
   import: "default",
   eager: true,
 }) as Record<string, string>;
-
-/** Source with comments stripped, so a guard cannot punish its own documentation
- *  (`billing.test.ts` idiom, repaired in 28.1-07 — see the long note there). */
-const codeOf = (content: string): string => content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
 
 const rollupCode = (): string => {
   const raw = backendSources["./billingRollup.ts"];

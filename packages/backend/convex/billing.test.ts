@@ -11,6 +11,7 @@ import { TRIAL_DAYS } from "@pikar/billing/config";
 import { SPEND_RAILS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { codeOf } from "../__fixtures__/sourceScan";
 // The Phase 26 equality below drives `api.finance.summary`, the SHIPPED surface, so the real
 // rate-limiter component has to be present — a stub would prove nothing about what Finance
 // renders. Relative imports: the packages block deep specifiers (guardrails.test.ts idiom).
@@ -149,22 +150,6 @@ async function withTenantOnFinance() {
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   return await tenantOn(t);
 }
-
-/**
- * Source with comments stripped, so a guard cannot punish its own documentation. A file that
- * WARNS against card data or against reusing the read rail reads exactly like one that does it.
- *
- * ONE alternation, not two passes, and it is a 28.1-07 REPAIR of a scan that was nearly vacuous.
- * The previous version dropped every line starting with `*` FIRST — which ate the closing marker
- * of every multi-line JSDoc block, leaving the opening `/**` to swallow everything up to the next
- * surviving marker. Measured on `billingRollup.ts`: 380 lines of real code reduced to 12. A
- * NEGATIVE scan over a blanked file passes for the wrong reason, so the damage was invisible.
- *
- * The alternation scans left to right, so whichever comment opens first consumes the other — a
- * `/*` inside a `//` line cannot open a block (the `env.test.ts` hazard), and a `//` inside a
- * block comment is inert. `notBlanked` below is the tripwire that would have caught the original.
- */
-const codeOf = (content: string): string => content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
 
 beforeEach(() => {
   calls = [];
@@ -434,6 +419,12 @@ describe("no card data and no 3DS exists anywhere in this subsystem", () => {
     const blanked = scanned.filter(([, content]) => !/\bexport\b/.test(content)).map(([p]) => p);
     expect(blanked).toEqual([]);
     expect(codeOf("const a = 1; // /* not a block\nconst b = 2;")).toContain("const b = 2;");
+    // …and a URL SURVIVES. The `//` in any `https://` opened the line-comment arm and deleted the
+    // rest of the line, so the two scans below were blind to exactly the offender they exist to
+    // catch: `config.ts` reduced to `export const STRIPE_API_BASE = "https:` (28.1-11 #12).
+    expect(codeOf('const u = "https://api.stripe.com/v1/customers"; // x')).toContain(
+      "https://api.stripe.com/v1/customers",
+    );
     expect(scanned.map(([p]) => p)).toContain("./billing.ts");
     expect(scanned.map(([p]) => p)).toContain("../../billing/src/config.ts");
     // …and the pattern really does match the thing it is looking for.

@@ -10,6 +10,7 @@
 import { readFileSync } from "node:fs";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { codeOf, nonBlankLines } from "../__fixtures__/sourceScan";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { internal } from "./_generated/api";
 import schema from "./schema";
@@ -740,18 +741,37 @@ describe("an unmatched Stripe customer is dead-lettered by ref and NEVER auto-pr
   test("the mapping module contains no way to create a user or a tenant", () => {
     // A literal scan, because no type can express "this module cannot invent a user". Comments are
     // stripped first — a mention in prose is indistinguishable from a use to a naive `includes`.
-    const src = readFileSync(new URL("./billingWebhook.ts", import.meta.url), "utf8")
-      .split("\n")
-      .filter((line) => !line.trim().startsWith("*") && !line.trim().startsWith("//"))
-      .join("\n")
-      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const raw = readFileSync(new URL("./billingWebhook.ts", import.meta.url), "utf8");
+    const src = codeOf(raw);
     expect(src).not.toMatch(/insert\(\s*["']users["']/);
     expect(src).not.toMatch(/insert\(\s*["']tenant/);
     // Non-vacuity: the stripper must not have eaten the module.
     expect(src).toMatch(/insert\(\s*["']billingCustomers["']/);
     expect(src).toMatch(/insert\(\s*["']deadLetters["']/);
-    // CLAUDE.md §3: nothing here mutates or removes a dead letter or an audit row.
-    expect(src).not.toMatch(/(patch|replace|delete)\(\s*["'](deadLetters|audit)["']/);
+    // …and the tripwires that would have CAUGHT it (28.1-11 #10). Both assertions above live in
+    // the surviving first half, so they passed over a text holding 203 of 556 non-blank lines
+    // with NOT ONE of the module's three exports in it — including the entry point every law
+    // here is about. A negative scan over a blanked file passes for the wrong reason.
+    for (const survives of ["verifyStripeSignature", "receiveAndApply", "UNATTRIBUTED_TENANT"]) {
+      expect(src).toContain(survives);
+    }
+    // A floor, not a ratio: this module is deliberately comment-heavy, so the honest measure is
+    // an absolute one. Measured 2026-08-30 with the repaired stripper: 344 of 598 raw non-blank
+    // lines survive. The broken one left 203.
+    expect(nonBlankLines(src)).toBeGreaterThan(300);
+    expect(nonBlankLines(raw)).toBeGreaterThan(500);
+    // CLAUDE.md §3: nothing here mutates or removes a dead letter, an audit row or a recorded
+    // event. The regex this replaces asked for a TABLE NAME as the first argument of `patch` —
+    // `ctx.db.patch(id, fields)` never takes one, so it had zero reachable matches and stood as
+    // the discharge of that obligation anyway (28.1-11 #11).
+    //
+    // What CAN be pinned is the CENSUS. This module deletes nothing and replaces nothing, and it
+    // patches in exactly two places, both of them rows that are mutable BY DESIGN: the
+    // `billingCustomers` subscription mirror and the `billingUnapplied` re-observation. A third
+    // patch is a new claim on this module's insert-only tables, and has to be argued for here.
+    expect(src).not.toMatch(/db\.replace\(/);
+    expect(src).not.toMatch(/db\.delete\(/);
+    expect(src.match(/db\.patch\(/g) ?? []).toHaveLength(2);
   });
 });
 

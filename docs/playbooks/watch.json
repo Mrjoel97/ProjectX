@@ -363,7 +363,12 @@
     "scripts/smoke-stripe-read.mjs",
     "docs/connectors/stripe-suitability.md"
   ],
-  "billing.md": ["packages/billing", "packages/backend/convex/billing", "docs/billing/"],
+  "billing.md": [
+    "packages/billing",
+    "packages/backend/convex/billing",
+    "docs/billing/",
+    "packages/backend/__fixtures__/sourceScan.ts"
+  ],
   "connector-paypal.md": [
     "packages/revenue/src/providers/paypal",
     "packages/backend/convex/paypalAuth",

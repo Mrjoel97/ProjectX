@@ -244,8 +244,15 @@ describe("reads are bounded", () => {
 describe("the billing ledger is append-only", () => {
   test("the module contains no way to mutate a recorded movement", () => {
     const src = Object.values(source).join("\n");
-    expect(src.length).toBeGreaterThan(0);
-    expect(src).not.toMatch(/db\.patch\(\s*["']?billingEvents/);
+    // A floor, not a truthiness check: an unresolved glob joins to "" and every negative
+    // assertion below then passes over nothing.
+    expect(src.length).toBeGreaterThan(500);
+    // A BARE call name, matching `spendLedger.test.ts:193` — which is what the comment above
+    // always claimed this was. The previous pattern asked for a table-name string as `patch`'s
+    // first argument; `ctx.db.patch(id, fields)` never takes one, so it had zero reachable
+    // matches and discharged an `audit_immutable` obligation by being unable to fail (28.1-11
+    // #11). This module inserts and reads. It has no legitimate patch.
+    expect(src).not.toMatch(/db\.patch\(/);
     expect(src).not.toMatch(/db\.replace\(/);
     expect(src).not.toMatch(/db\.delete\(/);
     expect(src).toMatch(/db\.insert\(\s*["']billingEvents["']/);
