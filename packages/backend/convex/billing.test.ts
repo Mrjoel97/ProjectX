@@ -872,6 +872,39 @@ describe("invoices serves the hosted page and never fabricates a zero", () => {
     expect(answer.coverage).toBe("known");
   });
 
+  test("a NON-POSTED row carrying a hosted url is still refused — by its STATUS", async () => {
+    // 28.1-07 MUTATION FINDING. The first version of this suite seeded unposted periods with no
+    // `hostedInvoiceUrl`, so the field guards refused them and the STATUS check killed nothing —
+    // flipping `row.status === "posted"` to a tautology left the suite green. The load-bearing
+    // guard was unfalsifiable. This row has every field a posted one has and the wrong status.
+    const { t, as, tenantId } = await withTenantHandle();
+    await openCoverage(t, tenantId);
+    const now = Date.now();
+    await t.run((ctx) =>
+      ctx.db.insert("billingPeriods", {
+        tenantId,
+        periodKey: "2026-08",
+        periodStart: now - 30 * 86_400_000,
+        periodEnd: now - 86_400_000,
+        dueAt: now - 3_600_000,
+        status: "failed",
+        charges: [],
+        attempts: 2,
+        postedAt: now,
+        stripeInvoiceId: "in_SENTINELNOTPOSTED",
+        hostedInvoiceUrl: HOSTED_INVOICE,
+        amountMinor: 4900,
+        currency: "USD",
+        failureCode: "stripe_http",
+      }),
+    );
+
+    const answer = await as.query(api.billing.invoices, {});
+
+    expect(answer.invoices).toEqual([]);
+    expect(JSON.stringify(answer)).not.toMatch(/SENTINELNOTPOSTED/);
+  });
+
   test("ANOTHER tenant's invoice is never in this tenant's list", async () => {
     const t = convexTest(schema, modules);
     const a = await tenantOn(t);
