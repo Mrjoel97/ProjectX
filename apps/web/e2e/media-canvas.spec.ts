@@ -2,6 +2,10 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+// The cost-lever sentence is IMPORTED, not retyped. It read "about 40×" here while the tables said
+// 66.7x and then 46.7x — a browser assertion pinning a literal is the same check-that-cannot-fail
+// the unit tests had, one layer out. `mediaCanvasView.ts` derives it from the price tables.
+import { CLIP_COST_LEVER_NOTE } from "../app/(app)/dashboard/workspace/mediaCanvasView";
 
 /**
  * 20.2 wave 6 — THE MEDIA CANVAS, IN A REAL BROWSER, ON A REAL SCENE DECK.
@@ -552,8 +556,8 @@ test("the phase-33 canvas: brief chips, two storyboards, a grounded citation and
   for (const line of ["clips", "stills", "voice", "captions", "render (incl. one retry)"]) {
     await expect(estimate).toContainText(line);
   }
-  // The 40x lever, on the line it applies to.
-  await expect(estimate).toContainText("A generated clip costs about 40× an animated still");
+  // The cost lever, on the line it applies to — the DERIVED sentence, whatever the tables say.
+  await expect(estimate).toContainText(CLIP_COST_LEVER_NOTE);
   await expect(estimate).toContainText("A 30-second reel of 3 scenes, priced per scene");
   await expect(estimate).toContainText("of today's media budget remains.");
   await expect(estimate).not.toContainText("per block");

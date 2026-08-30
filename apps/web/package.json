@@ -19,6 +19,7 @@
     "@pikar/backend": "workspace:*",
     "@pikar/contracts": "workspace:*",
     "@pikar/core": "workspace:*",
+    "@pikar/cost": "workspace:*",
     "@pikar/vault": "workspace:*",
     "@pikar/voice": "workspace:*",
     "@vercel/sandbox": "2.9.2",

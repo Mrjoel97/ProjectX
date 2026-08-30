@@ -1,5 +1,47 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-30 (33.1-04 — **THE DURATION GRID IS `1..15, ANY INTEGER`, AND
+> `illegal_generated_duration` IS RETIRED FOR EVERY LENGTH BELOW 16.** Constants and arithmetic
+> only; the submit path is still 33.1-05's, and `succession.replacementWiredUp` is still `false`.
+>
+> **What a generated scene may now be.** `MEDIA_VIDEO_SECONDS["x-ai/grok-imagine-video"]` and
+> `@pikar/core`'s `GENERATED_CLIP_SECONDS` are both the fifteen integers `1..15`. A 5-second and a
+> 7-second scene parse, persist and price at their OWN lengths with **no** `deckAdjustments` — that
+> was the owner's second live defect on 2026-08-30. `repairGeneratedGrid` still exists and now fires
+> only ABOVE 15, snapping to 15 and giving the freed seconds to the last non-generated scene.
+>
+> **TWO COPIES OF ONE GRID, and they drifted at the last cutover.** `@pikar/core` deliberately does
+> not depend on `@pikar/cost`, so the list is written out in both. `media.test.ts` now asserts
+> `GENERATED_CLIP_SECONDS` equals `MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model]`. **Move both or
+> neither**, and the assertion is the only thing that makes that enforceable.
+>
+> **The price row is grok's published rate, corroborated by a paid call**: 480p $0.05/s, 720p
+> $0.07/s, and a live `{duration: 5, resolution: "480p"}` billed `usage.cost` 0.25 = exactly
+> 5 x $0.05, which also proves a NON-multiple-of-4 duration is accepted. **No 1080p key** — xAI
+> publishes none, so 1080p is `unknown_model`, never a downgrade (rule 2). Pin stays 720p / 4 s:
+> six clips are $1.68 against the unchanged $3.50 cap, where sora-2 cost $2.40.
+>
+> **The trap this plan walked into, and the fix.** Repinning `MEDIA_DEFAULT_VIDEO` DROPS `sora-2`
+> out of `PINNED_MODELS`, and all three shutdown tripwires `continue` past it — measured: with the
+> repin landed and the shutdown moved to five days out, the file was GREEN. They now key on
+> `inScope` = pinned OR carrying a succession OR `deprecated`. **The third arm was found by
+> mutation, not design**: under the plan's two-arm predicate, DELETING the succession block silenced
+> the alarm that asks for one. `RUNWAY_DAYS` is still 14 and a repin is not a migration.
+>
+> **NOTHING A HUMAN OR A MODEL READS MAY RESTATE A COMPUTED NUMBER.** The clip-vs-still lever has
+> now been wrong on screen three times (a tenth, then a fortieth, then 66.7x for one day) because
+> three sentences in `mediaCanvasView.ts` typed the ratio out and three tests pinned the stale word.
+> It is DERIVED now — `CLIP_VS_STILL_RATIO` = `round(sceneVisualSpec("generated_video", 4).usd /
+> sceneVisualSpec("animated_image", 4).usd)`, today **47** — and the tests compute the same
+> quotient. That is why `apps/web` gained a `@pikar/cost` dependency (pure TS, `@pikar/core` only;
+> also added to `next.config.ts`'s `transpilePackages`). The e2e spec IMPORTS the sentence rather
+> than retyping it. `mediaDirector.ts`'s four "forty times cheaper" sites are **still stale** and
+> belong to plan 33.1-06.
+>
+> **Two rendered sentences became RANGES**, from `GENERATED_LENGTH_RANGE` (derived from the same
+> constant the repair snaps to): the adjustment note and `refusalText`'s `illegal_duration` arm.
+> A `join(", ")` over the new grid would have printed fifteen comma-separated numbers at a user.)
+
 > Last verified: 2026-08-30 (33.1-03 — **THE STILL PLANE IS ON OPENROUTER AND ITS PRICE ROW IS
 > MEASURED RATHER THAN GUESSED.** The block below decided both planes would move; this is the image
 > half, landed. Video has NOT moved yet — 33.1-05 owns it, and until then

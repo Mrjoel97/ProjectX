@@ -2889,6 +2889,50 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(plan?.deckLockedAt).toBeUndefined();
   });
 
+  // ── 33.1-04 (A5, the PERSIST leg) ────────────────────────────────────────────────────────────
+  //
+  // THE SEAM, not the parser. `storyboard.test.ts` already proves a 5 s and a 7 s generated scene
+  // parse; this proves the same seconds survive the write boundary and land on the row, which is
+  // where the owner's other 2026-08-30 defect lived (a field the parser emitted and `persistDeck`
+  // refused). The `deckAdjustments` assertion is the load-bearing one: an absent adjustments array
+  // is the difference between "the deck was accepted as written" and "the repair silently snapped
+  // it to 4 s and 4 s", and until 33.1-04 the latter is exactly what happened.
+  test("A 5-SECOND AND A 7-SECOND GENERATED SCENE PERSIST AT THEIR OWN LENGTHS, with no deckAdjustments", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const body = [
+      "SCENE DECK",
+      "Target duration: 15",
+      "",
+      "| # | Visual | Seconds | Description | Narration | Text overlay | Asset |",
+      "|---|--------|---------|-------------|-----------|--------------|-------|",
+      "| 1 | generated_video | 5 | Founder at a desk | Founders lose an hour a day. | | |",
+      "| 2 | generated_video | 7 | Mail icons collapsing | Pikar drafts the reply for you. | | |",
+      "| 3 | animated_image | 3 | Logo on black | You approve it. | | |",
+      "",
+    ].join("\n");
+    const res = ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    expect(res.ok).toBe(true);
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    expect(plan?.shots?.map((sh) => sh.seconds)).toEqual([5, 7, 3]);
+    expect(plan?.shots?.map((sh) => sh.windowStartMs)).toEqual([0, 5_000, 12_000]);
+    expect(plan?.shots?.map((sh) => sh.visual)).toEqual([
+      "generated_video",
+      "generated_video",
+      "animated_image",
+    ]);
+    // NOTHING was repaired, so nothing is disclosed. Before the 1..15 grid this deck did not reach
+    // the row at all — it refused with `illegal_generated_duration`.
+    expect(plan?.deckAdjustments).toBeUndefined();
+  });
+
   test("the deck_persisted audit gains variations/citedScenes/unverifiedScenes COUNTS — and no titles (§4)", async () => {
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
@@ -3025,13 +3069,17 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
   test("33-12: an off-grid clip is repaired ON THE ROW, and the row says what moved", async () => {
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
-    // 10 + 20 = 30, the declared length: only the GRID is wrong. The parser snaps 10 -> 8 and
-    // gives the 2 seconds to the animated scene. Asserted from the STORED ROW, not the parser —
+    // 18 + 12 = 30, the declared length: only the GRID is wrong. The parser snaps 18 -> 15 and
+    // gives the 3 seconds to the animated scene. Asserted from the STORED ROW, not the parser —
     // a repair that never reaches the database is a repair the user never gets.
+    //
+    // 33.1-04 moved this fixture from 10 -> 8 to 18 -> 15. Ten seconds was off sora-2's 4/8/12
+    // grid and is an ORDINARY length on grok's 1..15, so the old body no longer exercises the
+    // repair at all — it just parses. Above 15 is the only off-grid left.
     const body = VAR_A_DECK.replace(
       "| 1 | generated_video | 8 |",
-      "| 1 | generated_video | 10 |",
-    ).replace("| 2 | animated_image | 22 |", "| 2 | animated_image | 20 |");
+      "| 1 | generated_video | 18 |",
+    ).replace("| 2 | animated_image | 22 |", "| 2 | animated_image | 12 |");
     await t.action(
       internal.dispatch.__runSpecialistWithScript,
       mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
@@ -3039,10 +3087,10 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
 
     const plan = await readPlan(t, planId);
     expect(plan?.kind).toBe("media");
-    expect(plan?.shots?.map((s) => s.seconds)).toEqual([8, 22]);
+    expect(plan?.shots?.map((s) => s.seconds)).toEqual([15, 15]);
     expect(plan?.deckAdjustments).toEqual([
-      { sceneIndex: 0, fromSeconds: 10, toSeconds: 8, why: "grid" },
-      { sceneIndex: 1, fromSeconds: 20, toSeconds: 22, why: "rebalance" },
+      { sceneIndex: 0, fromSeconds: 18, toSeconds: 15, why: "grid" },
+      { sceneIndex: 1, fromSeconds: 12, toSeconds: 15, why: "rebalance" },
     ]);
   });
 
@@ -3325,8 +3373,7 @@ describe("groundMediaBrief: research lands in the vault BEFORE the deck is writt
     return made;
   };
 
-  const vaultDocs = (t: T) =>
-    t.run(async (ctx) => await ctx.db.query("vaultDocuments").collect());
+  const vaultDocs = (t: T) => t.run(async (ctx) => await ctx.db.query("vaultDocuments").collect());
 
   test("a researched brief becomes a CITABLE vault document", async () => {
     // The whole point: `media-director`'s only tool is `searchVault`, so findings are useless to

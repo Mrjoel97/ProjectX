@@ -535,14 +535,39 @@ export const VISUAL_KINDS = [
 ] as const;
 export type VisualKind = (typeof VISUAL_KINDS)[number];
 
-/** The provider's duration grid. Sora returns 4, 8 or 12 second clips and nothing between, so a
- *  `generated_video` scene MUST land on it. **This is the real reason the other three kinds
- *  exist**: they are frame-exact at any length, and every member of this grid is a multiple of 4,
- *  so a deck of ONLY generated clips cannot sum to 15 or 30 at all (and a 60 costs $6.00, over the
- *  job cap). It is also a 40x cost lever — measured at wave 7: a 4 s generated clip is $0.40 and a
- *  still is $0.01 at ANY length — so a deck that reaches for a still first is cheaper AND more
- *  flexible. See ADR-019. */
-export const GENERATED_CLIP_SECONDS = [4, 8, 12] as const;
+/**
+ * The provider's duration grid: xAI's **1-15, any integer** (33.1-04, ADR-027). A
+ * `generated_video` scene MUST land on it, and above 15 it is snapped down or refused.
+ *
+ * **WHAT THIS GRID CHANGED, stated because the old comment claimed the opposite.** Until
+ * 2026-08-30 this was sora-2's `[4, 8, 12]`, and the multiple-of-four property was called *"the
+ * real reason the other three kinds exist"*: no sum of them is 15 or 30, so a deck of only
+ * generated clips could not be built at all. That is **no longer true**. Two 15-second clips make
+ * a 30-second reel and price at $2.10, under the $3.50 job cap. The arithmetic no longer forbids
+ * anything.
+ *
+ * So the cheap kinds are now a **COST lever rather than an arithmetic necessity**: a 30-second
+ * all-generated reel is $2.10 of pictures against $0.864 for the mixed deck in
+ * `media.fixtures.json` — the same thirty seconds for a third of the money. Kind-mixing is kept
+ * MANDATORY by `@pikar/cost`'s `MEDIA_GENERATED_SECONDS_CAP` (12 generated seconds per
+ * reservation, below `min(TARGET_DURATIONS)`), which is a code-owned ceiling at the money
+ * boundary rather than a fact about the provider. See ADR-027's structural-guarantee section: a
+ * mitigation in code is not the same thing as an impossibility in arithmetic, and the ADR says so
+ * rather than pretending nothing was spent.
+ *
+ * **THIS CONSTANT MUST STAY IDENTICAL TO `MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model]` in
+ * `@pikar/cost`.** They are two hand-maintained copies of one provider grid, and they DRIFTED at
+ * the last cutover with nothing noticing — `isBuyableClipLength`'s comment in
+ * `packages/backend/convex/media.ts` records what that cost. `packages/cost/src/media.test.ts`
+ * now asserts the two are equal, which is the only thing that makes "keep them in step"
+ * enforceable.
+ *
+ * ponytail: two copies, one assertion — NOT an inverted package dependency. `@pikar/core`
+ * deliberately does not depend on `@pikar/cost` (the dependency runs the other way, because
+ * pricing is downstream of the contract), and inverting that to deduplicate fifteen integers
+ * would be a much larger change than the drift it prevents.
+ */
+export const GENERATED_CLIP_SECONDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
 
 /** The old closed set, mapped onto the new one, so a deck proposed under the block contract still
  *  READS. Accepted by the parser for one version and taught by the skill body for none:

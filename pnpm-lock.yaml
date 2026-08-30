@@ -38,6 +38,9 @@ importers:
       '@pikar/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@pikar/cost':
+        specifier: workspace:*
+        version: link:../../packages/cost
       '@pikar/vault':
         specifier: workspace:*
         version: link:../../packages/vault

@@ -1,3 +1,14 @@
+> Last verified: 2026-08-30 (33.1-04 — **THE CANVAS STOPPED RESTATING TWO NUMBERS IT SHOULD HAVE
+> BEEN COMPUTING.** Three sentences in `mediaCanvasView.ts` typed out the clip-vs-still cost ratio
+> ("about a fortieth", "costs about 40×") and two typed out the generator's legal clip lengths
+> ("4, 8 or 12 seconds"). Both are values the price table and `GENERATED_CLIP_SECONDS` already
+> compute, and both went stale the moment either moved — with a GREEN suite each time, because the
+> guards asserted the stale literal. They are derived now (`CLIP_VS_STILL_RATIO`,
+> `GENERATED_LENGTH_RANGE`, `CLIP_COST_LEVER_NOTE`), the unit tests recompute the same quotient
+> instead of pinning a word, and `e2e/media-canvas.spec.ts` IMPORTS the sentence. If you add a
+> sentence here that names a price or a member of a closed set, derive it — this is the third time.
+> `apps/web` gained a `@pikar/cost` dependency for it, plus a `transpilePackages` entry.)
+
 > Last verified: 2026-08-30 (33.1-01 — **THE STORYBOARD WRITE BOUNDARY WAS SILENTLY REJECTING
 > EVERY DECK WITH A MUSIC BED, AND THE SUITE WAS GREEN OVER IT.**
 >

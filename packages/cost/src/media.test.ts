@@ -369,9 +369,10 @@ describe("the price tables agree with the committed vendor fixture", () => {
         `${e.id} is deprecated and IN SCOPE, but no \`succession\` is recorded in media.fixtures.json`,
       ).toBeDefined();
       expect(succession?.status).toMatch(/^(decision_pending|decided|migrated)$/);
-      expect((succession?.why ?? "").length, `${e.id}: succession.why must say WHY`).toBeGreaterThan(
-        40,
-      );
+      expect(
+        (succession?.why ?? "").length,
+        `${e.id}: succession.why must say WHY`,
+      ).toBeGreaterThan(40);
     }
   });
 
@@ -404,9 +405,11 @@ describe("the price tables agree with the committed vendor fixture", () => {
     // either, and keying on `PINNED_MODELS` alone let the repin disarm this.
     const RUNWAY_DAYS = 14;
     for (const e of FIXTURES.entries) {
-      const succession = (e as {
-        succession?: { status?: string; replacementWiredUp?: boolean };
-      }).succession;
+      const succession = (
+        e as {
+          succession?: { status?: string; replacementWiredUp?: boolean };
+        }
+      ).succession;
       if (!e.vendor.shutdown || !inScope(e)) continue;
       // Only a WIRED replacement stands the tripwire down. `migrated` means the code moved;
       // anything else — undecided, or decided-but-unwired — still needs runway.
@@ -636,7 +639,12 @@ describe("stock: a $0 line that still BUYS an asset", () => {
   });
 
   it("refuses an unpriced library — fail closed, never a silent free pass", () => {
-    const res = estimateMediaUsd({ kind: "stock", model: "shutterstock/v9", media: "video", seconds: 6 });
+    const res = estimateMediaUsd({
+      kind: "stock",
+      model: "shutterstock/v9",
+      media: "video",
+      seconds: 6,
+    });
     expect(res).toEqual({ ok: false, error: { code: "unknown_model" } });
   });
 
