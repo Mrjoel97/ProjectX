@@ -1590,8 +1590,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1788092234.1065972,
-    "ast_hash": "0bff8f41f41dea20ea94f9dfca1b4367",
+    "mtime": 1788124221.9961853,
+    "ast_hash": "62453a64ce6ef44f9dace8f03b8e9358",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -6260,8 +6260,8 @@
     "semantic_hash": ""
   },
   "packages/cost/src/media.test.ts": {
-    "mtime": 1788113401.9272337,
-    "ast_hash": "ab772c8706cd66c0aabdf1e7e59ffae3",
+    "mtime": 1788123218.6866486,
+    "ast_hash": "37e7592dc97dd7897eb97e1151c4d3c1",
     "semantic_hash": ""
   },
   "packages/cost/src/media.ts": {
@@ -6360,13 +6360,13 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/mediaDirector.ts": {
-    "mtime": 1788092237.5030324,
-    "ast_hash": "b7bed5f31afc7ed278a51a760b506936",
+    "mtime": 1788123421.2221477,
+    "ast_hash": "342d7efee4743bfec39d4b26295abd29",
     "semantic_hash": ""
   },
   "packages/contracts/skills/media-director.md": {
-    "mtime": 1788092237.3400986,
-    "ast_hash": "f187ec55f9d924b9743fc85fd4a0b2ef",
+    "mtime": 1788123394.7484088,
+    "ast_hash": "606113d68b7a4a4fbc39ff970700ac5b",
     "semantic_hash": ""
   },
   ".planning/phases/20-media-canvas/20-03-SUMMARY.md": {
@@ -10367,6 +10367,11 @@
   ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-04-SUMMARY.md": {
     "mtime": 1788115730.356414,
     "ast_hash": "9a00d5e730a3dcc13959d783a3f82767",
+    "semantic_hash": ""
+  },
+  ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-05-SUMMARY.md": {
+    "mtime": 1788122282.3610094,
+    "ast_hash": "281eeeacefa5bdd188f4928382c709fa",
     "semantic_hash": ""
   }
 }
