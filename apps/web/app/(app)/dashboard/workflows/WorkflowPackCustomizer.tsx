@@ -83,6 +83,15 @@ const ACTIVATION_NOTE =
 
 const TRANSPORT_ERROR = "That could not be saved. Check your connection and try again.";
 
+/** Confirmation of a landed save. It names the VERSION, because that is the thing the next save is
+ *  checked against and the thing `draftStateLine` will report on reload — a bare "Saved" would leave
+ *  a `stale_base_version` refusal looking like it came from nowhere. It does NOT repeat
+ *  `ACTIVATION_NOTE`'s "no workflow uses them yet": that sentence is already on screen, above the
+ *  form, and saying it twice on success reads as a warning about the save rather than about the
+ *  release. */
+const SAVED_CONFIRMATION = (version: number) =>
+  `Saved. Your settings are version ${version}.`;
+
 /** The approved template's own name. An unknown id is NAMED as unknown, never echoed as a title. */
 function packTitle(packId: string): string {
   const resolved = resolveWorkflowPack(packId);
@@ -408,6 +417,19 @@ export function CustomizerView(props: CustomizerViewProps) {
             <WorkflowPackPreflight sources={selected.sources} />
           </div>
 
+          {/* THE SAVE HAD NO VISIBLE OUTCOME AT ALL UNTIL 2026-08-30, and the state to render it
+              already existed — `setOutcome({kind:"saved"})` was set and nothing read it. Success and
+              still-in-flight were indistinguishable in the DOM: no toast, no `role="status"`, no
+              `role="alert"`. Found by the 29-10 browser gate, and it is worse than cosmetic —
+              navigating straight after pressing Save ABORTS the in-flight mutation, so a user who
+              clicks and leaves loses the write with no signal that anything was pending. A test can
+              wait and retry the read; a person cannot.
+              `role="status"` (polite), not `role="alert"`: a success is not an interruption. */}
+          {outcome.kind === "saved" && (
+            <p role="status" style={{ ...dim, color: "var(--ink)", fontWeight: 600 }}>
+              {SAVED_CONFIRMATION(outcome.saved.version)}
+            </p>
+          )}
           {outcome.kind === "refused" && (
             <p role="alert" style={{ ...dim, color: "var(--ink)", fontWeight: 600 }}>
               {refusalMessage(outcome.refusal)}

@@ -244,6 +244,48 @@ describe("open → edit → save", () => {
     expect(text()).toContain("Version 3 is saved as a draft. Change id abcdef012345.");
   });
 
+  test("a landed save SAYS SO, in a live region, naming the version", async () => {
+    // THE GAP THIS CLOSES, found by the 29-10 browser gate on 2026-08-30. `setOutcome({kind:
+    // "saved"})` was set and NOTHING RENDERED IT: success and still-in-flight were
+    // indistinguishable in the DOM. That is not cosmetic — navigating straight after Save aborts
+    // the in-flight mutation, so a user who clicks and leaves loses the write with no signal that
+    // anything was pending.
+    server.packs = [{ ...PACK, myBaseVersion: 2, myCustomizationValues: null }];
+    publishResults = [SAVED];
+    await mount();
+    await click(byText("Business pulse"));
+    await type(termsFieldId(), "callouts");
+
+    // Nothing claims success BEFORE the save — otherwise the assertion below would pass on copy
+    // that is always present, which is the vacuity this phase kept shipping.
+    expect(text()).not.toContain("Saved. Your settings are version");
+
+    await click(byText("Save these settings"));
+
+    expect(text()).toContain("Saved. Your settings are version 3.");
+    // POLITE, not assertive: a success is not an interruption, and `role="alert"` here would
+    // interrupt a screen-reader user mid-sentence for good news.
+    const live = container.querySelector('[role="status"]');
+    expect(live?.textContent).toContain("Saved. Your settings are version 3.");
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  test("a REFUSED save never renders the success line", async () => {
+    // The pairing that stops "Saved." becoming decoration that appears on every submit.
+    server.packs = [{ ...PACK, myBaseVersion: 2, myCustomizationValues: null }];
+    publishResults = [{ ok: false, reason: "empty_customization" }];
+    await mount();
+    await click(byText("Business pulse"));
+    await type(termsFieldId(), "callouts");
+    await click(byText("Save these settings"));
+
+    expect(text()).not.toContain("Saved. Your settings are version");
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "Change at least one setting before saving.",
+    );
+  });
+
   test("after a save the form is level with what was saved — no stale diff, no stale version", async () => {
     publishResults = [SAVED];
     await mount();

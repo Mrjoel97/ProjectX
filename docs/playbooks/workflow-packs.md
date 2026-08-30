@@ -1,5 +1,32 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-30 (**THE SAVE NOW SAYS IT SAVED. The state to render it already existed
+> and nothing read it.** `setOutcome({kind: "saved"})` was set on the success arm and no branch
+> rendered `outcome.kind === "saved"` — only `refused` and `transport` were shown. So success and
+> still-in-flight were indistinguishable in the DOM: no toast, no `role="status"`, no `role="alert"`.
+>
+> **It was never cosmetic.** Navigating straight after pressing Save ABORTS the in-flight mutation,
+> so a user who clicks and leaves loses the write with no signal that anything was pending. Found by
+> the 29-10 browser gate, which first read back a previous run's string and looked like a
+> persistence bug in the product.
+>
+> Now renders `Saved. Your settings are version N.` in a `role="status"` live region — POLITE, not
+> `role="alert"`: a success is not an interruption, and alerting would cut across a screen-reader
+> user mid-sentence for good news. It names the VERSION because that is what the next save is
+> checked against, so a later `stale_base_version` refusal does not appear from nowhere. It does NOT
+> repeat `ACTIVATION_NOTE` — that sentence is already above the form, and repeating it on success
+> reads as a warning about the save rather than about the release.
+>
+> Tests (+2, 123 total): a landed save renders the line in `[role="status"]` and asserts the line is
+> ABSENT before the save (so it cannot pass on always-present copy); a REFUSED save renders no
+> success line and no status region. Mutations observed RED: delete the saved block (the exact prior
+> state) → 1 red; `role="status"` → `role="alert"` → 1 red.
+>
+> **A note on the second mutation, because it nearly went unrecorded.** A first attempt reported it
+> GREEN — but the edit had not applied: the replacement string never matched, so nothing was tested.
+> A mutation that fails to land is indistinguishable from one that survives. Assert the anchor
+> matched, or the mutation proves nothing.)
+
 > Last verified: 2026-08-30 (29-10 — **THE PACK SURFACE HAS ITS BROWSER GATE, AUTHORED AGAINST THE
 > RENDERED DOM AND PROVEN IN BOTH DIRECTIONS.** `apps/web/e2e/workflow-packs.spec.ts` +
 > `workflow-packs-isolation.spec.ts`: **5 passed, PW_EXIT=0**. Every locator was read off a live run
