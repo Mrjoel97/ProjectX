@@ -396,6 +396,16 @@ Plans:
 
 ## Phase Details
 
+### Phase 33.1: Media provider migration to OpenRouter: grok-imagine-video replaces sora-2 before the Videos API withdrawal, gpt-image-2 onto OpenRouter with native batching, and the persistDeck music-field fix (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 33
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 33.1 to break down)
+
 ### Phase 1: Foundation & Governance Substrate
 **Goal**: The governed data + orchestration substrate exists so every later feature inherits tenant isolation, immutable audit, durable workflows, and failure handling for free â the decisions that are cheap now and expensive to retrofit.
 **Depends on**: Nothing (first phase)
