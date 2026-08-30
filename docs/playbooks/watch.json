@@ -1,6 +1,10 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts"],
-  "tracing.md": ["packages/backend/convex/lib/foglamp.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts"
+  ],
+  "tracing.md": [
+    "packages/backend/convex/lib/foglamp.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -342,7 +346,8 @@
     "scripts/check-phase28-completion.mjs",
     "scripts/check-provider-lane.mjs",
     "docs/connectors/README.md",
-    "docs/connectors/phase28-readiness.md"
+    "docs/connectors/phase28-readiness.md",
+    "packages/backend/__fixtures__/providerGates.ts"
   ],
   "connector-hubspot.md": [
     "packages/revenue/src/providers/hubspot",
@@ -376,7 +381,10 @@
     "scripts/smoke-paypal-read.mjs",
     "docs/connectors/paypal-suitability.md"
   ],
-  "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
+  "revenue-crm.md": [
+    "packages/revenue/src/crm",
+    "packages/backend/convex/revenueCrm"
+  ],
   "revenue-finance.md": [
     "packages/revenue/src/money",
     "packages/revenue/src/finance",

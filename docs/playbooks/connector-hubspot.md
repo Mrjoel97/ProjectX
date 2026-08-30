@@ -1,6 +1,12 @@
 # Playbook: HubSpot connector (REVN-01)
 
-> Last verified: 2026-08-30 (gap audit of the connector plane) — **`hubspotReadForTenant` was
+> Last verified: 2026-08-31 (28-09 connect-start gate — `hubspotConnectUrl` now mints its state
+> BEFORE reading `requireHubSpotConfig()`, so an unauthorized caller is refused by the gate rather
+> than learning from a config error whether HubSpot is configured on this deployment. The gate
+> itself lives once, in `connectorOAuth.mintConnectState`. `ponytail:` an unconfigured deployment
+> leaves one state row that expires in 10 minutes. `hubspot.test.ts` seeds passed gate rows in its
+> harness because this suite is about the rail, not the gate; the probe assertion moved from
+> "providerGates is empty" to "the probe changed no gate row", which is the same claim. Prior: 2026-08-30 (gap audit of the connector plane) — **`hubspotReadForTenant` was
 > DELETED.** It was an `internalAction` taking an arbitrary `tenantId` and returning the FULL
 > unsanitized `HubSpotReadResult`, with a doc comment naming `scripts/smoke-hubspot-read.mjs` as its
 > caller. That script calls `hubspot:hubspotReadEvidence` instead, and nothing anywhere called

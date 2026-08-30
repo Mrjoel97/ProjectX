@@ -27,6 +27,7 @@ import type * as calendarViews from "../calendarViews.js";
 import type * as cash from "../cash.js";
 import type * as cockpit from "../cockpit.js";
 import type * as cockpitCapabilities from "../cockpitCapabilities.js";
+import type * as connectorConnections from "../connectorConnections.js";
 import type * as connectorCredentials from "../connectorCredentials.js";
 import type * as connectorFetch from "../connectorFetch.js";
 import type * as connectorOAuth from "../connectorOAuth.js";
@@ -158,6 +159,7 @@ declare const fullApi: ApiFromModules<{
   cash: typeof cash;
   cockpit: typeof cockpit;
   cockpitCapabilities: typeof cockpitCapabilities;
+  connectorConnections: typeof connectorConnections;
   connectorCredentials: typeof connectorCredentials;
   connectorFetch: typeof connectorFetch;
   connectorOAuth: typeof connectorOAuth;

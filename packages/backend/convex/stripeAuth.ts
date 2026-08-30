@@ -331,13 +331,17 @@ const environmentArg = v.union(v.literal("sandbox"), v.literal("production"));
 export const beginConnect = tenantAction({
   args: { environment: environmentArg, redirectPath: v.string() },
   handler: async (ctx, { environment, redirectPath }): Promise<{ url: string }> => {
-    const app = requireStripeApp();
+    // GATE BEFORE CONFIG. `mintConnectState` holds the connect-start gate, so minting first means
+    // an unauthorized caller is refused with `PROVIDER_NOT_CONNECTABLE` before learning anything —
+    // reading the deployment config first told a stranger whether this provider is set up here.
+    // ponytail: an unconfigured deployment now leaves ONE state row that expires in 10 minutes.
+    // Cheaper than a second gate call, and the row grants nothing on its own.
     const minted = await ctx.runMutation(api.connectorOAuth.mintConnectState, {
       provider: "stripe",
       environment,
       redirectPath,
     });
-    return { url: stripeAuthorizeUrl(app, minted.state) };
+    return { url: stripeAuthorizeUrl(requireStripeApp(), minted.state) };
   },
 });
 

@@ -23,6 +23,7 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { newConnectionId } from "./connectorCredentials";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { connectStartAllowed } from "./providerGates";
 
 // ── Argument validators ───────────────────────────────────────────────────────────────────
 
@@ -216,6 +217,24 @@ export const mintConnectState = tenantMutation({
   ): Promise<{ state: string; connectionId: string; expiresAt: number }> => {
     const path = safeRedirectPath(redirectPath);
     if (!path) throw new Error("Unsafe connector redirect path");
+
+    /**
+     * THE CONNECT-START GATE, and this is the ONLY place it lives.
+     *
+     * Every provider's connect flow mints its state here, so one check covers all four and a fifth
+     * lane cannot forget it. Before this, `hubspotConnectUrl` and the two `beginConnect`s were
+     * ungated `tenantAction`s: once the owner sealed a gate row to gather evidence, any tenant who
+     * called one directly could complete a real grant against a provider whose lane had not passed
+     * — a stored credential nobody uses, on a provider nothing has proven.
+     *
+     * `connectStartAllowed` opens a passed lane to everyone and an admitted-but-unproven one to the
+     * OWNER alone, which is what keeps the evidence path (28-22..25) reachable without exposing it.
+     * The refusal is a CODE, never a reason: which axis refused is operator information, and this
+     * throw reaches a browser.
+     */
+    const user = await ctx.db.get(ctx.userId);
+    const allowed = await connectStartAllowed(ctx, provider, environment, user?.owner === true);
+    if (!allowed) throw new Error("PROVIDER_NOT_CONNECTABLE");
 
     const state = mintNonce();
     const now = Date.now();

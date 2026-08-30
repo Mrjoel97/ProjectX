@@ -133,6 +133,24 @@ async function eligibilityFor(
 }
 
 /**
+ * Every PASSED (provider, environment), as a plain function so a server-side reader can join
+ * against it without going through a tenant query.
+ *
+ * ONE resolver, one filter. `availableProviders` below is this same answer wrapped for a browser;
+ * `connectorConnections.connections` uses this directly. Two filters over the same rows is how one
+ * of them eventually forgets an axis.
+ */
+export async function passedProviderGates(
+  ctx: QueryCtx | MutationCtx,
+  now: number,
+): Promise<{ provider: Provider; environment: ConnectorEnvironment }[]> {
+  const rows = await ctx.db.query("providerGates").collect();
+  return rows
+    .filter((row) => resolve(asRecord(row), row.provider, now).state === "passed")
+    .map((row) => ({ provider: row.provider, environment: row.environment }));
+}
+
+/**
  * The PASSED-ONLY projection every consumer reads: connections UI, discovery, the revenue tools and
  * the final-close gate. It returns the provider and the environment and NOTHING else — no evidence
  * ref, no revision, no review date. A surface that could see the review date could render "expiring
@@ -171,6 +189,39 @@ export const inspectGate = ownerQuery({
     };
   },
 });
+
+/**
+ * May a consent be STARTED for this provider, by THIS caller?
+ *
+ * Three answers, and the middle one is the whole reason this is not just `connectPermitted`:
+ *
+ *   - `lane === "passed"` — ANY tenant may start. The provider proved itself; it is a product
+ *     feature.
+ *   - admission permits but the lane has not passed — **OWNER ONLY**. This is the evidence-
+ *     gathering window: somebody has to complete a real grant before wave 7 can judge the lane, and
+ *     that somebody is the operator, not a customer. Without this branch the phase deadlocks again
+ *     (see `connectPermitted`); without the owner restriction, sealing a `parked` row would quietly
+ *     make an unproven provider connectable by every tenant who called the action directly.
+ *   - anything else — nobody.
+ *
+ * Called from ONE place: `connectorOAuth.mintConnectState`, which every provider's connect flow
+ * passes through. Gating there rather than in four provider modules means a fifth lane cannot
+ * forget it.
+ */
+export async function connectStartAllowed(
+  ctx: QueryCtx | MutationCtx,
+  provider: Provider,
+  environment: ConnectorEnvironment,
+  isOwner: boolean,
+): Promise<boolean> {
+  const row = await rowFor(ctx, provider, environment);
+  if (row === null || row.lane === "failed") return false;
+  if (row.reviewBy <= Date.now()) return false;
+  if (!admissionPermits(row.admission, environment)) return false;
+  // The full rule, not just the admission: a passed lane is open to everyone.
+  if (resolve(asRecord(row), provider, Date.now()).state === "passed") return true;
+  return isOwner;
+}
 
 /**
  * May an OAuth consent for this provider be COMPLETED in this environment?

@@ -31,6 +31,7 @@ import {
 } from "@pikar/revenue/providers/hubspot";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { allPassedGates } from "../__fixtures__/providerGates";
 import { api, internal } from "./_generated/api";
 import { isAllowedRead, PROVIDER_READ_PATHS } from "./connectorFetch";
 import schema from "./schema";
@@ -112,6 +113,12 @@ const objectPage = (ids: readonly string[], after?: string): Reply => ({
 
 async function harness() {
   const t = convexTest(schema, modules);
+  // `mintConnectState` gained a connect-start gate (28-09): a provider with no judged lane is not
+  // connectable by anyone. This suite is about the HubSpot rail itself, so every lane is seeded
+  // PASSED and the gate is transparent. Tests that are ABOUT gate absence call `clearGates`.
+  await t.run(async (ctx) => {
+    for (const row of allPassedGates()) await ctx.db.insert("providerGates", row);
+  });
   const userA = await t.run((ctx) => ctx.db.insert("users", {}));
   const userB = await t.run((ctx) => ctx.db.insert("users", {}));
   return {
@@ -789,7 +796,11 @@ describe("probeRevocationCascade — the open condition, tested rather than assu
     expect(PROVIDER_OPEN_CONDITIONS.hubspot.map((c) => c.id)).toContain(
       "revoke-cascades-to-access-tokens",
     );
-    expect(await h.t.run((ctx) => ctx.db.query("providerGates").collect())).toHaveLength(0);
+    // The harness seeds gate rows for the connect-start gate, so "the probe writes no gate row" is
+    // now "the probe CHANGED no gate row" — same claim, and the seeded revisions are the witness.
+    const gates = await h.t.run((ctx) => ctx.db.query("providerGates").collect());
+    expect(gates.every((g) => g.revision === 1)).toBe(true);
+    expect(gates.filter((g) => g.provider === "hubspot")).toHaveLength(2);
   });
 });
 

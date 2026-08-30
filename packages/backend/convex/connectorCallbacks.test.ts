@@ -19,6 +19,7 @@
 //     state, so there is nothing to call back.
 //
 // Every test is $0: convex-test and Web Crypto only, no network, no provider, no model.
+import { PROVIDER_OPEN_CONDITIONS } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
@@ -54,10 +55,22 @@ const gate = (
     admission?: "approved_beta" | "approved_production" | "blocked" | "deferred";
     lane?: "passed" | "parked" | "failed";
     reviewBy?: number;
+    cleared?: readonly string[];
   } = {},
 ) =>
-  h.t.run((ctx) =>
-    ctx.db.insert("providerGates", {
+  h.t.run(async (ctx) => {
+    // UPSERT, not insert. `mint` seeds a PASSED row to get past the connect-start gate, and
+    // `rowFor` reads with `.unique()` — a second row for the same provider+environment throws
+    // rather than overriding, which reads as a mystery failure in whichever test ran both.
+    const existing = await ctx.db
+      .query("providerGates")
+      .withIndex("by_provider_environment", (q) =>
+        q
+          .eq("provider", over.provider ?? "hubspot")
+          .eq("environment", over.environment ?? "sandbox"),
+      )
+      .unique();
+    const doc = {
       provider: over.provider ?? "hubspot",
       environment: over.environment ?? "sandbox",
       admission: over.admission ?? "approved_production",
@@ -66,12 +79,35 @@ const gate = (
       lane: over.lane ?? "parked",
       evidenceRef: "docs/connectors/hubspot-suitability.md#decision",
       reviewBy: over.reviewBy ?? Date.now() + YEAR,
+      clearedConditions: [...(over.cleared ?? [])],
       revision: 1,
       updatedAt: Date.now(),
-    }),
-  );
+    };
+    if (existing) return ctx.db.patch(existing._id, doc);
+    return ctx.db.insert("providerGates", doc);
+  });
 
-const mint = (h: Harness, provider: Routed = "hubspot", environment = "sandbox") =>
+/**
+ * Mint a real state. `mintConnectState` now refuses a provider whose lane has not passed unless the
+ * caller is the owner, so a mint here needs a PASSED lane — which is a different row from the
+ * `parked` one these tests use for the CALLBACK gate, and deliberately so: the two gates are
+ * different questions and this file proves the callback one.
+ */
+const mint = async (h: Harness, provider: Routed = "hubspot", environment = "sandbox") => {
+  // Through the SAME upsert `gate` uses, so a test that calls both does not end up with two rows
+  // for one provider+environment and a `.unique()` throw that looks like a gate failure.
+  await gate(h, {
+    provider,
+    environment: environment as "sandbox" | "production",
+    lane: "passed",
+    // From the source of truth: a passed lane must clear every open condition or the resolver
+    // refuses it, and this seed would silently stop passing.
+    cleared: PROVIDER_OPEN_CONDITIONS[provider].map((c) => c.id),
+  });
+  return mintRaw(h, provider, environment);
+};
+
+const mintRaw = (h: Harness, provider: Routed = "hubspot", environment = "sandbox") =>
   h.as.mutation(api.connectorOAuth.mintConnectState, {
     provider,
     environment,
@@ -147,18 +183,23 @@ describe("the callback gate is the admission axis, and it runs first", () => {
   // ORDERING, PROVEN BY CONSEQUENCE. There is no call-sequence bookkeeping to drift out of sync:
   // the state row can only still exist if nothing consumed it, and consuming it is the first thing
   // the provider handler does.
-  test("a refused callback leaves the one-time state UNBURNED", async () => {
+  // A LANE THAT FAILS MID-CONSENT is the real shape of this now, and it is a better test than the
+  // original: `mintConnectState` refuses a provider with no gate row at all, so a consent can only
+  // exist for a lane that WAS permitted. `recordLaneFailure` exists precisely because a lane can
+  // break between the consent starting and the callback arriving.
+  test("a lane that fails mid-consent refuses the callback and leaves the state UNBURNED", async () => {
     const h = await harness();
     const { state } = await mint(h);
     expect(await stateRows(h)).toHaveLength(1);
 
+    await gate(h, { lane: "failed" });
     const refused = await call(h, `/connectors/hubspot/callback/sandbox?code=c&state=${state}`);
     expect(resultOf(refused)).toBe("unavailable");
     expect(await burned(h)).toBe(false);
 
-    // And once the gate permits, the SAME state IS burned — so the marker being unset above was
-    // the gate refusing, not a state that could never have been consumed in the first place.
-    await gate(h);
+    // And once the lane permits again, the SAME state IS burned — so the marker being unset above
+    // was the gate refusing, not a state that could never have been consumed in the first place.
+    await gate(h, { lane: "parked" });
     await call(h, `/connectors/hubspot/callback/sandbox?code=c&state=${state}`);
     expect(await burned(h)).toBe(true);
   });

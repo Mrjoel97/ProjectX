@@ -1,6 +1,11 @@
 # Playbook: Stripe connector (REVN-03)
 
-> Last verified: 2026-08-30 (gap audit of the connector plane) — **`openInvoices` had NO TEST OF
+> Last verified: 2026-08-31 (28-09 connect-start gate — `stripeAuth.beginConnect` mints before
+> reading `requireStripeApp()`, for the same reason as the HubSpot lane: authorization refuses
+> first, and a config error must not tell a stranger what this deployment has configured.
+> `stripeConnector.test.ts` seeds passed gate rows in its harness and `sealLane` PATCHES rather
+> than inserts, because two rows for one provider+environment make `rowFor`'s `.unique()` throw.
+> Prior: 2026-08-30 (gap audit of the connector plane) — **`openInvoices` had NO TEST OF
 > ANY KIND** and was the only export in `stripeConnector.ts` without one; its three siblings each
 > pin the lane gate, so the gate could have been dropped from `openInvoices` alone and every suite
 > in the repo would still have been green. Six tests added: the gate refuses on an unsealed, a

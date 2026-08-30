@@ -20,6 +20,7 @@
 import { CAPS, importCredentialKey, openCredential, sealCredential } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { allPassedGates } from "../__fixtures__/providerGates";
 import { api, internal } from "./_generated/api";
 import {
   ACCESS_TOKEN_TTL_S,
@@ -78,6 +79,13 @@ const APP = {
 
 async function harness() {
   const t = convexTest(schema, modules);
+  // `mintConnectState` gained a connect-start gate (28-09): a provider with no judged lane is not
+  // connectable by anyone. These suites are about OAuth mechanics and bounded reads, not the gate,
+  // so every lane is seeded PASSED and the gate is transparent here. The gate has its own tests in
+  // `connectorConnections.test.ts`.
+  await t.run(async (ctx) => {
+    for (const row of allPassedGates()) await ctx.db.insert("providerGates", row);
+  });
   const userA = await t.run((ctx) => ctx.db.insert("users", {}));
   const userB = await t.run((ctx) => ctx.db.insert("users", {}));
   return {
@@ -976,21 +984,44 @@ describe("disconnect revokes upstream first, then clears locally", () => {
 
 const DAY_MS = 86_400_000;
 
-/** A `passed` gate row, written straight to the table the way 28-23's seal eventually will. */
+/**
+ * Remove every gate row. The harness seeds all four lanes PASSED so the connect-start gate is
+ * transparent for the OAuth cases; a test that is ABOUT the absence of a judgment has to undo that
+ * explicitly, or it would be asserting a refusal that the seeding made unreachable.
+ */
+async function clearGates(t: Awaited<ReturnType<typeof harness>>["t"]) {
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db.query("providerGates").collect()) await ctx.db.delete(row._id);
+  });
+}
+
+/**
+ * The `passed` gate this suite's bounded reads need. The harness now seeds every lane passed for
+ * the connect-start gate, so this PATCHES rather than inserts — a second row for the same
+ * provider+environment makes `rowFor`'s `.unique()` throw, which reads as a mystery failure.
+ */
 async function sealPassedGate(t: Awaited<ReturnType<typeof harness>>["t"]) {
-  await t.run((ctx) =>
-    ctx.db.insert("providerGates", {
-      provider: "quickbooks",
-      environment: "sandbox",
-      admission: "approved_production",
-      lane: "passed",
+  await t.run(async (ctx) => {
+    const row = await ctx.db
+      .query("providerGates")
+      .withIndex("by_provider_environment", (q) =>
+        q.eq("provider", "quickbooks").eq("environment", "sandbox"),
+      )
+      .unique();
+    const doc = {
+      provider: "quickbooks" as const,
+      environment: "sandbox" as const,
+      admission: "approved_production" as const,
+      lane: "passed" as const,
       evidenceRef: "28-06-SUMMARY.md#offline",
       reviewBy: Date.now() + 90 * DAY_MS,
       clearedConditions: ["partner-tier-and-poll-budget"],
       revision: 1,
       updatedAt: Date.now(),
-    }),
-  );
+    };
+    if (row) return ctx.db.patch(row._id, doc);
+    return ctx.db.insert("providerGates", doc);
+  });
 }
 
 const invoiceRow = (over: Record<string, unknown> = {}) => ({
@@ -1009,6 +1040,7 @@ const queryResponse = (entity: string, rows: unknown[]) =>
 describe("reads fail closed until the lane has actually passed", () => {
   test("no gate record means no request leaves, and the answer says so", async () => {
     const { t, asA, tenantA } = await harness();
+    await clearGates(t);
     await seedConnection(t, tenantA);
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -1339,6 +1371,7 @@ describe("derived figures", () => {
 
   test("an unavailable read yields null and `unavailable`, NEVER a zero total", async () => {
     const { t, asA, tenantA } = await harness();
+    await clearGates(t);
     await seedConnection(t, tenantA);
     vi.stubGlobal("fetch", vi.fn());
 
@@ -1380,6 +1413,7 @@ describe("derived figures", () => {
 
   test("cash on hand is null when we could not look, so cashTimeline stays UNKNOWN", async () => {
     const { t, asA, tenantA } = await harness();
+    await clearGates(t);
     await seedConnection(t, tenantA);
     vi.stubGlobal("fetch", vi.fn());
 
@@ -1413,6 +1447,7 @@ describe("the lane-evidence action — what 28-23 drives, and what it may record
 
   test("the tenant-facing read is still refused in that same state", async () => {
     const { t, asA, tenantA } = await harness();
+    await clearGates(t);
     await seedConnection(t, tenantA);
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
