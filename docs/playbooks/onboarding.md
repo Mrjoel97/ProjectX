@@ -1,5 +1,58 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-31 (28-09 — **THE PHASE 28 CONNECTOR ROWS ARRIVE ON THIS SURFACE AS A PURE
+> DERIVATION, AND THEY ARE NOT ON SCREEN YET.** `connectorRows.ts` + `connectorRows.test.ts` under
+> `dashboard/profile/`. Read from the working tree by the 33.1 lane, which does not own this
+> subsystem; recorded because §9 asks a change to travel with its playbook.
+>
+> **STATUS FIRST, because it is the thing a reader will get wrong: this module has ZERO callers.**
+> `grep -rn connectorRows apps/web --include=*.tsx` returns nothing. The server side is real —
+> `connectorConnections.connections` shipped in `514a19a` — but no `.tsx` renders these rows. It is
+> an ISLAND, in the same shape as `vaultGround` was: built, tested, and reaching no user. Do not
+> read the guarantees below as things the product currently does; read them as the contract the
+> wiring commit must honour. **The tests pass whether or not anything renders.**
+>
+> **Why it is a derivation and not a component.** This surface already tests presentation as pure
+> functions — `approvalsView.ts`, `financeView.ts`, `cashView.ts` — so what a row SAYS is testable
+> without rendering. The eventual `.tsx` keeps only markup.
+>
+> **Why it is a NEW FILE beside `connections.ts` rather than inside it, which is not arbitrary.**
+> `connections.ts` is source-scanned by `packages/core/src/connectionsSurface.test.ts`, which counts
+> `label:` and `blocker:` keys and requires one `ponytail:` comment per entry. Adding a second data
+> shape to that file silently breaks counts that are about something else entirely. **A future
+> reader tidying these two files together would re-break it.**
+>
+> **`checking` IS A STATE, NOT A DEFAULT — and this surface has been bitten twice.** `undefined`
+> from `useQuery` means "we do not know yet". Rendering "Not connected" during a query in flight
+> invites a user to reconnect an account that is already connected; the Google and Microsoft rows
+> above carry the same scar. The `ConnectorState` union names `checking` explicitly so the wiring
+> commit cannot collapse it into the not-connected branch by accident.
+>
+> **THE DISCONNECT BUTTON TELLS THE TRUTH BEFORE IT IS PRESSED, and this is the substantive claim
+> on this surface.** For three of the four lanes Pikar **cannot revoke the grant upstream**. A bare
+> "Disconnect" would promise something the code cannot deliver — the difference between deleting a
+> credential and telling someone their account is disconnected when it is not. So:
+>
+> - `revokeSupport: "confirmed"` — QuickBooks only, the one lane with a documented revocation
+>   endpoint a platform may call. No caveat.
+> - `"unproven"` — says access **may** persist, without claiming it will.
+> - `"unsupported"` — says the grant stays active until the user removes it in their own account.
+>
+> A test pins that the three classes produce three DIFFERENT sentences, which is what stops a future
+> edit from collapsing them into one reassuring string. And `residualNotice` keeps saying the grant
+> is live after a disconnect that could not revoke — the sentence the tenant is owed, on a row that
+> now reads "not connected".
+>
+> **§4 on a RENDERED string.** `lastFailureClass` is a CLOSED CLASS and never provider prose. Vendor
+> error text can carry account ids and customer names, and unlike an audit payload this string goes
+> on screen. A test asserts the closed class renders and that a missing one degrades to `unknown`
+> rather than to the provider's own words.
+>
+> **What the wiring commit still owes**, and none of it is proven today: that `undefined` maps to
+> `checking` at the call site; that `disconnectNote` is shown BEFORE the control rather than after
+> the click; and one browser check that a real row renders, since every guarantee above is currently
+> asserted against a hand-built object.)
+
 > Last verified: 2026-08-23 (27-07 — **ONE EXPORT, NO BEHAVIOUR CHANGE.** `onboardingCompletedAt`
 > joins `currentProfileDoc` in `convex/onboarding.ts`, reading the same `by_tenant_kind` index with
 > the same `failed` filter. It returns the OLDEST committed profile doc's `createdAt`, deliberately
