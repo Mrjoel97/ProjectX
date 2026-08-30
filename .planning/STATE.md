@@ -3,6 +3,69 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
+current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE and a connector-plane GAP AUDIT
+status: in_progress
+stopped_at: "GAP AUDIT of the connector plane (`1eaf5d2`), after the callback slice (`ad12c4e`).
+METHOD: scanned every exported Convex function in the 17 connector-plane modules for callers
+anywhere in packages/apps/scripts. Most unconsumed surface is the phase being 11 of 29 -- the
+revenue tools and the UI that consume it are 28-09/28-12/28-13, and the roadmap rows already say
+so. TWO WERE REAL.
+**(1) `hubspot.hubspotReadForTenant` DELETED.** An `internalAction` taking an ARBITRARY `tenantId`
+and returning the FULL unsanitized `HubSpotReadResult`, carrying a doc comment naming
+`scripts/smoke-hubspot-read.mjs` as its caller -- that script calls `hubspot:hubspotReadEvidence`.
+No test, no script, no plan referenced it. It left HubSpot as the ONLY lane with three read
+surfaces where QuickBooks, Stripe and PayPal each have exactly two (`readEntity` +
+`<provider>ReadEvidence`). A leftover from before the sanitized evidence read existed in the same
+plan.
+**(2) `stripeConnector.openInvoices` HAD NO TEST OF ANY KIND** -- the only export in that module
+without one, while its three siblings each pin the lane gate. The gate could have been dropped from
+`openInvoices` alone and every suite in the repo would still have been green. Six tests added; the
+gate refuses on unsealed, `parked` AND `failed` lanes and refuses BEFORE the request.
+**MUTATION-PROVEN:** swapping `gatedRead` for `readEntityRows` in `openInvoices` ALONE killed
+exactly the three gate cases and nothing else; restored byte-identical.
+**TWO LESSONS FROM WRITING THOSE SIX TESTS:** `tsc` caught two real errors a GREEN vitest run was
+silent over (`Projection` is a discriminated union; the tests reached `.items` without narrowing) --
+the 28-03/28-07 lesson recurring. And narrowing the draft case is what exposed the real behaviour:
+a rejected row degrades the read to **`partial`** with `missing` naming the gap, NOT `ready`. The
+assertion I first wrote said `ready`, which would have passed ONLY IF THE DROP WERE SILENT.
+**KNOWN GAPS THAT REMAIN, ALL OWNED EXCEPT ONE:** `connectorConnections.ts` + Connections UI +
+the ungated connect-START (28-09); `revenueTools`/`revenueTelemetry`/`invoiceReminders`/
+`revenueCrm`/`revenueFinance` modules absent (28-12/13/14); `scripts/check-phase28-completion.mjs`
+absent though watch-registered and cited by the playbook's release table (28-27);
+`providerGates.recordLaneFailure` has no production caller (by design -- future lane refresh).
+**THE ONE UNOWNED GAP: `tenantDelete.ts` does not know about connector connections.** Erasure
+DELETES the four providers' rows (they are `tenant_credential`) but never attempts upstream
+revocation and the deletion report says nothing about it -- the SAME defect class 28.1-08 just
+closed for billing. `revenue-connectors.md` records it as `Flagged, not fixed` and NO PHASE 28 PLAN
+CLAIMS IT. `disconnectForTenant` exists on all four lanes, so the arm is buildable today.
+GATES: backend sharded `--shard=1/2` **1508/1508** and `--shard=2/2` **1716/1717** = 3225 (up
+exactly 6 = the new tests); the single shard-2 failure is `media.test.ts`, green ALONE at 255/255
+and already recorded as an order-dependent flake. A `workflowPackBinding.test.ts` failure seen
+twice earlier also cleared (35/35 alone, then 1508/1508 in shard 1) -- its slowest case is 14.5s,
+the known load-flake class, and it imports `@pikar/contracts` skill bodies, disjoint from
+everything this session touched. `tsc --noEmit` exit 0, `biome check` exit 0, playbook gate silent,
+lane gate `consistent`, readiness `passed`.
+SHARDING RECIPE THAT WORKS: from `packages/backend`, `npx vitest run --shard=1/2` then `--shard=2/2`
+-- 57 files each, both well inside the Bash 10-min cap. Do NOT pass `--root packages/backend` from
+the repo root; it breaks convex-test's `_generated` glob.
+NEXT: the owner steps from the block below (seal a gate row, register the redirect URI, run the
+HubSpot revoke probe), then 28-22 judges on real evidence.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-31T00:45:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 336
+  percent: 80
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
 current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE (out of wave order, deliberate)
 status: in_progress
 stopped_at: "PHASE 28 RESUMED. `ad12c4e` registers the three connector OAuth callback routes.
