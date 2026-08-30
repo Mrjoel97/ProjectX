@@ -40,6 +40,52 @@ export const HANDLED_EVENT_TYPES = [
 
 export type HandledEventType = (typeof HANDLED_EVENT_TYPES)[number];
 
+/**
+ * The CLOSED set of handled types that Stripe emits AT MOST ONCE per object — and therefore the
+ * only types whose `(objectId, eventType)` pair is a genuine transition key.
+ *
+ * `billingWebhook.receiveAndApply` suppresses the EFFECT of a second delivery on one object. That
+ * is correct only where a second delivery cannot be a second transition. Applied to every type it
+ * was a defect (28.1-11 #2): one `sub_` emits `customer.subscription.updated` on EVERY transition,
+ * so a subscription that went `trialing → active` and, three months later, `active → unpaid` had
+ * the second update silently dropped and kept reading as a paying subscriber forever — `unpaid`
+ * never emits a `deleted`, so nothing downstream could correct it. The same bit dropped every
+ * refund after the first when refunds were still keyed on the charge.
+ *
+ * Membership is per-type and written down, because "is this one-shot?" is a claim about STRIPE and
+ * a wrong guess is invisible:
+ *   • `checkout.session.completed`      — a Checkout Session completes exactly once.
+ *   • `invoice.finalized`               — an invoice finalizes exactly once; it cannot un-finalize.
+ *   • `invoice.paid`                    — an invoice is paid once. A re-payment is a new invoice.
+ *   • `customer.subscription.created`   — one per `sub_`, at creation.
+ *   • `customer.subscription.deleted`   — terminal for that `sub_`; there is nothing after it.
+ *
+ * Everything else handled here is repeatable on ONE object id (`customer.subscription.updated`,
+ * `invoice.payment_failed` across dunning) or already carries a per-movement id that makes the
+ * by-object key non-colliding anyway (`refund.created`, `credit_note.created`,
+ * `customer_cash_balance_transaction.created`). Those are protected instead by the `by_event`
+ * dedupe key, by `applyMapping`'s `statusAt` freshness guard, and by the ledger's
+ * (tenant, correlation, phase) identity.
+ */
+export const ONE_SHOT_EVENT_TYPES = [
+  "checkout.session.completed",
+  "invoice.finalized",
+  "invoice.paid",
+  "customer.subscription.created",
+  "customer.subscription.deleted",
+] as const satisfies readonly HandledEventType[];
+
+/**
+ * May a second delivery on this object id have its EFFECT suppressed?
+ *
+ * Exact membership, like `classifyEvent`. An unknown type answers `false` — fail OPEN here on
+ * purpose, because the failure mode of suppressing wrongly is a transition silently lost, while
+ * the failure mode of applying twice is caught downstream by the ledger's own identity.
+ */
+export function isOneShotEventType(type: string): boolean {
+  return (ONE_SHOT_EVENT_TYPES as readonly string[]).includes(type);
+}
+
 export type EventClassification = { kind: "handled"; type: HandledEventType } | { kind: "ignored" };
 
 /**

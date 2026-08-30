@@ -3,7 +3,9 @@ import {
   classifyEvent,
   eventFacts,
   HANDLED_EVENT_TYPES,
+  isOneShotEventType,
   MAPPING_EVENT_TYPES,
+  ONE_SHOT_EVENT_TYPES,
   subscriptionState,
 } from "./events";
 
@@ -245,5 +247,59 @@ describe("subscriptionState never invents a tier it has no evidence for", () => 
     expect(subscriptionState("some_status_stripe_adds_in_2027")).toBe("unknown");
     // The one that matters: an unrecognised status must never fall through to "subscribed".
     expect(subscriptionState("Active")).toBe("unknown");
+  });
+});
+
+describe("ONE_SHOT_EVENT_TYPES — the closed set the by-object key may suppress (28.1-11 #2)", () => {
+  test("is exactly the five one-shot types, written out", () => {
+    expect([...ONE_SHOT_EVENT_TYPES]).toEqual([
+      "checkout.session.completed",
+      "invoice.finalized",
+      "invoice.paid",
+      "customer.subscription.created",
+      "customer.subscription.deleted",
+    ]);
+  });
+
+  test("every member is a HANDLED type — a set member Stripe never delivers suppresses nothing", () => {
+    for (const type of ONE_SHOT_EVENT_TYPES) {
+      expect(HANDLED_EVENT_TYPES as readonly string[]).toContain(type);
+    }
+  });
+
+  /**
+   * The membership that MATTERS, named individually rather than as "the complement". These are the
+   * handled types that repeat on ONE object id, and suppressing their effect is #2 — the defect
+   * that let a subscription go `unpaid` at Stripe while reading `active` here forever.
+   */
+  test.each([
+    "customer.subscription.updated",
+    "invoice.payment_failed",
+    "refund.created",
+    "credit_note.created",
+    "customer_cash_balance_transaction.created",
+    "cash_balance.funds_available",
+  ])("%s is NOT one-shot — its effect may never be suppressed by object", (type) => {
+    expect(isOneShotEventType(type)).toBe(false);
+  });
+
+  test.each([...ONE_SHOT_EVENT_TYPES])("%s IS one-shot", (type) => {
+    expect(isOneShotEventType(type)).toBe(true);
+  });
+
+  test("an unknown type answers false — fail OPEN, a lost transition is the worse failure", () => {
+    expect(isOneShotEventType("charge.dispute.created")).toBe(false);
+    expect(isOneShotEventType("")).toBe(false);
+  });
+
+  test("the two sets partition the handled list — every handled type is classified exactly once", () => {
+    // No handled type may be left unconsidered: a type added to `HANDLED_EVENT_TYPES` without a
+    // decision here silently inherits "repeatable", which is the safe default but must be a
+    // CHOICE. This test is what forces the choice to be written down.
+    const oneShot = HANDLED_EVENT_TYPES.filter((t) => isOneShotEventType(t));
+    const repeatable = HANDLED_EVENT_TYPES.filter((t) => !isOneShotEventType(t));
+    expect(oneShot.length + repeatable.length).toBe(HANDLED_EVENT_TYPES.length);
+    expect(oneShot.length).toBe(ONE_SHOT_EVENT_TYPES.length);
+    expect(repeatable.length).toBe(6);
   });
 });

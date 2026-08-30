@@ -16,7 +16,7 @@
 //     crash leave a dedupe row with no effect, and Stripe's retry is then silently suppressed by
 //     the very row that proves nothing happened. Do no I/O in here — no runAction, no fetch.
 import type { BillingEventFacts } from "@pikar/billing/events";
-import { classifyEvent } from "@pikar/billing/events";
+import { classifyEvent, isOneShotEventType } from "@pikar/billing/events";
 import type { BillingObservation, Reconciliation } from "@pikar/billing/reconcile";
 import {
   parseStripeSignature,
@@ -186,8 +186,15 @@ export const receiveAndApply = internalMutation({
     // The same object transition arriving as a second Event object. Record it (so the delivery is
     // visible) but never act on it. An empty objectId is not a dedupe key — a payload with no
     // object id would otherwise collapse every such event into one.
+    //
+    // ONE-SHOT TYPES ONLY (28.1-11 #2). `(objectId, eventType)` is a transition key only where
+    // Stripe emits that type at most once per object. For a REPEATABLE type — a `sub_` updating on
+    // every transition, an invoice failing across dunning — the pair is not a transition key at
+    // all, and suppressing on it dropped every transition after the first: a subscription that
+    // went `unpaid` kept reading as a paying subscriber, permanently. The delivery is still
+    // recorded either way; only the EFFECT is conditional.
     const duplicateByObject =
-      args.objectId === ""
+      args.objectId === "" || !isOneShotEventType(args.eventType)
         ? null
         : await ctx.db
             .query("billingStripeEvents")
@@ -344,19 +351,34 @@ async function refuse(
   args: { eventId: string; eventType: string; objectId: string },
   facts: BillingEventFacts,
   reason: (typeof REFUSAL)[keyof typeof REFUSAL],
-  tenantId: string = UNATTRIBUTED_TENANT,
+  /**
+   * The tenant this delivery was ABOUT, when one was resolved. It goes in the PAYLOAD, never on
+   * the row (28.1-11 #9).
+   *
+   * `deadLetters.listNew` is a `tenantQuery` over `by_tenant_status` and `markResolved` is a
+   * `tenantMutation` whose only check is `row.tenantId === ctx.tenantId`, so a refusal filed under
+   * the tenant it bills is one THAT CUSTOMER can read — every id in the payload, including (on a
+   * customer conflict) a `cus_` the lookup just proved belongs to somebody else — and can mark
+   * resolved, which drops it out of the owner's `listAll` (filtered `by_status` on "new")
+   * entirely. A billing refusal is Pikar's own money signal; the billed party is not its audience.
+   */
+  billedTenantId?: string,
 ): Promise<"ignored"> {
   // Ids and code tokens only (CLAUDE.md §4). `deadLetters` is `audit_immutable`: it is excluded
   // from both the erasure walk and the export walk, so anything personal that lands here outlives
-  // every deletion request this deployment can honour.
+  // every deletion request this deployment can honour. A tenant id is an id, so attribution is
+  // kept here rather than traded away with the row's scope.
   const payload = {
     stripeEventId: args.eventId,
     stripeEventType: args.eventType,
     stripeCustomerId: facts.customerId,
     stripeObjectId: args.objectId,
+    billedTenantId: billedTenantId ?? null,
   };
   await ctx.db.insert("deadLetters", {
-    tenantId,
+    // ALWAYS unattributed. Not a default a caller can override — the four sites that used to pass
+    // a real tenant id are exactly the four that leaked.
+    tenantId: UNATTRIBUTED_TENANT,
     correlationId: args.eventId,
     source: "billing",
     payload,
@@ -365,7 +387,7 @@ async function refuse(
     createdAt: Date.now(),
   });
   await ctx.runMutation(internal.audit.log, {
-    tenantId,
+    tenantId: UNATTRIBUTED_TENANT,
     correlationId: args.eventId,
     eventType: "deadletter.written",
     actor: "system",

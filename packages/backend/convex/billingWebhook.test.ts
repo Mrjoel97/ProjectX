@@ -606,7 +606,10 @@ describe("the tenant <-> Stripe-customer mapping resolves in BOTH directions", (
     const dl = await letters(t);
     expect(dl).toHaveLength(1);
     expect(dl[0]?.error).toBe("billing_tenant_customer_conflict");
-    expect(dl[0]?.tenantId).toBe(tenantId);
+    // UNATTRIBUTED on the row, the tenant kept as a ref in the payload (28.1-11 #9). Filing it
+    // under the tenant let that customer read and RESOLVE Pikar own money-refusal signal.
+    expect(dl[0]?.tenantId).toBe("billing:unattributed");
+    expect((dl[0]?.payload as Record<string, unknown> | undefined)?.billedTenantId).toBe(tenantId);
   });
 
   test("a Stripe customer claimed by a SECOND tenant is recorded, never re-pointed", async () => {
@@ -670,6 +673,9 @@ describe("an unmatched Stripe customer is dead-lettered by ref and NEVER auto-pr
       stripeEventType: "checkout.session.completed",
       stripeCustomerId: "cus_1",
       stripeObjectId: "cs_test_1",
+      // The tenant this was ABOUT, as a ref, so filing the row unattributed loses no attribution
+      // (28.1-11 #9). Null here: this refusal is exactly the case where no tenant was resolved.
+      billedTenantId: null,
     });
   });
 
@@ -1211,5 +1217,209 @@ describe("tax and attribution travel with the row", () => {
     expect(serialized).not.toContain(SENTINEL_EMAIL);
     expect(serialized).not.toContain(SENTINEL_NAME);
     expect(serialized).not.toContain("example.invalid");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-11 #2 and #9 — the by-object dedupe suppressed the EFFECT, and a billing refusal was filed
+// under the customer being billed.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("a REPEATABLE event type is not suppressed by the by-object dedupe (#2)", () => {
+  /**
+   * The whole failure in one test. A subscription emits `customer.subscription.updated` on EVERY
+   * transition of ONE `sub_`, so keying suppression on `(objectId, eventType)` meant only the
+   * first transition ever reached `applyMapping`. A tenant whose dunning exhausted went `unpaid`
+   * at Stripe and kept reading `active` here — and `unpaid` never emits a `deleted`, so nothing
+   * downstream could ever correct it.
+   */
+  test("a subscription that goes UNPAID stops reading as active", async () => {
+    const t = harness();
+    const tenantId = await seedTenant(t);
+    await send(
+      t,
+      subscriptionBody({
+        id: "evt_sub_a",
+        type: "customer.subscription.updated",
+        customer: "cus_sub_life",
+        status: "active",
+        metadataTenantId: tenantId,
+        created: 1_700_000_100,
+      }),
+    );
+    expect((await mappings(t))[0]?.status).toBe("active");
+
+    // Same `sub_1`, same event type, three months later.
+    await send(
+      t,
+      subscriptionBody({
+        id: "evt_sub_b",
+        type: "customer.subscription.updated",
+        customer: "cus_sub_life",
+        status: "unpaid",
+        metadataTenantId: tenantId,
+        created: 1_707_000_000,
+      }),
+    );
+
+    const mapped = await mappings(t);
+    expect(mapped).toHaveLength(1);
+    expect(mapped[0]?.status).toBe("unpaid");
+    expect(mapped[0]?.statusAt).toBe(1_707_000_000_000);
+  });
+
+  test("the delivery is still RECORDED — the audit trail does not depend on suppression", async () => {
+    const t = harness();
+    const tenantId = await seedTenant(t);
+    for (const [id, created] of [
+      ["evt_rec_a", 1_700_000_100],
+      ["evt_rec_b", 1_707_000_000],
+    ] as const) {
+      await send(
+        t,
+        subscriptionBody({
+          id,
+          type: "customer.subscription.updated",
+          customer: "cus_rec",
+          status: "active",
+          metadataTenantId: tenantId,
+          created,
+        }),
+      );
+    }
+    const stored = await rows(t);
+    expect(stored.map((r) => r.eventId).sort()).toEqual(["evt_rec_a", "evt_rec_b"]);
+    // Both APPLIED now. Recording a delivery and acting on it are separate decisions.
+    expect(stored.map((r) => r.status)).toEqual(["applied", "applied"]);
+  });
+
+  /**
+   * The freshness guard, proven with two events of the SAME type. Until #2 landed, the by-object
+   * dedupe absorbed every repeated `updated` before `statusIsFresh` could see it — so the guard's
+   * only live coverage was the `deleted`-then-`updated` pair (two different types), and it carried
+   * no load at all on the case it was written for.
+   */
+  test("an OLDER repeated `updated` cannot move a newer status back", async () => {
+    const t = harness();
+    const tenantId = await seedTenant(t);
+    const at = (id: string, status: string, created: number) =>
+      subscriptionBody({
+        id,
+        type: "customer.subscription.updated",
+        customer: "cus_stale",
+        status,
+        metadataTenantId: tenantId,
+        created,
+      });
+    await send(t, at("evt_new", "canceled", 1_707_000_000));
+    // A transient 500 got this one retried out of order; it is genuinely older.
+    await send(t, at("evt_old", "active", 1_700_000_100));
+
+    const row = (await mappings(t))[0];
+    expect(row?.status).toBe("canceled");
+    expect(row?.statusAt).toBe(1_707_000_000_000);
+  });
+
+  test("a ONE-SHOT type is still suppressed by object — `created` cannot run twice", async () => {
+    const t = harness();
+    const tenantId = await seedTenant(t);
+    const at = (id: string, status: string, created: number) =>
+      subscriptionBody({
+        id,
+        type: "customer.subscription.created",
+        customer: "cus_oneshot",
+        status,
+        metadataTenantId: tenantId,
+        created,
+      });
+    await send(t, at("evt_os_a", "trialing", 1_700_000_100));
+    await send(t, at("evt_os_b", "active", 1_707_000_000));
+
+    const stored = await rows(t);
+    expect(stored).toHaveLength(2);
+    // The second `created` for one `sub_` is not a real transition — Stripe emits it once.
+    expect(stored[1]?.status).toBe("ignored");
+    expect((await mappings(t))[0]?.status).toBe("trialing");
+  });
+});
+
+describe("a billing refusal is the OWNER's signal, never the billed tenant's (#9)", () => {
+  /**
+   * `deadLetters.listNew` / `markResolved` are `tenantQuery` / `tenantMutation` over
+   * `by_tenant_status`, and `/ops` wires both with the owner gate applied only to the optimizer
+   * section. A refusal filed under the tenant it bills is therefore one the customer can READ —
+   * `stripeEventId`, `stripeCustomerId`, `stripeObjectId` and, for a customer conflict, a `cus_`
+   * that belongs to a DIFFERENT tenant — and mark resolved, which drops it out of the owner's
+   * `listAll` (filtered `by_status` on "new") entirely.
+   */
+  const tenantVisible = (t: ReturnType<typeof harness>, tenantId: string) =>
+    t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("deadLetters")
+          .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "new"))
+          .collect(),
+    );
+
+  test("a tenant<->customer conflict is unattributed, and the tenant id survives as a REF", async () => {
+    const t = harness();
+    const tenantId = await seedTenant(t);
+    await send(t, checkoutBody({ clientReferenceId: tenantId, customer: "cus_first" }));
+    await send(
+      t,
+      checkoutBody({
+        id: "evt_checkout_2",
+        sessionId: "cs_test_2",
+        clientReferenceId: tenantId,
+        customer: "cus_second",
+      }),
+    );
+
+    const dl = (await letters(t)).filter((r) => r.error === "billing_tenant_customer_conflict");
+    expect(dl).toHaveLength(1);
+    expect(dl[0]?.tenantId).toBe("billing:unattributed");
+    // Attribution is NOT lost — it moves into the payload, where it is a ref (CLAUDE.md §4).
+    expect((dl[0]?.payload as Record<string, unknown> | undefined)?.billedTenantId).toBe(tenantId);
+    expect(await tenantVisible(t, tenantId)).toHaveLength(0);
+  });
+
+  test("an undetermined payment method is unattributed — the paying tenant cannot see it", async () => {
+    const t = harness();
+    const tenantId = await seedMappedTenant(t);
+    await send(t, invoiceBody({ paidWith: null }));
+
+    const dl = (await letters(t)).filter((r) => r.error === "billing_undetermined_payment_method");
+    expect(dl).toHaveLength(1);
+    expect(dl[0]?.tenantId).toBe("billing:unattributed");
+    expect((dl[0]?.payload as Record<string, unknown> | undefined)?.billedTenantId).toBe(tenantId);
+    expect(await tenantVisible(t, tenantId)).toHaveLength(0);
+  });
+
+  test("NO billing dead letter anywhere is filed under a real tenant", async () => {
+    // The closed sweep. Every refusal this suite can provoke, in one harness, and not one of them
+    // may carry a tenant id a `tenantQuery` could match.
+    const t = harness();
+    const tenantId = await seedMappedTenant(t);
+    const other = await seedTenant(t);
+    await send(t, invoiceBody({ paidWith: null }));
+    await send(t, checkoutBody({ clientReferenceId: other, customer: CUSTOMER }));
+    await send(
+      t,
+      checkoutBody({
+        id: "evt_ck_x",
+        sessionId: "cs_x",
+        clientReferenceId: "kn700000000000000000000000000",
+      }),
+    );
+    await send(
+      t,
+      invoiceBody({ id: "evt_inv_orphan", customer: "cus_nobody", invoiceId: "in_orphan" }),
+    );
+
+    const billing = (await letters(t)).filter((r) => r.source === "billing");
+    expect(billing.length).toBeGreaterThanOrEqual(4);
+    expect(billing.every((r) => r.tenantId === "billing:unattributed")).toBe(true);
+    expect(await tenantVisible(t, tenantId)).toHaveLength(0);
+    expect(await tenantVisible(t, other)).toHaveLength(0);
   });
 });
