@@ -2145,12 +2145,7 @@ export default defineSchema({
     // an ordinary video or image and the render's slot map reads `kind` to decide where bytes go.
     // This is also the routing discriminator `submitBatch` branches on BEFORE `toSubmittable`: a
     // stock row must never reach `submitLine`, which would POST `pexels/v1` to OpenAI.
-    provider: v.union(
-      v.literal("fal"),
-      v.literal("wan"),
-      v.literal("openai"),
-      v.literal("stock"),
-    ),
+    provider: v.union(v.literal("fal"), v.literal("wan"), v.literal("openai"), v.literal("stock")),
     // FOUR kinds, closed, and they stay four: `kind` says what the BYTES ARE, never who supplied
     // them or what they cost. A stock clip is a `video` and a stock still is an `image`, which is
     // why `renderReel` needed no stock case at all. A fifth member is a deliberate schema edit,
