@@ -3,6 +3,67 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28.1
+current_plan: 9 of 11 executed (28.1-01 webhook receiver + dedupe table, 28.1-02 Dashboard config
+mirror, 28.1-03 pure tax posture + event-to-phase mapping, 28.1-04 outbound transport + hosted
+Checkout/Portal, 28.1-05 tenant<->Stripe-customer mapping, 28.1-06 billingEvents book of record,
+28.1-07 scheduled invoice rollup, 28.1-09 the tenant-facing BillingPanel, 28.1-11 the
+adversarial-audit fix wave) -- 28.1 IN PROGRESS
+status: executing
+stopped_at: "28.1-11 COMPLETE (`5add3ec` correlations, `0bb36d0` dedupe+attribution, `2ce7b7b`
+double-invoice/card/re-subscribe, `064f5f8` biome, `d811cc7` cleared-hold clock, `86a1dea` the four
+vacuous guards + playbook). **THE ADVERSARIAL-AUDIT FIX WAVE: all 15 confirmed defects closed.**
+A 10-agent audit over waves 1-7 (6 lenses + 3 batch skeptics + 1 synthesis) gave 37 candidates ->
+27 survivors -> 15 distinct defects, recorded in
+`.planning/audits/28.1-billing-audit-2026-08-30.md`. Owner chose to fix ALL FIFTEEN as one wave
+before 28.1-10 and the seal. NINE behavioural, FOUR guards that could not fail.
+**#1/#6/#7 are ONE root cause:** a correlation built from an entity that REPEATS instead of from
+the movement that is UNIQUE -- `billingLedger.ts:142` answers a repeat by returning the first row
+and DISCARDING the amount, so only a customer's first bank transfer was ever booked.
+**#3:** a failed rollup discarded the invoice it had already created and the daily cron guarantees
+the retry lands past Stripe's ~24h key-pruning horizon -> a SECOND BILL. A failed period now KEEPS
+`stripeInvoiceId` and is excluded from the retry sweep.
+**#8+#13 had to be ONE edit,** and the fix DEVIATES from the audit's and the plan's prescription:
+the cleared `billingUnapplied` row is ZEROED, not deleted, because deleting it deletes the new
+`amountAt` ordering guard and Stripe redelivers for days -- the pre-clear event would re-insert the
+old figure as a hold nothing is left to clear. Reopening a zeroed row restarts `observedAt`.
+**THE FOUR VACUOUS GUARDS:** `codeOf` truncated every line at `https://`; `billingWebhook.test.ts`
+still ran the UNREPAIRED 28.1-07 stripper (203 of 556 non-blank lines, NONE of the module's three
+exports, both tripwires in the surviving half); the append-only `patch` guard asked for a table name
+as `patch`'s first argument, which Convex never passes -- zero reachable matches.
+Root cause of the stripper defect is DUPLICATION (repaired once in 28.1-07, in two of three files),
+so there is now ONE copy in `packages/backend/__fixtures__/sourceScan.ts`.
+**EVERY FINDING SEEN RED BEFORE ITS FIX** except #2 and one arm of #9, whose code paths were
+UNREACHABLE so a new test passed VACUOUSLY -- those two are mutation-proven and marked as such.
+Gates: backend **3150/3150** across 113 files, billing **156/156**, core **1234/1234**, `tsc
+--noEmit` exit 0 in backend and billing run SEPARATELY, `biome check` exit 0, and `git diff --stat
+HEAD` EMPTY so the committed HEAD is the tree that was tested.
+NOTHING HAS STILL EVER SPOKEN TO STRIPE -- no `BILLING_STRIPE_*` is set in any deployment.
+`requirements-completed: []`. **BILL-04 STAYS PENDING**: nothing writes a `billingPeriods` row.
+**NEXT: 28.1-10** (owner-raised adjustments -- `raiseAdjustment` as the ONE writer of
+`billingPeriods.charges`, owner-only, provenance from `ctx`, refused on a non-`pending` period),
+THEN 28.1-08 LAST (tenant-deletion billing arm + phase seal, carrying the constraint that billing
+termination runs BEFORE the deletion page loop while `billingCustomers` still holds the id).
+NOTE: this top block was STALE -- it reported 28.1-03 and never recorded 28.1-04 through 28.1-09,
+all complete on disk with SUMMARYs. The plan counter is corrected to 11 (28.1-09/-10/-11 were
+authored after 28.1-08 and all three run BEFORE it). `completed_plans` incremented by SIX for the
+plans this block reconciles; the frontmatter total (421) still does not match the files on disk and
+was not reconciled here.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-30T18:40:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 421
+  completed_plans: 334
+  percent: 79
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28.1
 current_plan: 3 of 8 executed (28.1-01 webhook receiver + dedupe table, 28.1-02 Dashboard config mirror, 28.1-03 pure tax posture + event-to-phase mapping) -- 28.1 IN PROGRESS
 status: executing
 stopped_at: "28.1-03 COMPLETE (`e78046c` RED tax, `2eb10b0` GREEN tax, `b9a7189` RED reconcile,
