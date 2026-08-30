@@ -1,5 +1,78 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
+> Last verified: 2026-08-31 against the 28-09 CONNECT-START gate (`connectorOAuth.mintConnectState`,
+> `providerGates.connectStartAllowed` / `passedProviderGates`, `__fixtures__/providerGates.ts`) —
+> **STARTING a consent is now gated, not just completing one.** Read from the working diff by the
+> 33.1 lane, which does not own this subsystem; recorded because §9 asks a change to travel with its
+> playbook, and because the fixture below is newly registered to this file in `watch.json`. Verified
+> by reading the code and its tests — **no live grant was performed**, and the lanes' live status is
+> unchanged.
+>
+> **What was open, and it was reachable.** The 2026-08-30 entry above gated the CALLBACK. The
+> `beginConnect`/`hubspotConnectUrl` entry points were still ungated `tenantAction`s. So once the
+> owner sealed a `providerGates` row to start gathering evidence, **any tenant calling one directly
+> could complete a real OAuth grant against a provider whose lane had not passed** — a stored
+> credential on a connector nothing had proven. Gating the exit and leaving the entrance open.
+>
+> **ONE gate, in ONE place, and that placement is the load-bearing decision.** The check lives in
+> `mintConnectState` because every provider's connect flow mints its state there. One check covers
+> all four providers and **a fifth lane cannot forget it**. Do not add per-provider connect checks —
+> a second copy of this rule is how one of them eventually drifts.
+>
+> **`connectStartAllowed` returns three answers and the middle one is why it is not
+> `connectPermitted`:**
+> - `lane === "passed"` → **any tenant.** The provider proved itself; it is a product feature.
+> - admission permits, lane has not passed → **OWNER ONLY.** This is the evidence-gathering window:
+>   somebody must complete a real grant before the lane can be judged, and that somebody is the
+>   operator. Without this branch the phase deadlocks — the lane cannot pass without evidence, and
+>   evidence cannot be gathered without starting a consent.
+> - otherwise → refused.
+>
+> **But four conditions refuse OUTRIGHT, before that owner branch is ever reached** — read
+> the ladder in `connectStartAllowed`, not this summary: no row at all; `lane === "failed"`;
+> `reviewBy <= now`; or an admission that does not permit this environment.
+>
+> **The third of those is a hazard: an EXPIRED `reviewBy` locks out the OWNER too.** The
+> expiry check sits ABOVE `return isOwner`, so once a gate's review date passes the
+> evidence-gathering window closes on the operator as well as on tenants — and gathering that
+> evidence is exactly what renewing the gate needs. If an operator reports they cannot start a
+> consent on a lane they are supposed to be proving, check `reviewBy` FIRST. The fix is to
+> re-seal the row with a future date, never to loosen the gate.
+>
+> The refusal is the CODE `PROVIDER_NOT_CONNECTABLE` and never a reason. Which axis refused is
+> operator information and this throw reaches a browser.
+>
+> **`passedProviderGates` exists so there is ONE filter over these rows.** `availableProviders` is
+> the same answer wrapped for a browser; `connectorConnections.connections` calls this directly.
+> Two independent filters over the same table is how one of them eventually forgets an axis.
+>
+> **GATE BEFORE CONFIG — a rule for every provider's `beginConnect`, not just QuickBooks'.**
+> `quickbooksAuth.beginConnect` used to read the deployment config (`requireQbApp()`) and mint the
+> state second. That told an unauthorized caller **whether the provider is configured on this
+> deployment**, because a missing-config throw is distinguishable from a refusal. The order is now
+> mint-then-config. Accepted cost, written at the call site: an unconfigured deployment leaves one
+> state row that expires in 10 minutes. **Any new provider's connect action must be written in this
+> order**, and a reader tidying the config read back to the top of a handler is removing a security
+> property, not a temporary variable.
+>
+> **THE SHARED FIXTURE, and the vacuity trap that comes with it.**
+> `packages/backend/__fixtures__/providerGates.ts` is now registered to this playbook — it is
+> cross-provider, so it belongs here rather than under any one connector. Two things about it:
+>
+> - It builds `clearedConditions` from `PROVIDER_OPEN_CONDITIONS` rather than typing the ids. A row
+>   that sets `lane: "passed"` and stops **resolves to NOT passed, silently**, which reads in a test
+>   as "the gate refused" and sends you looking in the wrong place. Deriving from the source the
+>   resolver reads means a renamed condition breaks the seeder instead.
+> - It is ONE copy because the last duplicated fixture here took a repair that reached two of three
+>   copies, leaving the third defective.
+>
+> **The trap:** seeding every lane PASSED in a harness makes that suite's fail-closed tests
+> **unfalsifiable** — "no gate record means no request leaves" cannot fail once the harness wrote a
+> passing gate. `quickbooks.test.ts` handles this with an explicit `clearGates(t)` in the four tests
+> that are ABOUT the absence of a judgment. **Any suite adopting `allPassedGates()` must do the
+> same**, and a suite that IS about the gate should build its rows inline so the axis under test is
+> visible in the test body.
+
 > Last verified: 2026-08-30 against the 28-09 callback-route slice (`http.ts`,
 > `providerGates.connectPermitted`, `connectorCallbacks.test.ts`), on top of 28-07 (the read-only Stripe App lane, `postTokenForm`'s
 > `bearerAuth` input and `readPages`' Stripe version pin), 28-06 (QuickBooks) and 28-05 (HubSpot),

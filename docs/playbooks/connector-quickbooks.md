@@ -1,5 +1,59 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
+> Last verified: 2026-08-31 against the 28-09 connect-start gate — **THE CONNECT FLOW IS NOW GATED,
+> AND `beginConnect` CHECKS THE GATE BEFORE IT READS THE DEPLOYMENT CONFIG.** Read from the working
+> diff by the 33.1 lane, which does not own this subsystem; recorded here because §9 asks the change
+> to travel with its playbook. The behaviour below is verified by reading the code and its tests,
+> **not** by a live QuickBooks grant — the lane's live status is unchanged and still says so above.
+>
+> **What was open.** `beginConnect` was an ungated `tenantAction`. Once the owner sealed a
+> `providerGates` row to begin gathering evidence, **any tenant who called it directly could
+> complete a real OAuth grant against a provider whose lane had not passed** — a stored credential
+> on a connector nothing had proven. The same hole existed on `hubspotConnectUrl` and the Stripe
+> `beginConnect`.
+>
+> **Where the fix lives, and why it is one place.** In `connectorOAuth.mintConnectState`, not here.
+> Every provider's connect flow mints its state through that one mutation, so a single
+> `connectStartAllowed` check covers all four providers and a fifth lane cannot forget it. This
+> playbook's subject is downstream of that gate, not a second copy of it — do NOT add a QuickBooks-
+> specific connect check.
+>
+> **`connectStartAllowed` has three answers and the middle one is the point:** a `passed` lane is
+> open to any tenant; an admitted-but-unproven lane is **owner-only**, which is what keeps the
+> evidence path reachable without exposing it to customers; anything else refuses. The refusal is
+> the CODE `PROVIDER_NOT_CONNECTABLE` and never a reason — which axis refused is operator
+> information and this throw reaches a browser.
+>
+> **THE ORDERING CHANGE IN THIS FILE'S OWN CODE, which is the part a reader here must not undo.**
+> `beginConnect` used to call `requireQbApp()` first and mint the state second. Reading the
+> deployment config first told an unauthorized caller **whether QuickBooks is configured on this
+> deployment**, because a missing-config throw and a refusal are distinguishable. The order is now
+> gate-then-config: `mintConnectState` runs first and an unauthorized caller is refused before
+> learning anything, with `requireQbApp()` moved inline into the return. **Do not "tidy" that back
+> into a local `const app` at the top of the handler** — the position is the security property.
+>
+> Its accepted cost is written at the call site: an unconfigured deployment now leaves ONE state row
+> that expires in 10 minutes. Cheaper than a second gate call, and the row grants nothing alone.
+>
+> **How the tests stay honest, and the trap in them.** `quickbooks.test.ts`'s harness now seeds
+> EVERY lane passed (via the shared `__fixtures__/providerGates.ts`) so the new gate is transparent
+> to suites that are about OAuth mechanics and bounded reads. That seeding would have made this
+> file's fail-closed cases **unfalsifiable** — a test asserting "no gate record means no request
+> leaves" cannot fail if the harness just wrote a passing gate. Four such tests therefore call
+> `clearGates(t)` first. **Any new test here that is ABOUT the absence of a judgment must do the
+> same**, or it will pass for the wrong reason.
+>
+> `sealPassedGate` is now patch-or-insert rather than insert, because a second row for the same
+> `(provider, environment)` makes `rowFor`'s `.unique()` throw and reads as a mystery failure.
+>
+> **The fixture is shared on purpose** (`packages/backend/__fixtures__/providerGates.ts`, registered
+> under `revenue-connectors.md` — it is cross-provider, not this connector's). It builds
+> `clearedConditions` from `PROVIDER_OPEN_CONDITIONS` rather than typing the ids, so a renamed
+> condition breaks the seeder instead of leaving a row that silently resolves to `pending`; and it
+> is ONE copy because the last time a fixture was duplicated here a repair reached two of the three
+> copies. A suite that IS about the gate should still build its rows inline, so the axis under test
+> is visible in the test body.
+
 > **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
 > subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
 > steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
