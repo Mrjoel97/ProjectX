@@ -100,6 +100,19 @@ const DECK_SHAPE = [
  *    flattened to a total at the write site.
  */
 export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = {
+  // 28.1-10. An owner-raised charge on a tenant's bill. `ref` and `periodKey` are the two halves of
+  // the Stripe idempotency identity, `charges` is the resulting line COUNT, and there is no
+  // description field anywhere in the payload — the owner's reason for a charge belongs in their
+  // own records, not in an append-only log (CLAUDE.md §4). The author is the audit row's `actor`.
+  "billing.adjustment.raised": [
+    "source",
+    "periodKey",
+    "ref",
+    "kind",
+    "amountMinor",
+    "currency",
+    "charges",
+  ],
   "blueprint.confirmed": [
     "docId",
     "sourceDocCount",
@@ -301,6 +314,11 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "microsoftLocalRowDeleted",
     "microsoftRevokedAtProvider",
     "microsoftFailure",
+    // 28.1-08's third provider arm. Omitting these here would leave the audit VIEWER showing an
+    // erasure with two arms while the row carries three — the renderer half of a backend change.
+    "billingLocalRowDeleted",
+    "billingRevokedAtProvider",
+    "billingFailure",
   ],
   "tenant.tier_changed": ["from", "to", "tierSource", "factsChanged"],
   "vault.drive.import": [

@@ -23,7 +23,17 @@
 > **The erasure tradeoff is now asserted, not just commented:** `billingCustomers`, `billingPeriods`
 > and `billingUnapplied` are erased; `billingEvents` and `billingCoverage` are `audit_immutable` and
 > SURVIVE. A tenant erasure removes the mapping and the working rows; it does not rewrite Pikar's
-> financial book. `tenantDelete.test.ts` 13/13. Details in `billing.md`.)
+> financial book. `tenantDelete.test.ts` 13/13. Details in `billing.md`.
+>
+> **AND THE VIEWER PROJECTION MOVED WITH IT.** `AUDIT_VIEWER_EVENTS` in
+> `packages/contracts/src/auditProjection.ts` gained the three `billing*` keys on `tenant.deleted`
+> and a new `billing.adjustment.raised` row (28.1-10's owner-raised charge: `periodKey`, `ref`,
+> `kind`, `amountMinor`, `currency` and a line COUNT — no description field exists, because the
+> owner's reason for a charge belongs in their own records and not in an append-only log).
+> **`reportsGovernance.test.ts`'s forward scan is what caught the omission**, and it is worth saying
+> why the pair works: writing an audit row with a new `eventType` and NOT projecting it renders a
+> shell in the viewer, so the allowlist fails closed on any unaccounted literal. That guard has now
+> done its job on the first new event type since it was written.)
 
 > Last verified: 2026-08-29 (28.1-05 — **`deadLetters.workflowId` IS NOW OPTIONAL, THE TABLE HAS A
 > `source` DISCRIMINATOR, AND `billingCustomers` IS CLASSIFIED `tenant_owned`.**

@@ -3,6 +3,64 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28.1
+current_plan: 11 of 11 executed -- 28.1 CODE COMPLETE AND SEALED
+status: phase_complete
+stopped_at: "28.1 SEALED at 28.1-08 (`374b3aa` raiseAdjustment, `dc2893b` the erasure arm + the
+seal). All eleven plans landed. **THE PHASE IS CODE COMPLETE AND HAS NEVER SPOKEN TO STRIPE**, and
+those two facts must be read together: `requirements-completed: []` and BILL-01..BILL-06 ALL STAY
+PENDING.
+**28.1-10 gave the rollup an input.** 28.1-07 shipped a correct, bounded, 28-mutation-proven invoice
+rollup that NOTHING fed: the daily cron ran, found nothing due, and did nothing, for every tenant,
+forever. `raiseAdjustment` is now its ONE writer -- an `ownerMutation` (a tenant must not bill
+themselves or anyone else), with `charges[].raisedBy` REQUIRED and taken from `ctx`, and
+`periodForPost` STRIPPING it so it never reaches Stripe. `kind` is hard-coded with a source
+assertion, because a parameter is how the metered kind gets written by accident.
+**28.1-08 closed the loop that kept charging a deleted tenant's card.** The billing arm sits ABOVE
+the page loop, because `billingCustomers` is `tenant_owned` and the loop deletes the row holding the
+`subscriptionId` -- an arm below it reports `hadSubscription: false`, indistinguishable from a tenant
+who never subscribed. The test proves ordering by CONSEQUENCE (`revokedAtProvider` cannot be true
+unless the read preceded the walk), not by reading source order. `terminateBilling` never throws AND
+never reports a silent success; those are opposite failure modes and both are tested.
+**The naming boundary is now ENFORCED BY THE SUITE:** nothing under `packages/billing` or
+`convex/billing*` may name `STRIPE_APP_`, `connectorFetch`, `providers/stripe`, `stripeAuth` or
+`stripeConnector`, and `BILLING_STRIPE_SECRET_KEY` has exactly ONE consumer. Proven by mutation.
+**TWO MEASUREMENT DEFECTS FOUND IN MY OWN TOOLING, and they are the transferable lesson:**
+(1) the mutation harness wrote mutants with `io.open(...).write(...)` and never closed the handle,
+so three of eight never reached disk before vitest read the file and were reported SURVIVED -- false
+accusations rather than false clean bills, which was luck; the replacement `fsync`s and reads the
+file back before running. (2) One mutant then survived FOR REAL: deleting the currency guard left a
+bare `rejects.toThrow()` green because the SCHEMA rejected `currency: undefined` downstream. The
+refusal was real and the test was vacuous. Guard tests now pin their own MESSAGE.
+GATES: billing suites 431/431 across 10 affected files, core 1234/1234, `tsc --noEmit` exit 0 run
+SEPARATELY, `biome check` exit 0, playbook gate silent, `git diff --stat HEAD` empty.
+ENV REALITY: `BILLING_STRIPE_SECRET_KEY` was set on the LOCAL deployment 2026-08-30 (owner-supplied
+`sk_test_`, owner said they will rotate). `BILLING_STRIPE_PRICE_ID` and
+`BILLING_STRIPE_WEBHOOK_SECRET` are UNSET EVERYWHERE, and Convex env vars are PER-DEPLOYMENT -- the
+cloud dev and production deployments carry no billing variable at all.
+**NEXT: PHASE 28 (Connector-Backed Revenue Pack), 11 of 29 plans.** All four read-only rails are
+BUILT and NONE has spoken to its provider: `node scripts/check-provider-lane.mjs --provider <p>`
+reads `consistent` for hubspot/quickbooks/stripe/paypal, and CONSISTENT IS NOT PASSED -- each still
+carries one PEND row for a live read/revoke that has never run. `.env` holds HubSpot and PayPal APP
+credentials (`HUBSPOTAPP_*`, `PAYPALAPP_*`) which MAY unblock those two lanes; there are NO
+QuickBooks credentials and NO `STRIPE_APP_*` (Phase 28's Stripe rail needs a registered Stripe App's
+OAuth pair, NOT the `sk_test_` merchant key -- that one belongs to 28.1 and using it here would read
+Pikar's own books through a surface built to read a customer's).
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-30T21:55:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 336
+  percent: 80
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28.1
 current_plan: 9 of 11 executed (28.1-01 webhook receiver + dedupe table, 28.1-02 Dashboard config
 mirror, 28.1-03 pure tax posture + event-to-phase mapping, 28.1-04 outbound transport + hosted
 Checkout/Portal, 28.1-05 tenant<->Stripe-customer mapping, 28.1-06 billingEvents book of record,
