@@ -1,3 +1,436 @@
+> Last verified: 2026-08-29 (29-W3-TAIL-FIX2 — citation sweep, prose only, no vault code changed.
+> The four `vaultRag.ts:390` citations for `vaultRag.embedDoc`'s `SMOKE::` short-circuit are now the
+> SYMBOL (`SMOKE_PREFIX`); the line was still correct today, which is exactly when a line number is
+> cheapest to remove. The rest of this 4.3k-line playbook still carries line-number citations in
+> older sections and they are NOT swept here — an unverified conversion is how stale citations get
+> minted, so they stay recorded as open in `29-W3-TAIL-FIX2-SUMMARY.md`. One known-stale citation is
+> outside this playbook and outside this agent's ownership: `vaultDigest.ts`'s cap comment cites
+> `vaultGround.ts:29-30` for `PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP`, which are at `:39-40`.)
+
+> Last verified: 2026-08-29 (29-W3-TAIL — **TWO STALE CITATIONS IN THE FOLDER-DIGEST SECTION.**
+> 29-FIN-06 inserted a nine-line header into `vaultGround.ts` and edited this file in the same
+> commit without moving the two constants it cites: `vaultGround.ts:29-30` was already
+> `PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP` at `:39-40`. Beside it, `schema.ts:900` for the `docType`
+> union had drifted to `:2018`. BOTH ARE NOW NAMED BY SYMBOL rather than by line — this phase has
+> produced stale citations in four separate rounds and a line number rots every commit. The
+> "mirroring" wording went with them: `vaultDigest.ts`'s `DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS`
+> hold the SAME two numbers as `vaultGround.ts`'s caps and nothing couples the pairs, which is now
+> what the sentence says. Prose-only; no vault code changed.)
+>
+> Last verified: 2026-08-29 (**29-FIN-06 — `vaultGround.ts`'s `SMOKE::` SEAM IS GATED ON THE
+> OPERATOR, NOT ON THE QUERY.** It was the last tenant-supplied string on the knowledge plane that
+> could select an offline fixture: `vaultGround` is a `tenantAction`, and every
+> `vaultGroundHydrated` caller — the cockpit `searchVault` tool, `blueprint.ts`, `evaluations.ts`,
+> `voiceDoc.ts`, `knowledgeVaultDrive.ts` — passes user text as `query`. The branch now needs
+> `offlineSeamAvailable()` (`lib/models.ts`: `PIKAR_OFFLINE_FIXTURES=1` AND neither model
+> credential) as well as the `SMOKE::` prefix. Same predicate as `knowledgeLlm.ts`, `vaultDigest.ts`
+> and `voiceDoc.ts` — a fourth variant was deliberately not written.
+>
+> **What closing it cost, because it is the reason the sibling seams stayed open.** ~14 test files
+> drive this seam. The operator consent moved to `packages/backend/vitest.config.mts`
+> (`env: { PIKAR_OFFLINE_FIXTURES: "1" }`) so no `beforeEach` had to be edited; a test that needs
+> the consent ABSENT stubs it off, which is what `vaultGround.test.ts`'s new "WITHOUT the operator's
+> consent" test does (mutation observed red: drop `offlineSeamAvailable() &&` and the seed resolves).
+> Two files then failed for a second reason: they planted a FAKE MODEL CREDENTIAL, which is a claim
+> about the deployment and makes `offlineSeamAvailable()` false. `knowledgeSearch.test.ts` now mocks
+> the model ROUTE instead, and `onboarding.test.ts`'s `process.env.OPENAI_API_KEY = FAKE_KEY` — a raw
+> assignment with no cleanup that leaked into every later file in the same worker — is deleted;
+> nothing needed it (32/32 without).
+>
+> **STILL OPEN, and named rather than implied:** `vault.ts`'s `vaultSearch` keeps an UNGATED
+> `SMOKE::` seam (`query.startsWith("SMOKE::")`, ~`:729`), because `apps/web/e2e/vault-redesign.
+> spec.ts` types those sentinels into the search box against a REAL KEYED deployment, where
+> `offlineSeamAvailable()` is false by construction. `vaultRag.embedDoc`, `vaultLlm.extractGraph` /
+> `identifyDoc` are the other content-selected paths; see
+> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.)
+
+> Last verified: 2026-08-29 (**WAVE-3 FINAL — THE COPY-DRIFT GUARD IS DELETED; `vaultDigest.ts`'s
+> SEAM COMMENT NOW CITES THE TESTS BEHIND ITS ABSOLUTES. Comment/test-only; no behaviour changed.**
+>
+> **1. The copy-drift guard is GONE, and copy-drift is now UNGUARDED.** `lib/models.test.ts`'s
+> source-text scan for a second `resolveModel` was defeated on all five of its iterations — a
+> renamed const, a renamed callee, the `@ai-sdk/openai/internal` subpath specifier, `export default
+> openai;`, and finally LEADING WHITESPACE against an anchored `^export` match — each escape RUN as
+> a planted module that left the suite green. A sixth regex was not written: a provider is reachable
+> through a renamed binding, a non-literal specifier and raw `fetch`, and this repo already uses the
+> last of those on a landed path (`vaultRag.ts`'s `embeddingV2`, ~:230-270, picks provider label,
+> env-key NAME and URL at runtime with zero provider imports). Only the BEHAVIOURAL tests remain —
+> where `resolveModel` routes each prefix. An eighth private copy of the route table would not be
+> caught by any test; closing that needs an AST/type-level pass or a lint rule. Full account in
+> `docs/playbooks/cockpit.md`'s top entry and `29-SMOKE-SEAM-DEBT.md`. THE ENTRY BELOW IS THE
+> EARLIER, SUPERSEDED ACCOUNT OF THAT GUARD.
+>
+> **2. `vaultDigest.ts`'s offline-seam comment now names its tests.** "Selected by the deployment
+> and by nothing else" cites the `"the offline seam is selected by the DEPLOYMENT, never by
+> content"` block, which attacks the member TEXT, the member TITLE and the folder NAME channels.
+> "On any deployment with a key the fixture is unreachable by construction" is replaced by what the
+> code does — `offlineSeamAvailable()` ANDs the operator flag with "neither model key" — plus the
+> two keyed tests that pin it. The old wording named neither.
+>
+> **3. `lib/env.ts`'s `fixturesActive` comment claimed the screen "cannot announce a seam that is
+> off".** False: the screen reports the FLAG, the seam ANDs it with "neither key", so a keyed
+> deployment reports ACTIVE over an inert seam. Corrected there; see `production-beta.md`.)
+
+> Last verified: 2026-08-28 (**WAVE-3 CLEANUP FIX — THE DRIFT GUARD WAS DECIDED, THE FIXTURE FLAG
+> STOPPED BEING DECIDED TWICE, AND THREE FALSE COMMENTS THE PREVIOUS ROUND LEFT BEHIND WERE FIXED.**
+>
+> **1. The copy-drift guard is a CHANNEL guard now.** SUPERSEDED — the guard is deleted; see the
+> entry above.
+>
+> **2. "Is the fixture seam on?" had two answers.** `lib/env.ts`'s `fixturesActive` used non-blank,
+> `lib/models.ts` used the literal `"1"`, so `PIKAR_OFFLINE_FIXTURES=on` (the spelling every other
+> fixture flag here takes) gave a readiness screen announcing a LIVE fabrication seam over a fixture
+> that was OFF, plus an unexplained `OPENROUTER_API_KEY is not set`. One predicate now —
+> `lib/env.ts` `isOfflineFixtureConsent` — imported by both, pinned by a table of literal values in
+> `models.test.ts` that fails if either site grows its own rule again.
+>
+> **3. False comments, corrected in source rather than only in the planning doc.**
+> `vaultDigest.test.ts`'s header stated the superseded credential-only predicate as present-tense
+> fact and attributed `offlineSeamAvailable` to the wrong module; `vaultDigest.ts`, that same test
+> and this playbook all still cited `vaultDrive.ts:697`/`:880` after the previous round's own report
+> identified them as wrong (`:705`/`:888`, and the store TRUNCATES to 200 chars rather than storing
+> "verbatim"). All fixed here.
+>
+> **Not fixed, recorded:** `vaultRag.embedDoc` (its `SMOKE_PREFIX` short-circuit) still selects a fabrication path
+> from CONTENT with no operator gate at all, on a fully landed path — pre-existing (d1e8826,
+> 2026-07-14), disclosed, and instance #3 in `29-SMOKE-SEAM-DEBT.md`. It needs an owner, not a
+> cleanup patch.)
+
+> Last verified: 2026-08-28 (**WAVE-3 CLEANUP — THE DIGEST OFFLINE GATE NEEDED A THIRD FIX, BECAUSE
+> THE SECOND ONE TRADED AN ATTACKER-TRIGGERED FABRICATION FOR AN UNCONDITIONAL ONE.**
+>
+> Round 4 replaced the content sentinel with `offlineSeamAvailable()` = "this deployment holds
+> NEITHER model key". That closed the third-party channel and opened a worse one. **Absence of a
+> credential is a MISCONFIGURATION, not an operator's consent.** A production deployment that lost
+> its keys — never set, or blanked with `convex env set X ""` — would have fabricated a digest for
+> EVERY completed folder, silently, and suppressed its own retry, because a fixture RETURNS where
+> the previous gate THREW at `openRouter()`. Blast radius: every folder on the deployment, no error
+> anywhere. Strictly worse than the defect it replaced.
+>
+> **The gate is now a POSITIVE OPERATOR OPT-IN, AND-ed with the precondition it claims:**
+> `process.env.PIKAR_OFFLINE_FIXTURES === "1" && !OPENAI_API_KEY && !OPENROUTER_API_KEY`
+> (`convex/lib/models.ts`). The literal `"1"` — `""` and a leftover `0` are the operator saying no.
+> The credential half is KEPT as the second belt: an operator who sets the flag on a keyed
+> deployment by accident still takes the real model path. `PIKAR_OFFLINE_FIXTURES` is registered in
+> `lib/env.ts` `ENV_MANIFEST` at `tier: "fixture"`, so the readiness screen names it under
+> `fixturesActive` (the `FAL_FIXTURE` precedent). **A keyless deployment WITHOUT the flag now throws
+> `OPENROUTER_API_KEY is not set` out of `buildFolderDigest` — deliberately. Do not add a keyless
+> fallback.** `voiceDoc.reviewDocument` shares the predicate and the reasoning matters more there,
+> because that seam is reached from a PUBLIC endpoint.
+>
+> **A FALSE CLAIM WAS ALSO CORRECTED, IN THREE PLACES.** `vaultDigest.ts`'s header, the
+> `vaultDigest.test.ts` seam comment and `29-SMOKE-SEAM-DEBT.md` all said the fabricated digest was
+> "stored, EMBEDDED and served back through retrieval". It was not. `smokeDigestFixture` begins
+> `SMOKE::graph::`, and `vaultRag.embedDoc` (its `SMOKE_PREFIX` short-circuit) short-circuits ANY `SMOKE::` text to
+> `{ entryId: "smoke::<hash>", costUsd: 0 }` with no vector — so the fabricated digest was **stored
+> and DISPLAYED, never embedded and never vector-retrievable**, holding a `ragEntryId` that merely
+> READS groundable. Corrected, not softened.
+>
+> Mutations that MUST go red (all three OBSERVED red in this pass, then reverted): drop the
+> `PIKAR_OFFLINE_FIXTURES` conjunct → `vaultDigest.test.ts` "KEYS GONE, OPT-IN ABSENT",
+> `voiceDoc.test.ts` "KEYS GONE, OPT-IN ABSENT" and `models.test.ts` "absence of a credential is a
+> MISCONFIGURATION"; drop BOTH credential conjuncts → `vaultDigest.test.ts` "the opt-in does NOT
+> re-open the seam" plus the four member-content / folder-name cases; `=== "1"` → `!== undefined` →
+> `models.test.ts` 'only the literal "1" is consent'.
+>
+> ⚠ **KNOWN-FLAKY SUITES — read before calling a red a regression.** `convex/vaultDigest.test.ts` is
+> LOAD-FLAKY under a full backend run (0, 1 and 6 failures across three identical clean runs; 17/17
+> green ALONE). **Re-run any failing backend file ALONE before treating it as a regression.**
+> `convex/media.test.ts` joined it on 2026-08-28: "a transcript with no usable words never buys a
+> sandbox" fails under full-suite load (spy called 1x, expected 0) and passes 255/255 in isolation.
+> That is a LATENT TEST-ISOLATION DEFECT newly EXPOSED by the suite growing 107 → 111 files, not a
+> media regression — Phase 29 touched no `media.*`, no `render/` and not `vaultIngest.ts`. **It is
+> recorded here rather than fixed, and it NEEDS AN OWNER on the media plane.** Recording it here so
+> it is not silently folded into the known-red list.)
+
+> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS, PART 2 — DRIVE OWNERSHIP NOW CROSSES THE IMPORT,
+> SO THE VAULT AND DRIVE PLANES TELL ONE STORY ABOUT ONE FILE.**
+>
+> A file a stranger shared into the tenant's Drive is `third_party_research` on the Drive plane
+> (Drive's own `ownedByMe`) and used to become `tenant_owned` the moment the folder import copied it
+> into the vault — the row landed `kind: "upload"` with no ownership signal, and
+> `vaultGroundHydrated` carries `kinds`/`origins` and not `source`, so the search plane could not
+> tell it from a real upload. Round 3 DISCLOSED that; this pass DECIDES it, at the weaker class:
+> importing someone else's document changes where it is kept, not who wrote it.
+>
+> **What changed, end to end.** `enumerateFolder`'s `files.list` projection now asks for
+> `ownedByMe` (BROWSE_FIELDS already did; the IMPORT's did not, which is why there was no signal to
+> carry). `Importable` and `exportOne` carry it verbatim, absence included. **`landFile` makes the
+> decision, once, at the write site**: `driveOwnedByMe = a.ownedByMe === true`, applying the Drive
+> plane's own "absence is not ownership" rule — Drive leaves the field unset for shared-drive items
+> — so the two planes cannot later disagree about what an absent value meant. It is written on
+> INSERT and re-stated on BOTH re-import branches, including the bare `modifiedTime` touch, because
+> a file can be transferred away from the tenant without its bytes changing.
+>
+> **THE CONTENT-DEDUP BRANCH DELIBERATELY DOES NOT WRITE IT.** That branch attaches a Drive identity
+> to a document the tenant ALREADY HELD whose bytes happen to match (it deliberately does not attach
+> membership either). Stamping it `false` would let anyone who can share a file into the tenant's
+> Drive DOWNGRADE a document the tenant uploaded themselves, just by matching its content hash.
+>
+> `vault.ownedDocsMeta` projects `driveOwnedByMe` (a boolean — refs-only holds, §4) and
+> `vaultGroundHydrated` returns it as the `driveOwned` parallel array, `null` where the row is not a
+> Drive import at all. `null` and `false` are DIFFERENT FACTS: `authorityFor` downgrades a vault row
+> only on an explicit `false`, so the upload rail keeps `tenant_owned`.
+>
+> ⚠ **`vaultGroundHydrated`'s return shape is pinned EXHAUSTIVELY by two suites** —
+> `vaultGround.test.ts`'s cross-tenant test and `onboarding.test.ts`'s. Adding a parallel field
+> means extending both by hand; that is the deliberate cost, and it is what keeps a leaked value
+> visible at the tenant boundary.
+>
+> Mutations that MUST go red: `landFile`'s `=== true` → `?? true` (`vaultDrive.test.ts`); drop
+> `ownedByMe` from the enumeration projection (`vaultDrive.test.ts`); `driveOwned.push(...)` →
+> `push(null)` and the adapter no longer passing `driveOwned` (both `knowledgeVaultDrive.test.ts`).)
+
+> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS — THE ROUND-3 DIGEST-SEAM FIX MOVED THE CHANNEL,
+> IT DID NOT CLOSE IT, AND THIS PLAYBOOK CERTIFIED THE MOVE.**
+>
+> Round 3 narrowed the folder-digest offline seam from the assembled prompt to `folder.name`, on the
+> stated grounds that a folder name is "the tenant's own, chosen at creation, and no member can write
+> it". `vaultDrive.importDriveFolder` takes `name: v.string()` FROM THE CLIENT and the browser
+> sources it from `listDriveFolders`, which lists SHARED folders named by a THIRD PARTY. The seam is
+> now `offlineSeamAvailable()` — no model credential on the deployment (SUPERSEDED the same day: it
+> ALSO requires `PIKAR_OFFLINE_FIXTURES=1`, see the top entry) — and the suite drives that
+> instead of the attack channel. See `#### The offline seam` below. The OTHER four `SMOKE::` gates
+> (`vaultLlm.extractGraph`, `vaultLlm.identifyDoc`, `vaultRag.embedDoc`, `gmail.ts`) are STILL
+> content-selected and are deliberately NOT touched here: they are coupled to each other and to a
+> landed E2E that drives them against a keyed deployment. Recorded in
+> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.)
+
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, ROUND 3 — THE PROVENANCE FIX ONE ENTRY BELOW
+> CLOSED ONE DOOR OF FOUR, AND ITS OWN SUMMARY SENTENCE WAS FALSE.**
+>
+> ⚠ **THE ENTRY BELOW SAYS "a row with NO origin is the tenant's upload". THAT IS NOT TRUE AND
+> WAS NOT TRUE WHEN IT WAS WRITTEN.** `schema.ts`'s `vaultDocuments.origin` comment — "ABSENT ⇒
+> user-supplied (every row that exists today)" — was true when `origin` landed in Phase 18, because
+> agent rows were then structurally never ingested. Three later writers ingest LLM prose with NO
+> `origin` at all and DO
+> call `startIngest`, so their rows are retrievable and were cited at `tenant_owned` — the
+> strongest class, the owner's own word:
+> `evaluations.ts`'s `persistNextStepMemo` (`text: plan.body`, then `startIngest`),
+> `voice.ts`'s `persistBrief` (markdown from `internal.llm.draftVoiceBrief`) and
+> `onboarding.ts`'s `writeProfileDoc` (the `business_profile` document).
+>
+> **VAULT AUTHORSHIP IS NOW ESTABLISHED POSITIVELY, NOT INFERRED FROM AN ABSENCE.** `@pikar/core`
+> exports `TENANT_AUTHORED_DOC_KINDS` = `["upload", "brain_dump", "document"]` — every retrievable
+> `vaultDocuments.kind` a TENANT-SUPPLIED path writes (`vault.ts`'s `vaultUpload`,
+> `ingestFromAttachment` and `vaultIngestText`, plus `smoke.ts`'s `seedVoiceDocSession`, which
+> writes `kind: "document"`). `authorityFor` reaches
+> `tenant_owned` only for those; any other kind, INCLUDING one this repo has never heard of, falls
+> to `third_party_research` or weaker. The direction is the point: `kind` is `v.string()` and
+> `schema.ts` records that it "grows every phase", so a denylist costs a laundered citation when
+> somebody forgets and an allowlist costs a downgrade. It SUBSUMES the old
+> `docKind === "web_research"` special case. `knowledgeVaultDrive.test.ts` drives all three
+> writers' exact stored row shapes through the REAL `searchVaultKnowledge`, not the pure function.
+>
+> **THE TWO PLANES STILL DISAGREE ABOUT ONE DOCUMENT, AND THAT IS NOW A PINNED DECISION RATHER
+> THAN DRIFT.** `vaultDrive.ts`'s `landFile` stores an imported Drive file as `kind: "upload"`,
+> `source: "google"`, no origin — so the SAME stranger-shared file is `third_party_research` on the
+> Drive plane (proven by `ownedByMe`) and `tenant_owned` once imported. The search plane cannot
+> tell that row from a real upload: `vaultGroundHydrated` carries `kinds` and `origins` and NOT
+> `source`, and dropping `"upload"` from the allowlist would downgrade every genuine upload — a
+> bigger untruth than the one it fixes. The defensible reading is that an import is a deliberate
+> tenant act and `tenant_owned` means "in the tenant's own store". A test asserts both values so
+> the asymmetry cannot move silently.
+>
+> **HOW TO VERIFY:** `cd packages/core && pnpm vitest run knowledgeSearch` and
+> `cd packages/backend && pnpm vitest run knowledgeVaultDrive`. MUTATION OBSERVED RED: revert
+> `!TENANT_AUTHORED_DOC_KINDS.includes(meta.docKind ?? "")` to `meta.docKind === "web_research"` —
+> three backend tests and one core test fail.
+>
+> **TWO NAMED FOLLOW-UPS, both outside this plan's owned files.** (a) `persistNextStepMemo`,
+> `persistBrief` and `writeProfileDoc` should each store `origin: "agent"`, which lands them at
+> `agent_authored` — the class that names the author — instead of `third_party_research`, which is
+> true but one rank too strong. (b) `vaultDrive.ts`'s folder import should write a distinguishable
+> `kind`, or `vaultGround.ts` should carry `source` through `vaultGroundHydrated`; either one lets
+> the imported stranger-shared file read as third-party on BOTH planes.)
+
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART B — PROVENANCE. A citation now says who
+> actually wrote the thing.**
+>
+> **(1) A FOLDER DIGEST IS THE MODEL'S OWN PROSE AND IS CITED AS SUCH.** `authorityFor` downgraded
+> only `origin: "agent_promoted"`, so a `folder_digest` — `vaultDigest.ts`'s LLM-written summary,
+> which IS retrievable because that insert calls `startIngest` — was cited at `tenant_owned`, the
+> STRONGEST class, while the adapter's own comment claimed origins were honoured. `@pikar/core`
+> now exports `AGENT_AUTHORED_ORIGINS` = every value in the `vaultDocuments.origin` union, because
+> every one of them means the agent wrote the prose; a row with NO origin is the tenant's upload.
+> `knowledgeVaultDrive.test.ts` reads that union OFF DISK, so a new origin landing without an
+> authority decision is RED rather than a silent `tenant_owned`.
+>
+> **(2) A DRIVE FILE SOMEBODY ELSE OWNS IS NOT THE TENANT'S DOCUMENT.** `runDriveSearch` passes
+> `includeItemsFromAllDrives` and never restricts to `'me' in owners`, so a stranger's shared file
+> matches — and `BROWSE_FIELDS` did not even ASK Drive for ownership, so the distinction was
+> unavailable rather than unused. `ownedByMe` is now requested, carried on `DriveSearchRow`, and
+> **anything but `true` is `third_party_research`** — absence included, because Drive leaves the
+> field unset for shared-drive items, which is exactly the unproven case. Ceiling, named: a file in
+> the tenant's OWN shared drive is understated as third-party. Understating is the safe direction.
+>
+> **HOW TO VERIFY:** `cd packages/core && pnpm vitest run knowledgeSearch` and `cd packages/backend
+> && pnpm vitest run knowledgeVaultDrive vaultDrive`. Mutations that MUST go red: narrow
+> `AGENT_AUTHORED_ORIGINS` back to `["agent_promoted"]`; delete the `source === "drive" &&
+> meta.ownedByMe !== true` branch; drop `ownedByMe` from `BROWSE_FIELDS` or from the row
+> projection.
+>
+> **(3) `vaultDrive.test.ts` NOW COVERS ITS OWN REFACTOR.** 29-02 named this file in
+> `files_modified` and never touched it while `vaultDrive.ts` took a 142-line change; every
+> assertion about `findInDriveForTenant` lived in another plan's file. Five tests here now pin the
+> shared gate, the argument-supplied tenant, the two projections of one request, the `fields`
+> request itself and the blank-needle short-circuit.
+>
+> **(4) THE TWO TRIPWIRES THIS FILE OWED.** `knowledgeVaultDrive.test.ts` had no regression guard
+> that the adapters write NOTHING to audit / agentSteps / telemetry / deadLetters, and no
+> injected-instruction fixture — both of which the sibling module ships. It now has both
+> behaviourally (a hostile vault document, and a hostile third-party DRIVE FILE NAME, which is the
+> one that reaches evidence `text` unescaped) plus a structural scan, so a future edit adding a
+> `label`-bearing audit row is RED rather than green. The VAULT `validateSourceRef` guard is
+> pinned by a call-site count: its ref is a Convex id and is therefore always ref-shaped, so no
+> behavioural test can reach it and a source scan is the only instrument there is. The DRIVE one
+> has a real behavioural test — a content-shaped `row.id` is dropped and reported
+> `partial/provider_error`, the state that arm is the sole producer of.)
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — the two vault-plane honesty defects, and
+> the one that was reported fixed and was not.**
+>
+> **(1) `truncated` IS NOW MEASURED AGAINST THE DOCUMENT, NOT AGAINST WHAT WAS HYDRATED.**
+> `vaultGroundHydrated`'s chunk-precise path hydrates the passage that MATCHED, so
+> `slice.length < text.length` was comparing a passage against itself: a 38-character extract from
+> an 8,000-character contract reported `truncated: false`, and `knowledgeVaultDrive.ts` turned that
+> into `{status: "available"}` — a COMPLETE read of a document it had read one paragraph of. That
+> is verbatim the defect the flag was added to close. `ownedDocsMeta` now returns `textChars` (a
+> LENGTH, never the text — it already loaded the whole row, so this costs nothing and keeps the
+> refs-only contract), and the loop compares the slice against the document.
+>
+> **The branch was untestable, which is why it survived a green suite.** The `SMOKE::` seam never
+> populated `matchedByDoc`, so every offline test took the doc-text fallback where passage and
+> document are the same string. `SMOKE::<docId>|<passage>` now attaches a matched passage — the `|`
+> half is optional and every existing `SMOKE::<id>,<id>` sentinel keeps its exact meaning, and a
+> passage is attached only to a doc `ownedDocsMeta` returned, so the seam stays tenant-scoped.
+>
+> **(2) THE VAULT AND DRIVE ADAPTERS CAN NOW RETURN `unavailable`, AND THEY NEVER THROW.**
+> `searchVaultKnowledge` had NO unavailable arm at all: `vaultGroundHydrated` reaches OpenRouter for
+> embeddings and `vault.getDoc` for hydration, either can reject, and the rejection escaped the
+> internalAction instead of becoming a state. `searchDriveKnowledge` modelled four provider failures
+> but not a rejected `fetch`. Both are wrapped now, and both refuse a blank query up front —
+> `runDriveSearch` short-circuits a blank needle to `{ok: true, rows: []}` with ZERO network calls,
+> which used to surface as `available/0`, "we looked at your Drive and there is nothing".
+>
+> **(3) A VAULT HIT WITH NO TEXT IS `provider_error`, NOT `cap`.** Two different facts reached the
+> loop as `""`: the run budget ran out (`truncated: true`, a real cap) and the document simply has
+> no extracted text (`truncated: false`). Reporting the second as `cap` told the user a retrieval
+> limit was hit that never applied.
+>
+> **(4) THE RESULT CONTRACT MOVED TO `@pikar/core`.** `KnowledgeAdapterResult`, `settleRead` and
+> `unavailableRead` are defined once, beside `clampEvidence` and the closed state union;
+> `knowledgeVaultDrive.ts`'s private `settle` and `KnowledgeAdapterResult` are gone. See
+> `knowledge-search-routines.md` for why, and for the per-source vs per-run clamp split.)
+>
+> Last verified: 2026-08-28 (**DRIVE IS A KNOWLEDGE SOURCE, AND IT IS METADATA ONLY — BY
+> CONSTRUCTION, NOT BY POLICY** — Phase 29 plan 29-02 task 2).
+>
+> `searchDriveKnowledge` (`knowledgeVaultDrive.ts`) is the identity-less half of the same
+> adapter. Its only way in is `internal.vaultDrive.findInDriveForTenant`.
+>
+> **THE GATE MOVED, AND THAT IS THE PART TO READ.** `findInDrive`'s token gate is now
+> `runDriveSearch`, a module-private function BOTH search entry points route through — the
+> cockpit's identity-bearing `findInDrive` and the knowledge plane's identity-less
+> `findInDriveForTenant`. The alternative was a second copy of the scope-before-refresh ordering
+> in the new entry point, and a duplicated security ordering is how one copy silently drifts —
+> here the copy that would drift is the one nobody clicks. `dispatchGuard.test.ts` was updated
+> to follow the gate (it scanned `export const findInDrive` for `hasScope`, which after this
+> change would find no gate and pass VACUOUSLY) and a new assertion pins that neither wrapper
+> calls `freshAccessToken` or `hasScope` itself. `findInDrive`'s PUBLIC shape is byte-identical:
+> it projects the runner's rows back down to `{id, name, kind, readable}`, so the picker, the
+> cockpit tool and their 18 landed tests are untouched.
+>
+> **A DRIVE CITATION IS A POINTER, NOT A QUOTE.** Drive search returns metadata; a content
+> snippet would require downloading or exporting the file, which IS the import rail's paid path.
+> So the evidence text says so in words — *"Pikar read its file listing only — the contents were
+> not opened"* — because a bare file NAME as evidence text is a name a synthesizer will read as
+> a finding about the business. A folder never becomes evidence at all: it has no content, so it
+> could only ever be cited as "a folder with a matching name exists".
+>
+> **THE NO-PAID-PATH PROOF IS A SOURCE SCAN, AND IT HAS TO BE.** A stubbed `fetch` is free to
+> return anything, so no behavioural test can prove the ABSENCE of an import. `knowledgeVault
+> Drive.test.ts` strips comments from both `knowledgeVaultDrive.ts` and the `runDriveSearch`
+> slice of `vaultDrive.ts` and fails on `importDriveFolder`, `diffImport`, `openRun`,
+> `refuseFolder`, `exportOne`, `landFile`, `landFailure`, `reserve`, `startIngest`,
+> `vaultUpload`, `alt=media`, `files.export`, `/export` or `storage.store`; on any `method:` in
+> the runner (every Drive request is a GET — `driveFetch` passes headers only); and on any
+> `fetch(` or `googleapis.com` in the adapter, which reaches no network at all. A POSITIVE
+> CONTROL asserts each scan can see real code first, so none of it can pass on an empty string.
+>
+> **AVAILABILITY IS HONEST IN BOTH DIRECTIONS.** `not_connected` / `reauth` / `refresh_failed`
+> keep their own names and `drive_error` becomes `provider_error`; all four return the
+> `unavailable` arm, which structurally carries NO count, so "Drive needs reconnecting" can never
+> render as "there are no such files". A `nextPageToken` (more matches than one page holds) and
+> the per-source cap of 8 both return `partial/cap`. An unparseable or absent `modifiedTime` is
+> ABSENT, never 0 — an epoch-0 stamp reads as "very stale", a claim about the file we have no
+> basis for.
+>
+> **MEASURED:** `knowledgeVaultDrive vaultDrive dispatchGuard vaultGround` = 4 files / 84 tests
+> pass (`vaultDrive` 18, unchanged; `dispatchGuard` 22, was 21). `packages/backend pnpm
+> typecheck` clean. **12 further mutations applied, observed RED and reverted**, including an
+> unreachable Drive reported as `available/0` (4 red), `reauth` flattened into `not_connected`
+> (1), folders admitted as evidence (1), the scope check moved BELOW the refresh (3), the Drive
+> query-language escape dropped (3), `includeItemsFromAllDrives` dropped (2), a paid verb
+> referenced from the adapter (1), the gate re-implemented inside `findInDriveForTenant` (8) and
+> a `method:` added to the search request (1).
+>
+> **KNOWN GAPS:** a Drive citation carries no content, so a Drive-only answer can say a file
+> matched and nothing about what it says — the upgrade path is a separate, explicitly-costed
+> export of one user-chosen file, never a search-time download. `parentName` on `DriveSearchHit`
+> is still never populated (pre-existing). Nothing calls either adapter yet: the coordinator is
+> plan 29-06.
+
+> Last verified: 2026-08-28 (**THE VAULT IS NOW A KNOWLEDGE SOURCE AS WELL AS A GROUNDING SOURCE**
+> — Phase 29 plan 29-02 task 1, `packages/backend/convex/knowledgeVaultDrive.ts`).
+>
+> `searchVaultKnowledge` is an identity-less `internalAction({tenantId, query})` that turns the
+> landed hydrated retrieval into `@pikar/core`'s closed `Evidence` + `KnowledgeSourceState`
+> contract. **IT RETRIEVES NOTHING ITSELF.** Its only way in is
+> `internal.vaultGround.vaultGroundHydrated`, because every bound worth having lives behind that
+> one door: `limit: 8`, `vectorScoreThreshold: 0.2`, folder sealing applied BEFORE graph
+> expansion, `GRAPH_HOP_CAP`, and the 1,500-per-doc / 8,000-total hydration budget. A source scan
+> in `knowledgeVaultDrive.test.ts` fails if that module ever names `rag.search`,
+> `ownedSearchDocsMeta`, `vaultGraph.expand`, `vault.getDoc` or `ctx.db` — a second read path
+> would silently carry none of those bounds.
+>
+> **THE BLUEPRINT SPINE IS DISCARDED, FROM THE EVIDENCE AND FROM THE COUNT.** `vaultGroundHydrated`
+> still returns one; a spine is not a document, has no id, and citing it would attribute the
+> product's own summary of the business to a source that does not exist. The test that proves this
+> carries a POSITIVE CONTROL (it asserts the spine really was non-null on the same fixture) —
+> without that it would pass on a run where there was no spine to discard.
+>
+> **THREE FIELDS WERE ADDED TO THE HYDRATED SHAPE, AND ONE TO `ownedDocsMeta`.** `kinds`,
+> `sourceUpdatedAt` and `truncated` are parallel to `docIds`; `ownedDocsMeta` now also returns
+> `kind`, `createdAt` and `retrievedAt`. All of it is CITATION metadata under the same rule
+> `origins` already carried: **it labels what was retrieved and must never filter what is
+> retrieved.** `kind` is what makes a `web_research` document cite as third-party research rather
+> than as the owner's own word; `sourceUpdatedAt` is `retrievedAt ?? createdAt`, which is the only
+> source-time the vault holds (a vault document has no provider modification time — it is the
+> tenant's own copy, dated from when it arrived), and without it every vault citation would read
+> as freshness `unknown` for ever.
+>
+> **`truncated` IS THE ONE THAT CAUGHT A REAL HOLE.** Per-doc truncation happens INSIDE
+> `vaultGroundHydrated`, so a caller receiving a 1,500-character chunk cannot tell a complete
+> document from the first page of a long one — both arrive as a string shorter than the cap. The
+> adapter reported `available` for a document it had read one page of. It now reports
+> `{status: "partial", reason: "cap"}`, and a hit whose text the whole-run budget squeezed to the
+> empty string is DROPPED rather than shipped: a row with no text can be cited and never verified.
+>
+> The four `vaultGroundHydrated` production callers (`blueprint.ts:540`, `evaluations.ts:295`,
+> `llm.ts:3873`, `voiceDoc.ts:75`) destructure by name and are unaffected — the change is purely
+> additive. The EXHAUSTIVE `toEqual` in `vaultGround.test.ts`'s cross-tenant case was extended
+> rather than loosened; keeping it exhaustive is what makes a future field that leaks a value
+> across the tenant boundary red instead of unnoticed.
+>
+> **MEASURED:** `knowledgeVaultDrive.test.ts` 13/13 and `vaultGround.test.ts` 17/17 (was 16);
+> `vaultGround knowledgeVaultDrive blueprint evaluations voiceDoc cockpitTools vault` 21 files /
+> 495 tests pass. **10 mutations applied, observed RED and reverted**, including
+> `authorityFor("vault", {})` (2 red), appending the spine as an evidence row (2 red), a constant
+> `evidenceId` (1 red), `truncated.push(false)` (2 red) and dropping `ownedDocsMeta`'s
+> `doc.tenantId === tenantId` check (4 red).
+>
+> **NOT IN THIS ENTRY:** the Drive half of the same adapter — task 2, its own entry.
+
 > Last verified: 2026-08-27 (**EMBEDDINGS RUN THROUGH OPENROUTER NOW — AND THE CHANGE NEARLY TOOK
 > THE RETRY WORK WITH IT.** `EMBEDDING_MODEL` is `openai/text-embedding-3-small`: the SAME OpenAI
 > model as before, reached through OpenRouter's namespaced id and OpenRouter's balance. A ROUTE
@@ -1059,7 +1492,7 @@ Pure packages:
 Backend adapters (thin):
 - `packages/backend/convex/vaultRag.ts` — the single `rag` construction site (05-02).
 - `packages/backend/convex/vaultGraph.ts` — `upsertGraph` (cross-doc dedup on `(tenantId, type, normalizedName)` + degree bookkeeping) + `expand` (hop-capped tenant-scoped BFS delegating to `@pikar/vault` `bfsNeighbors`).
-- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. Holds a temporary `getDocText` reader; `internal.vault.getDoc` (05-04) is the canonical richer reader the embed step uses.
+- `packages/backend/convex/vaultLlm.ts` — the DEFAULT-runtime (V8) `extractGraph` (NEVER a second `"use node"` module): registry prompt, `scanText` fail-closed BEFORE the model call, `generateObject` → `{nodes,edges,costUsd}`, `SMOKE::graph::` offline seam. **Resolves its model through the shared `lib/models.ts` table** (it held one of the seven private `resolveModel` copies, so every real call named a model OpenAI does not know). ⚠ Its `SMOKE::graph::` / `SMOKE::identify::` gates STILL read the DOCUMENT'S OWN TEXT — unlike `vaultDigest.ts`, they are not yet operator-signalled; see `29-SMOKE-SEAM-DEBT.md`. Holds a temporary `getDocText` reader; `internal.vault.getDoc` (05-04) is the canonical richer reader the embed step uses.
 - `packages/backend/convex/vaultRag.embedDoc` (05-04) — the ingest embed step: reads the doc via `internal.vault.getDoc`, `scanText` fail-closed BEFORE `rag.add`, hash-dedups on `(namespace=tenantId, key=contentHash)`, `SMOKE::` bypass (no network). Returns `{entryId, costUsd}`.
 - `packages/backend/convex/vault.ts` (05-04/05-05) — the tenant ingest mutations (`vaultIngestText` paste/late-text seam + `vaultUpload` accept-but-defer, both hash-dedup), `deleteVaultDoc` cascade (row + rag chunks + graphEdges, orphan-node GC), the internal lifecycle (`getDoc`/`markReady`/`markFailed`), and (05-05) the READ plane: `listVaultDocs`/`vaultStats` (cheap, no vectors), `vaultDownloadUrl` (owner-only signed URL, bearer capability, never logged §4), `docEntities` (owner-guarded per-doc nodes/edges), `vaultSearch` (the `rag.search` hybrid primitive post-filtered to a category), and `ownedDocsMeta` (the tenant-scope resolve seam shared by grounding + search). Starts ingest ONLY via `vaultIngest.startIngest` (never a bare `workflow.start`).
 - `packages/backend/convex/vaultIngest.ts` (05-04; failure-handling 2026-07-20) — `ingestDoc = workflow.define(...)`: `preCall` gate (governed stop → `markFailed`, never a DLQ throw) → `embedDoc` → `extractGraph` → `upsertGraph` → `recordSpend` → `markReady`. Plus `startIngest` (the SOLE ingest starter — `workflow.start` + the `onComplete`), `onIngestComplete` (failed/canceled run → `markFailed`, so a dead run can never strand the doc at `processing`), and `retryStuckIngests` (re-queue stranded docs).
@@ -2945,9 +3378,15 @@ silently drops a document it could not read makes the reader assume full coverag
 
 Parts 1 and 3 are built from PROJECTED metadata only (title, kind, docType, identityLine, status,
 failureReason, size, createdAt). Part 2 gets a bounded head slice per member under a running total
-(`DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS`, mirroring `vaultGround.ts:29-30`). An ABSENT
+(`DIGEST_PER_DOC_CHARS` / `DIGEST_TOTAL_CHARS` in `vaultDigest.ts`).
+**DEBT, not derivation:** those two literals are hand-written and happen to equal `vaultGround.ts`'s
+`PER_DOC_CHAR_CAP` / `TOTAL_CHAR_CAP`; there is no import between the modules and no test over the
+pair. Setting `DIGEST_PER_DOC_CHARS` to `1400` leaves `pnpm typecheck` clean and
+`pnpm vitest run vaultDigest` green (probe run and reverted, 29-W3-TAIL-FIX). The fix is to export
+the two caps from one module and import them; `vaultDigest.ts` is outside this plan's owned files. An ABSENT
 `docType` renders as `not classified` and is NOT collapsed into the `"unclassified"` literal
-(schema.ts:900 — never classified is not the same as classified and unplaceable).
+(the `docType` union in `schema.ts` — never classified is not the same as classified and
+unplaceable).
 
 **Never `.collect()` the members.** `digestMembersPage` paginates at `VAULT_FOLDER_MEMBER_BATCH`,
 one page per transaction, and the ACTION carries the cursor. Convex has no projection, so a member
@@ -2990,12 +3429,48 @@ source set is exactly the READY members at build time.
 
 #### The offline seam
 
-`SMOKE::digest::` anywhere in the ASSEMBLED prompt (`.includes`, not `startsWith`) returns a
-deterministic fixture with NO model call. It may ride in the folder NAME, a member TITLE, or a
-member's TEXT — the name/title routes matter because a folder whose only member FAILED contributes
-no excerpt at all. **The fixture must start with `SMOKE::graph::`**: the digest is itself ingested,
-and that ingest's `vaultLlm.extractGraph` is only free when its text starts with that prefix at
-position 0 (`vaultRag.embedDoc` is free on any `SMOKE::`).
+**THE SEAM IS AN OPERATOR SIGNAL, NOT A SENTINEL.** `offlineSeamAvailable()` (`lib/models.ts`) —
+an operator has set `PIKAR_OFFLINE_FIXTURES=1` **AND** this deployment holds NEITHER
+`OPENAI_API_KEY` NOR `OPENROUTER_API_KEY` — is the whole gate, so nothing in any request, argument
+or document selects it, and on a deployment that has a key it is unreachable whatever the flag says.
+`folder.name` is still the fixture's LABEL; it is data in the output, never the selector.
+
+⚠ **THIS PARAGRAPH PREVIOUSLY GAVE THE CREDENTIAL HALF AS "the whole gate".** That was the round-4
+predicate, and it made a deployment that merely LOST its keys fabricate every digest silently and
+suppress its own retry. The positive opt-in is the authority now and the credential check is the
+second belt — see the top entry of this playbook. The VALUE test is `lib/env.ts`'s
+`isOfflineFixtureConsent` (the literal `"1"`), shared with `missingEnv().fixturesActive` so the
+readiness screen and the seam cannot disagree about whether the seam is on. They did: at
+`PIKAR_OFFLINE_FIXTURES=on` the screen reported a LIVE fabrication seam over a fixture that was off.
+
+⚠ **TWO EARLIER GATES FAILED HERE AND BOTH ARE WRITTEN DOWN BECAUSE THE SECOND ONE READ AS SAFE.**
+(a) `safePrompt.includes("SMOKE::digest::")` over the ASSEMBLED prompt — every member TITLE and a
+head slice of every member's TEXT, i.e. bytes a third party authored. (b) `folder.name.includes(...)`,
+justified in a comment as "the folder name is the tenant's own, chosen at creation". IT IS NOT:
+`vaultDrive.importDriveFolder` is a `tenantAction` whose `name: v.string()` comes from the CLIENT
+(`vaultDrive.ts:705`, stored at `:888` as `name.slice(0, 200)` — truncated only, so a leading
+sentinel survives) and the browser fills it from `listDriveFolders`, which lists SHARED folders whose
+names A STRANGER CHOSE. Share a folder called `SMOKE::digest::x`, wait for the import, and the digest
+is fabricated — then STORED and DISPLAYED as a vault document saying "(offline fixture — no synthesis
+was performed)", with no model call, no spend and no trace that synthesis was skipped.
+
+⚠ **TWO CORRECTIONS TO THE SENTENCE ABOVE, MADE RATHER THAN SOFTENED.** (a) It read "STORED,
+EMBEDDED and served back through retrieval". It was never embedded: `smokeDigestFixture` begins
+`SMOKE::graph::` and `vaultRag.embedDoc` (its `SMOKE_PREFIX` short-circuit) short-circuits ANY `SMOKE::` text to
+`{ entryId: "smoke::<hash>", costUsd: 0 }` with no vector, so the fabricated digest was invisible to
+vector search while holding a `ragEntryId` that READS groundable. (b) It cited `vaultDrive.ts:697`
+and `:880`; the real lines are `:705` (the `name: v.string()` arg) and `:888` (the store, which
+truncates to 200 chars and alters nothing else). Both were corrected in `29-SMOKE-SEAM-DEBT.md` a
+round earlier and left standing here — a citation that sends a reader to a `/**` and to an unrelated
+index query is the same defect class as a false claim.
+
+**The fixture must still start with `SMOKE::graph::`**: the digest is itself ingested, and that
+ingest's `vaultLlm.extractGraph` is only free when its text starts with that prefix at position 0
+(`vaultRag.embedDoc` is free on any `SMOKE::`). **Those two are the OPEN half of this debt** —
+`extractGraph`, `identifyDoc`, `vaultRag.embedDoc` and `gmail.ts`'s tool-argument gate all still
+select a code path from content, they are coupled to each other and to a landed Playwright E2E that
+drives the sentinels against a REAL KEYED deployment, so they cannot be converted one at a time.
+Recorded in `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.
 
 #### Gotchas
 
@@ -3016,7 +3491,13 @@ position 0 (`vaultRag.embedDoc` is free on any `SMOKE::`).
 
 Five guarantees, one describe block each: groundability, non-recursion, staleness fires and clears,
 staleness is exact at folder scale, and part 3 is present. Plus a sixth test pinning the fail-closed
-skill load. All offline, zero spend — the folder NAME carries `SMOKE::digest::`.
+skill load, and a five-test seam block. All offline, zero spend — the suite's top-level `beforeEach`
+DELETES both model keys, which is what makes the seam available. It used to name every folder
+`SMOKE::digest:: …`, i.e. it drove the attack channel, which is exactly how a client-supplied string
+survived as a live model-path selector through three remediation rounds. The seam block asserts the
+three content channels (member TEXT, member TITLE, folder NAME) all reach the PROVIDER when a key
+exists (`fetch` is stubbed to throw, so reaching it is observable), with a keyless control proving
+the fixture is still alive and an `OPENROUTER_API_KEY`-alone test proving both keys are checked.
 
 **THE ONE SUITE IN THIS REPO THAT DRIVES THE INGEST WORKFLOW TO COMPLETION, and it has to.** Every
 other vault suite produces a `ready` row by calling `internal.vault.markReady` by hand

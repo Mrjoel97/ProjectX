@@ -8,11 +8,25 @@
 // feature is most exposed to, because its central risk is an ABSENCE.
 //
 // ── Why every model call in here is free ─────────────────────────────────────
-// The folder NAME carries `SMOKE::digest::`, which lands in the assembled prompt and short-circuits
-// synthesis to a deterministic fixture. That fixture's first line is `SMOKE::graph::…`, which in
-// turn takes the free path through the digest's OWN ingest — `vaultRag.embedDoc` returns a fake
-// entryId on any `SMOKE::` prefix and `vaultLlm.extractGraph` returns a fixture on `SMOKE::graph::`
-// at position 0. So the whole chain (synthesis → embed → extract → markReady) runs offline.
+// THE SEAM IS AN OPERATOR SIGNAL, NOT A SENTINEL, AND THIS SUITE NOW DRIVES THE OPERATOR SIGNAL.
+// `offlineSeamAvailable()` (`convex/lib/models.ts` — `vaultDigest.ts` only imports it) is true only
+// when an operator has set `PIKAR_OFFLINE_FIXTURES=1` AND the backend holds NEITHER model key. The
+// top-level `beforeEach` below stubs the flag ON and deletes both keys, so both halves are
+// structural here rather than ambient (other suites in this package SET the keys and vitest reuses
+// workers).
+//
+// ⚠ THIS COMMENT PREVIOUSLY STATED THE SUPERSEDED PREDICATE — "true only on a backend with NEITHER
+// model key" — as present-tense fact, twelve lines above the `beforeEach` that the same commit
+// taught to stub the flag. Absence of a credential is a MISCONFIGURATION, not consent; a reader who
+// believed the old sentence would conclude that any keyless convex-test worker reaches the fixture,
+// which is exactly the behaviour that was removed.
+// It used to be `folder.name.includes("SMOKE::digest::")`, and this suite drove exactly that
+// channel — which is how a client-supplied, third-party-chosen string stayed a live model-path
+// selector through three remediation rounds. A test that drives the attack channel cannot see it.
+// The digest's own ingest is still free by sentinel: the fixture's first line is `SMOKE::graph::…`,
+// so `vaultRag.embedDoc` returns a fake entryId on any `SMOKE::` prefix and `vaultLlm.extractGraph`
+// returns a fixture on `SMOKE::graph::` at position 0. Those two are the OPEN half of this debt —
+// see `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.
 //
 // ── Why the ingest workflow is DRIVEN here and nowhere else in the repo ──────
 // `ragEntryId != null` is the only observable that distinguishes a groundable digest from a
@@ -48,14 +62,31 @@ const workpoolModules = import.meta.glob(
 
 type Harness = ReturnType<typeof convexTest>;
 
-/** THE sentinel, carried in the folder NAME so it reaches the prompt whatever the members are —
- *  a folder whose only member FAILED contributes no excerpt at all. */
+/** THE OLD sentinel. It selects NOTHING now — it appears in this file only as ATTACKER-SUPPLIED
+ *  content in the seam describe below, which proves each channel it used to arrive through is
+ *  dead. If any test outside that describe needs it, the seam has regressed to content selection. */
 const SMOKE = "SMOKE::digest::";
+
+/** BOTH keys, because `DEFAULT_MODEL` is `or/openai/gpt-4o-mini` and `lib/models` routes it to
+ *  OpenRouter — so OPENROUTER_API_KEY is the credential a real digest would spend. */
+const MODEL_KEYS = ["OPENAI_API_KEY", "OPENROUTER_API_KEY"] as const;
 
 // The workflow's workpool schedules its steps through the scheduler; under real timers they fire
 // after the suite and retry-loop against vitest's torn-down module runner (vaultExtract.test.ts:40).
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  // THE OFFLINE PRECONDITION, MADE STRUCTURAL — and it is now TWO facts, not one.
+  // `offlineSeamAvailable()` requires the operator's `PIKAR_OFFLINE_FIXTURES=1` **and** neither
+  // model credential. Another suite in this worker may have left a key set, which would send every
+  // digest below down the live model path; and without the opt-in a keyless backend no longer takes
+  // the fixture at all — it throws, which is the whole point of the last round's fix.
+  vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+  for (const key of MODEL_KEYS) vi.stubEnv(key, undefined);
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 /** rateLimiter for preCall/recordSpend, workflow + workpool for startIngest. Mandatory here. */
 function budgetHarness(): Harness {
@@ -101,12 +132,19 @@ type MemberSpec = { title: string; status: "ready" | "failed" | "processing"; re
 const seedFolder = (
   t: Harness,
   tenantId: string,
-  opts: { status: Doc<"vaultFolders">["status"]; memberCount: number; terminalCount?: number },
+  opts: {
+    status: Doc<"vaultFolders">["status"];
+    memberCount: number;
+    terminalCount?: number;
+    /** Folder names are ORDINARY DATA here. Nothing in this suite selects the offline seam with
+     *  one; the seam is selected by the absent model credentials. */
+    name?: string;
+  },
 ) =>
   t.run((ctx) =>
     ctx.db.insert("vaultFolders", {
       tenantId,
-      name: `${SMOKE} Acme onboarding`,
+      name: opts.name ?? "Acme onboarding",
       source: "upload" as const,
       status: opts.status,
       memberCount: opts.memberCount,
@@ -576,5 +614,200 @@ describe("the staleness read is bounded by BYTES, not only by rows", () => {
 
     // It RETURNS — that is the headline. And it under-reports by design rather than throwing.
     expect(await stateOf(t, TENANT, folderId)).toEqual({ state: "stale", unincorporatedCount: 2 });
+  });
+});
+
+// ── 5. THE OFFLINE SEAM IS OPERATOR-SELECTED, NOT CONTENT-SELECTED ───────────
+//
+// TWO GATES HAVE NOW FAILED HERE, BOTH BECAUSE CONTENT SELECTED THE CODE PATH.
+//   (a) `safePrompt.includes("SMOKE::digest::")` over the ASSEMBLED prompt — every member TITLE and
+//       a head slice of every member's TEXT. Members are ingested Drive files and email, so a third
+//       party authors those bytes.
+//   (b) `folder.name.includes(...)`, justified as "the folder name is the tenant's own, chosen at
+//       creation". IT IS NOT. `vaultDrive.importDriveFolder` is a `tenantAction` whose
+//       `name: v.string()` comes from the CLIENT, and the browser fills it from `listDriveFolders`
+//       — which lists SHARED folders whose names A STRANGER CHOSE. Share a folder called
+//       `SMOKE::digest::x`, wait for the import, and the digest is fabricated: a STORED and
+//       DISPLAYED vault document saying "(offline fixture — no synthesis was performed)", with no
+//       model call, no spend and no trace that synthesis was skipped.
+//       ⚠ CORRECTION: this comment used to say "stored, EMBEDDED, RETRIEVABLE". It was not embedded
+//       and it was not vector-retrievable — the fixture starts `SMOKE::graph::` and
+//       `vaultRag.embedDoc` short-circuits any `SMOKE::` text to a fake `smoke::<hash>` entryId with
+//       no vector. Stored + displayed + a `ragEntryId` that READS groundable is the true blast
+//       radius, and it is bad enough without the extra claim.
+// The gate is now `offlineSeamAvailable()` — the operator set `PIKAR_OFFLINE_FIXTURES=1` AND the
+// deployment holds no model credential — which no request, argument or document can influence.
+//
+// Mutations RUN against this block:
+//   • gate reverted to `folder.name.includes(SMOKE_DIGEST_PREFIX)` -> "a FOLDER NAME carrying the
+//     sentinel" goes RED (it resolves `{ok: true}` off a stranger's folder name).
+//   • gate reverted to `safePrompt.includes(...)` -> the member TEXT and member TITLE tests go RED.
+//   • gate `offlineSeamAvailable()` -> `true` (i.e. ignore the credentials) -> all three RED.
+//   • gate `offlineSeamAvailable()` -> `false` -> the keyless control goes RED.
+//
+// AND THE THIRD FAILURE ON THE SAME GATE, WHICH WAS THE PREVIOUS FIX'S OWN: `!OPENAI && !OPENROUTER`
+// alone made ABSENCE OF A CREDENTIAL the selector, so a production deployment that lost or blanked
+// both keys fabricated a digest for EVERY completed folder — unconditionally, silently, and with the
+// retry suppressed, because a fixture RETURNS where the model call THREW. The predicate now needs a
+// POSITIVE operator opt-in as well (`PIKAR_OFFLINE_FIXTURES=1`).
+//   • drop the opt-in conjunct from `offlineSeamAvailable` -> "KEYS GONE, OPT-IN ABSENT" goes RED.
+//   • drop the credential conjuncts (flag alone) -> "the opt-in does NOT re-open the seam" goes RED.
+describe("the offline seam is selected by the DEPLOYMENT, never by content", () => {
+  const TENANT = "tenant_digest_seam";
+
+  // Any network call is a failure here: the seam resolving would RETURN, so a thrown `fetch` is
+  // what proves the live model path was entered. The keys are stubbed so the assertion does not
+  // depend on what another suite in this worker left in `process.env`.
+  beforeEach(() => {
+    vi.stubEnv("OPENROUTER_API_KEY", "or-digest-seam-test-key");
+    vi.stubEnv("OPENAI_API_KEY", "sk-digest-seam-test-key");
+    vi.stubGlobal("fetch", () => {
+      throw new Error("vaultDigest.test: no network is allowed in this suite");
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  /** A complete one-member folder. Both the folder NAME and the member TEXT are the caller's, so
+   *  each test below chooses which channel it attacks. */
+  async function seamFolder(t: Harness, name: string, memberText: string) {
+    const folderId = await seedFolder(t, TENANT, {
+      status: "complete",
+      memberCount: 1,
+      terminalCount: 1,
+      name,
+    });
+    const member = await seedMember(t, TENANT, folderId, { title: "Handbook", status: "ready" });
+    await t.run((ctx) => ctx.db.patch(member, { text: memberText }));
+    return folderId;
+  }
+
+  test("a MEMBER DOCUMENT carrying the sentinel still takes the LIVE model path", async () => {
+    const t = await seeded();
+    const folderId = await seamFolder(
+      t,
+      "Shared with me",
+      `quarterly notes
+${SMOKE}
+the rest of the document`,
+    );
+
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/no network is allowed/);
+
+    // Nothing was written, so there is no fabricated digest for retrieval to serve.
+    expect((await digestOf(t, folderId)).digestDocId).toBeUndefined();
+  });
+
+  test("a MEMBER TITLE carrying the sentinel still takes the LIVE model path", async () => {
+    // Titles are the other half of the assembled prompt, and a Drive file's name is no more the
+    // tenant's own word than its body is.
+    const t = await seeded();
+    const folderId = await seedFolder(t, TENANT, {
+      status: "complete",
+      memberCount: 1,
+      terminalCount: 1,
+      name: "Shared with me",
+    });
+    await seedMember(t, TENANT, folderId, { title: `${SMOKE} Handbook`, status: "ready" });
+
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/no network is allowed/);
+  });
+
+  test("A FOLDER NAME carrying the sentinel takes the LIVE model path — it is a CLIENT argument", async () => {
+    // THE FIX THIS ROUND. `importDriveFolder({ driveFolderId, name })` takes `name` from the CLIENT
+    // (`vaultDrive.ts:705`) and stores it at `vaultDrive.ts:888` as `name.slice(0, 200)` — truncated
+    // only, so a leading sentinel survives — and the browser sources it from `listDriveFolders`, which lists SHARED
+    // folders. So this string is exactly as attacker-controlled as the member text above; it only
+    // LOOKED tenant-owned. On a deployment with a key it must reach the provider like any other.
+    const t = await seeded();
+    const folderId = await seamFolder(t, `${SMOKE} Shared with me`, "an ordinary handbook");
+
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/no network is allowed/);
+
+    expect((await digestOf(t, folderId)).digestDocId).toBeUndefined();
+  });
+
+  test("THE CONTROL: with NO model credential the fixture is still reachable, on a CLEAN name", async () => {
+    // Anti-vacuous, and it is the whole point of the shape: the three refusals above must be about
+    // the CHANNEL, not about a seam that is simply dead. Same harness, same folder, no sentinel
+    // anywhere — only the deployment's credentials change, and the offline path returns.
+    const t = await seeded();
+    const folderId = await seamFolder(t, "Acme onboarding", "an ordinary handbook");
+    for (const key of MODEL_KEYS) vi.stubEnv(key, undefined);
+
+    const result = await build(t, TENANT, folderId);
+    expect(result).toMatchObject({ ok: true, memberCount: 1 });
+    const { digest } = await digestOf(t, folderId);
+    expect(digest?.text).toContain("(offline fixture — no synthesis was performed)");
+  });
+
+  test("KEYS GONE, OPT-IN ABSENT: it FAILS LOUDLY and writes NO digest", async () => {
+    // THE REGRESSION THE PREVIOUS FIX INTRODUCED, as a value. `!OPENAI && !OPENROUTER` alone meant
+    // a production deployment that lost (or blanked) both keys silently fabricated a digest for
+    // EVERY completed folder and suppressed its own retry — the fixture RETURNS where the model
+    // call THREW. Absence of a credential is a misconfiguration, not an operator's consent.
+    const t = await seeded();
+    const folderId = await seamFolder(t, "Acme onboarding", "an ordinary handbook");
+    for (const key of MODEL_KEYS) vi.stubEnv(key, undefined);
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", undefined);
+
+    // Loud: the missing credential surfaces from `resolveModel`, where a caller's dead-letter and
+    // retry path can see it. NOT the fetch stub — this never reaches the network at all.
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/OPENROUTER_API_KEY is not set/);
+
+    // And nothing was fabricated: no digest row, and the folder is not marked as built.
+    const { digestDocId, digest } = await digestOf(t, folderId);
+    expect(digestDocId).toBeUndefined();
+    expect(digest).toBeNull();
+    expect((await folderRow(t, folderId))?.digestBuiltAt).toBeUndefined();
+  });
+
+  test('THE OPT-IN, SET: "PIKAR_OFFLINE_FIXTURES=1" on the same keyless backend returns the fixture', async () => {
+    // The other half of the pair, and what keeps the test above from passing against a seam that is
+    // simply dead: one env var apart, same folder, same harness.
+    const t = await seeded();
+    const folderId = await seamFolder(t, "Acme onboarding", "an ordinary handbook");
+    for (const key of MODEL_KEYS) vi.stubEnv(key, undefined);
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+
+    expect(await build(t, TENANT, folderId)).toMatchObject({ ok: true, memberCount: 1 });
+    expect((await digestOf(t, folderId)).digest?.text).toContain(
+      "(offline fixture — no synthesis was performed)",
+    );
+  });
+
+  test("the opt-in does NOT re-open the seam on a deployment that still holds a key", async () => {
+    // The flag is consent, not an override: an operator who sets it on a keyed deployment by
+    // accident gets the real model path, not a fabricated digest.
+    const t = await seeded();
+    const folderId = await seamFolder(t, "Acme onboarding", "an ordinary handbook");
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "1");
+
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/no network is allowed/);
+  });
+
+  test("OPENROUTER_API_KEY ALONE closes the seam — that is the key a digest actually spends", async () => {
+    // `DEFAULT_MODEL` is `or/openai/gpt-4o-mini`, routed to OpenRouter by `lib/models`. A guard
+    // reading only OPENAI_API_KEY would leave the fixture reachable on a deployment that carries
+    // the OpenRouter key alone — i.e. on the deployment this module actually bills.
+    const t = await seeded();
+    const folderId = await seamFolder(t, "Acme onboarding", "an ordinary handbook");
+    vi.stubEnv("OPENAI_API_KEY", undefined);
+
+    await expect(
+      t.action(internal.vaultDigest.buildFolderDigest, { tenantId: TENANT, folderId }),
+    ).rejects.toThrow(/no network is allowed/);
   });
 });

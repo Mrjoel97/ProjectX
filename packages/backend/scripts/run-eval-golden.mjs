@@ -968,6 +968,26 @@ function assertEvaluableCandidate(snapshot, id) {
       `--tenant-skill ${id} has status "${c.status}" — only a candidate is evaluable`,
     );
   }
+  // 29-05 remediation. A WORKFLOW PACK row is not evaluable HERE, whoever authored it. Two
+  // independent reasons, and each alone is sufficient:
+  //   - this suite drives `llm:runCockpitAgent` and never runs a pack specialist, so the pin would
+  //     never be loaded and the evidence would certify a body this run did not execute — 16-09's
+  //     defect class, one registry scope down (`skillVersions: {}` is the tell);
+  //   - a pack body is gated on THREE planes (provenance, the pack suite, browser), and the blob
+  //     written from here carries none of them. `planTenantActivation` refuses any name that is a
+  //     MEMBER of `WORKFLOW_PACK_SKILL_NAMES` — membership in the derived list, not a prefix test —
+  //     so this evidence could not activate a registered pack even if it were honest; but a ~$0.4
+  //     run that writes a meaningless certificate is still worth refusing at $0.
+  // THE TWO REFUSALS ARE NOT THE SAME SET, deliberately. `WORKFLOW_PACK_SKILL_NAMES` is derived as
+  // `pack-${id}` over the six registered pack ids, and this file matches that PREFIX rather than
+  // importing the list, because it is a standalone node script with no bundler. So a `pack-`-named
+  // row that is NOT a registered pack is refused here and accepted by `planTenantActivation`. That
+  // asymmetry is the safe direction: over-matching fails CLOSED at $0.
+  if (typeof c.name === "string" && c.name.startsWith("pack-")) {
+    throw new Error(
+      `--tenant-skill ${id} is a workflow pack row ("${c.name}") — the golden suite never runs a pack specialist, so it cannot certify one`,
+    );
+  }
   return {
     candidateId: c.id,
     registryTenantId: c.tenantId,
@@ -1234,6 +1254,24 @@ function configuredDeployment() {
  * An over-cap or governed stop never reaches here at all: `abortEnv` exits(2) from inside the case
  * loop. `--self-check` asserts that ORDERING against the source, because a rule that is only true
  * because of where it sits is a rule one refactor away from being false.
+ *
+ * ⚠ WHAT THIS RULE DOES NOT CHECK, AND IT IS A REAL HAZARD (recorded 2026-08-28, wave-2
+ * remediation, NOT fixed here). It never asks whether the PINNED SKILL WAS ACTUALLY EXERCISED by
+ * the run. `SKILL_NAMES` is derived from `GATED_SKILLS`, so every gated name is a valid `--skill`
+ * pin — including one this runner structurally cannot reach, because it drives
+ * `llm:runCockpitAgent` and nothing else. For such a skill a green, unfiltered, non-empty run
+ * writes a `pass: true` evidence row certifying a body it never loaded: a certificate
+ * manufactured for work that did not happen, which is exactly the provenance-laundering shape
+ * this repo has paid for before.
+ *
+ * It is harmless for every name currently in `GATED_SKILLS` — all of them ARE driven by the
+ * cockpit path, and `filters.length === 0` forces the full suite — and it is why two Phase-29
+ * bodies were REMOVED from that list rather than left behind a gate that looks like protection.
+ * See their constants in `@pikar/contracts/skill`.
+ *
+ * THE FIX, when a skill the cockpit path cannot reach genuinely needs gating: attribute per case
+ * which skills were loaded, and record evidence for a pin only if that pin appears. That is real
+ * plumbing and it needs a paid run to verify, so it is written down here rather than guessed at.
  */
 function shouldRecordEvidence({ allGreen, casesTotal, filters }) {
   return allGreen === true && casesTotal > 0 && filters.length === 0;

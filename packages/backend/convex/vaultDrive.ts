@@ -55,6 +55,7 @@ import { estimatedBytesFor } from "@pikar/vault/driveEstimate";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { ActionCtx } from "./_generated/server";
 import { internalAction, internalMutation, type MutationCtx } from "./_generated/server";
 import { freshAccessToken } from "./gmail";
 import { tenantAction } from "./lib/functions";
@@ -150,6 +151,8 @@ type DriveFile = {
   modifiedTime?: string;
   shortcutDetails?: { targetId?: string; targetMimeType?: string };
   capabilities?: { canDownload?: boolean };
+  /** Drive's own ownership flag. ABSENT for shared-drive items — see `BROWSE_FIELDS`. */
+  ownedByMe?: boolean;
 };
 
 /** One importable file, already resolved to what it will become in the vault. */
@@ -163,6 +166,9 @@ type Importable = {
   /** Conservative bytes for the reservation — never 0 (see `estimatedBytesFor`). */
   estBytes: number;
   modifiedTime: number;
+  /** Drive's own ownership flag, carried VERBATIM (absence included) so the decision "absence is
+   *  not ownership" is made once, at the write site in `landFile`. */
+  ownedByMe?: boolean;
 };
 
 // ── Drive HTTP ────────────────────────────────────────────────────────────────
@@ -268,8 +274,11 @@ async function enumerateFolder(
     do {
       const url = driveUrl("", {
         q: `'${folderId}' in parents and trashed=false`,
+        // `ownedByMe` IS ASKED FOR HERE TOO, not only in BROWSE_FIELDS. Without it the import had
+        // no ownership signal to store, so a stranger-shared file became a `tenant_owned` vault
+        // document while the SAME file read `third_party_research` on the Drive plane.
         fields:
-          "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,shortcutDetails,capabilities/canDownload)",
+          "nextPageToken,files(id,name,mimeType,size,modifiedTime,md5Checksum,shortcutDetails,capabilities/canDownload,ownedByMe)",
         pageSize: "1000",
         includeItemsFromAllDrives: "true",
         ...(pageToken ? { pageToken } : {}),
@@ -340,6 +349,7 @@ function classifyOne(f: DriveFile): Importable | { skip: DriveSkipCode } {
     exportMime,
     estBytes: estimatedBytesFor({ mimeType: f.mimeType, size }),
     modifiedTime: f.modifiedTime ? Date.parse(f.modifiedTime) : 0,
+    ...(f.ownedByMe === undefined ? {} : { ownedByMe: f.ownedByMe }),
   };
 }
 
@@ -375,8 +385,15 @@ const FOLDER_Q = `mimeType='${FOLDER_MIME}' and trashed=false`;
 const NODE_FIELDS = "nextPageToken,files(id,name)";
 /** Everything `classifyOne` reads, so a browsed level can answer "can this be read?" without a
  *  second round-trip per file. */
+/**
+ * `ownedByMe` IS A PROVENANCE FIELD, NOT A DISPLAY ONE. The search runs with
+ * `includeItemsFromAllDrives`, so a file a stranger shared in matches — and without asking for
+ * this, the distinction was not merely unused, it was UNAVAILABLE, and the knowledge adapter
+ * stamped every hit `tenant_owned`. Drive does not populate it for shared-drive items, so an
+ * ABSENT value means ownership was not established and `authorityFor` downgrades on it.
+ */
 const BROWSE_FIELDS =
-  "nextPageToken,files(id,name,mimeType,size,modifiedTime,shortcutDetails,capabilities/canDownload)";
+  "nextPageToken,files(id,name,mimeType,size,modifiedTime,shortcutDetails,capabilities/canDownload,ownedByMe)";
 
 /** One page-1 `files.list` of folders. Deliberately NOT paginated: a browse level is a HUMAN
  *  reading a list, and 100 folders in one directory is already past what anyone scans.
@@ -417,6 +434,25 @@ export type DriveSearchHit = {
 export type DriveSearchResult =
   | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" | "drive_error" }
   | { ok: true; hits: DriveSearchHit[] };
+
+/** Everything `files.list` already returned about a match. The COCKPIT hit above is this minus the
+ *  two citation fields — one request, two projections, so the picker's contract is unchanged while
+ *  the knowledge adapter gets the mime and the provider modification time a citation needs. */
+export type DriveSearchRow = DriveSearchHit & {
+  mimeType: string;
+  /** Epoch ms, parsed from Drive's RFC-3339 `modifiedTime`. ABSENT is not "fresh" — downstream
+   *  reads a missing source time as freshness `unknown`, never as current. */
+  modifiedTime?: number;
+  /** Drive's `ownedByMe`. ABSENT is not ownership — `authorityFor` downgrades anything but `true`,
+   *  which is what stops a stranger's shared file being cited as the tenant's own document. */
+  ownedByMe?: boolean;
+};
+
+export type DriveSearchRowsResult =
+  | { ok: false; reason: "not_connected" | "reauth" | "refresh_failed" | "drive_error" }
+  /** `truncated` is Drive's own `nextPageToken`: there were more matches than one page holds, so
+   *  a caller reporting this as a complete read would be reporting a cap as an answer. */
+  | { ok: true; rows: DriveSearchRow[]; truncated: boolean };
 
 /** Escape a value embedded inside one of Drive's single-quoted query-language literals. URL
  * encoding happens later and does not protect this boundary: Drive decodes `q` before parsing it. */
@@ -535,55 +571,100 @@ export const listDriveFolders = tenantAction({
   },
 });
 
-/** Bounded read-only search over the existing Drive grant. This returns metadata, never bytes,
- * and performs no import, reservation, export, landing or ingest work. */
+/**
+ * Bounded read-only search over the existing Drive grant, tenant read from an EXPLICIT `tenantId`
+ * (not `ctx.auth`) — the `vaultGround.runVaultGround` convention. Returns metadata, never bytes,
+ * and performs no import, reservation, export, landing or ingest work.
+ *
+ * **THE GATE LIVES HERE, ONCE, AND BOTH ENTRY POINTS ROUTE THROUGH IT.** The cockpit's
+ * `findInDrive` (identity-bearing) and the knowledge adapter's `findInDriveForTenant`
+ * (identity-less, 29-02) are thin wrappers; neither may re-implement the scope-before-refresh
+ * ordering, because duplicating a security ordering is how one copy of it silently drifts.
+ * `dispatchGuard.test.ts` pins the ordering on this function and pins that neither wrapper calls
+ * `freshAccessToken` itself.
+ *
+ * `include_granted_scopes` is FORWARD-only, so every tenant connected before the Drive widening
+ * holds a token that refreshes perfectly happily and 403s on the first Drive call. Checking scope
+ * AFTER the refresh would present a permanent reconnect condition as a provider failure.
+ */
+async function runDriveSearch(
+  ctx: ActionCtx,
+  tenantId: string,
+  query: string,
+): Promise<DriveSearchRowsResult> {
+  const token: Doc<"gmailTokens"> | null = await ctx.runQuery(internal.gmailAuth.getTokens, {
+    tenantId,
+  });
+  if (!token) return { ok: false, reason: "not_connected" };
+  if (!hasScope(token.scope, DRIVE_READONLY_SCOPE)) return { ok: false, reason: "reauth" };
+
+  const access = await freshAccessToken(ctx, tenantId);
+  if (!access.ok)
+    return {
+      ok: false,
+      reason: access.reason === "not_connected" ? "not_connected" : "refresh_failed",
+    };
+
+  const needle = escapeDriveQueryLiteral(query.trim());
+  if (needle === "") return { ok: true, rows: [], truncated: false };
+
+  const res = await driveFetch(
+    driveUrl("", {
+      q: `(name contains '${needle}' or fullText contains '${needle}') and trashed=false`,
+      fields: BROWSE_FIELDS,
+      pageSize: "20",
+      includeItemsFromAllDrives: "true",
+    }),
+    access.token,
+  );
+  if (!res.ok) {
+    await logDriveFailure("files.list (search)", res);
+    return { ok: false, reason: "drive_error" };
+  }
+  const body = (await res.json()) as { files?: DriveFile[]; nextPageToken?: string };
+
+  return {
+    ok: true,
+    truncated: body.nextPageToken !== undefined,
+    rows: (body.files ?? []).map((file): DriveSearchRow => {
+      const folder = file.mimeType === FOLDER_MIME;
+      const modified = file.modifiedTime === undefined ? NaN : Date.parse(file.modifiedTime);
+      return {
+        id: file.id,
+        name: file.name,
+        kind: folder ? "folder" : "file",
+        readable: !folder && !isSkip(classifyOne(file)),
+        mimeType: file.mimeType,
+        // An unparseable date is ABSENT, never 0 — an epoch-0 timestamp reads as "very stale",
+        // which is a claim about the file we have no basis for.
+        ...(Number.isFinite(modified) ? { modifiedTime: modified } : {}),
+        // Carried VERBATIM, absence included: only `true` is ownership, and only Drive says it.
+        ...(file.ownedByMe === undefined ? {} : { ownedByMe: file.ownedByMe }),
+      };
+    }),
+  };
+}
+
+/** The COCKPIT search tool. Projects the runner's rows down to the shape the picker and the tool
+ *  loop already take — the two citation fields are for the knowledge plane, not the agent loop. */
 export const findInDrive = tenantAction({
   args: { query: v.string() },
   handler: async (ctx, { query }): Promise<DriveSearchResult> => {
-    const token: Doc<"gmailTokens"> | null = await ctx.runQuery(internal.gmailAuth.getTokens, {
-      tenantId: ctx.tenantId,
-    });
-    if (!token) return { ok: false, reason: "not_connected" };
-    if (!hasScope(token.scope, DRIVE_READONLY_SCOPE)) return { ok: false, reason: "reauth" };
-
-    const access = await freshAccessToken(ctx, ctx.tenantId);
-    if (!access.ok)
-      return {
-        ok: false,
-        reason: access.reason === "not_connected" ? "not_connected" : "refresh_failed",
-      };
-
-    const needle = escapeDriveQueryLiteral(query.trim());
-    if (needle === "") return { ok: true, hits: [] };
-
-    const res = await driveFetch(
-      driveUrl("", {
-        q: `(name contains '${needle}' or fullText contains '${needle}') and trashed=false`,
-        fields: BROWSE_FIELDS,
-        pageSize: "20",
-        includeItemsFromAllDrives: "true",
-      }),
-      access.token,
-    );
-    if (!res.ok) {
-      await logDriveFailure("files.list (search)", res);
-      return { ok: false, reason: "drive_error" };
-    }
-    const body = (await res.json()) as { files?: DriveFile[] };
-
+    const out = await runDriveSearch(ctx, ctx.tenantId, query);
+    if (!out.ok) return out;
     return {
       ok: true,
-      hits: (body.files ?? []).map((file): DriveSearchHit => {
-        const folder = file.mimeType === FOLDER_MIME;
-        return {
-          id: file.id,
-          name: file.name,
-          kind: folder ? "folder" : "file",
-          readable: !folder && !isSkip(classifyOne(file)),
-        };
-      }),
+      hits: out.rows.map(({ id, name, kind, readable }) => ({ id, name, kind, readable })),
     };
   },
+});
+
+/** The identity-less knowledge-plane entry point (29-02). Same gate, same bounds, one extra
+ *  projection — see `knowledgeVaultDrive.searchDriveKnowledge`, its only caller. */
+export const findInDriveForTenant = internalAction({
+  args: { tenantId: v.string(), query: v.string() },
+  handler: async (ctx, { tenantId, query }): Promise<DriveSearchRowsResult> =>
+    runDriveSearch(ctx, tenantId, query),
 });
 
 // ── The entry point ───────────────────────────────────────────────────────────
@@ -719,6 +800,7 @@ export const importDriveFolder = tenantAction({
         mimeType: f.mimeType,
         exportMime: f.exportMime,
         modifiedTime: f.modifiedTime,
+        ownedByMe: f.ownedByMe,
       });
     }
 
@@ -943,6 +1025,9 @@ export const exportOne = internalAction({
     mimeType: v.string(),
     exportMime: v.optional(v.string()),
     modifiedTime: v.number(),
+    /** Drive's `ownedByMe` for THIS file. Absent ⇒ Drive did not say (shared-drive items), which
+     *  `landFile` treats as not owned — the same rule `authorityFor` applies on the Drive plane. */
+    ownedByMe: v.optional(v.boolean()),
   },
   handler: async (ctx, a): Promise<null> => {
     const access = await freshAccessToken(ctx, a.tenantId);
@@ -1001,6 +1086,7 @@ export const exportOne = internalAction({
       contentHash: await contentHash(bytes),
       storageId,
       text,
+      ownedByMe: a.ownedByMe,
     });
     return null;
   },
@@ -1037,8 +1123,16 @@ export const landFile = internalMutation({
     contentHash: v.string(),
     storageId: v.id("_storage"),
     text: v.optional(v.string()),
+    ownedByMe: v.optional(v.boolean()),
   },
   handler: async (ctx, a): Promise<null> => {
+    // THE OWNERSHIP DECISION, MADE ONCE, HERE. Drive's `ownedByMe` is a TRISTATE — it is absent for
+    // shared-drive items — and `authorityFor("drive", ...)` already rules that anything but `true`
+    // is not ownership. Collapsing it to a decided boolean at the write site is what stops the two
+    // planes from later disagreeing about what an absent value meant; the stored `false` is then a
+    // positive statement ("Drive did not confirm the tenant owns this"), which is what the search
+    // plane needs, since ABSENCE of the field there means "not from Drive at all".
+    const driveOwnedByMe = a.ownedByMe === true;
     const folder = await ctx.db.get(a.folderId);
     if (!folder) return null; // cancelled mid-flight — the lenient join, same as every folder read
 
@@ -1056,6 +1150,7 @@ export const landFile = internalMutation({
       if (byDriveId.contentHash !== a.contentHash) {
         await ctx.db.patch(byDriveId._id, {
           driveModifiedTime: a.driveModifiedTime,
+          driveOwnedByMe,
           contentHash: a.contentHash,
           size: a.size,
           storageId: a.storageId,
@@ -1068,7 +1163,12 @@ export const landFile = internalMutation({
       } else {
         // `modifiedTime` moved but the bytes did not (a Drive touch, or an OOXML re-export). Record
         // the new stamp so the NEXT refresh sees it as unchanged, and do not re-ingest.
-        await ctx.db.patch(byDriveId._id, { driveModifiedTime: a.driveModifiedTime });
+        // Ownership is re-stated on a bare touch too: a file can be transferred away from the
+        // tenant without its bytes changing, and that must downgrade the vault row's authority.
+        await ctx.db.patch(byDriveId._id, {
+          driveModifiedTime: a.driveModifiedTime,
+          driveOwnedByMe,
+        });
       }
       await bumpLanded(ctx, a.folderId);
       return null;
@@ -1082,6 +1182,12 @@ export const landFile = internalMutation({
       )
       .first();
     if (dup) {
+      // NO `driveOwnedByMe` HERE, ON PURPOSE. This row is a document the tenant ALREADY HELD whose
+      // bytes happen to match; the Drive file is being attached as an identity so the re-import key
+      // works, not imported as a new document (see the comment above — membership is deliberately
+      // not attached either). Stamping it `driveOwnedByMe: false` would let anyone who can share a
+      // file into the tenant's Drive DOWNGRADE the authority of a document the tenant uploaded
+      // themselves, just by matching its content hash. Absence keeps it at its own provenance.
       await ctx.db.patch(dup._id, {
         driveFileId: a.driveFileId,
         driveModifiedTime: a.driveModifiedTime,
@@ -1107,6 +1213,7 @@ export const landFile = internalMutation({
       folderId: a.folderId,
       driveFileId: a.driveFileId,
       driveModifiedTime: a.driveModifiedTime,
+      driveOwnedByMe,
       createdAt: Date.now(),
     });
     await ctx.db.patch(a.folderId, { memberCount: folder.memberCount + 1 });

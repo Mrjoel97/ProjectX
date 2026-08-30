@@ -56,13 +56,14 @@ const PENDING = [
   },
 ];
 
-function render(viewer: unknown, pending: unknown) {
+function render(viewer: unknown, pending: unknown, env?: unknown) {
   hooks.state.queryCalls = [];
   hooks.state.mutationCalls = [];
   hooks.state.resolveQuery = (reference) => {
     const name = getFunctionName(reference as never);
     if (name.startsWith("owner:viewer")) return viewer;
     if (name.startsWith("invites:pending")) return pending;
+    if (name.startsWith("ops:envCheck")) return env;
     return undefined;
   };
   return renderToStaticMarkup(createElement(AdminPage));
@@ -134,5 +135,59 @@ describe("the admin surface mounts only for a confirmed owner", () => {
   test("an empty queue says so rather than rendering nothing", () => {
     const html = render({ isOwner: true }, []);
     expect(html).toContain("No one is waiting");
+  });
+});
+
+describe("an unseeded skill registry is REPORTED, not just fatal at the point of use", () => {
+  // THE GAP THIS CLOSES, measured 2026-08-30. §5 puts every agent prompt in the `skills` table and
+  // `loadSkill` fails CLOSED — but `seedSkills` is an internalMutation an operator must RUN, and
+  // no surface reported that it had not been. Phase 29 shipped two new skill names, the deployment
+  // was never re-seeded, and unified knowledge search was INERT: the browser gate died on
+  // `NO_ACTIVE_SKILL` while the whole unit suite stayed green, because `convex-test` seeds the
+  // registry INSIDE each test. This asserts the RENDERED sentence, not that a field exists.
+  const GREEN = {
+    ready: true,
+    missingRequired: [],
+    missingFeature: [],
+    fixturesActive: [],
+    nonDurableOrigins: [],
+    unseededSkills: [],
+  };
+
+  test("the missing agents are NAMED on screen, with the command that fixes them", () => {
+    const html = render({ isOwner: true }, [], {
+      ...GREEN,
+      ready: false,
+      unseededSkills: ["knowledge-query-planner", "knowledge-synthesizer"],
+    });
+
+    expect(html).toContain("Agents with no active prompt row");
+    expect(html).toContain("knowledge-query-planner");
+    expect(html).toContain("knowledge-synthesizer");
+    // The remedy is on screen rather than in a runbook nobody opens.
+    expect(html).toContain("skills:seedSkills");
+    // And the headline must say what is wrong, not report a different dimension as fine.
+    expect(html).toContain("have no prompt row");
+  });
+
+  test("the headline no longer claims only names are set — it was true while a feature was dark", () => {
+    const green = render({ isOwner: true }, [], GREEN);
+    expect(green).toContain("every agent has its prompt");
+    expect(green).not.toContain("Agents with no active prompt row");
+  });
+
+  test("a required-name fault and an unseeded agent are reported TOGETHER, not one instead", () => {
+    // Two independent faults collapsed into one message is how the second one gets missed.
+    const html = render({ isOwner: true }, [], {
+      ...GREEN,
+      ready: false,
+      missingRequired: ["UNSUBSCRIBE_SECRET"],
+      unseededSkills: ["cockpit-agent"],
+    });
+
+    expect(html).toContain("UNSUBSCRIBE_SECRET");
+    expect(html).toContain("cockpit-agent");
+    expect(html).toContain("required name(s) missing");
+    expect(html).toContain("have no prompt row");
   });
 });

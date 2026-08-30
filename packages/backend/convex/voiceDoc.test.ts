@@ -209,23 +209,38 @@ const searchAudits = (t: ReturnType<typeof convexTest>, tenantId: string) =>
 // Any network call is a test failure. The SMOKE:: seam must carry the whole flow, so this suite
 // passes with no OPENAI_API_KEY and no embedding request — stubbing `fetch` proves that
 // structurally rather than trusting the ambient environment.
-// The `SMOKE::docreview::` seam is gated on OPENAI_API_KEY being ABSENT (`voiceDoc.ts` explains
-// why: `reviewSession` is a PUBLIC action, so an ungated sentinel would let any tenant user have a
-// fabricated review persisted). Other suites in this package SET the variable, and vitest reuses
-// workers across files, so clear it here rather than trusting the ambient environment — the same
-// discipline as the throwing `fetch` stub.
-let savedKey: string | undefined;
+// The `SMOKE::docreview::` seam is gated on there being NO model credential at all (`voiceDoc.ts`
+// explains why: `reviewSession` is a PUBLIC action, so an ungated sentinel would let any tenant user
+// have a fabricated review persisted). BOTH keys: this module resolves `DEFAULT_MODEL`
+// ("or/openai/gpt-4o-mini") through the shared `lib/models` table, so OPENROUTER_API_KEY is the
+// credential it would actually spend. Other suites in this package SET both variables, and vitest
+// reuses workers across files, so clear them here rather than trusting the ambient environment —
+// the same discipline as the throwing `fetch` stub.
+const MODEL_KEYS = ["OPENAI_API_KEY", "OPENROUTER_API_KEY"] as const;
+const savedKeys = new Map<string, string | undefined>();
+
+// THE SECOND HALF OF THE GATE, ADDED AFTER THE CREDENTIAL-ONLY VERSION PROVED WORSE. Deleting the
+// keys is no longer enough to reach the fixture: `offlineSeamAvailable()` requires a POSITIVE
+// operator opt-in too, because "this deployment lost its keys" is a misconfiguration and used to be
+// read as consent — on a PUBLIC endpoint. This suite is exactly the deployment the opt-in describes.
+const ENV_KEYS = [...MODEL_KEYS, "PIKAR_OFFLINE_FIXTURES"] as const;
 
 beforeEach(() => {
-  savedKey = process.env.OPENAI_API_KEY;
-  delete process.env.OPENAI_API_KEY;
+  for (const key of ENV_KEYS) {
+    savedKeys.set(key, process.env[key]);
+    delete process.env[key];
+  }
+  process.env.PIKAR_OFFLINE_FIXTURES = "1";
   vi.stubGlobal("fetch", () => {
     throw new Error("voiceDoc.test: no network is allowed in this suite");
   });
 });
 afterEach(() => {
-  if (savedKey === undefined) delete process.env.OPENAI_API_KEY;
-  else process.env.OPENAI_API_KEY = savedKey;
+  for (const key of ENV_KEYS) {
+    const saved = savedKeys.get(key);
+    if (saved === undefined) delete process.env[key];
+    else process.env[key] = saved;
+  }
   vi.unstubAllGlobals();
 });
 
@@ -718,6 +733,62 @@ describe("voiceDoc.reviewSession (SC2 — the persisted, cited findings row)", (
 
     // Nothing was persisted, so there is no fabricated row for `actOnGap` to act on.
     expect(await reviewRow(t, TENANT, sessionId)).toBeNull();
+  });
+
+  test("OPENROUTER_API_KEY ALONE is enough to make the sentinel inert", async () => {
+    // `DEFAULT_MODEL` is `or/openai/gpt-4o-mini` and this module resolves it through the shared
+    // `lib/models` table, so OpenRouter is the credential this producer would actually spend.
+    // A gate that only looked at OPENAI_API_KEY would leave the fabrication seam OPEN on any
+    // deployment carrying the OpenRouter key alone.
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    process.env.OPENROUTER_API_KEY = "or-voicedoc-seam-guard-test";
+    await expect(
+      asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+        sessionId,
+        transcript: smokeTranscript("gaps"),
+      }),
+    ).rejects.toThrow(/NO_ACTIVE_SKILL/);
+
+    expect(await reviewRow(t, TENANT, sessionId)).toBeNull();
+  });
+
+  test("KEYS GONE, OPT-IN ABSENT: the public sentinel fabricates NOTHING and the call fails", async () => {
+    // The credential-only gate shipped a worse defect than the one it closed: on a deployment that
+    // never set its keys, or blanked them (`convex env set X ""`), THIS PUBLIC ENDPOINT reopened to
+    // every authenticated tenant with no operator in the decision at all. Absence of a credential is
+    // a misconfiguration, not consent. Same suite, same keyless backend — only the opt-in removed.
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    delete process.env.PIKAR_OFFLINE_FIXTURES;
+    await expect(
+      asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+        sessionId,
+        transcript: smokeTranscript("gaps"),
+      }),
+    ).rejects.toThrow(/NO_ACTIVE_SKILL/); // the model path, fail-closed at the unseeded persona
+
+    expect(await reviewRow(t, TENANT, sessionId)).toBeNull();
+  });
+
+  test("THE OPT-IN, SET: the same keyless backend DOES return the fixture", async () => {
+    // Anti-vacuous for the test above: one env var apart, same harness, same transcript. Without
+    // this the refusal above would also pass against a seam that had simply been deleted.
+    const t = newTest();
+    const docId = await seedReadyDoc(t, TENANT, REPORT_TEXT);
+    const sessionId = await seedSession(t, { docRef: docId });
+
+    process.env.PIKAR_OFFLINE_FIXTURES = "1";
+    const res = await asTenant(t, TENANT).action(api.voiceDoc.reviewSession, {
+      sessionId,
+      transcript: smokeTranscript("gaps"),
+    });
+    expect(res.findingCount).toBe(3);
+    expect(await reviewRow(t, TENANT, sessionId)).not.toBeNull();
   });
 
   test("BETA-05 — tenant B can neither review nor read tenant A's voice-doc thread", async () => {

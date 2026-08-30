@@ -11,10 +11,14 @@
 
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test } from "vitest";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/*.ts",
+);
 
 const TENANT = "tenant-discovery";
 const asTenant = (t: TestConvex<typeof schema>) => t.withIdentity({ subject: TENANT });
@@ -156,5 +160,154 @@ describe("a quick start carries its own preflight", () => {
       if (probed === undefined) continue; // a matrix-missing source the probe never reports
       expect(view.state, `${view.source} disagrees with the probe`).toBe(probed);
     }
+  });
+});
+
+// ── 29-07 FIX: the base version the form sends is the one the mutation compares against ──────
+//
+// THE DEFECT THIS CLOSES. `/dashboard/workflows` derived its `baseCandidateVersion` from
+// `skills.myUserSkills`, which returns the tenant's 50 most recent `tenantSkills` rows across ALL
+// skill names and only then filters to the pack. `publishPackCustomization` compares against the
+// newest row for THAT NAME (`readTenantPublishState`'s `by_tenant_name_version` take(1)). Past the
+// window the two disagree permanently: the form sends `null`, the mutation answers
+// `stale_base_version`, and its copy says "reload" — which reproduces the same window. The tenant
+// can never save again.
+//
+// `listPacks` now resolves it per name, so this file pins the two values EQUAL under exactly the
+// condition that used to break them apart.
+describe("listPacks resolves this tenant's base version per PACK, not from a recent-rows window", () => {
+  const packHarness = async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    await publish(t, "pack-business-pulse", 3);
+    await activate(t, "pack-business-pulse", 3);
+    const user = await t.run((ctx) => ctx.db.insert("users", {}));
+    return { t, user, as: t.withIdentity({ subject: `${user}|session` }) };
+  };
+
+  const VALUES = { business_terms: "We say members, not customers." } as const;
+
+  const listed = async (as: ReturnType<TestConvex<typeof schema>["withIdentity"]>) => {
+    const packs = await as.query(api.workflowPackDiscovery.listPacks, {});
+    const pack = packs.find((p) => p.packId === "business-pulse");
+    expect(pack, "business-pulse is active and must be listed").toBeDefined();
+    return pack as NonNullable<typeof pack>;
+  };
+
+  test("no customization yet reads as null on both halves", async () => {
+    const { as } = await packHarness();
+    const pack = await listed(as);
+    expect(pack.myBaseVersion).toBe(null);
+    expect(pack.myCustomizationValues).toBe(null);
+  });
+
+  test("after one save it names the newest row, and returns the values back for the form", async () => {
+    const { as } = await packHarness();
+    const res = await as.mutation(api.skills.publishPackCustomization, {
+      templateId: "business-pulse",
+      templateVersion: 3,
+      baseCandidateVersion: null,
+      values: VALUES,
+    });
+    expect(res.ok).toBe(true);
+
+    const pack = await listed(as);
+    // The candidate is v2 — `ensureRollbackBaseline` mints the code-authored v1 first.
+    expect(pack.myBaseVersion).toBe(2);
+    expect(JSON.parse(pack.myCustomizationValues ?? "null")).toEqual({
+      business_terms: "We say members, not customers.",
+    });
+  });
+
+  test("50 newer rows for OTHER skills hide the pack from myUserSkills — and do not move this", async () => {
+    const { t, user, as } = await packHarness();
+    const first = await as.mutation(api.skills.publishPackCustomization, {
+      templateId: "business-pulse",
+      templateVersion: 3,
+      baseCandidateVersion: null,
+      values: VALUES,
+    });
+    expect(first.ok).toBe(true);
+
+    // The truncation, built the way it happens in production: an ordinary authoring history that
+    // is NEWER than the pack row, which is what pushes the pack row out of the recent window.
+    const after = Date.now() + 60_000;
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 60; i++) {
+        await ctx.db.insert("tenantSkills", {
+          tenantId: String(user),
+          name: "offer-architect",
+          version: i + 1,
+          body: "b",
+          authoredBody: "a",
+          status: "candidate",
+          author: "user",
+          authorUserId: user,
+          basedOnName: "offer-architect",
+          basedOnScope: "global" as const,
+          basedOnVersion: 1,
+          rollbackEligible: false,
+          createdAt: after + i,
+        });
+      }
+    });
+
+    // THE CONDITION. The old client derivation read this list; the pack row is no longer in it.
+    const recent = await as.query(api.skills.myUserSkills, {});
+    expect(recent.some((r) => r.name === "pack-business-pulse")).toBe(false);
+
+    // The new derivation is unaffected...
+    const pack = await listed(as);
+    expect(pack.myBaseVersion).toBe(2);
+
+    // ...and that is the value the mutation accepts. `null` — what the old client would have sent
+    // — is refused, which is the loop the user was stuck in.
+    const stale = await as.mutation(api.skills.publishPackCustomization, {
+      templateId: "business-pulse",
+      templateVersion: 3,
+      baseCandidateVersion: null,
+      values: { business_terms: "changed once" },
+    });
+    expect(stale.ok).toBe(false);
+    if (!stale.ok) {
+      expect(stale.reason).toBe("stale_base_version");
+      // The refusal carries the same number, so adopting it is a retry the client can win.
+      if (stale.reason === "stale_base_version") expect(stale.currentBaseVersion).toBe(2);
+    }
+
+    const accepted = await as.mutation(api.skills.publishPackCustomization, {
+      templateId: "business-pulse",
+      templateVersion: 3,
+      baseCandidateVersion: pack.myBaseVersion,
+      values: { business_terms: "changed once" },
+    });
+    expect(accepted.ok, "the listed base version must be the one the mutation accepts").toBe(true);
+  });
+
+  test("the system rollback baseline counts — the comparand is the newest row, not the newest USER row", async () => {
+    const { t, user, as } = await packHarness();
+    // A `system` baseline alone (no user candidate yet), exactly as `ensureRollbackBaseline` writes
+    // one. `myUserSkills` filters `system` rows out; the mutation's comparand does not.
+    await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: String(user),
+        name: "pack-business-pulse",
+        version: 1,
+        body: "core",
+        authoredBody: "",
+        status: "archived",
+        author: "system",
+        basedOnName: "pack-business-pulse",
+        basedOnScope: "global" as const,
+        basedOnVersion: 3,
+        rollbackEligible: true,
+        createdAt: 5,
+      }),
+    );
+
+    const pack = await listed(as);
+    expect(pack.myBaseVersion).toBe(1);
+    expect(pack.myCustomizationValues, "a system baseline has no form values").toBe(null);
+    expect((await as.query(api.skills.myUserSkills, {})).length).toBe(0);
   });
 });

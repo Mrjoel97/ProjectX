@@ -4,7 +4,6 @@
  * CLAUDE.md §2 bans public query/mutation/action builders; these identity-less tenant-scoped
  * readers deliberately use the allowed internalQuery builder and accept an explicit tenantId.
  */
-import { openai } from "@ai-sdk/openai";
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import {
   aggregatePulse,
@@ -32,7 +31,7 @@ import {
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { categoryFor } from "@pikar/vault";
-import { generateObject, jsonSchema, type LanguageModel } from "ai";
+import { generateObject, jsonSchema } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -45,14 +44,13 @@ import {
 import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { resolveModel } from "./lib/models";
 import { sealedIn } from "./vaultFolders";
 
 const TOP_ENTITY_COUNT = 20;
 const DRIFT_SCAN_CAP = 100;
 const CALL_TIMEOUT_MS = 45_000;
 const SMOKE_BLUEPRINT_PREFIX = "SMOKE::blueprint::";
-
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 type DeriveCandidatesResult =
   | {
@@ -295,8 +293,17 @@ export const deriveCandidates = internalAction({
     if (!scan.ok) throw new Error("blueprint: candidate scan failed");
     const safePrompt = scan.value.safeText;
 
-    if (safePrompt.includes(SMOKE_BLUEPRINT_PREFIX)) {
-      return { ok: true, candidates: smokeCandidatesFixture(safePrompt) };
+    // THE OFFLINE SEAM IS KEYED ON `fields`, AND NEVER ON THE PROMPT. `sources` is VAULT CONTENT —
+    // `buildBlueprintDraft` fills it from `vaultGround.vaultGroundHydrated`, i.e. chunks of Drive
+    // files and ingested email — so the previous `safePrompt.includes(...)` let ANY third party who
+    // got one document into a tenant's vault flip this action into returning `smokeCandidatesFixture`
+    // instead of calling the model: attacker-authored text silently becomes the tenant's derived
+    // blueprint. `fields` cannot be reached that way. It is code-owned on the production path
+    // (`probesFor` over FIELD_SPEC in @pikar/core), this is an `internalAction` so no client can
+    // set it, and a retrieved chunk can never land in it.
+    const smokeSeed = fields.find((field) => field.includes(SMOKE_BLUEPRINT_PREFIX));
+    if (smokeSeed !== undefined) {
+      return { ok: true, candidates: smokeCandidatesFixture(smokeSeed) };
     }
 
     const { object, usage } = await generateObject({

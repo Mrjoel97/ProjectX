@@ -4,18 +4,29 @@
 // (Pitfall 4) drives the graph-expand + fuse path deterministically WITHOUT rag.search / an
 // embedding network call. The seed doc(s) ride in the query as `SMOKE::<docId,docId,...>` and are
 // tenant-scoped exactly as `namespace = tenantId` scopes the real search — a cross-tenant seed
-// resolves to nothing, so a different tenant's corpus can never enter a grounding result.
+// resolves to nothing, which the "cross-tenant" and "a passage is attached only to a doc the TENANT
+// owns" tests below drive.
 //
 // These tests seed a graph via internal.vaultGraph.upsertGraph and assert: vector-seed + ≤2-hop
 // graph merge, hop-cap exclusion, cross-tenant isolation, plus the cheap metadata read plane
 // (listVaultDocs / vaultStats / vaultDownloadUrl / docEntities / vaultSearch).
 import { type BusinessBlueprint, serializeBlueprint } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+
+// The suite-wide offline-fixture consent lives in `vitest.config.mts`; one test below removes it
+// with `vi.stubEnv`. Restoring it HERE rather than as that test's last statement is the point: an
+// `await expect(...)` that fails aborts the body, so an inline `vi.unstubAllEnvs()` never runs and
+// `PIKAR_OFFLINE_FIXTURES=""` leaks into every later test in the file — which would make the
+// fixture seam unreachable and turn unrelated failures into "unset for embeddings". Pinned by
+// "the operator consent is RESTORED for the tests that follow" below.
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const TENANT = "tenant_a";
 const asTenant = (t: ReturnType<typeof convexTest>, tenantId = TENANT) =>
@@ -166,6 +177,48 @@ describe("vaultGround (VALT-03 hybrid vector + hop-capped graph)", () => {
 
     expect(Object.keys(result).sort()).toEqual(["context", "docIds"]);
   });
+
+  // 29-FIN-06: the sentinel is TENANT-SUPPLIED (`vaultGround` is a `tenantAction`, and every
+  // `vaultGroundHydrated` caller passes user text), so it must not be able to select the offline
+  // fixture on its own. The suite-wide consent lives in `vitest.config.mts`; this test removes it
+  // and drives the same query that passes three tests above.
+  //
+  // MUTATION OBSERVED RED: drop `offlineSeamAvailable() &&` from `runVaultGround` — the seed
+  // resolves, `docIds` comes back with `docA` in it, and the expected rejection never happens.
+  test("WITHOUT the operator's consent the SMOKE:: seed is NOT a fixture — it reaches rag.search", async () => {
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "");
+    const t = convexTest(schema, modules);
+    const { docA } = await seedChain(t);
+
+    // The real retrieval path, which has no embedding credential in a test run. The failure is the
+    // proof: with the gate open this query returns docs without ever touching an embedding.
+    await expect(
+      asTenant(t).action(api.vaultGround.vaultGround, { query: `SMOKE::${docA}` }),
+    ).rejects.toThrow(/unset for embeddings/);
+  });
+
+  // THE LEAK GUARD for the test above. It drives the fixture path rather than reading
+  // `process.env`, so it fails the way a leak would actually be felt. It catches the leak only when
+  // it runs after the stubbing test, and nothing here enforces that ordering; `unstubEnvs: true` in
+  // `vitest.config.mts` would make it order-free for every file and is named as a follow-up — a
+  // suite-wide config change was out of scope for this closing pass.
+  // MUTATION OBSERVED RED: delete the file-level `afterEach(() => vi.unstubAllEnvs())` — the stub
+  // survives into this test, `offlineSeamAvailable()` is false, and the seed goes to `rag.search`,
+  // which rejects with "unset for embeddings" instead of resolving `docA`.
+  test("the operator consent is RESTORED for the tests that follow", async () => {
+    const t = convexTest(schema, modules);
+    const { docA } = await seedChain(t);
+
+    const { docIds } = await asTenant(t).action(api.vaultGround.vaultGround, {
+      query: `SMOKE::${docA}`,
+    });
+
+    expect(docIds).toContain(docA);
+  });
+
+  // ponytail: the CREDENTIAL half of `offlineSeamAvailable()` is NOT re-tested here. It belongs to
+  // the shared predicate and `lib/models.test.ts` drives it directly; the version of this test that
+  // stubbed a bogus `OPENROUTER_API_KEY` made a real outbound embedding request and took 7s.
 });
 
 describe("vaultGroundHydrated (identity-less internalAction — real titles + capped chunk text)", () => {
@@ -239,10 +292,142 @@ describe("vaultGroundHydrated (identity-less internalAction — real titles + ca
       query: `SMOKE::${docA}`,
     });
 
-    // 26-11 added `origins` as a fifth parallel field. Kept as an EXHAUSTIVE toEqual on
-    // purpose: a foreign tenant must get empty arrays and nothing else, so a future field
-    // that leaks a value across the boundary reddens here rather than passing unnoticed.
-    expect(out).toEqual({ docIds: [], titles: [], origins: [], chunks: [], spine: null });
+    // 26-11 added `origins`; 29-02 added `kinds`, `sourceUpdatedAt` and `truncated`; the 29 final
+    // pass added `driveOwned` (Drive ownership, carried across the import so the vault and Drive
+    // planes stop disagreeing about a stranger-shared file). Kept as an
+    // EXHAUSTIVE toEqual on purpose: a foreign tenant must get empty arrays and nothing else, so a
+    // future field that leaks a value across the boundary reddens here rather than passing
+    // unnoticed. Extending this list is the deliberate cost of adding a parallel field.
+    expect(out).toEqual({
+      docIds: [],
+      titles: [],
+      origins: [],
+      kinds: [],
+      sourceUpdatedAt: [],
+      truncated: [],
+      driveOwned: [],
+      chunks: [],
+      spine: null,
+    });
+  });
+});
+
+describe("vaultGroundHydrated citation metadata (29-02)", () => {
+  test("kinds / sourceUpdatedAt / truncated stay index-parallel and say what was really read", async () => {
+    const t = convexTest(schema, modules);
+    const short = await seedDoc(t, {
+      title: "Short",
+      kind: "upload",
+      text: "all of it",
+      createdAt: 1_000,
+    });
+    const fetched = 2_000;
+    const long = await seedDoc(t, {
+      title: "Long",
+      kind: "web_research",
+      text: "x".repeat(2000), // > PER_DOC_CHAR_CAP
+      createdAt: 1_500,
+      retrievedAt: fetched,
+      // A Drive import the tenant does NOT own — `landFile` decides this boolean at the write site.
+      driveFileId: "shared-in",
+      driveOwnedByMe: false,
+    });
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${short},${long}`,
+    });
+
+    const iShort = out.docIds.indexOf(short);
+    const iLong = out.docIds.indexOf(long);
+    expect(iShort).toBeGreaterThanOrEqual(0);
+    expect(iLong).toBeGreaterThanOrEqual(0);
+    for (const arr of [out.kinds, out.sourceUpdatedAt, out.truncated, out.driveOwned])
+      expect(arr).toHaveLength(out.docIds.length);
+
+    expect(out.kinds[iShort]).toBe("upload");
+    expect(out.kinds[iLong]).toBe("web_research");
+    // createdAt when there is no fetch stamp; the FETCH stamp when there is one.
+    expect(out.sourceUpdatedAt[iShort]).toBe(1_000);
+    expect(out.sourceUpdatedAt[iLong]).toBe(fetched);
+    // Only the doc that was actually cut reports the cut — otherwise every read would look partial.
+    expect(out.truncated[iShort]).toBe(false);
+    expect(out.truncated[iLong]).toBe(true);
+    expect(out.chunks[iLong]).toHaveLength(1500);
+    // `driveOwned` carries Drive's DECIDED ownership across the import, and it must be
+    // index-parallel like the rest — asserted on TWO docs with different values, because a
+    // one-document test cannot tell an aligned array from a misaligned one. `null`, not `false`,
+    // for the upload: "this row never came from Drive" is not "Drive did not confirm ownership",
+    // and only the second is a downgrade in `authorityFor`.
+    expect(out.driveOwned[iShort]).toBeNull();
+    expect(out.driveOwned[iLong]).toBe(false);
+  });
+
+  // ── THE CHUNK-PRECISE PATH, WHICH NOTHING COULD DRIVE OFFLINE UNTIL NOW ────────────────────
+  //
+  // Vector seeds hydrate from the passage that actually MATCHED, not from the document's opening —
+  // that is why a 300-page PDF is no longer answered from its copyright notice. But `truncated` was
+  // computed against the hydrated string, which on that path IS the passage, so a 40-character
+  // extract from a 4,000-character document reported `truncated: false`: a complete read of a
+  // document one paragraph of which was read. The knowledge adapter turns that flag into
+  // `available` vs `partial`, so the lie surfaced to the user as "we read your whole document".
+  //
+  // Every test above takes the doc-text fallback, where the passage and the document are the same
+  // string, which is exactly why the defect survived a green suite. The `SMOKE::<id>|<passage>`
+  // seam populates `matchedByDoc` so the real branch runs.
+
+  test("a MATCHED PASSAGE is what gets hydrated, and it is reported as a partial read", async () => {
+    const t = convexTest(schema, modules);
+    const doc = await seedDoc(t, {
+      title: "Long contract",
+      kind: "upload",
+      text: `${"x".repeat(4000)}the renewal fee is 40 dollars per seat${"y".repeat(4000)}`,
+      createdAt: 1_000,
+    });
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${doc}|the renewal fee is 40 dollars per seat`,
+    });
+
+    // The passage, not the document's first 1500 characters of "x".
+    expect(out.chunks[0]).toBe("the renewal fee is 40 dollars per seat");
+    // MUTATION that must turn this RED: measure `truncated` against the hydrated string again
+    // (`slice.length < text.length`), which is `38 < 38` here.
+    expect(out.truncated[0]).toBe(true);
+  });
+
+  test("a passage that IS the whole document is NOT reported as truncated — the control", async () => {
+    // Without this the fix could be "always true on the matched path", which would make every
+    // vault read partial and drain the distinction of meaning.
+    const t = convexTest(schema, modules);
+    const text = "the entire document";
+    const doc = await seedDoc(t, { title: "Tiny", kind: "upload", text, createdAt: 1_000 });
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${doc}|${text}`,
+    });
+    expect(out.chunks[0]).toBe(text);
+    expect(out.truncated[0]).toBe(false);
+  });
+
+  test("a passage is attached only to a doc the TENANT owns", async () => {
+    // The seam resolves ids through `ownedDocsMeta`; a foreign id resolves to nothing, so its
+    // passage can never be hydrated for the asking tenant.
+    const t = convexTest(schema, modules);
+    const foreign = await seedDoc(
+      t,
+      { title: "Theirs", kind: "upload", text: "their private terms", createdAt: 1_000 },
+      "tenant_someone_else",
+    );
+
+    const out = await t.action(internal.vaultGround.vaultGroundHydrated, {
+      tenantId: TENANT,
+      query: `SMOKE::${foreign}|their private terms`,
+    });
+    expect(out.docIds).toEqual([]);
+    expect(JSON.stringify(out)).not.toContain("their private terms");
   });
 });
 

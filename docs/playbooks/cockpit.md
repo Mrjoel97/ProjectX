@@ -1,3 +1,348 @@
+> Last verified: 2026-08-30 (**A PLAYWRIGHT HAZARD THAT APPLIES TO EVERY SPEC UNDER `apps/web/e2e`,
+> not just the pack ones: a rapid `page.goto` loop POISONS THE NEXT PAGE in the same browser
+> context.** Reproduced deterministically — a four-test serial probe counting buttons inside
+> `main.canvas-main` after a fixed 6s settle read `14` at baseline, `14` inside the loop itself, and
+> **`0` in the very next test**; five identical tests with no loop all read `14`.
+>
+> In the failing state everything that usually indicates a broken test looks FINE: the shell is
+> painted, the route is right, the session is valid (`Sign out` present, no redirect) and the console
+> is clean. The client subscriptions simply never resolve, so every `useQuery` stays undefined and
+> the page content never mounts — which presents as a locator timeout and reads like a product bug.
+> Consistent with Convex websockets from the abandoned navigations not being released before the
+> next client opens one.
+>
+> **What to do about it:** do not re-read by reloading. If a spec must poll for server state, poll
+> without navigating; if it genuinely has to reload in a loop, put anything that runs after it in a
+> SEPARATE SPEC FILE — Playwright gives each file its own worker and therefore its own browser
+> context, which is the only reason the pack isolation test passes.
+> Full write-up in `docs/playbooks/workflow-packs.md`.)
+
+> Last verified: 2026-08-30 (29-10 — **TWO NEW E2E SPECS UNDER THIS PLAYBOOK'S WATCHED PATH, AND ONE
+> PRODUCT GAP THEY FOUND.** `apps/web/e2e/workflow-packs.spec.ts` and `workflow-packs-isolation.spec.ts`
+> gate `/dashboard/workflows` (5 passed, PW_EXIT=0). The detail that belongs HERE rather than only in
+> `workflow-packs.md`, because it is a pattern any cockpit surface can repeat:
+> **the customization save emits NO completion signal** — no toast, no `role="status"`, no
+> `role="alert"` — so success and still-in-flight are indistinguishable in the DOM, and navigating
+> straight after the click ABORTS the in-flight mutation. A spec can wait before navigating and retry
+> the read; a user who presses Save and leaves simply loses the write.
+> Also measured on this surface: the form prefills ASYNCHRONOUSLY and overwrites typing that lands
+> first, and there is exactly ONE `tenantSkills` row per (tenant, pack) so two customization tests
+> are two writers of one row and cannot run under `fullyParallel: true`.
+> Full write-up, including the unexplained serial-worker hang, in `docs/playbooks/workflow-packs.md`.)
+
+> Last verified: 2026-08-30 (29-13 — **THE DEFERRED-RECURRENCE BROWSER PROOF, AND A SETTLE SIGNAL
+> THAT PROVED NOTHING.** `apps/web/e2e/routines.spec.ts` is the deferred branch's browser evidence:
+> `/dashboard/workflows` still offers a manual **Run again**, and no control on it schedules, pauses,
+> resumes or revokes a repeating run. **THE SETTLE SIGNAL WAS ITSELF VACUOUS, AND ONLY THE POSITIVE CONTROL CAUGHT IT.**
+> `routines.spec.ts` waited for `main.getByText("Run again")` before scanning for absence — but the
+> pinned surface's always-present intro reads *"Nothing starts by itself — you press Run again."* So
+> the settle matched STATIC COPY, fired before a single Convex query resolved, and every
+> `toHaveCount(0)` below it ran against a page still rendering "Loading your workflows…". The scan's
+> own positive control (`expect(names.length).toBeGreaterThan(0)`) refused: **0 controls found**.
+> Without that control this would have been a green absence proof over a DOM the spec never read —
+> the exact defect `workflow-pack-pilot.spec.ts`'s `@dark` block shipped, which passed with all six
+> packs ACTIVE because `toHaveCount(0)` succeeds on its first poll.
+> FIXED by settling on a CONTROL, not prose: a `button` named "Pin this workflow"/"Run again", or the
+> empty-state sentence. None of those can render before `listPins`/`listPacks` answer; prose can be
+> anywhere. **Rule this cost us: a settle signal must match something that CANNOT exist before the
+> thing you are waiting for.**
+>
+> **PROVEN IN BOTH DIRECTIONS, ON A REAL BROWSER, BY THE ORCHESTRATOR (2026-08-30).**
+> Green: `e2e/routines.spec.ts` **5 passed**, PW_EXIT=0, including the two-identity case (tenant B,
+> an ordinary non-owner, sees the same surface with the same absence).
+> Red on demand: a `<button>Pause schedule</button>` planted in `workflows/page.tsx`, rebuilt and
+> re-served, turned the scan RED naming it (`+ "Pause schedule"`); reverted, rebuilt, 5/5 green again.
+> `routineBranch.test.ts` likewise: planting a `RoutineControls.tsx` turned **3** tests red, then it
+> was deleted. Two full `next build` + restart cycles per direction — `@pikar/core` exports raw TS so
+> Next BUNDLES it, and without a rebuild the browser tests the previous bundle.
+>
+> The recorded decision is `defer` and the spec asserts that FIRST — as a failing assertion, not a
+> skip: if the decision ever flips to `enable-safe` this absence proof is the wrong proof and must be
+> replaced by a lifecycle spec, and going red is how that gets noticed.)
+
+> Last verified: 2026-08-29 (29-08 FIX — **PINNING A WORKFLOW WAS EVICTING A SAVED PROMPT FROM THIS
+> MENU.** Correcting the entry after this one. `savedPrompts.list` applied its
+> `templateId === undefined` filter to the page it had already taken, so each workflow pin consumed
+> one of the twenty slots and a prompt silently disappeared from the workspace menu — driven, not
+> reasoned: 20 prompts returned 20, then one pin returned 19. The defence written into that entry
+> ("the take is the cap this menu has always had") was true of the TAKE and false of the CAP, which
+> shrank with every pin.
+>
+> The filter is now a `.filter((q) => q.eq(q.field("templateId"), undefined))` on the same indexed
+> range, BEFORE `.order("desc").take(SAVED_PROMPT_LIST_LIMIT)`. One predicate, one bounded read, no
+> second query. Mutation observed RED: moving it back after the take makes the new
+> `pinnedWorkflows.test.ts` case "pinning a workflow evicts nothing from the twenty-entry prompt
+> menu" report 19.
+>
+> `cockpit.ts` is STILL unchanged by 29-08, and both facts pinned by tests that read it still hold.)
+
+> Last verified: 2026-08-29 (29-08 — **THE WORKSPACE'S PINNED-PROMPT MENU NOW LISTS PROMPT PINS
+> ONLY.** `savedPrompts.list` gained one filter: a row carrying `templateId` is a pinned WORKFLOW
+> (29-08, `packages/backend/convex/pinnedWorkflows.ts`), and Run in this menu is an ordinary
+> Executive-Agent turn through `sendCockpitMessage` — so a workflow pin listed here would offer
+> "Brand review" and then run something that is not the Brand review pack. Workflow pins live on
+> `/dashboard/workflows` and run through `cockpit.startWorkflowPack`, the allow-listed pack agent.
+>
+> The filter is applied AFTER the existing `take(SAVED_PROMPT_LIST_LIMIT)`, deliberately: the take
+> is the cap this menu has always had, and re-taking to refill it would turn a bounded read into a
+> scan. Mutation observed RED — deleting the filter makes `pinnedWorkflows.test.ts` "a workflow pin
+> never appears in the prompt menu" fail with both titles in the list.
+>
+> `cockpit.ts` itself is UNCHANGED by 29-08. `startWorkflowPack` already was the re-run door, and
+> two facts about it are now pinned by tests in `pinnedWorkflows.test.ts` that read this file: it
+> still passes NO `tenantSkillIds` to the binding (which is what makes the pin surface's
+> "your customization is not applied" sentence true), and its `threadId` is still optional with
+> `ensureThreadAndPlan` minting a new thread when it is absent (which is the whole freshness
+> mechanism behind "Run again").)
+
+> Last verified: 2026-08-29 (29-09 FIX — **THE SEARCH CARD COULD DENY EVIDENCE IT WAS SHOWING, AND
+> THE THREE PROVENANCE STRINGS BELOW WERE UNTESTED.** Four corrections to the entry after this one.
+>
+> **(1) `answered` no longer reads the summary string.** It was `row.summary.length > 0`, and the
+> synthesis JSON schema in `knowledgeLlm.ts` puts no minimum length on `summary`, so a model that
+> answers only in claims stored citation-checked claims beside a blank summary — and the card
+> printed "The sources that were searched had nothing on this." directly above them, with the
+> confidence line suppressed. It is now `row.claims.length > 0 || row.summary.trim().length > 0`,
+> and the summary paragraph renders only when there is one. Two new tests in
+> `KnowledgeSearchPanel.test.ts` cover the blank-summary-with-claims and blank-summary-with-no-claims
+> cases; restoring the old expression fails the first.
+>
+> **(2) The provenance line is enforced now, not just rendered.** Deleting
+> `PACK_SOURCE_LABEL[citation.source]` from the citation, deleting `PACK_SOURCE_LABEL[row.source]`
+> from the conflicting-evidence list, or deleting the `{row.question}` heading each left the suite
+> green. The prior entry's claim that every citation carries source, authority and freshness was
+> true of the code and unenforced by the tests. Three tests now assert the RENDERED span, e.g.
+> `Re: renewal</span> — your mailbox · Something someone said, not a record · Updated in the last
+> month` — a substring the coverage sentence cannot supply. All three deletions go red.
+>
+> **(3) The available/unavailable split is read from `@pikar/core`.** The panel had its own
+> `row.sources.some((s) => s.status !== "unavailable")` beside `aggregateCoverage`'s docstring
+> claiming the distinction is made once, in core. The panel now calls `aggregateCoverage(row.sources)`
+> and reads `available + partial > 0`; a source scan fails if the inline form comes back.
+>
+> **(4) The panel's own thread handle wins.** `activeThread` was `threadId ?? ownThread`, so a search
+> made on a fresh workspace became unreadable the moment the user sent their first chat message —
+> the prop arrived, the subscription moved to the cockpit thread, and the rows stayed stranded under
+> the `ks_` handle with nothing able to query them. It is `ownThread ?? threadId ?? null` now.
+> ponytail: session-scoped — the panel unmounts on close, so the handle does not outlive the card.
+>
+> THE BROWSER GATE IS STILL UNRUN, and it was DEAD ON ARRIVAL until this pass:
+> `panel.getByRole("button", { name: "Search" })` resolved to TWO elements, because Playwright's
+> `name` is a case-insensitive SUBSTRING match and `aria-label="Close knowledge search"` contains
+> "search". Every test in the file went through that locator, so the whole spec would have failed on
+> its first line; `--list` only proves parsing, which is why it survived. Now `{ name: "Search",
+> exact: true }`, verified against real chromium with `setContent` (loose = 2 and a strict-mode
+> violation, exact = 1 and usable). An eighth test was added for correction (4). Still zero
+> executions against a running stack — see `29-SEARCH-GATE.md`.)
+>
+> Last verified: 2026-08-29 (29-09 — **THE COCKPIT GAINED A THIRD INLINE CARD: UNIFIED KNOWLEDGE
+> SEARCH (KNOW-01).** `KnowledgeSearchPanel.tsx` is opened from the same "Chat options" menu as
+> `SkillAuthoringPanel`, mounted in the same place in `page.tsx`, on the same terms — session state,
+> not a route, so the thread and every open subscription survive the toggle. It is wrapped in
+> `ErrorBoundary` with a `null` fallback, like `WorkflowPackQuickStarts`: a failing search control
+> degrades itself, never the cockpit.
+>
+> WHAT IT ADDS TO THE PANE, and what it deliberately does not:
+>
+> - It calls `api.knowledgeSearch.search` (a `tenantAction`) and reads `api.knowledgeSearch.listByThread`.
+>   It holds no `useMutation`, does not go through `useSendCockpitMessage`, and imports nothing from
+>   `api.cockpit` — `KnowledgeSearchPanel.test.ts` scans the shipped source for each of those three.
+> - The `threadId` it passes is the cockpit's own when there is one. With a fresh workspace there is
+>   no thread yet, so the panel mints `ks_<uuid>` ON SUBMIT (not in a `useState` initializer, which
+>   would run on the server and hydrate to a different id).
+> - The honest-gap copy is NOT restated in the UI. `renderSourceGap` and `groundedSourceProps` in
+>   `@pikar/core/knowledgeSearch` own the sentences and the citation mapping; the panel renders what
+>   they return. `KnowledgeSearchPanel.test.ts` asserts the panel source does not contain the
+>   substrings `so it was not searched` or `only the first`.
+> - Only a `vault` citation reaches `GroundedSources({titles, docIds})` and therefore
+>   `VaultDocButton`. Every citation — vault included — also gets a provenance line carrying the
+>   source label, authority class and freshness, because an agent-promoted document lives in the
+>   vault and `agent_authored` is the class that must be visible there.
+>
+> UNPROVEN AND STATED AS SUCH: `apps/web`'s vitest is node-only, so what is verified is the string
+> `renderToStaticMarkup` emits, not pixels, not focus order and not the live action call.
+>
+> THE BROWSER GATE IS `apps/web/e2e/knowledge-search.spec.ts`, AND IT IS UNRUN. Playwright discovers
+> and parses its 7 tests; not one has executed against a running stack. It opens the card through the
+> same "Chat options" keyboard path `skill-authoring.spec.ts` uses and writes zero auth code (the
+> `setup` project's `storageState`). It has two modes on two DIFFERENT deployments, because
+> `offlineSeamAvailable()` requires fixture consent AND no model key: `PIKAR_E2E_KNOWLEDGE_MODE=offline`
+> drives the `SMOKE::knowledge-plan::` planner fixture at $0, and `=live` spends real money. Its
+> two-identity block is skipped rather than faked — no second loggable account exists on this
+> project's deployments. Commands, env vars, preconditions and the empty results table are in
+> `.planning/phases/29-unified-knowledge-and-routines/29-SEARCH-GATE.md`.)
+
+> Last verified: 2026-08-29 (**WAVE-3 FINAL — THE COPY-DRIFT GUARD IS DELETED. Copy-drift is
+> UNGUARDED, and this entry exists so nobody reads a green `lib/models.test.ts` as protection.**
+>
+> `lib/models.test.ts` carried a source-text scan meant to prove that no module under `convex/`
+> keeps its own `resolveModel`. It went through FIVE iterations and was defeated on every one, each
+> escape RUN as a real module planted under `convex/` that left the whole suite green:
+>
+> | # | Escape | What it beat |
+> | - | ------ | ------------ |
+> | 1 | `const pickModel = (id) => openai(...)` | the NAME scan (it grepped for `resolveModel(`) |
+> | 2 | `createOpenAI({…})(id)` and `const P = createOpenAI({…}); P(id)` | the CALL-SHAPE scan (hardcoded callee spellings; the char before `(` is `)`) |
+> | 3 | `import { OpenAIChatLanguageModel } from "@ai-sdk/openai/internal"` | the IMPORT scan (a documented subpath export; the regex anchored on the closing quote) |
+> | 4 | `export default openai;` | the export-surface pin (it enumerated the export spellings it feared) |
+> | 5 | leading whitespace before `export` | the rewritten export pin (anchored `^export`) |
+>
+> **A sixth regex was not written.** A pattern over source text cannot decide this question: a
+> provider is reachable through a renamed binding, an arbitrary subpath specifier, a non-literal
+> specifier (`import("@ai-sdk/" + "openai")`), any export spelling, and — with no provider package at
+> all — RAW HTTP. This repo already does the last one on a landed path: `vaultRag.ts`'s `embeddingV2`
+> (~:230-270) picks provider label, env-key NAME and endpoint URL at runtime and calls `fetch`,
+> holding zero provider imports. So "no module holds a private route table" was never true of this
+> codebase, and no regex was going to make it true.
+>
+> **WHAT REMAINS IN `lib/models.test.ts`:** the behavioural tests only — `resolveModel` routes `or/`
+> and `stealth/` ids to the OpenRouter provider with the right `modelId`, bare/`openai/` ids to
+> OpenAI, `google/` throws, and `resolveModel(DEFAULT_MODEL)` lands on OpenRouter. Those assert
+> `.provider`/`.modelId`, the values the AI SDK actually sends with. They say where THIS table
+> routes; they say nothing about who else routes.
+>
+> **THE GAP, STATED:** an eighth copy of the route table can be written under `convex/` and no test
+> will see it. Closing it needs an AST or type-level pass (or a lint rule) that resolves bindings —
+> not a pattern. Recorded with the same five escapes in
+> `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md`.
+>
+> The offline-fixture consent test is unaffected and still tested: `lib/env.ts`
+> `isOfflineFixtureConsent` is called by both `offlineSeamAvailable()` and the readiness screen, and
+> `models.test.ts` runs a table of literal values through both.)
+
+> Last verified: 2026-08-29 (**29-FIN-06 — THE CORRECTION BELOW WAS ITSELF FALSE, AND IS NOW
+> DELETED RATHER THAN REWRITTEN A THIRD TIME.** Comment-only in `llm.ts`; no behaviour changed, no
+> cockpit test changed.
+>
+> `runAgentLoop`'s skill loader first carried "only the three `USER_AUTHORABLE_SKILLS` can have an
+> overlay row at all, so every other specialist name resolves exactly as before". The 29-06 FIX
+> replaced that with "29-05 widened `USER_AUTHORABLE_SKILLS` to admit the six `pack-*` workflow-pack
+> skills". **It did not.** `packages/contracts/src/skill.ts` still lists exactly
+> `OFFER_ARCHITECT_SKILL`, `MONEY_MODEL_DESIGNER_SKILL`, `LEAD_ENGINE_SKILL`; 29-05 added a SEPARATE
+> channel, `skills.publishPackCustomization`. The second claim mattered more than the first, because
+> it read as justification for removing a sibling plan's fail-closed gate.
+>
+> **No closed set of names is asserted at that line any more.** The comment now says what
+> `loadEffectiveSkill` QUERIES — `tenantSkills` by `[tenantId, name, status: "active"]`, falling
+> through to the global active row — and points at the publish channels for the membership question,
+> because that is where it is decided. Activation of an overlay row is an `ownerMutation`.)
+
+> Last verified: 2026-08-28 (**WAVE-2 FINAL PASS.**
+>
+> **(1) The copy-drift guard's second iteration.** Superseded — the guard is DELETED; see the entry
+> at the top of this playbook for the five escapes and the gap that is now open.
+>
+> **(2) `offlineSeamAvailable()` LIVES HERE NOW**, in `lib/models.ts`, beside the table that decides
+> WHICH key is spent. `voiceDoc.ts` and `vaultDigest.ts` both need the identical "this deployment
+> holds no model credential" predicate, and a second copy of a credential check is the same
+> copy-drift defect `resolveModel` was just consolidated out of. It checks BOTH keys, because
+> `DEFAULT_MODEL` is an `or/` route and OpenRouter is the credential these producers actually spend.)
+
+> Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — a failed Gmail read was reported as an
+> empty successful one, and every model call in the repo was routed by one of seven copies of the
+> same function.**
+>
+> **(1) `gmail.knowledgeQuery` CHECKS ITS HTTP STATUS NOW, AND CATCHES ITS TRANSPORT.** Neither
+> `listRes.ok` nor the per-message `res.ok` was tested and nothing was caught, so a 500/429/403
+> parsed as `{}`, `messages` came back undefined, and the inbox adapter published
+> `{status: "available", source: "inbox", returned: 0}` — "we searched your mailbox and there is
+> nothing there" for a mailbox Gmail refused to show us. A refused BODY was worse: `{}` becomes two
+> empty strings and `Number(undefined ?? 0)` becomes 1970, i.e. an evidence row asserting that a
+> message exists and says nothing. A refused list is now `{ok: false, reason: "provider_error"}`;
+> a refused body is DROPPED and reported through the new `hydrationFailed` flag, which the adapter
+> turns into `partial/provider_error`.
+>
+> **The stub shape is load-bearing and the tests say so.** Gmail's error bodies are JSON, and a JSON
+> envelope PARSES — that is what hides a missing `res.ok`. An HTML error page throws on `.json()`
+> and gets caught, so a stub that only ever answers HTML cannot tell a module that checks the status
+> from one that does not; both mutations came back GREEN against the first version of these tests.
+>
+> **(2) THE EMPTY-QUERY THROW IS GONE, AND THE COMMENT THAT CALLED IT UNREACHABLE WAS FALSE.**
+> `clampSearchPlan` only requires one letter or digit, while `escapeGmailQuery` additionally drops
+> the bare boolean operators — so a planner emitting `"OR"`, `"AND"` or `"OR AND"` cleared the
+> boundary and made the adapter REJECT, under `Promise.allSettled`, where a rejection renders as
+> nothing. It returns `{ok: false, reason: "unplanned"}` now: no search of the mailbox happened,
+> which is neither Gmail's fault nor an empty result. The mirror claim in
+> `@pikar/core/knowledgeSearch` was corrected too — a guard justified by a claim about another
+> module is only as true as that claim.
+>
+> **(3) ONE MODEL ROUTE TABLE: `packages/backend/convex/lib/models.ts`.** `resolveModel` existed
+> SEVEN times and only `llm.ts`'s ever grew the `or/` branch, while `DEFAULT_MODEL` has been
+> `"or/openai/gpt-4o-mini"` since 845f4b1 — so every other copy hands an OpenRouter ROUTE id to the
+> OpenAI provider. `llm.ts` now delegates and keeps ONLY the `google/` branch, because
+> `@ai-sdk/google-vertex` is Node-only and `llm.ts` is the one `"use node"` module; the shared table
+> fails CLOSED on `google/` rather than silently routing it to OpenAI.
+>
+> **ALL SEVEN COPIES ARE CONVERTED — `llm.ts`, `blueprint.ts`, `onboarding.ts`, `vaultDigest.ts`,
+> `vaultLlm.ts`, `voiceDoc.ts`, `knowledgeLlm.ts`.** (An earlier revision of this entry said five of
+> them were still stale and pointed the reader at a named list in `lib/models.test.ts`. Commit
+> 2e6f276 converted them in the SAME round, so both halves of that sentence were false the day they
+> were written. A playbook asserting a live falsehood is worse than a stale one, because it reads as
+> verified.) `lib/models.test.ts` pins the END STATE, not a shrinking list: its allow-list is EMPTY,
+> and it fails if any module under `convex/` routes a model id to a provider itself.)
+>
+> Last verified: 2026-08-28 (29-03 — **`gmail.ts` GAINS A FIFTH READ VERB, `knowledgeQuery`, AND
+> IT IS DELIBERATELY NOT `search`.** `search` resolves a CONTACT: it asks `from:/to:` about a name,
+> fetches `format=metadata` only and never touches a body. `knowledgeQuery` asks a free-text
+> BUSINESS question and exists to fetch a bounded number of bodies, because a body is what the
+> Phase-29 toolless synthesis reads. Merging them would give the contact resolver a standing reason
+> to hydrate bodies it has never needed, so they stay two verbs with two privacy shapes.
+>
+> **THE ESCAPE IS THE SECURITY BOUNDARY.** `escapeGmailQuery` NEUTRALIZES every character that
+> carries Gmail search-operator meaning (`:` — which is what makes `from:`, `label:`, `has:`,
+> `in:`, `is:` operators at all — plus quotes, brackets, angle brackets and backslash) into a SPACE,
+> strips a leading `-`/`+` per token (Gmail's exclude/require prefixes: a planner phrase starting
+> with a dash would silently invert the search) and drops the bare uppercase `OR`/`AND`. It
+> neutralizes rather than dropping the whole token, so every word the planner wrote survives while
+> no operator it could have built does. **URL encoding does not protect this boundary** — Gmail
+> decodes `q` before it parses operators, the same trap `escapeDriveQueryLiteral` exists for. A
+> phrase with no letter or digit escapes to `""`, and the action THROWS rather than listing on an
+> empty `q` (an empty `q` returns arbitrary recent mail, i.e. an answer about messages nobody asked
+> about). That state is unreachable through the product: `clampSearchPlan` refuses such a query at
+> the planner boundary.
+>
+> **BOUNDS:** 25 ids listed (`maxResults`), 5 bodies hydrated, each body truncated to
+> `SEARCH_CAPS.evidenceTextCharCap` (1500). Listing wide and reading narrow is what makes it
+> "metadata first" rather than "download the mailbox". Selection is Gmail's own newest-first list
+> order — `ponytail:` ceiling, recency not relevance; the upgrade is a metadata fetch for all
+> `listed` ids and pure-code ranking, at 5x the quota.
+>
+> **NO AUDIT ROW, ON PURPOSE.** `search` writes `mailbox.searched` and `listInbox` writes
+> `mailbox.listed`; this verb writes nothing. A unified search reads several sources and owes
+> exactly ONE refs-only `knowledge.searched` event, owned by the plan-29-06 coordinator — per-source
+> events would let the log plane infer the shape of the question from how many rows appeared.
+> `gmail.test.ts` asserts the `audit` table is empty after a knowledge query.
+>
+> **NO SENDER LEAVES THE VERB.** `KnowledgeMailMessage` is `{id, subject, body, internalDate,
+> bodyTruncated}` — there is no `from`. The known boundary this respects: the LANDED toolless
+> firewall (`llmRedaction.test.ts`) is **BODY-scoped, not CONTENT-scoped**, so today's briefing path
+> already admits sender display names and subject lines into the tool-bearing loop. Phase 29 is
+> strictly tighter and must not be loosened toward it. `ponytail:` ceiling — an answer cannot say
+> "Sarah said X"; the upgrade path is a server-side sender table addressed by index, the
+> `buildRecipientView` idiom.
+>
+> Every existing `gmail.ts` invariant is unchanged and still enforced: GET-only reads, the POST set
+> pinned to `TOKEN_ENDPOINT` + `SEND_ENDPOINT`, zero mailbox-write endpoints, and the
+> `inboxFixtures` seam checked BEFORE the token (which `knowledgeQuery` also does, so the offline
+> eval corpus can exercise the inbox source with no mailbox). The fixture path FILTERS on the
+> escaped terms rather than returning the whole fixture — a seam that answered every question with
+> every fixture message would make every offline assertion built on it vacuous.
+>
+> **A BACKTICK IS DELIBERATELY ABSENT FROM `GMAIL_OPERATOR_CHARS`.** The first version included
+> one, and `skills.test.ts`'s "no long inline prompt string literals" scan went from 0 offenders
+> to 3 in `gmail.ts` — the longest a 1714-char span. That scan's string matcher is a regex, not
+> a tokenizer, so a lone backtick anywhere in source opens a template-literal span it cannot
+> close, and everything after it in the file goes unscanned for a hardcoded prompt (CLAUDE.md
+> §5). A backtick carries no Gmail query meaning, so neutralizing it bought nothing and blinded
+> a real guard for the whole file. If one ever needs neutralizing, fix the scanner first. The
+> scan's own header already records the same class of bug for `//` and for apostrophes; this is
+> the third instance and the first from the source side rather than from prose.
+>
+> The knowledge-plane mapping (evidence, authority, availability) lives in
+> `packages/backend/convex/knowledgeExternalSources.ts` and is documented in
+> `knowledge-search-routines.md`, not here. 15 new tests in `gmail.test.ts`; mutations M1-M6, M12
+> observed RED.)
+
 > Last verified: 2026-08-28 (28.1-01 — **`http.ts` GAINED A ROUTE THIS PLAYBOOK DOES NOT OWN.**
 > `POST /billing/stripe/webhook` is the Stripe webhook receiver for PIKAR'S OWN merchant account;
 > it is documented in `docs/playbooks/billing.md`, not here. It touches no cockpit surface — no
@@ -1975,9 +2320,11 @@
 >
 > **`llm.runSpecialistTurn`'s ordinary active-body read is now `internal.skills.getEffectiveSkill`
 > (tenant active overlay -> global active -> `NO_ACTIVE_SKILL`).** `tenantId` there is trusted
-> server state off the dispatcher's authenticated envelope, never model-supplied. Only the three
-> `USER_AUTHORABLE_SKILLS` can have an overlay row at all, so `research-specialist` and
-> `media-director` resolve exactly as before. **The exact-VERSION pin branch stays GLOBAL** — moving
+> server state off the dispatcher's authenticated envelope, never model-supplied. (This paragraph
+> used to add "only the three `USER_AUTHORABLE_SKILLS` can have an overlay row at all, so
+> `research-specialist` and `media-director` resolve exactly as before". Deleted 29-FIN-06: the
+> loader does not filter by name, and a second publish channel has since landed. Which names carry
+> an overlay row is decided at `skills.publishUserCandidate` / `skills.publishPackCustomization`.) **The exact-VERSION pin branch stays GLOBAL** — moving
 > it would silently re-point the eval runner's `--skill name@version` at a tenant row; tenant pins
 > are 21-03's. **Deliberately NOT threaded** into `runCockpitAgent`, voice, inbox, reply,
 > extraction, blueprint or vault loaders: those names are not authorable in v0, and every one of

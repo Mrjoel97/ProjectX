@@ -33,6 +33,8 @@ import {
   isAgentAuthorableSkill,
   isGatedSkill,
   isUserAuthorableSkill,
+  KNOWLEDGE_QUERY_PLANNER_SKILL,
+  KNOWLEDGE_SYNTHESIZER_SKILL,
   LEAD_ENGINE_SKILL,
   LEAN_CANVAS_SKILL,
   type LoadedSkill,
@@ -68,6 +70,8 @@ import { folderDigestSkillBody } from "@pikar/contracts/skills/folderDigest";
 import { graphExtractorSkillBody } from "@pikar/contracts/skills/graphExtractor";
 import { growthOsDiagnosticSkillBody } from "@pikar/contracts/skills/growthOsDiagnostic";
 import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
+import { knowledgeQueryPlannerSkillBody } from "@pikar/contracts/skills/knowledgeQueryPlanner";
+import { knowledgeSynthesizerSkillBody } from "@pikar/contracts/skills/knowledgeSynthesizer";
 import {
   KNOWLEDGE_WORK_PINNED_AT,
   KNOWLEDGE_WORK_PROVENANCE,
@@ -93,9 +97,15 @@ import { swotSkillBody } from "@pikar/contracts/skills/swot";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import {
+  type CustomizationError,
+  canonicalCustomization,
+  checkBaseVersion,
+  customizationSchemaFor,
   hasPassingPackBrowserEvidence,
   hasValidPackProvenance,
   isWorkflowPackSkill,
+  renderCustomization,
+  validateCustomization,
   WORKFLOW_PACK_SKILL_NAMES,
 } from "@pikar/core";
 import { v } from "convex/values";
@@ -258,7 +268,7 @@ async function planGlobalActivation(
 }
 
 /**
- * The TENANT overlay's plan (21-04). Two things differ from the global scope and only two:
+ * The TENANT overlay's plan (21-04). Differences from the global scope:
  *
  *  1. **The exemption is a COLUMN, not a status.** Globally, `archived`/`rolled_back` prove prior
  *     activation because nothing else can produce those statuses in the `skills` table. In
@@ -269,6 +279,8 @@ async function planGlobalActivation(
  *     the code-owned core.
  *  2. **Evidence names the ROW.** `hasPassingTenantEvidence` compares candidateId, registryTenantId,
  *     name AND version, because two tenants can each own `offer-architect@2` (21-02/21-03).
+ *  3. **A workflow-pack name never reaches either of those** (29-05) — the branch below throws
+ *     before any evidence is read. Its reasoning is on that branch.
  *
  * Owner authorization is deliberately NOT here. This helper is also the identity-free path for
  * internal callers, and `requireOwner` lives on the public wrapper — two independent gates
@@ -281,6 +293,38 @@ async function planTenantActivation(
   ownerUserId?: Id<"users">,
 ): Promise<ActivationPlan> {
   const row = await loadTenantCandidate(ctx, candidateId);
+
+  // THE PACK GATE HAS NO TENANT LANE, SO THE TENANT LANE FAILS CLOSED (29-05 remediation).
+  //
+  // `publishPackCustomization` is the first production writer that can mint a `pack-*` row in
+  // `tenantSkills`. Before it, every pack name was refused by `publishUserCandidate`
+  // (NOT_USER_AUTHORABLE) and by `publishAgentCandidate`, so this asymmetry was unreachable; after
+  // it, a tenant pack body would otherwise have activated on `hasPassingTenantEvidence` — which is
+  // exactly the suite-less `run-eval-golden.mjs` predicate `assertPackActivationEvidence`'s own
+  // comment names as the thing the pack gate exists to refuse. Same body class, same deployment,
+  // two different gates.
+  //
+  // This is NOT "the same three planes here": `tenantSkills` has no `provenance` and no
+  // `browserEvidence` COLUMN (schema.ts), so two of the three planes have nowhere to be written and
+  // `hasPassingPackEvalEvidence` has no tenant-scoped runner to satisfy it. Rather than run a
+  // weaker subset and call it the gate, the throw sits ahead of the mode switch, so activate-user,
+  // activate-agent and rollback all take it. Rollback is included for the same reason it is safe to
+  // include: the single `status: "active"` patch in this module (`transitionSkillActivation`, whose
+  // uniqueness `skills.test.ts` counts) routes every tenant target through here, so a name this
+  // branch always throws on has no live version to restore. A pack body changes at GLOBAL scope,
+  // through the three-plane gate.
+  //
+  // Publishing is untouched: a tenant may still mint the candidate, and it stays a candidate. It is
+  // NOT unreachable — the `tenantSkillIds` pin rail runs a candidate body by row id (see
+  // `publishPackCustomization`'s docstring for that door and what governs it). When a tenant pack
+  // lane is genuinely wanted, the work is the two evidence columns plus a tenant-scoped pack eval
+  // runner — not deleting this branch.
+  if (isWorkflowPackSkill(row.name)) {
+    throw new Error(
+      `${PACK_GATE_ERROR}: ${row.name} is a workflow pack — the tenant overlay carries no provenance or browser evidence, so a tenant pack candidate cannot be activated at any scope`,
+    );
+  }
+
   let ownerApproval: OwnerApproval | null = null;
 
   if (mode === "activate-user") {
@@ -635,6 +679,19 @@ const SEEDS = [
   // SEED BEFORE THIS SHIPS: `classifyDoc` loads it fail-closed, and on an unseeded deployment
   // every document classifies as `unclassified` (degraded label, never a failed document).
   { name: DOCUMENT_CLASSIFIER_SKILL, body: documentClassifierSkillBody },
+  // GATED (29-04, KNOW-01): the two TOOLLESS knowledge calls — a query planner and a cited
+  // synthesizer. APPEND-ONLY — these rows go LAST; do not reorder or touch the rows above.
+  // As NEW names they take the `rows.length === 0` branch below and land at v1 `active`, so
+  // bootstrap needs no eval cycle and no paid run. THE FIRST BODY EDIT IS DIFFERENT: it mints a
+  // candidate the EVAL_GATE holds until a green `--skill <name>@N` run records evidence, and the
+  // golden runner can only reach these calls once plan 29-06 lands the cockpit knowledge tool and
+  // threads `skillVersions` into `knowledgeLlm`. Read the reachability warning on
+  // KNOWLEDGE_QUERY_PLANNER_SKILL in contracts/src/skill.ts before editing either body.
+  // SEED BEFORE 29-06 SHIPS: both `knowledgeLlm` actions load fail-closed (getActiveSkill throws
+  // NO_ACTIVE_SKILL), so on an unseeded deployment a knowledge search errors rather than
+  // synthesizing from a hardcoded fallback — which is the correct direction and is deliberate.
+  { name: KNOWLEDGE_QUERY_PLANNER_SKILL, body: knowledgeQueryPlannerSkillBody },
+  { name: KNOWLEDGE_SYNTHESIZER_SKILL, body: knowledgeSynthesizerSkillBody },
 ];
 
 /** Every seeded skill name. Derived from `SEEDS`, never typed a second time. */
@@ -1278,79 +1335,315 @@ export const publishUserCandidate = tenantMutation({
   args: { name: v.string(), authoredBody: v.string() },
   handler: async (ctx, { name, authoredBody }) => {
     // The closed v0 product set — deliberately NARROWER than GATED_SKILLS. Refused before any read.
+    // A WORKFLOW PACK NAME IS REFUSED HERE, and 29-05 did not change that: packs are customized
+    // through `publishPackCustomization`'s closed FORM, which renders the body server-side. Widening
+    // this list to admit them would have handed pack customization the wider capability (arbitrary
+    // prose in a pack body) that the form exists to withhold.
     if (!isUserAuthorableSkill(name)) throw new Error(`NOT_USER_AUTHORABLE: ${name}`);
 
-    const { core, base, body, authored, newest } = await readTenantPublishState(
-      ctx,
-      ctx.tenantId,
-      name,
-      authoredBody,
-    );
-    // Idempotence compares the TRIMMED stored text and the exact base lineage — the same
-    // adaptation against a NEW base is a real new candidate, not a repost.
-    const duplicate =
-      newest !== null &&
-      newest.status === "candidate" &&
-      newest.author === "user" &&
-      newest.authoredBody === authored &&
-      newest.basedOnScope === base.scope &&
-      newest.basedOnVersion === base.version;
-
-    const prior = await ensureRollbackBaseline(ctx, ctx.tenantId, name, core, base, newest);
-
-    const { version, inserted } = allocateImmutableVersion(prior, duplicate);
-    // `duplicate` already implies `newest !== null`; the re-test is what narrows it for the
-    // compiler without a non-null assertion.
-    if (!inserted && newest !== null)
-      return {
-        name,
-        version,
-        status: "candidate" as const,
-        inserted: false,
-        tenantSkillId: newest._id,
-      };
-
-    const tenantSkillId = await ctx.db.insert("tenantSkills", {
+    const state = await readTenantPublishState(ctx, ctx.tenantId, name, authoredBody);
+    return insertTenantUserCandidate(ctx, {
       tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      name,
+      state,
+    });
+  },
+});
+
+/** WHICH approved pack template produced a candidate, and the fingerprint of the exact form values.
+ *  Every field is SERVER-DERIVED (29-05) — the closed template id off `resolveWorkflowPack`, the
+ *  live registry version, the validated values, and the hash of the canonical lineage string. */
+type PackTemplateLineage = {
+  templateId: string;
+  templateVersion: number;
+  customizationValues: string;
+  customizationHash: string;
+  fieldCount: number;
+};
+
+/**
+ * THE ONE TENANT CANDIDATE WRITER (21-02, extended by 29-05). Both authoring channels — Phase 21's
+ * free-text adaptation and Phase 29's closed pack form — land here, so candidate-only status,
+ * authenticated provenance, the rollback baseline, immutable version allocation, idempotence and
+ * the refs-only audit row cannot be true on one path and absent on the other.
+ *
+ * `authoredBody` reaches this function ALREADY COMPOSED by `readTenantPublishState`. It is bytes the
+ * caller chose, and the pack channel's whole safety story is that its caller rendered them from a
+ * closed schema rather than accepting them from a client.
+ */
+async function insertTenantUserCandidate(
+  ctx: MutationCtx,
+  args: {
+    tenantId: string;
+    userId: Id<"users">;
+    name: string;
+    state: Awaited<ReturnType<typeof readTenantPublishState>>;
+    template?: PackTemplateLineage;
+  },
+): Promise<{
+  name: string;
+  version: number;
+  status: "candidate";
+  inserted: boolean;
+  tenantSkillId: Id<"tenantSkills">;
+}> {
+  const { tenantId, userId, name, template } = args;
+  const { core, base, body, authored, newest } = args.state;
+  // Idempotence compares the TRIMMED stored text and the exact base lineage — the same
+  // adaptation against a NEW base is a real new candidate, not a repost. It also compares the
+  // TEMPLATE lineage: identical form values rendered against a REPUBLISHED pack template produce
+  // identical bytes but are a different candidate, because the base body they adapt has moved.
+  // Both comparands are `undefined` on the free-text path, so that path's rule is unchanged.
+  const duplicate =
+    newest !== null &&
+    newest.status === "candidate" &&
+    newest.author === "user" &&
+    newest.authoredBody === authored &&
+    newest.basedOnScope === base.scope &&
+    newest.basedOnVersion === base.version &&
+    newest.templateId === template?.templateId &&
+    newest.templateVersion === template?.templateVersion;
+
+  const prior = await ensureRollbackBaseline(ctx, tenantId, name, core, base, newest);
+
+  const { version, inserted } = allocateImmutableVersion(prior, duplicate);
+  // `duplicate` already implies `newest !== null`; the re-test is what narrows it for the
+  // compiler without a non-null assertion.
+  if (!inserted && newest !== null)
+    return {
       name,
       version,
-      body,
-      authoredBody: authored,
-      // CANDIDATE, always. There is no code path from this mutation to an activation function.
-      status: "candidate",
-      author: "user",
-      // Provenance from the AUTHENTICATED context, never from an argument.
-      authorUserId: ctx.userId,
-      basedOnName: name,
-      basedOnVersion: base.version,
-      ...lineageOf(base),
-      // Code-owned: a candidate that was never active has nothing to roll back to.
-      rollbackEligible: false,
-      createdAt: Date.now(),
-    });
+      status: "candidate" as const,
+      inserted: false,
+      tenantSkillId: newest._id,
+    };
 
-    // CLAUDE.md §4: refs, hashes, ids and counts ONLY. The adaptation and the composed body are
-    // content-plane data and never reach this payload — `skills.test.ts` pins the key set by
-    // EQUALITY and needle-scans audit + deadLetters, so adding a body field fails on purpose.
-    await ctx.runMutation(internal.audit.log, {
+  const tenantSkillId = await ctx.db.insert("tenantSkills", {
+    tenantId,
+    name,
+    version,
+    body,
+    authoredBody: authored,
+    // A LITERAL, not a variable and not an argument — neither channel can choose the status it
+    // publishes at. The module-wide guarantee is one level up: `skills.test.ts` counts exactly one
+    // `status: "active"` patch in this file and pins it inside `transitionSkillActivation`.
+    status: "candidate",
+    author: "user",
+    // Provenance from the AUTHENTICATED context, never from an argument.
+    authorUserId: userId,
+    basedOnName: name,
+    basedOnVersion: base.version,
+    ...lineageOf(base),
+    // 29-05: the template half of the lineage. Absent on the free-text path.
+    ...(template === undefined
+      ? {}
+      : {
+          templateId: template.templateId,
+          templateVersion: template.templateVersion,
+          customizationValues: template.customizationValues,
+          customizationHash: template.customizationHash,
+        }),
+    // Code-owned: a candidate that was never active has nothing to roll back to.
+    rollbackEligible: false,
+    createdAt: Date.now(),
+  });
+
+  // CLAUDE.md §4: refs, hashes, ids and counts ONLY. The adaptation, the composed body and the
+  // submitted form VALUES are content-plane data and never reach this payload — `skills.test.ts`
+  // pins the key set by EQUALITY on both channels and needle-scans audit + deadLetters, so adding
+  // a body, a label or a field value fails on purpose. `templateId` is a closed code-owned id, and
+  // `customizedFieldCount` is a count of declared keys, never their names.
+  await ctx.runMutation(internal.audit.log, {
+    tenantId,
+    correlationId: String(tenantSkillId),
+    eventType: "skill.user_candidate_published",
+    actor: "user",
+    payload: {
+      skillName: name,
+      tenantSkillId: String(tenantSkillId),
+      version,
+      baseScope: base.scope,
+      baseSkillId: String(base.skillId),
+      baseVersion: base.version,
+      author: "user",
+      bodyHash: await contentHash(body),
+      authoredBytes: new TextEncoder().encode(authored).length,
+      ...(template === undefined
+        ? {}
+        : {
+            templateId: template.templateId,
+            templateVersion: template.templateVersion,
+            customizationHash: template.customizationHash,
+            customizedFieldCount: template.fieldCount,
+          }),
+    },
+  });
+
+  return { name, version, status: "candidate" as const, inserted: true, tenantSkillId };
+}
+
+/** The refusals of the pack-customization channel. Every one of them is a USER MISTAKE, not a bug,
+ *  so it comes back as DATA (the `PackRunResult` posture, one lane over) and carries no user text:
+ *  the caller already knows what it sent, and an error string is the one place stray content
+ *  reaches a log. `errors` echoes the caller's own submitted keys back to the caller alone. */
+export type PackCustomizationResult =
+  | {
+      ok: true;
+      name: string;
+      version: number;
+      status: "candidate";
+      inserted: boolean;
+      tenantSkillId: Id<"tenantSkills">;
+      customizationHash: string;
+    }
+  | { ok: false; reason: "unknown_template" }
+  | { ok: false; reason: "template_not_active" }
+  | { ok: false; reason: "stale_template_version"; approvedVersion: number }
+  | { ok: false; reason: "stale_base_version"; currentBaseVersion: number | null }
+  | { ok: false; reason: "empty_customization" }
+  | { ok: false; reason: "invalid_values"; errors: readonly CustomizationError[] };
+
+/**
+ * Publish a tenant's WORKFLOW PACK customization as an immutable candidate (29-05, ROUT-01).
+ *
+ * THE ARGUMENT LIST IS THE WHOLE AUTHORIZATION STORY, and it is deliberately narrower than
+ * `publishUserCandidate`'s: four fields, and no field named `authoredBody`, `body`, `tools` or
+ * `name`. Convex's arg validator rejects an extra key outright, so those are refused at the boundary
+ * rather than by a check.
+ *
+ * PROSE DOES REACH THE BODY, and pretending otherwise is the failure mode this sentence exists to
+ * prevent. `business_terms` (400 bytes) and `extra_guidance` (1200 bytes) are declared free-text
+ * fields, and their trimmed content is rendered verbatim into `tenantSkills.body` under the
+ * adaptation marker. The defensible property is narrower and different: the prose is BOUNDED (1600
+ * bytes across the two, against the free-text door's 4000) and CONTENT-SCANNED
+ * (`FORBIDDEN_VALUE_PATTERNS`), and it arrives under a key the schema declared rather than in a
+ * caller-chosen shape. A pack candidate still needs prompt-content review; what a tenant cannot do
+ * is choose the field, the size or the position.
+ *
+ * THE REGISTRY NAME IS DERIVED, NOT SUPPLIED. `customizationSchemaFor` resolves `templateId` through
+ * `resolveWorkflowPack`'s closed six-id registry (which uses `Object.hasOwn`, so `__proto__` and
+ * `constructor` are refused rather than resolved), and the name is `pack-<resolved id>`. That is a
+ * stronger property than an allow-list check: there is no string a caller can send that produces a
+ * registry name outside `WORKFLOW_PACK_SKILL_NAMES`. `skills.test.ts` pins that set as literals and
+ * proves the pack names are in NEITHER `USER_AUTHORABLE_SKILLS` nor `AGENT_AUTHORABLE_SKILLS`.
+ *
+ * SIX REFUSALS, in this order, and the order is what makes the first two meaningful. ALL SIX come
+ * back as DATA (`{ok:false, reason}`), never as a throw — a governed refusal is a form the UI can
+ * render, and a 500 is not:
+ *  1. UNKNOWN TEMPLATE — before any read.
+ *  2. INVALID VALUES — layer 1 refuses an undeclared KEY before its value is looked at, then layer 2
+ *     content-scans the declared free-text fields (`validateCustomization`, @pikar/core).
+ *  3. EMPTY FORM — an empty adaptation is not a customization; `composeUserSkillBody` would throw.
+ *  4. TEMPLATE NOT ACTIVE — and this one is ORDINARY, not exotic: `seedPackCandidates` writes all
+ *     six pack rows as `candidate`, and each becomes active only once the owner clears the
+ *     three-plane pack gate for it. Checked HERE, before `readTenantPublishState`, because that
+ *     helper reaches `loadSkill`, which throws `NO_ACTIVE_SKILL` — so on any deployment where a
+ *     pack is seeded but not yet activated, the tenant's customization form would 500 rather than
+ *     say "not available yet". One extra indexed read on a path that is about to do several.
+ *  5. STALE TEMPLATE VERSION — the form must have been rendered against the pack body that is LIVE.
+ *     A form built against an older template may no longer mean what the live body says it means.
+ *  6. STALE BASE VERSION — optimistic concurrency against the tenant's newest row. No merge: two
+ *     people editing one workflow's thresholds cannot both be satisfied, and silent last-write-wins
+ *     is the version of that failure nobody notices.
+ *
+ * NOTHING HERE ACTIVATES, AND ACTIVATION IS REFUSED DOWNSTREAM. `planTenantActivation` throws
+ * `PACK_GATE` for any name `isWorkflowPackSkill` accepts — membership in `WORKFLOW_PACK_SKILL_NAMES`,
+ * not a `pack-` prefix — ahead of its mode switch, because the tenant overlay has no `provenance`
+ * and no `browserEvidence` column to satisfy the three-plane pack gate with. `skills.test.ts` ("a
+ * pack-named TENANT candidate with Phase-21 evidence is still REFUSED") drives that with evidence
+ * that would otherwise have passed, and asserts `loadEffectiveSkill` still serves the global body.
+ *
+ * A ROW MINTED HERE IS STILL RUNNABLE, AND AN EARLIER VERSION OF THIS COMMENT DENIED IT. The
+ * `tenantSkillIds` rail pins a `tenantSkills` row BY ID into `runSpecialistTurn`, and a `pack-*` row
+ * resolves through it like any other — `workflowPackBinding.test.ts` ("the pinned CANDIDATE body
+ * runs, not the tenant's effective one") runs one and reads the candidate's version back. What
+ * governs that door: the pin is declared only on `internalAction`s; `runPackTurn` compares
+ * `row.tenantId` to the run's tenant before `preCall`; `runSpecialistTurn` refuses a row whose
+ * `name` is not the skill being run; the tool grant comes from `toolsForWorkflowPack`, so the pinned
+ * body has no vote on it; and the run patches no status. `cockpit.ts`, the only production caller of
+ * `runWorkflowPack`, passes `skillVersions` (a global preview pin) and no `tenantSkillIds` — so what
+ * a tenant publishes here is inert until some caller pins it. Recorded in the playbook, not closed.
+ *
+ * This mutation never touches the ADR-003 global `skills` table.
+ */
+export const publishPackCustomization = tenantMutation({
+  args: {
+    /** A closed Phase 27 pack id (`business-pulse`, …), NOT a registry name. `v.string()` because
+     *  `resolveWorkflowPack` is the fail-closed door and its refusal must be reachable to be
+     *  testable — the `packArgs` precedent in `workflowPackBinding.ts`. */
+    templateId: v.string(),
+    /** The approved template version the form was rendered against. */
+    templateVersion: v.number(),
+    /** The tenant's newest candidate version this edit is based on; `null` means "I believe this
+     *  pack has never been customized here". */
+    baseCandidateVersion: v.union(v.number(), v.null()),
+    /** The submitted form. Every value is a string, a number or a string list; there is no nested
+     *  object and no boolean, so a tool grant or an MCP block has no shape to arrive in even before
+     *  the closed key set refuses its name. */
+    values: v.record(v.string(), v.union(v.string(), v.number(), v.array(v.string()))),
+  },
+  handler: async (
+    ctx,
+    { templateId, templateVersion, baseCandidateVersion, values },
+  ): Promise<PackCustomizationResult> => {
+    const resolved = customizationSchemaFor(templateId, templateVersion);
+    if (!resolved.ok) return { ok: false, reason: "unknown_template" };
+    const customizationSchema = resolved.value;
+    const name = `pack-${customizationSchema.templateId}`;
+
+    const checked = validateCustomization(customizationSchema, values);
+    if (!checked.ok) return { ok: false, reason: "invalid_values", errors: checked.error };
+    const accepted = checked.value;
+
+    // Rendered from the SCHEMA's field order, never the submitted object's key order, so two UIs
+    // produce byte-identical bodies and the lineage hash means something.
+    const authoredBody = renderCustomization(customizationSchema, accepted);
+    if (authoredBody.trim() === "") return { ok: false, reason: "empty_customization" };
+
+    // Refusal 4. The same read `loadSkill` is about to do, asked as a QUESTION rather than as an
+    // assertion — a seeded-but-not-yet-activated pack is a normal deployment state, not a bug, and
+    // the tenant-facing form must get a reason back instead of a 500.
+    const active = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) => q.eq("name", name).eq("status", "active"))
+      .unique();
+    if (active === null) return { ok: false, reason: "template_not_active" };
+
+    const state = await readTenantPublishState(ctx, ctx.tenantId, name, authoredBody);
+
+    // The approved template IS the global active pack row. A form rendered against any other
+    // version is refused rather than composed onto a body it was not designed for.
+    if (state.core.version !== templateVersion) {
+      return { ok: false, reason: "stale_template_version", approvedVersion: state.core.version };
+    }
+
+    const currentBaseVersion = state.newest?.version ?? null;
+    if (!checkBaseVersion(baseCandidateVersion, currentBaseVersion).ok) {
+      return { ok: false, reason: "stale_base_version", currentBaseVersion };
+    }
+
+    // ONE hash implementation: the pure package returns the canonical STRING, `lib/hash.ts` hashes
+    // it. @pikar/core has no crypto dependency and must not grow a weaker digest of its own.
+    const customizationHash = await contentHash(
+      canonicalCustomization(customizationSchema, accepted),
+    );
+    const res = await insertTenantUserCandidate(ctx, {
       tenantId: ctx.tenantId,
-      correlationId: String(tenantSkillId),
-      eventType: "skill.user_candidate_published",
-      actor: "user",
-      payload: {
-        skillName: name,
-        tenantSkillId: String(tenantSkillId),
-        version,
-        baseScope: base.scope,
-        baseSkillId: String(base.skillId),
-        baseVersion: base.version,
-        author: "user",
-        bodyHash: await contentHash(body),
-        authoredBytes: new TextEncoder().encode(authored).length,
+      userId: ctx.userId,
+      name,
+      state,
+      template: {
+        templateId: customizationSchema.templateId,
+        templateVersion,
+        // CONTENT PLANE, like `savedPrompts.text`: the tenant's own words, stored on their own row
+        // so the form can be reopened. It never reaches an audit payload (CLAUDE.md §4).
+        customizationValues: JSON.stringify(accepted),
+        customizationHash,
+        fieldCount: Object.keys(accepted).length,
       },
     });
-
-    return { name, version, status: "candidate" as const, inserted: true, tenantSkillId };
+    return { ok: true, ...res, customizationHash };
   },
 });
 

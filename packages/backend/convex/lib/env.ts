@@ -359,6 +359,16 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   },
   { name: "FAL_FIXTURE", tier: "fixture", whatBreaks: "Nothing. Set = fal.ai calls are FAKED." },
   {
+    // `lib/models.offlineSeamAvailable()` — the OPERATOR HALF of the vault-digest / voice-doc
+    // fixture gate. It was the ABSENCE of both model keys alone, which made a deployment that
+    // merely LOST its keys fabricate digests silently instead of failing; consent is now positive
+    // and it is reported here, on the same footing as the media fixtures.
+    name: "PIKAR_OFFLINE_FIXTURES",
+    tier: "fixture",
+    whatBreaks:
+      'Nothing. Set to "1" ON A KEYLESS deployment = folder digests and voice-doc review are FAKED from a local fixture with no model call. Ignored while either model key is set.',
+  },
+  {
     name: "PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE",
     tier: "fixture",
     whatBreaks: "Nothing. Set = the Graph concurrency probe may run against a disposable account.",
@@ -381,6 +391,32 @@ export const REQUIRED_ENV = ENV_MANIFEST.filter((e) => e.tier === "required").ma
 export const FEATURE_ENV = ENV_MANIFEST.filter((e) => e.tier === "feature").map((e) => e.name);
 
 /**
+ * THE ONE CONSENT TEST FOR THE OFFLINE-FIXTURE SEAM. Both deciders call it; neither owns a rule.
+ *
+ * "Is this fixture seam on?" was answered in two places with two rules: `lib/models.ts`
+ * `offlineSeamAvailable()` required the literal `"1"`, while `fixturesActive` below used the
+ * generic `!read(name)?.trim()`. So `PIKAR_OFFLINE_FIXTURES=on` — the spelling every other fixture
+ * flag in this repo accepts — gave an operator all three of: a readiness screen saying a
+ * fabrication seam is LIVE, a fixture that is silently OFF, and an unexplained
+ * `OPENROUTER_API_KEY is not set`. One question, one predicate.
+ *
+ * The rule is the literal `"1"`, which is what this manifest row's `whatBreaks` string tells the
+ * operator to set. `""` and a leftover `"0"` are the operator saying NO, so a `!== undefined` check
+ * is wrong in the unsafe direction. A value that is neither (`on`, `true`) reads as OFF in BOTH
+ * places now, which is coherent and fails toward the loud missing-key throw.
+ *
+ * NOT re-exported as a `process.env` read: `lib/models.ts` keeps the LITERAL
+ * `process.env.PIKAR_OFFLINE_FIXTURES`, because `env.test.ts`'s "no manifest entry is dead" drift
+ * scan only sees literal reads and a helper indirection would make this row look dead.
+ *
+ * Pinned by `lib/models.test.ts` — a table of literal values run through BOTH sites, which fails if
+ * either grows its own rule again.
+ */
+export const OFFLINE_FIXTURES_ENV = "PIKAR_OFFLINE_FIXTURES";
+export const isOfflineFixtureConsent = (value: string | undefined): boolean =>
+  value?.trim() === "1";
+
+/**
  * Which manifest names are unset, by tier. NAMES ONLY — never a value, never a length, never a
  * prefix. A blank or whitespace-only value counts as unset: `convex env set X ""` is the most
  * common way a key looks configured and is not.
@@ -396,7 +432,21 @@ export function missingEnv(read: (name: string) => string | undefined): {
     missingFeature: FEATURE_ENV.filter(unset),
     // Reported because a fixture seam left on in production silently FAKES a provider — a failure
     // that looks like success, which is the worst kind to leave undetectable.
-    fixturesActive: ENV_MANIFEST.filter((e) => e.tier === "fixture" && !unset(e.name))
+    //
+    // `PIKAR_OFFLINE_FIXTURES` is read through `isOfflineFixtureConsent`, the SAME value test its
+    // consumer `offlineSeamAvailable()` uses, so the two agree on WHETHER THE VALUE IS CONSENT.
+    // They still differ deliberately on one thing: this screen reports the flag alone, while the
+    // seam ANDs it with "neither model key is set". On a keyed deployment the screen therefore
+    // reports the flag ACTIVE while the seam is inert — a fixture warning louder than the seam is
+    // the safe direction. Both halves are pinned by the literal-value table in `models.test.ts`.
+    // Every OTHER fixture-tier name keeps the generic non-blank test below.
+    fixturesActive: ENV_MANIFEST.filter((e) =>
+      e.tier !== "fixture"
+        ? false
+        : e.name === OFFLINE_FIXTURES_ENV
+          ? isOfflineFixtureConsent(read(e.name))
+          : !unset(e.name),
+    )
       .map((e) => e.name)
       // Convex sets these two itself; they are not seams and their presence is not a warning.
       .filter((n) => n !== "CONVEX_CLOUD_URL" && n !== "NEXT_PUBLIC_CONVEX_URL"),

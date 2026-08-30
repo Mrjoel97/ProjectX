@@ -7,12 +7,17 @@ import { defineConfig } from "vitest/config";
 // nowhere while reading as coverage in the diff and in review; the adversarial pass caught it, and
 // two waves' worth of UI guarantees had to be smuggled into `packages/core` instead.
 //
-// SCOPE IS DELIBERATELY `.ts`, NOT `.tsx`. This runs the PURE modules that sit beside the
-// components — copy builders, formatters, pure derivations — in a plain node environment. There is
-// no jsdom and no testing-library, so React components still cannot be rendered here.
-// ponytail: the smallest thing that closes the "a test file here is decoration" gap. Adding jsdom +
-// @testing-library/react is the upgrade path when a component guarantee actually needs rendering;
-// it is two more dependencies and should be a deliberate choice, not a side effect of this one.
+// SCOPE IS DELIBERATELY `.ts`, NOT `.tsx`, and the DEFAULT environment is node: this runs the PURE
+// modules that sit beside the components — copy builders, formatters, pure derivations — plus the
+// SSR renders (`react-dom/server` needs no DOM).
+//
+// THE UPGRADE PATH WAS TAKEN, ONCE, AND IT IS PER-FILE. 29-07-FIX2 added `jsdom` (one devDependency,
+// no testing-library) because four mutations that made `/dashboard/workflows` functionally inert
+// passed the whole customizer suite: SSR renders a component from props and fires no event, so it
+// can say nothing about whether a container is wired to its view. A file that needs a DOM opts in
+// with a `// @vitest-environment jsdom` docblock and drives React itself (`createRoot` + `act`);
+// `WorkflowPackCustomizer.container.test.ts` is the one that does. Everything else still runs in
+// node, which is faster and keeps a missing-DOM failure loud instead of accidental.
 //
 // Component-level guarantees that cannot move into a pure module still belong in
 // `packages/core/src/vaultSurface.test.ts`, which reads the surface as SOURCE TEXT.
@@ -26,7 +31,8 @@ export default defineConfig({
   esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
-    // `.ts` only — a `.tsx` file here would silently need a DOM and fail confusingly.
+    // `.ts` only — a `.tsx` file here would silently need the JSX transform to reach it through a
+    // different path; `createElement` is what the two rendering suites use instead.
     include: ["app/**/*.test.ts", "lib/**/*.test.ts"],
     // FALSE ON PURPOSE. If this workspace ever has no test files, that is the exact condition this
     // config was created to make visible — a silent green run is how the last gap survived.

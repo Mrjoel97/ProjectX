@@ -1,5 +1,68 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-30 (**MERGE-ONLY ENTRY — the Phase 29 lane integrating `origin/main`.** No
+> behaviour in this subsystem changed on the 29 side. Two things landed here and both are recorded
+> because the classification registry is the export/deletion walk's only map:
+>
+> 1. From `origin/main` (Phase 28.1, already reviewed in PR #31): `billingStripeEvents: "global"`,
+>    with the reason stated on the entry — erasing it on a tenant deletion would let a REDELIVERED
+>    Stripe event re-apply, since the row is the only record the event was already seen. **This
+>    entry does not re-verify that decision**; it records that the merge carried it in.
+> 2. RESOLVED HERE, and it is the hazard this file has hit before: `tenantData.test.ts`'s table-count
+>    tripwire conflicted because BOTH lanes added tables and each bumped the number for its own.
+>    Either side's figure resolves the conflict "cleanly" and is wrong by the other side's count —
+>    the same shape as the red 28.1-01 found, where the tripwire had been failing on its own
+>    arithmetic and a genuinely unclassified table would have looked identical. **52 was DERIVED
+>    from the merged `schema.ts` and `tenantData.ts`** (52 tables, 52 classifications, nothing
+>    unclassified in either direction), not carried over from a branch, and the test comment now
+>    says to re-derive it the same way after any future merge rather than pick a side.
+>
+> `tenantData.test.ts` 4/4, `packages/core` 1476/1476 on the merged tree.)
+
+
+> Last verified: 2026-08-28 (29-06 REMEDIATION — **A SECOND KNOWLEDGE EVENT, AND THE FIRST
+> KEY-ALLOWLIST TEST IN THIS TABLE.**
+>
+> `knowledge.search_stopped` joins `knowledge.searched`, written by `convex/knowledgeSearch.ts` and
+> by nothing else. It fires when the budget is exhausted BETWEEN the fan-out and the synthesis — the
+> connectors have already been read and the planner has already charged, but there is no answer and
+> no `knowledgeSearches` row, so that run previously left NO governance trace at all. Refs and counts
+> only: `questionHash`, a code-owned `stoppedAt` stage token, `stopReason` (`guardrails.preCall`'s
+> closed enum, never a provider message), `evidenceCount` plus the three coverage counts (which is
+> what says the connectors were reached), `adapterCrashCount`, `rejectedPlanCount`,
+> `plannerFallback`, `planRunRef`, `plannerSkillVersion`, `durationMs`. **Exactly one of the two
+> events fires per run**; a stop before the planner writes neither.
+>
+> **AND `AUDIT_VIEWER_EVENTS` NOW HAS ONE ROW THAT IS TESTED RATHER THAN HAND-MAINTAINED.** Both
+> `knowledge.*` rows are pinned by `packages/backend/convex/knowledgeSearch.test.ts` against the
+> STORED payload — `Object.keys(payload)` must equal the allowlist row exactly, and every one of
+> `redactedSearchEvent`'s 14 output keys must be present. This table fails CLOSED (a forgotten key is
+> silently never shown), so drift here is invisible in production: deleting `"adapterCrashCount"`
+> from the `knowledge.searched` row previously left the ENTIRE contracts and backend suites green.
+> It is now RED. The other ~90 events remain hand-listed — only `knowledge.*` has an exported pure
+> projection to derive from, and the general fix is a write-site change, not a wider table.)
+>
+> Last verified: 2026-08-28 (29-06 — **ONE NEW AUDIT EVENT: `knowledge.searched`**, written by
+> `convex/knowledgeSearch.ts` and by nothing else. `actor: "system"`, `correlationId` = the
+> coordinator's own run uuid. The payload is `@pikar/core`'s `redactedSearchEvent` projection plus
+> eight run refs/counts, and it is registered in `AUDIT_VIEWER_EVENTS` with all 22 keys — every one
+> a ref, a hash, a count, a boolean or a closed enum. **The absences are the contract**: the
+> question is present ONLY as `questionHash`, and there is no summary, claim text, label, excerpt,
+> `sourceRef`, subject, sender or file name — those live on the tenant's own `knowledgeSearches`
+> content row. The planner's REJECTED SOURCE NAMES are model-authored strings, so only
+> `rejectedPlanCount` crosses. `unavailableReasons` is the one array: closed `UnavailableReason`
+> values, at most `KNOWLEDGE_SOURCES.length` = 5 members, well inside `MAX_REF_ARRAY_LENGTH`.
+> Enforced by a behavioural test — five unique needles are planted in the question, a doc title, a
+> doc body, a mail subject and a mail body, and the serialized payload is asserted to contain none
+> of them — plus static payload scans in `llmRedaction.test.ts`. NO dead-letter, telemetry or
+> `agentSteps` write: `telemetry.writeTerminal` is hard-bound to `requestId: v.id("requests")` and a
+> search has no request row, so the measurement rides this audit event instead and that binding was
+> deliberately NOT loosened.)
+>
+> Last verified: 2026-08-28 (MERGE of the Phase 28 and Phase 29 lanes — both notes below stand;
+> five tables were classified between them, none of which changed the insert-only rule, the
+> dead-letter path or the WORM export.)
+>
 > Last verified: 2026-08-27 (28-03 — **FOUR PHASE-28 TABLES CLASSIFIED, AND ONE OF THEM DOES NOT
 > BEHAVE LIKE `gmailTokens`.** `TENANT_TABLE_CLASSIFICATION` gains `connectorConnections`
 > (`tenant_credential`), `connectorOAuthStates` (`tenant_credential`), `contactProviderRefs`
@@ -20,6 +83,25 @@
 > `providerGates` is `global` and carries NO `tenantId` column — a tenant must not be able to widen
 > or erase the deployment's own provider lane status. isolation 37/37, tenantDelete 8/8,
 > tenantExport 4/4, core typecheck 0.)
+>
+> Last verified: 2026-08-27 (**ONE NEW TENANT-OWNED TABLE: `knowledgeSearches` (29-01, KNOW-01).**
+> It is classified `tenant_owned` in `packages/core/src/tenantData.ts`, which is the OPPOSITE call
+> from `workflowPackEvents` directly below — and the difference is content, not convention. A pack
+> event is refs, enums and counts with nowhere to put prose; a `knowledgeSearches` row holds the
+> user's own QUESTION, the ANSWER they were shown, and the TITLES of their own documents. That is
+> tenant content, so it exports in full and it deletes.
+>
+> The denominator argument that reclassified `workflowPackEvents` does NOT apply here, because the
+> search measurement plane is a different object: `redactedSearchEvent` in
+> `@pikar/core/knowledgeSearch` is a pure refs/counts/enum projection, so erasing a tenant removes
+> their prose without rewriting any measure. Nothing writes either one yet — 29-01 landed the table,
+> the classification and the contracts only.
+>
+> THE INDEX RULE APPLIES: `tenantDelete.ts`/`tenantExport.ts` call `.withIndex("by_tenant")` on
+> every name `deletableTables()` returns, so `knowledgeSearches` carries a bare `by_tenant`
+> alongside `by_thread` and `by_tenant_createdAt`. `tenantData.test.ts`'s table-count tripwire moved
+> 46 -> 47. Nothing about the insert-only rule, the dead-letter path or the WORM export changed.
+> See `docs/playbooks/knowledge-search-routines.md`.)
 >
 > PREVIOUS: 2026-08-27 (**ONE NEW VIEWER EVENT: `media.grounding_failed`, AND IT IS VISIBLE ON
 > PURPOSE.** `groundMediaBrief` runs a research turn on the brief before the deck is written and

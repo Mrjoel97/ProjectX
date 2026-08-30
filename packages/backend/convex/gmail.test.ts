@@ -2,7 +2,7 @@
 // plus the 03.7-02 inbox read plane: the fixture seam, the refs-only mailbox.listed audit, and
 // the pure MIME text/plain picker.
 
-import { BODY_TRUNCATE_CHARS } from "@pikar/core";
+import { BODY_TRUNCATE_CHARS, SEARCH_CAPS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // listInbox's refs-only mailbox.listed audit hits the auditCounts aggregate; register the
@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // under convex-test instead of throwing "component not registered" (cockpitTools.test.ts precedent).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { internal } from "./_generated/api";
-import { buildMime, pickPlainText, SEND_ENDPOINT } from "./gmail";
+import { buildMime, escapeGmailQuery, pickPlainText, SEND_ENDPOINT } from "./gmail";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -791,5 +791,459 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
     expect(mime).toContain("owner@example.com"); // it really did send (non-vacuity)
     expect(mime).not.toContain(POSTAL);
     expect(mime).not.toContain("/unsubscribe/");
+  });
+});
+
+// ── 29-03 (KNOW-01): the metadata-first knowledge query ──────────────────────────────────────
+//
+// A SEPARATE verb from `search`. `search` is the contact resolver: it asks `from:/to:` about a
+// NAME and returns headers only. This asks a free-text business question, lists ids under a hard
+// cap and hydrates a SMALLER selected set of bodies — the untrusted plane the toolless synthesis
+// reads. The two must not be merged: their privacy shapes are opposites (one never fetches a body,
+// the other exists to).
+
+describe("escapeGmailQuery — the model can never write Gmail query language (29-03)", () => {
+  test("operator punctuation is NEUTRALIZED to spaces, never passed through", () => {
+    // `:` is what makes `from:`, `label:`, `has:`, `in:`, `is:` operators at all. Deleting the
+    // whole token would silently change the question; turning the character into a space keeps
+    // every word the planner wrote while removing every operator it could have built.
+    expect(escapeGmailQuery("from:ceo@rival.example invoice")).toBe(
+      "from ceo@rival.example invoice",
+    );
+    expect(escapeGmailQuery('subject:"board deck"')).toBe("subject board deck");
+    expect(escapeGmailQuery("has:attachment in:anywhere pricing")).toBe(
+      "has attachment in anywhere pricing",
+    );
+    expect(escapeGmailQuery("(renewal OR churn)")).toBe("renewal churn");
+    expect(escapeGmailQuery("label:^smartlabel_personal")).toBe("label ^smartlabel_personal");
+  });
+
+  test("negation, must-have and the bare boolean operators cannot survive", () => {
+    // `-term` excludes in Gmail and `+term` forces it: a planner phrase that happened to start
+    // with a dash would silently invert the search.
+    expect(escapeGmailQuery("-refund +urgent")).toBe("refund urgent");
+    expect(escapeGmailQuery("acme OR northwind AND renewal")).toBe("acme northwind renewal");
+    // Lower-case `or`/`and` are ordinary words to Gmail, and are kept as the user's own words.
+    expect(escapeGmailQuery("cats or dogs")).toBe("cats or dogs");
+  });
+
+  test("no escaped query can contain a character that carries query-language meaning", () => {
+    const hostile = [
+      'from:x OR label:y "quoted" (grouped) {braced} [bracketed] back\\slash',
+      "line\r\nbreak\ttab",
+      "rfc822msgid:<abc@def>",
+    ];
+    for (const raw of hostile) {
+      const q = escapeGmailQuery(raw);
+      for (const ch of [":", '"', "'", "(", ")", "{", "}", "[", "]", "\\", "\n", "\r", "\t"]) {
+        expect([raw, ch, q.includes(ch)]).toEqual([raw, ch, false]);
+      }
+    }
+  });
+
+  test("the escaped query is bounded in words and in characters", () => {
+    const many = escapeGmailQuery(Array.from({ length: 40 }, (_, i) => `w${i}`).join(" "));
+    // LITERALS, not the constants the implementation uses — a test whose oracle moves with the
+    // subject can never fail (the 29-01 round-2 lesson).
+    expect(many.split(" ")).toHaveLength(12);
+    expect(escapeGmailQuery("x".repeat(500)).length).toBe(200);
+    expect(SEARCH_CAPS.queryCharCap).toBe(200);
+  });
+
+  test("a phrase with no letter or digit escapes to nothing — the caller must refuse to list", () => {
+    // Fail CLOSED: an empty `q` lists the whole mailbox, which would answer a question with
+    // arbitrary recent mail. `clampSearchPlan` refuses these at the planner boundary; the action
+    // treats one reaching it as an invariant violation, not as a search.
+    expect(escapeGmailQuery("--- ::: ()")).toBe("");
+    expect(escapeGmailQuery("   ")).toBe("");
+  });
+});
+
+describe("gmail.knowledgeQuery — bounded, GET-only, never throwing on a governed state (29-03)", () => {
+  const KQ_TENANT = "tenant_knowledge";
+  const listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
+
+  type MailStub = { id: string; subject: string; body: string; internalDate: number };
+
+  /**
+   * Gmail's OWN error shape, and the choice is the whole point. A JSON envelope PARSES, so a
+   * handler that never checks `res.ok` sails past it with `messages: undefined` and reports an
+   * empty successful read — the defect. An HTML page throws on `.json()` and is caught, which is
+   * why an HTML-only stub cannot tell the two implementations apart.
+   */
+  const errorResponse = (status: number, html = false) =>
+    new Response(
+      html ? "<html>502 Bad Gateway</html>" : JSON.stringify({ error: { code: status } }),
+      {
+        status,
+      },
+    );
+
+  /**
+   * A fake Gmail that serves one list page and a `format=full` get per id.
+   *
+   * `listStatus`, `bodyStatus` and `throwOn` are what the ORIGINAL 29-03 suite could not say, and
+   * that is why a failed read reporting as an empty successful one shipped green: every stub
+   * answered 200. An error body is deliberately HTML, because Gmail's 5xx pages are, and
+   * `res.json()` on one throws rather than parsing to `{}`.
+   */
+  function mockMailbox(
+    mails: MailStub[],
+    opts: {
+      nextPageToken?: string;
+      listStatus?: number;
+      /** Ids whose `format=full` GET fails, with the status it fails with. */
+      bodyStatus?: Record<string, number>;
+      /** "list" | a message id — the fetch REJECTS rather than answering (DNS, TLS, timeout). */
+      throwOn?: string;
+      /** Answer errors with an HTML page instead of Gmail's JSON error envelope. */
+      htmlError?: boolean;
+    } = {},
+  ) {
+    const calls: { url: string; method: string }[] = [];
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+      const u = String(url);
+      calls.push({ url: u, method: init?.method ?? "GET" });
+      if (u.startsWith("https://oauth2.googleapis.com/token")) {
+        return new Response(JSON.stringify({ access_token: "at", expires_in: 3600 }), {
+          status: 200,
+        });
+      }
+      if (u.startsWith(`${listUrl}?`)) {
+        if (opts.throwOn === "list") throw new TypeError("fetch failed");
+        if (opts.listStatus !== undefined && opts.listStatus !== 200)
+          return errorResponse(opts.listStatus, opts.htmlError);
+        return new Response(
+          JSON.stringify({
+            messages: mails.map((m) => ({ id: m.id })),
+            ...(opts.nextPageToken === undefined ? {} : { nextPageToken: opts.nextPageToken }),
+          }),
+          { status: 200 },
+        );
+      }
+      const id = u.slice(`${listUrl}/`.length).split("?")[0] ?? "";
+      if (opts.throwOn === id) throw new TypeError("fetch failed");
+      const bad = opts.bodyStatus?.[id];
+      if (bad !== undefined) return errorResponse(bad, opts.htmlError);
+      const found = mails.find((m) => m.id === id);
+      return new Response(
+        JSON.stringify({
+          internalDate: String(found?.internalDate ?? 0),
+          snippet: "snippet fallback",
+          payload: {
+            mimeType: "text/plain",
+            headers: [{ name: "Subject", value: found?.subject ?? "" }],
+            body: { data: Buffer.from(found?.body ?? "", "utf8").toString("base64url") },
+          },
+        }),
+        { status: 200 },
+      );
+    });
+    return { calls, gets: () => calls.filter((c) => c.method === "GET") };
+  }
+
+  const seedKqTokens = (t: ReturnType<typeof convexTest>, tenantId = KQ_TENANT) =>
+    t.run((ctx) =>
+      ctx.db.insert("gmailTokens", { tenantId, refreshToken: "r", scope: "s", updatedAt: BASE_MS }),
+    );
+
+  const mail = (n: number, over: Partial<MailStub> = {}): MailStub => ({
+    id: `m${n}`,
+    subject: `Subject ${n}`,
+    body: `Body of message ${n}`,
+    internalDate: BASE_MS - n * 3_600_000,
+    ...over,
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("the ESCAPED query reaches Gmail — the planner's raw text never does", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    const g = mockMailbox([mail(1)]);
+
+    await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: 'from:ceo@rival.example subject:"board deck"',
+    });
+
+    const list = g.calls.find((c) => c.url.startsWith(`${listUrl}?`));
+    expect(list, "no list call was made").toBeDefined();
+    const q = new URL(String(list?.url)).searchParams.get("q");
+    // The VALUE Gmail receives, decoded — URL encoding does not protect this boundary, because
+    // Gmail decodes `q` before it parses operators.
+    expect(q).toBe("from ceo@rival.example subject board deck");
+    expect(q).not.toContain("from:");
+    expect(q).not.toContain('"');
+  });
+
+  test("bodies are hydrated for a SMALLER selected cap than the list cap", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    const mails = Array.from({ length: 12 }, (_, i) => mail(i));
+    const g = mockMailbox(mails);
+
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // LITERALS: 12 listed, 5 hydrated. A test that read the caps from the module could not fail.
+    expect(res.listed).toBe(12);
+    expect(res.messages).toHaveLength(5);
+    expect(res.messages.map((m) => m.id)).toEqual(["m0", "m1", "m2", "m3", "m4"]);
+    // …and exactly five `format=full` gets happened. Hydrating all twelve would be the leak.
+    expect(g.gets().filter((c) => c.url.includes("format=full"))).toHaveLength(5);
+  });
+
+  test("the list itself is capped, so a huge match set cannot drive an unbounded fan-out", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    const g = mockMailbox([mail(1)]);
+    await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" });
+    const list = g.calls.find((c) => c.url.startsWith(`${listUrl}?`));
+    expect(new URL(String(list?.url)).searchParams.get("maxResults")).toBe("25");
+  });
+
+  test("each hydrated body is truncated to the search plane's own character cap", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1, { body: "x".repeat(4000) })]);
+
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.messages[0]?.body).toHaveLength(1500);
+    expect(SEARCH_CAPS.evidenceTextCharCap).toBe(1500);
+    expect(res.messages[0]?.bodyTruncated).toBe(true);
+  });
+
+  test("THE SUBJECT LINE IS CAPPED TOO — and unlike the body there is no flag to notice it", async () => {
+    // An attacker-controlled subject with no bound flows straight into `Evidence.label`, which
+    // `synthesisPrompt` interpolates onto the fence line. The body cap has `bodyTruncated` to
+    // report the loss; the label cap has nothing, so removing the truncation left the whole suite
+    // green. The literal 200 is pinned beside the constant rather than read from it.
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1, { subject: "S".repeat(4000) })]);
+
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.messages[0]?.subject).toHaveLength(200);
+    expect(SEARCH_CAPS.labelCharCap).toBe(200);
+    // A SHORT subject is untouched — the negative control, so the cap is not just "always 240".
+    mockMailbox([mail(2, { subject: "Renewal terms" })]);
+    const short = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(short.ok).toBe(true);
+    if (!short.ok) return;
+    expect(short.messages[0]?.subject).toBe("Renewal terms");
+  });
+
+  test("a further page of results is REPORTED, never silently dropped", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1)], { nextPageToken: "page-2" });
+
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.more).toBe(true);
+  });
+
+  test("a tenant with no token gets not_connected — never a throw, never an empty success", async () => {
+    const t = convexTest(schema, modules);
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" }),
+    ).toEqual({ ok: false, reason: "not_connected" });
+  });
+
+  test("a dead refresh token gets reauth — never a throw", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    vi.stubGlobal("fetch", async () => new Response("invalid_grant", { status: 400 }));
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" }),
+    ).toEqual({ ok: false, reason: "reauth" });
+  });
+
+  // A phrase the planner boundary CANNOT refuse, because `clampSearchPlan` only requires one
+  // letter or digit while `escapeGmailQuery` additionally drops the bare boolean operators. The
+  // code comment here used to call this seam unreachable and justify a THROW with it; the claim was
+  // about another module and it was false, so the throw was live in the product.
+  test.each([
+    ["--- :::"],
+    ["OR"],
+    ["AND"],
+    ["OR AND"],
+    ["+OR"],
+    ['"OR"'],
+  ])("a query that escapes to nothing (%j) is a governed `unplanned`, not a throw and not a listing", async (query) => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    const g = mockMailbox([mail(1)]);
+    expect(await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query })).toEqual({
+      ok: false,
+      reason: "unplanned",
+    });
+    // And nothing was asked of Gmail at all. Listing on an empty `q` returns arbitrary recent
+    // mail, which is an answer about messages nobody asked about.
+    expect(g.calls).toHaveLength(0);
+  });
+
+  // ── A FAILED READ IS NOT AN EMPTY MAILBOX ──────────────────────────────────────────────────
+  //
+  // Every one of these returned `{ok: true, messages: [], listed: 0}` or an evidence row of two
+  // empty strings before the fix, which the inbox adapter then published as
+  // `{status: "available", source: "inbox", returned: 0}` — "we searched your mailbox and there is
+  // nothing there" for a mailbox Gmail refused to show us.
+
+  test.each([
+    [500],
+    [429],
+    [403],
+  ])("a %i on the LIST is provider_error — never an empty successful read", async (status) => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1), mail(2)], { listStatus: status });
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" }),
+    ).toEqual({ ok: false, reason: "provider_error" });
+  });
+
+  test("a NON-JSON error page is provider_error too, not an escaped parse error", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1)], { listStatus: 502, htmlError: true });
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" }),
+    ).toEqual({ ok: false, reason: "provider_error" });
+  });
+
+  test("a rejected LIST fetch (DNS/TLS/timeout) is provider_error, not a rejection", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1)], { throwOn: "list" });
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" }),
+    ).toEqual({ ok: false, reason: "provider_error" });
+  });
+
+  test("a message Gmail refuses to hand over is DROPPED and the drop is reported", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1), mail(2)], { bodyStatus: { m2: 500 } });
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // The good message survives; the refused one does NOT arrive as an evidence row whose subject
+    // and body are "" and whose date is 1970 — which is what `res.json()` on an error body built.
+    expect(res.messages.map((m) => m.id)).toEqual(["m1"]);
+    expect(res.messages.map((m) => m.subject)).toEqual(["Subject 1"]);
+    expect(res.hydrationFailed).toBe(true);
+    expect(res.listed).toBe(2);
+  });
+
+  test("a rejected BODY fetch is reported the same way, not thrown", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1), mail(2)], { throwOn: "m1" });
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.messages.map((m) => m.id)).toEqual(["m2"]);
+    expect(res.hydrationFailed).toBe(true);
+  });
+
+  test("a fully successful read reports NO hydration failure — the negative control", async () => {
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1), mail(2)]);
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.hydrationFailed).toBe(false);
+    expect(res.messages).toHaveLength(2);
+  });
+
+  test("the fixture seam is checked BEFORE the token, and it is tenant-scoped", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("inboxFixtures", {
+        tenantId: KQ_TENANT,
+        offlineDigest: false,
+        messages: [
+          {
+            id: "fx-1",
+            from: "Sarah <s@example.com>",
+            subject: "Renewal terms",
+            snippet: "s",
+            internalDate: BASE_MS,
+            body: "The renewal is due in March.",
+          },
+          {
+            id: "fx-2",
+            from: "Ben <b@example.com>",
+            subject: "Lunch",
+            snippet: "s",
+            internalDate: BASE_MS - 1000,
+            body: "Pizza?",
+          },
+        ],
+      }),
+    );
+
+    // No token, no fetch stub: reaching either would fail the test.
+    const res = await t.action(internal.gmail.knowledgeQuery, {
+      tenantId: KQ_TENANT,
+      query: "renewal",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // The fixture is FILTERED by the escaped terms — a seam that returned every fixture message
+    // regardless of the question would make every offline assertion below it vacuous.
+    expect(res.messages.map((m) => m.id)).toEqual(["fx-1"]);
+
+    // Another tenant sees no fixture at all and falls through to the token gate.
+    expect(
+      await t.action(internal.gmail.knowledgeQuery, { tenantId: "other", query: "renewal" }),
+    ).toEqual({ ok: false, reason: "not_connected" });
+  });
+
+  test("a knowledge query writes NO audit row — the coordinator owns the one search event", async () => {
+    // `search` and `listInbox` each write their own refs-only event. This verb deliberately does
+    // not: a unified search hits several sources and must produce ONE `knowledge.searched` event,
+    // owned by the coordinator, or the log plane learns the shape of the question from the count
+    // of per-source rows.
+    const t = convexTest(schema, modules);
+    await seedKqTokens(t);
+    mockMailbox([mail(1)]);
+    await t.action(internal.gmail.knowledgeQuery, { tenantId: KQ_TENANT, query: "renewal" });
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([]);
   });
 });

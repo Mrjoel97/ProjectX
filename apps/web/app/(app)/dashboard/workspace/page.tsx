@@ -9,6 +9,7 @@ import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(a
 import { ChatPane } from "./ChatPane";
 import { CardList } from "./cards";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { KnowledgeSearchPanel } from "./KnowledgeSearchPanel";
 import { CanvasPane } from "./MediaCanvas";
 import { SkillAuthoringPanel } from "./SkillAuthoringPanel";
 import { SplitPane } from "./SplitPane";
@@ -364,6 +365,9 @@ export default function WorkspacePage() {
   // SKILL-01: the skill-authoring card, opened from the existing Chat options menu. Session state,
   // not a route — the thread, the tabs and every open subscription survive the toggle.
   const [authoring, setAuthoring] = useState(false);
+  // KNOW-01: unified knowledge search, opened from the same menu and on the same terms —
+  // session state, not a route, so the thread and every open subscription survive the toggle.
+  const [searching, setSearching] = useState(false);
 
   // SKILL-01 "routine v0": replay a pinned prompt as an ORDINARY FRESH cockpit turn.
   //
@@ -619,6 +623,17 @@ export default function WorkspacePage() {
                         type="button"
                         role="menuitem"
                         className="head-menu-item"
+                        onClick={() => {
+                          setSearching((s) => !s);
+                          close();
+                        }}
+                      >
+                        Search your knowledge
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="head-menu-item"
                         disabled={clearingHistory}
                         onClick={() => void clearChatHistory().then((ok) => ok && close())}
                       >
@@ -689,6 +704,15 @@ export default function WorkspacePage() {
                 cockpit, not a destination. It renders regardless of mailbox state — adapting a
                 skill has nothing to do with a connected inbox. */}
             {authoring && <SkillAuthoringPanel onClose={() => setAuthoring(false)} />}
+
+            {/* KNOW-01. Same place, same reasoning as the card above. `threadId` is passed so a
+                search files itself under the conversation it was asked in; the panel mints its
+                own handle when the workspace has no thread yet. */}
+            {searching && (
+              <ErrorBoundary label="knowledge-search" fallback={null}>
+                <KnowledgeSearchPanel threadId={threadId} onClose={() => setSearching(false)} />
+              </ErrorBoundary>
+            )}
 
             {/* The review thread is synthetic — it has no `plans` row, and sendCockpitMessage throws
                 "cockpit: plan row missing for thread" (cockpit.ts:93) on any send. Reading degrades

@@ -344,7 +344,10 @@ test("the digestInbox call is structurally TOOLLESS (generateObject, no tools:)"
   expect(block, "digestInbox does not load the inbox-digest skill").toMatch(/INBOX_DIGEST_SKILL/);
 });
 
-test("every generateObject schema is STRICT-mode legal (all properties required)", () => {
+test.each([
+  "llm.ts",
+  "knowledgeLlm.ts",
+])("%s: every generateObject schema is STRICT-mode legal (all properties required)", (file) => {
   // 03.7-05, found by a live eval run: OpenAI structured outputs run in STRICT mode, which
   // requires every key in `properties` to also appear in `required`. A merely-"optional" field
   // makes the API reject the SCHEMA — so the call throws 100% of the time, on every input. No
@@ -353,18 +356,36 @@ test("every generateObject schema is STRICT-mode legal (all properties required)
   // failed on every live briefing until this scan's fixture caught it.
   // The way to say "may be absent" is a NULLABLE-and-required field (`type: ["string","null"]`),
   // normalized back off after the call. This scan holds that line for every jsonSchema in llm.ts.
-  const src = readSource("llm.ts");
-  const schemas = [...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => m[1]);
+  const src = readSource(file);
+  // TWO IDIOMS, and the second is why this scan needs to know about both. `jsonSchema<T>({...})`
+  // writes the schema INLINE; `const X: JSONSchema7 = {...}` hoists it so a test can assert the
+  // OBJECT rather than its source text (29-04's grammar locks are pinned that way, because a
+  // `toContain` over a whole schema block is satisfied by one occurrence and cannot see a lock
+  // dropped from a nested object). A hoisted schema opened a hole here the first time it landed:
+  // the old regex still matched `= jsonSchema<`, sliced a block with no `properties:` in it, and
+  // the anti-vacuity guard below is the only reason that was loud rather than silent.
+  const schemas: { name: string; start: number; close: string }[] = [
+    ...[...src.matchAll(/const (\w*[Ss]chema) = jsonSchema</g)].map((m) => ({
+      name: m[1] as string,
+      start: m.index as number,
+      close: "\n});",
+    })),
+    ...[...src.matchAll(/const (\w*(?:SCHEMA|Schema)): JSONSchema7 = \{/g)].map((m) => ({
+      name: m[1] as string,
+      start: m.index as number,
+      close: "\n};",
+    })),
+  ];
   expect(
     schemas.length,
     "no jsonSchema definitions found — has the idiom changed?",
   ).toBeGreaterThan(0);
 
-  for (const name of schemas) {
-    const start = src.indexOf(`const ${name} = jsonSchema<`);
+  for (const { name, start, close } of schemas) {
     const rest = src.slice(start);
-    const end = rest.indexOf("\n});");
+    const end = rest.indexOf(close);
     const block = rest.slice(0, end >= 0 ? end : undefined);
+    let checked = 0;
 
     // Each `properties: { ... }` object paired with the `required: [...]` that follows it.
     for (const m of block.matchAll(/properties:\s*\{/g)) {
@@ -389,13 +410,174 @@ test("every generateObject schema is STRICT-mode legal (all properties required)
       // Group 1 exists whenever the regex matched, which `!requiredMatch` above already guarded.
       const required = [...requiredMatch[1]!.matchAll(/["'](\w+)["']/g)].map((r) => r[1]);
       const missing = keys.filter((k) => !required.includes(k));
+      checked++;
       expect(
         missing,
         `${name}: ${missing.join(", ")} in properties but not in required — OpenAI strict mode ` +
           `REJECTS this schema, so the call throws on every input. Make it nullable-and-required.`,
       ).toEqual([]);
     }
+    // THE SCAN IS ORDER-DEPENDENT and silently vacuous otherwise: it looks for `required:` AFTER
+    // the `properties:` object it is checking, so a schema written `required` FIRST (blueprint.ts's
+    // ordering) matches zero pairs and passes without examining anything. That is not hypothetical
+    // — it is how a scan reads green over a broken schema. Fail loudly instead.
+    // A `jsonSchema<T>(HOISTED_CONST)` wrapper has no `properties:` of its own — the object it
+    // names is a separate entry above and IS checked. Everything else matching zero pairs is the
+    // silent-vacuity case this guard exists for.
+    const isWrapper = close === "\n});" && !block.includes("properties:");
+    expect(
+      isWrapper ? 1 : checked,
+      `${name}: the strict-mode scan matched NO properties/required pair — put \`required\` AFTER ` +
+        `\`properties\` in each object, or this scan is checking nothing at all.`,
+    ).toBeGreaterThan(0);
   }
+});
+
+// ── 29-06: the knowledge COORDINATOR's two planes ────────────────────────────────────────────────
+
+/**
+ * Content-bearing identifiers, and every one of them is a real field on the search plane:
+ * `question`/`query` (the user's own words), `summary` and `text` (model prose over untrusted
+ * sources), `label`/`title`/`subject`/`sender`/`name` (a doc title, a file name, a mail subject),
+ * `excerpt` (a quoted passage) and `sourceRef` (an id we are allowed to STORE on the content row,
+ * but which is per-record and identifies the document a citation points at).
+ *
+ * The hash and the count forms are excluded by construction: `questionHash` and every `*Count` /
+ * `*Ref` name below survive a `\b…\b` match against these words only if they are the bare word.
+ *
+ * `claims` and `evidence` are deliberately NOT here. They are the ARGUMENT names of
+ * `redactedSearchEvent`, a pure projection in `@pikar/core` whose parameters are `claims: number`
+ * and whose output keys are `claimCount` / `evidenceCount` — banning the words would ban the very
+ * call that does the redacting. The projection's own contract is covered by `knowledgeSearch`'s
+ * needle test, which asserts on the SERIALIZED STORED PAYLOAD rather than on this source.
+ */
+const KNOWLEDGE_CONTENT_FIELDS =
+  /\b(question|query|summary|text|label|title|subject|sender|excerpt|sourceRef|snippet|body)\b/;
+
+test("knowledgeSearch.ts writes exactly TWO audit sites and both payloads are refs/counts-only (§4)", () => {
+  // The coordinator is the only module in this feature that touches a governance plane at all
+  // (`knowledgeVaultDrive.ts`, `knowledgeExternalSources.ts` and `knowledgeLlm.ts` write none, and
+  // their own suites scan for that). So these payloads are the whole §4 surface of unified search.
+  //
+  // TWO, not one: a run that completes writes `knowledge.searched`; a run whose budget is
+  // exhausted BETWEEN the fan-out and the synthesis — connectors already read, planner already
+  // charged — writes `knowledge.search_stopped`. Exactly one of the two fires per run.
+  //
+  // ⚠ CEILING OF THIS TEST, STATED RATHER THAN IMPLIED. `KNOWLEDGE_CONTENT_FIELDS` is a WORD
+  // BLOCKLIST over source text, and a blocklist admits every word it does not name — a mutation
+  // adding `unansweredList` (free prose the synthesizer wrote over untrusted mail bodies) to the
+  // payload passed this file and the whole backend suite. The ALLOWLIST that actually closes it is
+  // behavioural and lives in `knowledgeSearch.test.ts`: it reads the STORED payload of each event
+  // and pins `Object.keys(...)` to a literal set, so any new key of any name fails. This scan is
+  // kept as the cheap source-level tripwire in front of it, not as the boundary.
+  const src = readSource("knowledgeSearch.ts")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  expect(src.match(/audit\.log\b/g) ?? [], "knowledgeSearch.ts audit.log call sites").toHaveLength(
+    2,
+  );
+
+  const completed = payloadAfter(src, /eventType:\s*["']knowledge\.searched["']/);
+  // POSITIVE CONTROL — a scan that found no payload would pass every assertion below vacuously.
+  expect(completed, "the knowledge.searched audit payload was not found").not.toBe("");
+  expect(completed).toMatch(/questionHash/);
+  expect(completed).toMatch(/redactedSearchEvent/);
+
+  const stopped = payloadAfter(src, /eventType:\s*["']knowledge\.search_stopped["']/);
+  expect(stopped, "the knowledge.search_stopped audit payload was not found").not.toBe("");
+  expect(stopped).toMatch(/questionHash/);
+  // The stop reason is `guardrails.preCall`'s closed enum, never a provider message.
+  expect(stopped).toMatch(/stopReason:\s*synthesized\.reason/);
+
+  for (const [event, payload] of [
+    ["knowledge.searched", completed],
+    ["knowledge.search_stopped", stopped],
+  ] as const) {
+    // `x.length` is a COUNT, not content (the briefing.created idiom), and so is `claims.length`.
+    const scrubbed = payload.replace(/\b[A-Za-z]\w*\.length\b/g, "COUNT");
+    expect(scrubbed, `${event} leaks source content: ${payload}`).not.toMatch(
+      KNOWLEDGE_CONTENT_FIELDS,
+    );
+    // The planner's rejected SOURCE NAMES are model-authored strings ("notion",
+    // "http://evil.example"). Only the count may cross.
+    expect(scrubbed).toMatch(/rejectedPlanCount/);
+    expect(scrubbed, `${event}: a model-authored rejection name reaches the log plane`).not.toMatch(
+      /rejected(?!PlanCount)/,
+    );
+  }
+});
+
+test("knowledgeSearch.ts writes NO telemetry, NO dead letter and NO agentSteps row", () => {
+  // The measurement rides the ONE audit event. A search has no `requests` row, so there is nothing
+  // for a telemetry row to be keyed on — see the next test.
+  // Comments STRIPPED: the module header explains WHY there is no telemetry row and names the
+  // symbol to do it, and a scan that reads its own subject's prose fails on the documentation of
+  // the invariant it enforces (the `gmail.ts:229` idiom — prose may name a hazard, CODE may not).
+  const src = readSource("knowledgeSearch.ts")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  expect(src, "the scan is vacuous — the module was not read").toMatch(/audit\.log\b/);
+  for (const forbidden of [
+    /\.insert\(\s*["'](audit|deadLetters|telemetry|agentSteps)["']/,
+    /telemetry\./,
+    /deadLetters/,
+    /agentSteps/,
+  ])
+    expect(src, `knowledgeSearch.ts reaches ${String(forbidden)}`).not.toMatch(forbidden);
+});
+
+test("telemetry.writeTerminal is STILL hard-bound to requestId: v.id('requests')", () => {
+  // 29-06 chose NOT to loosen this, and a decision recorded only in a comment is not a decision.
+  // If a later plan widens `requestId` to a string (or drops the fail-closed lookup) so a
+  // knowledge search can write a telemetry row, this fails and the choice gets re-made on purpose.
+  const src = readSource("telemetry.ts");
+  expect(src).toMatch(/requestId:\s*v\.id\("requests"\)/);
+  expect(src).toMatch(/telemetry: no request for/);
+});
+
+test("the TOOL-BEARING loop cannot reach the knowledge search plane at all (SC-2)", () => {
+  // The whole safety argument of unified search is that mail bodies, Drive text and CRM records
+  // never sit beside a tool grant. 29-06 deliberately ships NO cockpit tool, which is strictly
+  // stronger than the counts-only tool contract the plan allowed for — and this is what makes that
+  // an enforced absence rather than a claim in a module header. A future plan that DOES add the
+  // tool must delete this test on purpose and replace it with a counts-only return assertion.
+  const src = readSource("llm.ts");
+  expect(src, "the scan is vacuous — llm.ts is not the tool-bearing loop").toMatch(
+    /generateText[\s\S]*tools:/,
+  );
+  for (const module of [
+    "knowledgeSearch",
+    "knowledgeLlm",
+    "knowledgeVaultDrive",
+    "knowledgeExternalSources",
+  ])
+    expect(
+      src,
+      `llm.ts reaches ${module} — untrusted search content is one call from a tool grant`,
+    ).not.toContain(module);
+});
+
+test("knowledgeLlm.ts is structurally TOOLLESS — both knowledge calls, no tools: anywhere", () => {
+  // 29-04. The whole safety argument of the unified search: mail bodies, Drive text and CRM
+  // records reach a model that CANNOT act. This is a WHOLE-FILE ban, not a per-block one, because
+  // the module exists precisely so that untrusted content never sits beside a tool grant.
+  // Comments STRIPPED: the module header names `tools:` as the thing it must never do, and a
+  // scan that reads its own subject's prose fails on the documentation of the invariant it is
+  // enforcing. The `gmail.ts:229` idiom — prose may name a hazard, CODE may not.
+  const src = readSource("knowledgeLlm.ts")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  expect(src, "knowledgeLlm.ts does not use generateObject").toMatch(/generateObject/);
+  expect(src, "knowledgeLlm.ts is NO LONGER TOOLLESS — it passes tools to the model").not.toMatch(
+    /\btools\s*:/,
+  );
+  // Registry-loaded prompts (§5), never a hardcoded system string.
+  expect(src).toMatch(/system: skill\.body/);
+  expect(src).toMatch(/KNOWLEDGE_QUERY_PLANNER_SKILL/);
+  expect(src).toMatch(/KNOWLEDGE_SYNTHESIZER_SKILL/);
+  expect(src, "a hardcoded system prompt would bypass the skill registry (§5)").not.toMatch(
+    /system:\s*["'`]/,
+  );
 });
 
 test("no body-bearing identifier reaches the tool-bearing loop region of llm.ts (SC-2)", () => {

@@ -141,8 +141,24 @@ const packArgs = {
   /** Pairs a run back to the recommendation that offered it (27-09's discovery surface). */
   recommendationId: v.optional(v.string()),
   /** 27-08: the eval runner MUST be able to pin the exact candidate, or a run certifies the ACTIVE
-   *  body while the evidence row names the candidate. `internalAction` ⇒ never model-supplied. */
+   *  body while the evidence row names the candidate. */
   skillVersions: v.optional(v.record(v.string(), v.number())),
+  /** 29-05: the TENANT twin of the pin above, and the hop that runs a tenant pack candidate BODY.
+   *  `<name>@<version>` cannot name a row once two tenants each own version 2, so a tenant candidate
+   *  is pinned by ROW ID (`skills.getTenantSkillVersion`, resolved inside `runSpecialistTurn`).
+   *  Without this hop the run would take the tenant's EFFECTIVE body while the caller believed it
+   *  had pinned the candidate — 16-09's defect, one registry scope down.
+   *
+   *  It is also the door a published customization reaches a model THROUGH: since the 29-05
+   *  remediation `planTenantActivation` throws `PACK_GATE` for every name in
+   *  `WORKFLOW_PACK_SKILL_NAMES`, so such a row does not go active and `loadEffectiveSkill` keeps
+   *  serving the global body — `skills.test.ts`
+   *  ("a pack-named TENANT candidate ... is still REFUSED") asserts exactly that pair. A pinned run
+   *  changes nothing that outlives it — no status patch, no evidence write — and the tool grant
+   *  still comes from `toolsForWorkflowPack`.
+   *  NONE OF THAT IS THE ISOLATION ARGUMENT — a valid id is still a valid id for SOMEONE ELSE'S
+   *  row. The tenant comparison is in `runPackTurn`, before `preCall`. */
+  tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
 };
 
 type PackTurnArgs = {
@@ -154,6 +170,7 @@ type PackTurnArgs = {
   runId?: string;
   recommendationId?: string;
   skillVersions?: Record<string, number>;
+  tenantSkillIds?: Record<string, Id<"tenantSkills">>;
 };
 
 /**
@@ -174,6 +191,33 @@ async function runPackTurn(
   const { packId, spec } = resolved;
   const { tenantId, threadId, planId } = args;
   const runId = args.runId ?? crypto.randomUUID();
+
+  // THE PIN IS SCOPED TO THIS RUN'S TENANT, and it has to be checked HERE.
+  //
+  // `skills.getTenantSkillVersion` resolves a `tenantSkills` row BY ID and returns its body; the
+  // only guard downstream (`runSpecialistTurn`) is `row.name !== skillName`. A name check is not a
+  // tenant check — two tenants can each own `pack-business-pulse`, which is the entire reason the
+  // pin is a row id and not `<name>@<version>` — so without this comparison one tenant's row id
+  // would run as another tenant's system prompt.
+  //
+  // Refused BEFORE `preCall` and before any event is recorded: a mis-wired harness costs $0 and
+  // leaves no run row behind. It THROWS rather than returning a governed refusal, which means a
+  // caller reaching this with a foreign id gets an unhandled error and not a rendered outcome. The
+  // justification that used to sit here — that both declaring entry points below are
+  // `internalAction`s, so a foreign id can only be a bug — is deleted: it was true when written and
+  // nothing enforces it, and `skill-registry.md` now records the same gap for all eight declaring
+  // sites repo-wide.
+  //
+  // ponytail: the unscoped read is `skills.getTenantSkillVersion` itself, and the root fix is a
+  // required `tenantId` arg on it — that also changes the pin resolution in `runSpecialistTurn`
+  // (llm.ts), which this wave does not own. Named as a follow-up in the 29-05 FIX summary; this
+  // closes the caller surface 29-05 added.
+  for (const candidateId of Object.values(args.tenantSkillIds ?? {})) {
+    const row = await ctx.runQuery(internal.skills.getTenantSkillVersion, { candidateId });
+    if (row.tenantId !== tenantId) {
+      throw new Error(`TENANT_SKILL_PIN_FOREIGN: pinned candidate belongs to another tenant`);
+    }
+  }
 
   // The acceptance lands BEFORE the run: it is a fact about the offer the user answered, and it must
   // survive a run that then fails. `recommendation_shown` is emitted by the discovery surface that
@@ -278,6 +322,7 @@ async function runPackTurn(
           turnId: runId,
           threadId,
           ...(args.skillVersions === undefined ? {} : { skillVersions: args.skillVersions }),
+          ...(args.tenantSkillIds === undefined ? {} : { tenantSkillIds: args.tenantSkillIds }),
           ...(mockScript === undefined ? {} : { mockScript }),
         }),
     );
@@ -364,9 +409,9 @@ async function runPackTurn(
 }
 
 /**
- * PRODUCTION entry point. `internalAction`, so the model can never supply the tenant, the plan or a
- * version pin (the `runSpecialist` precedent, ADR-008). The public door is
- * `cockpit.startWorkflowPack`, which owns the thread, the plan row and the reply turn.
+ * PRODUCTION entry point. The public door is `cockpit.startWorkflowPack`, which owns the thread,
+ * the plan row and the reply turn. (The `internalAction` justification that used to sit here is
+ * deleted for the reason recorded at `runPackTurn`'s pin check: nothing enforces it.)
  */
 export const runWorkflowPack = internalAction({
   args: packArgs,
@@ -374,8 +419,9 @@ export const runWorkflowPack = internalAction({
 });
 
 /**
- * The offline twin. A `LanguageModel` is not Convex-serializable, so the production action can never
- * be driven offline; this shim swaps ONLY the model and shares every other line above.
+ * The offline twin. A `LanguageModel` is not Convex-serializable, so the offline path passes a
+ * scripted response array instead of a model; this shim swaps ONLY that and shares every other
+ * line above.
  */
 export const __runWorkflowPackWithScript = internalAction({
   args: { ...packArgs, primary: v.array(v.any()), fallback: v.optional(v.array(v.any())) },

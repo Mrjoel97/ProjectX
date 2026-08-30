@@ -13,6 +13,15 @@
 // embedding network) and instead resolves the given seed doc ids THROUGH the tenant-scoped
 // `ownedDocsMeta` — a cross-tenant seed resolves to nothing, mirroring how `namespace = tenantId`
 // would never surface it. The graph-expand + fuse path is then exercised deterministically.
+//
+// THE SEAM IS GATED ON THE OPERATOR, NOT ON THE QUERY (29-FIN-06). `query` is tenant-supplied —
+// `vaultGround` is a `tenantAction`, and `vaultGroundHydrated`'s query reaches here from the
+// cockpit tool loop, the blueprint prober, the evaluator and the knowledge coordinator, all of
+// which carry user text. So the sentinel alone no longer selects the fixture: `offlineSeamAvailable
+// ()` (`lib/models.ts` — `PIKAR_OFFLINE_FIXTURES=1` AND neither model credential set) must ALSO be
+// true, which on a keyed deployment it is not. Same predicate as `knowledgeLlm.ts`, `vaultDigest.ts`
+// and `voiceDoc.ts`; the fourth variant is deliberately not written. `vaultGround.test.ts`'s
+// "WITHOUT the operator's consent" test drives the ungated direction.
 import { fuse, GRAPH_HOP_CAP, type VectorHit } from "@pikar/vault";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
@@ -20,6 +29,7 @@ import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
+import { offlineSeamAvailable } from "./lib/models";
 import { rag } from "./vaultRag";
 
 const SMOKE_PREFIX = "SMOKE::";
@@ -45,18 +55,32 @@ async function runVaultGround(
   // matched chunk and still fall back to the doc-text slice.
   const matchedByDoc: Record<string, string> = {};
 
-  if (query.startsWith(SMOKE_PREFIX)) {
+  if (offlineSeamAvailable() && query.startsWith(SMOKE_PREFIX)) {
     // Offline: the seed doc ids ride in the sentinel; resolve them tenant-scoped (a cross-tenant
     // seed drops out exactly as namespace scoping would exclude it — no embedding call).
-    const candidateIds = query
+    //
+    // A seed may carry its MATCHED PASSAGE — `SMOKE::<docId>|<passage>` — and without that the
+    // chunk-precise branch below was undrivable offline: every existing test took the doc-text
+    // fallback, so nothing could tell a passage from a document and the `truncated` flag that rides
+    // on the difference had a green suite over a wrong answer. The `|` half is optional and every
+    // `SMOKE::<id>,<id>` sentinel keeps its exact meaning.
+    const seeds = query
       .slice(SMOKE_PREFIX.length)
       .split(",")
-      .filter(Boolean) as Id<"vaultDocuments">[];
+      .filter(Boolean)
+      .map((segment) => {
+        const [id = "", passage] = segment.split("|");
+        return { id: id as Id<"vaultDocuments">, passage };
+      });
     const owned = await ctx.runQuery(internal.vault.ownedDocsMeta, {
       tenantId,
-      docIds: candidateIds,
+      docIds: seeds.map((seed) => seed.id),
     });
     seedDocIds = owned.map((d) => d._id);
+    // Tenant-scoped by construction: a passage is attached only to a doc `ownedDocsMeta` returned.
+    const ownedIds = new Set<string>(seedDocIds);
+    for (const seed of seeds)
+      if (seed.passage !== undefined && ownedIds.has(seed.id)) matchedByDoc[seed.id] = seed.passage;
     hits = seedDocIds.map((docId, i) => ({ docId, score: 1 - i * 0.01 }));
   } else {
     const { results, entries } = await rag.search(ctx, {
@@ -159,8 +183,9 @@ export const vaultGround = tenantAction({
 // The HYDRATED grounding surface for the identity-less cockpit tool loop (Plan 02 calls this as
 // `internal.vaultGround.vaultGroundHydrated`). tenantId is an EXPLICIT arg — the gmail.search /
 // llm.digestInbox convention — because the tool loop and eval harnesses carry no live identity.
-// Returns three PARALLEL retrieval arrays — docIds, titles (via tenant-scoped ownedDocsMeta), and
-// capped chunk text (via getDoc) — plus a fourth `spine` field for standing blueprint context.
+// Returns PARALLEL retrieval arrays — docIds, titles / origins / kinds / sourceUpdatedAt (all off
+// one tenant-scoped ownedDocsMeta read) and capped chunk text (via getDoc) — plus a separate
+// `spine` field for standing blueprint context.
 // The spine is deliberately NOT entry 0: it is not a search result and must not alter no-match,
 // result-count, source-card, or retrieval-budget behavior. Text is returned into the LOOP only —
 // never into any audit/DLQ payload (§4; Plan 02's tool owns the refs-only `vault.searched` audit).
@@ -181,6 +206,29 @@ export const vaultGroundHydrated = internalAction({
      *  so a citation must not read as the owner's own word. LABELLING ONLY — no caller may use
      *  this to filter what is retrieved (the origin predicate is banned in retrieval). */
     origins: string[];
+    /** 29-02: parallel to docIds. `vaultDocuments.kind`, so a `web_research` document cites as
+     *  third-party research rather than as the tenant's own word (`authorityFor`, @pikar/core).
+     *  LABELLING ONLY, exactly like `origins` — no caller may filter retrieval on it. */
+    kinds: string[];
+    /** 29-02: parallel to docIds. The only source-time the vault holds: the web-research fetch
+     *  stamp when there is one, otherwise the row's creation time (a vault document has no
+     *  provider modification time — it is the tenant's own copy, dated from when it arrived).
+     *  Absent/0 is never treated as fresh downstream; `freshnessFor` reads a missing stamp as
+     *  `unknown`. ADDITIVE — the four production callers destructure by name and are unaffected. */
+    sourceUpdatedAt: (number | null)[];
+    /** 29-02: parallel to docIds. TRUE when this doc's text was cut by PER_DOC_CHAR_CAP or by the
+     *  remaining whole-run budget — i.e. the loop is reading part of a document, not all of it.
+     *  Without it a caller cannot tell a complete read from a truncated one, because both arrive
+     *  as a string that is simply shorter than the cap. The knowledge adapter turns this into
+     *  `{status: "partial", reason: "cap"}` rather than reporting a full read of a partial one. */
+    truncated: boolean[];
+    /** 29 final pass: parallel to docIds. Drive's decided ownership flag for an IMPORTED row —
+     *  `false` means Drive did not confirm the tenant owns the file, `null` means the row is not a
+     *  Drive import at all (an upload, a brain dump, an agent write). Without it the vault plane
+     *  cited a file A STRANGER SHARED IN at `tenant_owned` while the Drive plane, looking at the
+     *  same file, called it `third_party_research`. LABELLING ONLY, exactly like `origins` and
+     *  `kinds` — no caller may filter retrieval on it. */
+    driveOwned: (boolean | null)[];
     chunks: string[];
     spine: string | null;
   }> => {
@@ -194,18 +242,38 @@ export const vaultGroundHydrated = internalAction({
     const titleById = new Map(meta.map((m) => [m._id as string, m.title]));
     // Same batch read, one more field off it — the origin was already fetched and thrown away.
     const originById = new Map(meta.map((m) => [m._id as string, m.origin ?? ""]));
+    // Same batch read again (29-02). The `retrievedAt ?? createdAt` choice is made HERE, once, so
+    // no caller has to know that only `kind: "web_research"` rows carry a fetch stamp.
+    const kindById = new Map(meta.map((m) => [m._id as string, m.kind]));
+    const updatedById = new Map(
+      meta.map((m) => [m._id as string, m.retrievedAt ?? m.createdAt ?? null]),
+    );
+    // The DOCUMENT's full length, which is what `truncated` has to be measured against — see the
+    // loop below. Same batch read again; no extra query and no extra text crosses the boundary.
+    const charsById = new Map(meta.map((m) => [m._id as string, m.textChars]));
+    // Same batch read again. `?? null` rather than `?? false`: "this row is not from Drive" and
+    // "Drive did not confirm ownership" are different facts and only the second is a downgrade.
+    const driveOwnedById = new Map(meta.map((m) => [m._id as string, m.driveOwnedByMe ?? null]));
 
     // Chunks: per-doc + running-total char budget so a large corpus never blows the loop context.
     const titles: string[] = [];
     const origins: string[] = [];
+    const kinds: string[] = [];
+    const sourceUpdatedAt: (number | null)[] = [];
+    const truncated: boolean[] = [];
+    const driveOwned: (boolean | null)[] = [];
     const chunks: string[] = [];
     let used = 0;
     for (const docId of docIds) {
       titles.push(titleById.get(docId) ?? "");
       origins.push(originById.get(docId) ?? "");
+      kinds.push(kindById.get(docId) ?? "");
+      sourceUpdatedAt.push(updatedById.get(docId) ?? null);
+      driveOwned.push(driveOwnedById.get(docId) ?? null);
       const remaining = TOTAL_CHAR_CAP - used;
       if (remaining <= 0) {
         chunks.push("");
+        truncated.push(true); // the budget ran out before this doc — nothing of it was read
         continue;
       }
       // Chunk-precise when we have it: the passage that actually matched, not the doc's opening.
@@ -222,6 +290,15 @@ export const vaultGroundHydrated = internalAction({
         ).text;
       const slice = text.slice(0, Math.min(PER_DOC_CHAR_CAP, remaining));
       chunks.push(slice);
+      // MEASURED AGAINST THE DOCUMENT, NOT AGAINST WHAT WE HAPPEN TO BE HOLDING. On the
+      // chunk-precise path `text` is the matched PASSAGE, so `slice.length < text.length` compared
+      // a passage against itself and reported `truncated: false` for a 300-character extract from a
+      // 40,000-character file — the knowledge adapter then called that an `available`, i.e.
+      // complete, read of a document it had read one paragraph of. That is verbatim the defect the
+      // flag was added to close. `textChars` is the row's own full length; `text.length` still
+      // covers the graph-neighbour and SMOKE:: paths, where the two are the same number.
+      const full = Math.max(text.length, charsById.get(docId) ?? 0);
+      truncated.push(slice.length < full);
       used += slice.length;
     }
 
@@ -239,6 +316,16 @@ export const vaultGroundHydrated = internalAction({
     } catch {
       spine = null;
     }
-    return { docIds, titles, origins, chunks, spine };
+    return {
+      docIds,
+      titles,
+      origins,
+      kinds,
+      sourceUpdatedAt,
+      truncated,
+      driveOwned,
+      chunks,
+      spine,
+    };
   },
 });

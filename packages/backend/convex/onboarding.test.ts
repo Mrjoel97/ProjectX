@@ -61,13 +61,15 @@ const rateLimiterModules = import.meta.glob(
 );
 
 const TENANT = "tenant_onb";
-const FAKE_KEY = "sk-onboarding-test-key";
-
 // A TYPED instance is mandatory the moment a `t.run` body reads a USER index — an untyped
 // `ReturnType<typeof convexTest>` erases the schema generic and `withIndex("by_tenant", …)` resolves
 // against `SystemIndexes` (the 15-04 wall, re-hit by 15.1-02). Same reason it is used here.
+// 29-FIN-06: this used to plant `process.env.OPENAI_API_KEY = "sk-onboarding-test-key"` — a raw
+// assignment with no cleanup, so it leaked into every later file in the same worker. Nothing here
+// needs it (32/32 without it), and it is a claim about the DEPLOYMENT: `offlineSeamAvailable()`
+// requires NO model credential, so the fake key made `vaultGround.ts`'s offline seed resolve to
+// nothing and the three SMOKE-retrieval tests below fail.
 function setup(): TestConvex<typeof schema> {
-  process.env.OPENAI_API_KEY = FAKE_KEY;
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
@@ -298,7 +300,21 @@ test("cross-tenant: tenant B never retrieves tenant A's committed profile (SC#3)
   // 26-11 added `origins` as a fifth parallel field. Kept EXHAUSTIVE on purpose: a foreign
   // tenant must get empty arrays and nothing else, so any future field that leaks a value
   // across the boundary reddens here instead of passing unnoticed.
-  expect(out).toEqual({ docIds: [], titles: [], origins: [], chunks: [], spine: null });
+  expect(out).toEqual({
+    docIds: [],
+    titles: [],
+    origins: [],
+    // 29-02 added three more parallel citation fields. Kept EXHAUSTIVE rather than loosened to a
+    // subset match: extending this list by hand is the deliberate cost of adding a parallel field,
+    // and it is what keeps a leaked value visible here.
+    kinds: [],
+    sourceUpdatedAt: [],
+    truncated: [],
+    // The 29 final pass added `driveOwned` (Drive ownership carried across the folder import).
+    driveOwned: [],
+    chunks: [],
+    spine: null,
+  });
 
   // And tenant B's own gate is still open (A's profile is invisible to B).
   expect(await asTenant(t, "tenant_b").query(api.onboarding.status, {})).toEqual({

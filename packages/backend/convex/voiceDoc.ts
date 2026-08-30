@@ -20,7 +20,6 @@
 //     memo body, ILLEGAL in every `audit` / `deadLetters` / `telemetry` payload and in
 //     `agentSteps`. Plan 14-09 pins that with a mutation-verified static scan.
 //
-import { openai } from "@ai-sdk/openai";
 import { DOCUMENT_ANALYST_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import {
@@ -36,7 +35,7 @@ import {
   shapeDocReview,
   voiceDocThreadId,
 } from "@pikar/voice";
-import { generateObject, jsonSchema, type LanguageModel } from "ai";
+import { generateObject, jsonSchema } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -44,6 +43,7 @@ import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { tenantAction, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { offlineSeamAvailable, resolveModel } from "./lib/models";
 
 /**
  * Collect the passages of THIS session's document that match `query`. Returns `[]` — never
@@ -176,9 +176,6 @@ export const searchDocument = tenantAction({
 /** Per-call wall-clock ceiling (mirrors `llm.ts` / `vaultLlm.ts`). One retry budget. */
 const CALL_TIMEOUT_MS = 45_000;
 
-/** Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel. */
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
-
 /** Counts and a closed-enum verdict — the ONLY thing the producer hands back. No label, no
  *  excerpt, no passage, no transcript turn ever crosses this boundary (§4). */
 type ReviewResult = {
@@ -281,16 +278,29 @@ const docReviewSchema = jsonSchema<RawDocReview>({
 // `actOnGap` → memo → the Approve gate. Tenant-scoped and non-exfiltrating, but it directly
 // contradicts Success Criterion 2: a production endpoint must never fabricate a gap on request.
 //
-// So the seam is gated on `OPENAI_API_KEY` being ABSENT. That is not a new config knob — it is the
-// exact precondition the seam exists for (a local backend / convex-test with no key). Any real
-// deployment has a key, so the sentinel is INERT in production and a `SMOKE::` transcript there
-// takes the ordinary model path. `voiceDoc.test.ts` deletes the variable in `beforeEach` (beside
-// the throwing `fetch` stub) so the offline precondition is structural rather than ambient, and
-// pins the inert-with-a-key behavior with its own test.
+// So the seam is gated on `offlineSeamAvailable()` — the operator SET `PIKAR_OFFLINE_FIXTURES=1`
+// AND the deployment holds neither model key. The sentinel is then only the fixture SELECTOR, never
+// the authority.
+//
+// ⚠ THE CREDENTIAL HALF ALONE WAS NOT ENOUGH, and this module is why the rule is worth stating
+// twice. This seam is reached from a PUBLIC endpoint, so on a deployment that merely LOST its keys
+// — never set them, or blanked them with `convex env set X ""` — the fabrication endpoint reopened
+// to every authenticated user, with no operator anywhere in the decision. Absence of a credential
+// is a misconfiguration, not consent. A keyless deployment WITHOUT the flag now throws at
+// `resolveModel` (`OPENROUTER_API_KEY is not set`), which is the honest answer for a backend that
+// cannot review. `voiceDoc.test.ts` sets the flag and deletes BOTH keys in `beforeEach` (beside the
+// throwing `fetch` stub) so the offline precondition is structural rather than ambient, and pins
+// BOTH refusals — inert-with-a-key, and inert-when-keyless-without-the-flag — with its own tests.
+//
+// BOTH keys, not just OPENAI_API_KEY: `DEFAULT_MODEL` is `or/openai/gpt-4o-mini` and this module now
+// resolves it through the shared `lib/models` table, so the credential this producer actually spends
+// is OPENROUTER_API_KEY. Checking only the OpenAI key would have re-opened the seam on any
+// deployment that carries the OpenRouter key alone.
 const SMOKE_REVIEW_PREFIX = "SMOKE::docreview::";
 
-/** True only where the seam is legitimate: a backend with no model credentials at all. */
-const offlineSeamAvailable = (): boolean => !process.env.OPENAI_API_KEY;
+// The guard itself now lives in `lib/models.ts` beside the route table that decides WHICH key is
+// spent, because `vaultDigest.ts` needed the identical predicate and a second copy of a
+// credential check is the same copy-drift defect `resolveModel` was just consolidated out of.
 
 /** A quote the model "produced" that is NOT in the document — the rejected-excerpt path. */
 const SMOKE_ABSENT_EXCERPT = "This sentence appears nowhere in the report under discussion.";
@@ -462,8 +472,9 @@ export const reviewDocument = internalAction({
     if (!doc) return NO_REVIEW;
     const docText = doc.text ?? "";
 
-    // The sentinel is honoured ONLY on a keyless backend — see the exposure note on the seam. A
-    // `SMOKE::` transcript on a real deployment is just text and takes the model path.
+    // The sentinel is honoured ONLY on a backend whose operator opted in AND which holds no model
+    // key — see the exposure note on the seam. A `SMOKE::` transcript anywhere else is just text
+    // and takes the model path (which throws if there is no key, rather than fabricating).
     const first = transcript[0]?.text ?? "";
     const raw: RawDocReview =
       offlineSeamAvailable() && first.startsWith(SMOKE_REVIEW_PREFIX)

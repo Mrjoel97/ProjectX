@@ -23,7 +23,6 @@ import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
 import { createVertex, vertex } from "@ai-sdk/google-vertex";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { ActionCache } from "@convex-dev/action-cache";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { parseRouting, type RoutingDecision, routingSchema } from "@pikar/contracts/routing";
 import {
@@ -122,6 +121,7 @@ import {
 } from "./cockpitCapabilities";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
+import { NODE_ONLY_MODEL_PREFIX, resolveModel as resolveSharedModel } from "./lib/models";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
 
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
@@ -266,80 +266,14 @@ const googleVertex = (): ReturnType<typeof createVertex> => {
 // that resolves here but is missing from that table would run and bill NOTHING against the daily
 // rail (see the fail-closed note in packages/cost/src/cost.ts). Resolve and price move together.
 // The @ai-sdk/openai provider reads OPENAI_API_KEY from the deployment env.
-// OpenRouter, through its OWN provider — and the second SDK is EARNED, not a convenience.
-//
-// This started as a baseURL swap on @ai-sdk/openai, on the reasoning that OpenRouter is
-// OpenAI-wire-compatible. It is, for the request body. It is NOT for the two things ox-alpha needs:
-//   1. `reasoningEffort` was SILENTLY DROPPED. @ai-sdk/openai gates that parameter on its own
-//      model-capability table, which has never heard of `stealth/ox-alpha`, so it emitted a console
-//      warning and sent nothing. Verified on the wire with a spying `fetch`.
-//   2. `reasoning_details` is not round-tripped. OpenRouter requires the assistant message's
-//      `reasoning_details` to be passed back UNMODIFIED for the model to continue a reasoning chain
-//      across turns. Every step of a tool loop re-sends the transcript, so without it a
-//      reasoning-MANDATORY model re-reasons from scratch on every step — which is the leading
-//      explanation for both the 113-164 s pack runs and the empty replies at 180 s.
-// This provider does both. That is what a new dependency has to buy to be worth it.
-//
-// Lazy + memoised like the Google providers: a module-load factory would throw on a deployment that
-// has no OpenRouter key but never routes here.
-//
-// The FULL id ("stealth/ox-alpha") is what OpenRouter wants AND what PRICING is keyed on, so unlike
-// the openai/ and google/ branches nothing is stripped.
-let openRouterProvider: ReturnType<typeof createOpenRouter> | undefined;
-const openRouter = () => {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
-  openRouterProvider ??= createOpenRouter({ apiKey });
-  return openRouterProvider;
-};
-
-/**
- * Model-level settings for ox-alpha. **EMPTY ON PURPOSE, AND THE MEASUREMENTS ARE WHY.**
- *
- * Reasoning is MANDATORY on this model: `reasoning: {enabled: false}` returns HTTP 400 "Reasoning is
- * mandatory for this endpoint and cannot be disabled". `effort` is the only dial, and this provider
- * genuinely delivers it — verified on the wire, and the probe's output fell from ~16-20 tokens to 3.
- * On an isolated call it is dramatic: default 6556 ms / 105 output tokens, `effort: low` 2488 ms / 55.
- *
- * **IT IS STILL NOT SET, BECAUSE THE PACK EVIDENCE DOES NOT SUPPORT SETTING IT.** Single runs of
- * `customer-complaint` scored: low 1/5, medium 2/5, default 0/5 — and then a REPEAT of the default
- * config scored 1/5, with individual cases changing which way they failed (case 03 failed on wording
- * in one run and on dropped tool calls in the next; case 05 failed then passed). **Run-to-run
- * variance is at least +/-1 case, so all three settings sit inside the noise.** Reading that spread
- * as a gradient would be inventing a finding.
- *
- * WHAT WOULD SETTLE IT: repeats, not another single run. The upstream DeepSWE harness used `-k 3`
- * for exactly this reason — ox-alpha's tool-call behaviour is stochastic, so one number per config
- * measures the dice. Until a repeated experiment exists, the default is the honest setting.
- *
- * NOTE THE TRADE THE MEASUREMENTS HINT AT (unproven): less reasoning is faster and cheaper, and the
- * pilot's headline assertion — the honest-partial statement — is precisely the kind of output that a
- * shorter answer drops first. If the dial is ever adopted, re-run the `missingNamed` cases, not the
- * latency.
- *
- * ponytail: an empty object rather than a deleted parameter — the seam is the finding, and the next
- * person needs somewhere obvious to put the answer.
- */
-const OX_ALPHA_SETTINGS = {} as const;
-
+// Model routing lives in ONE place — `lib/models.ts` — because it was four copies and only this
+// one ever grew the `or/` branch, so `DEFAULT_MODEL` ("or/openai/gpt-4o-mini") was being handed to
+// the OpenAI provider by every other caller. `google/` stays HERE: `@ai-sdk/google-vertex` is
+// Node-only and this is the one `"use node"` module, so exporting that branch would drag the Node
+// runtime into every V8 caller of the shared table.
 const resolveModel = (id: string): LanguageModel => {
-  // `.chat(...)`, NOT the bare callable — MEASURED 2026-08-25 and this is the load-bearing half.
-  // The bare provider defaults to OpenAI's RESPONSES API, and two things went wrong there, both
-  // silently: the request went to /responses instead of /chat/completions, and @ai-sdk/openai
-  // DROPPED `reasoningEffort` on the floor with only a console warning ("not supported for
-  // non-reasoning models") because it gates that parameter on its own model-capability table, which
-  // has never heard of `stealth/ox-alpha`. Observed on the wire: reasoning_effort=undefined via
-  // /responses, reasoning_effort="low" via /chat/completions, and the model honours it — output
-  // tokens fell 235 -> 44 on the same prompt. A dial that is silently discarded is worse than no
-  // dial: the first attempt at this looked applied and changed nothing.
-  if (id.startsWith("stealth/")) return openRouter().chat(id, OX_ALPHA_SETTINGS);
-  // OpenRouter-routed vendor models. The `or/` prefix is the ROUTE and is stripped here; the full id
-  // stays the PRICING/audit key, so `or/openai/gpt-4o-mini` and `openai/gpt-4o-mini` price and audit
-  // as the different billing paths they are. No per-model settings: unlike ox-alpha these are not
-  // reasoning-mandatory, and the 45 s lane is the one place reasoning has actually cost us runs.
-  if (id.startsWith("or/")) return openRouter().chat(id.slice(3));
-  if (!id.startsWith("google/")) return openai(id.replace(/^openai\//, ""));
-  const bare = id.replace(/^google\//, "");
+  if (!id.startsWith(NODE_ONLY_MODEL_PREFIX)) return resolveSharedModel(id);
+  const bare = id.slice(NODE_ONLY_MODEL_PREFIX.length);
   // AI Studio if a key is set, else Vertex. `googleVertex()` still throws its own worded error when
   // NEITHER credential exists, so "no Google config at all" stays one clear message rather than two.
   return (googleAiStudio() ?? googleVertex())(bare);
@@ -5036,10 +4970,19 @@ export async function runSpecialistTurn(
   //
   // 21-02 (SKILL-01): the ORDINARY branch resolves the TENANT overlay first and falls back to the
   // global active row (skills.loadEffectiveSkill). `tenantId` here is trusted server state from the
-  // dispatcher's authenticated envelope — never model-supplied — and only the three
-  // USER_AUTHORABLE_SKILLS can have an overlay row at all, so every other specialist name resolves
-  // exactly as before. Deliberately NOT threaded into the cockpit, voice, inbox, reply, extraction
-  // or vault loaders: those names are not authorable in v0.
+  // dispatcher's authenticated envelope — never model-supplied.
+  //
+  // WHAT THE OVERLAY BRANCH READS: `loadEffectiveSkill` queries `tenantSkills` by
+  // `[tenantId, name, status: "active"]` and falls through to the global active row when there is
+  // no such row. It does not filter by NAME, so which names can carry an overlay row is a question
+  // about the publish channels (`skills.publishUserCandidate`, `skills.publishPackCustomization`),
+  // not about this line — check them rather than reasoning from a set named here.
+  // Activation of an overlay row is an `ownerMutation` (`skills.activateTenantCandidate`).
+  //
+  // (Two earlier versions of this comment asserted a closed set of affected names. The first was
+  // "only the three `USER_AUTHORABLE_SKILLS`"; the second said Phase 29 had widened that literal to
+  // admit the six `pack-*` names, which it did not — `USER_AUTHORABLE_SKILLS` still lists exactly
+  // three. Neither absolute is restated here.)
   // The exact-VERSION pin stays GLOBAL: `--skill name@version` names a `skills` row and must keep
   // doing so. 21-03's tenant pin is a SEPARATE argument (`tenantSkillIds`) for exactly that reason.
   const pin = skillVersions?.[skillName];

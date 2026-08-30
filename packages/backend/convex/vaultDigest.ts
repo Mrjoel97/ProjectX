@@ -19,9 +19,10 @@
 //
 // §5: the prompt loads from the skill registry (`folder-digest`) and fails closed when unseeded —
 // never hardcoded. §4: the assembled manifest is scanned (fail-closed) BEFORE the model call.
-// A `SMOKE::digest::` sentinel anywhere in the assembled prompt returns a deterministic fixture
-// with NO model call (the offline convex-test path).
-import { openai } from "@ai-sdk/openai";
+// The offline fixture is selected by an OPERATOR SIGNAL (`offlineSeamAvailable`: the operator SET
+// `PIKAR_OFFLINE_FIXTURES=1` **and** the deployment holds no model credential), NEVER by anything
+// in the request or in any document — see the seam note below for the two content channels that
+// used to select it, and for why the credential half alone was not enough.
 import { FOLDER_DIGEST_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
@@ -31,7 +32,7 @@ import {
   VAULT_FOLDER_MEMBER_BATCH,
   VAULT_GRID_READ_BUDGET_BYTES,
 } from "@pikar/vault";
-import { generateText, type LanguageModel } from "ai";
+import { generateText } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -43,15 +44,11 @@ import {
 } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { offlineSeamAvailable, resolveModel } from "./lib/models";
 import { startIngest } from "./vaultIngest";
 
 // Per-call wall-clock ceiling + one retry budget (mirrors llm.ts / vaultLlm.ts).
 const CALL_TIMEOUT_MS = 45_000;
-
-// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel. Duplicated
-// from llm.ts / vaultLlm.ts / blueprint.ts — the third module-local copy of one line, deliberately
-// not a shared helper (it would be the only reason for a new module).
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 /** The excerpt budget. Mirrors `vaultGround.ts:29-30`'s PER_DOC_CHAR_CAP / TOTAL_CHAR_CAP, which
  *  are module-private `const`s there and therefore cannot be imported. Same numbers, same job: cap
@@ -151,15 +148,41 @@ function digestPrompt(folderName: string, members: readonly MemberMeta[]): strin
   ].join("\n");
 }
 
-// ── Offline SMOKE seam ───────────────────────────────────────────────────────
-// convex-test and a dev-deployment smoke must drive synthesis deterministically and offline (no
-// OPENAI_API_KEY on the local backend). The sentinel is matched with `.includes` over the ASSEMBLED
-// prompt (blueprint.ts:267's variant, not `startsWith`), so it may ride in the folder NAME, any
-// member TITLE, or any member's TEXT — which matters, because a folder whose only member FAILED
-// contributes no excerpt at all and would otherwise reach the model.
-// ponytail: content sentinel, not an env flag — keeps the seam per-request and out of shared
-// deployment config. Remove once a mock-model vault smoke exists.
-const SMOKE_DIGEST_PREFIX = "SMOKE::digest::";
+// ── The offline seam, and why it is NOT a sentinel ───────────────────────────
+//
+// convex-test and a local backend must drive synthesis deterministically and offline, with no model
+// credentials. That fixture is selected by `offlineSeamAvailable()` — a fact about the DEPLOYMENT —
+// and by nothing else. DRIVEN, not asserted: `vaultDigest.test.ts`'s "the offline seam is selected
+// by the DEPLOYMENT, never by content" block attacks all three content channels — "a MEMBER DOCUMENT
+// carrying the sentinel", "a MEMBER TITLE...", "A FOLDER NAME..." — and asserts the LIVE model path
+// is taken; reverting this gate to `folder.name.includes(...)` turns the folder-name test RED.
+//
+// ⚠ IT USED TO BE SELECTED BY CONTENT, TWICE, AND BOTH CHANNELS WERE REACHABLE BY A THIRD PARTY.
+// First `safePrompt.includes("SMOKE::digest::")` over the whole ASSEMBLED prompt: a single ingested
+// Drive file or email containing that string turned a real folder's digest into a fixture. The fix
+// moved the match to `folder.name`, justified as "the folder name is the tenant's own, chosen when
+// the folder is created". THAT JUSTIFICATION WAS FALSE. `vaultDrive.importDriveFolder` is a
+// `tenantAction` taking `name: v.string()` from the CLIENT (`vaultDrive.ts:705`), stored at
+// `vaultDrive.ts:888` as `name.slice(0, 200)` — truncated, not otherwise altered, so a sentinel at
+// the front survives — and the browser fills it in from `listDriveFolders` — which lists SHARED
+// folders whose names a THIRD PARTY chose. A stranger shares a folder called `SMOKE::digest::x`, the
+// tenant imports it, and the digest is fabricated — then STORED as a `vaultDocuments` row and SHOWN
+// to the tenant as that folder's digest, carrying a `ragEntryId` that reads as groundable.
+//
+// ⚠ IT WAS NOT ACTUALLY EMBEDDED, and an earlier version of this comment (and of
+// `29-SMOKE-SEAM-DEBT.md`) claimed it was "embedded and served back through retrieval". That was an
+// OVERSTATEMENT and it is corrected here rather than softened: `smokeDigestFixture` begins
+// `SMOKE::graph::`, and `vaultRag.embedDoc` (`vaultRag.ts:390`) short-circuits on ANY `SMOKE::`
+// prefix to `{ entryId: "smoke::<hash>", costUsd: 0 }` — no vector, so the fabricated digest was
+// never vector-retrievable. The real harm was DISPLAY plus a row that reads `ready` and groundable
+// while being invisible to search, which is debt instance #3 in that register, not retrieval
+// poisoning. Same channel as the first version, one hop further away.
+//
+// So: no sentinel. A deployment holding either model key takes the model path whatever anyone names
+// anything — `offlineSeamAvailable()` ANDs the operator flag with "neither key", pinned by
+// `lib/models.test.ts`'s "a key still closes the seam even WITH the opt-in" and by
+// `vaultDigest.test.ts`'s "the opt-in does NOT re-open the seam on a deployment that still holds a
+// key" / "OPENROUTER_API_KEY ALONE closes the seam".
 
 /**
  * The offline digest. Deterministic, derived from the SAME projected metadata the real prompt
@@ -360,7 +383,17 @@ export const buildFolderDigest = internalAction({
     const safePrompt = scan.value.safeText;
 
     let markdown: string;
-    if (safePrompt.includes(SMOKE_DIGEST_PREFIX)) {
+    // THE OPERATOR SIGNAL, NOT THE CONTENT, AND IT IS A POSITIVE OPT-IN. Nothing a client or a
+    // third party can write reaches this branch; on a deployment with a model key, or on one whose
+    // operator never set `PIKAR_OFFLINE_FIXTURES=1`, it is not taken. `folder.name` is still the
+    // fixture's LABEL — it is data in the output, never the selector.
+    //
+    // A DEPLOYMENT THAT SIMPLY LOST ITS KEYS FALLS THROUGH TO THE MODEL PATH AND THROWS at
+    // `resolveModel` (`OPENROUTER_API_KEY is not set`) — deliberately. The gate used to be the
+    // absence of both keys alone, which turned a misconfiguration into a fabricated digest for
+    // EVERY completed folder, with no error and no retry (the fixture RETURNS where the model call
+    // THREW). A loud failure is the correct behaviour for a backend that cannot synthesise.
+    if (offlineSeamAvailable()) {
       markdown = smokeDigestFixture(folder.name, members);
     } else {
       // `generateText`, not `generateObject`: the contract's three sections ARE markdown headings,

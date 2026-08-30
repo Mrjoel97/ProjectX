@@ -1,5 +1,36 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-29 (29-W3-TAIL — **`run-eval-golden.mjs` AND `planTenantActivation` DO NOT
+> REFUSE THE SAME SET, AND THE COMMENT SAID THEY DID.** `assertEvaluableCandidate`'s note claimed
+> *"`planTenantActivation` now refuses every `pack-*` name outright"*. It does not: it gates on
+> MEMBERSHIP in `WORKFLOW_PACK_SKILL_NAMES` (via `isWorkflowPackSkill`), while this script really
+> does match the `pack-` PREFIX, because it is a standalone node script with no bundler and cannot
+> import the list. So a `pack-`-named row that is not a registered pack is refused HERE and accepted
+> THERE. The comment now says what each one does and names the asymmetry as the safe direction —
+> over-matching fails closed at $0. Comment-only; no behaviour changed.)
+
+> Last verified: 2026-08-28 (29-05 REMEDIATION — **`run-eval-golden.mjs` NO LONGER ACCEPTS A
+> WORKFLOW-PACK ROW AS A `--tenant-skill` TARGET.** `assertEvaluableCandidate` validated only the
+> row's AUTHOR and STATUS; it had no name predicate, so a tenant `pack-business-pulse` candidate was
+> an accepted target. The golden suite drives `llm:runCockpitAgent` and never runs a pack
+> specialist, and the evidence write is unconditional on whether the pinned body executed — so a
+> ~$0.4 run wrote a `pass: true` certificate (`skillVersions: {}`) for a body it never invoked. Same
+> shape as the `shouldRecordEvidence` hazard recorded below, one registry scope down. It now throws
+> at $0, before any seed or model call. The activation-side fix is in
+> docs/playbooks/skill-registry.md, "THE PACK GATE HAS NO TENANT LANE".)
+>
+> Previously verified: 2026-08-28 (**WAVE-2 REMEDIATION — a HAZARD recorded on `run-eval-golden.mjs`,
+> no behaviour changed.** `shouldRecordEvidence` never checks that the `--skill` pin it is about
+> to certify was actually EXERCISED by the run, and `SKILL_NAMES` is derived from
+> `GATED_SKILLS`, so every gated name is a valid pin — including one this runner structurally
+> cannot reach, since it drives `llm:runCockpitAgent` and nothing else. For such a skill a green
+> unfiltered run writes `pass: true` evidence for a body it never loaded. It is harmless for
+> every name currently in the list, and it is why two Phase-29 bodies were removed from that list
+> rather than left behind a gate that cannot be honestly cleared — see `skill-registry.md`. THE
+> FIX, when a skill the cockpit path cannot reach genuinely needs gating: attribute per case which
+> skills were loaded and record a pin only if it appears. That is real plumbing needing a PAID run
+> to verify, so it is written down rather than guessed at.)
+
 > Last verified: 2026-08-27 (**FIXTURE 33 AND THE HONESTY GUARD CONTRADICT EACH OTHER, THE FIXTURE
 > IS THE STALE HALF, AND THE TEMPTING FIX IS A GOVERNANCE REGRESSION. DO NOT MAKE IT.**
 >

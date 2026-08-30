@@ -21,7 +21,6 @@
 // serialized markdown (§4.2 — the markdown is a projection, the table is the record), and
 // `commitProfile` is the design §6 completion gate.
 
-import { openai } from "@ai-sdk/openai";
 import type { EntryId } from "@convex-dev/rag";
 import { BUSINESS_PROFILE_SKILL, ONBOARDING_AGENT_SKILL } from "@pikar/contracts/skill";
 import {
@@ -41,7 +40,7 @@ import {
 } from "@pikar/core";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { categoryFor } from "@pikar/vault";
-import { generateObject, jsonSchema, type LanguageModel } from "ai";
+import { generateObject, jsonSchema } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -52,6 +51,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { resolveModel } from "./lib/models";
 import schema from "./schema";
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
@@ -60,10 +60,6 @@ const CALL_TIMEOUT_MS = 45_000;
 
 // The free-string vault `kind` for a committed profile (ZERO schema migration — kind is v.string()).
 const PROFILE_KIND = "business_profile";
-
-// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel (mirrors
-// vaultLlm.ts resolveModel — the @ai-sdk/openai provider wants the bare name + reads OPENAI_API_KEY).
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 // The Convex arg validator mirroring the pure @pikar/core `ProfileInput` — the profile MINUS the
 // tier (Phase 15.1, design §9, defect 1b). There is deliberately NO `persona` field and there never

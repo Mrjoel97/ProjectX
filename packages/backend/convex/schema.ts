@@ -1,13 +1,40 @@
 import { authTables } from "@convex-dev/auth/server";
 import { CONTRACTS_PACKAGE_NAME } from "@pikar/contracts";
+import {
+  AUTHORITY_CLASSES,
+  CONFIDENCE_LABELS,
+  FRESHNESS_LABELS,
+  KNOWLEDGE_SOURCES,
+  MISSING_PACK_SOURCES,
+  PARTIAL_REASONS,
+  REACHABLE_PACK_SOURCES,
+  UNAVAILABLE_REASONS,
+} from "@pikar/core";
 import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { type VLiteral, v } from "convex/values";
 
 // Compile-time proof the Convex bundler resolves source-export workspace packages.
 void CONTRACTS_PACKAGE_NAME;
 
+/**
+ * A closed Convex union built FROM a `@pikar/core` constant instead of restating its members.
+ *
+ * WHY: the Phase-29 enums were first hand-copied here, and three separate narrowings of them
+ * (dropping `support-desk` from the source union, `unplanned` from the unavailable reasons,
+ * `agent_authored` from the authority classes) each left the whole backend suite AND the typecheck
+ * green — `schema.test.ts` imported nothing from `@pikar/core`, so nothing crossed the package
+ * boundary. The failure that buys is the honest-gap row this phase exists to produce: core can
+ * construct `{status: "unavailable", reason: "not_landed", source: "support-desk"}` and the Convex
+ * validator would refuse it at insert time, at runtime, with nothing red in CI.
+ *
+ * Deriving is the fix rather than a second source scan: there is now ONE list. The domain type is
+ * preserved through the cast, so `Doc<"knowledgeSearches">` still narrows to the literal union.
+ */
+const literals = <T extends string>(values: readonly [T, ...T[]]) =>
+  v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
+
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 45 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 52 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -15,7 +42,7 @@ void CONTRACTS_PACKAGE_NAME;
 // │                                                                            │
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
 // │   audit, deadLetters, skills, tenantSkills, savedPrompts,                  │
-// │   pendingTimeouts, exportCursors, guardrailConfig                          │
+// │   knowledgeSearches, pendingTimeouts, exportCursors, guardrailConfig       │
 // │                                                                            │
 // │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
 // │   requests, plans, briefings, intakeArtifacts, attachments,                │
@@ -54,6 +81,16 @@ void CONTRACTS_PACKAGE_NAME;
 // │                                                                            │
 // │ ── Proposals ───────────────────────────────────────────── ~L2238          │
 // │   proposals                                                                │
+// │                                                                            │
+// │ ── Workflow Packs (27-02) ──────────────────────────────── ~L2652          │
+// │   workflowPackEvents                                                       │
+// │                                                                            │
+// │ ── Connector Rails (28-03) ─────────────────────────────── ~L2547          │
+// │   connectorConnections, connectorOAuthStates, contactProviderRefs,         │
+// │   providerGates                                                            │
+// │                                                                            │
+// │ ── Pikar's OWN billing (28.1-01) ───────────────────────── ~L3080          │
+// │   billingStripeEvents                                                      │
 // └──────────────────────────────────────────────────────────────────────────────┘
 
 /**
@@ -74,6 +111,36 @@ export const AGENT_STEP_REFUSAL = v.union(
   v.literal("scorecard_field"), // a scorecard-stored figure the agent may not write
   v.literal("invalid_claim"), // validateFigureClaim said no (basis quoting, bounds, dates)
 );
+
+/**
+ * The closed Phase-29 native-source enum (KNOW-01), declared once because `knowledgeSearches.sources`
+ * uses it in three arms of a discriminated union. It mirrors `KNOWLEDGE_SOURCES` in
+ * `@pikar/core/knowledgeSearch` — kept as literals here rather than derived from that array because
+ * a Convex validator needs a literal union at module load, and because widening the storage
+ * vocabulary should be a visible schema diff, not a side effect of an import.
+ *
+ * THE NAMES ARE `PackSource` NAMES. `KNOWLEDGE_SOURCES` is a named SUBSET of `workflowPacks.ts`'s
+ * one source registry, so `inbox` and `crm-facts` here are the same strings the pack plane,
+ * `PACK_SOURCE_LABEL` and `savedPrompts.sourcePreferences` use. 29-01 first shipped `gmail`/`crm`
+ * here, which meant a pin preferring `inbox` could never select the mail search source.
+ *
+ * `support-desk` has NO landed adapter, so a planned support search lands as
+ * `{status: "unavailable", reason: "not_landed"}` and renders as a visible gap. It is in the enum
+ * on purpose: omitting it would let the product answer a business question from mail, files and
+ * the CRM while never saying the support desk was not consulted. **`crm-facts` STOPPED being
+ * not-landed on 2026-08-28** — Phase 28's `convex/hubspot.ts` landed a toolless CRM read and
+ * plan 29-03 adapted it, so a `crm-facts` row can now legitimately be `available` or `partial`.
+ * Landedness for the search plane is `KNOWLEDGE_ADAPTERS` in `@pikar/core/knowledgeSearch`, NOT
+ * `MISSING_PACK_SOURCES` — the two planes ask different questions and deliberately disagree here.
+ */
+const knowledgeSource = literals(KNOWLEDGE_SOURCES);
+
+/**
+ * The FULL `PackSource` vocabulary — `KNOWLEDGE_SOURCES` plus the pack-only planes (`web`,
+ * `calendar`, `finance-inputs`, `phase26-summaries`, …). Used by `savedPrompts.sourcePreferences`,
+ * whose domain type is `PackSource[]`, not `KnowledgeSource[]`.
+ */
+const packSource = literals([...REACHABLE_PACK_SOURCES, ...MISSING_PACK_SOURCES]);
 
 /** ONE deck element, shared by `plans.shots` and `plans.altShots` (33-02) — a single const so the
  *  two arrays can never drift apart field-by-field. `type` is a ShotType value; @pikar/core/storyboard
@@ -325,6 +392,22 @@ export default defineSchema({
         evalRunId: v.string(),
       }),
     ),
+    // ---- Phase 29 (ROUT-01): WHICH APPROVED PACK TEMPLATE this row customizes.
+    // `basedOnName`/`basedOnVersion` above already say which REGISTRY ROW it came from. These say
+    // which product TEMPLATE and which of that template's customization schemas produced it —
+    // the two are not the same once a pack template is republished without the skill row moving.
+    // Optional at schema level so every Phase-21 and Phase-23 row stays valid with no migration.
+    //
+    // `customizationValues` is the validated form input as JSON — CONTENT PLANE, the tenant's own
+    // words like `savedPrompts.text`, and it never reaches an audit payload (CLAUDE.md §4).
+    // `customizationHash` is SHA-256 over `@pikar/core` `canonicalCustomization(schema, values)`,
+    // and it is what a pin points at. Both are SERVER-DERIVED: the client sends values, code
+    // validates them against the closed schema, renders the body and computes the hash. Nothing
+    // reachable from a model writes any of these three.
+    templateId: v.optional(v.string()),
+    templateVersion: v.optional(v.number()),
+    customizationValues: v.optional(v.string()),
+    customizationHash: v.optional(v.string()),
     basedOnScope: v.union(v.literal("global"), v.literal("tenant")),
     basedOnName: v.string(),
     basedOnVersion: v.number(),
@@ -352,7 +435,10 @@ export default defineSchema({
     // TENANT-SCOPED FIRST on purpose: a thread/turn-only index would answer the same question
     // ACROSS tenants and hand any caller holding a turn ref a cross-tenant existence oracle. It is
     // an index, not a public query; no read surface is opened by adding it.
-    .index("by_tenant_source_turn", ["tenantId", "sourceThreadId", "sourceTurnId"]),
+    .index("by_tenant_source_turn", ["tenantId", "sourceThreadId", "sourceTurnId"])
+    // Phase 29: "what has this tenant customized for THIS pack template?" — the customization
+    // list surface and the stale-pin check. Tenant-first, like every other read index here.
+    .index("by_tenant_template", ["tenantId", "templateId"]),
 
   // "Routine v0" (Phase 21, SKILL-01): saved cockpit prompt text, INERT AT REST.
   //
@@ -361,16 +447,182 @@ export default defineSchema({
   // starts an ORDINARY fresh cockpit turn through the existing governed send path — so plan,
   // guardrail, spend, approval and activity boundaries are unchanged. `title` is code-derived
   // (bounded trimmed first line); `textHash` makes save idempotent within one tenant.
+  //
+  // PHASE 29 (ROUT-02) EXTENDS THIS ROW RATHER THAN ADDING A SECOND PINNED SURFACE.
+  // A "pinned workflow" is a pinned prompt that also names an exact approved template version and
+  // an exact tenant candidate row — so `save`/`list`/`remove`, the twenty-entry menu, the
+  // code-derived title and, crucially, the "Run is an ordinary fresh cockpit turn" execution path
+  // are inherited verbatim (CLAUDE.md ladder rung 2). A parallel `pinnedWorkflows` table would
+  // duplicate all of that AND put a second pin menu in the workspace.
+  //
+  // All FIVE lineage fields are optional, so every existing pin stays valid with no migration and
+  // an absent set means "a plain prompt pin", exactly as today.
+  //
+  // KNOWN CONSTRAINT FOR 29-08: `textHash` is currently computed from the TEXT ALONE, so two pins
+  // of the same words against different customizations would collide on `by_tenant_textHash` and
+  // the second `save` would return the first row. The pin writer must fold ALL FIVE —
+  // `templateId`, `templateVersion`, `tenantSkillId`, `customizationHash` AND `sourcePreferences`
+  // — into that hash before it writes the first lineage-bearing row. `sourcePreferences` was
+  // missing from this list until the 29-01 repair: two pins differing ONLY in their preferred
+  // sources are two different runs, and leaving it out reproduced the exact collision this note
+  // exists to prevent. `@pikar/core`'s `pinIdentity` already covers all five and is the intended
+  // hash input. This plan does not change `savedPrompts.ts`, so the collision is unreachable today
+  // (nothing writes these fields yet) — it is recorded here because the fields that make it
+  // reachable are being added here.
   savedPrompts: defineTable({
     tenantId: v.string(),
     text: v.string(),
     title: v.string(),
     textHash: v.string(),
+    // ---- Phase 29 pin lineage. REFS AND VERSIONS ONLY: no plan, no recipient, no artifact.
+    /** The approved pack template this pin runs. A `WorkflowPackId` from `@pikar/core`. */
+    templateId: v.optional(v.string()),
+    /** The template version pinned. A bump makes the pin stale and forces re-resolution. */
+    templateVersion: v.optional(v.number()),
+    /** The EXACT tenant candidate row, not a (name, version) pair — two tenants can hold the
+     *  same name AND version, which is why `recordTenantEvalEvidence` keys on the row id too. */
+    tenantSkillId: v.optional(v.id("tenantSkills")),
+    /** SHA-256 over `canonicalCustomization` — what the pin's identity is built from. */
+    customizationHash: v.optional(v.string()),
+    /** `PackSource` names, CLOSED BY THE VALIDATOR — the same derived vocabulary the coverage and
+     *  citation planes use. It was `v.array(v.string())` under this same "bounded" comment until
+     *  the second 29-01 repair, and a convex-test probe stored
+     *  `["notion","http://evil.example","sharepoint"]` verbatim: a documented invariant with no
+     *  enforcement, one field over from where the identical hole had just been closed.
+     *  Preferences, not grants: a preference cannot reach a source the pack's static tool
+     *  allow-list does not already contain.
+     *
+     *  ponytail: MEMBERSHIP is enforced here; LENGTH is not, because a Convex validator has no
+     *  array-length bound and claiming one in a comment is the defect above. The ceiling that
+     *  matters is `CUSTOMIZATION_CAPS.maxValuesPerField` (8) in `validateCustomization`, which
+     *  every writer must run — there is no writer of this field yet. Upgrade path when one lands:
+     *  clamp in the `savedPrompts` mutation, and assert the refusal there. */
+    sourcePreferences: v.optional(v.array(packSource)),
+    //
+    // THERE IS STILL DELIBERATELY NO cadence, timezone, nextRunAt, enabled flag, scheduler id,
+    // run-history ref or standing approval on this row. Pinning is not scheduling, and Phase 29's
+    // recurrence gate (plan 29-11) has not been decided. `schema.test.ts` scans for all of them.
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
-    .index("by_tenant_textHash", ["tenantId", "textHash"]),
+    .index("by_tenant_textHash", ["tenantId", "textHash"])
+    // Phase 29: the tenant's pins for one pack template — the "you already pinned this" read and
+    // the stale-pin sweep after a template republish.
+    .index("by_tenant_template", ["tenantId", "templateId"]),
+
+  // ── Phase-29 unified-search CONTENT PLANE (KNOW-01) ───────────────────────
+  //
+  // ONE ROW PER SEARCH RUN: the answer the user reads, plus its citations, plus the honest record
+  // of which sources actually answered. It is the `vaultSources` pattern one plane over — stable
+  // REFS with PARALLEL LABELS for the card, and the tool-bearing cockpit gets only counts.
+  //
+  // WHY THE SOURCE STATES ARE STORED AND NOT DERIVED: a source that could not be reached and a
+  // source that answered with nothing are the same zero rows and completely different facts. If
+  // the states are not durable beside the answer, a re-render can only guess, and the guess that
+  // costs nothing is "we searched everything and found nothing". `sources[].returned` is therefore
+  // OPTIONAL and legal only on `available`/`partial` — the `unavailable` shape has no count to
+  // write, mirroring `@pikar/core`'s `KnowledgeSourceState` union.
+  //
+  // §4 BOUNDARY: `question`, `summary`, `claims[].text`, `label` and `excerpt` are CONTENT — the
+  // user's own words and their own documents' titles, stored on their own tenant row like
+  // `plans.body` and `savedPrompts.text`. NONE of them may be copied into an audit or dead-letter
+  // payload. The refs/counts projection the log plane gets is `redactedSearchEvent` in
+  // `@pikar/core`, which is a pure function precisely so the ban is testable without a database.
+  //
+  // BOUNDED BY THE WRITER, WHICH IS WHERE TO CHECK IT: `@pikar/core` caps sources at 5
+  // (`clampSearchPlan` — one entry per distinct source), evidence at 24 with 8 per source and 1500
+  // chars each, labels at 200 chars and the whole evidence corpus at 8000 chars (`clampEvidence`),
+  // and claims at 12 with 300-char excerpts (`validateSynthesis`). The Convex validator does NOT
+  // re-impose any of those lengths — the array validators here are unbounded — so a writer that
+  // skips `clampEvidence` puts an unbounded array on this row. Six of those eleven caps were
+  // enforced by nothing at all until the 29-01 repair; if you add a cap, add its enforcement in
+  // the same change or do not add the cap. That the document is kilobytes is why the citations are
+  // an array on this row rather than a second table — one read renders the entire card.
+  //
+  // `authority` and `freshness` are stored as the LITERAL unions `@pikar/core` froze, so the
+  // Convex validator refuses a value the contracts do not know. Widening either is a deliberate
+  // schema change, which is the point: it is exactly how an ungoverned sixth authority class
+  // would otherwise appear.
+  knowledgeSearches: defineTable({
+    tenantId: v.string(),
+    /** Renders the result card in this thread, like `vaultSources.threadId`. */
+    threadId: v.string(),
+    /** The run correlation the toolless planner/synthesizer calls spent against. */
+    runId: v.string(),
+    /** The user's question. CONTENT PLANE — the log plane gets `questionHash`, never this. */
+    question: v.string(),
+    summary: v.string(),
+    /** A closed LABEL. There is deliberately no probability field for a model to author. */
+    confidence: literals(CONFIDENCE_LABELS),
+    // A DISCRIMINATED union of three object shapes, not one object with optional fields. That is
+    // the whole safety property: `unavailable` HAS NO `returned` FIELD, so "reauth failed, so zero
+    // results, so nothing exists" is refused by the Convex validator at insert time rather than by
+    // a code review. `schema.test.ts` proves it by trying the insert.
+    sources: v.array(
+      v.union(
+        v.object({
+          source: knowledgeSource,
+          status: v.literal("available"),
+          returned: v.number(),
+        }),
+        v.object({
+          source: knowledgeSource,
+          status: v.literal("partial"),
+          returned: v.number(),
+          reason: literals(PARTIAL_REASONS),
+        }),
+        v.object({
+          source: knowledgeSource,
+          status: v.literal("unavailable"),
+          reason: literals(UNAVAILABLE_REASONS),
+        }),
+      ),
+    ),
+    /** Post-validation claims only: every `evidence` entry survived citation checking. */
+    claims: v.array(
+      v.object({
+        text: v.string(),
+        evidence: v.array(
+          v.object({
+            // THE SAME CLOSED UNION as `sources[]`. It was `v.string()` until the 29-01 repair,
+            // which meant a stored CITATION could name `notion` or `http://evil.example` while the
+            // coverage plane beside it could not — a rendered source the product does not have,
+            // which is the exact lie this table's comment says it exists to make unspellable.
+            source: knowledgeSource,
+            /** Stable provider/native ref — the drill-in target. Refs only. */
+            sourceRef: v.string(),
+            /** Doc title / file name / subject. Labels-to-UI; never an audit payload (§4). */
+            label: v.string(),
+            authority: literals(AUTHORITY_CLASSES),
+            freshness: literals(FRESHNESS_LABELS),
+            sourceUpdatedAt: v.optional(v.number()),
+            retrievedAt: v.number(),
+          }),
+        ),
+        /** Evidence that DISAGREES, kept beside the claim. Synthesis may not resolve it away. */
+        conflictEvidence: v.array(
+          v.object({
+            source: knowledgeSource,
+            sourceRef: v.string(),
+            label: v.string(),
+          }),
+        ),
+        /** Substring-verified against the evidence THIS claim cited, or absent. Never a summary. */
+        excerpt: v.optional(v.string()),
+      }),
+    ),
+    /** Questions the run could not answer. Said out loud rather than left as a silent gap. */
+    unanswered: v.array(v.string()),
+    /** Claims dropped for citing nothing the run minted. A count, so the gap is visible. */
+    unsupportedCount: v.number(),
+    /** Evidence ids the model produced that no adapter ever minted. The fabrication signal. */
+    invalidCitationCount: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_thread", ["tenantId", "threadId"])
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"]),
 
   // Scheduled awaitEvent-timeout bookkeeping (cancel the scheduled event on real decision).
   // by_correlation added for 02-04's sendDecision (currently full-scans; unbounded now).
@@ -1782,6 +2034,28 @@ export default defineSchema({
     // Drive import writes them; every other insert site leaves both absent.
     driveFileId: v.optional(v.string()),
     driveModifiedTime: v.optional(v.number()),
+    /**
+     * PROVENANCE, CARRIED ACROSS THE IMPORT — the one field that keeps the Drive plane and the
+     * vault plane telling the same story about the same file.
+     *
+     * Drive search is not ownership-scoped (`includeItemsFromAllDrives`, no `'me' in owners`), so a
+     * file a STRANGER shared into the tenant's Drive is a hit. `authorityFor("drive", ...)` reads
+     * Drive's own `ownedByMe` and calls anything but `true` `third_party_research`. Importing that
+     * same file used to erase the distinction: the row landed as `kind: "upload"` with no ownership
+     * signal at all, `vaultGroundHydrated` carries `kinds`/`origins` and not `source`, and the
+     * search plane's allowlist reads `"upload"` as the tenant's own word — so ONE document read
+     * `third_party_research` on the Drive plane and `tenant_owned` on the vault plane.
+     *
+     * A DECIDED BOOLEAN, NOT DRIVE'S TRISTATE. `landFile` stores `ownedByMe === true`, applying the
+     * Drive plane's own "absence is not ownership" rule at the write site, so the two planes cannot
+     * drift apart later by disagreeing about what an absent value meant. Drive leaves `ownedByMe`
+     * unset for shared-drive items, and those must read as NOT owned on both planes.
+     *
+     * ABSENT ⇒ this row did not come from Drive (an upload, a brain dump, an agent write). Absence
+     * is NOT a downgrade — `authorityFor` only downgrades on an explicit `false`, or the whole
+     * upload rail would lose `tenant_owned`.
+     */
+    driveOwnedByMe: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"]) // browse

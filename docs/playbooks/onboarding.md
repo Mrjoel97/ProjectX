@@ -1,5 +1,28 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-08-28 (**TWO DEFECTS IN LANDED CODE. (1) `deriveCandidates` WAS SENDING AN
+> UNKNOWN MODEL ID.** `blueprint.ts` and `onboarding.ts` each held a private
+> `resolveModel = id => openai(id.replace(/^openai\//, ""))`, whose regex is anchored on
+> `^openai/` — and `@pikar/cost`'s `DEFAULT_MODEL` has been `"or/openai/gpt-4o-mini"` since 845f4b1.
+> An `or/` id does not match, so the id passed through unchanged and the request went to OpenAI
+> naming a model OpenAI has never heard of. Both copies are deleted; both modules now import the ONE
+> route table at `convex/lib/models.ts`, which strips the `or/` route prefix and calls OpenRouter.
+> **(2) THE BLUEPRINT'S OFFLINE SEAM WAS SELECTABLE BY VAULT CONTENT.** The gate was
+> `safePrompt.includes("SMOKE::blueprint::")` over the ASSEMBLED prompt — and that prompt embeds
+> `sources`, which `buildBlueprintDraft` hydrates from `vaultGround.vaultGroundHydrated`, i.e. chunks
+> of Drive files and ingested email. One document carrying the sentinel replaced the model call with
+> `smokeCandidatesFixture`, whose candidate values are parsed straight out of the attacker's own
+> line: a third party's text silently became the tenant's DERIVED BLUEPRINT, with no spend and no
+> trace that synthesis had been skipped. The seam is now keyed on `fields` — code-owned via
+> `probesFor` on the production path, and unreachable from any client because `deriveCandidates` is
+> an `internalAction`. `onboarding.ts`'s own two seams were AUDITED AND LEFT ALONE: `extractProfile`
+> matches `startsWith` on its `intakeText` argument and the conversational turn matches `startsWith`
+> on `userMessage` — both are single-channel, client-supplied-by-the-tenant inputs with no embedded
+> retrieved content, which is the property blueprint's gate had lost. Mutations run RED: the gate
+> reverted to `safePrompt.includes` (blueprint.test.ts, 3 red), a naive `resolveModel` copy restored
+> (lib/models.test.ts, 2 red), the `or/` branch deleted from the shared table (2 red).)
+>
+
 > Last verified: 2026-08-23 (27-07 — **ONE EXPORT, NO BEHAVIOUR CHANGE.** `onboardingCompletedAt`
 > joins `currentProfileDoc` in `convex/onboarding.ts`, reading the same `by_tenant_kind` index with
 > the same `failed` filter. It returns the OLDEST committed profile doc's `createdAt`, deliberately
@@ -756,8 +779,13 @@ blank field and every index-parallel source passage into one redacted prompt, th
 source-backed candidates in one strict-schema call. The active `business-blueprint` skill is loaded
 first—even before the offline seam—so an unseeded deployment throws `NO_ACTIVE_SKILL`; there is no
 hardcoded prompt fallback. `guardrails.preCall` refusals remain governed `{ok:false}` returns.
-`SMOKE::blueprint::<field>|<value>|<sourceIndex>` yields deterministic candidates after the same
-skill and guardrail gates, without a model call or spend. Real calls use the repository's 45-second
+A `fields` ENTRY of the form `SMOKE::blueprint::<field>|<value>|<sourceIndex>` yields
+deterministic candidates after the same skill and guardrail gates, without a model call or
+spend. **The sentinel is matched against `fields` ONLY, never against the prompt.** `sources`
+is retrieved vault content — Drive files and ingested email — so a prompt-wide `.includes`
+let a third party's document replace this tenant's derived blueprint with a fixture of its own
+authoring; `fields` is code-owned by `probesFor` and `deriveCandidates` is an `internalAction`,
+so only server code can select the seam. Real calls use the repository's 45-second
 timeout, one retry, `DEFAULT_MODEL`, and record only priced actual usage.
 
 The public `buildBlueprintDraft` action reads the tier row first and throws the named

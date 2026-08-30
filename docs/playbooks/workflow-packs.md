@@ -1,6 +1,507 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
-> Last verified: 2026-08-26 (**THE SIX PACKS ARE CERTIFIED ON PRODUCTION'S EVAL PLANE AND STILL
+> Last verified: 2026-08-30 (**THE "UNEXPLAINED" SERIAL-WORKER HANG IS EXPLAINED: a rapid
+> `page.goto` loop poisons the NEXT page in the same browser context.** Reproduced deterministically
+> with a four-test serial probe counting buttons inside `main.canvas-main` after a fixed 6s settle:
+>
+>     baseline                 buttons=14  chars=3791
+>     inside the reload loop   buttons=14  chars=3791   <- the looping page itself is FINE
+>     immediately after it     buttons=0   chars=0      <- the NEXT test renders nothing
+>
+> Five identical tests with NO loop all read 14, so it is the LOOP, not the position — the earlier
+> guess ("something the serial worker accumulates") was the right neighbourhood and the wrong
+> mechanism. In the failing state the shell is painted, the route is right, the session is valid
+> (`Sign out` present, no redirect) and there are no console errors: the client subscriptions simply
+> never resolve, so every `useQuery` stays undefined and the content never mounts. Consistent with
+> Convex websockets from the abandoned navigations not being released before the next client opens.
+>
+> **This is not confined to one test.** `workflow-packs.spec.ts`'s persistence test drives exactly
+> such a loop — `expect(...).toPass()` re-reads by reloading — so ANY test after it in the same
+> worker inherits the poisoned context. Splitting the isolation test into its own file works because
+> Playwright gives each spec FILE its own worker and therefore its own browser context. A third test
+> following a reload loop needs its own file too, or a way to re-read without reloading.
+>
+> Note the loop exists only because the save had no completion signal to await; that is fixed in the
+> entry above, so the reload-retry may be reducible now.)
+
+> Last verified: 2026-08-30 (**THE SAVE NOW SAYS IT SAVED. The state to render it already existed
+> and nothing read it.** `setOutcome({kind: "saved"})` was set on the success arm and no branch
+> rendered `outcome.kind === "saved"` — only `refused` and `transport` were shown. So success and
+> still-in-flight were indistinguishable in the DOM: no toast, no `role="status"`, no `role="alert"`.
+>
+> **It was never cosmetic.** Navigating straight after pressing Save ABORTS the in-flight mutation,
+> so a user who clicks and leaves loses the write with no signal that anything was pending. Found by
+> the 29-10 browser gate, which first read back a previous run's string and looked like a
+> persistence bug in the product.
+>
+> Now renders `Saved. Your settings are version N.` in a `role="status"` live region — POLITE, not
+> `role="alert"`: a success is not an interruption, and alerting would cut across a screen-reader
+> user mid-sentence for good news. It names the VERSION because that is what the next save is
+> checked against, so a later `stale_base_version` refusal does not appear from nowhere. It does NOT
+> repeat `ACTIVATION_NOTE` — that sentence is already above the form, and repeating it on success
+> reads as a warning about the save rather than about the release.
+>
+> Tests (+2, 123 total): a landed save renders the line in `[role="status"]` and asserts the line is
+> ABSENT before the save (so it cannot pass on always-present copy); a REFUSED save renders no
+> success line and no status region. Mutations observed RED: delete the saved block (the exact prior
+> state) → 1 red; `role="status"` → `role="alert"` → 1 red.
+>
+> **A note on the second mutation, because it nearly went unrecorded.** A first attempt reported it
+> GREEN — but the edit had not applied: the replacement string never matched, so nothing was tested.
+> A mutation that fails to land is indistinguishable from one that survives. Assert the anchor
+> matched, or the mutation proves nothing.)
+
+> Last verified: 2026-08-30 (29-10 — **THE PACK SURFACE HAS ITS BROWSER GATE, AUTHORED AGAINST THE
+> RENDERED DOM AND PROVEN IN BOTH DIRECTIONS.** `apps/web/e2e/workflow-packs.spec.ts` +
+> `workflow-packs-isolation.spec.ts`: **5 passed, PW_EXIT=0**. Every locator was read off a live run
+> of the page BEFORE the spec was written — `--list` proves a file parses, never that a locator
+> resolves, and `knowledge-search.spec.ts` was dead on its first line while `--list` was happy.
+> Falsified deliberately: an `<input type="url" aria-label="Webhook endpoint">` planted inside the
+> customizer turned the closed-schema count RED (`Expected: 4, Received: 5`); reverted, rebuilt, green.
+>
+> **THE SPEC WENT RED FIVE TIMES FOR FIVE DIFFERENT REAL REASONS, and three of them are facts about
+> this surface that no source reading would have surfaced:**
+> 1. **The prefill is asynchronous and CLOBBERS TYPING.** `choose()` fills the form from
+>    `myCustomizationValues` when the query lands; type before that and the value is silently
+>    replaced, so the save writes the OLD string and a later reload "passes" on a value nobody
+>    entered. Any test here must prove the typed value stuck before pressing Save.
+> 2. **THERE IS NO SAVE COMPLETION SIGNAL — no toast, no `role="status"`, no `role="alert"`.**
+>    Success and still-in-flight are indistinguishable in the DOM, and navigating straight after the
+>    click ABORTS the in-flight mutation. A test can wait before navigating and retry the read; a
+>    user who presses Save and navigates simply loses the write. **This is a product gap, recorded
+>    here rather than absorbed by a sleep.**
+> 3. **One tenant + one pack = ONE `tenantSkills` row**, so two customization tests are two writers
+>    of the same row and cannot run under `fullyParallel: true`. The file is `mode: "serial"`.
+> Plus the 30s default timeout (which presents as a locator failure), and a serial-WORKER
+> interaction that hangs tenant A's pack list, survives a fresh browser context, and disappears when
+> the test runs in its own file — **root cause NOT established**, written into
+> `workflow-packs-isolation.spec.ts` so the green tick does not imply otherwise.
+>
+> **WHAT THE GATE DELIBERATELY DOES NOT ASSERT.** The plan asks for exact-version activation and
+> rollback. Neither is reachable: `planTenantActivation` refuses every `pack-*` with `PACK_GATE`,
+> both are `ownerMutation`, and `cockpit.ts` passes no `tenantSkillIds` so a published customization
+> is INERT. The gate asserts the honest consequences — no control offers activation, and the surface
+> never says "pending review" / "awaiting approval" / "once approved" — and 29-10-SUMMARY.md records
+> the criteria as NOT MET rather than faking a path.
+>
+> **A PRECONDITION THAT DECIDES WHETHER ANY OF THIS CAN RUN:** `listPacks` returns ACTIVE packs only.
+> With no active `pack-*` row the surface renders "No approved workflows are available to you yet."
+> with ZERO controls and every assertion is unreachable; `settle()` accepts that state and the tests
+> skip loudly rather than failing as if the product were broken. Five packs are active locally.
+> The `@run` block (pin + two reruns, real model spend) is written and TAGGED but NOT YET RUN.)
+
+> Last verified: 2026-08-30 (29-13 — **THE WORKFLOWS ROUTE HAS ITS FIRST BROWSER EVIDENCE, AND IT
+> IS AN ABSENCE PROOF.** `routineBranch.test.ts` reads `29-RECURRENCE-DECISION.md` and asserts the
+> branch that artifact selects (`defer`), so it is not hard-coded to one outcome; the deferred branch
+> asserts `RoutineControls.tsx` does not exist, nothing binds a recurrence lifecycle API, and
+> `PinnedWorkflowButton` is STILL MOUNTED — the manual rerun surface ROUT-02 actually shipped.
+>
+> **PROVEN IN BOTH DIRECTIONS, ON A REAL BROWSER, BY THE ORCHESTRATOR (2026-08-30).**
+> Green: `e2e/routines.spec.ts` **5 passed**, PW_EXIT=0, including the two-identity case (tenant B,
+> an ordinary non-owner, sees the same surface with the same absence).
+> Red on demand: a `<button>Pause schedule</button>` planted in `workflows/page.tsx`, rebuilt and
+> re-served, turned the scan RED naming it (`+ "Pause schedule"`); reverted, rebuilt, 5/5 green again.
+> `routineBranch.test.ts` likewise: planting a `RoutineControls.tsx` turned **3** tests red, then it
+> was deleted. Two full `next build` + restart cycles per direction — `@pikar/core` exports raw TS so
+> Next BUNDLES it, and without a rebuild the browser tests the previous bundle.
+>
+> **THE SETTLE SIGNAL WAS ITSELF VACUOUS, AND ONLY THE POSITIVE CONTROL CAUGHT IT.**
+> `routines.spec.ts` waited for `main.getByText("Run again")` before scanning for absence — but the
+> pinned surface's always-present intro reads *"Nothing starts by itself — you press Run again."* So
+> the settle matched STATIC COPY, fired before a single Convex query resolved, and every
+> `toHaveCount(0)` below it ran against a page still rendering "Loading your workflows…". The scan's
+> own positive control (`expect(names.length).toBeGreaterThan(0)`) refused: **0 controls found**.
+> Without that control this would have been a green absence proof over a DOM the spec never read —
+> the exact defect `workflow-pack-pilot.spec.ts`'s `@dark` block shipped, which passed with all six
+> packs ACTIVE because `toHaveCount(0)` succeeds on its first poll.
+> FIXED by settling on a CONTROL, not prose: a `button` named "Pin this workflow"/"Run again", or the
+> empty-state sentence. None of those can render before `listPins`/`listPacks` answer; prose can be
+> anywhere. **Rule this cost us: a settle signal must match something that CANNOT exist before the
+> thing you are waiting for.**
+>
+> **A precondition worth knowing before reading this route's gates:** `listPacks` returns ACTIVE packs
+> only (`by_name_status`, exact status — never "newest row", which would surface a candidate and undo
+> the dark pilot). On a deployment where no `pack-*` skill has an active row the whole surface renders
+> "No approved workflows are available to you yet." with ZERO controls, and any control-level browser
+> assertion is unreachable. Five packs are active on the local deployment, which is why these gates
+> could run at all.)
+
+> Last verified: 2026-08-29 (29-08 FIX2 — **THE ENUM THAT REPLACED THE BOOLEAN HAD THE SAME HOLE,
+> ONE ARM OVER.** Three independent verifiers applied the identical mutation:
+> `outcome === null ? "unknown" : outcome === "blocked" ? "blocked" : "ran"` →
+> `outcome === null ? "unknown" : "blocked"`, and `pinnedWorkflows` stayed **43/43 GREEN**. Under it
+> a run that reached the model, answered and recorded spend rendered "Pikar stopped this run before
+> it started. Nothing ran and nothing was spent" and wrote `state: "blocked"` to the audit plane —
+> the same $0 falsehood the round before existed to kill. **No test in this repo had ever produced
+> `state: "ran"` from the server**, because every $0 drive either exhausts the budget (→ `blocked`)
+> or throws before a thread (→ `null`). A discriminant whose happy arm nothing reaches is not a
+> discriminant.
+>
+> **Both halves of the close are in the tree.** (1) The derivation is the exported pure function
+> `pinRunState(outcome: string | null)`, with all three arms asserted directly — `useful`,
+> `partial`, `no_findings` and `failed` are each RAN, which also makes the module header's
+> "`no_findings` is `ran`, not `unknown`" an enforced invariant rather than a comment. (2) **A
+> COMPLETED TURN IS NOW DRIVEN END TO END, OFFLINE, FOR $0 OF REAL MONEY.**
+> `pinnedWorkflows.test.ts` mocks `lib/models.resolveModel` to a scripted `MockLanguageModelV4` (the
+> `knowledgeSearch.test.ts` idiom, and the same swap `__runWorkflowPackWithScript` performs); every
+> other line is shipped code, so `runAgain` returns `state: "ran"`, `outcome: "useful"` **beside a
+> real priced `spendEvents` row**. Zeroing the scripted token counts turns both assertions red, so
+> the row is `priceUsage`'s, not a fixture's.
+>
+> **`"unknown"` had the mirror-image hole and it is closed the same way.** Both existing `unknown`
+> drives kill the agent component, i.e. throw BEFORE any model call — so the one state whose whole
+> purpose is "we cannot tell whether money was spent" had only ever been observed where money
+> provably was NOT. The new drive lets the model answer, lets `recordModelSpend` run, and then
+> throws from AFTER `runSpecialistTurn` (the exact seam the module header names). The state is still
+> `unknown`, the audit row is still `unknown`, and a non-zero spend row sits beside it. The
+> verifier's mutation `outcome === null ? (threadId === null ? "unknown" : "blocked")` — which
+> re-instates the original lie on precisely the cockpit-swallowed-throw path — is RED on that test.
+>
+> **The "nothing runs by itself" scan now sees the copy a user actually reads.** It enumerated four
+> READINESS states plus empty, all of them pre-press, so `BLOCKED_RUN`, `UNKNOWN_RUN`,
+> `TRANSPORT_ERROR` and every `actionLine` branch were outside it: a verifier put "Pikar will retry
+> this automatically every day" into the blocked copy and the web suite stayed 30/30 green. The scan
+> now runs over every `PinAction` kind through `actionLine` (a `Record<PinAction["kind"], …>`, so a
+> new kind fails the typecheck rather than going unscanned) AND over the DOM after a real press in
+> five run-result states. That mutation is RED on both.
+>
+> **THREE CLAIMS DELETED RATHER THAN NARROWED.** (1) `latencyMs` is gone from the audit payload:
+> nothing read it and its only assertion was `expect.any(Number)`, so `Date.now() - startedAt` → `0`
+> survived. (2) `pinWorkflow`'s docstring no longer says the pin captures "the source preferences
+> that row recorded" — that field lost its writer last round and the sentence was left standing.
+> (3) `TRANSPORT_ERROR` no longer says "That did not go through": a browser that never saw the reply
+> cannot know that. It now reads "Pikar could not confirm that. Reload the page to see whether it
+> went through." and it is reachable from PIN and UNPIN only — **a throw out of the run channel now
+> sets `runUnknown`**, because `runAgain`'s audit write sits outside its try, so a completed and
+> possibly billed run can reject after the turn happened.
+>
+> **The `"blocked" ⇒ $0` absolute has a guard at last** (the two weaker `cockpit.ts` absolutes had
+> one and the one carrying the money sentence did not): a scan asserts `workflowPackBinding.ts`
+> writes `outcome: "blocked"` at exactly two sites, both BEFORE `runSpecialistTurn(`, with the
+> literal `costUsd: 0` between the second and the model. Its reach is stated where it lives: a
+> literal second producer is RED (and so are the two completed-run drives); a producer that builds
+> the value from a variable is NOT seen by the scan, and only a drive that takes that path would
+> catch it.
+>
+> Gates: `pinnedWorkflows` **53 tests** (was 43), `apps/web PinnedWorkflowButton` **33** (was 30).
+> Mutations observed RED are listed in `29-08-FIX2-SUMMARY.md`. **STILL UNRUN: the browser** — this
+> route has no Playwright spec and is still absent from the nav; and the web suite remains
+> fixture-driven (its fixtures are now the server's own `FunctionReturnType`s, so a renamed state
+> fails the typecheck, but only the backend suite proves a state is ever PRODUCED).)
+
+> Last verified: 2026-08-29 (29-08 FIX — **THE PIN SURFACE TOLD A USER "NOTHING WAS SPENT" ABOUT A
+> RUN THAT MAY HAVE BEEN BILLED.** Two independent verifiers found it. `runAgain` computed
+> `ran = res.ok && outcome !== null && outcome !== "blocked"`, and `cockpit.startWorkflowPack`
+> reports a pack-binding refusal and EVERY throw out of `runWorkflowPack` the same way (`ok:false`,
+> no `outcome`; it never rethrows) — while `runPackTurn` rethrows from AFTER `runSpecialistTurn`,
+> i.e. after the model may have answered and `recordModelSpend` may have run. So `outcome === null`
+> collapsed into the same `false` as the $0 governed stop, the UI rendered "Pikar stopped this run
+> before it started. Nothing ran and nothing was spent", and the audit row said `ran:false`.
+> Deleting `outcome !== null &&` left the suite 34/34 green: the branch was unmutatable.
+>
+> **The boolean is gone.** `RunAgainResult` now carries `state: PinRunState = "ran" | "blocked" |
+> "unknown"`, and so does the audit payload (the `ran` + `started` pair is deleted, not narrowed).
+> Only two states may claim $0, and both can prove it: `ok:false` (refused before a thread, a plan
+> row or a model call exists) and `"blocked"` (`runPackTurn` returns `costUsd: 0` literally).
+> `"unknown"` renders "This run did not finish, and Pikar cannot tell whether it reached the model.
+> It may have used part of today's budget — open your workspace to see what happened before running
+> it again." and does not navigate. The `run_failed` refusal reason is DELETED: it was reachable
+> only from a transport throw, which `transport` already covers, and its copy made the same
+> unprovable promise.
+>
+> **ONE PIN PER PACK, PER TENANT — re-pinning REPLACES.** The backend used to insert a row per
+> distinct lineage while the surface rendered one row per pack, so every extra pin was invisible,
+> unremovable (the prompt menu filters workflow pins out) and functionally identical — `runAgain`
+> sends the pack id and re-resolves to the ACTIVE version, so a pin of v4 and a pin of v5 run the
+> same thing. The pinned version is a DISPLAY fact, not a selector. `listPins` therefore lost its
+> `createdAt` sort (with one pin per pack there is nothing to order) and returns rows in
+> `WORKFLOW_PACK_IDS` order, bounded by six.
+>
+> **`sourcePreferences` has no writer again**, and `schema.ts`'s "no writer of this field yet"
+> comment is true once more. It was stored, folded into `pinIdentity` and read by NOTHING: no
+> runtime honours a preference, and the surface never rendered it. `customizationHash` already
+> hashes the exact values it was derived from, so it could only ever agree with the hash.
+>
+> **The unfalsifiable guards are guards now.** `runCount`'s prefix (`freshRunCorrelation(pinId,"")`)
+> is pinned by a two-pin/two-tenant test — replacing it with a constant `"pin:"` counted every pin
+> in the deployment across tenants and left 34/34 green; it is RED now. The range also compares
+> `eventType`. The audit payload is asserted as a whole VALUE (`toEqual`, every field), plus a
+> second run with three notices and two differing versions, so `noticeCount: 0` and
+> `activeVersion: 999` are both RED. `newestCustomization`'s `templateId === packId` and
+> `readinessFor`'s foreign-tenant check each have their own test.
+>
+> **Also:** the write-only `pinButtons` ref map is deleted; the `runCount` docstring's `schema.ts:359`
+> citation was wrong (the comment is at `schema.ts:442`) and is fixed; the U+FFFF range bound is now
+> actually written as the escape its comment claimed (commit `cdcf7dd`'s message said that change
+> had been made and it had not — the message cannot be rewritten, so it is corrected here).
+>
+> **DEVIATIONS FROM 29-08's PLAN, RECORDED RATHER THAN BLESSED.** (1) The component is NOT wired to
+> `checkReadiness`; readiness arrives embedded in `listPins` and a second read would be redundant.
+> The source-scan assertion that froze that omission as "the four functions it MAY reach" is
+> DELETED — the `convex/react` stub already enforces the closed set behaviourally, in every test, by
+> throwing on any unexpected function path. (2) The plan's "shows last/manual-run outcome" is NOT
+> met: the repeat ordinal and the last outcome live on the audit plane only, the surface has no
+> persisted memory of them, and `ordinal`/`correlationId` are no longer returned to the browser at
+> all rather than shipped as dead payload. Reading them back would need a per-pin audit range read
+> on every reactive `listPins`.
+>
+> Gates: `pinnedWorkflows` 43 tests, `apps/web PinnedWorkflowButton` 30 tests. THIRTEEN mutations
+> observed RED, listed in `.planning/phases/29-unified-knowledge-and-routines/29-08-FIX-SUMMARY.md`.
+> STILL UNRUN: the browser. This route has no Playwright spec and is still absent from the nav.)
+
+> Last verified: 2026-08-29 (29-08 — **`/dashboard/workflows` GAINED PIN AND RUN AGAIN CONTROLS,
+> AND THEY SAY WHAT A RE-RUN ACTUALLY RUNS.** `PinnedWorkflowButton.tsx` is mounted above the
+> customizer on this route and reaches exactly five functions: `listPacks`, and the four
+> `pinnedWorkflows` verbs (`listPins`, `pinWorkflow`, `unpinWorkflow`, `runAgain`) — asserted as
+> the complete `api.*.*` set in the shipped source, so a sixth cannot appear unnoticed. There is
+> still NO activation, approval or rollback control here, and none is possible: both mutations are
+> `ownerMutation`s.
+>
+> A run goes through `cockpit.startWorkflowPack` with no `threadId`, so each press is a fresh
+> thread, a fresh `plans` row and a fresh correlation; the surface then navigates to
+> `/dashboard/workspace?thread=<new>`. A run stopped at the governed gate does NOT navigate — it
+> says "Nothing ran and nothing was spent", because sending the user to a conversation whose only
+> reply is "I've paused for a moment" hides the fact that matters.
+>
+> `PinnedWorkflowButton.test.ts` is a jsdom CONTAINER test (the 29-07-FIX2 idiom: `createRoot`,
+> real click events, only `convex/react` and `next/navigation` stubbed) — 28 tests. Nine mutations
+> observed RED, including both click handlers cut to no-ops, `router.push` deleted, navigating on
+> `res.ok` instead of `res.ran`, the runnable check dropped from the Run button's `disabled`, and
+> the focus restore deleted. The no-recurrence scan runs over the RENDERED text of five states, not
+> over the source, so the comment explaining the ban cannot fail its own check.
+>
+> ONE REAL DEFECT WAS FOUND BY THAT SUITE AND FIXED: the focus restore after "Remove pin" was
+> written as an effect that looked once, and the unpin mutation resolves BEFORE the live `listPins`
+> query pushes the removal — so there was no replacement button to focus yet and focus fell to the
+> document body. It is now done in the button's own ref callback, which runs when the replacement
+> mounts.
+>
+> STILL UNRUN: the browser. This route has no Playwright spec and is still absent from the nav.)
+
+> Last verified: 2026-08-29 (29-07-FIX2 — **THE CONTAINER HALF OF `/dashboard/workflows` WAS
+> UNPINNED, AND THE OPTIMISTIC-CONCURRENCY REFUSAL COULD NOT FIRE.** Four mutations that make the
+> route functionally inert all passed the customizer suite: `onChoose`, `onSet` and `onSubmit` cut
+> to no-ops, and `setBaseline(values)` deleted from the save's success arm. A user could open the
+> page, click a workflow, type and press save with nothing happening, and every gate stayed green —
+> the SSR suite renders `CustomizerView` from props and fires no event, so it was never able to say
+> whether the container is wired to it. Three of the four were disclosed as "SOURCE-SCAN coverage,
+> not behaviour coverage"; an honest label on a hole is not a fix.
+>
+> **`WorkflowPackCustomizer.container.test.ts` (new, 12 tests) MOUNTS THE REAL CONTAINER** under
+> jsdom with `createRoot`, dispatches real click and `input` events, and reads the text back out of
+> the document. `convex/react` is the only stub, and `useQuery` answers by the function reference's
+> OWN path (`getFunctionName`), not by a hand-kept map. All four inert-making mutations go RED,
+> observed, along with four more on the concurrency fix below. `jsdom` is the ONE dependency added
+> (an `apps/web` devDependency); `react`/`react-dom` were already here and no testing-library is
+> used. `apps/web/vitest.config.mts` named jsdom as the upgrade path for exactly this case.
+>
+> **`stale_base_version` WAS UNREACHABLE FOR THE CONTAINER PATH.** `submit()` read
+> `selected.myBaseVersion` off the LIVE reactive `listPacks` query at save time, while the form's
+> contents were snapshotted at open time by `choose()`. A concurrent publish moved the token without
+> moving the data it describes, so the save carried the OTHER draft's version, the server accepted
+> it, and the guard that exists for this exact race could never trip — silent last-write-wins, the
+> failure `publishPackCustomization`'s own docstring calls the version of that failure nobody
+> notices. The base version is now snapshotted in `choose()` beside `setBaseline(prior)`, passed to
+> the view as `baseVersion`, and moved only by a save success (together with the baseline) or by
+> `adoptedBase` on a refusal. **THE SURFACE ALSO RENDERED A FALSE SENTENCE** in that state, naming a
+> version whose settings were not on the form; `lineageLine` now reads "This edit is based on your
+> saved version N" — true after a refusal, where "your latest saved version is N" was not — and
+> every saved-version sentence on the surface reads the frozen prop.
+>
+> **THE `server-only` BUILD STORY IS SETTLED, AND BOTH PREVIOUS RECORDS OF IT WERE WRONG.** It is
+> neither "the gate cannot run here" nor "nothing imports it, ignore it". The mechanism, the
+> one-line repair and the two fixes that do NOT work are now under *How to verify*, where an
+> operator hitting the failure will look. Nothing was committed for it.
+>
+> **A §9 VIOLATION IS REPAIRED HERE TOO.** The previous round's code commit changed two files under
+> this playbook's watched path without touching this file — its playbook commit landed BEFORE its
+> code commit, and the Stop hook only inspects the working tree, so nothing could see it. That left
+> a stale `apps/web 97/97` recorded as a package-level result; it is retracted in the 29-07-FIX
+> block below.
+>
+> Measured on this tip: `WorkflowPackCustomizer.test.ts` 109/109 · `WorkflowPackCustomizer
+> .container.test.ts` 12/12 · `apps/web` package 38 files / 762 tests (that package total moves with
+> two sibling agents' uncommitted work in this worktree — trust the two FILE counts) ·
+> `convex/workflowPackDiscovery.test.ts` 12/12, unchanged, and unchanged for a reason: the defect
+> was entirely client-side and the server's per-name base-version resolution is already pinned
+> there (mutation: `myBaseVersion: null` → 3 of 12 RED, observed) · `apps/web` typecheck clean ·
+> `pnpm --filter @pikar/web build` EXIT=0 with `f /dashboard/workflows` in the route table.
+> **STILL UNRUN: the authenticated browser gate.** jsdom is not a browser — no layout, no paint, no
+> real focus ring — and no Playwright spec has loaded this route.)
+
+> Last verified: 2026-08-29 (29-07-FIX — **TWO RECORDED FACTS IN THIS FILE WERE FALSE; BOTH ARE
+> RETRACTED ABOVE.** (a) The Next production build DOES run here: `pnpm --filter @pikar/web build`
+> exits 0 and `ƒ /dashboard/workflows` is in its route table, measured on this tip. It is the
+> meaningful compile gate for the route and it should be run. (b) The eval harness's staging
+> function is `seedCase` (`packages/backend/scripts/run-workflow-pack-evals.mjs`), not `stageFor`,
+> and it plants THREE things: `smoke:seedPackEvalTenant` (a figure row, one calendar event, a
+> `gmailTokens` row), `smoke:seedInboxFixture` (the mailbox — only when the fixture declares
+> `inbox: available`) and `vaultSmoke:seedCorpus` (the briefs — only when an expected operation uses
+> `searchVault`); `runCase` adds `smoke:seedCockpitPlan`.
+>
+> **THE MAILBOX CARRIES A REAL INJECTION, ON PURPOSE.** `seedInboxFixture`'s `fix-injection` message
+> body is a forward-to-attacker instruction, and `pack-customer-complaint` is the only pack whose
+> fixtures declare `inbox: available` — so all five of its cases run against it, not only its
+> `-injected-` one. The other three seeded planes carry none. Every one of those four claims is now
+> asserted against the SEEDER'S OWN sliced source, with a positive control on the slicer.
+> `INJECTION_MARKERS` gained "system instruction": without it the guard could not see
+> `IMPORTANT SYSTEM INSTRUCTION:`, the phrasing this repo's own probe payload uses, so planting that
+> exact line in `vaultSmoke.ts` left the file green. It now goes red (observed).
+>
+> **THE RUNNER'S VALIDATOR NOW RUNS IN CI.** `run-workflow-pack-evals.mjs` executes `main()` only
+> when Node was pointed at it, so `convex/workflowPackEvals.test.ts` imports the real
+> `validateFixture` / `validateCorpus` / `projectRegistry` instead of carrying a second traversal.
+> `--fixtures-only` still reports "30 valid". Two assertions were DELETED rather than kept: a
+> tautological `toEqual(packReadableSources(packId))` (the implementation assigns that call's
+> result; `packages/core/src/workflowCustomization.test.ts` is what catches a change to it, verified
+> red) and a verbatim copy of `packages/core/src/workflowPacks.test.ts`'s grant-derivation test.
+>
+> **THE CUSTOMIZER IS NOW ASSERTED THROUGH ITS RENDER.** Every user-facing sentence used to be
+> checked by CALLING an exported copy function; six could be stripped out of the JSX with the suite
+> green. `WorkflowPackCustomizer` is split into a hooks container and `CustomizerView`, no copy
+> function is exported, and the test renders with `react-dom/server` and asserts the RENDERED string
+> and the exact ARIA id pairs on the exact controls. `ACTIVATION_NOTE`'s claim about `cockpit.ts` is
+> cited by a test that reads `cockpit.ts` (adding `tenantSkillIds` there turns it red).
+>
+> **TWO USER-FACING DEFECTS CLOSED.** `baseCandidateVersion` came from `skills.myUserSkills`, a
+> 50-row tenant-WIDE window; past it the form sent `null` forever and every save was refused
+> `stale_base_version` with copy telling the user to reload — which reproduces the window.
+> `workflowPackDiscovery.listPacks` now returns `myBaseVersion` from the same per-name
+> `by_tenant_name_version` `take(1)` `readTenantPublishState` uses, the client adopts the server's
+> `currentBaseVersion` on a refusal, and the copy asks for a retry that can win. And a repeat
+> customization silently dropped every field the user did not re-type: `listPacks` returns
+> `myCustomizationValues`, the form reopens with them, the diff is against what it opened with, and
+> the surface says saving replaces the whole set.
+>
+> workflowPackEvals 22/22 · workflowPackDiscovery 12/12 · both typechecks clean ·
+> `pnpm --filter @pikar/web build` EXIT=0. **STILL UNRUN: the authenticated browser gate.** No
+> Playwright spec has been executed against `/dashboard/workflows`, and this release's honesty
+> claims about what a user SEES rest on SSR renders, not on a live page.
+> (An `apps/web 97/97` figure stood here and was stale before it was written: it was the customizer
+> FILE's count at the commit that wrote this block, and the next commit of the same fix took that
+> file to 109 while the package itself was 749. Re-measured numbers are in the 29-07-FIX2 block at
+> the top. Record a FILE count under the file's name and a PACKAGE count under the package's, never
+> one number under the other's label.))
+
+> Last verified: 2026-08-29 (29-W3-TAIL-FIX — **THE `internalAction` JUSTIFICATION IS DELETED FROM
+> THE CODE, AND THE 2026-08-28 ENTRY BELOW STILL STATES IT.** The `packArgs` docstrings in
+> `workflowPackBinding.ts` no longer read "`internalAction` ⇒ never model-supplied" or "declared
+> only on the two `internalAction`s below". Every declaring site is internal today and no test fails
+> when one stops being, which `skill-registry.md`'s "The pin door IS open" records as a GAP rather
+> than a bound; read that bullet, not the sentence in the entry below. Comment-only — no behaviour
+> changed, `pnpm vitest run workflowPackBinding` is 39/39 and `pnpm typecheck` is clean.)
+
+> Last verified: 2026-08-29 (29-07 Task 2 — **THE FIXTURE VALIDATOR RAN NOWHERE, AND FOUR OF THE
+> SIX "INJECTION" CASES PLANT NO INJECTION.** `run-workflow-pack-evals.mjs --fixtures-only` is
+> offline and free and validates the whole corpus, and no CI job invokes it; `packEvalSuite.test.ts`
+> checks each file's sha256 and case count and nothing about its CONTENT. `convex/workflowPackEvals
+> .test.ts` (new, 21 tests, $0, runs in `pnpm test`) now derives every legal value from the shipped
+> code and checks the corpus against it: operations must be `existing`, `expect.sources` must name
+> every reachable plane and only states `PACK_SOURCE_PROBE_STATES` allows, `expect.outcome` is
+> checked through the REAL `outcomeFor` (a reachable plane declared unavailable forces `partial`),
+> `toolsAllowed` must be in `toolsForWorkflowPack` and `toolsForbidden` must not be, and
+> `artifactCreated` must not be claimed of a briefing pack.
+>
+> **THE FINDING AS FIRST WRITTEN HERE WAS WRONG AND IS RETRACTED.** It said "`stageFor` plants
+> exactly two things (`smoke:seedInboxFixture`, `vaultSmoke:seedCorpus`) and neither contains an
+> injected instruction — asserted, with a positive control". `stageFor` exists nowhere in this
+> repository, three things are planted, and one of them DOES carry an injection. See the 29-07-FIX
+> block at the top of this file for what the harness actually plants; do not cite this paragraph.
+>
+> Also made executable: a valid pack-suite evidence blob does NOT satisfy `hasPassingTenantEvidence`
+> and tenant evidence does not satisfy `hasPassingPackEvalEvidence`, with a positive control that
+> the pack blob really is valid for the GLOBAL row it names. The pack corpus can clear the gate it
+> was written for (`--candidate`, live and paid); a TENANT customization has no gate to clear in
+> this release, because `planTenantActivation` refuses it.)
+
+> Last verified: 2026-08-29 (29-07 — **THE TENANT CUSTOMIZATION SURFACE EXISTS, AND IT SAYS WHAT
+> IS TRUE.** `apps/web/app/(app)/dashboard/workflows/` is new and is now a watched path of this
+> playbook. Every control on it is generated by iterating `packCustomizationFields`, so there is no
+> hand-written field and nothing that carries a tool name, a URL, a secret or an assembled body; the
+> only mutation it holds is `skills.publishPackCustomization`. The copy states the two things that
+> are actually true of a saved customization — `planTenantActivation` throws `PACK_GATE` for every
+> name in `WORKFLOW_PACK_SKILL_NAMES`, so it cannot be activated in this release, and `cockpit.ts`
+> passes no `tenantSkillIds`, so no run a user starts reads it. "Pending approval" / "awaiting
+> review" are banned by test, because that queue does not exist.
+>
+> **THE ROUTE IS NOT IN THE NAV** (`apps/web/app/(app)/layout.tsx`), by decision: it is reachable by
+> URL only until plan 29-10 runs an authenticated browser gate against it. A test asserts the NAV
+> does not link to it, with a positive control that the scan can see a route that IS linked. Adding
+> the href IS the activation, and rollback is deleting it — the `dashboard-pages.md` rule.
+>
+> **UNRUN:** no browser has loaded this route. **TWO CLAIMS THAT STOOD HERE ABOUT THE BUILD WERE
+> BOTH WRONG AND ARE BOTH RETRACTED** — first "the build cannot run in this worktree at all", then
+> "the build runs, nothing imports `server-only`". `server-only` IS imported, from inside
+> `@convex-dev/auth`, reached by `middleware.ts` and `app/layout.tsx`; the build's dependence on it
+> is real. What was wrong was calling that a repo defect. The mechanism and the one-line repair are
+> under *How to verify*. A false gate RESULT is worse than a false invariant in either direction:
+> "unavailable" stops the gate being run, and "fine, ignore it" deletes the repair the next fresh
+> worktree needs.)
+
+> Last verified: 2026-08-29 (29-W3-TAIL — **`workflowPackBinding.ts`'s `TENANT_SKILL_PIN_FOREIGN`
+> THROW NO LONGER JUSTIFIES ITSELF WITH AN UNENFORCED CLAIM.** The comment above it read *"both
+> entry points that declare `tenantSkillIds` here … are `internalAction`s, so a foreign id is a BUG,
+> not an outcome"* — true today, enforced by nothing, and used to argue for throwing rather than
+> returning a governed refusal. The justification is deleted; the comment now states the consequence
+> (a caller reaching it with a foreign id gets an unhandled error, not a rendered outcome) and points
+> at `skill-registry.md`, which records the same gap for all eight declaring sites. No behaviour
+> changed — the tenant comparison before `preCall` is untouched.)
+
+> Last verified: 2026-08-29 (29-FIN-05 PROSE SWEEP — **THE PIN DOOR IS OPEN ON PURPOSE, AND THE
+> COMMENTS THAT DENIED IT ARE GONE.** `skills.ts` said a pack customization row was "DARK BY
+> CONSTRUCTION" and could "never become the body a specialist runs"; the `tenantSkillIds` rail runs
+> one, and the 29-05 tests always showed it. Those absolutes are deleted from `skills.ts` and
+> `workflowPackBinding.ts`; `docs/playbooks/skill-registry.md` gained "The pin door IS open, and
+> this is what governs it" — internal-only, tenant-scoped, name-scoped, no grant, no state. One
+> assertion was ADDED here: the pinned run re-reads the row and proves it patched no status, wrote
+> no evidence and flipped no `rollbackEligible` (mutation: patch the row in `runPackTurn` -> RED).
+> Also recorded, because it is the real state of the channel: **no production caller passes
+> `tenantSkillIds` for a pack.** `cockpit.ts` is the only caller of `runWorkflowPack` and it passes
+> `skillVersions` (a global preview pin) only, so what a tenant publishes through the customization
+> form is inert until someone decides who may pin it. No behaviour changed.)
+>
+> Previously verified: 2026-08-28 (29-05 REMEDIATION — **THE PIN IS NOW TENANT-SCOPED, AND THE GRANT TEST
+> NOW REACHES ITS OWN SCENARIO.** Two corrections to the bump below it:
+>
+> 1. **`TENANT_SKILL_PIN_FOREIGN`.** `skills.getTenantSkillVersion` resolves a `tenantSkills` row BY
+>    ID and `runSpecialistTurn`'s only guard is `row.name !== skillName`. Two tenants can each own
+>    `pack-business-pulse` — that is exactly why the pin is a row id — so the name check was never
+>    the isolation argument, and neither was "validated as `v.id(...)`": a valid id is still a valid
+>    id for someone else's row. `runPackTurn` now compares `row.tenantId` to the run's tenant BEFORE
+>    `preCall` and before any event is written. Root fix (a required `tenantId` arg on
+>    `getTenantSkillVersion`, closing the dispatch surface too) is an open follow-up in `llm.ts`.
+> 2. **The grant test was vacuous.** "a tenant candidate body CANNOT widen the grant" stayed green
+>    when the pin was never forwarded — it could not tell "the tenant body ran and did not widen the
+>    grant" from "the tenant body never ran", so deleting the whole `tenantSkillIds` feature left it
+>    passing. It now asserts `skillVersion === 7` on every probe chunk, which is only readable if the
+>    pinned candidate reached the loader. The claim below is true again, and now enforced.
+>
+> Also: `planTenantActivation` throws `PACK_GATE` for any name `isWorkflowPackSkill` accepts, ahead
+> of its mode switch, so a tenant pack candidate does not go active and `loadEffectiveSkill` keeps
+> serving the global body. The pin rail is how that candidate body reaches a model instead. See
+> docs/playbooks/skill-registry.md "THE PACK GATE HAS NO TENANT LANE" and "The pin door IS open".)
+>
+> Previously verified: 2026-08-28 (29-05: `packArgs` gained `tenantSkillIds` — the tenant twin of the
+> `skillVersions` pin, forwarded to `runSpecialistTurn` so a tenant's schema-driven pack
+> customization can be RUN before it is activated. Row ids (`v.id("tenantSkills")`),
+> `internalAction` only, never model-supplied. The tool grant is unchanged and still derived from
+> the operation matrix: `workflowPackBinding.test.ts` drives a tenant candidate body that asks in
+> prose for every forbidden tool and proves the executed record is still `toolsForWorkflowPack`.
+> A pinned row naming a different pack is refused as `TENANT_SKILL_PIN_MISMATCH` before any model
+> call. See docs/playbooks/skill-registry.md "Phase 29 — pack customization" for the authoring
+> half and for the runner gap that still leaves a tenant candidate uncertifiable in practice.)
+>
+> Previously verified: 2026-08-28 (29-01 second repair round: the "no dead vocabulary" exemption for
+> `support-desk` now CALLS `renderSourceGap` instead of spreading `KNOWLEDGE_SOURCES`.
+> Membership in a second const is a DECLARATION, not a read — the exact shape this file rejects
+> for tool grants — and `support-desk` is the one source no pack operation reads, so it was the
+> only member the exemption actually carried. The user-facing sentence is now pinned as a
+> literal in `knowledgeSearch.test.ts`. Pack behaviour is unchanged.)
+>
+> Previously verified 2026-08-27 (Phase 29 made this file's source registry the repo's ONLY one —
+> see "Phase 29 shares this registry" under Dependencies. Pack behaviour is unchanged.)
+>
+> Previously verified 2026-08-26 (**THE SIX PACKS ARE CERTIFIED ON PRODUCTION'S EVAL PLANE AND STILL
 > DARK THERE.** Prod candidates seeded at v1 — note they are v1 while dev carries v4/v5/v10/v11:
 > versions are PER DEPLOYMENT and a version number is never a cross-deployment identifier. Six gates
 > run with `PIKAR_CONVEX_TARGET=prod`, 30/30, ~$0.41. `campaign-plan` passed FIRST TRY on prod after
@@ -1191,6 +1692,22 @@ pack DARK until it has earned three independent kinds of evidence.
 - `packages/backend/convex/skills.ts` — `publishPackCandidate`, `recordPackBrowserEvidence`,
   `assertPackActivationEvidence`, and the pack branch of `planGlobalActivation`.
 - `packages/backend/convex/skills.test.ts` — the `workflow-pack candidate lifecycle` block.
+- `packages/backend/convex/workflowPackDiscovery.ts` — `listPacks` (ACTIVE-only, with the preflight
+  and this tenant's `myBaseVersion` / `myCustomizationValues` for the pack), `probeSources`, and the
+  owner-only candidate-preview and rollback-target queries.
+- `packages/backend/convex/workflowPackEvals.test.ts` — the $0 corpus gate. It IMPORTS the runner's
+  `validateFixture` / `validateCorpus` / `projectRegistry` rather than re-implementing them, and
+  adds what the runner does not check: the terminal through the shipped `outcomeFor`, an audit of
+  what the harness actually seeds, the customization/eval tie, the evidence-predicate boundary.
+
+**Web**
+- `apps/web/app/(app)/dashboard/workflows/page.tsx` — the route. NOT in the `(app)` layout's `NAV`.
+- `apps/web/app/(app)/dashboard/workflows/WorkflowPackCustomizer.tsx` — a hooks/handlers container
+  plus `CustomizerView`, which holds all the JSX and takes its whole state as props. No copy
+  function is exported: the sentences are proved by RENDERING, not by calling them.
+- `apps/web/app/(app)/dashboard/workflows/WorkflowPackCustomizer.test.ts` — renders with
+  `react-dom/server` and asserts the rendered string and the exact ARIA id pairs, plus source scans
+  for the absences a render cannot show.
 
 **Scripts**
 - `packages/backend/scripts/run-workflow-pack-evals.mjs` — fixture schema, validator and
@@ -1216,6 +1733,21 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
   suite stays green. Pinned by a source scan in `workflowPacks.test.ts`.
 - **The runner imports the registry as TypeScript.** Node >= 22.6 strips types natively; CI's test
   job pins Node 20 and never runs this script.
+- **PHASE 29 SHARES THIS REGISTRY (2026-08-27).** `packages/core/src/knowledgeSearch.ts` declares
+  `KNOWLEDGE_SOURCES = ["vault","drive","inbox","crm-facts","support-desk"] satisfies readonly
+  PackSource[]` — a named SUBSET of `REACHABLE_PACK_SOURCES` + `MISSING_PACK_SOURCES`, reusing
+  `PACK_SOURCE_LABEL` and `MISSING_SOURCE_UNLOCK` rather than restating them. `support-desk` is in
+  `MISSING_PACK_SOURCES` for that reason and for no pack reason: NO pack operation reads it, so
+  `workflowPacks.test.ts`'s "no source is dead vocabulary" assertion now accepts a source read by
+  the search plane. Consequences for this playbook:
+    - A new `MissingPackSource` still needs its `PACK_SOURCE_LABEL`, `MISSING_SOURCE_UNLOCK` and
+      `MISSING_SOURCE_MENTIONS` entries (the typed `Record`s force all three).
+    - **Renaming or removing a source here changes the Phase-29 search plane and the
+      `knowledgeSearches` Convex validator**, whose literals mirror `KNOWLEDGE_SOURCES`. Read
+      `knowledge-search-routines.md` before touching either list.
+    - `SourceState`'s three words are pinned to `KnowledgeSourceState["status"]` by a compile-time
+      bidirectional witness in `knowledgeSearch.ts`. A fourth pack state fails `pnpm typecheck` in
+      `@pikar/core` until the search plane grows the same one.
 
 ## Data flow
 
@@ -1288,7 +1820,11 @@ Run `graphify query "workflow packs"` for the current subgraph. Couplings graphi
   `workflowPacks.test.ts` deliberately, and teach the tool in the pack's body — a granted tool a
   body never names is never called and nothing errors.
 - **Changing a missing classification**: owner decision A (2026-08-23) forbids adding read tools to
-  close a `missing` source inside Phase 27. Reclassifying is a phase-level decision.
+  close a `missing` source inside Phase 27. Reclassifying is a phase-level decision. Since
+  2026-08-27 it is also a PHASE-29 change: `NOT_LANDED_SOURCES` in `knowledgeSearch.ts` is DERIVED
+  from `MISSING_PACK_SOURCES`, so moving a source between the two lists here flips whether the
+  unified search reports it as `unavailable/not_landed`. That is the point — one move, both planes —
+  but do it knowing that, and run `cd packages/core && pnpm vitest run workflowPacks knowledgeSearch`.
 - **Touching the activation gate**: re-run the two mutations recorded above. A gate that cannot be
   observed failing is not a gate.
 
@@ -1304,8 +1840,37 @@ cd packages/core && npx vitest run src/tenantData.test.ts        # the new table
 cd packages/core && npx tsc --noEmit                             # compile-time totality proofs
 cd packages/backend && npx vitest run convex/skills.test.ts      # publication + gate + rollback
 cd packages/backend && npx vitest run convex/isolation.test.ts   # tenant scoping of the new table
+cd packages/backend && npx vitest run convex/workflowPackEvals.test.ts       # the $0 corpus gate
+cd packages/backend && npx vitest run convex/workflowPackDiscovery.test.ts  # listPacks + base version
 cd packages/backend && node scripts/run-workflow-pack-evals.mjs --fixtures-only --self-test
+cd apps/web && pnpm vitest run WorkflowPackCustomizer   # renders the surface; asserts its sentences
+cd apps/web && pnpm vitest run WorkflowPackCustomizer.container  # jsdom; drives the real container
+pnpm --filter @pikar/web build                          # RUNS. `f /dashboard/workflows` is in the
+                                                        # route table. The dev server OOMs on the
+                                                        # workspace page, so this is THE compile
+                                                        # gate for a route — do not skip it.
 ```
+
+**IF THAT BUILD FAILS WITH `Module not found: Can't resolve 'server-only'`, IT IS AN INSTALL
+ARTIFACT OF A FRESHLY CREATED GIT WORKTREE, NOT A REPO DEFECT AND NOT A MISSING DEPENDENCY.** Next
+aliases the bare specifier `server-only` — imported from inside `@convex-dev/auth`, reached by
+`middleware.ts` and `app/layout.tsx` — to `next/dist/compiled/server-only/empty`, a
+legitimately-shipped **0-byte** file. `pnpm install --frozen-lockfile` has been observed not to
+materialise that file in a new worktree, while the main tree has it (store-linked) and CI builds.
+The repair is one line, in `node_modules`, committed nowhere:
+
+```
+: > "$(readlink -f apps/web/node_modules/next)/dist/compiled/server-only/empty.js"
+```
+
+Create it EMPTY, matching what upstream ships. Two fixes that were tried, reverted, and should not
+be proposed again: adding `server-only` to `apps/web/package.json` (pnpm's strict layout only lets
+`@convex-dev/auth` see its own declared deps) and a `packageExtensions` entry adding it to
+`@convex-dev/auth` (it installs, and the build still fails, because Next's alias map redirects the
+specifier before resolution reaches the package).
+
+**The browser gate has not been run for `/dashboard/workflows`.** No Playwright spec has loaded it
+authenticated. Everything above is SSR and source; a live page is still owed.
 
 Never `pnpm --filter <pkg> test -- <name>`: the `--` is swallowed and the whole suite runs, so the
 command reads green whether or not the named file exists. Never `node scripts/check-playbooks.mjs`

@@ -105,6 +105,17 @@ export const list = tenantQuery({
     const rows = await ctx.db
       .query("savedPrompts")
       .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", ctx.tenantId))
+      // 29-08: PROMPT pins only. A row carrying `templateId` is a pinned WORKFLOW
+      // (`pinnedWorkflows.ts`), and Run in this menu is an ordinary Executive-Agent turn through
+      // `sendCockpitMessage` — so a workflow pin listed here would offer "Business pulse" and then
+      // run something that is not the Business pulse pack. Its own surface (`/dashboard/workflows`)
+      // runs it through `startWorkflowPack`, which is the allow-listed pack agent.
+      //
+      // FILTERED BEFORE THE TAKE, and that ordering is the whole point: filtering the taken page
+      // instead made every workflow pin EVICT a saved prompt from this menu, so the twenty-entry
+      // cap silently shrank by one for each pinned workflow. This is one predicate on the same
+      // indexed range, not a second read — `take` still bounds it.
+      .filter((q) => q.eq(q.field("templateId"), undefined))
       .order("desc")
       .take(SAVED_PROMPT_LIST_LIMIT);
     return rows.map((r) => ({
