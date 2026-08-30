@@ -380,7 +380,15 @@ const INVOICE_ID = "in_SENTINELINVOICE";
 const HOSTED = "https://invoice.stripe.com/i/acct_SENTINEL/test_SENTINELHOSTED";
 
 /** Stripe's replies, keyed by the path each call takes. */
-function stubStripe(over: { finalize?: { status: number; body?: unknown } } = {}): void {
+function stubStripe(
+  over: {
+    finalize?: { status: number; body?: unknown };
+    /** Fail the LINE ITEM, so the draft invoice exists at Stripe and the run dies after it. */
+    invoiceitems?: { status: number; body?: unknown };
+    /** Fail the DRAFT itself, so NO document exists at Stripe and a retry is safe (28.1-11 #3). */
+    invoices?: { status: number; body?: unknown };
+  } = {},
+): void {
   calls = [];
   vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
     const url = String(input);
@@ -410,21 +418,29 @@ function stubStripe(over: { finalize?: { status: number; body?: unknown } } = {}
       });
     }
     if (url.endsWith("/v1/invoiceitems")) {
-      return new Response(JSON.stringify({ id: "ii_SENTINELITEM", object: "invoiceitem" }), {
+      const reply = over.invoiceitems ?? {
         status: 200,
+        body: { id: "ii_SENTINELITEM", object: "invoiceitem" },
+      };
+      return new Response(JSON.stringify(reply.body ?? {}), {
+        status: reply.status,
         headers: { "content-type": "application/json" },
       });
     }
     // POST /v1/invoices — the draft. `customer_email` is here on purpose: it must not escape.
-    return new Response(
-      JSON.stringify({
+    const draft = over.invoices ?? {
+      status: 200,
+      body: {
         id: INVOICE_ID,
         object: "invoice",
         status: "draft",
         customer_email: "SENTINEL-BUYER@example.com",
-      }),
-      { status: 200, headers: { "content-type": "application/json" } },
-    );
+      },
+    };
+    return new Response(JSON.stringify(draft.body ?? {}), {
+      status: draft.status,
+      headers: { "content-type": "application/json" },
+    });
   });
 }
 
@@ -525,6 +541,49 @@ describe("postInvoice rolls ONE bounded document and settles the claim", () => {
     expect(new Set(calls.map(keyOf)).size).toBe(calls.length);
   });
 
+  // ── 28.1-11, audit findings #3 and #4 ──────────────────────────────────────────────────────────
+
+  test("a run that dies AFTER /v1/invoices keeps the invoice id, and is never re-posted (#3)", async () => {
+    // THE ONLY FINDING WHERE MONEY LEAVES A CUSTOMER'S ACCOUNT TWICE. `auto_advance: "true"` means
+    // the draft Stripe already has collects on its own; `crons.daily` guarantees the retry lands
+    // past Stripe's ~24h idempotency-key pruning, so the retry mints a SECOND invoice that also
+    // collects. The claim row cannot help — it only guards `posted`.
+    const { t, tenantId } = await withTenant();
+    await mapCustomer(t, tenantId, "cus_SENTINEL");
+    const id = await seedPeriod(t, tenantId);
+    stubStripe({ invoiceitems: { status: 402, body: { error: { code: "card_declined" } } } });
+
+    await rollup(t);
+
+    const failed = await readPeriod(t, id);
+    expect(failed?.status).toBe("failed");
+    // The invoice EXISTS at Stripe. Losing its id is what makes the second one possible.
+    expect(failed?.stripeInvoiceId).toBe(INVOICE_ID);
+
+    // A later tick must refuse it rather than mint a second document.
+    calls = [];
+    await rollup(t);
+    expect(byPath("/v1/invoices")).toHaveLength(0);
+  });
+
+  test("the invoice declares card as a payment method, so invoice.paid can identify one (#4)", async () => {
+    // `invoicePaymentMethods` probes `charge.payment_method_details`, `payment_intent
+    // .payment_method_types` and `payment_settings.payment_method_types`. On the pinned
+    // 2026-08-26.dahlia the first two are gone from Invoice and we never request expansions, so
+    // `payment_settings` is the ONLY probe that can ever be live — and nothing was setting it.
+    // Without this an `invoice.paid` is UNDETERMINABLE and books no `actual`: card revenue is
+    // unreachable, fail-closed, forever.
+    const { t, tenantId } = await withTenant();
+    await mapCustomer(t, tenantId, "cus_SENTINEL");
+    await seedPeriod(t, tenantId);
+    stubStripe();
+
+    await rollup(t);
+
+    const draft = new URLSearchParams((byPath("/v1/invoices")[0] as Recorded).body);
+    expect(draft.get("payment_settings[payment_method_types][0]")).toBe("card");
+  });
+
   test("the SAME period posted twice sends the SAME key AND the same body", async () => {
     const { t, tenantId } = await withTenant();
     await mapCustomer(t, tenantId, "cus_SENTINEL");
@@ -618,7 +677,12 @@ describe("postInvoice rolls ONE bounded document and settles the claim", () => {
 });
 
 describe("a failure leaves the period re-claimable, never dropped and never half-posted", () => {
-  test("a Stripe refusal marks the period failed with a CODE and no invoice id", async () => {
+  test("a refusal AFTER the draft exists keeps the invoice id — losing it is what double-bills", async () => {
+    // REWRITTEN 28.1-11 (audit #3). This test previously asserted
+    // `expect(row?.stripeInvoiceId).toBeUndefined()` — it ENCODED the defect: a finalize failure
+    // discarded the invoice Stripe had already created and would go on to collect
+    // (`auto_advance: "true"`), and the next daily tick minted a second one past the ~24h
+    // idempotency-key horizon. The id is now retained precisely so `claimable` can refuse the row.
     const { t, tenantId } = await withTenant();
     await mapCustomer(t, tenantId, "cus_SENTINEL");
     const id = await seedPeriod(t, tenantId);
@@ -628,19 +692,28 @@ describe("a failure leaves the period re-claimable, never dropped and never half
 
     const row = await readPeriod(t, id);
     expect(row?.status).toBe("failed");
-    expect(row?.stripeInvoiceId).toBeUndefined();
+    expect(row?.stripeInvoiceId).toBe(INVOICE_ID);
+    // Still no hosted url: the invoice was never finalized, so there is nothing to send anyone.
     expect(row?.hostedInvoiceUrl).toBeUndefined();
     expect(row?.failureCode).toBe("card_declined");
     expect(row?.attempts).toBe(1);
   });
 
   test("…and the NEXT tick picks it up again, so a transient failure costs a day, not a period", async () => {
+    // 28.1-11 (audit #3): the failure now happens on the DRAFT POST, not on the finalize. That is
+    // the case this promise is actually about — nothing exists at Stripe, so a retry is free.
+    // A failure AFTER the draft exists is deliberately NOT retried; see the test above and
+    // "a run that dies AFTER /v1/invoices…". Retrying that one bills the customer twice, which is
+    // a worse outcome than a period an operator has to look at.
     const { t, tenantId } = await withTenant();
     await mapCustomer(t, tenantId, "cus_SENTINEL");
     const id = await seedPeriod(t, tenantId);
-    stubStripe({ finalize: { status: 500 } });
+    stubStripe({ invoices: { status: 500 } });
     await rollup(t);
-    expect((await readPeriod(t, id))?.status).toBe("failed");
+    const first = await readPeriod(t, id);
+    expect(first?.status).toBe("failed");
+    // NOTHING was created, so there is no id to refuse on — this is why it stays re-claimable.
+    expect(first?.stripeInvoiceId).toBeUndefined();
 
     stubStripe();
     await rollup(t);

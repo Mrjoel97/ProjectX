@@ -316,14 +316,16 @@ describe("startCheckout opens a hosted Stripe Checkout with a trial and a card u
 describe("checkoutParams refuses an unconfigured trial rather than inventing one", () => {
   test("a null TRIAL_DAYS throws naming the constant", () => {
     expect(() =>
-      checkoutParams({ tenantId: "t", priceId: PRICE, trialDays: null, origin: ORIGIN }),
+      checkoutParams({ tenantId: "t", priceId: PRICE, trialDays: null, customerId: null,
+      origin: ORIGIN }),
     ).toThrow(/TRIAL_DAYS/);
   });
 
   test("a zero or fractional trial is not a trial and is refused too", () => {
     for (const trialDays of [0, -1, 1.5]) {
       expect(() =>
-        checkoutParams({ tenantId: "t", priceId: PRICE, trialDays, origin: ORIGIN }),
+        checkoutParams({ tenantId: "t", priceId: PRICE, trialDays, customerId: null,
+      origin: ORIGIN }),
       ).toThrow(/TRIAL_DAYS/);
     }
   });
@@ -334,6 +336,7 @@ describe("checkoutParams refuses an unconfigured trial rather than inventing one
       tenantId: "t",
       priceId: PRICE,
       trialDays: 14,
+      customerId: null,
       origin: ORIGIN,
     });
     expect(params["subscription_data[trial_period_days]"]).toBe("14");
@@ -472,6 +475,34 @@ async function mapCustomer(
     }),
   );
 }
+
+describe("a re-subscribing tenant reuses their Stripe customer (28.1-11, audit #5)", () => {
+  test("startCheckout passes `customer` when a mapping already exists", async () => {
+    // Without this Stripe mints a SECOND `cus_` for a tenant that already has one. The webhook's
+    // mapping is keyed on (tenantId, stripeCustomerId) and `applyMapping` refuses a tenant whose
+    // stored customer disagrees (`tenantConflict`) — so every event for the new customer
+    // dead-letters, and a tenant who cancels and comes back is permanently unmappable: their
+    // money arrives at Stripe and is never booked in our ledger.
+    stubStripe(sessionReply());
+    const { t, as, tenantId } = await withTenantHandle();
+    await mapCustomer(t, tenantId, "cus_RETURNING", "canceled");
+
+    await as.action(api.billing.startCheckout, {});
+
+    expect(form().get("customer")).toBe("cus_RETURNING");
+  });
+
+  test("…and sends NO customer when there is no mapping, so Stripe creates the first one", async () => {
+    // The complement, and it is the reason `customer` is conditional rather than always present:
+    // an empty string would be a 400 from Stripe, and a fabricated id would be worse.
+    stubStripe(sessionReply());
+    const { as } = await withTenantHandle();
+
+    await as.action(api.billing.startCheckout, {});
+
+    expect(form().has("customer")).toBe(false);
+  });
+});
 
 describe("billingStatus reads the mapping 28.1-05 landed, and still refuses to guess", () => {
   async function stateFor(status: string) {

@@ -129,7 +129,16 @@ async function claimable(ctx: MutationCtx, nowMs: number): Promise<Doc<"billingP
       .query("billingPeriods")
       .withIndex("by_status_dueAt", (q) => q.eq("status", status).lte("dueAt", nowMs))
       .take(PERIOD_SCAN_LIMIT);
-    out.push(...page.filter((row) => row.attempts < MAX_PERIOD_ATTEMPTS));
+    out.push(
+      ...page.filter(
+        (row) =>
+          row.attempts < MAX_PERIOD_ATTEMPTS &&
+          // AUDIT #3, FAIL CLOSED: a `failed` row whose invoice already exists at Stripe is an
+          // OPERATOR problem, not a retry. Re-posting mints a second document that also collects,
+          // and the customer is billed twice for one period. `pending` rows never carry one.
+          row.stripeInvoiceId === undefined,
+      ),
+    );
   }
   const claimed = await ctx.db
     .query("billingPeriods")
@@ -314,10 +323,20 @@ export const postInvoice = internalAction({
     // reached before any Stripe call, which is what makes it survive the 24h key pruning.
     if (period === null) return null;
 
+    // AUDIT #3: once `/v1/invoices` has succeeded the document EXISTS at Stripe and, because
+    // `auto_advance` is true, Stripe finalizes and collects it without us. A failure after this
+    // point must therefore carry the id forward — losing it is what lets the next tick mint a
+    // SECOND invoice that also collects. `crons.daily` guarantees that retry lands past Stripe's
+    // ~24h idempotency-key pruning, so the key cannot save us either.
+    let createdInvoiceId: string | null = null;
     const fail = (code: string): Promise<null> =>
       ctx.runMutation(internal.billingRollup.settlePeriod, {
         periodId,
-        outcome: { ok: false as const, failureCode: code },
+        outcome: {
+          ok: false as const,
+          failureCode: code,
+          ...(createdInvoiceId === null ? {} : { stripeInvoiceId: createdInvoiceId }),
+        },
       });
 
     if (period.customerId === null) return await fail("no_stripe_customer");
@@ -340,6 +359,11 @@ export const postInvoice = internalAction({
         collection_method: "charge_automatically",
         auto_advance: "true",
         pending_invoice_items_behavior: "exclude",
+        // AUDIT #4: the ONLY payment-method probe that can be live on the pinned API version.
+        // `invoice.charge` and `invoice.payment_intent` are gone from Invoice post-Basil and we
+        // never request expansions, so without this every `invoice.paid` is UNDETERMINABLE and
+        // books no `actual` — card revenue would be unreachable by construction, fail-closed.
+        "payment_settings[payment_method_types][0]": "card",
         "metadata[tenantId]": period.tenantId,
         "metadata[periodKey]": period.periodKey,
       },
@@ -350,6 +374,7 @@ export const postInvoice = internalAction({
     if (typeof invoiceId !== "string" || !INVOICE_ID.test(invoiceId)) {
       return await fail("no_invoice_id");
     }
+    createdInvoiceId = invoiceId;
 
     // 2. THE LINES, attached to THAT invoice by id. Each carries the explicit period, so the
     //    document says which window it bills even to a reader who never saw this row.
@@ -423,7 +448,12 @@ const settleOutcome = v.union(
     amountMinor: v.number(),
     currency: v.string(),
   }),
-  v.object({ ok: v.literal(false), failureCode: v.string() }),
+  // AUDIT #3: optional, because a failure BEFORE `/v1/invoices` has no invoice to name.
+  v.object({
+    ok: v.literal(false),
+    failureCode: v.string(),
+    stripeInvoiceId: v.optional(v.string()),
+  }),
 );
 
 /**
@@ -458,7 +488,15 @@ export const settlePeriod = internalMutation({
     }
     // `failed`, not deleted and not `pending`: the code is what an operator reads, and the row
     // stays re-claimable by the next tick until `MAX_PERIOD_ATTEMPTS`.
-    await ctx.db.patch(periodId, { status: "failed", failureCode: outcome.failureCode });
+    await ctx.db.patch(periodId, {
+      status: "failed",
+      failureCode: outcome.failureCode,
+      // Kept so `claimable` can refuse this row. Never cleared on a later attempt: the invoice
+      // does not stop existing at Stripe because we tried again.
+      ...(outcome.stripeInvoiceId === undefined
+        ? {}
+        : { stripeInvoiceId: outcome.stripeInvoiceId }),
+    });
     return null;
   },
 });

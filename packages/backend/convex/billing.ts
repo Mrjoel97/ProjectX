@@ -86,8 +86,10 @@ export function checkoutParams(input: {
   priceId: string;
   trialDays: number | null;
   origin: string;
+  /** The tenant's existing Stripe customer, or `null` when they have never subscribed (#5). */
+  customerId: string | null;
 }): Record<string, string> {
-  const { tenantId, priceId, trialDays, origin } = input;
+  const { tenantId, priceId, trialDays, origin, customerId } = input;
   if (typeof trialDays !== "number" || !Number.isInteger(trialDays) || trialDays <= 0) {
     throw new Error("TRIAL_DAYS is not configured — refusing to open Checkout with no trial");
   }
@@ -109,6 +111,12 @@ export function checkoutParams(input: {
     // attributed to a tenant at all and must dead-letter. Added in 28.1-05 (deviation Rule 2) —
     // "order-independent" is not achievable with one thread.
     "subscription_data[metadata][tenantId]": tenantId,
+    // AUDIT #5: reuse the Stripe customer this tenant already has. Omitted entirely when there is
+    // none — an empty string is a 400 and a fabricated id is worse. Without this, a tenant who
+    // cancels and re-subscribes is minted a SECOND `cus_`, `applyMapping` refuses it as a
+    // `tenantConflict` against the stored one, and every event for the new customer dead-letters:
+    // their money reaches Stripe and never reaches our ledger.
+    ...(customerId === null ? {} : { customer: customerId }),
     success_url: `${origin}/dashboard/settings?checkout=success`,
     cancel_url: `${origin}/dashboard/settings?checkout=cancel`,
   };
@@ -195,12 +203,23 @@ export const startCheckout = tenantAction({
   handler: async (ctx): Promise<Door> => {
     const priceId = requirePriceId();
     const origin = requireAppOrigin();
+    const customerId = await ctx.runQuery(internal.billing.stripeCustomerFor, {
+      tenantId: ctx.tenantId,
+    });
     return hostedSession(
       "/v1/checkout/sessions",
-      checkoutParams({ tenantId: ctx.tenantId, priceId, trialDays: TRIAL_DAYS, origin }),
-      // Deterministic per (tenant, price, UTC day): a double-click cannot mint two sessions, and
-      // the key is derived from exactly the inputs that build the body above.
-      `checkout:${ctx.tenantId}:${priceId}:${billingPeriodKey(Date.now())}`,
+      checkoutParams({
+        tenantId: ctx.tenantId,
+        priceId,
+        trialDays: TRIAL_DAYS,
+        origin,
+        customerId,
+      }),
+      // Deterministic per (tenant, price, customer, UTC day): a double-click cannot mint two
+      // sessions, and the key is derived from exactly the inputs that build the body above —
+      // `customerId` included, because replaying a key with a DIFFERENT body is an error at Stripe
+      // and a mapping that lands mid-day changes the body.
+      `checkout:${ctx.tenantId}:${priceId}:${customerId ?? "new"}:${billingPeriodKey(Date.now())}`,
     );
   },
 });
