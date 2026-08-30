@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import {
   GENERATED_CLIP_SECONDS,
   MUSIC_MOODS,
+  parseVariations,
   TARGET_DURATIONS,
   type VisualKind,
 } from "@pikar/core/storyboard";
@@ -17,6 +18,7 @@ import {
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
+  MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_IMAGE_PRICING,
   MEDIA_JOB_CAP_USD,
   MEDIA_MUSIC_PRICING,
@@ -160,6 +162,15 @@ describe("estimateBatchUsd + the job cap", () => {
     expect(total.ok).toBe(true);
     if (total.ok) expect(total.value).toBeCloseTo(1.762, 10);
   });
+  it("...and the SAME six-block job is now REFUSED — 24 generated seconds is over the ceiling", () => {
+    // The §4.1 reel was six four-second clips, which is 24 s of generated video: double the cap.
+    // Stated plainly rather than deleted, because it is the cost the decision spends — a reel that
+    // used to be the phase's canonical job is now illegal, and the cure is a mixed deck, which is
+    // exactly the behaviour the ceiling exists to force (ADR-027).
+    const r = chooseMediaBatch(JOB_4_1, MEDIA_JOB_CAP_USD);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe("over_generated_seconds");
+  });
   it("MEDIA_JOB_CAP_USD IS STILL $3.50 — a successor needing a bigger cap is a worse outcome", () => {
     // Asserted on its own, against a literal, because this is the phase where it would slip:
     // ADR-026 is explicit that a replacement that needs the ceiling raised is a regression
@@ -174,20 +185,30 @@ describe("estimateBatchUsd + the job cap", () => {
     // "keep them in step" enforceable rather than aspirational.
     expect([...GENERATED_CLIP_SECONDS]).toEqual([...(MEDIA_VIDEO_SECONDS[VIDEO_MODEL] ?? [])]);
   });
-  it("13 grok blocks at 720p ($3.64) → over_job_cap", () => {
-    // WAS 9, at the sora-2 rate. Nine grok clips are $2.52 and pass, so the count had to be
-    // recomputed rather than left standing: an over-cap test whose job is UNDER the cap asserts
-    // nothing at all. 12 x $0.28 = $3.36 is the last passing count; 13 is $3.64.
-    const job = [...Array.from({ length: 13 }, () => clip()), { kind: "render" } as MediaSpec];
-    const r = chooseMediaBatch(job, MEDIA_JOB_CAP_USD);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.code).toBe("over_job_cap");
+  it("13 and 20 grok blocks are refused by the SECONDS cap, which now binds before the job cap", () => {
+    // THESE TWO TESTS WERE `over_job_cap` UNTIL 33.1-04, and the change of code is the honest
+    // record of what the cap did: 13 clips are $3.64 and 20 are $5.60, both still over the $3.50
+    // ceiling — but at 52 and 80 generated seconds they never reach the price check, because
+    // `MEDIA_GENERATED_SECONDS_CAP` refuses them first. Asserted rather than quietly re-keyed.
+    for (const count of [13, 20]) {
+      const job = [...Array.from({ length: count }, () => clip()), { kind: "render" } as MediaSpec];
+      const r = chooseMediaBatch(job, MEDIA_JOB_CAP_USD);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe("over_generated_seconds");
+    }
   });
-  it("20 grok blocks at 720p ($5.60) → over_job_cap", () => {
-    const r = chooseMediaBatch(
-      Array.from({ length: 20 }, () => clip()),
-      MEDIA_JOB_CAP_USD,
-    );
+  it("over_job_cap IS STILL REACHABLE — through the kinds the seconds cap does not bound", () => {
+    // The cap ceilings generated video at $0.84, so video alone can no longer reach $3.50. That
+    // does NOT retire `over_job_cap`: stills, voice and captions are unbounded by scene COUNT, and
+    // 600 stills at $0.006 is $3.60. If this ever goes red because the code stopped checking the
+    // price at all, the seconds cap has quietly replaced the money cap rather than joining it.
+    const stills: MediaSpec[] = Array.from({ length: 600 }, () => ({
+      kind: "image",
+      model: MEDIA_DEFAULT_IMAGE.model,
+      width: MEDIA_DEFAULT_IMAGE.width,
+      height: MEDIA_DEFAULT_IMAGE.height,
+    }));
+    const r = chooseMediaBatch(stills, MEDIA_JOB_CAP_USD);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("over_job_cap");
   });
@@ -201,6 +222,8 @@ describe("estimateBatchUsd + the job cap", () => {
     expect(total.ok && total.value).toBeCloseTo(2.1, 10);
     const r = chooseMediaBatch(thirty, MEDIA_JOB_CAP_USD);
     expect(r.ok ? "ok" : r.error.code).not.toBe("over_job_cap");
+    // ...and what DOES refuse it is the ceiling Task 4 added, named on its own return value.
+    expect(r.ok ? "ok" : r.error.code).toBe("over_generated_seconds");
   });
   it("ANY member's Err propagates — one unpriceable line refuses the whole job", () => {
     const r = estimateBatchUsd([
@@ -272,7 +295,7 @@ const FIXTURES = JSON.parse(read("./media.fixtures.json")) as {
       usdAt4s: number;
       durations: number[] | "any";
     }[];
-    reel30s: { mixed: { pictureUsd: number } };
+    reel30s: { mixed: { pictureUsd: number; generatedSeconds: number } };
     targetsUnreachableByGeneratedVideoAlone: number[];
   };
 };
@@ -497,34 +520,133 @@ describe("the scene-kind price table — §2.3, and why the cheap kinds are not 
     }
   });
 
-  it("the §2.3 30-second reel costs what the ADR claims", () => {
+  it("the §2.3 30-second reel costs what the ADR claims — AND is still buyable", () => {
     const pictures =
       3 * sceneUsd("generated_video", 4) +
       4 * sceneUsd("animated_image", 4) +
       sceneUsd("text_card", 2);
     expect(pictures).toBeCloseTo(SCENE.reel30s.mixed.pictureUsd, 10);
+    // 33.1-04: the ADR's worked deck sits EXACTLY on `MEDIA_GENERATED_SECONDS_CAP` with zero
+    // slack, and nothing checked that until this line. A one-second nudge to any of its three
+    // generated scenes makes the deck the ADR is argued from illegal, which would be a silent
+    // contradiction between the record and the rail. Asserted through `chooseMediaBatch` rather
+    // than by comparing two numbers, so it is the shipped gate that answers.
+    const generatedSeconds = SCENE.reel30s.mixed.generatedSeconds;
+    const deck: MediaSpec[] = [
+      ...Array.from({ length: generatedSeconds / 4 }, () => clip("720p", 4)),
+      ...Array.from(
+        { length: 4 },
+        (): MediaSpec => ({
+          kind: "image",
+          model: MEDIA_DEFAULT_IMAGE.model,
+          width: MEDIA_DEFAULT_IMAGE.width,
+          height: MEDIA_DEFAULT_IMAGE.height,
+        }),
+      ),
+      { kind: "render" },
+    ];
+    const bought = chooseMediaBatch(deck, MEDIA_JOB_CAP_USD);
+    expect(bought.ok, bought.ok ? "" : `the ADR's own deck is refused: ${bought.error.code}`).toBe(
+      true,
+    );
+    expect(generatedSeconds).toBe(3 * 4);
   });
 
   it("NOT ONE target duration is reachable with generated video alone", () => {
-    const grid = MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model] ?? [];
-    /** Can `t` seconds be filled EXACTLY with the pinned model's own clip lengths? */
-    const fillable = (t: number): boolean => {
-      const reached = Array.from({ length: t + 1 }, () => false);
-      reached[0] = true;
-      for (let i = 1; i <= t; i++) reached[i] = grid.some((g) => g <= i && reached[i - g]);
-      return reached[t] ?? false;
-    };
-    const perSecond =
-      MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.[MEDIA_DEFAULT_VIDEO.resolution];
+    // THE PROPERTY IS UNCHANGED; THE MECHANISM MOVED, on 2026-08-30 (33.1-04, ADR-027).
+    //
+    // It used to hold through TWO different mechanisms without saying so: 15 and 30 failed the
+    // ARITHMETIC (every sora-2 clip length was a multiple of 4, so no sum of them was 15 or 30)
+    // and 60 failed the JOB CAP ($6.00 > $3.50). On grok's 1..15 grid every target is composable,
+    // and 15 s ($1.05) and 30 s ($2.10) are both under the job cap, so the arithmetic half is gone.
+    //
+    // What holds it now is `MEDIA_GENERATED_SECONDS_CAP` — a code-owned ceiling at the same money
+    // boundary every other refusal passes through. All three targets are refused for ONE stated
+    // reason, and the assertion is made through `chooseMediaBatch`'s own return value rather than
+    // by arithmetic over a fixture array, so it reads the shipped check instead of restating it.
+    // ADR-027 §"What the mitigation is not": a ceiling somebody can raise is not the same thing as
+    // an impossibility, and that is a cost the Grok decision spends.
     for (const target of TARGET_DURATIONS) {
-      // Video is priced per SECOND, so every composition of `target` costs the same — the cap check
-      // needs the length, not the arrangement. 15 and 30 fail the arithmetic (every supported clip
-      // length is a multiple of 4); 60 is composable and costs $6.00, over the $3.50 job cap.
-      const usd = target * (perSecond ?? 0);
-      expect(fillable(target) && usd <= MEDIA_JOB_CAP_USD).toBe(false);
+      // The whole target, bought as generated video however it is arranged — video is priced per
+      // SECOND, so the arrangement never mattered, only the total.
+      const allGenerated = Array.from({ length: Math.ceil(target / 15) }, (_, i) =>
+        clip("720p", Math.min(15, target - i * 15)),
+      );
+      const r = chooseMediaBatch(allGenerated, MEDIA_JOB_CAP_USD);
+      expect(r.ok, `an all-generated ${target}s reel must be refused`).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe("over_generated_seconds");
     }
     expect([...TARGET_DURATIONS]).toEqual(SCENE.targetsUnreachableByGeneratedVideoAlone);
-    expect(fillable(28)).toBe(true); // the grid itself works — 28 s is buildable, 30 s is not
+    // THE ONE-LINE PROPERTY, which is what makes the loop above true for a target duration nobody
+    // has added yet rather than only for these three.
+    expect(MEDIA_GENERATED_SECONDS_CAP).toBeLessThan(Math.min(...TARGET_DURATIONS));
+  });
+
+  it("the boundary is INCLUSIVE — a deck spending exactly the cap is bought", () => {
+    // Both decks the cap was sized against sit EXACTLY on it, with zero slack: the skill body's
+    // VARIATION A spends 4 + 8 and `media.fixtures.json`'s reel30s.mixed spends 3 x 4. An
+    // exclusive boundary would make both illegal without a word of warning anywhere.
+    const atCap = [clip("720p", 4), clip("720p", 8)];
+    const r = chooseMediaBatch(atCap, MEDIA_JOB_CAP_USD);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.estUsd).toBeCloseTo(MEDIA_GENERATED_SECONDS_CAP * 0.07, 10);
+    // ...and one second more is not.
+    const over = chooseMediaBatch([clip("720p", 4), clip("720p", 9)], MEDIA_JOB_CAP_USD);
+    expect(over.ok ? "ok" : over.error.code).toBe("over_generated_seconds");
+  });
+
+  it("a batch with NO video at all is untouched by the ceiling", () => {
+    // A standalone image, and a whole deck of stills. The cap is about generated video; a ceiling
+    // that refused a $0.006 still would be a bug wearing a guard's clothes.
+    const image: MediaSpec = {
+      kind: "image",
+      model: MEDIA_DEFAULT_IMAGE.model,
+      width: MEDIA_DEFAULT_IMAGE.width,
+      height: MEDIA_DEFAULT_IMAGE.height,
+    };
+    expect(chooseMediaBatch([image], MEDIA_JOB_CAP_USD).ok).toBe(true);
+    const stillsDeck: MediaSpec[] = [
+      ...Array.from({ length: 8 }, () => image),
+      { kind: "free" },
+      { kind: "render" },
+    ];
+    expect(chooseMediaBatch(stillsDeck, MEDIA_JOB_CAP_USD).ok).toBe(true);
+  });
+
+  it("THE SKILL BODY'S OWN WORKED ANSWER STAYS LEGAL — the gap nothing checked", () => {
+    // `media-director.md` teaches by example, and `seedSkills` publishes it straight to ACTIVE with
+    // no eval gate in front of it (the body is not a GATED skill). So the only thing between "the
+    // body teaches a deck the money boundary refuses" and a live dead end is a check like this.
+    // VARIATION A spends 4 + 8 = 12 generated seconds — EXACTLY the cap, with zero slack, which is
+    // why the cap is 12 and why this assertion ships in the same commit as the cap.
+    //
+    // Read off DISK by relative path, the way `storyboard.test.ts` reads the same file:
+    // `@pikar/cost` does not depend on `@pikar/contracts` and must not start to.
+    const body = read("../../contracts/skills/media-director.md");
+    const v = parseVariations(body);
+    expect(v.kind, `the body's worked answer did not parse: ${JSON.stringify(v)}`).toBe("two");
+    if (v.kind !== "two") return;
+    for (const [name, slice] of [
+      ["A", v.a],
+      ["B", v.b],
+    ] as const) {
+      const generatedSeconds = slice.deck.scenes
+        .filter((sc) => sc.visual === "generated_video")
+        .reduce((n, sc) => n + sc.durationMs / 1000, 0);
+      expect(
+        generatedSeconds,
+        `the worked answer's VARIATION ${name} spends ${generatedSeconds}s of generated video, ` +
+          `over MEDIA_GENERATED_SECONDS_CAP (${MEDIA_GENERATED_SECONDS_CAP}). The body teaches a ` +
+          "deck the money boundary refuses - fix the body or the cap, not this assertion.",
+      ).toBeLessThanOrEqual(MEDIA_GENERATED_SECONDS_CAP);
+      // ...and the same deck is genuinely BUYABLE, not merely under one number.
+      const specs = slice.deck.scenes.flatMap((sc) => {
+        const line = sceneVisualSpec(sc.visual, sc.durationMs / 1000);
+        if (!line.ok) throw new Error(`worked answer scene refused: ${line.error.code}`);
+        return line.value === null ? [] : [line.value.spec];
+      });
+      expect(chooseMediaBatch([...specs, { kind: "render" }], MEDIA_JOB_CAP_USD).ok).toBe(true);
+    }
   });
 });
 

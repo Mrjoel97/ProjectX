@@ -40,7 +40,47 @@
 >
 > **Two rendered sentences became RANGES**, from `GENERATED_LENGTH_RANGE` (derived from the same
 > constant the repair snaps to): the adjustment note and `refusalText`'s `illegal_duration` arm.
-> A `join(", ")` over the new grid would have printed fifteen comma-separated numbers at a user.)
+> A `join(", ")` over the new grid would have printed fifteen comma-separated numbers at a user.
+>
+> ---
+>
+> **`MEDIA_GENERATED_SECONDS_CAP = 12` — THE GUARANTEE, RESTORED IN CODE.** The wider grid made an
+> all-generated reel composable AND affordable ($1.05 at 15 s, $2.10 at 30 s, both under the
+> unchanged $3.50 job cap), which destroyed the arithmetic that used to make kind-mixing
+> structural. The ceiling is a total on GENERATED VIDEO SECONDS per reservation, checked in
+> `chooseMediaBatch` — the one gate `reserveJobInner`, `reserveSceneJobInner`, `jobEstimate` and
+> `imageEstimate` all pass through, so the number on screen and the number that spends agree by
+> construction. The refusal is a governed code, `over_generated_seconds`, with its own sentence on
+> the canvas naming its own lever (swap a generated scene for a still or stock — never "cut a
+> scene", which is `over_job_cap`'s lever). **There is no silent trim.**
+>
+> **12 is derived, not chosen:** it is `4 + 8`, what `media-director.md`'s VARIATION A already
+> spends; it is `3 x 4`, what `media.fixtures.json`'s `reel30s.mixed` already spends; and it is
+> below `min(TARGET_DURATIONS) = 15`, which is what refuses an all-generated reel at EVERY target
+> rather than only at 60. At $0.07/s it ceilings generated spend at $0.84 (24% of the job cap).
+> **Both of those decks sit EXACTLY on the boundary with zero slack** — the boundary is inclusive,
+> and `media.test.ts` now parses the shipped skill body and prices the fixture's own deck through
+> `chooseMediaBatch`, so a one-second nudge to either goes red instead of going live.
+>
+> **THE CAP IS UNIFORM, INCLUDING THE BLOCK PATH.** `reserveJobInner` builds one video spec per
+> paid block, so a block deck is generated-video by construction and a 6-block reel at 4 s is 24
+> seconds — refused. Passing `Infinity` on the block path was REJECTED: a model emitting a block
+> deck would evade the ceiling entirely, and a money guard with a documented bypass reads as
+> protection while providing none. **§4.1's canonical six-block reel is therefore no longer a legal
+> reservation**, and `media.test.ts`'s reference job is three blocks with a named test asserting
+> the six-block one refuses.
+>
+> **A PARTIAL BUY IS MEASURED DECK-WIDE, and this was a REAL hole, not a theoretical one.**
+> `reserveSceneJobInner` narrows `lines` to one scene on a partial buy and builds the batch specs
+> FROM `lines`, so with only the `chooseMediaBatch` check in place a 12+12+6 deck — refused as a
+> whole reel — reserved successfully one scene at a time through `regenerateBlock`, which needs no
+> prior batch. Measured on the landed cap, then closed by summing the WHOLE deck's generated
+> scenes, which is the rule this function already states for every other refusal. The check sits
+> AFTER the scene loop so an unmakeable length still reports `illegal_duration`.
+>
+> **If you change the cap:** it is a POLICY, not an impossibility — read ADR-027 §"What the
+> mitigation is not". Raising it above 15 silently re-permits an all-generated reel at every
+> target. `MEDIA_JOB_CAP_USD` stays 3.50 and `RUNWAY_DAYS` stays 14.)
 
 > Last verified: 2026-08-30 (33.1-03 — **THE STILL PLANE IS ON OPENROUTER AND ITS PRICE ROW IS
 > MEASURED RATHER THAN GUESSED.** The block below decided both planes would move; this is the image

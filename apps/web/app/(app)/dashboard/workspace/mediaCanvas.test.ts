@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GENERIC_DECK_REFUSAL, TARGET_DURATIONS } from "@pikar/core/storyboard";
-import { sceneVisualSpec } from "@pikar/cost/media";
+import { MEDIA_GENERATED_SECONDS_CAP, sceneVisualSpec } from "@pikar/cost/media";
 import { describe, expect, test } from "vitest";
 import {
   adjustmentNotes,
@@ -239,6 +239,20 @@ describe("the refusal names the lever, in the deck's own vocabulary", () => {
     expect(refusalText({ reason: "illegal_duration" }, { ...base, noun: "block" })).toBe(
       "Every block must be 5 or 10 seconds.",
     );
+  });
+
+  test("the SECONDS ceiling gets its OWN sentence, naming its OWN lever", () => {
+    // `refusalText` has a default fall-through — the test below proves an unknown reason returns a
+    // generic string — so the compiler could NOT have caught a missing arm here. A governed code
+    // with no sentence reads to the user as "This reel can't be generated yet", which names no
+    // lever at all. The lever for this one is NOT "cut a scene": it is "swap a generated scene for
+    // a still or stock", which cost the same at any length.
+    const text = refusalText({ reason: "over_generated_seconds" }, base);
+    expect(text).not.toBe("This reel can't be generated yet.");
+    expect(text).toMatch(/generated video/);
+    expect(text).toMatch(/animated still|stock/);
+    // The NUMBER is derived from the cap, not typed out — the same rule as the cost ratio.
+    expect(text).toContain(`${MEDIA_GENERATED_SECONDS_CAP} seconds`);
   });
 
   test("the cap refusal offers the lever that is actually cheaper on a scene deck", () => {

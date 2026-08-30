@@ -149,6 +149,48 @@ export const MEDIA_STOCK_PRICING: Record<string, number> = {
  *  per-request budget; there is deliberately no $1.00 constant left in this file to pull. */
 export const MEDIA_JOB_CAP_USD = 3.5;
 
+/**
+ * The ceiling on TOTAL GENERATED VIDEO SECONDS in ONE reservation (33.1-04, ADR-027).
+ *
+ * **What it replaces.** Until 2026-08-30 "every legal reel mixes kinds" was ARITHMETIC: sora-2 made
+ * only 4, 8 and 12 second clips, so no sum of them was 15 or 30, and a 60 cost $6.00 against the
+ * $3.50 job cap. Grok's 1..15 grid is exactly what the phase bought — it retires
+ * `illegal_generated_duration` — and it destroys that guarantee in passing: a 15 s all-generated
+ * reel is $1.05 and a 30 s is $2.10, both comfortably under the cap. Kind-mixing would drop from
+ * structural to advisory, and the only thing left advising it is skill-body prose that
+ * `dispatch.ts` already records as "violated twice in six attempts, which is why this is code and
+ * not another sentence in the body."
+ *
+ * **Why 12, derived rather than chosen.** It is the largest number that is below every target
+ * duration AND keeps both shipped worked examples legal exactly as written:
+ *  - `media-director.md`'s VARIATION A spends `4 + 8 = 12` generated seconds in a 30 s reel
+ *    (VARIATION B spends 0). Twelve is the smallest value that does not require editing the body.
+ *  - `media.fixtures.json`'s `reel30s.mixed` is `3 generated x 4 s = 12 s`, and the ADR's own
+ *    worked economics land on the same number.
+ *  - `12 < min(TARGET_DURATIONS) === 15`, which is what makes an all-generated reel impossible at
+ *    EVERY target rather than only at 60 — including a target nobody has added yet.
+ *  - At $0.07/s it ceilings generated spend at **$0.84** per reel whatever the target duration:
+ *    24% of `MEDIA_JOB_CAP_USD`, leaving $2.66 for stills, voice, captions and render.
+ *
+ * **The uncomfortable part, said out loud: both of those decks sit EXACTLY on the boundary, with
+ * zero slack.** A one-second nudge to either makes it illegal. That is why the boundary is
+ * inclusive and why `media.test.ts` parses the shipped body and asserts its worked answer prices
+ * under this constant — otherwise the body and the money boundary could drift apart in a commit
+ * that touches neither. 13 and 15 were considered: 15 destroys the guarantee, 13 is a round number
+ * with no argument behind it.
+ *
+ * **`MEDIA_JOB_CAP_USD` STAYS 3.50.** Lowering it below $2.10 to make the arithmetic work would
+ * shrink every legitimate mixed reel's headroom, and ADR-026 is explicit that a successor needing
+ * a cap change is a worse outcome wearing a migration's clothes.
+ *
+ * ponytail: one constant and a two-line check at the choke point every reservation and every
+ * estimate already passes through. The ceiling is that this is a POLICY somebody can raise, where
+ * what it replaces was an impossibility — ADR-027 §"What the mitigation is not" says so rather
+ * than pretending otherwise. The upgrade path, if a long-form product ever needs more, is a
+ * per-tenant limit read from `guardrails`, NOT a bigger constant.
+ */
+export const MEDIA_GENERATED_SECONDS_CAP = 12;
+
 /* ponytail: a flat estimate, not metered per-render. Vercel does not expose per-sandbox billing at
  * request time. The ceiling is that a pathological render could cost more than this constant; the
  * upgrade path is `sandbox.usage` on the returned session object, reconciled in the manual D5
@@ -249,14 +291,21 @@ export type MediaSpec =
   | { kind: "render" } // the flat sandbox constant — a cost line, not a provider call
   | { kind: "free" }; // a scene whose picture costs nothing — see SCENE_VISUAL_LINE
 
-/** Three DISTINCT codes, because they send the user to three different levers:
+/** FOUR DISTINCT codes, because they send the user to four different levers:
  *  - `unknown_model`     — nothing in the table prices this model+resolution. Fail closed.
  *  - `over_job_cap`      — priced fine, but the reel is too big. Cut blocks or drop resolution.
  *  - `illegal_duration`  — a submitted dimension that cannot be priced at all: a clip length
  *                          outside the selected model's supported set, or a non-finite/negative
  *                          count. Collapsing this into
- *                          `unknown_model` would lie about a model we price perfectly well. */
-export type MediaCostError = { code: "unknown_model" | "over_job_cap" | "illegal_duration" };
+ *                          `unknown_model` would lie about a model we price perfectly well.
+ *  - `over_generated_seconds` — the reel is affordable but spends more than
+ *                          `MEDIA_GENERATED_SECONDS_CAP` on generated video. A DIFFERENT lever
+ *                          from `over_job_cap`: the cure is not "cut a scene", it is "swap a
+ *                          generated scene for an animated still or stock", which costs the same
+ *                          at any length. Kept separate for exactly that reason. */
+export type MediaCostError = {
+  code: "unknown_model" | "over_job_cap" | "illegal_duration" | "over_generated_seconds";
+};
 
 const counted = (...ns: number[]) => ns.every((n) => Number.isFinite(n) && n >= 0);
 
@@ -362,6 +411,16 @@ export function chooseMediaBatch(
 ): Result<{ estUsd: number; estCents: number }, MediaCostError> {
   const est = estimateBatchUsd(specs);
   if (!est.ok) return est;
+  // THE GENERATED-SECONDS CEILING (33.1-04), beside the job cap and before any cents exist.
+  // Here rather than at a caller because this is the ONE gate `reserveJobInner`,
+  // `reserveSceneJobInner`, `jobEstimate` and `imageEstimate` all pass through — so the estimate
+  // the canvas prints and the reservation that spends agree by construction. It is UNIFORM: block
+  // decks are generated-video by construction and are checked too. Passing a per-caller ceiling
+  // was rejected — a cap a deck shape can route around is not a cap (ADR-027).
+  const generatedSeconds = specs.reduce((n, s) => n + (s.kind === "video" ? s.seconds : 0), 0);
+  if (generatedSeconds > MEDIA_GENERATED_SECONDS_CAP) {
+    return err({ code: "over_generated_seconds" });
+  }
   if (!Number.isFinite(capUsd) || capUsd <= 0 || est.value > capUsd) {
     return err({ code: "over_job_cap" });
   }

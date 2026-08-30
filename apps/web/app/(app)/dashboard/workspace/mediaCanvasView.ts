@@ -33,7 +33,7 @@ import {
   GENERATED_CLIP_SECONDS,
   TARGET_DURATIONS,
 } from "@pikar/core/storyboard";
-import { sceneVisualSpec } from "@pikar/cost/media";
+import { MEDIA_GENERATED_SECONDS_CAP, sceneVisualSpec } from "@pikar/cost/media";
 
 /**
  * THE CLIP-VS-STILL LEVER, COMPUTED FROM THE PRICE TABLES AT RENDER — never typed out.
@@ -263,6 +263,12 @@ export function refusalText(
   switch (refusal.reason) {
     case "over_job_cap":
       return `This reel would cost ${money(o.totalCents)}, over the ${money(o.capCents)} per-reel limit — cut a ${o.noun}, or swap a generated clip for an animated still.`;
+    // 33.1-04's generated-seconds ceiling. A DIFFERENT sentence from `over_job_cap` because it is a
+    // different lever: the reel is affordable, and cutting a scene is not the cure — swapping one
+    // for a still or stock is, because those cost the same at any length. The number is derived
+    // from the cap rather than typed out, for the reason `CLIP_VS_STILL_RATIO` exists.
+    case "over_generated_seconds":
+      return `This reel uses more than ${MEDIA_GENERATED_SECONDS_CAP} seconds of generated video, which is the most one reel may buy — swap a generated ${o.noun} for an animated still or for stock, which cost the same at any length.`;
     case "illegal_duration":
       return o.noun === "scene"
         ? `The scenes don't add up to the reel's declared length, or a generated clip isn't ${GENERATED_LENGTH_RANGE} whole seconds — the only lengths the model produces.`

@@ -44,6 +44,7 @@ import {
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
+  MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_JOB_CAP_USD,
   MEDIA_VIDEO_SECONDS,
   sceneVisualSpec,
@@ -69,6 +70,12 @@ export type ReserveRefusal =
   | "unknown_model"
   | "over_job_cap"
   | "illegal_duration"
+  /** 33.1-04 — the reel is affordable but spends more than `MEDIA_GENERATED_SECONDS_CAP` on
+   *  generated video. A DIFFERENT lever from `over_job_cap`: the cure is not "cut a scene", it is
+   *  "swap a generated scene for an animated still or stock", which cost the same at any length.
+   *  It exists because grok's 1..15 grid made an all-generated reel composable and affordable for
+   *  the first time, removing an arithmetic guarantee this restores in code (ADR-027). */
+  | "over_generated_seconds"
   | "unrenderable_block"
   /** 20.2 wave 6 — regenerating a scene that BUYS NOTHING. A `text_card` is drawn by ffmpeg and an
    *  `uploaded_video`'s bytes are already the tenant's, so a silent one of either has no provider
@@ -586,6 +593,32 @@ export async function reserveSceneJobInner(
         },
       });
     }
+  }
+
+  // THE GENERATED-SECONDS CEILING, MEASURED OVER THE WHOLE DECK (33.1-04).
+  //
+  // `chooseMediaBatch` enforces it too, and on a FULL buy that is the same question asked twice.
+  // On a PARTIAL buy it is not: `lines` is narrowed to the chosen scene, so the specs the batch
+  // sees carry only that scene's seconds — and a deck spending 24 generated seconds, refused as a
+  // whole reel, could be bought one scene at a time through `regenerateBlock` (which requires no
+  // prior batch) until the entire deck had been paid for. Measured, not theorised: with only the
+  // batch check in place, scene 0 of a 12 + 12 + 6 deck reserved successfully.
+  //
+  // Deck-wide is the rule this function already states for every other refusal — "every refusal a
+  // full buy would raise, a partial buy raises too; only the LINES are narrowed" — so this is that
+  // rule applied to one more gate rather than a new kind of check.
+  //
+  // AFTER the scene loop, deliberately: a scene the provider cannot make at ANY price is
+  // `illegal_duration`, which names a different and more actionable lever. Every length above the
+  // grid is also above this ceiling, so checking the ceiling first would make `illegal_duration`
+  // unreachable for a generated scene and report "too much video" about a clip that cannot be
+  // bought at all. Nothing has been spent either way — both are free refusals.
+  const deckGeneratedSeconds = a.scenes.reduce(
+    (n, s) => n + (s.visual === "generated_video" ? s.durationMs / 1000 : 0),
+    0,
+  );
+  if (deckGeneratedSeconds > MEDIA_GENERATED_SECONDS_CAP) {
+    return { ok: false, reason: "over_generated_seconds" };
   }
 
   // A deck of nothing but free scenes and no narration has nothing to reserve and nothing to
