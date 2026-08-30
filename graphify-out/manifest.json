@@ -10350,8 +10350,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-PRICE-EVIDENCE.md": {
-    "mtime": 1788101584.1492326,
-    "ast_hash": "81155fc1c17f520860d007be92088e1a",
+    "mtime": 1788119632.1885133,
+    "ast_hash": "aae02efa0fab5ff81a89d84c1de34af0",
     "semantic_hash": ""
   },
   ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-03-SUMMARY.md": {
@@ -10362,6 +10362,11 @@
   ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-AUDIT.md": {
     "mtime": 1788107772.107505,
     "ast_hash": "ebaf46f3471697646187745c114eb3f5",
+    "semantic_hash": ""
+  },
+  ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-04-SUMMARY.md": {
+    "mtime": 1788115730.356414,
+    "ast_hash": "9a00d5e730a3dcc13959d783a3f82767",
     "semantic_hash": ""
   }
 }
