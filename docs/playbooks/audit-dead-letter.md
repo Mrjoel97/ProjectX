@@ -1,6 +1,120 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-08-23 (27-02 — **ONE NEW TABLE ON THE REFS-ONLY PLANE: `workflowPackEvents`,
+> Last verified: 2026-08-30 (28.1-08 — **THE ERASURE SEQUENCE HAS A THIRD PROVIDER ARM: BILLING.**
+>
+> `tenantDelete.ts` said nothing about billing, so erasing a tenant left a live Stripe subscription
+> charging a card belonging to nobody (BILL-06). The arm is a third block of the exact shape Google
+> and Microsoft already use — its own `try/catch`, recording `failure` rather than aborting — and it
+> sits **above the `deleteTenantDataPage` loop**. That position is the design, not a preference:
+> `billingCustomers` is `tenant_owned`, so the loop deletes the row holding the `subscriptionId`,
+> and an arm below it would find nothing to cancel and report `hadSubscription: false` —
+> indistinguishable from a tenant who never subscribed.
+>
+> **BOTH closed unions were widened**, the TypeScript `ProviderDeletionResult` and the Convex
+> `providerResultValidator`. Widening one and not the other is a runtime rejection under a green
+> typecheck. The arm is APPENDED to `providers`, so every assertion indexing `providers[0]`/`[1]`
+> stays true unchanged.
+>
+> **The `tenant.deleted` audit row** now carries `billingLocalRowDeleted` /
+> `billingRevokedAtProvider` / `billingFailure` through the existing
+> `payload[\`${provider.provider}…\`]` pattern — booleans only, no `cus_`, no `sub_`, no address,
+> asserted by a whole-row string scan (§4).
+>
+> **The erasure tradeoff is now asserted, not just commented:** `billingCustomers`, `billingPeriods`
+> and `billingUnapplied` are erased; `billingEvents` and `billingCoverage` are `audit_immutable` and
+> SURVIVE. A tenant erasure removes the mapping and the working rows; it does not rewrite Pikar's
+> financial book. `tenantDelete.test.ts` 13/13. Details in `billing.md`.
+>
+> **AND THE VIEWER PROJECTION MOVED WITH IT.** `AUDIT_VIEWER_EVENTS` in
+> `packages/contracts/src/auditProjection.ts` gained the three `billing*` keys on `tenant.deleted`
+> and a new `billing.adjustment.raised` row (28.1-10's owner-raised charge: `periodKey`, `ref`,
+> `kind`, `amountMinor`, `currency` and a line COUNT — no description field exists, because the
+> owner's reason for a charge belongs in their own records and not in an append-only log).
+> **`reportsGovernance.test.ts`'s forward scan is what caught the omission**, and it is worth saying
+> why the pair works: writing an audit row with a new `eventType` and NOT projecting it renders a
+> shell in the viewer, so the allowlist fails closed on any unaccounted literal. That guard has now
+> done its job on the first new event type since it was written.)
+
+> Last verified: 2026-08-29 (28.1-05 — **`deadLetters.workflowId` IS NOW OPTIONAL, THE TABLE HAS A
+> `source` DISCRIMINATOR, AND `billingCustomers` IS CLASSIFIED `tenant_owned`.**
+>
+> Three changes, and the reasoning matters more than the diff.
+>
+> **1. `workflowId` became `v.optional(v.string())`.** A Stripe webhook has no workflow. The
+> alternative was synthesizing something like `billing:evt_…`, which would lie about what the
+> field MEANS to every existing reader and to this compliance surface. The field is optional
+> because the FACT is optional. This is the WIDEN step of widen→migrate→narrow and it terminates
+> here: nothing narrows, existing rows stay valid, no backfill, no migration.
+> `deadLetterRecipient` also stopped writing `workflowId: ""` — an empty string was only ever a
+> placeholder for a required column with no value to put in it.
+>
+> **2. `source: "workflow" | "billing"` is set at the WRITE site, never inferred.** "Has a
+> workflowId" and "was written by the pipeline" are different claims, and only one of them
+> survives a future writer that has both. Absent (every row before this plan) is reported as
+> `"workflow"` by `deadLetters.listAll`, which the `/ops` screen now renders — so a billing dead
+> letter is distinguishable from a pipeline one on the operator's screen rather than only in the
+> database. The `listAll` key-set pin was bumped DELIBERATELY, which is what that pin exists for.
+>
+> **3. THE TABLE IS STILL INSERT-ONLY AND MUST STILL NEVER HOLD PERSONAL DATA.** The billing
+> writer is a direct `ctx.db.insert` inside `billingWebhook.receiveAndApply`; no mutating
+> dead-letter or audit function was added (CLAUDE.md §3). Its payload is
+> `{stripeEventId, stripeEventType, stripeCustomerId, stripeObjectId}` — ids only — and a Stripe
+> `checkout.session.completed` carries an email, a name and a phone number, so this is the
+> sharpest §4 boundary in the repo. It is enforced structurally: `eventFacts` in
+> `@pikar/billing` names every id it lifts, and `receiveAndApply`'s validator has no argument
+> that could carry prose. Proven by mutation — adding a `customerEmail` field to that type and
+> to the payload reddens both a whole-object assertion in `events.test.ts` and a whole-ROW
+> assertion over the stored `deadLetters` and `audit` rows.
+>
+> **`billingCustomers` is `tenant_owned`, and the two categories it is NOT are the interesting
+> part.** Not `tenant_credential` like `connectorConnections`: that category holds the tenant's
+> GRANT (a refresh token, AES-256-GCM ciphertext), whereas a `cus_…` grants nothing without the
+> merchant's own API key — and `tenant_credential` would SUMMARISE the row out of the tenant's
+> export via `summarizeTenantCredential`, deleting the one fact they would want from it. Not
+> `audit_immutable` like `deadLetters`: this is mutable mapping state, and the erasure obligation
+> runs the other way — it is the ONLY row joining a person to a live merchant record, so an
+> erasure that left it behind would leave that link standing forever. The registry count moved
+> 51 → 52.)
+>
+> Previously verified: 2026-08-27 (28-03 — **FOUR PHASE-28 TABLES CLASSIFIED, AND ONE OF THEM DOES NOT
+> BEHAVE LIKE `gmailTokens`.** `TENANT_TABLE_CLASSIFICATION` gains `connectorConnections`
+> (`tenant_credential`), `connectorOAuthStates` (`tenant_credential`), `contactProviderRefs`
+> (`tenant_owned`) and `providerGates` (`global`). Registry-only — no export or deletion code
+> changed, and `isolation.test.ts`'s both-directions drift test is what forced the entry.
+>
+> **DISCONNECT IS NOT ERASURE ON `connectorConnections`, AND THAT IS DELIBERATE.** `gmailAuth`
+> deletes its row on disconnect because Google's revoke is confirmed to kill the whole grant, so
+> nothing is left to say. Three of the four Phase 28 providers are not like that — Stripe Apps has
+> no documented platform-initiated revoke, PayPal documents none at all, and HubSpot's cascade to
+> already-issued access tokens is unproven — so for them LOCAL DELETION MAY BE THE ONLY REVOCATION
+> PIKAR CAN PERFORM. `recordRevocation` therefore CLEARS the ciphertext and KEEPS the row: the
+> surviving `revocation.upstream` value is the only place the honest answer lives, and deleting the
+> row would leave the connections surface with nothing to be truthful with.
+>
+> **ERASURE IS UNAFFECTED.** `tenant_credential` puts the row on the normal `tenantDelete` walk, so
+> an erasure request still removes it entirely. The two operations are different and stay that way.
+> `providerGates` is `global` and carries NO `tenantId` column — a tenant must not be able to widen
+> or erase the deployment's own provider lane status. isolation 37/37, tenantDelete 8/8,
+> tenantExport 4/4, core typecheck 0.)
+>
+> PREVIOUS: 2026-08-27 (**ONE NEW VIEWER EVENT: `media.grounding_failed`, AND IT IS VISIBLE ON
+> PURPOSE.** `groundMediaBrief` runs a research turn on the brief before the deck is written and
+> files the findings in the vault. Every failure arm returns quietly and the media turn proceeds on
+> the vault alone — the pass can never fail a reel. **That is exactly why the row has to exist.**
+> A reel grounded in live research and one grounded only in a near-empty vault ship identically,
+> so without this event a silently ungrounded proposal is indistinguishable from a researched one
+> after the fact.
+>
+> **§4 HOLDS AND WAS THE CONSTRAINT ON THE SHAPE:** the row carries `LINEAGE` refs plus a `reason`
+> CODE. No brief text, no query, no retrieved page, no model prose — the failure is identified by
+> a code the reader looks up, never by quoting what was being researched. A grounding failure is
+> precisely the moment when the tempting payload (the question that failed) is user content.
+>
+> The event is registered in `AUDIT_VIEWER_EVENTS` (`packages/contracts/src/auditProjection.ts`),
+> so it is projected to the viewer like every other media event; nothing about the dead-letter
+> path, the insert-only rule, or the WORM export changed.)
+>
+> PREVIOUS: 2026-08-23 (27-02 — **ONE NEW TABLE ON THE REFS-ONLY PLANE: `workflowPackEvents`,
 > classified `audit_immutable` in `packages/core/src/tenantData.ts`.** It first landed
 > `tenant_owned`; the owner reclassified it the same day, because `tenant_owned` enrols a table in
 > the tenant deletion and export walks automatically, and erasing one tenant then silently rewrote

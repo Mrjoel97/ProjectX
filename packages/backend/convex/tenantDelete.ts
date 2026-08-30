@@ -15,7 +15,10 @@ import { contentHash } from "./lib/hash";
 export const TENANT_DELETE_BATCH_SIZE = 2;
 
 type ProviderDeletionResult = {
-  provider: "google" | "microsoft";
+  /** 28.1-08 widened this to three. BOTH this type AND `providerResultValidator` below must carry
+   *  the same members — a value that satisfies one and not the other is a runtime rejection under
+   *  a perfectly green typecheck. */
+  provider: "google" | "microsoft" | "billing";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
@@ -23,7 +26,7 @@ type ProviderDeletionResult = {
 
 const deletionCursorValidator = v.object({ tableIndex: v.number() });
 const providerResultValidator = v.object({
-  provider: v.union(v.literal("google"), v.literal("microsoft")),
+  provider: v.union(v.literal("google"), v.literal("microsoft"), v.literal("billing")),
   localRowDeleted: v.boolean(),
   revokedAtProvider: v.boolean(),
   failure: v.boolean(),
@@ -142,7 +145,17 @@ export const authorizeTenantDeletion = internalMutation({
       .query("microsoftCalendarTokens")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .unique();
-    return { googleConnected: !!google, microsoftConnected: !!microsoft };
+    // 28.1-08: the third probe. `billingCustomers` is `tenant_owned`, so the page loop below will
+    // delete this row — which is exactly why the arm that needs it runs before the loop.
+    const billing = await ctx.db
+      .query("billingCustomers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .first();
+    return {
+      googleConnected: !!google,
+      microsoftConnected: !!microsoft,
+      billingActive: !!billing,
+    };
   },
 });
 
@@ -238,8 +251,15 @@ export const deleteTenantDataPage = internalMutation({
 const authorizeTenantDeletionRef = makeFunctionReference<
   "mutation",
   { tenantId: string; userId: Id<"users"> },
-  { googleConnected: boolean; microsoftConnected: boolean }
+  { googleConnected: boolean; microsoftConnected: boolean; billingActive: boolean }
 >("tenantDelete:authorizeTenantDeletion");
+/** The billing arm. A `makeFunctionReference`, matching the two above, so this module keeps its
+ *  deliberate lack of a static import edge into the feature modules it orchestrates. */
+const terminateBillingRef = makeFunctionReference<
+  "action",
+  { tenantId: string },
+  { hadSubscription: boolean; cancelled: boolean; failure: boolean; failureCode?: string }
+>("billing:terminateBilling");
 const deleteTenantDataPageRef = makeFunctionReference<
   "mutation",
   {
@@ -299,6 +319,31 @@ export const deleteTenantData = tenantAction({
       }
     }
 
+    // ── THE BILLING ARM (28.1-08, BILL-06) ────────────────────────────────────────────────────
+    // THIS MUST STAY ABOVE THE PAGE LOOP. `billingCustomers` is `tenant_owned`, so
+    // `deleteTenantDataPage` deletes the row that holds `subscriptionId` — the only place it is
+    // stored. An arm moved below the loop would find nothing to cancel and report
+    // `hadSubscription: false`, which is indistinguishable from a tenant who never subscribed:
+    // a silent, permanent subscription charging a card belonging to nobody. Same shape and same
+    // reason as the two revoke-first blocks above.
+    //
+    // `terminateBilling` never throws — it reports every failure class as a code — so this
+    // try/catch is the belt for the unforeseeable, exactly like Google's and Microsoft's.
+    let billingCancelled = false;
+    let billingFailure = false;
+    if (connected.billingActive) {
+      try {
+        const result: { cancelled: boolean; failure: boolean } = await ctx.runAction(
+          terminateBillingRef,
+          { tenantId: ctx.tenantId },
+        );
+        billingCancelled = result.cancelled;
+        billingFailure = result.failure;
+      } catch {
+        billingFailure = true;
+      }
+    }
+
     const providers: ProviderDeletionResult[] = [
       {
         provider: "google",
@@ -311,6 +356,15 @@ export const deleteTenantData = tenantAction({
         localRowDeleted: connected.microsoftConnected,
         revokedAtProvider: microsoftRevoked,
         failure: microsoftFailure,
+      },
+      {
+        // APPENDED, not inserted: the two existing arms keep their positions so every assertion
+        // written against them stays true unchanged. `localRowDeleted` is the mapping row, which
+        // the page loop below erases; `revokedAtProvider` is the cancellation at Stripe.
+        provider: "billing",
+        localRowDeleted: connected.billingActive,
+        revokedAtProvider: billingCancelled,
+        failure: billingFailure,
       },
     ];
 

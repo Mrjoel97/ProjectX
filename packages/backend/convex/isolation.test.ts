@@ -178,6 +178,37 @@ const NON_TENANT_LEADING: Record<string, string> = {
   "vaultDocuments.by_kind": "internal corpus maintenance; no tenant-facing caller",
   "feedback.by_skill": "skill-optimizer aggregation across tenants; owner/token plane",
   "spendEvents.by_correlation": "correlation trace, internal",
+  // 28-03. The OAuth callback arrives from the provider with a nonce and NOTHING else — no
+  // session, no cookie, no tenant — so the lookup cannot lead with tenantId; that is the entire
+  // reason a state row exists instead of a bare HMAC. The consumer is 28-04's callback handler,
+  // which has no tenant-facing caller: it resolves the row, checks `usedAt`/`expiresAt`, and the
+  // tenant it then acts as comes FROM the row rather than from the request.
+  "connectorOAuthStates.by_state":
+    "OAuth callback resolves a server-minted nonce; no tenant in the request",
+  // 28.1-05. A `customer.subscription.*` delivery carries a `cus_...` and NOTHING that names a
+  // tenant — no session, no cookie, no client_reference_id — so the reverse lookup cannot lead
+  // with tenantId; that is the entire reason the mapping row exists. Same shape as
+  // `connectorOAuthStates.by_state`: the consumer is `billingWebhook.receiveAndApply`, an
+  // internalMutation reached only from the signature-verified webhook route, with no tenant-facing
+  // caller. The tenant it then acts as comes FROM the row, never from the request.
+  "billingCustomers.by_customer":
+    "Stripe webhook resolves a customer id to its tenant; no tenant in the delivery",
+  // 28.1-06. Identical in shape and reason to `spendEvents.by_correlation` above: the idempotence
+  // read is by correlation because that is what a Stripe retry carries, and the TENANT CHECK IS
+  // PART OF THE IDENTITY rather than part of the index — `recordBillingMovement` filters the
+  // bounded `take(32)` to `row.tenantId === args.tenantId` before it looks at anything else, so a
+  // correlation colliding across tenants can neither dedupe nor currency-clash across them. There
+  // is no tenant-facing caller: the only reader is `recordBillingMovement`, inside the webhook's
+  // internalMutation.
+  "billingEvents.by_correlation": "correlation identity read, internal; tenant filtered in code",
+  // 28.1-07. The invoice rollup is DEPLOYMENT-WIDE work, not a tenant's request: the daily cron
+  // has no tenant in hand and finds due periods across every tenant by (status, dueAt) — that IS
+  // the query, so a tenant-leading index cannot serve it. The only readers are
+  // `billingRollup.tick` and `billingRollup.periodForPost`, both internal and both reached only
+  // from the cron chain; there is no tenant-facing caller and no argument a caller could supply.
+  // The tenant-facing surface (`billing.invoices`) uses `by_tenant`, which does lead with tenantId.
+  "billingPeriods.by_status_dueAt":
+    "deployment-wide claim scan from the cron; no tenant-facing caller",
 };
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {
@@ -333,6 +364,28 @@ const OWNER_ARGS: Record<string, Record<string, unknown>> = {
   "skills.activateTenantCandidate": { candidateId: "id:tenantSkills" },
   "skills.rollbackTenantSkill": { targetId: "id:tenantSkills" },
   "invites.approve": { waitlistId: "id:betaWaitlist" },
+  // 28-26. Both are HARMLESS on purpose: `sealGate` here would PARK hubspot on a `blocked`
+  // admission with an already-expired review date, so if the owner wrapper ever let it through,
+  // the worst it could do is switch a provider off.
+  "providerGates.inspectGate": { provider: "hubspot", environment: "production" },
+  "providerGates.sealGate": {
+    provider: "hubspot",
+    environment: "production",
+    admission: "blocked",
+    lane: "parked",
+    evidenceRef: "isolation.test#non-owner",
+    reviewBy: 0,
+  },
+  // 28.1-10. HARMLESS on purpose, and every field is VALID: argument validation runs BEFORE the
+  // owner wrapper, so a deliberately malformed fixture would fail with a validator error that
+  // reads exactly like an authorization one. If the wrapper ever let this through, the worst it
+  // could do is open a pending billing period for a tenant that does not exist.
+  "billingRollup.raiseAdjustment": {
+    tenantId: "tenant-isolation-nonowner",
+    ref: "isolation-test",
+    amountMinor: 1,
+    currency: "USD",
+  },
 };
 
 /** The endpoints whose validator has at least one required field. Kept beside `OWNER_ARGS` so a
@@ -346,17 +399,22 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
     // `deadLetters.listAll`, 18 once 26-15 added the two `reportsGovernance` owner reads, 19 once
     // 27-09 added `skills.deactivatePack`, 20 once 27-11 added
     // `workflowPackDiscovery.listPackCandidates` — the owner-only candidate preview, which is the
-    // surface the browser evidence plane is earned from. THIS ASSERTION HAS NOW DONE ITS JOB FIVE
+    // surface the browser evidence plane is earned from, 22 once 28-26 added
+    // `providerGates.inspectGate`/`sealGate`, 23 once 28.1-10 added
+    // `billingRollup.raiseAdjustment` — the ONLY writer of a billing period, and the one owner
+    // endpoint that puts money on a customer's bill. THIS ASSERTION HAS NOW DONE ITS JOB SEVEN
     // TIMES: each new owner endpoint turned it red, which is the entire reason the count and the
     // module set are pinned rather than derived-and-forgotten. Update it deliberately when the
     // surface grows.
-    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(21);
+    expect(OWNER_SURFACE.length).toBeGreaterThanOrEqual(24);
     expect([...new Set(OWNER_SURFACE.map((f) => f.module))].sort()).toEqual([
+      "billingRollup",
       "deadLetters",
       "finance",
       "invites",
       "ops",
       "optimizerConfig",
+      "providerGates",
       "reportsGovernance",
       "skills",
       "workflowPackDiscovery",

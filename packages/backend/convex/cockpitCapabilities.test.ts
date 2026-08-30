@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   applyGmailCapability,
   GMAIL_TOOL_NAMES,
-  isPinnedCockpitEvaluation,
+  isHarnessDrivenEvaluation,
   routeCockpitIntent,
   shouldUseGmailCapability,
 } from "./cockpitCapabilities";
@@ -73,30 +73,40 @@ describe("cockpit capability routing", () => {
     );
   });
 
-  test("only a pinned throwaway golden tenant bypasses the live Gmail grant", () => {
-    expect(isPinnedCockpitEvaluation("eval-a80e0816", 2)).toBe(true);
-    expect(isPinnedCockpitEvaluation("eval-a80e0816", undefined)).toBe(false);
-    expect(isPinnedCockpitEvaluation("real-tenant", 2)).toBe(false);
+  test("a throwaway golden tenant bypasses the live Gmail grant — pinned or NOT", () => {
+    // THE REGRESSION THIS FUNCTION EXISTS FOR. An UNPINNED eval run used to return false here,
+    // withholding the email rail from a tenant that is disconnected by design. Every email fixture
+    // then failed with `recipients: []` and a tool list of `{proposeCalendarEvent, stageCrmWrite}`
+    // — the recipient tools were structurally absent — and the run measured the harness rather
+    // than the product. Flipping either assertion to false is how that comes back.
+    expect(isHarnessDrivenEvaluation("eval-a80e0816")).toBe(true);
+    expect(isHarnessDrivenEvaluation("eval-d0556903")).toBe(true);
   });
 
-  // 21-03 REGRESSION. Since 21-03 the harness pins in EITHER of two scopes, and this function knew
-  // only the global one. A `--tenant-skill` run therefore lost the Gmail rail on a tenant that is
-  // disconnected by design: golden run 21/41 for $0.4157, six fixtures returning at $0.0000 having
-  // called no tool at all. The run measured the harness, not the candidate.
-  //
-  // Deleting the `tenantSkillPins` clause turns the first assertion red.
-  test("21-03: a TENANT-scoped pin is a pinned golden evaluation too", () => {
-    const pin = { "offer-architect": "qx73bwshbfds5nk7hd40vsf5y18cm7z0" };
-    // The exact shape 21-07's paid command produces: a tenant pin and NO global pin.
-    expect(isPinnedCockpitEvaluation("eval-6e021dce", undefined, pin)).toBe(true);
-    // Both scopes at once is still one harness-driven run.
-    expect(isPinnedCockpitEvaluation("eval-6e021dce", 2, pin)).toBe(true);
+  test("the guard that keeps this away from real users is the PREFIX, and only the prefix", () => {
+    // Safe to rest the whole bypass on this: `sendCockpitMessage` is a `tenantAction` that passes
+    // `ctx.tenantId` from the authenticated identity, so a real user cannot present an `eval-`
+    // tenant. Nothing a caller sends reaches this argument.
+    expect(isHarnessDrivenEvaluation("real-tenant")).toBe(false);
+    expect(isHarnessDrivenEvaluation("k57rowabcdef")).toBe(false);
+    // Not a substring match: the marker has to START the id, or any tenant could claim it.
+    expect(isHarnessDrivenEvaluation("tenant-eval-a80e0816")).toBe(false);
+    expect(isHarnessDrivenEvaluation("")).toBe(false);
+  });
 
-    // …and the guard that keeps this away from real users is UNCHANGED. A tenant pin does not
-    // buy the bypass off an ordinary tenant, which is the whole reason the prefix test comes first.
-    expect(isPinnedCockpitEvaluation("real-tenant", undefined, pin)).toBe(false);
-    // An empty record is not a pin — otherwise every caller that passes `{}` silently qualifies.
-    expect(isPinnedCockpitEvaluation("eval-6e021dce", undefined, {})).toBe(false);
-    expect(isPinnedCockpitEvaluation("eval-6e021dce", undefined, undefined)).toBe(false);
+  // THE THREE RUN SHAPES THAT EACH COST MONEY, one assertion apiece. Every one is a harness-driven
+  // run, and under the old pin-keyed predicate the second and third returned false.
+  //
+  // 21-03 widened the predicate from one pin scope to two. That fix did not hold, because the shape
+  // that broke next carried NO pin in either scope. The predicate is the TENANT now, so a fourth
+  // run shape cannot reintroduce this by arriving with a pin nobody enumerated.
+  test("every harness run shape keeps the email rail, however it pins", () => {
+    // 1. Global pin (`--skill cockpit-agent@26`) — the shape every historical green run used.
+    expect(isHarnessDrivenEvaluation("eval-a80e0816")).toBe(true);
+    // 2. Tenant pin only (`--tenant-skill <id>`) — 21-03, scored 21/41 for $0.4157.
+    expect(isHarnessDrivenEvaluation("eval-6e021dce")).toBe(true);
+    // 3. A pin on some OTHER skill, or none at all — `--skill research-specialist@9` scored 26/46,
+    //    and the unpinned `--only` probe sent to diagnose it reproduced the same artifact.
+    expect(isHarnessDrivenEvaluation("eval-d0556903")).toBe(true);
   });
 });

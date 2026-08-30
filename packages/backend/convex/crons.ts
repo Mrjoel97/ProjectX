@@ -60,4 +60,23 @@ crons.daily(
 // `runSweep` re-runs BOTH migrations with `{ reset: true }` internally; that reset is required, not
 // decorative (a completed migration no-ops on a bare invocation — the vault-sweep lesson above).
 crons.interval("reliability-sweep", { minutes: 30 }, internal.reliabilitySweep.runSweep, {});
+// 28.1-07 (BILL-04): the invoice rollup. Stripe has no built-in recurrence for standalone
+// invoices, so the schedule is ours.
+//
+// IT POINTS AT A MUTATION, AND THAT IS THE WHOLE DESIGN — do not "simplify" it to the action.
+// Scheduled ACTIONS are at-most-once and are NOT auto-retried, so a cron aimed at `postInvoice`
+// would drop an entire billing period in silence: no retry, no error surface, no invoice. `tick`
+// is an internalMutation (exactly-once, auto-retried on an internal error) that CLAIMS each due
+// period and then schedules the outbound post — atomically with the claim. The reasoning, and the
+// separate reason the Stripe idempotency key cannot be the guard, live in `billingRollup.ts`.
+// `billingRollup.test.ts` fails if this line ever names `postInvoice`.
+//
+// 07:00 UTC, after `worm-export` (03), `gmail-token-expiry-scan` (04) and
+// `vault-pending-extraction-sweep` (05), so the money path is not competing with the daily sweeps.
+crons.daily(
+  "billing-invoice-rollup",
+  { hourUTC: 7, minuteUTC: 0 },
+  internal.billingRollup.tick,
+  {},
+);
 export default crons;

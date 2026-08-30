@@ -100,33 +100,36 @@ export function shouldUseGmailCapability(text: string, activeEmailPlan: boolean)
 
 /**
  * Golden evaluations stage governed email plans but can never approve or execute them. Their
- * throwaway tenant is intentionally disconnected, so a pinned cockpit candidate must retain the
- * email tools the fixtures are evaluating. Real user turns never carry this internal version pin.
+ * throwaway tenant is intentionally disconnected, so a harness-driven turn must retain the email
+ * tools the fixtures are evaluating.
  *
- * 21-03 (SKILL-01) — WHY THERE ARE TWO PIN SCOPES HERE. A pinned evaluation is one the HARNESS
- * drives, and since 21-03 the harness can pin in either of two scopes: `--skill name@version`
- * (a GLOBAL `skills` row → `cockpitSkillVersion`) or `--tenant-skill <id>` (an EXACT `tenantSkills`
- * row → `tenantSkillPins`). This function knew only the first, and the consequence was measured:
- * golden run with 41 cases went 21/41 for $0.4157 while pinning ONLY a tenant candidate. The eval
- * tenant is disconnected by design, so the bypass returning false withheld the Gmail rail; six
- * fixtures returned at $0.0000 having called no tool at all, and the paid email fixtures show the
- * model reaching for `checkAvailability`/`proposeCalendarEvent` because `addRecipients` and
- * `proposePlan` were structurally absent. It measured the harness, not the candidate.
+ * THE PREDICATE IS "IS THE HARNESS DRIVING THIS TURN", AND IT USED TO BE "DOES A PIN EXIST".
+ * Those are not the same question, and the gap between them has now been paid for three times
+ * with the SAME signature — email fixtures returning `recipients: []` and a tool list of
+ * `{proposeCalendarEvent, stageCrmWrite}` because `addRecipients` and `proposePlan` were
+ * structurally absent, plus research fixtures at $0.0000 that never reached a model at all:
  *
- * The `eval-` tenant prefix is what keeps this away from real users, and it is UNCHANGED — a
- * production turn has neither pin and cannot reach this branch by either scope.
+ *   1. 21-03: only the GLOBAL pin scope counted, so a `--tenant-skill`-only run scored 21/41
+ *      for $0.4157. Fixed by adding the tenant scope BESIDE the global one.
+ *   2. 2026-08-27: a run pinning `research-specialist` (and nothing else) scored 26/46 — the
+ *      cockpit was unpinned, so all 20 email fixtures failed and were nearly filed as a cockpit
+ *      regression. Fixture 34 failed the same way for a subtler reason: its injection bait is an
+ *      email ADDRESS, which the capability router matches, so a RESEARCH turn took the
+ *      disconnected-Gmail early return and dispatched nothing.
+ *   3. The `--only` probe run to diagnose (2) reproduced (2) exactly, because it was unpinned too.
+ *
+ * Widening the scope a fourth time would repeat the fix that did not hold twice. The question the
+ * caller actually needs answered is whether the HARNESS is driving, and the `eval-` tenant prefix
+ * is the only thing that has ever answered it — it is, and always was, the guard that keeps this
+ * away from real users. A pin is evidence the harness is driving; it was never the definition, and
+ * requiring it made every unpinned run measure the harness instead of the product.
+ *
+ * SAFE BECAUSE THE PREFIX IS NOT CALLER-SUPPLIED: `sendCockpitMessage` is a `tenantAction` and
+ * passes `ctx.tenantId`, injected by the wrapper from the authenticated identity. A real user
+ * cannot present an `eval-` tenant, so no production turn can reach this branch.
  */
-export function isPinnedCockpitEvaluation(
-  tenantId: string,
-  cockpitSkillVersion: number | undefined,
-  tenantSkillPins?: Record<string, unknown>,
-): boolean {
-  if (!tenantId.startsWith("eval-")) return false;
-  // EITHER scope means "the harness is driving this turn". Deliberately not `cockpitSkillVersion`
-  // plus a `tenantSkillPins["cockpit-agent"]` lookup: `cockpit-agent` is not in
-  // USER_AUTHORABLE_SKILLS, so a tenant pin NEVER names it — requiring one would make this branch
-  // unreachable for exactly the runs it exists to serve.
-  return cockpitSkillVersion !== undefined || Object.keys(tenantSkillPins ?? {}).length > 0;
+export function isHarnessDrivenEvaluation(tenantId: string): boolean {
+  return tenantId.startsWith("eval-");
 }
 
 /** Gmail-bound keys in the executive tool record. Business/CRM/Vault/content tools are absent. */

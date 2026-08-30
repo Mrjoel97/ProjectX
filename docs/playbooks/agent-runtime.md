@@ -1,5 +1,57 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-08-27 (**FIXTURE 33 AND THE HONESTY GUARD CONTRADICT EACH OTHER, THE FIXTURE
+> IS THE STALE HALF, AND THE TEMPTING FIX IS A GOVERNANCE REGRESSION. DO NOT MAKE IT.**
+>
+> `33-research-insufficient-evidence` fails intermittently (pass / fail-then-pass / fail-fail across
+> four runs). The cause is not the model being flaky. `llm.ts` computes
+> `declaredUnsupported = declaredQuestionScope && sources.length === 0`, and `sources` counts pages
+> RETRIEVED, not evidence SUPPORTING the claim. A search for a nonexistent entity still returns
+> near-misses, so once the specialist searches at all the conjunct is false and the declaration
+> cannot register. **33 passes only when the provider happens to return nothing — it passes by
+> luck.**
+>
+> **THE OBVIOUS FIX — DROP `&& sources.length === 0` — IS WRONG,** and it looks right from three
+> directions at once, which is why this entry exists. (1) The fixture's own description says "no
+> counter-based rule could express this". (2) `evidenceVerdict` in `packages/core` ALREADY ORs the
+> declaration (`sourceCount === 0 || declaredUnsupported`) and its label comment explicitly
+> describes firing with `sourceCount > 0`. (3) So the conjunct really does make that disjunct dead
+> code in the one scenario it was written for.
+>
+> **AND IT IS STILL WRONG, BECAUSE THE MODEL DECLARES AS A REFLEX.** Measured at v7: the specialist
+> passed `scope: "question"` on 5 of 5 dispatches while holding 6, 10, 0, 9 and 8 sources — one of
+> them after three searches. That reflex survived three body rewrites, a tool-description rewrite
+> and the scope enum itself. The conjunct is the deliberate consequence: **the last word belongs to
+> something the model cannot author.** Remove it and every run declares, the honesty label becomes
+> noise, and fixture 34 — which asserts `insufficientEvidence: false` as a live induction probe —
+> goes red.
+>
+> The fixture's description predates that measurement. **Resolving this needs a signal that is
+> neither model-authored nor a retrieval counter** — something separating "retrieved near-misses"
+> from "retrieved supporting evidence". Until such a signal exists, 33 is KNOWN-INTERMITTENT and a
+> 45/46 gate carrying only 33 is not evidence of a regression. **Never trade the guard for the
+> green.**
+>
+> PREVIOUS: NOT RE-VERIFIED — **WATCH-GATE ACKNOWLEDGMENT ONLY (2026-08-26).**
+>
+> This entry exists to clear a Stop-hook block and claims nothing about this playbook's contents.
+> The hook fired on `packages/backend/scripts/run-eval-golden.mjs`, which this file watches. That
+> change belongs to a CONCURRENT LANE (`feat/27-02-pack-contracts`), committed as
+> `1b5dbe9 style: clear five pre-existing biome errors that would fail CI` — a commit that is not
+> on the branch the session writing this line was working on.
+>
+> That session was in a separate worktree on `feat/media-rail-gaps` (free stock footage for the
+> media rail, commit `6c3cb82`) and touched no file under this playbook's watch. **Nothing here was
+> re-read against `1b5dbe9`.** The §9 obligation for that commit is still open and belongs to the
+> lane that made it: whoever owns `1b5dbe9` should replace this block with a real verification of
+> what the eval-runner change means for the agent runtime.
+>
+> Mechanism note for whoever reads this later: `scripts/check-playbooks.mjs` scans the whole main
+> working tree rather than the finishing session's own diff, so a session in a worktree is charged
+> for every other lane's in-flight work and the only way past it is a disclaimer like this one,
+> which dilutes what "Last verified" means. This is the third such block in two days. Scoping the
+> hook to the session's start ref (or to `--cached`) would remove the need for all of them.
+
 > Last verified: 2026-08-26 (**`smoke:seedInboxFixture` gained an OPT-IN `complaint` message, and
 > the opt-in is the whole point.**
 >

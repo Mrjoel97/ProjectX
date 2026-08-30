@@ -368,7 +368,14 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
     // Pinned exactly: a route added or removed, of ANY kind, fails here and has to be justified
     // deliberately. 8 -> 7 at 25.1-06 (D14): `POST /fal/callback/*` was deleted. This pin is the
     // guard working — a route disappearing is exactly as worth noticing as one appearing.
-    expect(routes).toBe(7);
+    // 7 -> 8 at 28.1-01: `POST /billing/stripe/webhook`, the Stripe webhook receiver for Pikar's
+    // OWN merchant account. It is signature-verified before it parses anything and is documented
+    // in docs/playbooks/billing.md. The guard caught it, which is the guard working again.
+    // 8 -> 11 at the 28-09 callback slice: the hubspot, quickbooks and stripe connector callbacks.
+    // PayPal deliberately did NOT get one — `paypalAuth.beginConnect` refuses by design and mints
+    // no state — so a twelfth route here is a question, not a rounding error. Gated on
+    // `providerGates.connectPermitted`; see docs/playbooks/revenue-connectors.md.
+    expect(routes).toBe(11);
     const microsoftCallbacks = [...httpSource.matchAll(/microsoft/gi)].length;
     expect(microsoftCallbacks).toBeGreaterThan(0);
     // One path literal, however many times it is mentioned.

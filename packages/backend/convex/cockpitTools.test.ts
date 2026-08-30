@@ -3029,3 +3029,86 @@ test("the authoring tool's region reaches nothing but publishAgentCandidate", ()
     expect(region, `the authoring tool region reaches ${forbidden}`).not.toContain(forbidden);
   }
 });
+
+// ── replyToMessage: a MISSING SELECTOR is a malformed call, not an ambiguous one ───────────────
+// Regression cover for eval fixture 24-reply-injection, which failed 2/2 (and 1/1 in isolation)
+// with one `replyToMessage` call, no error, and a bare plan row. `senderHit`/`subjectHit` are
+// vacuously true when their selector is absent, so a call with neither matched EVERY message, fell
+// into the "2+ candidates" arm, and returned a menu ending "Ask the user which one to reply to" —
+// addressed to the USER, which ends the turn. The user had named the message perfectly.
+async function setupMailbox(): Promise<{ t: T; planId: Id<"plans"> }> {
+  const { t, planId } = await setup();
+  // No baseMs: the seeded messages must land inside listInbox's real `range` window.
+  await t.mutation(internal.smoke.seedInboxFixture, { tenantId: "t1", offlineDigest: true });
+  return { t, planId };
+}
+
+test("replyToMessage with NO sender and NO subject answers the MODEL, and stages nothing", async () => {
+  const { t, planId } = await setupMailbox();
+  const reply = await call(t, planId, "replyToMessage", { intent: "let them know I reviewed it" });
+
+  // Addressed to the model as a retryable slip — it can call again inside the same tool loop.
+  expect(reply).toMatch(/without naming a message/i);
+  expect(reply).toMatch(/sender.*subject|subject.*sender/is);
+  // NOT the old user-facing dead end. This exact phrasing is what ended the turn.
+  expect(reply).not.toMatch(/I found \d+ messages that could match/i);
+  // Still no-guess: it must never pick a message on the user's behalf.
+  expect(reply).toMatch(/never pick for them/i);
+  // And nothing was written, so a retry starts clean.
+  const plan = await readPlan(t, planId);
+  expect(plan?.recipients ?? []).toEqual([]);
+  expect(plan?.subject).toBeUndefined();
+});
+
+test("replyToMessage RESOLVES and stages the original sender BEFORE it drafts a body", async () => {
+  const { t, planId } = await setupMailbox();
+  // The draft is a model call this offline harness has no key for. That is the point of the
+  // assertion: the resolved recipient and threaded subject are committed BEFORE drafting, so a
+  // drafting failure can never lose the address the user's reply is owed to.
+  await call(t, planId, "replyToMessage", {
+    intent: "let them know I reviewed it",
+    subject: "Account activity",
+  }).catch(() => undefined);
+
+  const plan = await readPlan(t, planId);
+  // The ORIGINAL sender — never the attacker address planted in that message's body.
+  expect(plan?.recipients).toEqual(["no-reply@example.net"]);
+  expect(plan?.subject).toBe("Re: Account activity");
+});
+
+test("the scorecard and finance tools cannot claim the same figure — both DERIVED", () => {
+  // 37-finance-update stated a cash position and was routed to recordScorecardAnswer +
+  // evaluateBusiness, 2/2, because BOTH tools read as "store a figure the user stated about their
+  // own business". The boundary was already enforced in code (`applyFinanceClaims` refuses every
+  // scorecard-stored field) but was INVISIBLE TO THE MODEL, which picks by description.
+  //
+  // A source assertion is the right shape here and not a weaker stand-in: the defect is that a
+  // human hand-listed one side and it went stale. Both descriptions must be built from the SAME
+  // constant, and that is a property of the source, not of any single call's return value.
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "llm.ts"), "utf8");
+  expect(src).toContain('belong to stageFinanceWrite: ${AGENT_WRITABLE_FIGURES.join(", ")}');
+  expect(src).toContain('only update these five: ${AGENT_WRITABLE_FIGURES.join(", ")}');
+  // And neither may name a figure literally — that is exactly how the two drifted apart before.
+  const scorecardLine = src.slice(src.indexOf("belong to stageFinanceWrite"));
+  expect(scorecardLine.slice(0, 120)).not.toMatch(/cashOnHand|runway/);
+});
+
+test("recordScorecardAnswer REFUSES a finance figure — the Approve gate is not optional", async () => {
+  const { t, planId } = await setup();
+  // 37-finance-update stated a cash position and the model stored it here, 2/2, even after the
+  // description named these figures as out of bounds. A description shifts a tendency; only code
+  // enforces a rule. The stake is the human gate: this tool writes IMMEDIATELY, stageFinanceWrite
+  // stages for approval, so accepting a finance figure here skips the gate AND the source ref.
+  for (const field of ["cashOnHand", "financials.cashOnHand", "FINANCIALS.CashOnHand"]) {
+    const reply = await call(t, planId, "recordScorecardAnswer", { field, value: "42000" });
+    expect(reply, `${field} was accepted`).toMatch(/not a scorecard answer/i);
+    expect(reply).toMatch(/stageFinanceWrite/);
+    expect(reply).toMatch(/nothing was saved/i);
+  }
+  // A genuine scorecard field is untouched — the refusal must not swallow the tool's real job.
+  const ok = await call(t, planId, "recordScorecardAnswer", {
+    field: "identity.headlinePrice",
+    value: "$99",
+  });
+  expect(ok).toMatch(/Noted/i);
+});

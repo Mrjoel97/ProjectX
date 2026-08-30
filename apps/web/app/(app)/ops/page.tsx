@@ -779,8 +779,8 @@ function AllTenantDeadLetters() {
                 fontFamily: "var(--font-mono), ui-monospace, monospace",
               }}
             >
-              tenant <code>{d.tenantId}</code> · workflow <code>{d.workflowId || "—"}</code> ·
-              correlation <code>{d.correlationId}</code>
+              tenant <code>{d.tenantId}</code> · source <code>{d.source}</code> · workflow{" "}
+              <code>{d.workflowId || "—"}</code> · correlation <code>{d.correlationId}</code>
             </div>
             <details>
               <summary style={{ cursor: "pointer", fontSize: "0.78rem", color: "var(--ink-soft)" }}>

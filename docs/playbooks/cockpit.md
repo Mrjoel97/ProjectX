@@ -46,6 +46,162 @@
 > third copy to keep in step, and the one that fails loudest.)
 >
 > Last verified: 2026-08-27 (**`@drill` RAN AGAINST PRODUCTION FOR THE FIRST TIME. Rollback-to-dark
+
+> Last verified: 2026-08-30 (the 28-09 callback slice — **`http.ts` ONLY**: three connector OAuth
+> callback routes, `/connectors/{hubspot,quickbooks,stripe}/callback/<env>`, each a thin dispatcher
+> to the auth module's existing `internalAction` and gated on `providerGates.connectPermitted` —
+> the ADMISSION axis, never `availableProviders`, because gating the callback on a passed lane
+> deadlocks the phase. The route census in `microsoftAuth.test.ts` moved 8 -> 11 and caught it.
+> PayPal deliberately has no route. Owned by docs/playbooks/revenue-connectors.md; only the
+> wiring lives here. Prior: 2026-08-29, 28.1-05 — **`http.ts` ONLY**, and only the Stripe billing route at
+> the bottom of the file. The route now calls `eventFacts(event.type, event.data.object)` at the
+> trust boundary and passes ONLY the resulting ids into `receiveAndApply`; the parsed Stripe
+> object never crosses into Convex. `event.created` is threaded through in milliseconds as the
+> only delivery ordering Stripe provides. **The five-line security ordering above it is
+> unchanged** — secret + header present → read the raw body ONCE → verify → only then parse.
+> Nothing on the Gmail, Microsoft, agent or delivery paths was read or touched, and this is NOT
+> a re-verification of anything else in this playbook. See `docs/playbooks/billing.md`.)
+>
+> Previously verified: 2026-08-28 (28.1-01 — **`http.ts` GAINED A ROUTE THIS PLAYBOOK DOES NOT OWN.**
+> `POST /billing/stripe/webhook` is the Stripe webhook receiver for PIKAR'S OWN merchant account;
+> it is documented in `docs/playbooks/billing.md`, not here. It touches no cockpit surface — no
+> tool, no card, no `VERB` entry, no `agentSteps.tool` literal, no skill body. This entry exists
+> only because `watch.json` gives `http.ts` to this playbook, so the route inventory below stays
+> honest: `http.ts` now ALSO holds `POST /billing/stripe/webhook`. **No cockpit behaviour changed.**
+>
+> Last verified: 2026-08-27 (28-03 — **FOUR REVENUE VERB ENTRIES, AND NOT ONE TOOL WRITES THEM
+> YET.** `cards.tsx`'s `VERB` record gains `dispatchRevenue`, `readRevenueCrm`,
+> `readBusinessFinance` and `stageInvoiceReminder`, beside the four `agentSteps.tool` literals
+> 28-03 pre-declared in `schema.ts`. `traceParity.test.ts` asserts the two sets equal BOTH ways, so
+> either half alone is RED — that, and nothing else, is why a schema plan touches this playbook's
+> file. **No cockpit behaviour changed.**
+>
+> **WHY PRE-DECLARE AT ALL.** 28-03 is Phase 28's single serialized `schema.ts` owner, so 28-12
+> (`revenueTools`) and 28-13 (`invoiceReminders`) cannot add their own literals when they land.
+> Without them `agentSteps:record` throws an `ArgumentValidationError` inside an AI-SDK callback the
+> SDK SILENTLY swallows — prod loses the trace row while the whole suite stays green. That is the
+> trap this union has already sprung at `searchVault`, `evaluateBusiness`, `recordScorecardAnswer`
+> and `saveAsDocument`.
+>
+> **THE NAMES ARE NOW BINDING ON 28-12/28-13.** The specialist route's `stepTool` and the
+> `buildCockpitTools` keys must be exactly these four, or `cockpitTools.test.ts`'s key scan goes red
+> at those plans. Pre-declaration has exactly one failure mode — the `webResearch` one, a literal
+> that reads as a trace that exists — and it does not apply here: all four will be written by LOCAL
+> executable tools, so `onToolExecutionStart` fires for each.
+>
+> The done labels are deliberately READS, not results. A connector coverage window can be partial,
+> so none of them may imply a complete answer, and `stageInvoiceReminder` must never read "Sent":
+> REVN-06 stages a draft and stops at the existing human Approve gate. traceParity 7/7, web
+> typecheck 0.)
+>
+> PREVIOUS: 2026-08-27 (**THE DESCRIPTION FIX MOVED THE MODEL AND DID NOT STOP IT, WHICH IS
+> WHAT A DESCRIPTION FIX IS FOR.** Naming the finance figures in `recordScorecardAnswer`'s
+> description shifted `37-finance-update`'s routing — `evaluateBusiness` became `readFinance`, the
+> right DOMAIN — and the model still stored the cash position through the scorecard. A description
+> shifts a tendency; only code enforces a rule. `recordScorecardAnswer` now REFUSES any field whose
+> leaf matches `AGENT_WRITABLE_FIGURES` and names `stageFinanceWrite` in the refusal, so the model
+> can correct itself inside the same tool loop.
+>
+> **THE STAKE IS THE APPROVE GATE, NOT THE STORE.** `recordScorecardAnswer` WRITES IMMEDIATELY —
+> its own description says it "changes nothing outbound" — while `stageFinanceWrite` only STAGES
+> for a human to approve and requires a source reference. A finance figure accepted by the
+> scorecard therefore reached a store **without the human gate the finance path exists to enforce
+> and without any provenance**. The eval fixture was surfacing a governance hole, not a formatting
+> preference. It refuses rather than forwards: this call carries no `source`, and
+> `stageFinanceWrite` must never invent one.
+>
+> Matching is on the LEAF of a dot-path, case-insensitively, so `cashOnHand`,
+> `financials.cashOnHand` and `FINANCIALS.CashOnHand` are all refused while a genuine scorecard
+> field (`identity.headlinePrice`) still writes. cockpitTools 148/148, typecheck 0,
+> mutation-verified. **Full-gate confirmation of the ROUTING still needs a suite run** — 37 passes
+> alone regardless, so only the gate can measure it.)
+>
+> PREVIOUS: 2026-08-27 (**TWO TOOLS CLAIMED THE SAME SENTENCE, AND THE MODEL PICKED BY VIBE.**
+> `recordScorecardAnswer` read *"Store a figure the user states about their own business"* — with
+> a MONEY example — and so did `stageFinanceWrite` in effect. Fixture `37-finance-update` states a
+> cash position and was routed to `recordScorecardAnswer` + `evaluateBusiness`, 2/2, staging no
+> finance claim at all.
+>
+> **THE BOUNDARY ALREADY EXISTED IN CODE AND WAS INVISIBLE TO THE MODEL.** `applyFinanceClaims`
+> refuses every scorecard-stored field, so the split was enforced where it could not be read by
+> the thing making the choice. `recordScorecardAnswer` now names the finance figures it must not
+> take, DERIVED from `AGENT_WRITABLE_FIGURES` — the same constant `stageFinanceWrite`'s
+> description is built from, so the two cannot drift into claiming one field. Hand-listing either
+> side turns the new test red; that is precisely how the older wording went stale by 6 of 11.
+>
+> **A DESCRIPTION CHANGE IS A BEHAVIOURAL CHANGE AND CANNOT BE PROVEN OFFLINE.** 37 passes ALONE
+> and fails in the full gate — a dose-response to accumulated tenant context, documented in the
+> fixture itself — so no unit test can confirm the routing. The test locks the STRUCTURE (both
+> descriptions derived from one constant); only a full-suite run measures the behaviour.)
+>
+> PREVIOUS: 2026-08-27 (**A MISSING SELECTOR IS A MALFORMED CALL, NOT AN AMBIGUOUS ONE — AND
+> `replyToMessage` HANDLED IT AS THE LATTER, WHICH KILLED THE TURN.**
+>
+> `senderHit` and `subjectHit` are VACUOUSLY TRUE when their selector is absent (`!s || …`), so a
+> call carrying neither matched EVERY message, fell into the "2+ candidates" arm, and returned a
+> menu ending *"Ask the user which one to reply to"*. That sentence is addressed to the USER, so
+> the turn ended with a bare plan row — **even though the user had named the message perfectly**
+> ("Reply to that 'Account activity' notification"). One tool call, no error, nothing staged.
+>
+> **WHO THE ANSWER IS ADDRESSED TO IS THE WHOLE FIX.** A missing selector is the MODEL's slip and
+> is recoverable inside the same tool loop; genuine ambiguity between real candidates is the
+> USER's to resolve and must end the turn. Collapsing the two turned a retryable mistake into a
+> dead turn. The new branch names the requirement, lists the mailbox subjects so the model can
+> match the user's OWN words, and says *never pick for them* — the no-guess rule is unchanged.
+> The tool description also stopped advertising *"Clarifies if 0 or 2+ match"*, which read as an
+> invitation to call it bare and let it produce a menu.
+>
+> **DIAGNOSED AT $0 THROUGH `internal.llm.__invokeCockpitTool`.** The eval runner deliberately
+> locks model replies, so a fixture can only report *which* tools were called, never what they
+> returned — `24-reply-injection` therefore read as "replyToMessage ran and staged nothing", which
+> looks like a broken staging path. Driving the tool directly through the shim against the seeded
+> mailbox separated the three cases in one offline run: `subject` set → staged; `sender` set →
+> staged; NEITHER → the menu. **Reach for the shim before paying for another eval run** — it
+> answers "what did the tool say" and the harness structurally cannot.
+>
+> Also locked: the resolved recipient and `Re:` subject are committed BEFORE the body is drafted,
+> so a drafting failure can never lose the address the reply is owed to. Live: 24 now PASSES at
+> $0.0058, having failed 2/2 in the gate and 1/1 in isolation. Mutation-verified — disabling the
+> branch turns the new test red. cockpitTools 146/146, typecheck 0.)
+>
+> PREVIOUS: 2026-08-27 (**THE EMAIL RAIL WAS KEYED ON "DOES A PIN EXIST" WHEN THE QUESTION IS
+> "IS THE HARNESS DRIVING", AND THAT GAP HAS NOW BEEN PAID FOR THREE TIMES.**
+> `isPinnedCockpitEvaluation` is now `isHarnessDrivenEvaluation(tenantId)` — the `eval-` tenant
+> prefix alone. The pin arguments are gone.
+>
+> **THE SIGNATURE, so it is recognised on sight rather than diagnosed again:** email fixtures fail
+> with `status: collecting`, `recipients: []`, no subject, no body, and a tool list of exactly
+> `{proposeCalendarEvent, stageCrmWrite}`. The model is not confused — `addRecipients` and
+> `proposePlan` are STRUCTURALLY ABSENT, because `applyGmailCapability` filtered them out, so it
+> reaches for whatever is left. Cost is roughly ONE cheap turn, not two: turn 1 returns
+> `GMAIL_CONNECTION_REQUIRED_REPLY` at `costUsd: 0`, and only the bare follow-up turn bills.
+>
+> **A RESEARCH FIXTURE CAN CATCH THIS TOO, and that is the part that fooled a whole session.**
+> Fixture `34-research-injection` returned `$0.0000` with `no research document before timeout`,
+> which reads as a scheduler or dispatch fault. It is not: the fixture's injection bait is an email
+> ADDRESS, the capability router's last alternative is a bare address regex, so a RESEARCH turn is
+> routed to email, takes the disconnected-Gmail early return and dispatches nothing. Any fixture
+> whose prose contains an `@` can fail this way.
+>
+> **THE THREE OCCURRENCES.** 21-03: only the global pin scope counted, `--tenant-skill`-only ran
+> 21/41 for `$0.4157`; fixed by adding the tenant scope BESIDE it. 2026-08-27: a run pinning
+> `research-specialist@9` and nothing else ran 26/46, and the 20 email failures were within an hour
+> of being filed as a cockpit regression. Then the `--only` probe sent to diagnose THAT reproduced
+> it a third time, because the probe was unpinned as well.
+>
+> **WIDENING THE SCOPE A FOURTH TIME WOULD REPEAT A FIX THAT ALREADY FAILED TWICE.** Each previous
+> fix enumerated the pin shapes known that day, and each was broken by a shape nobody had thought
+> to enumerate — including "no pin at all". The predicate is the TENANT now, so there is no shape
+> left to miss. Safe because the prefix is not caller-supplied: `sendCockpitMessage` is a
+> `tenantAction` passing `ctx.tenantId` from the authenticated identity, so no production turn can
+> reach the branch. `real-tenant`, `k57row…` and `tenant-eval-…` are all asserted false.
+>
+> PROVEN BOTH WAYS, LIVE: `--only 01-happy` UNPINNED failed with the signature above, then passed
+> at `$0.0098` after the change with no other edit. Narrowing the predicate turns exactly the two
+> new tests red. **Do not diagnose an email fixture off an unpinned run made before this change** —
+> the previous entry in `skill-registry.md` requiring a pin is superseded, not merely dated.)
+>
+> PREVIOUS: 2026-08-27 (**`@drill` RAN AGAINST PRODUCTION FOR THE FIRST TIME. Rollback-to-dark
 > PASSED — the undo path is now proven on prod, not just dev.**
 >
 > **THE DRILL IS DESTRUCTIVE ON PRODUCTION AND DOES NOT CLEAN UP AFTER ITSELF.** Read the assertion:
@@ -574,8 +730,9 @@
 > route's only reachable caller was therefore somebody holding the secret, for whom it offered an
 > outbound fetch and a terminal `succeeded` write. Provider truth and the removal record: ADR-024.
 >
-> `http.ts` now holds the OAuth callbacks, `/skillopt/*`, `GET /media/blob/*` and the unsubscribe
-> pair. `contacts.ts`'s unsubscribe token is the last living copy of the 20-06 stateless-token
+> `http.ts` now holds the OAuth callbacks (Gmail, Microsoft, and — since the 28-09 slice — the
+> hubspot/quickbooks/stripe connector callbacks, which belong to revenue-connectors.md),
+> `/skillopt/*`, `GET /media/blob/*` and the unsubscribe pair. `contacts.ts`'s unsubscribe token is the last living copy of the 20-06 stateless-token
 > pattern, and its comment says so rather than pointing at the deleted route.
 > Last verified: 2026-08-21 (25.1-05 Task 2, D11 — **THE MEMO CARD RENDERS ITS DOCUMENT AND SHOWS
 > ITS SOURCES.** `MemoCardBody` (exported from `cards.tsx`, hook-free) replaces the memo branch's
@@ -825,6 +982,12 @@
 >
 # Playbook: Email Chat Cockpit
 
+> **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
+> subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
+> steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
+> behaviour change, and **this is not a re-verification of anything below.** The
+> `Last verified` line still means what it said.
+
 > Last verified: 2026-08-18 (**A BRIEF IS A SUBJECT, NOT A TASK — the media specialist was never
 > told to produce the deck.** dispatch 103/103, backend 87 files / 2041 passed, tsc clean. All four
 > claims mutation-proven.)
@@ -1000,7 +1163,8 @@
 > re-consent now. Mutation-proven: gating on `connected` reddens that case.
 >
 > **NO SECOND OAUTH SURFACE WAS ADDED, and a test asserts it** — `microsoftAuth.test.ts` pins
-> `http.route(` at exactly 8 and at most one Microsoft callback path. 17-06 built the authorize
+> `http.route(` at exactly 11 (8 until the 28-09 connector callbacks; the pin is on the TOTAL, so
+> any route appearing or disappearing has to be justified) and at most one Microsoft callback path. 17-06 built the authorize
 > URL, callback, consent page and token row; a plan named "provider lifecycle" is precisely the one
 > that would quietly add a second, so the absence is measured rather than assumed.
 >
