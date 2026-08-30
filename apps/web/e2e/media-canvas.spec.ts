@@ -572,8 +572,11 @@ test("the phase-33 canvas: brief chips, two storyboards, a grounded citation and
   const altHeadline = (await headline.innerText()).trim();
   expect(cents(altHeadline)).toBeLessThan(cents(pickedHeadline));
   await expect(estimate).toContainText("A 30-second reel of 4 scenes, priced per scene");
-  // No generated clip in this deck, so there is no clips line to price.
-  await expect(estimate).not.toContainText("A generated clip costs about 40×");
+  // No generated clip in this deck, so there is no clips line to price. Asserted against the
+  // DERIVED sentence: pinning the old "about 40×" literal here would have gone on passing for the
+  // wrong reason once the ratio moved, because that exact string is no longer rendered at ANY
+  // price — an absence assertion over a string nothing can produce is a check that cannot fail.
+  await expect(estimate).not.toContainText(CLIP_COST_LEVER_NOTE);
 
   // ── AN EDITED CHIP MARKS THE DECK STALE AND FIRES NOTHING (33-07) ───────────────────────────
   // The badge is a statement, not a trigger: the re-propose beside it costs a model turn, and this

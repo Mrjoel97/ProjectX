@@ -59,3 +59,9 @@ ReferenceError: process is not defined
 ```
 
 Known Windows-only vitest artifact; it is why the backend suite exits 1 while thousands pass.
+
+## From 33.1-04 (2026-08-30)
+
+- **`biome ci .` is RED at HEAD on 13 files this plan did not author** — `packages/cost/src/media.fixtures.json` (1-space JSON indent, predates this phase), `packages/backend/convex/schema.ts`, `convex/media.ts`, `convex/render/renderReel.ts`, `convex/render/assembleScript.ts(.test.ts)`, `packages/contracts/src/skills/{mediaDirector,researchSpecialist}.ts`. All are `format` diagnostics, none introduced here; my own files were formatted and are clean. Out of scope per CLAUDE.md §8's scope boundary — but note the standing-red-gate memory: CI runs Typecheck -> Lint -> Test -> Build, so this red would disable every gate below it on a push to main.
+- **`convex/media.test.ts` > "a transcript with no usable words never buys a sandbox" is order/load-flaky.** It failed once mid-plan with `expected "spy" to be called 0 times, but got 1`, passed in isolation, and passed on every re-run of the file and the full suite afterwards. Consistent with the known load-flaky backend suite; not caused by this plan (it touches no caption code).
+- **`33.1-PRICE-EVIDENCE.md`'s video section still says "Pending".** The live grok probe (2026-08-30: `{duration: 5, resolution: "480p"}` -> 202, polls to completed, `usage.cost` 0.25 = 5 x $0.05, a non-multiple-of-4 duration ACCEPTED) is recorded in `media.ts`, `media.fixtures.json` and `media.test.ts` but not in the evidence file, which plan 33.1-05 owns.
