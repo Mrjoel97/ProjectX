@@ -2,6 +2,83 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE (out of wave order, deliberate)
+status: in_progress
+stopped_at: "PHASE 28 RESUMED. `ad12c4e` registers the three connector OAuth callback routes.
+**THE PHASE WAS DEADLOCKED AND THE DEADLOCK WAS STRUCTURAL, NOT A CREDENTIAL GAP.** Wave 7
+(28-22..25) judges each lane pass/park from live evidence; live evidence needs a completed OAuth
+grant; a grant needs a callback route; and 28-09, which registers the routes, `depends_on`
+28-22..25. `hubspotAuth.completeHubSpotConnect`, `quickbooksAuth.handleCallback` and
+`stripeAuth.handleCallback` had all shipped as `internalAction`s whose comments said the route was
+a later plan's. NOTHING COULD EVER PASS. Owner chose (2026-08-30) to pull the routes forward.
+**THE GATE IS THE ADMISSION AXIS, AND THAT IS THE WHOLE FIX.** `providerGates.connectPermitted`
+(new internalQuery) permits a callback when a gate ROW exists, the lane is not `failed`, `reviewBy`
+is future, and `admissionPermits(admission, environment)` -- the rule now EXPORTED from
+`@pikar/revenue` contracts rather than copied. It is deliberately NOT `availableProviders`: gating
+the callback on `lane === passed` re-closes the loop, while gating on the admission opens it
+exactly where the register says it should, since `approved_production` means PERMISSION TO START.
+**A `parked` lane accepts a callback and stays invisible to every tenant.** Do not re-point this at
+`availableProviders`.
+PAYPAL HAS NO ROUTE AND MUST NOT GET ONE -- `paypalAuth.beginConnect` refuses by design
+(`PAYPAL_PARTNER_SURFACE_GAP`) and mints no state, so there is nothing to call back. Three routes,
+not four.
+PROVEN: the gate runs BEFORE the provider handler by CONSEQUENCE (after a refused callback the
+one-time state is still UNBURNED, which can only be true if nothing consumed it -- and
+`consumeConnectState` PATCHES `usedAt` rather than deleting, so the burn marker is the assertion,
+never a row count). A callback ALWAYS redirects: `requireQbApp`/`requireStripeApp` read config
+BEFORE consuming state and throw by name, which without the route's catch is a 500 on the Convex
+site origin plus a provider message in a log line. connectorCallbacks 27/27.
+TWO REAL SUITE FAILURES, BOTH WORTH THE NOTE: (1) `microsoftAuth.test.ts` pins `http.route(` at a
+TOTAL and went 8 -> 11 -- the census working, updated deliberately. (2) `billingWebhook.test.ts`
+scanned the WHOLE stored row including `_creationTime` for the fixture's `1200`, and
+`1788120082071` contains it -- a RANDOM red on a clock, now a closed key set over the row's own
+fields.
+**ENV PREREQUISITES FOUND AND SET ON THE LOCAL DEPLOYMENT (2026-08-30):**
+`CONNECTOR_CREDENTIAL_KEY_V1` was UNSET -- a grant would have completed the exchange and then
+thrown at the seal, wasting the consent. Generated per the playbook's never-print procedure and
+validated at exactly 32 bytes. `HUBSPOT_OAUTH_CLIENT_ID`/`_CLIENT_SECRET` set from `.env`
+(`HUBSPOTAPP_*`; owner will rotate), `HUBSPOT_OAUTH_REDIRECT_URI` =
+`http://localhost:3211/connectors/hubspot/callback/production`. QuickBooks (`QUICKBOOKS_*`) and
+the Stripe APP (`STRIPE_APP_*`) have NO credentials anywhere -- and the Stripe App pair is NOT the
+`sk_test_` merchant key, which belongs to 28.1.
+**WHAT IS STILL OWED, IN ORDER, AND THE FIRST TWO NEED THE OWNER:**
+ 1. Seal a gate row so the callback is permitted at all -- today `connectPermitted` refuses
+    everything because NO providerGates row exists anywhere. `node scripts/check-provider-lane.mjs
+    --provider hubspot --seal-decision from-owner --apply` records
+    `admission: approved_production, lane: parked`, which is exactly the evidence-gathering state.
+    It shells out to `npx convex run`, which THIS SESSION MUST NOT RUN.
+ 2. Register `http://localhost:3211/connectors/hubspot/callback/production` in the HubSpot
+    developer app, then complete the consent in a browser.
+ 3. `node scripts/smoke-hubspot-read.mjs --revoke` -- the DESTRUCTIVE cascade probe that answers
+    `revoke-cascades-to-access-tokens`. Its `--self-test` is green (20 cases, every guard observed
+    refusing), so the validator is proven; only the observation is missing.
+ 4. Then 28-22 judges pass or park on real evidence, and waves 8-20 unblock.
+**KNOWN GAP, OWNED BY 28-09 TASK 2:** the connect-START (`hubspotConnectUrl`,
+`quickbooksAuth.beginConnect`, `stripeAuth.beginConnect`) is still an ungated `tenantAction`. Once
+a park row is sealed, a tenant calling it directly could complete a grant against a parked
+provider. Bounded and owner-controlled (needs BOTH configured credentials AND a sealed row) and
+the credential is inert because every reader gates on `availableProviders` -- but it is a stored
+credential nobody uses. Recorded in revenue-connectors.md's Known gaps.
+GATES: connectorCallbacks 27/27, six affected suites 221/221, full backend 3219 tests with the two
+failures above now fixed, revenue 296/296, `tsc --noEmit` exit 0 (backend + revenue), `biome check`
+exit 0 across both packages, playbook gate silent, lane gate `consistent`, readiness `passed`,
+`git diff --stat HEAD` empty for packages/ and docs/.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-30T23:15:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 336
+  percent: 80
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 28.1
 current_plan: 11 of 11 executed -- 28.1 CODE COMPLETE AND SEALED
 status: phase_complete
