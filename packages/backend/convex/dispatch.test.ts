@@ -2017,6 +2017,34 @@ describe("the activity trace always terminalizes", () => {
 // `dispatchAndLand` and the SAME `persistStoryboard` the scheduled `runMedia` does. $0: the model
 // is a script.
 
+/**
+ * 33.1-01: koda's art-direction section, with the `Music` line the write boundary used to reject.
+ *
+ * ONE fixture for BOTH deck contracts, because the seam it exercises is the same one —
+ * `parseArtDirection` -> `plans.persistDeck`'s arg validator. Before this existed, `dispatch.test.ts`
+ * carried ZERO `Music` fixtures while `storyboard.test.ts` carried 14: the parser was covered and
+ * the boundary it writes across was not, so a field the parser emitted and the schema stored threw
+ * `ArgumentValidationError` in production with a green suite over it.
+ *
+ * `mood` must be a member of `MUSIC_MOODS` (`calm|warm|upbeat|cinematic`) — anything else parses to
+ * `undefined` and the assertion downstream is vacuous.
+ */
+const artDirectionSection = (mood: string) =>
+  [
+    "## 2. ART DIRECTION",
+    "",
+    "- **Palette** — `#0B4F4A deep teal`, `#F4F1EA bone`",
+    "- **Mood** — Quietly confident, never triumphant.",
+    "- **Lighting** — Warm golden light from camera left at 45 degrees.",
+    "- **Composition** — Subject off-centre right, camera locked off.",
+    "- **Environment** — A working studio, mid-afternoon.",
+    "- **Texture** — 35mm film grain over matte paper.",
+    "- **References** — Gregory Crewdson; the film Locke",
+    "- **Do NOT** — No stock-footage handshakes.",
+    `- **Music** — ${mood}`,
+    "",
+  ].join("\n");
+
 /** A body in the exact shape the `media-director` skill body asks for. Narration lines sit inside
  *  the 103-140 band a 10-second window admits, or `parseBlockDeck` refuses them before payment. */
 const MEDIA_BODY = [
@@ -2024,17 +2052,7 @@ const MEDIA_BODY = [
   "",
   "Six weeks, start to finish. Nobody believed it could be done that fast.",
   "",
-  "## 2. ART DIRECTION",
-  "",
-  "- **Palette** — `#0B4F4A deep teal`, `#F4F1EA bone`",
-  "- **Mood** — Quietly confident, never triumphant.",
-  "- **Lighting** — Warm golden light from camera left at 45 degrees.",
-  "- **Composition** — Subject off-centre right, camera locked off.",
-  "- **Environment** — A working studio, mid-afternoon.",
-  "- **Texture** — 35mm film grain over matte paper.",
-  "- **References** — Gregory Crewdson; the film Locke",
-  "- **Do NOT** — No stock-footage handshakes.",
-  "",
+  artDirectionSection("cinematic"),
   "BLOCK DECK",
   "Clip seconds: 10",
   "",
@@ -2089,6 +2107,9 @@ describe("20-08 — a media dispatch proposes a deck and spends nothing but toke
     expect(plan?.script).toContain("Six weeks, start to finish.");
     expect(plan?.artDirection?.palette).toEqual(["#0B4F4A deep teal", "#F4F1EA bone"]);
     expect(plan?.artDirection?.avoid).toContain("stock-footage handshakes");
+    // 33.1-01 (A1, BLOCK path): the music bed the parser emits reaches the row. Before the arg
+    // validator was widened this line was unreachable — `persistDeck` threw on the whole object.
+    expect(plan?.artDirection?.music).toBe("cinematic");
 
     expect(plan?.shots).toHaveLength(2);
     expect(plan?.shots?.map((s) => s.index)).toEqual([0, 1]);
@@ -2807,6 +2828,13 @@ const TWO_UP_BODY = [
   VAR_BRIEF,
   "## VARIATION A",
   "",
+  // 33.1-01: the art direction rides INSIDE variation A's slice, and that placement is the point.
+  // `persistSceneDeck` is handed `variations.a.body` — the slice between the two VARIATION
+  // headings — not the whole body, so a section sitting above `## VARIATION A` would parse to
+  // `null`, the assertions below would pass with or without the fix, and the test would prove
+  // nothing. Until this line, the SCENE path (dispatch.ts:886) — the one production runs and the
+  // one the owner hit live on 2026-08-30 — had never been exercised with a non-null artDirection.
+  artDirectionSection("upbeat"),
   VAR_A_DECK,
   "## VARIATION B",
   "",
@@ -2836,6 +2864,11 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(plan?.altShots).toHaveLength(2);
     expect(plan?.altTargetDurationSeconds).toBe(15);
     expect(plan?.altShots?.map((s) => s.visual)).toEqual(["animated_image", "text_card"]);
+    // 33.1-01 (A1, SCENE path — the production one). The palette assertion is not decoration: it
+    // proves the section was READ off variation A's slice, so `music` below is a field that
+    // actually travelled the seam rather than one the parser silently dropped.
+    expect(plan?.artDirection?.palette).toEqual(["#0B4F4A deep teal", "#F4F1EA bone"]);
+    expect(plan?.artDirection?.music).toBe("upbeat");
     // The brief landed beside the decks, defaulted markers stripped into the array.
     expect(plan?.brief).toMatchObject({
       topic: "Inbox triage, and what it costs a founder",
@@ -2871,6 +2904,73 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(payload.unverifiedScenes).toBe(1);
     // Refs and COUNTS only: the doc title and the claim text appear NOWHERE in the audit plane.
     expect(JSON.stringify(await readLineage(t))).not.toContain("pricing one-pager");
+  });
+
+  // ── 33.1-01 (A2): the terminal, asserted as an ABSENCE that is excluded ────────────────────
+  //
+  // The live signature on 2026-08-30 was NEITHER `media.deck_persisted` NOR `media.deck_refused`
+  // after a `subagent.completed` — `persistDeck` threw between them, and a throw writes no
+  // terminal at all. So "persisted === 1" alone is not the assertion: "refused === 0" is what
+  // excludes a refusal wearing the fix's clothes, and `subagent.completed` present is what proves
+  // the run actually got as far as the seam rather than dying earlier for some other reason.
+  test("33.1-01/A2: a body carrying a music bed writes deck_persisted, no deck_refused", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(TWO_UP_BODY), usage: SPEND_8_CENTS }] }),
+    );
+    const lineage = await readLineage(t);
+    const types = lineage.map((r) => r.eventType);
+    expect(types).toContain("subagent.completed");
+    expect(types.filter((e) => e === "media.deck_persisted")).toHaveLength(1);
+    expect(types.filter((e) => e === "media.deck_refused")).toHaveLength(0);
+    const persisted = lineage.find((r) => r.eventType === "media.deck_persisted");
+    expect((persisted?.payload as Record<string, unknown>).hasArtDirection).toBe(true);
+  });
+
+  // ── 33.1-01: the seam itself, with nothing between the caller and the validator ────────────
+  //
+  // The two tests above run the whole dispatch, so a green there could in principle come from any
+  // layer. This one calls `persistDeck` directly with the exact object `parseArtDirection` emits
+  // for `- **Music** — upbeat`, which is the shape that threw
+  // `ArgumentValidationError` in production. If the field is missing from the arg validator this
+  // is the failure that names it and nothing else.
+  test("33.1-01: persistDeck accepts an artDirection carrying music, and reads it back", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.mutation(internal.plans.persistDeck, {
+      tenantId: TENANT,
+      planId,
+      script: "Six weeks, start to finish.",
+      artDirection: {
+        palette: ["#0B4F4A deep teal", "#F4F1EA bone"],
+        mood: "Quietly confident, never triumphant.",
+        lighting: "Warm golden light from camera left at 45 degrees.",
+        composition: "Subject off-centre right, camera locked off.",
+        environment: "A working studio, mid-afternoon.",
+        texture: "35mm film grain over matte paper.",
+        typography: "Grotesque, tight tracking.",
+        references: ["Gregory Crewdson", "the film Locke"],
+        avoid: "No stock-footage handshakes.",
+        music: "upbeat",
+      },
+      clipSeconds: 10,
+      shots: [
+        {
+          index: 0,
+          type: "AI",
+          seconds: 10,
+          windowStartMs: 0,
+          description: "Founder at a desk",
+          prompt: "A founder at a desk in warm 45-degree light, 35mm grain",
+          narration: "Most founders lose a full hour a day to inbox triage.",
+        },
+      ],
+    });
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    expect(plan?.artDirection?.music).toBe("upbeat");
   });
 
   test("a refusing variation SALVAGES its good sibling — proposed alone, and disclosed", async () => {
