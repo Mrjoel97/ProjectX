@@ -1,3 +1,39 @@
+> Last verified: 2026-08-30 (33.1-01 — **THE STORYBOARD WRITE BOUNDARY WAS SILENTLY REJECTING
+> EVERY DECK WITH A MUSIC BED, AND THE SUITE WAS GREEN OVER IT.**
+>
+> **The defect.** `plans.persistDeck`'s `artDirection` arg validator is a HAND-MAINTAINED MIRROR
+> of `plans.artDirection` in `schema.ts`, and Convex `v.object` is CLOSED. So a field the parser
+> emits and the schema already stores is not ignored here — it THROWS. `e2b281f` ("the music
+> bed") widened `parseArtDirection`, the schema, the price table, the renderer, the assembler and
+> the skill body, and never this validator. From then until 2026-08-30 every storyboard carrying a
+> `Music:` line died with `ArgumentValidationError` at `persistDeck`.
+>
+> **Why it did not look like a crash.** The throw lands AFTER `dispatchAndLand` has already landed
+> the memo. The plan row survives at `kind: "memo"` carrying the model's raw prose, so the user
+> reads a wall of text where a storyboard should be and the app reports no error at all.
+>
+> **The signature to recognise it by:** a `subagent.completed` audit row with NO
+> `media.deck_persisted` AND NO `media.deck_refused`. Neither terminal is written when the mutation
+> throws between them — the absence of BOTH is the fingerprint, and it is not the same shape as a
+> refusal. Two of the owner's three media dispatches on 2026-08-30 read exactly like this.
+>
+> **Why the tests were green.** `storyboard.test.ts` carried 14 `Music` fixtures; `dispatch.test.ts`
+> carried ZERO. Coverage of a PARSER is not coverage of the BOUNDARY it writes across. Worse, the
+> SCENE/variations path (`dispatch.ts:886`) — the one production actually runs — had never been
+> exercised with a non-null `artDirection` at all: `TWO_UP_BODY` had no `## 2. ART DIRECTION`
+> section. Only the BLOCK path did.
+>
+> **A trap if you write that fixture.** `persistSceneDeck` is handed `variations.a.body`, the slice
+> BETWEEN the two `## VARIATION` headings — NOT the whole body. An art-direction section placed
+> above `## VARIATION A` parses to `null`, and every music assertion under it then passes with or
+> without the fix. It must ride INSIDE variation A.
+>
+> **The standing rule.** A new `artDirection` field lands in `schema.ts` AND in `plans.ts`'s
+> `persistDeck` validator in the SAME commit, with a `dispatch.test.ts` fixture carrying it on both
+> deck contracts. Mirror the schema's `v.optional(v.string())` — do NOT restate a core closed set
+> (`MUSIC_MOODS`) as a `v.union` of literals here: this package cannot import it, so it would be a
+> third copy to keep in step, and the one that fails loudest.)
+>
 > Last verified: 2026-08-27 (**`@drill` RAN AGAINST PRODUCTION FOR THE FIRST TIME. Rollback-to-dark
 > PASSED — the undo path is now proven on prod, not just dev.**
 >

@@ -2926,7 +2926,7 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(types.filter((e) => e === "media.deck_persisted")).toHaveLength(1);
     expect(types.filter((e) => e === "media.deck_refused")).toHaveLength(0);
     const persisted = lineage.find((r) => r.eventType === "media.deck_persisted");
-    expect((persisted?.payload as Record<string, unknown>).hasArtDirection).toBe(true);
+    expect((persisted?.payload as Record<string, unknown> | undefined)?.hasArtDirection).toBe(true);
   });
 
   // ── 33.1-01: the seam itself, with nothing between the caller and the validator ────────────
