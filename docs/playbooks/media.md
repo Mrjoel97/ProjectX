@@ -1713,17 +1713,23 @@ is priced per kind, by one table in the pure package that both money sites read.
 | Kind | Buys | USD at 4 s | Duration freedom |
 |---|---|---|---|
 | `generated_video` | one `sora-2` clip | $0.40 | 4 / 8 / 12 s only |
-| `animated_image` | one `gpt-image-2` still, panned by ffmpeg | $0.01 | any |
+| `animated_image` | one `gpt-image-2` still, panned by ffmpeg | $0.006 | any |
 | `uploaded_video` | nothing — a tenant vault asset | $0 | any |
 | `text_card` | nothing — `drawtext` in the sandbox | $0 | any |
 
 **NOT ONE TARGET DURATION IS REACHABLE WITH `generated_video` ALONE.** Every clip length the pinned
 model supports is a multiple of 4, so no sum of them is 15 or 30; 60 composes and costs $6.00 —
 over `MEDIA_JOB_CAP_USD`. The cheap kinds are what make the contract legal at all. A 30-second reel
-of 3 clips + 4 stills + 1 card costs **$1.24** in pictures; the nearest composable all-generated
+of 3 clips + 4 stills + 1 card costs **$1.224** in pictures; the nearest composable all-generated
 reel is **28 seconds** and costs $2.80.
 
-This is asserted, not written down: `media.test.ts` recomputes every figure above from the live
+**THIS SECTION ROTTED, AND THE SENTENCE THAT USED TO SIT HERE IS WHY IT WENT UNNOTICED.** It read
+"this is asserted, not written down — a price row moving turns the table red rather than making this
+section quietly wrong". That was FALSE for the prose: `media.test.ts` recomputes `media.fixtures.json`,
+not this markdown, so when 33.1-03 measured the still at $0.006 the fixture moved, the test stayed
+green, and every figure in this section stayed stale. Found by the 33.1 audit, not by a gate.
+
+The figures above are HAND-MAINTAINED against `packages/cost/src/media.ts`. `media.test.ts` recomputes every figure from the live
 tables against `media.fixtures.json`'s `sceneKinds` block, so a price row moving turns the table
 red rather than making this section quietly wrong. The test was observed RED (a 5-second entry
 added to the Sora grid makes 15 s and 30 s composable under the cap).
@@ -3055,7 +3061,7 @@ passed. One transaction, not two to keep in step.
 | Scene kind | Buys | Why |
 |---|---|---|
 | `generated_video` | one clip **at its own length** | the provider's duration grid still applies |
-| `animated_image` | one **still** | ~a FORTIETH of a clip ($0.01 vs $0.40 at 4 s — this row said "a tenth" until 33-06), frame-exact at any duration |
+| `animated_image` | one **still** | ~a SIXTY-SEVENTH of a clip ($0.006 vs $0.40 at 4 s — "a tenth" until 33-06, "a fortieth" until 33.1-03 MEASURED it), frame-exact at any duration |
 | `uploaded_video` | nothing | the tenant already owns the bytes |
 | `text_card` | nothing | `drawtext` in the sandbox |
 | any narrated scene | one voice take | silence is legal, so an empty line buys nothing |
