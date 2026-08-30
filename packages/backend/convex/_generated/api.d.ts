@@ -96,6 +96,7 @@ import type * as reportsBusiness from "../reportsBusiness.js";
 import type * as reportsGovernance from "../reportsGovernance.js";
 import type * as requests from "../requests.js";
 import type * as research from "../research.js";
+import type * as revenueCrm from "../revenueCrm.js";
 import type * as review from "../review.js";
 import type * as savedPrompts from "../savedPrompts.js";
 import type * as skilloptExport from "../skilloptExport.js";
@@ -228,6 +229,7 @@ declare const fullApi: ApiFromModules<{
   reportsGovernance: typeof reportsGovernance;
   requests: typeof requests;
   research: typeof research;
+  revenueCrm: typeof revenueCrm;
   review: typeof review;
   savedPrompts: typeof savedPrompts;
   skilloptExport: typeof skilloptExport;

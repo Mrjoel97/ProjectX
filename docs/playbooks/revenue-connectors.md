@@ -1,6 +1,8 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-31 — **THE COMPLETION GATE EXISTS NOW.**
+> Last verified: 2026-08-31 — `@pikar/revenue` now also exports `./crm` (28-10's pure ranking and
+> pulse); the package index is the only file of this playbook's that changed, and the rules live in
+> `revenue-crm.md`. Prior: **THE COMPLETION GATE EXISTS NOW.**
 > `scripts/check-phase28-completion.mjs` was cited by the release table and by 28-27 and had never
 > been written, so the strongest statement about phase completion in this repository was a
 > paragraph. It composes: the six REVN statements read from `.planning/REQUIREMENTS.md`, the

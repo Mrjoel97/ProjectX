@@ -1,12 +1,52 @@
 # Playbook: Revenue CRM workflows (REVN-04)
 
-> Last verified: 2026-08-27 against 4295bcc
+> Last verified: 2026-08-31 against 28-10 (the pure ranking, the adapter and its tests)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-10) · Related ADRs: none yet
 
-> **Status: REGISTERED AHEAD OF IMPLEMENTATION.** At the `Last verified` sha neither
-> `packages/revenue/src/crm.ts` nor `convex/revenueCrm.ts` exists. Everything marked **[PLANNED]** is
-> a contract a later plan must satisfy, not a claim of landed behaviour. Connector lifecycle,
-> credentials and release semantics live in `revenue-connectors.md`.
+> **Status: BUILT AND LOCAL-ONLY.** `packages/revenue/src/crm.ts` (30 tests) and
+> `convex/revenueCrm.ts` (17 tests) both exist as of 28-10. **They read Phase 19 and NOTHING ELSE.**
+> `coverage` is the literal `local`, `deal` and `paymentFlag` are always `null`, and that is not a
+> stub — no provider lane has passed, so there is nothing honest to put there. 28-11 and 28-12
+> compose provider facts ON TOP of these same pure functions rather than replacing them. Items
+> still marked **[PLANNED]** below remain contracts, not claims. Connector lifecycle, credentials
+> and release semantics live in `revenue-connectors.md`.
+>
+> ## What 28-10 decided, and why each decision has a test
+>
+> **SUPPRESSION IS TERMINAL, NOT A LOW RANK.** `rankAttention` REMOVES a suppressed contact. Ranking
+> it last still puts a do-not-contact person at the bottom of a short day's call list. The adapter
+> does the address join server-side (Phase 19 keys suppression by address, so there is no other
+> way), lower-cases both sides — a case-sensitive miss silently re-admits someone who asked not to
+> be contacted, the worst possible direction — and the address never reaches the output.
+>
+> **NOTHING IS FABRICATED FROM ROW METADATA.** `lastActivityAt` is `null`, not `_creationTime`.
+> Phase 19 has no activity timeline yet, and deriving one from the row's creation date would make
+> every imported contact look freshly touched and every old one newly quiet. `rankAttention` never
+> fires `gone_quiet` from a null date, and a test pins the pair: null does not fire, a known-old
+> date does.
+>
+> **SILENCE IN PROVIDER METADATA IS NOT "OPEN".** A deal fires `deal_closing` only when
+> `stageClosed === false`. `null` means HubSpot did not say, and treating that as open would put
+> won and lost deals back on a working list forever.
+>
+> **A ROW WITH NO REASON IS NOT RETURNED.** A call list padded with people there is no reason to
+> call stops being read. `scanned` is reported separately, so an empty list is visibly a JUDGMENT
+> rather than an empty read.
+>
+> **THE PULSE REFUSES TO BE HEALTHY ON A READ THAT DID NOT HAPPEN.** `coverage: "unavailable"` and
+> `"partial"` both yield `unknown`. A "healthy" computed from a read that never ran is
+> indistinguishable from a real all-clear — the most dangerous output this module could produce. A
+> dispute is still `at_risk` on a partial read, because that fact IS known and silence about it
+> would be worse. `coverage` is a required ARGUMENT rather than a default, or the guard would never
+> fire.
+>
+> **THE MODULE CANNOT WRITE, AND A SOURCE SCAN ENFORCES IT.** `revenueCrm.test.ts` fails if the
+> module ever contains `tenantMutation(`, `internalMutation(`, `tenantAction(` or any `ctx.db`
+> write verb. A read surface that can write is exactly how the second CRM starts.
+>
+> **BOUNDED:** `ATTENTION_SCAN_CAP = 500`, with `capped` reported. `ponytail:` a fixed cap rather
+> than pagination, because the output is a working list a person reads and nobody works 500 rows;
+> the upgrade path is a cursor when a tenant genuinely outgrows it.
 
 ## Purpose
 
