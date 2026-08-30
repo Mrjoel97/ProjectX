@@ -121,6 +121,52 @@ test("setRecipients([]) cannot wipe already-set recipients — it bounces (03.2.
   expect((await readPlan(t, planId))?.recipients).toEqual(["bob@example.com", "alice@example.com"]);
 });
 
+// ── THE PIN MUST REACH THE PLAN ROW, NOT JUST EXIST AS AN ARG (2026-08-30) ────────────────────
+//
+// `cockpit.test.ts` proves `proposeEmailPlan` HONOURS a `skillVersion` it is handed. That is only
+// half a fix, and the cheaper half: a capability nothing calls is indistinguishable from no
+// capability, and the mutation's own unit test cannot tell the difference. This drives the REAL
+// tool through `__invokeCockpitTool` — the same shim the agent loop uses — with an EVAL-01 pin and
+// a DIFFERENT active row, and reads the persisted plan.
+//
+// Delete the `skillVersion:` line from the propose tool in `llm.ts` and this test goes red while
+// every test in `cockpit.test.ts` stays green. That asymmetry is the whole point of having it.
+test("A PINNED tool run stamps the plan with the PIN, not the active cockpit-agent row", async () => {
+  const { t, planId } = await setup();
+  // seedSkills gave us an ACTIVE cockpit-agent. Add a candidate at a version it cannot collide with
+  // and pin THAT — the shape of every `--skill cockpit-agent@N` gate run.
+  const activeVersion: number = (
+    await t.query(internal.skills.getActiveSkill, { name: "cockpit-agent" })
+  ).version;
+  const pinned = activeVersion + 7;
+  await t.run((ctx) =>
+    ctx.db.insert("skills", {
+      name: "cockpit-agent",
+      version: pinned,
+      body: "candidate body",
+      status: "candidate",
+      createdAt: Date.now(),
+    }),
+  );
+
+  await call(t, planId, "addRecipients", { addresses: ["bob@example.com"] });
+  await call(t, planId, "setSubject", { subject: "Q3 update" });
+  await call(t, planId, "draftBody", { intent: `${SMOKE}Here is the Q3 update.` });
+
+  await t.action(internal.llm.__invokeCockpitTool, {
+    tenantId: "t1",
+    planId,
+    toolName: "proposePlan",
+    input: {},
+    skillVersions: { "cockpit-agent": pinned },
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.status).toBe("proposed");
+  expect(plan?.skillVersion).toBe(pinned);
+  expect(plan?.skillVersion).not.toBe(activeVersion); // the bug this closes, stated positively
+});
+
 test("proposePlan refuses an incomplete plan — never proposes a zero-recipient plan", async () => {
   const { t, planId } = await setup();
 
@@ -2094,6 +2140,79 @@ test("SMOKE::agent::create drives ONE governed createDocument OFFLINE and record
   const steps = await t.run((ctx) => ctx.db.query("agentSteps").collect());
   expect(steps.map((s) => s.tool)).toEqual(["createDocument"]);
   expect(await vaultDocs(t)).toHaveLength(1);
+});
+
+// ── THE GATE'S OBSERVATION ROW (2026-08-30) ───────────────────────────────────────────────────
+//
+// `run-eval-golden.mjs` used to build its evidence row out of `skillVersionsOf(pins)` — its OWN
+// argument — so a green run certified a body it never loaded. The fix is that the runner now reads
+// back what actually ran; these two tests own the write half of that, because a read-back of a row
+// nobody writes fails in exactly the direction that looks like success (no evidence, no alarm).
+test("a PINNED cockpit turn records the body it loaded — the row the eval gate reads back", async () => {
+  const { t, planId } = await setupWithLimiter();
+  const active: number = (await t.query(internal.skills.getActiveSkill, { name: "cockpit-agent" }))
+    .version;
+  const pinned = active + 5;
+  await t.run((ctx) =>
+    ctx.db.insert("skills", {
+      name: "cockpit-agent",
+      version: pinned,
+      body: "candidate body under evaluation",
+      status: "candidate",
+      createdAt: Date.now(),
+    }),
+  );
+
+  await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    turnId: "turn1",
+    text: `SMOKE::agent::create=long:${SMOKE} Quarterly one-pager`,
+    skillVersions: { "cockpit-agent": pinned },
+  });
+
+  const rows = await t.run((ctx) =>
+    ctx.db
+      .query("audit")
+      .filter((q) => q.eq(q.field("eventType"), "agent.skill_loaded"))
+      .collect(),
+  );
+  expect(rows).toHaveLength(1);
+  const payload = rows[0].payload as {
+    skillName: string;
+    skillVersion: number;
+    skillBodyHash: string;
+    pinned: boolean;
+  };
+  expect(payload.skillName).toBe("cockpit-agent");
+  // THE VERSION THAT LOADED, not the one that is active — the whole point of the row.
+  expect(payload.skillVersion).toBe(pinned);
+  expect(payload.skillVersion).not.toBe(active);
+  expect(payload.pinned).toBe(true);
+  // A hash, never the body (§4). 64 hex chars of SHA-256, and NOT the body string itself.
+  expect(payload.skillBodyHash).toMatch(/^[0-9a-f]{64}$/);
+  expect(JSON.stringify(rows[0])).not.toContain("candidate body under evaluation");
+});
+
+test("an UNPINNED turn writes no attribution row — production does not pay for a gate concern", async () => {
+  const { t, planId } = await setupWithLimiter();
+
+  await t.action(internal.llm.runCockpitAgent, {
+    tenantId: "t1",
+    threadId: "thread1",
+    planId,
+    turnId: "turn1",
+    text: `SMOKE::agent::create=long:${SMOKE} Quarterly one-pager`,
+  });
+
+  const rows = await t.run((ctx) =>
+    ctx.db
+      .query("audit")
+      .filter((q) => q.eq(q.field("eventType"), "agent.skill_loaded"))
+      .collect(),
+  );
+  expect(rows).toHaveLength(0);
 });
 
 test("parseAgentSmoke accepts only the closed Drive list/find grammar", () => {

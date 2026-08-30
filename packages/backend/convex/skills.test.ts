@@ -898,10 +898,46 @@ describe("the knowledge bodies stay ungated only while the runner cannot certify
     expect(runner).toContain("llm:runCockpitAgent");
   });
 
-  test("EVIDENCE IS STILL RECORDED WITHOUT CHECKING THE PIN RAN — the reason for the ungating", () => {
-    // If this stops being true, the false-clearability half of the decision is gone and the
-    // deadlock half should be re-read on its own merits.
-    expect(runner).toContain("return allGreen === true && casesTotal > 0 && filters.length === 0;");
+  test("THE FALSE-CLEARABILITY HALF IS CLOSED (2026-08-30) — one reason for the ungating is gone", () => {
+    // THIS TEST USED TO ASSERT THE DEFECT, and it fired the moment the defect was fixed:
+    //   expect(runner).toContain("return allGreen === true && casesTotal > 0 && filters.length === 0;")
+    // Its instruction was "if this stops being true, the false-clearability half of the decision is
+    // gone and the deadlock half should be re-read on its own merits." That is what happened, so the
+    // assertion is inverted rather than deleted: the rule now REFUSES a pin the run never loaded,
+    // and a regression that quietly restores the old one-line rule turns this red.
+    expect(runner).not.toContain(
+      "return allGreen === true && casesTotal > 0 && filters.length === 0;",
+    );
+    // The observation clause itself, by its load-bearing lines — not by a comment, which a refactor
+    // would carry along unchanged.
+    expect(runner).toContain("if (observed === null || observed === undefined) return false;");
+    expect(runner).toContain("smokeAssert:observedSkillLoads");
+    // And the fail-closed direction, which is the half that is easy to lose: a null observation must
+    // refuse, never fall through. Asserted on the runner's own self-check text so this file does not
+    // have to re-implement the rule to check it.
+    expect(runner).toContain(
+      "FAIL CLOSED: unable to read what ran must refuse, never fall through to yes",
+    );
+  });
+
+  test("THE DEADLOCK HALF IS STILL TRUE — and it alone now holds the ungating open", () => {
+    // The second reason has NOT been fixed: `run-eval-golden.mjs` drives `llm:runCockpitAgent` and
+    // nothing else, so it structurally cannot reach a TOOLLESS knowledge call. With the false
+    // certificate closed above, gating these two would no longer be dangerous — it would simply
+    // make them UNACTIVATABLE, because no run can produce evidence for a body it cannot drive.
+    // That is a different failure and a worse one for a shipped feature, so the exemption stands.
+    //
+    // This is the pair that must both be false before re-gating: no false certificate (above) AND
+    // the runner can actually drive the body (here).
+    expect(runner).toContain("llm:runCockpitAgent");
+    for (const verb of ["planKnowledgeSearch", "synthesizeKnowledge", "knowledgeLlm"]) {
+      expect(
+        runner.includes(verb),
+        `run-eval-golden.mjs now names \`${verb}\`. The deadlock half has fallen too — re-gate ` +
+          `knowledge-query-planner / knowledge-synthesizer, flip skillBodies.test.ts's block back ` +
+          `to true, and delete both of these tests.`,
+      ).toBe(false);
+    }
   });
 
   test("RE-GATE THESE TWO the moment the runner can drive a knowledge search", () => {

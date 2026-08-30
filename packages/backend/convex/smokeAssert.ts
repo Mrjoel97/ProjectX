@@ -811,3 +811,92 @@ export const agentAuthoringStateForThread = internalQuery({
     };
   },
 });
+
+/**
+ * WHICH SKILL BODIES A RUN ACTUALLY LOADED — the observation `run-eval-golden.mjs` was missing.
+ *
+ * THE HOLE THIS CLOSES. The runner built its evidence row from `skillVersionsOf(pins)` — the
+ * caller's own claim about what it asked for — and never asked whether that body was reached. A
+ * green, unfiltered, non-empty run therefore wrote `pass: true` certifying a body it never loaded,
+ * which is a certificate manufactured for work that did not happen. It is why two Phase-29 skills
+ * were EXEMPTED from `GATED_SKILLS` rather than left behind a gate that only looked like protection.
+ *
+ * WHAT MAKES THIS AN OBSERVATION RATHER THAN AN ECHO. Every row read here is written from a skill
+ * row that was actually fetched out of the registry and whose `body` string went to the provider:
+ * `agent.skill_loaded` from the cockpit loop, `subagent.completed` from `runSpecialistTurn`. None
+ * of them is derived from the `skillVersions` / `tenantSkillIds` argument the caller supplied — if
+ * they were, checking a pin against them would prove nothing at all, which is the trap this
+ * function exists to avoid. `skillBodyHash` is the strongest field: it identifies the exact string
+ * that ran, so it can catch a version number that is right about a body that changed underneath it.
+ *
+ * Scoped by TENANT because the eval runner uses one throwaway tenant per run (`eval-<runId>`), so
+ * "did this run exercise the pinned body at all" is exactly a tenant-scoped question.
+ *
+ * REFS AND COUNTS ONLY (§4): names, version numbers, a scope enum, a row id and a hash.
+ */
+export const observedSkillLoads = internalQuery({
+  args: { tenant: v.string() },
+  handler: async (ctx, { tenant }) => {
+    const rows = await ctx.db
+      .query("audit")
+      .withIndex("by_tenant_ts", (q) => q.eq("tenantId", tenant))
+      .collect();
+
+    const seen = new Map<
+      string,
+      {
+        name: string;
+        version: number;
+        scope: "global" | "tenant" | "unknown";
+        skillId: string | null;
+        bodyHash: string | null;
+        pinned: boolean;
+        loads: number;
+      }
+    >();
+
+    for (const row of rows) {
+      // The two planes that record a body they actually loaded. Any other event type is a claim
+      // about something else and must not be mistaken for an observation.
+      if (row.eventType !== "agent.skill_loaded" && row.eventType !== "subagent.completed")
+        continue;
+      const p = row.payload as {
+        skillName?: unknown;
+        skillVersion?: unknown;
+        skillScope?: unknown;
+        skillId?: unknown;
+        skillBodyHash?: unknown;
+        pinned?: unknown;
+      } | null;
+      // A row missing either half of the identity is NOT evidence. `subagent.completed` predates
+      // the attribution fields and older rows genuinely lack them — skipping is correct and
+      // fail-closed: an unidentifiable load can never satisfy a pin.
+      if (typeof p?.skillName !== "string" || typeof p?.skillVersion !== "number") continue;
+
+      const key = `${p.skillName}@${p.skillVersion}`;
+      const prior = seen.get(key);
+      seen.set(key, {
+        name: p.skillName,
+        version: p.skillVersion,
+        scope:
+          p.skillScope === "global" || p.skillScope === "tenant"
+            ? p.skillScope
+            : (prior?.scope ?? "unknown"),
+        skillId: typeof p.skillId === "string" ? p.skillId : (prior?.skillId ?? null),
+        bodyHash: typeof p.skillBodyHash === "string" ? p.skillBodyHash : (prior?.bodyHash ?? null),
+        // Sticky: one pinned load in the run is what the gate asks about.
+        pinned: prior?.pinned === true || p.pinned === true,
+        loads: (prior?.loads ?? 0) + 1,
+      });
+    }
+
+    return {
+      tenant,
+      // Sorted so the runner's failure message is stable and diffable between runs.
+      loaded: [...seen.values()].sort((a, b) =>
+        a.name === b.name ? a.version - b.version : a.name < b.name ? -1 : 1,
+      ),
+      auditRowsScanned: rows.length,
+    };
+  },
+});

@@ -1572,6 +1572,64 @@ describe("skill-version attribution (IMPR-01 — propose stamps, executePlan cop
     expect((await t.run((ctx) => ctx.db.get(planId)))?.skillVersion).toBe(12);
   });
 
+  // ── THE EVAL-RUN ATTRIBUTION HOLE (found 2026-08-30, closing gaps 1/2) ──────────────────────
+  //
+  // Every test above seeds ONE cockpit-agent row and is therefore blind to the case the governance
+  // plane actually depends on: a run PINNED to a candidate while a DIFFERENT version is active.
+  // That is not an edge case, it is what `pnpm eval:golden --skill cockpit-agent@N` does on every
+  // gate run — `runCockpitAgent` loads the PINNED candidate, while `proposeEmailPlan` separately
+  // reads `by_name_status(name, "active")` and stamps THAT.
+  //
+  // So the stored row says the ACTIVE body produced a draft the CANDIDATE wrote, and the error
+  // propagates: executePlan copies plan.skillVersion onto every request row, and feedback is keyed
+  // requestId → request.skillVersion. A rating collected during a gate run trains the wrong body,
+  // and the eval's own evidence cannot be checked against what ran.
+  //
+  // This is the [[provenance-laundering]] shape one plane down: nobody lied, the row simply
+  // records a different author than the one who wrote it.
+  test("A PINNED run stamps the PIN, not the active row — the eval-gate attribution case", async () => {
+    const t = convexTest(schema, modules);
+    await seedActiveCockpit(t, 12); // active
+    await t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name: COCKPIT_AGENT_SKILL,
+        version: 13,
+        body: "candidate body",
+        status: "candidate",
+        createdAt: Date.now(),
+      }),
+    );
+    const planId = await seedPlan(t, "collecting");
+
+    // The agent loop ran under @13. The propose must say so.
+    await t.mutation(internal.cockpit.proposeEmailPlan, {
+      ...proposeArgs(planId),
+      skillVersion: 13,
+    });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.skillVersion).toBe(13);
+  });
+
+  test("a pinned RE-propose re-attributes to the PIN, not the then-active row", async () => {
+    const t = convexTest(schema, modules);
+    await seedActiveCockpit(t, 12);
+    const planId = await seedPlan(t, "proposed"); // already proposed → redraft branch
+
+    await t.mutation(internal.cockpit.proposeEmailPlan, {
+      ...proposeArgs(planId),
+      skillVersion: 13,
+    });
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.skillVersion).toBe(13);
+  });
+
+  test("NO pin still reads the active row — the unpinned path is byte-identical to before", async () => {
+    const t = convexTest(schema, modules);
+    await seedActiveCockpit(t, 12);
+    const planId = await seedPlan(t, "collecting");
+
+    await t.mutation(internal.cockpit.proposeEmailPlan, proposeArgs(planId));
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.skillVersion).toBe(12);
+  });
+
   test("no active cockpit-agent row → propose degrades to unattributable (undefined), never throws", async () => {
     const t = convexTest(schema, modules);
     const planId = await seedPlan(t, "collecting"); // NO active skill seeded

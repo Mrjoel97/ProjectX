@@ -2702,6 +2702,11 @@ export function buildCockpitTools(
           mode: recipients.length > 1 ? (plan.mode ?? "individual") : "individual",
           subject: plan.subject,
           body: plan.body,
+          // THE BODY THAT ACTUALLY DREW THIS DRAFT. `runCockpitAgent` loads this same pin (the
+          // EVAL-01 5th arg), so the plan row now names the version that ran instead of whatever
+          // happens to be ACTIVE — which on every `--skill cockpit-agent@N` gate run is a
+          // different row. Undefined on the production path, where active IS what ran.
+          skillVersion: skillVersions?.[COCKPIT_AGENT_SKILL],
         });
         // REVW-02: past the revise cap the gate escalated instead of re-proposing (fail-closed,
         // bounded). Tell the user plainly — the plan can no longer be re-proposed OR approved.
@@ -5419,13 +5424,57 @@ export const runCockpitAgent = internalAction({
     // 2. System = the cockpit-agent skill body (no hardcoded prompt — §5; fails closed unseeded).
     //    A pinned version loads AS ITSELF (EVAL-01 — the eval must observe the candidate body).
     const pin = skillVersions?.[COCKPIT_AGENT_SKILL];
-    const skill: { body: string } =
+    const skill: { body: string; version: number } =
       pin !== undefined
         ? await ctx.runQuery(internal.skills.getSkillVersion, {
             name: COCKPIT_AGENT_SKILL,
             version: pin,
           })
         : await ctx.runQuery(internal.skills.getActiveSkill, { name: COCKPIT_AGENT_SKILL });
+    // ── THE OBSERVED BODY, RECORDED (2026-08-30, EVAL-01 hardening) ──────────────────────────
+    //
+    // `skillVersions` above is the CALLER'S CLAIM. This row is what was actually read out of the
+    // registry and handed to the provider: name, version, and a SHA-256 of the exact body string.
+    //
+    // WHY IT HAS TO EXIST. `run-eval-golden.mjs` built its evidence row from `skillVersionsOf(pins)`
+    // — the caller's own claim — so a green, unfiltered, non-empty run wrote `pass: true` for a body
+    // it never loaded. That is a certificate manufactured for work that did not happen, and it is
+    // why two Phase-29 skills were EXEMPTED from `GATED_SKILLS` rather than left behind a gate that
+    // only looked like protection. `runSpecialistTurn` already logs this identity on its
+    // `subagent.completed` row; the cockpit loop did not, so there was nothing to check a
+    // `cockpit-agent` pin against. Now both planes answer the same question the same way.
+    //
+    // REFS ONLY (§4): a name, a number, a hash and a boolean. The body itself never enters an audit
+    // payload — the hash is what makes "this exact body ran" checkable without storing it.
+    //
+    // WRITTEN ONLY ON A PINNED RUN, and that is a deliberate narrowing rather than a half-measure.
+    // An unpinned production turn already has its attribution: `proposeEmailPlan` stamps
+    // `plans.skillVersion` from the active row and `executePlan` copies it onto every request row.
+    // What had NO record anywhere was the pinned case — the one the gate depends on — so this row
+    // is scoped to exactly that. The alternative, logging every turn, buys the gate nothing and
+    // makes the cockpit hot path pay for an audit insert plus an `auditCounts` aggregate write on
+    // every message. Costing production for a test-harness concern is not a trade worth making.
+    //
+    // IT STILL CATCHES THE REAL FAILURE. The version recorded comes from the row `getSkillVersion`
+    // actually returned — which THROWS on a missing (name, version) — so a run that pinned @9 while
+    // loading something else writes 9's absence, not its presence, and the gate refuses. A skill
+    // this runner cannot reach at all writes no row and is refused for the same reason.
+    if (pin !== undefined) {
+      await ctx.runMutation(internal.audit.log, {
+        tenantId,
+        // `turnId` is optional on this action; `threadId` is not, and both are refs. A turn without
+        // its own id still gets an attributable row rather than being silently unrecorded.
+        correlationId: turnId ?? threadId,
+        eventType: "agent.skill_loaded",
+        actor: "system",
+        payload: {
+          skillName: COCKPIT_AGENT_SKILL,
+          skillVersion: skill.version,
+          skillBodyHash: await contentHash(skill.body),
+          pinned: true,
+        },
+      });
+    }
 
     // 3. Current plan state → the model-facing context (index+label recipients, address-free §2-D).
     const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
