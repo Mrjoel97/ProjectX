@@ -30,8 +30,8 @@
     "semantic_hash": ""
   },
   "apps/web/package.json": {
-    "mtime": 1788110435.9561348,
-    "ast_hash": "b64c1dbc79cb9d8220acfd07fcfef7cc",
+    "mtime": 1788127940.4028697,
+    "ast_hash": "c7429a0dd6358c2ba4d08eb940e4c7b5",
     "semantic_hash": ""
   },
   "apps/web/tsconfig.json": {
@@ -100,8 +100,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/http.ts": {
-    "mtime": 1788092235.313854,
-    "ast_hash": "9333de4c40bf26a32079add19c4db6bf",
+    "mtime": 1788127866.3327076,
+    "ast_hash": "e940fc8c7def0633065ee6d5a33b9d17",
     "semantic_hash": ""
   },
   "packages/backend/convex/importGuard.test.ts": {
@@ -125,8 +125,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1788125125.0260558,
-    "ast_hash": "88a561def50eeb51b07629d1ed007af3",
+    "mtime": 1788127866.3802087,
+    "ast_hash": "34f2281b81ceaae43135ed6c40736543",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
@@ -150,8 +150,8 @@
     "semantic_hash": ""
   },
   "packages/backend/package.json": {
-    "mtime": 1788092236.6926868,
-    "ast_hash": "26f7aedbcd858896533800226f7e5926",
+    "mtime": 1788127866.409559,
+    "ast_hash": "450c42adb9871802b220dea259d734e3",
     "semantic_hash": ""
   },
   "packages/backend/tsconfig.json": {
@@ -250,18 +250,18 @@
     "semantic_hash": ""
   },
   ".planning/REQUIREMENTS.md": {
-    "mtime": 1788092227.275201,
-    "ast_hash": "6aaa4398197651a65795993eb4493c44",
+    "mtime": 1788127866.06028,
+    "ast_hash": "e932dbf8b5770eb59df239818383c0be",
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1788094811.7675245,
-    "ast_hash": "28890bb7603ff6971acc3abdce41be10",
+    "mtime": 1788127866.0663795,
+    "ast_hash": "46a278977664abd05170217c9489d00d",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1788092595.6101768,
-    "ast_hash": "d8cac2eec0fdbfc61289f575fa7b0de4",
+    "mtime": 1788128891.7503376,
+    "ast_hash": "ae28278159c6f71367239687b2237fb0",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -410,8 +410,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/deadLetter.ts": {
-    "mtime": 1788092235.156772,
-    "ast_hash": "3cdc4ca36d278a6715bd32320632a84d",
+    "mtime": 1788127866.3327076,
+    "ast_hash": "6280c0931fcb639d39d9d2ec261f46fd",
     "semantic_hash": ""
   },
   "packages/backend/convex/review.ts": {
@@ -450,8 +450,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/crons.ts": {
-    "mtime": 1788092235.1197555,
-    "ast_hash": "5ac98d344f578b5cb72d499f6aac08f8",
+    "mtime": 1788127866.3297915,
+    "ast_hash": "4f0fe3bbe2b8aa6230e45e8962341c62",
     "semantic_hash": ""
   },
   "packages/backend/convex/worm.test.ts": {
@@ -1025,8 +1025,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/llm.ts": {
-    "mtime": 1788092235.3934574,
-    "ast_hash": "ffd5bc6ccff380eae710503ce79543aa",
+    "mtime": 1788127866.3627653,
+    "ast_hash": "62d642d44b3e313c33556a215016b722",
     "semantic_hash": ""
   },
   "packages/contracts/src/drafting.ts": {
@@ -1045,13 +1045,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/deadLetters.test.ts": {
-    "mtime": 1788092235.1745362,
-    "ast_hash": "952329f0da5fdd6ceb56c118ee7f1f59",
+    "mtime": 1788127866.3327076,
+    "ast_hash": "2c69b552eebd90ab2513cd842d67912d",
     "semantic_hash": ""
   },
   "packages/backend/convex/deadLetters.ts": {
-    "mtime": 1788092235.1745362,
-    "ast_hash": "eaf98cbfbb042bd8359431ff8d220f9e",
+    "mtime": 1788127866.3327076,
+    "ast_hash": "afcd4c5454522c26f00e6829b5c3b473",
     "semantic_hash": ""
   },
   "packages/backend/scripts/run-smoke-pipeline.mjs": {
@@ -1120,8 +1120,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/ops/page.tsx": {
-    "mtime": 1788092233.2692344,
-    "ast_hash": "9165e528b446832fca4f0a40c3f975d0",
+    "mtime": 1788127866.1718931,
+    "ast_hash": "18b9a9cb36e76fe4bd3b01abb3ae0efa",
     "semantic_hash": ""
   },
   "packages/backend/scripts/run-seed.mjs": {
@@ -1525,8 +1525,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/cards.tsx": {
-    "mtime": 1788092233.1900473,
-    "ast_hash": "513d8c5c5d1e2fd7fe0d528120ada82a",
+    "mtime": 1788127866.1718931,
+    "ast_hash": "3c5b935580363c855614e5ace75d9f07",
     "semantic_hash": ""
   },
   ".planning/phases/03.1-cockpit-core/03.1-08-SUMMARY.md": {
@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1788092234.1805868,
-    "ast_hash": "0d18a77ddcd7e267c879d6b89b51753b",
+    "mtime": 1788127866.274503,
+    "ast_hash": "5896140c1ad3a5cefbccbef59579736e",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -1580,18 +1580,18 @@
     "semantic_hash": ""
   },
   "docs/playbooks/audit-dead-letter.md": {
-    "mtime": 1788092233.9577942,
-    "ast_hash": "7b07566e875d1a76b54f49e3abca384c",
+    "mtime": 1788128891.7503376,
+    "ast_hash": "38f1c7cf30d3c8f1873cc64b2b6679d6",
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1788110927.0781105,
-    "ast_hash": "0442c09e8d3238079ac55ff5ea23b3a3",
+    "mtime": 1788127995.0889714,
+    "ast_hash": "4036ff87d6664d42c1ed3d97ba134df5",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1788124221.9961853,
-    "ast_hash": "62453a64ce6ef44f9dace8f03b8e9358",
+    "mtime": 1788127995.1197572,
+    "ast_hash": "321104f74fbe8ca3f7e940162721b767",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -1765,8 +1765,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitTools.test.ts": {
-    "mtime": 1788092235.087603,
-    "ast_hash": "a39386ba538ce1037971ede21cb49ac8",
+    "mtime": 1788127866.314235,
+    "ast_hash": "b7d99dc887fcfae177cd6dac58aea038",
     "semantic_hash": ""
   },
   "packages/backend/convex/documentDraft.test.ts": {
@@ -2145,8 +2145,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/intake.test.ts": {
-    "mtime": 1788092235.3304307,
-    "ast_hash": "672ca47b3284bcf33bb47bd89c6749e6",
+    "mtime": 1788127866.3459978,
+    "ast_hash": "bb26c11aa642284071674d292a074c68",
     "semantic_hash": ""
   },
   "packages/backend/convex/intake.ts": {
@@ -2295,8 +2295,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/agent-runtime.md": {
-    "mtime": 1788092233.9488668,
-    "ast_hash": "a7b9d03430cfb6d0630b54928f40bd18",
+    "mtime": 1788127866.2031615,
+    "ast_hash": "646875501d17222ce57eb94c9fd715e6",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/IntakeControls.tsx": {
@@ -5900,8 +5900,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/authorization.md": {
-    "mtime": 1788092233.9577942,
-    "ast_hash": "d22c9bc06a999f28d3c92d7b731c2d04",
+    "mtime": 1788127866.2187865,
+    "ast_hash": "09702dede6ddf6cb51ad14c734455744",
     "semantic_hash": ""
   },
   ".planning/phases/22-owner-authorization-primitive-requireowner/22-02-SUMMARY.md": {
@@ -6205,8 +6205,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/media.md": {
-    "mtime": 1788121103.9806418,
-    "ast_hash": "e3db591b8b826fa3403af18782b20044",
+    "mtime": 1788127995.108086,
+    "ast_hash": "efa204558733983335395fd96ffbbfe0",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-08-02-profile-tabs-blueprint-segments-design.md": {
@@ -6235,7 +6235,7 @@
     "semantic_hash": ""
   },
   "packages/cost/src/media.fixtures.json": {
-    "mtime": 1788121616.7826817,
+    "mtime": 1788127903.6415079,
     "ast_hash": "1e1bdbc5e1bee757ec4d585ec472e513",
     "semantic_hash": ""
   },
@@ -6260,7 +6260,7 @@
     "semantic_hash": ""
   },
   "packages/cost/src/media.test.ts": {
-    "mtime": 1788123218.6866486,
+    "mtime": 1788127904.4956894,
     "ast_hash": "37e7592dc97dd7897eb97e1151c4d3c1",
     "semantic_hash": ""
   },
@@ -6360,7 +6360,7 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/mediaDirector.ts": {
-    "mtime": 1788125801.8328183,
+    "mtime": 1788127919.6520896,
     "ast_hash": "203168a713617520a4e30899085551fc",
     "semantic_hash": ""
   },
@@ -6870,8 +6870,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.d.ts": {
-    "mtime": 1788092234.8920598,
-    "ast_hash": "8805d929c56b21bdc3875b1f4897ce1e",
+    "mtime": 1788127866.274503,
+    "ast_hash": "fade0233ded246487b5f2c779c9bda5a",
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.js": {
@@ -7125,8 +7125,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/dashboard-pages.md": {
-    "mtime": 1788092234.0319846,
-    "ast_hash": "eb14e6361edb45425bad7ab65a993e21",
+    "mtime": 1788127866.2503145,
+    "ast_hash": "f158727a2893b912126ada2d92ab6080",
     "semantic_hash": ""
   },
   ".planning/phases/26-pending-product-pages-and-vault-redesign-integration/26-01-SUMMARY.md": {
@@ -8650,13 +8650,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitCapabilities.test.ts": {
-    "mtime": 1788092235.0438662,
-    "ast_hash": "95771c4bfd8a4f8af32364fc0936f7a9",
+    "mtime": 1788127866.29809,
+    "ast_hash": "fc24a0aab29e38ef879d7e723dcf1863",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitCapabilities.ts": {
-    "mtime": 1788092235.0538945,
-    "ast_hash": "d10770ed0e57e8565348a6768cf37882",
+    "mtime": 1788127866.29809,
+    "ast_hash": "7b91fe724380aaa3948b4b21eb764372",
     "semantic_hash": ""
   },
   "packages/backend/convex/cockpitSolopreneur.test.ts": {
@@ -8770,8 +8770,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/microsoftAuth.test.ts": {
-    "mtime": 1788092235.4461763,
-    "ast_hash": "8d98d5894e75a3b79adb19e84475c544",
+    "mtime": 1788127866.3627653,
+    "ast_hash": "4c34aefb89cdd64043223332bae4d685",
     "semantic_hash": ""
   },
   "packages/backend/convex/microsoftAuth.ts": {
@@ -9060,18 +9060,18 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/ops/opsPresentation.test.ts": {
-    "mtime": 1788092233.2692344,
-    "ast_hash": "bfba3be6518395ce12bdb77229f7ce94",
+    "mtime": 1788127866.1718931,
+    "ast_hash": "e5c00e1c6abcb34e9858304342b1b7af",
     "semantic_hash": ""
   },
   "packages/core/src/tenantData.test.ts": {
-    "mtime": 1788092238.463442,
-    "ast_hash": "6f734e68f53fbf48209e23c4bafdd696",
+    "mtime": 1788127866.4413083,
+    "ast_hash": "bbf004e4048d5c813adb73f2113ba97b",
     "semantic_hash": ""
   },
   "packages/core/src/tenantData.ts": {
-    "mtime": 1788092238.463442,
-    "ast_hash": "c2b2cb3739df78895e4af5dc62484ce1",
+    "mtime": 1788127866.4669268,
+    "ast_hash": "376b5c2c984fc5fb868c7dd4ccd84322",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantExport.test.ts": {
@@ -9110,8 +9110,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/settings/page.tsx": {
-    "mtime": 1788092232.9496481,
-    "ast_hash": "cf900e6a23fe9f2b61bc9de86bf9674d",
+    "mtime": 1788127866.1718931,
+    "ast_hash": "3f0ef599704127588751d5a90757f819",
     "semantic_hash": ""
   },
   ".planning/phases/22.1-beta-admission-readiness-legal-deployment-ci-typechecking-and-identity-boundary-hardening/22.1-04-SUMMARY.md": {
@@ -9120,13 +9120,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantDelete.test.ts": {
-    "mtime": 1788092235.9603102,
-    "ast_hash": "1f2d99eeb7185c0ef87779a38d9ce0b6",
+    "mtime": 1788128891.7659762,
+    "ast_hash": "094897e324649a1484eb0d4993b62e86",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantDelete.ts": {
-    "mtime": 1788092235.9603102,
-    "ast_hash": "b79f5da435a874e40c2c5830a73dc437",
+    "mtime": 1788128891.7684877,
+    "ast_hash": "ab86d6ad8a93d82dc2bb56e17d4ede04",
     "semantic_hash": ""
   },
   ".planning/phases/20.2-scene-timeline-reels/20.2-SUMMARY.md": {
@@ -9230,8 +9230,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/isolation.test.ts": {
-    "mtime": 1788092235.3433573,
-    "ast_hash": "c517e637ceeef2369b04203b1873f4c3",
+    "mtime": 1788127866.3459978,
+    "ast_hash": "a877bb952bbe15250c7a81465d8a9b89",
     "semantic_hash": ""
   },
   ".planning/phases/25-private-beta-productionization/25-01-SUMMARY.md": {
@@ -9305,8 +9305,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/lib/env.ts": {
-    "mtime": 1788105809.878483,
-    "ast_hash": "3bba7b95fb63a4ca259294859d5888c1",
+    "mtime": 1788127866.3550086,
+    "ast_hash": "6c75d99d950339c7adb5c732fe2194e8",
     "semantic_hash": ""
   },
   "packages/backend/convex/ops.ts": {
@@ -9320,8 +9320,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/production-beta.md": {
-    "mtime": 1788102839.9303155,
-    "ast_hash": "686e4e9496acec0b552d7f7b9a82511f",
+    "mtime": 1788127995.108086,
+    "ast_hash": "92b11bbdc49973934fb87c5202eb6bd8",
     "semantic_hash": ""
   },
   ".planning/phases/25-private-beta-productionization/25-OWNER-GATES.md": {
@@ -9550,8 +9550,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/reliabilitySweep.test.ts": {
-    "mtime": 1788092235.599789,
-    "ast_hash": "266d32db8439f4bb2f456f564b7b531b",
+    "mtime": 1788127866.3802087,
+    "ast_hash": "d435c80e94a8d234b9af3166985a8063",
     "semantic_hash": ""
   },
   "packages/backend/convex/reliabilitySweep.ts": {
@@ -9635,8 +9635,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/auditProjection.ts": {
-    "mtime": 1788092237.4100902,
-    "ast_hash": "96c76b78bbe43e25e3a9ce94a628ad8c",
+    "mtime": 1788128891.7703395,
+    "ast_hash": "28dc7214d9b704f3d1987dfa7156a346",
     "semantic_hash": ""
   },
   "packages/core/src/home.test.ts": {
@@ -10372,6 +10372,651 @@
   ".planning/phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-05-SUMMARY.md": {
     "mtime": 1788122282.3610094,
     "ast_hash": "281eeeacefa5bdd188f4928382c709fa",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/settings/BillingPanel.tsx": {
+    "mtime": 1788127866.1718931,
+    "ast_hash": "79abd7eb47b4e3b067d7ff2d0313b5dd",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/settings/billingPanel.test.ts": {
+    "mtime": 1788127866.1718931,
+    "ast_hash": "1fda49b5817cd1613c595ca41ed9ba66",
+    "semantic_hash": ""
+  },
+  "packages/backend/__fixtures__/sourceScan.ts": {
+    "mtime": 1788127866.274503,
+    "ast_hash": "036c20fd4437ef0b5e6a2a3d676b0c27",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billing.test.ts": {
+    "mtime": 1788127866.282036,
+    "ast_hash": "57d78b1ab8669752cc658943cb5a42eb",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billing.ts": {
+    "mtime": 1788127866.282036,
+    "ast_hash": "b2256dc5561a68bf8dbc351e7d414165",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billingApi.test.ts": {
+    "mtime": 1788127866.282036,
+    "ast_hash": "8f339b008e9f00ec5a4cbb683f770ffc",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billingApi.ts": {
+    "mtime": 1788127866.2890463,
+    "ast_hash": "b90f3ad080c50a9da1ae3a381bc2047f",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billingLedger.test.ts": {
+    "mtime": 1788127866.2890463,
+    "ast_hash": "e982b47a0b4eaec108bee5a95e19a387",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billingLedger.ts": {
+    "mtime": 1788127866.2930741,
+    "ast_hash": "a5dfcfda8680462bf255d063ad459044",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billingRollup.test.ts": {
+    "mtime": 1788127866.2930741,
+    "ast_hash": "00305cc91f7505a2f17461e52a35b1ad",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billingRollup.ts": {
+    "mtime": 1788127866.29809,
+    "ast_hash": "6c5b2fb0b822aee81e847ef359da3126",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billingWebhook.test.ts": {
+    "mtime": 1788127866.29809,
+    "ast_hash": "674e05c8163ae14aaaf137273c7365c1",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/billingWebhook.ts": {
+    "mtime": 1788127866.29809,
+    "ast_hash": "176079908736c68017f3e8af96ed7502",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/connectorCallbacks.test.ts": {
+    "mtime": 1788127866.314235,
+    "ast_hash": "6022268381c4a5df0d005e697fa1953c",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/connectorCredentials.test.ts": {
+    "mtime": 1788127866.314235,
+    "ast_hash": "7bef6594921051b22be3c7f6653cee80",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/connectorCredentials.ts": {
+    "mtime": 1788127866.314235,
+    "ast_hash": "9cdc0fe30eaa1b57d703548f7f4e0772",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/connectorFetch.test.ts": {
+    "mtime": 1788127866.3217604,
+    "ast_hash": "fd541b3c49d5547f960fe620826303b3",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/connectorFetch.ts": {
+    "mtime": 1788127866.3217604,
+    "ast_hash": "86ee7362e691bcc51d51c076fc837448",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/connectorOAuth.test.ts": {
+    "mtime": 1788127866.3217604,
+    "ast_hash": "cb8e26950d869c5849d2616e935e6611",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/connectorOAuth.ts": {
+    "mtime": 1788127866.3217604,
+    "ast_hash": "37c7b647d35dbb07eb708718b075e504",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/hubspot.test.ts": {
+    "mtime": 1788127866.3327076,
+    "ast_hash": "309c296d226539aa49354157532e99f0",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/hubspot.ts": {
+    "mtime": 1788127866.3327076,
+    "ast_hash": "05abeb8970595d79551a5868150f9b14",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/hubspotAuth.ts": {
+    "mtime": 1788127866.3457222,
+    "ast_hash": "b1185b535ecdf505e5f4ba4f78e44a87",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/paypalAuth.ts": {
+    "mtime": 1788127866.3666434,
+    "ast_hash": "9e6d44c1eca389a87956cd1155895c13",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/paypalConnector.test.ts": {
+    "mtime": 1788127866.3666434,
+    "ast_hash": "9c0c65796e764fee347c0c79737696f6",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/paypalConnector.ts": {
+    "mtime": 1788127866.3666434,
+    "ast_hash": "a5efd808a51112c9c30e315235f401e2",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/providerGates.test.ts": {
+    "mtime": 1788127866.3666434,
+    "ast_hash": "2f968743ec72c4ed48ade6e6ce7f2aa5",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/providerGates.ts": {
+    "mtime": 1788127866.3666434,
+    "ast_hash": "3b49cd436c09868e0c799dd5b2a7b6f5",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/quickbooks.test.ts": {
+    "mtime": 1788127866.3766558,
+    "ast_hash": "ed22864efb0f048ba199adeba6b89a8c",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/quickbooks.ts": {
+    "mtime": 1788127866.3776848,
+    "ast_hash": "8d2841a97297bec7532165037d395548",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/quickbooksAuth.ts": {
+    "mtime": 1788127866.3802087,
+    "ast_hash": "f6244aedf2a5a720be4fe4635ca44208",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/stripeAuth.ts": {
+    "mtime": 1788127866.3802087,
+    "ast_hash": "420e754211788b12b5240e2816d793c1",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/stripeConnector.test.ts": {
+    "mtime": 1788127866.3802087,
+    "ast_hash": "746d5308417f02c3768c2ddd7d39557a",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/stripeConnector.ts": {
+    "mtime": 1788127866.3802087,
+    "ast_hash": "e8bf7b207cd4cf75d30c48dd757dffa0",
+    "semantic_hash": ""
+  },
+  "packages/billing/package.json": {
+    "mtime": 1788127866.409559,
+    "ast_hash": "a3c58c6ac1629a5b0d9792dfe7faa8d0",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/config.test.ts": {
+    "mtime": 1788127866.409559,
+    "ast_hash": "aa774e296f8d6bfb3acfdc48cee3b409",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/config.ts": {
+    "mtime": 1788127866.409559,
+    "ast_hash": "6ade6ff8ce58a3741d70bf16f7b5bf3d",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/events.test.ts": {
+    "mtime": 1788127866.409559,
+    "ast_hash": "39057c02e89cf8ac6b5a6b94c295cbcd",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/events.ts": {
+    "mtime": 1788127866.409559,
+    "ast_hash": "7255340abe46421666b1ab872ddc599d",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/index.ts": {
+    "mtime": 1788127866.409559,
+    "ast_hash": "3d058c9303777030868c33888fcf5d3e",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/reconcile.test.ts": {
+    "mtime": 1788127866.409559,
+    "ast_hash": "a70428f053a43bc60dad4a3188ba4fbe",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/reconcile.ts": {
+    "mtime": 1788127866.425203,
+    "ast_hash": "bcd779f99369998ddeb85259e7f95748",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/signature.test.ts": {
+    "mtime": 1788127866.425203,
+    "ast_hash": "ee78abb3c656f2869b14bfd247557b34",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/signature.ts": {
+    "mtime": 1788127866.4302704,
+    "ast_hash": "725616a1cb304ae34bc27d27396e3164",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/tax.test.ts": {
+    "mtime": 1788127866.432296,
+    "ast_hash": "773af7caea5beb2a4f81916ca39de7e1",
+    "semantic_hash": ""
+  },
+  "packages/billing/src/tax.ts": {
+    "mtime": 1788127866.432296,
+    "ast_hash": "06f579db7e7e0b9ed1655dac3e0c1b73",
+    "semantic_hash": ""
+  },
+  "packages/billing/tsconfig.json": {
+    "mtime": 1788127866.432296,
+    "ast_hash": "b560cd4eb41a732e5b522d12be592745",
+    "semantic_hash": ""
+  },
+  "packages/billing/vitest.config.ts": {
+    "mtime": 1788127866.432296,
+    "ast_hash": "578d022856a6bbfce0bc0e66da68a429",
+    "semantic_hash": ""
+  },
+  "packages/revenue/package.json": {
+    "mtime": 1788127866.4855056,
+    "ast_hash": "bae576388837b831e131b5ce65d214a0",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/contracts.test.ts": {
+    "mtime": 1788127866.4866035,
+    "ast_hash": "9f63d541ab2d881b840117435089496a",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/contracts.ts": {
+    "mtime": 1788127866.4896188,
+    "ast_hash": "ffa781b5c90a6f71ce64902b7af517ca",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/credential.test.ts": {
+    "mtime": 1788127866.4896188,
+    "ast_hash": "f2c7bab3e6b5c68b7d7c3aaec5eb8b30",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/credential.ts": {
+    "mtime": 1788127866.495633,
+    "ast_hash": "51e66c67cf457c1adf1d06751b9c0af2",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/finance.test.ts": {
+    "mtime": 1788127866.495633,
+    "ast_hash": "5ff0ad90953c242fe273fa136f4d19ea",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/finance.ts": {
+    "mtime": 1788127866.495633,
+    "ast_hash": "5c6395804d6e2380562a0e8b738d3aee",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/index.ts": {
+    "mtime": 1788127866.495633,
+    "ast_hash": "9556e8942c4fc681eb5fdf4b33c3e390",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/money.test.ts": {
+    "mtime": 1788127866.5056477,
+    "ast_hash": "d8f91dd704fdff84c445c547fcd6d986",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/money.ts": {
+    "mtime": 1788127866.5056477,
+    "ast_hash": "acb328cf865253f5cdc8430b3be88646",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/hubspot.test.ts": {
+    "mtime": 1788127866.5056477,
+    "ast_hash": "f3407de0bd854ac018a80b45fd788f2d",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/hubspot.ts": {
+    "mtime": 1788127866.5056477,
+    "ast_hash": "4889611e229792689a0dea179dc48b0b",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/paypal.test.ts": {
+    "mtime": 1788127866.5056477,
+    "ast_hash": "b1322311f4d59ffa97d2f9e0f5412b33",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/paypal.ts": {
+    "mtime": 1788127866.5056477,
+    "ast_hash": "bb7a3298236c50531fb631e7b48f1661",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/quickbooks.test.ts": {
+    "mtime": 1788127866.5056477,
+    "ast_hash": "7296e173b2baf488ee98993d41787d66",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/quickbooks.ts": {
+    "mtime": 1788127866.5216827,
+    "ast_hash": "948f4e3f430a550b582f3e2d238c3d8c",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/shared.ts": {
+    "mtime": 1788127866.5216827,
+    "ast_hash": "47bfab8eb588324e337d03b68d23a893",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/stripe.test.ts": {
+    "mtime": 1788127866.5373216,
+    "ast_hash": "95f69671fc8da3b893c244841f0988fa",
+    "semantic_hash": ""
+  },
+  "packages/revenue/src/providers/stripe.ts": {
+    "mtime": 1788127866.5373216,
+    "ast_hash": "5e63b80f14a52be7f5e938e4757b5c44",
+    "semantic_hash": ""
+  },
+  "packages/revenue/tsconfig.json": {
+    "mtime": 1788127866.5373216,
+    "ast_hash": "b560cd4eb41a732e5b522d12be592745",
+    "semantic_hash": ""
+  },
+  "packages/revenue/vitest.config.ts": {
+    "mtime": 1788127866.5448897,
+    "ast_hash": "a4c660fd7349b788caff62514d69a8df",
+    "semantic_hash": ""
+  },
+  "scripts/check-phase28-readiness.mjs": {
+    "mtime": 1788127866.5448897,
+    "ast_hash": "16af2c79a12a2d8abac27183d9234f81",
+    "semantic_hash": ""
+  },
+  "scripts/check-provider-lane.mjs": {
+    "mtime": 1788127866.5448897,
+    "ast_hash": "23c255ce4433ecb992a916b12132452c",
+    "semantic_hash": ""
+  },
+  "scripts/smoke-hubspot-read.mjs": {
+    "mtime": 1788127866.555463,
+    "ast_hash": "18f680500afe1212b9716bc70fe80570",
+    "semantic_hash": ""
+  },
+  "scripts/smoke-paypal-read.mjs": {
+    "mtime": 1788127866.555463,
+    "ast_hash": "2f9da4d073e82d4d4c348739cb88d798",
+    "semantic_hash": ""
+  },
+  "scripts/smoke-quickbooks-read.mjs": {
+    "mtime": 1788127866.555463,
+    "ast_hash": "2d1f1263f0b5c394377e45fdef9b34a0",
+    "semantic_hash": ""
+  },
+  "scripts/smoke-stripe-read.mjs": {
+    "mtime": 1788127866.560982,
+    "ast_hash": "1e7ca1cafeef70b286fc81cb7cb1afc8",
+    "semantic_hash": ""
+  },
+  ".planning/audits/28.1-billing-audit-2026-08-30.md": {
+    "mtime": 1788127866.076097,
+    "ast_hash": "bd022dcc04bd72e95b7e5396ccfd043f",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-01-SUMMARY.md": {
+    "mtime": 1788127866.076097,
+    "ast_hash": "1653845bcb508aff9ee0a8c6cd435f50",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-02-SUMMARY.md": {
+    "mtime": 1788127866.076097,
+    "ast_hash": "15ab1c0ff3371e110750be7362945c0d",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-03-SUMMARY.md": {
+    "mtime": 1788127866.076097,
+    "ast_hash": "b1df0356f1881c960834ae3a3480658f",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-04-SUMMARY.md": {
+    "mtime": 1788127866.0851104,
+    "ast_hash": "641dd6b5fc940fd362f7dd37c560f556",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-05-SUMMARY.md": {
+    "mtime": 1788127866.0851104,
+    "ast_hash": "4799f4a4393bcfb1399df6f896e452ae",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-06-SUMMARY.md": {
+    "mtime": 1788127866.0851104,
+    "ast_hash": "38ee7970e13e64739f067a17802c1971",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-07-SUMMARY.md": {
+    "mtime": 1788127866.0891402,
+    "ast_hash": "45443f451de7834dc8a33743f70d7514",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-08-SUMMARY.md": {
+    "mtime": 1788127866.0891402,
+    "ast_hash": "d981154b2ef8d490cde334a5f79a78cc",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-17-SUMMARY.md": {
+    "mtime": 1788127866.0921686,
+    "ast_hash": "18d6ccd36d9ba140f721d64c774918cc",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-18-SUMMARY.md": {
+    "mtime": 1788127866.0921686,
+    "ast_hash": "b958b6de5a093f1b2106a9c54a6ed00f",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/28-26-SUMMARY.md": {
+    "mtime": 1788127866.0981798,
+    "ast_hash": "94850817a05e5a15a59bf0e144de7928",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28-connector-backed-revenue-pack/deferred-items.md": {
+    "mtime": 1788127866.0981798,
+    "ast_hash": "a28991f9b703a69189c4e01692215198",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-01-PLAN.md": {
+    "mtime": 1788127866.0981798,
+    "ast_hash": "b99e44d041564f526329ba17ea844ca0",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-01-SUMMARY.md": {
+    "mtime": 1788127866.0981798,
+    "ast_hash": "178f1b09695f5e0d1b61089cab49a312",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-02-PLAN.md": {
+    "mtime": 1788127866.0981798,
+    "ast_hash": "1b7ba0e9560a1114ca9d77a2cd94b5d5",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-02-SUMMARY.md": {
+    "mtime": 1788127866.1152742,
+    "ast_hash": "d1179e21d24787102b9bd7f1e1aa2e35",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-03-PLAN.md": {
+    "mtime": 1788127866.1152742,
+    "ast_hash": "f1c8cde122571d84d6aca4f14cbc73e8",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-03-SUMMARY.md": {
+    "mtime": 1788127866.1152742,
+    "ast_hash": "4f53435a55efea2a200baafb5af3805c",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-04-PLAN.md": {
+    "mtime": 1788127866.1152742,
+    "ast_hash": "9af2ef36ce98e9ce40ee7bb082908905",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-04-SUMMARY.md": {
+    "mtime": 1788127866.1152742,
+    "ast_hash": "269be2b0df0d41a54afcca299442b781",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-05-PLAN.md": {
+    "mtime": 1788127866.1243074,
+    "ast_hash": "16d43e4fdf91175f376ade296e5535c2",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-05-SUMMARY.md": {
+    "mtime": 1788127866.1273172,
+    "ast_hash": "1c0f17817db762431b76f66ff9388575",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-06-PLAN.md": {
+    "mtime": 1788127866.1273172,
+    "ast_hash": "3fc6b45c3f31c4abf38ef237ea96c9a6",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-06-SUMMARY.md": {
+    "mtime": 1788127866.1273172,
+    "ast_hash": "b99926af4ca0133038c5d6e2abb5690d",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-07-PLAN.md": {
+    "mtime": 1788127866.1273172,
+    "ast_hash": "375ad383fd87553369f72e4bc1f726ed",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-07-SUMMARY.md": {
+    "mtime": 1788127866.1273172,
+    "ast_hash": "5ecd570fdecf28c0f750a07b680b6ba0",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-08-PLAN.md": {
+    "mtime": 1788127866.1273172,
+    "ast_hash": "78d4bbc8c600854a5f81b2a42e9aaa2d",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-08-SUMMARY.md": {
+    "mtime": 1788127866.1401553,
+    "ast_hash": "c56643a2ec39dd75e9035a33cdb7f9b4",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-09-PLAN.md": {
+    "mtime": 1788127866.1401553,
+    "ast_hash": "230dfd54fe3c9ee6a16faa62a4398a19",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-09-SUMMARY.md": {
+    "mtime": 1788127866.1401553,
+    "ast_hash": "358d47ea5f77cd3fc7cee16f920e0ffa",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-10-PLAN.md": {
+    "mtime": 1788127866.1401553,
+    "ast_hash": "48ad06a93d73bb0363a0f672b09f6142",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-10-SUMMARY.md": {
+    "mtime": 1788127866.1401553,
+    "ast_hash": "3111084d61c0345c349f24f47e0c6112",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-11-PLAN.md": {
+    "mtime": 1788127866.1401553,
+    "ast_hash": "f16c9ff6eb8a674495d20fe102301808",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-11-SUMMARY.md": {
+    "mtime": 1788127866.1401553,
+    "ast_hash": "d5dde832eb3b138e4af6c738020674f9",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-CONTEXT.md": {
+    "mtime": 1788127866.1401553,
+    "ast_hash": "4dffce53ce209212f7dd5fa01ffc633a",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-RESEARCH.md": {
+    "mtime": 1788127866.162362,
+    "ast_hash": "0dd9ca6fd9bc963795c49193ad636015",
+    "semantic_hash": ""
+  },
+  ".planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/28.1-VALIDATION.md": {
+    "mtime": 1788127866.162362,
+    "ast_hash": "89b0acb2409cd620dc0691fafb8935bf",
+    "semantic_hash": ""
+  },
+  ".planning/research/stripe-billing-plan-2026-08-28.md": {
+    "mtime": 1788127866.1673796,
+    "ast_hash": "0d49345e675233edc0dc9dc3a1cb2193",
+    "semantic_hash": ""
+  },
+  "docs/billing/stripe-dashboard-setup.md": {
+    "mtime": 1788127866.187535,
+    "ast_hash": "3ca8692ef14d9c5f613645d4be2fbdc4",
+    "semantic_hash": ""
+  },
+  "docs/connectors/README.md": {
+    "mtime": 1788127866.187535,
+    "ast_hash": "2eedd5eab3cdb49fb2bb2bff90015c97",
+    "semantic_hash": ""
+  },
+  "docs/connectors/hubspot-suitability.md": {
+    "mtime": 1788127866.187535,
+    "ast_hash": "8c627f6de362fa5e6eecc6db0a3e3944",
+    "semantic_hash": ""
+  },
+  "docs/connectors/paypal-suitability.md": {
+    "mtime": 1788127866.187535,
+    "ast_hash": "5af43710208cea4dd58f054465fce30f",
+    "semantic_hash": ""
+  },
+  "docs/connectors/phase28-readiness.md": {
+    "mtime": 1788127866.187535,
+    "ast_hash": "05ecd465f494d72522805e4a74569873",
+    "semantic_hash": ""
+  },
+  "docs/connectors/quickbooks-suitability.md": {
+    "mtime": 1788127866.187535,
+    "ast_hash": "daf91464e11e3d7566eee7fa31068c0e",
+    "semantic_hash": ""
+  },
+  "docs/connectors/stripe-suitability.md": {
+    "mtime": 1788127866.2031615,
+    "ast_hash": "63aa77b3fd366738853db70934f4e808",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/billing.md": {
+    "mtime": 1788127866.2187865,
+    "ast_hash": "8c7bd97947d4769a5e6e710c814be763",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/connector-hubspot.md": {
+    "mtime": 1788127866.2387743,
+    "ast_hash": "594dcd4b672387c2d5a34a67a2c39868",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/connector-paypal.md": {
+    "mtime": 1788127866.2397857,
+    "ast_hash": "0bdd464adc2aa53cc9ed985e262a27fb",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/connector-quickbooks.md": {
+    "mtime": 1788127866.2397857,
+    "ast_hash": "8d1a844faa090971ee37836cd184ee88",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/connector-stripe.md": {
+    "mtime": 1788127866.2397857,
+    "ast_hash": "52caa9d3fb991dd7c1b4adf2128c9e92",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/revenue-connectors.md": {
+    "mtime": 1788128891.7503376,
+    "ast_hash": "438af24ffb18e76b0036fc784f08ba91",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/revenue-crm.md": {
+    "mtime": 1788127866.2659893,
+    "ast_hash": "cbd58b0c6cf6ab161fb3b0685807d6f2",
+    "semantic_hash": ""
+  },
+  "docs/playbooks/revenue-finance.md": {
+    "mtime": 1788127866.2659893,
+    "ast_hash": "c02955d0c8f4c8906ffaadc1d4be3019",
     "semantic_hash": ""
   }
 }
