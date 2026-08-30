@@ -4,6 +4,7 @@ import {
   type TenantDeletionCursor,
   tenantTableScope,
 } from "@pikar/core/tenantData";
+import type { RevocationUpstream } from "@pikar/revenue";
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
@@ -15,21 +16,71 @@ import { contentHash } from "./lib/hash";
 export const TENANT_DELETE_BATCH_SIZE = 2;
 
 type ProviderDeletionResult = {
-  /** 28.1-08 widened this to three. BOTH this type AND `providerResultValidator` below must carry
-   *  the same members — a value that satisfies one and not the other is a runtime rejection under
-   *  a perfectly green typecheck. */
-  provider: "google" | "microsoft" | "billing";
+  /** 28.1-08 widened this to three and the connector arm to seven. BOTH this type AND
+   *  `providerResultValidator` below must carry the same members — a value that satisfies one and
+   *  not the other is a runtime rejection under a perfectly green typecheck. */
+  provider: "google" | "microsoft" | "billing" | "hubspot" | "quickbooks" | "stripe" | "paypal";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
+  /**
+   * WHY A BOOLEAN IS NOT ENOUGH FOR A CONNECTOR, and the reason this field exists.
+   *
+   * `revokedAtProvider: false` cannot distinguish "we asked and the provider refused" from "this
+   * provider documents no revocation endpoint at all". For three of the four Phase 28 connectors
+   * the second is the permanent truth — PayPal documents none anywhere, Stripe Apps have no
+   * documented platform-initiated revocation, and HubSpot's cascade to already-issued access
+   * tokens is unproven — so collapsing them would re-create exactly the boolean the four-value
+   * `RevocationUpstream` enum was built to prevent.
+   *
+   * It matters most HERE. `connectorConnections` is `tenant_credential`, so the page loop deletes
+   * the row carrying `revocation.upstream`; after an erasure this audit payload is the ONLY place
+   * that truth survives. Absent for google/microsoft/billing, which are not connector lanes.
+   */
+  revokeUpstream?: RevocationUpstream;
 };
+
+/** The four connector lanes, in the order their entries are appended. */
+const CONNECTOR_PROVIDERS = ["hubspot", "quickbooks", "stripe", "paypal"] as const;
+type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number];
+
+/**
+ * LEAST REASSURING WINS. A tenant may hold both a sandbox and a production grant for one provider
+ * and they can come back with different answers; one entry per provider has to pick one. It picks
+ * the worst, because an erasure report that rounds a partial failure up to `confirmed` is the one
+ * error this record must never make.
+ */
+const UPSTREAM_SEVERITY: Record<RevocationUpstream, number> = {
+  attempted_failed: 3,
+  unsupported: 2,
+  not_attempted: 1,
+  confirmed: 0,
+};
+const leastReassuring = (states: readonly RevocationUpstream[]): RevocationUpstream =>
+  states.reduce((worst, s) => (UPSTREAM_SEVERITY[s] > UPSTREAM_SEVERITY[worst] ? s : worst));
 
 const deletionCursorValidator = v.object({ tableIndex: v.number() });
 const providerResultValidator = v.object({
-  provider: v.union(v.literal("google"), v.literal("microsoft"), v.literal("billing")),
+  provider: v.union(
+    v.literal("google"),
+    v.literal("microsoft"),
+    v.literal("billing"),
+    v.literal("hubspot"),
+    v.literal("quickbooks"),
+    v.literal("stripe"),
+    v.literal("paypal"),
+  ),
   localRowDeleted: v.boolean(),
   revokedAtProvider: v.boolean(),
   failure: v.boolean(),
+  revokeUpstream: v.optional(
+    v.union(
+      v.literal("confirmed"),
+      v.literal("attempted_failed"),
+      v.literal("unsupported"),
+      v.literal("not_attempted"),
+    ),
+  ),
 });
 const auditLog = makeFunctionReference<
   "mutation",
@@ -151,10 +202,29 @@ export const authorizeTenantDeletion = internalMutation({
       .query("billingCustomers")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .first();
+    /**
+     * THE FOURTH PROBE. `connectorConnections` is `tenant_credential`, so the page loop deletes
+     * these rows — including the sealed blob the revocation needs. Same reason as billing above:
+     * the arm that uses this must run BEFORE the loop.
+     *
+     * `sealed` is what separates a live grant from one already disconnected. `recordRevocation`
+     * CLEARS the ciphertext and KEEPS the row, deliberately, so the UI can still say "we deleted
+     * our copy; your grant stays live upstream". Re-revoking one of those would report a second
+     * revocation of a credential we no longer hold.
+     */
+    const connectorRows = await ctx.db
+      .query("connectorConnections")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect();
     return {
       googleConnected: !!google,
       microsoftConnected: !!microsoft,
       billingActive: !!billing,
+      connectorGrants: connectorRows.map((row) => ({
+        provider: row.provider,
+        environment: row.environment,
+        sealed: row.credentialCiphertextB64 !== undefined,
+      })),
     };
   },
 });
@@ -210,6 +280,12 @@ export const deleteTenantDataPage = internalMutation({
             payload[`${provider.provider}LocalRowDeleted`] = provider.localRowDeleted;
             payload[`${provider.provider}RevokedAtProvider`] = provider.revokedAtProvider;
             payload[`${provider.provider}Failure`] = provider.failure;
+            // The connector lanes only. After the walk deletes `connectorConnections`, THIS is the
+            // only surviving record of whether the grant is actually dead upstream — and it is a
+            // closed enum member, never provider prose (CLAUDE.md §4).
+            if (provider.revokeUpstream !== undefined) {
+              payload[`${provider.provider}RevokeUpstream`] = provider.revokeUpstream;
+            }
           }
           await ctx.runMutation(auditLog, {
             tenantId: args.tenantId,
@@ -251,7 +327,19 @@ export const deleteTenantDataPage = internalMutation({
 const authorizeTenantDeletionRef = makeFunctionReference<
   "mutation",
   { tenantId: string; userId: Id<"users"> },
-  { googleConnected: boolean; microsoftConnected: boolean; billingActive: boolean }
+  {
+    googleConnected: boolean;
+    microsoftConnected: boolean;
+    billingActive: boolean;
+    /** A THIRD copy of a shape that has to move together — the hand-written reference type does
+     *  not follow the handler's inference, so a probe added above and not here is a `tsc` error
+     *  rather than a silent `undefined` at runtime. It caught this one. */
+    connectorGrants: {
+      provider: ConnectorProvider;
+      environment: "sandbox" | "production";
+      sealed: boolean;
+    }[];
+  }
 >("tenantDelete:authorizeTenantDeletion");
 /** The billing arm. A `makeFunctionReference`, matching the two above, so this module keeps its
  *  deliberate lack of a static import edge into the feature modules it orchestrates. */
@@ -260,6 +348,34 @@ const terminateBillingRef = makeFunctionReference<
   { tenantId: string },
   { hadSubscription: boolean; cancelled: boolean; failure: boolean; failureCode?: string }
 >("billing:terminateBilling");
+/**
+ * The three connector lanes that expose an INTERNAL disconnect. `makeFunctionReference` for the
+ * same reason as the billing arm: this module names its callees as strings rather than importing
+ * four provider modules into the erasure orchestrator.
+ *
+ * HubSpot is deliberately absent and is called through `api.hubspotAuth.disconnectHubSpot` below —
+ * it never grew a `disconnectForTenant`, and its tenant action derives the tenant from the
+ * authenticated identity exactly as the Google and Microsoft arms do, so no new surface was added
+ * to reach it. That asymmetry is recorded in docs/playbooks/connector-hubspot.md.
+ */
+const connectorDisconnectRefs = {
+  quickbooks: makeFunctionReference<
+    "action",
+    { tenantId: string; environment: "sandbox" | "production"; confirm: "revoke" },
+    { cleared: boolean; upstream: string; statusCode: number | null }
+  >("quickbooksAuth:disconnectForTenant"),
+  stripe: makeFunctionReference<
+    "action",
+    { tenantId: string; environment: "sandbox" | "production"; confirm: "revoke" },
+    { cleared: boolean; upstream: string; statusCode: number | null }
+  >("stripeAuth:disconnectForTenant"),
+  paypal: makeFunctionReference<
+    "action",
+    { tenantId: string; environment: "sandbox" | "production"; confirm: "revoke" },
+    { cleared: boolean; upstream: string; statusCode: number | null }
+  >("paypalAuth:disconnectForTenant"),
+} as const;
+
 const deleteTenantDataPageRef = makeFunctionReference<
   "mutation",
   {
@@ -344,6 +460,55 @@ export const deleteTenantData = tenantAction({
       }
     }
 
+    // ── THE CONNECTOR ARM (Phase 28) ──────────────────────────────────────────────────────────
+    // THIS MUST STAY ABOVE THE PAGE LOOP, for the same reason as billing: `connectorConnections`
+    // is `tenant_credential`, so the loop deletes the row holding the sealed credential the
+    // revocation needs. An arm below the loop could only ever report "nothing to revoke".
+    //
+    // WHAT THIS ARM CAN HONESTLY CLAIM IS NARROW, AND THAT IS THE POINT. Only QuickBooks documents
+    // a revocation endpoint. Stripe Apps have no documented platform-initiated revocation, PayPal
+    // documents none anywhere, and HubSpot's cascade to already-issued access tokens is unproven.
+    // `classifyRevokeOutcome` already refuses to say `confirmed` for those, so this arm reads the
+    // upstream state it returns rather than inferring one from "the call did not throw".
+    //
+    // A LANE THAT CANNOT REVOKE IS NOT A FAILURE. `failure` means we tried and could not, or
+    // something faulted — not that the vendor offers nothing. Reporting a documented absence as a
+    // failure on every erasure would train the reader to ignore the field, which is precisely how
+    // a real failure goes unnoticed. The absence is carried by `revokeUpstream: "unsupported"`.
+    const connectorOutcomes = new Map<
+      ConnectorProvider,
+      { hadRow: boolean; upstreams: RevocationUpstream[]; failure: boolean }
+    >();
+    for (const grant of connected.connectorGrants) {
+      const entry = connectorOutcomes.get(grant.provider) ?? {
+        hadRow: false,
+        upstreams: [],
+        failure: false,
+      };
+      entry.hadRow = true;
+      if (grant.sealed) {
+        try {
+          const outcome =
+            grant.provider === "hubspot"
+              ? await ctx.runAction(api.hubspotAuth.disconnectHubSpot, {
+                  environment: grant.environment,
+                })
+              : await ctx.runAction(connectorDisconnectRefs[grant.provider], {
+                  tenantId: ctx.tenantId,
+                  environment: grant.environment,
+                  confirm: "revoke" as const,
+                });
+          entry.upstreams.push(outcome.upstream as RevocationUpstream);
+        } catch {
+          // The call itself faulted, so nothing upstream was established. `attempted_failed` is
+          // the honest record: we tried, and we do not know that the grant is dead.
+          entry.upstreams.push("attempted_failed");
+          entry.failure = true;
+        }
+      }
+      connectorOutcomes.set(grant.provider, entry);
+    }
+
     const providers: ProviderDeletionResult[] = [
       {
         provider: "google",
@@ -366,6 +531,28 @@ export const deleteTenantData = tenantAction({
         revokedAtProvider: billingCancelled,
         failure: billingFailure,
       },
+      // APPENDED after billing, in `CONNECTOR_PROVIDERS` order, and only for providers that
+      // actually had a row — so a tenant who never connected a connector produces the same
+      // three-entry array every existing assertion was written against.
+      ...CONNECTOR_PROVIDERS.flatMap((provider): ProviderDeletionResult[] => {
+        const outcome = connectorOutcomes.get(provider);
+        if (outcome === undefined) return [];
+        // No sealed grant means nothing was asked of the provider. `not_attempted` says that,
+        // rather than `unsupported`, which would libel a provider we never called.
+        const upstream =
+          outcome.upstreams.length === 0 ? "not_attempted" : leastReassuring(outcome.upstreams);
+        return [
+          {
+            provider,
+            localRowDeleted: outcome.hadRow,
+            // ONLY `confirmed` earns this. Three of the four lanes can never reach it today, and
+            // that is the truth the tenant is owed rather than a defect to paper over.
+            revokedAtProvider: upstream === "confirmed",
+            failure: outcome.failure,
+            revokeUpstream: upstream,
+          },
+        ];
+      }),
     ];
 
     const deletedByTable: Record<string, number> = {};

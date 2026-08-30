@@ -834,11 +834,16 @@ implying it happened.
   no Phase 28 plan asks for one; a speculative table with no reader is a migration nobody needed
   (CLAUDE.md §8 rung 1). If a lane later proves a bounded cache is required, it adds one table with
   an explicit freshness column — a cache without a visible retrieval time would break Invariant 6.
-- **`tenantDelete.ts` reports per-provider disconnect truth for Google/Microsoft and does not yet
-  know about connector connections.** Erasure DOES delete the rows (they are `tenant_credential`),
-  but the deletion report says nothing about whether the four provider grants were revoked upstream
-  — which, per Invariant 12, is often "we could not". `tenantDelete.ts` is owned by
-  `audit-dead-letter.md` and no Phase 28 plan currently claims it. Flagged, not fixed.
+- **CLOSED 2026-08-31 (Phase 28 gap audit): `tenantDelete.ts` now has a connector arm.** It used to
+  delete the four connector rows without asking any provider to revoke. The arm sits ABOVE the page
+  loop (`connectorConnections` is `tenant_credential`, so the loop deletes the sealed blob the
+  revocation needs) and reports per provider. Per Invariant 12 the honest answer is usually "we
+  could not": only QuickBooks documents a platform-callable revocation, so the result carries the
+  closed `RevocationUpstream` enum as `revokeUpstream` rather than a boolean, and a documented
+  absence is recorded as `unsupported` WITHOUT being counted as a failure. That enum reaching the
+  `tenant.deleted` audit payload matters because the walk then deletes the row carrying
+  `revocation.upstream` — the audit row is the only place the truth survives an erasure.
+  `tenantDelete.ts` is owned by `audit-dead-letter.md`; the details are there.
 - **The connect-START is not yet gated, and 28-09 Task 2 owns closing it.** `hubspotAuth.hubspotConnectUrl`,
   `quickbooksAuth.beginConnect` and `stripeAuth.beginConnect` are `tenantAction`s that mint a state
   for any provider. Now that the callbacks exist, a tenant who called one directly could complete a

@@ -3,6 +3,68 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
+current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE, a GAP AUDIT, and the TENANTDELETE CONNECTOR ARM
+status: in_progress
+stopped_at: "THE LAST UNOWNED PHASE-28 GAP IS CLOSED (`abba1a2`). `tenantDelete.ts` deleted the four
+connector rows and never asked any provider to revoke, leaving up to four live grants into a
+business CRM, books and payment account with nothing in the record. `revenue-connectors.md` had it
+as `Flagged, not fixed` and NO PHASE 28 PLAN CLAIMED IT. Same defect class 28.1-08 closed for
+billing; the playbook note is now rewritten as CLOSED.
+ORDERING, as with billing: `connectorConnections` is `tenant_credential`, so the page loop deletes
+the sealed blob the revocation needs. The arm is a FOURTH revoke-first block above the loop.
+**PROVEN BY CONSEQUENCE, AND ONLY HUBSPOT CAN PROVE IT** -- `revokeGrant` returns `not_attempted`
+when the row is absent and reaches decryption when it is present, so above the loop yields
+`attempted_failed` and below it would yield `not_attempted`. PayPal and Stripe answer `unsupported`
+from a PURE CLASSIFIER without reading the row, so an assertion on either would have passed with the
+arm on EITHER side. My first version of that test used PayPal and was vacuous.
+**WHAT THE ARM MAY HONESTLY CLAIM IS NARROW.** Only QuickBooks documents a platform-callable
+revocation; Stripe Apps have none documented, PayPal none anywhere, HubSpot cascade unproven. So
+`revokedAtProvider` is true ONLY for `confirmed`, and a fifth field `revokeUpstream` carries the
+closed `RevocationUpstream` enum -- a boolean cannot separate `we asked and failed` from `this
+vendor offers nothing`, which is the collapse the four-value enum exists to prevent. A DOCUMENTED
+ABSENCE IS NOT A FAILURE: reporting one on every erasure trains the reader to ignore the field. The
+enum reaches the `tenant.deleted` payload because the walk deletes the row carrying
+`revocation.upstream` -- afterwards the audit row is the ONLY surviving record.
+**THREE closed shapes had to move together, not two:** the TS union, the Convex
+`providerResultValidator`, AND the hand-written `makeFunctionReference` return type for
+`authorizeTenantDeletion`, which does NOT follow handler inference. `tsc` caught the third. The 16
+new payload keys were hand-added to `AUDIT_VIEWER_EVENTS` for the same reason as 28.1-08 -- built
+from a template at the write site, so no literal exists for a forward scan.
+Entries are APPENDED and CONDITIONAL: a tenant with no connector rows still gets exactly the
+original three, which is its own regression test.
+**7 MUTATIONS, 7 KILLED, restored byte-identical -- and the round caught a VACUOUS TEST OF MINE:**
+the `sandbox and production disagree` case paired a sealed grant with an UNSEALED one, but an
+unsealed grant is never called and contributes no upstream value, so the list had ONE element and
+`take the first` survived. It now uses two grants that are both CALLED and answer DIFFERENTLY
+(ciphertext without an IV returns `not_attempted` without throwing).
+GATES: backend sharded **1516/1516 + 1717/1717 = 3233** (up exactly 8 = tenantDelete 13 -> 21),
+contracts 93/93, `tsc --noEmit` exit 0, `biome check` exit 0, playbook gate silent.
+**REMAINING PHASE 28 GAPS ALL HAVE PLANS:** connectorConnections.ts + Connections UI + the ungated
+connect-START (28-09); the five revenue* modules (28-12/13/14); `check-phase28-completion.mjs`
+(28-27); `recordLaneFailure` has no production caller BY DESIGN.
+**NEXT AND IT NEEDS THE OWNER:** (1) seal a gate row --
+`check-provider-lane.mjs --provider hubspot --seal-decision from-owner --apply` (shells out to
+`npx convex run`, which THIS SESSION MUST NOT RUN); (2) register
+`http://localhost:3211/connectors/hubspot/callback/production` in the HubSpot developer app and
+complete the consent; (3) `smoke-hubspot-read.mjs --revoke`; (4) 28-22 judges on real evidence and
+waves 8-20 unblock. Deployment env already set: `CONNECTOR_CREDENTIAL_KEY_V1` (32 bytes verified),
+`HUBSPOT_OAUTH_CLIENT_ID`/`_CLIENT_SECRET`/`_REDIRECT_URI`.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-31T01:30:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 336
+  percent: 80
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
 current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE and a connector-plane GAP AUDIT
 status: in_progress
 stopped_at: "GAP AUDIT of the connector plane (`1eaf5d2`), after the callback slice (`ad12c4e`).

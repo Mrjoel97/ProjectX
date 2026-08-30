@@ -1,6 +1,39 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-08-30 (28.1-08 — **THE ERASURE SEQUENCE HAS A THIRD PROVIDER ARM: BILLING.**
+> Last verified: 2026-08-31 (Phase 28 gap audit — **THE ERASURE SEQUENCE NOW HAS A CONNECTOR ARM,
+> AND IT IS THE FIRST ONE THAT IS HONEST ABOUT NOT REVOKING.** `tenantDelete.ts` deleted the four
+> Phase 28 connector rows and never asked any provider to revoke, leaving up to four live grants
+> into a business CRM, books and payment account with nothing in the record to say so;
+> `revenue-connectors.md` carried it as "Flagged, not fixed" and no Phase 28 plan claimed it.
+>
+> Same ordering constraint as billing: `connectorConnections` is `tenant_credential`, so the arm
+> sits ABOVE the page loop that deletes the row holding the sealed blob. **Proven by consequence
+> with HubSpot specifically** — `revokeGrant` returns `not_attempted` when the row is absent and
+> reaches decryption when it is present, so the arm above the loop yields `attempted_failed` and
+> below it would yield `not_attempted`. PayPal and Stripe could NOT prove this: they answer
+> `unsupported` from a pure classifier without reading the row, so an assertion on them would pass
+> with the arm on either side. Picking the wrong provider is how this test would have been vacuous.
+>
+> **`ProviderDeletionResult` gained a fifth field, `revokeUpstream`, and it is the point of the
+> arm.** Only QuickBooks documents a platform-callable revocation; Stripe Apps have none documented,
+> PayPal none anywhere, and HubSpot cascade is unproven — so `revokedAtProvider: false` alone cannot
+> separate "we asked and failed" from "this vendor offers nothing". After the walk deletes
+> `connectorConnections`, the `tenant.deleted` payload is the ONLY surviving record of that, so the
+> closed `RevocationUpstream` enum is carried into it. **A documented absence is NOT a failure** —
+> reporting one on every erasure trains the reader to ignore the field, which is how a real failure
+> goes unnoticed. Entries are appended and CONDITIONAL, so a tenant with no connector rows still
+> produces exactly the original three and every assertion indexing them stays true.
+>
+> THREE closed shapes had to move together this time, not two: the TypeScript union, the Convex
+> `providerResultValidator`, AND the hand-written `makeFunctionReference` return type for
+> `authorizeTenantDeletion`, which does not follow the handler inference. `tsc` caught the third.
+> The 16 new `tenant.deleted` payload keys were added to `AUDIT_VIEWER_EVENTS` by hand for the same
+> reason as 28.1-08: they are built from a template at the write site, so no literal exists for a
+> forward scan to find. `tenantDelete.test.ts` 13 -> **21/21**, **7 mutations, 7 killed** — and the
+> mutation round caught a VACUOUS test of its own: the "sandbox and production disagree" case
+> originally paired a sealed grant with an unsealed one, but an unsealed grant is never called and
+> contributes no upstream value, so the list had ONE element and "take the first" survived. It now
+> uses two grants that are both called and answer differently. Prior: 2026-08-30, 28.1-08 — **THE ERASURE SEQUENCE HAS A THIRD PROVIDER ARM: BILLING.**
 >
 > `tenantDelete.ts` said nothing about billing, so erasing a tenant left a live Stripe subscription
 > charging a card belonging to nobody (BILL-06). The arm is a third block of the exact shape Google
