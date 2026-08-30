@@ -1,6 +1,34 @@
 # Playbook: Persona Onboarding & Business Profile
 
-> Last verified: 2026-08-31 (28-09 — **THE PHASE 28 CONNECTOR ROWS ARRIVE ON THIS SURFACE AS A PURE
+> Last verified: 2026-08-31 (28-09 Task 2 — **THE CONNECTOR ROWS ARE NOW WIRED AND ARE NO LONGER AN
+> ISLAND.** `ConnectionsPanel.tsx` renders `<ConnectorRows />`, which reads
+> `connectorConnections.connections` and maps each row through `connectorRowView`. The entry below,
+> written by the 33.1 lane from the working tree a few minutes earlier, correctly said the module
+> had ZERO callers; that is now false and is corrected here rather than left to mislead — a
+> playbook claim about another module is only as true as the moment it was checked.
+>
+> **THE PANEL STILL RENDERS NOTHING TODAY, and for a different reason than "unwired".** The row set
+> is a function of the SERVER GATE: `connections` returns only lanes that resolve to `passed`, and
+> every lane is `parked`. So `ConnectorRows` returns `null` and the section shows Google, Microsoft
+> and the blocked list exactly as before. That is the correct amount of promise to make about
+> connectors that have never spoken to a provider — and it flips on with no UI change the moment a
+> lane is sealed.
+>
+> **THE ROWS ARE MOUNTED ABOVE THE BLOCKED LIST, AND THE PLACEMENT IS LOAD BEARING.**
+> `connectionsSurface.test.ts` slices the blocked-list block and asserts it contains no button,
+> href or onClick. Connector rows are interactive, so mounting them below turns that scan red for a
+> reason that has nothing to do with the change. **Naming the scan delimiters in a comment breaks it
+> too** — the first draft of that comment quoted both literals, `indexOf` landed on the comment, and
+> the scan sliced 37 characters of prose instead of the block.
+>
+> **THE DISCONNECT BUTTON SAYS WHAT IT WILL ACTUALLY DO, BEFORE IT IS PRESSED.** For three of the
+> four lanes Pikar cannot revoke upstream, so `revokeSupport` drives a caveat rendered NEXT TO the
+> button — not behind a confirm dialog, because a warning a user sees only after deciding arrived
+> too late. The three classes produce three DIFFERENT sentences and a test pins that, since one
+> shared string would re-collapse the distinction `RevocationUpstream` exists to keep.
+> `connectorRows.test.ts` 15/15, `connectionsSurface.test.ts` 30/30, web `tsc` 0.
+>
+> Prior (28-09 — **THE PHASE 28 CONNECTOR ROWS ARRIVE ON THIS SURFACE AS A PURE
 > DERIVATION, AND THEY ARE NOT ON SCREEN YET.** `connectorRows.ts` + `connectorRows.test.ts` under
 > `dashboard/profile/`. Read from the working tree by the 33.1 lane, which does not own this
 > subsystem; recorded because §9 asks a change to travel with its playbook.
