@@ -1,5 +1,76 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-31 (33.1-06 — **THE `media-director` BODY NOW TEACHES THE GRID AND THE CAP
+> THE CODE ACTUALLY ENFORCES, AND THE ONE COST FIGURE LEFT IN IT IS GUARDED BY A DERIVED TEST.**
+> AUTHORED, NOT LIVE: nothing below reaches a model until `seedSkills` runs in the main tree, which
+> is 33.1-06 Task 3 and has not happened.
+>
+> **`media-director` IS DELIBERATELY UNGATED, and this is the fact to read first before editing it.**
+> `skillBodies.test.ts:130` asserts `isGatedSkill(MEDIA_DIRECTOR_SKILL) === false` and it is not an
+> oversight: `run-eval-golden.mjs` derives its `--skill` list from `GATED_SKILLS` and drives
+> `runCockpitAgent` over TEXT fixtures, which structurally cannot exercise a
+> script/art-direction/storyboard turn. Gating it would strand it at v1 on its first body edit with
+> no runner able to clear the gate. **Do not "tidy up the gate list".**
+>
+> The consequence is the thing to hold onto: **`seedSkills` publishes at `maxVersion + 1` straight
+> to ACTIVE, with no eval between the prose and production.** There is no EVAL_GATE to run here and
+> no ~$0.35 to spend. Everything that stands between a bad sentence and a live cockpit is offline.
+>
+> **What changed in the body.** Four edits, and only the first two were in the plan:
+> 1. The grid rule: a `generated_video` scene may be **any whole number of seconds from 1 to 15**,
+>    not 4/8/12. The old sentence's argument — that 4, 8 and 12 are all multiples of four so an
+>    all-generated reel cannot sum to 15 or 30 — became FALSE with the grok repin, and *"Every legal
+>    reel therefore mixes kinds"* went with it. Replaced by a COST argument. The
+>    **"THE ORDER TO REACH IN"** section is untouched on purpose: ADR-027 records that it is now the
+>    only remaining defence, and weakening it in the same edit that removed the structural one would
+>    have been the worst available combination.
+> 2. The worked answer now SHOWS the new grid rather than describing it — VARIATION A's generated
+>    scenes are **5 s and 7 s**, the two lengths that produced the owner's live
+>    `illegal_generated_duration` on 2026-08-30. Their total is still exactly 12, so the deck stays
+>    on the right side of the cap with the same zero slack ADR-027 noted.
+> 3. **The generated-seconds cap is now TAUGHT, and it was not before.** The body said *"at most
+>    three or four `generated_video` scenes in a reel"*. Under `MEDIA_GENERATED_SECONDS_CAP = 12`
+>    that advice PRODUCES REFUSED DECKS: four 4-second clips is 16 seconds, three 5-second clips is
+>    15, and both are rejected whole with nothing trimmed. A code-owned refusal the prose never
+>    learned about — this repo's *"a backend fix that never reaches the renderer"*, one layer up,
+>    where the renderer is the model. The scene-COUNT advice is **deleted**, not supplemented: a
+>    body carrying two rules that disagree gets the easier one followed.
+> 4. **FOUR numeric cost claims collapsed to ONE.** This literal has now gone stale three times
+>    ("a tenth" → "a fortieth" → wrong again after the 33.1-03 reprice). The audit's prescription
+>    was *derive, don't restate* — but **a skill body cannot derive anything**; it is a static
+>    string handed to a model. So the equivalent is: state it in exactly one place, make the other
+>    three qualitative ("a small fraction", "dramatically cheaper"), and put a test over the one
+>    that computes what it must say.
+>
+> **THE TWO NEW GUARDS, and the mutations that prove they can fail** (`packages/cost/src/media.test.ts`):
+> - the body's single `N times` figure must equal `round(sceneVisualSpec("generated_video",4).usd /
+>   sceneVisualSpec("animated_image",4).usd)`, and there must be **exactly one** such figure — a
+>   count, not an "at least one", so a second rot site cannot be added back silently. Mutation:
+>   `47 times` → `40 times` reddens it with the derived number in the message.
+> - the body must contain the cap sentence naming `MEDIA_GENERATED_SECONDS_CAP`, and must NOT still
+>   carry the old scene-count advice. Mutation: deleting the cap sentence reddens it.
+>
+> **THE ROUND TRIP IS STILL THE ONLY PRE-LIVE GATE**
+> (`packages/core/src/storyboard.test.ts:316`). It `readFileSync`s the `.md`, runs `parseVariations`
+> first and then every per-deck rule against BOTH variations. Mutation-verified again here the way
+> 33-09 did it: reverting the worked answer's scene 1 from 5 s to 4 s **without** rebalancing
+> reddened **15 assertions** — the same count 33-09 measured for a mismatched target, so the gate is
+> genuinely parsing the shipped example and not decorating it.
+>
+> **REGENERATING THE DERIVED `.ts` IS A MANUAL STEP AND THERE IS NO COMMITTED GENERATOR.** The
+> Convex runtime cannot `fs.read` repo files, so `packages/contracts/src/skills/mediaDirector.ts` is
+> what actually ships and `skillBodies.test.ts` holds it byte-identical to the `.md` (LF-normalized).
+> Regenerate with a throwaway `JSON.stringify` of the `.md` spliced in after
+> `export const mediaDirectorSkillBody =`, then `biome check --write` (it prefers double quotes).
+> **If `skillBodies.test.ts` is red after a body edit, the regeneration is stale — not the test.**
+>
+> **What is NOT verified.** No model has read this body. Repo memory is explicit that a body edit
+> once made the model start passing an optional enum it had never passed before and broke an
+> unrelated fixture, so 33.1-06 Task 3 A/Bs one fixture against the previous active version before
+> trusting it. And the active version number this lands at is **not predictable from any plan** —
+> optimizer dry-run candidates occupy version numbers, and phase 10 shipped at `@14` where its plan
+> said `@13`. Read it back; a recorded version that was never read back is a guess.)
+
 > Last verified: 2026-08-27 (**THE EVAL SUITE MANIFEST WAS STALE FOR EVERYONE, AND RE-CUTTING IT
 > INVALIDATES EVERY RECORDED EVIDENCE ROW.** Four case files had drifted from earlier lanes' commits
 > while `AGENT_EVAL_SUITE` still named `2026-08-18.phase23`. `hasPassingEvidence` matches all THREE

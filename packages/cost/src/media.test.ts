@@ -648,6 +648,68 @@ describe("the scene-kind price table — §2.3, and why the cheap kinds are not 
       expect(chooseMediaBatch([...specs, { kind: "render" }], MEDIA_JOB_CAP_USD).ok).toBe(true);
     }
   });
+
+  it("THE BODY'S STATED COST MULTIPLE IS THE DERIVED ONE — the fourth rot of the same literal", () => {
+    // This literal has now gone stale THREE times: `media.md` records it as "a tenth" until 33-06,
+    // then "a fortieth", and 33.1-03's reprice made that wrong again while four surfaces kept
+    // saying forty. The audit's fix was "derive, don't restate" — and 33.1-04 did exactly that for
+    // the screen (`CLIP_VS_STILL_RATIO` is computed at render).
+    //
+    // A SKILL BODY CANNOT DERIVE ANYTHING. It is a static string handed to a model, so the number
+    // has to be written out. What is available instead is this: state it in exactly ONE place, and
+    // put a test over that place which computes what it must say. The prose still restates; the
+    // restatement is no longer unfalsifiable.
+    //
+    // 33.1-06 reduced the body from FOUR numeric ratio claims to one for this reason. The other
+    // three now say "a small fraction" / "dramatically cheaper" and point at this one — qualitative
+    // prose cannot go stale, and a claim that cannot go stale needs no guard.
+    const body = read("../../contracts/skills/media-director.md");
+    const clip = sceneVisualSpec("generated_video", 4);
+    const still = sceneVisualSpec("animated_image", 4);
+    if (!clip.ok || !still.ok || clip.value === null || still.value === null) {
+      throw new Error("the two kinds the body compares must both price");
+    }
+    const derived = Math.round(clip.value.usd / still.value.usd);
+
+    // EXACTLY ONE numeric "N times" in the whole body. Not "at least one": a second numeric claim
+    // is a second thing to rot, and the count is what stops one being added back silently. The
+    // word-number forms elsewhere ("a hundred times before", "three times a week") are narration
+    // and example prose, carry no cost claim, and are deliberately not matched.
+    const stated = [...body.matchAll(/(\d+) times/g)].map((m) => Number(m[1]));
+    expect(
+      stated,
+      "the body must state its cost multiple exactly once, as digits. Found: " +
+        JSON.stringify(stated),
+    ).toHaveLength(1);
+    expect(
+      stated[0],
+      `media-director.md says a clip costs ${stated[0]}x a still; the price tables now say ` +
+        `${derived}x. Fix the BODY (packages/contracts/skills/media-director.md, the SCENE DECK ` +
+        "rules) and regenerate mediaDirector.ts — never this assertion.",
+    ).toBe(derived);
+
+    // The two historical spellings, named explicitly. This is a regression guard on the exact rot
+    // that happened, not a blocklist over an open vocabulary — those cannot fail usefully.
+    expect(body).not.toMatch(/fortieth|forty times/);
+  });
+
+  it("THE BODY TEACHES THE GENERATED-SECONDS CAP, and teaches the number the code enforces", () => {
+    // Before 33.1-06 the body said "at most three or four `generated_video` scenes in a reel" and
+    // said nothing about a seconds total. Under `MEDIA_GENERATED_SECONDS_CAP` that advice PRODUCES
+    // REFUSED DECKS: four 4-second clips is 16 generated seconds, three 5-second clips is 15, and
+    // both are rejected whole. A code-owned refusal the prose never learned about is this repo's
+    // "a backend fix that never reaches the renderer", one layer up — the renderer here being the
+    // model that reads the body.
+    const body = read("../../contracts/skills/media-director.md");
+    expect(
+      body,
+      `the body must state the ${MEDIA_GENERATED_SECONDS_CAP}-second generated total, or it ` +
+        "teaches decks the reservation refuses",
+    ).toContain(`at most ${MEDIA_GENERATED_SECONDS_CAP} seconds of \`generated_video\` IN TOTAL`);
+    // And the old scene-COUNT advice must be gone, not merely supplemented: a body carrying both
+    // gives the model two rules that disagree, and it will follow the one that is easier to satisfy.
+    expect(body).not.toMatch(/at most three or four `generated_video` scenes/);
+  });
 });
 
 describe("SC5 — the ceiling and its upgrade path exist in the source", () => {

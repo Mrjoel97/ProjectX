@@ -145,8 +145,9 @@ order: `#`, `Visual`, `Seconds`, `Description`, `Narration`, `Text overlay`, `As
 
 - **`Visual` is a CLOSED set of six, and every one of them renders.** Nothing else parses.
   - `generated_video` — a clip the system generates. The expensive one.
-  - `animated_image` — ONE still, slowly panned across the whole scene. About **forty times
-    cheaper** than a generated clip of the same length, and it can be any length at all.
+  - `animated_image` — ONE still, slowly panned across the whole scene. **Dramatically cheaper**
+    than a generated clip of the same length — see the multiple under SCENE DECK — and it can be
+    any length at all, at the same price.
   - `stock_video` — a real clip from a free library, found from this scene's own SCENE PROMPT.
     **Free, and it is moving footage.** Any length. Use it wherever the shot is something the world
     already contains — a city street at dawn, hands on a keyboard, coffee being poured, traffic,
@@ -169,20 +170,30 @@ order: `#`, `Visual`, `Seconds`, `Description`, `Narration`, `Text overlay`, `As
 - **The `Seconds` column must add up to the target EXACTLY.** Whole seconds only. A deck that
   sums to 28 when it declared 30 is refused before anything is bought — the system will not
   quietly stretch or trim a scene to make the arithmetic work.
-- **A `generated_video` scene may only be 4, 8 or 12 seconds.** That is the generator's grid and
-  there is nothing in between. **The other three kinds are any length, and that is not a detail:
-  4, 8 and 12 are all multiples of four, so a reel built ONLY from generated clips cannot hit 15
-  or 30 seconds at all, and a 60-second one costs more than the whole job is allowed to.** Every
-  legal reel therefore mixes kinds.
+- **A `generated_video` scene may be any whole number of seconds from 1 to 15.** 5 and 7 are as
+  legal as 4 and 8; write the length the shot actually needs. The other three kinds are any length.
+- **A reel may spend at most 12 seconds of `generated_video` IN TOTAL, across every scene.** This is
+  a hard refusal and not a guideline: a deck over it is rejected whole, before anything is bought,
+  with nothing trimmed for you. **Count it before you write the prompts.** Three 4-second clips is
+  exactly 12 and legal; four of them is 16 and refused; three 5-second clips is 15 and refused.
+- **Why the mix, now that the arithmetic no longer forces it.** A generated second costs about
+  **$0.07**. An `animated_image` costs the SAME whether it is on screen for 2 seconds or 12 — so a
+  4-second clip costs about **47 times** a still covering the same 4 seconds, and the gap only
+  widens as the clip gets longer. A reel built only from generated clips is
+  no longer impossible to add up, just far more expensive and capped at 12 seconds anyway. **Mixing
+  kinds is now a cost discipline rather than an arithmetic necessity, and the order below IS that
+  discipline.** Follow it because nothing else will make you.
 - **THE ORDER TO REACH IN.** `stock_video` or `stock_image` first, when the shot is something the
-  world already contains. Then `animated_image`, which costs about a fortieth of a clip and can be
-  anything you can describe. Spend a `generated_video` only where the shot must show something
+  world already contains. Then `animated_image`, which costs a small fraction of a clip — the
+  multiple is stated once above — and can be anything you can describe. Spend a `generated_video` only where the shot must show something
   specific to THIS business that no library holds, and where motion is the point. A deck that
   reaches for a generated clip out of habit is a deck that will be refused for cost while a free
   kind was sitting right there.
-- **Budget: at most three or four `generated_video` scenes in a reel**, and fewer is better. The
-  whole job — pictures, voice, captions and render — is capped, and a deck over the cap is
-  refused after you have written it rather than trimmed for you.
+- **Budget: the 12-second generated total above is the real limit, not a scene count.** Three
+  4-second clips and two 6-second ones are both at the ceiling; one 12-second clip spends the whole
+  allowance on a single shot. Fewer and shorter is better. The whole job — pictures, voice, captions
+  and render — is separately capped too, and a deck over either cap is refused after you have
+  written it rather than trimmed for you.
 - **A scene may be SILENT.** Leave the `Narration` cell empty when the picture should carry the
   moment. Silence is a real choice — but a reel where EVERY scene is silent is refused, and a
   card that says one thing while the narration says another is worse than either alone.
@@ -207,7 +218,7 @@ should be arguable against each other — a founder's own account against the ar
 demonstration against a testimonial, a warm room against a printed page.
 
 The kind mix is part of that. A cinematic concept spends its generated clips where motion is the
-point; a graphic concept can be stills and cards end to end and costs a fortieth as much. Two
+point; a graphic concept can be stills and cards end to end and costs a small fraction as much. Two
 decks with the same kinds in the same order are one deck with different words.
 
 ## 5. SCENE PROMPTS
@@ -287,9 +298,12 @@ token — refuses the whole deck. Use one of the two forms above, or leave the l
 - Are they genuinely different CONCEPTS — a different angle AND a different visual treatment —
   rather than one script shot twice?
 - Does each deck declare the brief's duration, and does each `Seconds` column add up to it EXACTLY?
-- Is every `Visual` from the closed set of six, is every `generated_video` scene 4, 8 or 12
-  seconds, does every `text_card` carry a `Text overlay`, and does every `uploaded_video` name a
-  document you actually found?
+- Is every `Visual` from the closed set of six, is every `generated_video` scene a whole number of
+  seconds between 1 and 15, does every `text_card` carry a `Text overlay`, and does every
+  `uploaded_video` name a document you actually found?
+- **Add up the `Seconds` of the `generated_video` scenes ONLY. Is that total 12 or less?** Do this
+  arithmetic explicitly, in each deck, before you write a single scene prompt. Over 12 and the whole
+  deck is refused.
 - Is every `stock_video` / `stock_image` prompt a SEARCH — a few plain words, no camera move, no
   lighting note, no brand name — and is it a shot the world already contains rather than
   something specific to this business?
@@ -347,11 +361,11 @@ SCENE DECK
 Target duration: 30
 | # | Visual | Seconds | Description | Narration | Text overlay | Asset |
 |---|--------|---------|-------------|-----------|--------------|-------|
-| 1 | generated_video | 4 | Founder alone in a quiet office before opening, laptop shut, coffee steaming | Founders lose ninety minutes a day to the inbox. | NINETY MINUTES | |
+| 1 | generated_video | 5 | Founder alone in a quiet office before opening, laptop shut, coffee steaming | Founders lose ninety minutes a day to the inbox. | NINETY MINUTES | |
 | 2 | animated_image | 6 | A single thread unfolding into one clean card, everything else fading back | Pikar reads the whole thread overnight and drafts the reply in your voice. | | |
 | 3 | stock_video | 8 | Hands typing steadily at a laptop, the same motion over and over | Most of it is replies you have written a hundred times before, in slightly different words. | | |
 | 4 | text_card | 4 | A held beat on the promise, no picture competing with it | | YOU APPROVE | |
-| 5 | generated_video | 8 | Hand closing a laptop in warm evening light, desk already clear | Nothing sends until you approve it, and every send is written down. | | |
+| 5 | generated_video | 7 | Hand closing a laptop in warm evening light, desk already clear | Nothing sends until you approve it, and every send is written down. | | |
 
 SCENE PROMPTS
 
@@ -376,7 +390,7 @@ Settings: 9:16, 1080x1920
 
 VARIATION B
 
-The arithmetic, told as a printed page. No footage at all, so it costs a fortieth of A. Note that it uses no stock either, and that is a decision rather than an oversight: this variation's art direction forbids photographs, and a free kind is only free if it is still the reel you meant. Cheapness never overrules the art direction.
+The arithmetic, told as a printed page. No generated footage at all, so its pictures cost a small fraction of A's. Note that it uses no stock either, and that is a decision rather than an oversight: this variation's art direction forbids photographs, and a free kind is only free if it is still the reel you meant. Cheapness never overrules the art direction.
 
 SCRIPT
 
