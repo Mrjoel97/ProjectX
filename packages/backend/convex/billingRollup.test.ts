@@ -12,7 +12,8 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { codeOf } from "../__fixtures__/sourceScan";
-import { internal } from "./_generated/api";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
   CLAIM_STALE_MS,
@@ -21,6 +22,7 @@ import {
   MAX_PERIOD_ATTEMPTS,
   MAX_PERIOD_CHARGES,
   PERIOD_SCAN_LIMIT,
+  type PostedCharge,
   periodKeyFor,
   prepareInvoice,
 } from "./billingRollup";
@@ -44,12 +46,32 @@ const rollupCode = (): string => {
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
 
+/** Provenance on a HAND-SEEDED charge. Real ones carry the owner identity `raiseAdjustment`
+ *  reads from `ctx`; these rows have no producer behind them and say so. */
+const SEEDED_BY = "seeded_by_test";
+
+const aggregateModules = import.meta.glob(
+  "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+
+/** A backend that can take an AUDIT write. `audit.log` counts into the `auditCounts` aggregate
+ *  (OPSG-01), so any path that audits needs the component registered or it throws at the write. */
+function backendWithAudit() {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  return t;
+}
+
+/** Hand-written, NOT `Doc<"billingPeriods">["charges"][number]` — an oracle regenerated from its
+ *  subject cannot pin it. `raisedBy` is here because 28.1-10 made provenance required on every
+ *  charge; a seed that omits it is a seed for a row the producer could not have written. */
 type Charge = {
   ref: string;
   kind: "subscription" | "usage" | "adjustment";
   amountMinor: number;
   currency: string;
   occurredAt: number;
+  raisedBy: string;
 };
 
 /** One tenant on a fresh backend. `tenantOn` shape from `billing.test.ts`. */
@@ -97,6 +119,7 @@ async function seedPeriod(
           amountMinor: 4900,
           currency: "USD",
           occurredAt: periodStart + DAY,
+          raisedBy: SEEDED_BY,
         },
       ],
       attempts: over.attempts ?? 0,
@@ -775,6 +798,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
           amountMinor: 700,
           currency: "USD",
           occurredAt: periodStart + DAY,
+          raisedBy: SEEDED_BY,
         },
         {
           ref: "next-month",
@@ -782,6 +806,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
           amountMinor: 999_999,
           currency: "USD",
           occurredAt: periodEnd + DAY,
+          raisedBy: SEEDED_BY,
         },
         {
           // THE BOUNDARY, not the line. `periodEnd` is the NEXT period's first instant, so a
@@ -791,6 +816,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
           amountMinor: 777_777,
           currency: "USD",
           occurredAt: periodEnd,
+          raisedBy: SEEDED_BY,
         },
         {
           ref: "last-month",
@@ -798,6 +824,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
           amountMinor: 888_888,
           currency: "USD",
           occurredAt: periodStart - DAY,
+          raisedBy: SEEDED_BY,
         },
       ],
     });
@@ -819,7 +846,16 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
     const id = await seedPeriod(t, tenantId, {
       periodStart: now - 30 * DAY,
       periodEnd: now - DAY,
-      charges: [{ ref: "late", kind: "usage", amountMinor: 700, currency: "USD", occurredAt: now }],
+      charges: [
+        {
+          ref: "late",
+          kind: "usage",
+          amountMinor: 700,
+          currency: "USD",
+          occurredAt: now,
+          raisedBy: SEEDED_BY,
+        },
+      ],
     });
     stubStripe();
 
@@ -835,8 +871,22 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
     const now = Date.now();
     const id = await seedPeriod(t, tenantId, {
       charges: [
-        { ref: "a", kind: "usage", amountMinor: 100, currency: "USD", occurredAt: now - 2 * DAY },
-        { ref: "b", kind: "usage", amountMinor: 100, currency: "EUR", occurredAt: now - 2 * DAY },
+        {
+          ref: "a",
+          kind: "usage",
+          amountMinor: 100,
+          currency: "USD",
+          occurredAt: now - 2 * DAY,
+          raisedBy: SEEDED_BY,
+        },
+        {
+          ref: "b",
+          kind: "usage",
+          amountMinor: 100,
+          currency: "EUR",
+          occurredAt: now - 2 * DAY,
+          raisedBy: SEEDED_BY,
+        },
       ],
     });
     stubStripe();
@@ -859,6 +909,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
           amountMinor: 100,
           currency: "USD",
           occurredAt: now - 2 * DAY,
+          raisedBy: SEEDED_BY,
         },
         {
           ref: "same",
@@ -866,6 +917,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
           amountMinor: 250,
           currency: "USD",
           occurredAt: now - 2 * DAY,
+          raisedBy: SEEDED_BY,
         },
       ],
     });
@@ -887,6 +939,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
       amountMinor: 10,
       currency: "USD",
       occurredAt: now - 2 * DAY,
+      raisedBy: SEEDED_BY,
     }));
     const id = await seedPeriod(t, tenantId, { charges });
     stubStripe();
@@ -905,7 +958,14 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
     const now = Date.now();
     const id = await seedPeriod(t, tenantId, {
       charges: [
-        { ref: "free", kind: "usage", amountMinor: 0, currency: "USD", occurredAt: now - 2 * DAY },
+        {
+          ref: "free",
+          kind: "usage",
+          amountMinor: 0,
+          currency: "USD",
+          occurredAt: now - 2 * DAY,
+          raisedBy: SEEDED_BY,
+        },
       ],
     });
     stubStripe();
@@ -928,6 +988,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
           amountMinor: -500,
           currency: "USD",
           occurredAt: now - 2 * DAY,
+          raisedBy: SEEDED_BY,
         },
       ],
     });
@@ -960,7 +1021,7 @@ describe("the module shape is the design", () => {
 
 describe("prepareInvoice decides the whole document before a byte goes out", () => {
   const window = { periodStart: 1_000_000, periodEnd: 2_000_000 };
-  const charge = (over: Partial<Charge> = {}): Charge => ({
+  const charge = (over: Partial<PostedCharge> = {}): PostedCharge => ({
     ref: "r1",
     kind: "usage",
     amountMinor: 100,
@@ -1014,5 +1075,299 @@ describe("prepareInvoice decides the whole document before a byte goes out", () 
     expect(
       prepareInvoice({ ...window, charges: [charge({ occurredAt: window.periodEnd })] }),
     ).toEqual({ ok: false, code: "no_charges_in_period" });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-10 (BILL-04) — raiseAdjustment: the ONE writer of `billingPeriods.charges`.
+//
+// 28.1-07 built the rollup and proved it with 28 mutations while NOTHING wrote a period row, so
+// the cron ran daily, found nothing due, and did nothing — for every tenant, forever. Every period
+// above this line is seeded by hand. Below it, the rollup has a real input.
+//
+// It is owner-only and it is NOT a tenant surface: a tenant must not be able to bill themselves,
+// and must not be able to bill anyone else. `kind` is hard-coded at the call site — not a
+// parameter — because a parameter is how the metered kind gets written by accident, and the
+// phase's locked decision is that metering stays internal for v1.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("raiseAdjustment — an owner one-off charge, and the only writer of a period", () => {
+  const OWNED = "tenant_billed";
+
+  /** An owner identity plus the tenant they are billing. The owner's OWN tenant is their userId. */
+  async function ownerOn(t: ReturnType<typeof convexTest>) {
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    return { ownerId, as: t.withIdentity({ subject: `${ownerId}|session` }) };
+  }
+
+  async function plainOn(t: ReturnType<typeof convexTest>) {
+    const userId = await t.run((ctx) => ctx.db.insert("users", {}));
+    return { userId, as: t.withIdentity({ subject: `${userId}|session` }) };
+  }
+
+  const periodsOf = (t: ReturnType<typeof convexTest>) =>
+    t.run((ctx) => ctx.db.query("billingPeriods").collect());
+
+  type RaiseOver = Partial<{
+    tenantId: string;
+    ref: string;
+    amountMinor: number;
+    currency: string;
+    occurredAt: number;
+  }>;
+
+  const raise = (
+    as: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
+    over: RaiseOver = {},
+  ) =>
+    as.mutation(api.billingRollup.raiseAdjustment, {
+      tenantId: over.tenantId ?? OWNED,
+      ref: over.ref ?? "setup-fee",
+      amountMinor: over.amountMinor ?? 25000,
+      currency: over.currency ?? "USD",
+      ...(over.occurredAt === undefined ? {} : { occurredAt: over.occurredAt }),
+    });
+
+  test("a NON-owner is refused and writes NOTHING", async () => {
+    const t = backendWithAudit();
+    const { as } = await plainOn(t);
+    await expect(raise(as)).rejects.toThrow(/OWNER_REQUIRED/);
+    // The refusal is only worth anything if no row exists afterwards. A throw that has already
+    // written is not a refusal.
+    expect(await periodsOf(t)).toEqual([]);
+  });
+
+  test("an UNAUTHENTICATED caller is refused and writes NOTHING", async () => {
+    const t = backendWithAudit();
+    await expect(
+      t.mutation(api.billingRollup.raiseAdjustment, {
+        tenantId: OWNED,
+        ref: "setup-fee",
+        amountMinor: 25000,
+        currency: "USD",
+      }),
+    ).rejects.toThrow();
+    expect(await periodsOf(t)).toEqual([]);
+  });
+
+  test("an owner first charge OPENS the period, pending, with a window tick can claim", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    await raise(as);
+
+    const rows = await periodsOf(t);
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row?.tenantId).toBe(OWNED);
+    expect(row?.status).toBe("pending");
+    expect(row?.attempts).toBe(0);
+    expect(row?.charges).toHaveLength(1);
+    // The window has to be the one `prepareInvoice` filters against, or the charge is opened into
+    // a period that will refuse it with `no_charges_in_period` — a bill for nothing.
+    const charge = row?.charges[0];
+    expect(charge?.occurredAt).toBeGreaterThanOrEqual(row?.periodStart ?? 0);
+    expect(charge?.occurredAt).toBeLessThan(row?.periodEnd ?? 0);
+    expect(row?.periodKey).toBe(periodKeyFor(OWNED, charge?.occurredAt ?? 0));
+  });
+
+  test("a second charge APPENDS to the same period — one row, two charges", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    await raise(as, { ref: "setup-fee" });
+    await raise(as, { ref: "custom-work", amountMinor: 9900 });
+
+    const rows = await periodsOf(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.charges.map((c: Charge) => c.ref)).toEqual(["setup-fee", "custom-work"]);
+  });
+
+  test("the SAME ref twice adds ONE charge — raising it again is not a second bill", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    await raise(as, { ref: "setup-fee", amountMinor: 25000 });
+    await raise(as, { ref: "setup-fee", amountMinor: 999_999 });
+
+    const rows = await periodsOf(t);
+    expect(rows[0]?.charges).toHaveLength(1);
+    // The FIRST amount stands. A replay must not silently revalue a charge either — `ref` is half
+    // the per-line Stripe idempotency key, so Stripe would replay line one and ignore the change.
+    expect(rows[0]?.charges[0]?.amountMinor).toBe(25000);
+  });
+
+  for (const status of ["claimed", "posted", "failed"] as const) {
+    test(`a ${status} period REFUSES a new charge — an invoice already sent cannot grow`, async () => {
+      const t = backendWithAudit();
+      const { as } = await ownerOn(t);
+      await raise(as, { ref: "setup-fee" });
+      const before = (await periodsOf(t))[0];
+      await t.run((ctx) => ctx.db.patch(before?._id as Id<"billingPeriods">, { status }));
+
+      await expect(raise(as, { ref: "too-late" })).rejects.toThrow();
+      const after = (await periodsOf(t))[0];
+      // Byte-identical, and still ONE row: opening a second period for a late charge would split
+      // one month across two invoices.
+      expect(await periodsOf(t)).toHaveLength(1);
+      expect(after?.charges).toEqual(before?.charges);
+    });
+  }
+
+  for (const [label, amountMinor] of [
+    ["zero", 0],
+    ["a negative", -100],
+    ["a float", 12.5],
+    ["a non-finite", Number.POSITIVE_INFINITY],
+    ["beyond MAX_SAFE_INTEGER", Number.MAX_SAFE_INTEGER + 2],
+  ] as const) {
+    test(`${label} amount is refused and writes NOTHING`, async () => {
+      const t = backendWithAudit();
+      const { as } = await ownerOn(t);
+      await expect(raise(as, { amountMinor })).rejects.toThrow(/positive safe integer/);
+      expect(await periodsOf(t)).toEqual([]);
+    });
+  }
+
+  test("a non-ref-safe ref is refused — it is half an HTTP header value", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    for (const ref of ["has space", "line\nbreak", "", "x".repeat(65)]) {
+      await expect(raise(as, { ref })).rejects.toThrow(/ref must be a ref-safe token/);
+    }
+    expect(await periodsOf(t)).toEqual([]);
+  });
+
+  test("an unusable currency is refused BY THE GUARD and writes NOTHING", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    // The MESSAGE, not merely a throw. Measured 2026-08-30: deleting the currency guard left a
+    // bare `rejects.toThrow()` green, because `normalizeCurrency`'s failed Result has no `value`
+    // and the SCHEMA then rejected `currency: undefined`. The refusal was real and the test was
+    // vacuous — and the day someone writes `currency.ok ? currency.value : args.currency`, an
+    // unnormalised currency reaches Stripe under a green suite.
+    await expect(raise(as, { currency: "XYZZY" })).rejects.toThrow(/unusable currency/);
+    expect(await periodsOf(t)).toEqual([]);
+  });
+
+  test("a non-ref-safe TENANT is refused — periodKeyFor derives a header value from it", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    await expect(raise(as, { tenantId: "tenant with space" })).rejects.toThrow();
+    expect(await periodsOf(t)).toEqual([]);
+  });
+
+  test("PROVENANCE: the stored author is the AUTHENTICATED owner, never an argument", async () => {
+    const t = backendWithAudit();
+    const { ownerId, as } = await ownerOn(t);
+    // A conflicting author passed in the request body. Convex rejects an unknown arg outright,
+    // which is the strongest possible answer; if the signature ever grows one, the STORED row must
+    // still carry the identity from `ctx`. This repo has shipped provenance laundering before.
+    await expect(
+      as.mutation(api.billingRollup.raiseAdjustment, {
+        tenantId: OWNED,
+        ref: "setup-fee",
+        amountMinor: 25000,
+        currency: "USD",
+        raisedBy: "somebody-else",
+      } as never),
+    ).rejects.toThrow();
+
+    await raise(as);
+    const rows = await periodsOf(t);
+    expect(rows[0]?.charges[0]?.raisedBy).toBe(String(ownerId));
+    expect(rows[0]?.charges[0]?.raisedBy).not.toBe("somebody-else");
+    // …and it is not the BILLED tenant either. Author and subject are different people.
+    expect(rows[0]?.charges[0]?.raisedBy).not.toBe(OWNED);
+  });
+
+  test("the charge kind is always the adjustment literal — the metered kind has no write path", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    await raise(as);
+    expect((await periodsOf(t))[0]?.charges[0]?.kind).toBe("adjustment");
+    // The source law, because a future parameter would satisfy the assertion above and still open
+    // the door: the metered literal may appear in a type or a comment, never in a write.
+    const code = rollupCode();
+    expect(code).toMatch(/kind: "adjustment"/);
+    expect(code).not.toMatch(/kind: "usage"/);
+    expect(code).not.toMatch(/kind: args\.kind/);
+  });
+
+  test("an audit row is written, and it carries refs and counts only (CLAUDE.md §4)", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    await raise(as, { ref: "setup-fee", amountMinor: 25000 });
+
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    const mine = rows.filter((r) => r.eventType.includes("adjustment"));
+    expect(mine).toHaveLength(1);
+    // No prose anywhere in the payload — an audit row that can hold a sentence is a PII honeypot.
+    const payload = JSON.stringify(mine[0]?.payload ?? {});
+    expect(payload).toContain("setup-fee");
+    expect(payload).not.toMatch(/[.!?]\s/);
+  });
+
+  test("THE WHOLE SPINE, offline: owner raises → tick claims → post → settle", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    await mapCustomer(t, OWNED, "cus_SENTINEL");
+    stubStripe();
+
+    // A charge dated INSIDE a month that has already closed, so the period is billable now. The
+    // window `raiseAdjustment` derives is the one `prepareInvoice` filters against; if they ever
+    // disagree this test fails with `no_charges_in_period` rather than passing over a bill for
+    // nothing. This is the test 28.1-07 could not write, because it had no way to open a period.
+    const lastMonth = Date.UTC(2026, 6, 15);
+    await raise(as, { ref: "setup-fee", amountMinor: 25000, occurredAt: lastMonth });
+    await raise(as, { ref: "custom-work", amountMinor: 9900, occurredAt: lastMonth + DAY });
+
+    // The scheduled hop is part of the spine: `tick` claims and schedules ATOMICALLY, and the
+    // posting action is a separate at-most-once link. Driving `postInvoice` by hand here would
+    // skip exactly the seam that makes the shape necessary.
+    vi.useFakeTimers();
+    await t.mutation(internal.billingRollup.tick, {});
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const row = (await periodsOf(t))[0];
+    expect(row?.status).toBe("posted");
+    expect(row?.hostedInvoiceUrl).toBe(HOSTED);
+    expect(row?.stripeInvoiceId).toBe(INVOICE_ID);
+    // Stripe's `amount_due` on the FINALIZED invoice, never our subtotal of 34900 — Stripe Tax
+    // adds lines we never sent, and reporting our own sum would understate the bill.
+    expect(row?.amountMinor).toBe(5390);
+
+    // The DRAFT excludes every pending item the customer already has. `POST /v1/invoices`
+    // otherwise sweeps them all onto this document, so a period that failed last month gets billed
+    // on top of this one — unbounded by construction (28.1-07's deviation).
+    const draft = calls.find((c) => c.url.endsWith("/v1/invoices"));
+    expect(draft?.body).toContain("pending_invoice_items_behavior=exclude");
+
+    // Both raised amounts reached Stripe, each on its own line, attached to THIS invoice by id.
+    const items = calls.filter((c) => c.url.endsWith("/v1/invoiceitems"));
+    expect(items).toHaveLength(2);
+    expect(items.map((c) => c.body).join("|")).toContain("amount=25000");
+    expect(items.map((c) => c.body).join("|")).toContain("amount=9900");
+    for (const item of items) expect(item.body).toContain(encodeURIComponent(INVOICE_ID));
+
+    // …and the OWNER's identity did not. `raisedBy` is a local provenance fact; a request body is
+    // the last place a Pikar user id belongs (§4).
+    expect(calls.map((c) => c.body).join("|")).not.toContain(SEEDED_BY);
+    const ownerRow = await t.run((ctx) => ctx.db.query("users").first());
+    expect(calls.map((c) => c.body).join("|")).not.toContain(String(ownerRow?._id));
+  });
+
+  test("tick CLAIMS a period a raised charge created — the rollup has a real input", async () => {
+    const t = backendWithAudit();
+    const { as } = await ownerOn(t);
+    await raise(as);
+
+    // `dueAt` is in the future when the period is opened — a month is not billable mid-month.
+    await t.mutation(internal.billingRollup.tick, {});
+    expect((await periodsOf(t))[0]?.status).toBe("pending");
+
+    const opened = (await periodsOf(t))[0];
+    await t.run((ctx) =>
+      ctx.db.patch(opened?._id as Id<"billingPeriods">, { dueAt: Date.now() - 1000 }),
+    );
+    await t.mutation(internal.billingRollup.tick, {});
+    expect((await periodsOf(t))[0]?.status).toBe("claimed");
   });
 });

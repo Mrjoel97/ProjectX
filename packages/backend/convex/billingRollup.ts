@@ -39,6 +39,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { stripeHostedUrl, stripePost } from "./billingApi";
+import { ownerMutation } from "./lib/functions";
 
 // ── Bounds, all code-owned ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,12 @@ export const INVOICE_LINE_LABELS = {
 
 type ChargeKind = keyof typeof INVOICE_LINE_LABELS;
 type Charge = Doc<"billingPeriods">["charges"][number];
+/**
+ * What the POSTING side sees: a charge with its provenance stripped (`periodForPost`). Separate
+ * from `Charge` on purpose — `raisedBy` is a local fact about who raised the line, and the half of
+ * this module that talks to Stripe has no business being able to read it (§4).
+ */
+export type PostedCharge = Omit<Charge, "raisedBy">;
 
 // ── The keys ──────────────────────────────────────────────────────────────────────────────────
 
@@ -223,7 +230,10 @@ export const periodForPost = internalQuery({
       periodKey: period.periodKey,
       periodStart: period.periodStart,
       periodEnd: period.periodEnd,
-      charges: period.charges,
+      // `raisedBy` is STRIPPED here, not carried. It is a local provenance fact; the action that
+      // talks to Stripe has no use for it, and every field that does not cross this boundary is a
+      // field that cannot leak across it (§4).
+      charges: period.charges.map(({ raisedBy: _raisedBy, ...line }) => line),
       customerId: mapping?.stripeCustomerId ?? null,
     };
   },
@@ -247,7 +257,7 @@ type Prepared = {
 export function prepareInvoice(period: {
   periodStart: number;
   periodEnd: number;
-  charges: readonly Charge[];
+  charges: readonly PostedCharge[];
 }): { ok: true; value: Prepared } | { ok: false; code: string } {
   const { charges, periodStart, periodEnd } = period;
   if (charges.length > MAX_PERIOD_CHARGES) return { ok: false, code: "too_many_charges" };
@@ -502,4 +512,151 @@ export const settlePeriod = internalMutation({
 });
 
 /** Re-exported for the tenant-facing read in `billing.ts`, so the id type has one source. */
+// ── The producer (28.1-10, BILL-04) ───────────────────────────────────────────────────────────
+
+/**
+ * The UTC month `atMs` falls in, half-open `[periodStart, periodEnd)` — the SAME window
+ * `prepareInvoice` filters charges against. Deriving it anywhere else is how a charge gets opened
+ * into a period that will later refuse it with `no_charges_in_period`: a bill for nothing, which
+ * also consumes the period's only claim.
+ *
+ * `periodEnd` doubles as `dueAt`, so a period becomes claimable the instant its month closes and
+ * never mid-month. `Date.UTC` rolls month 12 into the next January on its own.
+ */
+function monthWindow(atMs: number): { periodStart: number; periodEnd: number } {
+  const at = new Date(atMs);
+  return {
+    periodStart: Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1),
+    periodEnd: Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 1, 1),
+  };
+}
+
+/**
+ * THE ONLY WRITER OF `billingPeriods`, and it is OWNER-ONLY.
+ *
+ * 28.1-07 built a correct, bounded rollup with no input: nothing opened a period, so the cron ran
+ * daily, found nothing due, and did nothing, for every tenant, forever. This is the input — a
+ * one-off charge the owner types: a setup fee, custom work, a correction.
+ *
+ * `ownerMutation`, never `tenantMutation` (CLAUDE.md §2). A tenant must not be able to bill
+ * themselves, and must not be able to bill anyone else.
+ *
+ * PROVENANCE COMES FROM `ctx`, NEVER FROM AN ARGUMENT. `requireOwner` has already resolved who is
+ * calling; `raisedBy` is that identity and there is no parameter that could override it. A money
+ * figure a request body can author, stored in a row that later renders as the owner's own charge,
+ * is this repo's recorded provenance-laundering defect class.
+ *
+ * `kind` IS HARD-CODED HERE and is deliberately not a parameter — a parameter is how the metered
+ * kind gets written by accident, and the phase's locked decision is that metering stays internal
+ * for v1. The day metered events go to Stripe is the day the Customer Portal can no longer manage
+ * those subscriptions.
+ *
+ * EVERY REFUSAL IS AT THE DOOR, not at the invoice. A charge that `prepareInvoice` would later
+ * reject (a bad amount, a duplicate ref, a second currency, one line too many) is refused here
+ * where the owner can see it, rather than silently turning a period into one that can only fail.
+ *
+ * A NON-`pending` PERIOD REFUSES rather than opening a second one. Silently opening another period
+ * for a late charge would split one month across two invoices; an invoice already claimed or sent
+ * cannot grow, and a charge landing on a `claimed` row would ride onto a retry.
+ *
+ * ponytail: no admin UI. The owner reaches this through the Convex dashboard or a script. The
+ * upgrade path, the day it needs one, is an owner-only panel beside `BillingPanel` — the
+ * validation and the provenance law live here, so a UI would only have to call it.
+ */
+export const raiseAdjustment = ownerMutation({
+  args: {
+    tenantId: v.string(),
+    ref: v.string(),
+    amountMinor: v.number(),
+    currency: v.string(),
+    occurredAt: v.optional(v.number()),
+  },
+  returns: v.id("billingPeriods"),
+  handler: async (ctx, args) => {
+    const occurredAt = args.occurredAt ?? Date.now();
+    // Throws on a tenant id or an instant that is not ref-safe. That IS the refusal: the Stripe
+    // idempotency key is derived from both and it is an HTTP HEADER VALUE.
+    const periodKey = periodKeyFor(args.tenantId, occurredAt);
+
+    if (!Number.isSafeInteger(args.amountMinor) || args.amountMinor <= 0) {
+      // Direction lives in the kind, never in the sign. A credit is a Stripe credit note.
+      throw new Error("raiseAdjustment: an amount must be a positive safe integer of minor units");
+    }
+    if (args.ref.length === 0 || args.ref.length > 64 || !REF_TOKEN.test(args.ref)) {
+      throw new Error("raiseAdjustment: ref must be a ref-safe token of 1-64 characters");
+    }
+    const currency = normalizeCurrency(args.currency);
+    if (!currency.ok) throw new Error("raiseAdjustment: unusable currency");
+
+    const { periodStart, periodEnd } = monthWindow(occurredAt);
+    const charge = {
+      ref: args.ref,
+      kind: "adjustment" as const,
+      amountMinor: args.amountMinor,
+      currency: currency.value,
+      occurredAt,
+      raisedBy: ctx.tenantId,
+    };
+
+    const existing = await ctx.db
+      .query("billingPeriods")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId).eq("periodKey", periodKey))
+      .first();
+
+    let periodId: Id<"billingPeriods">;
+    let chargeCount: number;
+    if (existing === null) {
+      periodId = await ctx.db.insert("billingPeriods", {
+        tenantId: args.tenantId,
+        periodKey,
+        periodStart,
+        periodEnd,
+        dueAt: periodEnd,
+        status: "pending",
+        charges: [charge],
+        attempts: 0,
+      });
+      chargeCount = 1;
+    } else {
+      if (existing.status !== "pending") {
+        throw new Error(`raiseAdjustment: period ${periodKey} is ${existing.status}, not pending`);
+      }
+      // IDEMPOTENT ON `ref`, and the FIRST amount stands. `ref` is half the per-line Stripe
+      // idempotency key, so a second line under the same ref would be replayed rather than added
+      // — a silently short bill. Re-raising is a no-op, not a revaluation.
+      if (existing.charges.some((row) => row.ref === args.ref)) return existing._id;
+      if (existing.charges.length >= MAX_PERIOD_CHARGES) {
+        throw new Error("raiseAdjustment: this period already carries the maximum lines");
+      }
+      // One invoice carries exactly one currency (`@pikar/revenue`'s law). Refusing here beats
+      // letting `prepareInvoice` answer `mixed_currency` on a period nobody is watching.
+      if (existing.charges.some((row) => row.currency !== currency.value)) {
+        throw new Error("raiseAdjustment: this period is already denominated in another currency");
+      }
+      await ctx.db.patch(existing._id, { charges: [...existing.charges, charge] });
+      periodId = existing._id;
+      chargeCount = existing.charges.length + 1;
+    }
+
+    // §4: refs, ids, counts and the amount. No description field exists to hold a human note, and
+    // that is the point — the owner's reason belongs in their own records, not in the audit log.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: args.tenantId,
+      correlationId: `billing-period:${args.tenantId}:${periodKey}`,
+      eventType: "billing.adjustment.raised",
+      actor: ctx.tenantId,
+      payload: {
+        source: "billing",
+        periodKey,
+        ref: args.ref,
+        kind: "adjustment",
+        amountMinor: args.amountMinor,
+        currency: currency.value,
+        charges: chargeCount,
+      },
+    });
+    return periodId;
+  },
+});
+
 export type BillingPeriodId = Id<"billingPeriods">;

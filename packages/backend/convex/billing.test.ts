@@ -838,6 +838,9 @@ async function seedInvoicePeriod(
           amountMinor: 4900,
           currency: "USD",
           occurredAt: now - 15 * 86_400_000,
+          // Hand-seeded: a real charge carries the owner identity `raiseAdjustment` reads from
+          // `ctx`, and this row has no producer behind it (28.1-10).
+          raisedBy: "seeded_by_test",
         },
       ],
       attempts: 1,

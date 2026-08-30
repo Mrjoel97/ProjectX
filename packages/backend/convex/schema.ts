@@ -3052,6 +3052,11 @@ export default defineSchema({
         amountMinor: v.number(),
         currency: v.string(),
         occurredAt: v.number(),
+        /** WHO raised this charge, taken from `ctx` at `raiseAdjustment` and never from an
+         *  argument (28.1-10). Required, so a future writer of `subscription`/`usage` lines has to
+         *  state its provenance rather than inherit the owner's by omission. It stays in this
+         *  database: `periodForPost` strips it, so it never reaches Stripe. */
+        raisedBy: v.string(),
       }),
     ),
     claimedAt: v.optional(v.number()),

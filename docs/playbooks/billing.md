@@ -59,7 +59,9 @@
 > NOT proven. **This is a `Last verified` bump for the surface only, not a re-verification of the
 > sections below.**
 
-> Last verified: 2026-08-30 against 28.1-11 (the ADVERSARIAL-AUDIT FIX WAVE — 15 confirmed defects
+> Last verified: 2026-08-30 against 28.1-10 (`raiseAdjustment` — the ONLY writer of
+> `billingPeriods`, owner-only, provenance from `ctx`; the rollup finally has an input) — after
+> 28.1-11 (the ADVERSARIAL-AUDIT FIX WAVE — 15 confirmed defects
 > across waves 1-7, every one seen RED before its fix; the correlation defects, the double-invoice
 > path, the cleared-hold clock, and four guards that could not fail) — after 28.1-09 (the tenant-facing `BillingPanel` — the first caller
 > `unappliedFunds`, `renderTaxPosture` and `billing.invoices` have ever had in `apps/web`; offline
@@ -362,9 +364,58 @@ document is created first with `pending_invoice_items_behavior=exclude`, each li
 that invoice by id, and only then is it finalized. (This is a deliberate DEVIATION from the 28.1-07
 plan, which specified items-first.)
 
-**Where a period comes from: NOWHERE YET.** No code in this deployment inserts a `billingPeriods`
-row. The rollup is complete and its INPUT has no producer — the same posture `reconcileEvent` had
-between 28.1-03 and 28.1-06. Every test seeds its periods by hand.
+### `raiseAdjustment` — the ONLY writer of `billingPeriods` (28.1-10)
+
+28.1-07 shipped a correct, bounded, 28-mutation-proven rollup **with no input**: nothing opened a
+period, so the cron ran daily, found nothing due, and did nothing, for every tenant, forever.
+`raiseAdjustment` is the input, and it is the only one.
+
+It is an **`ownerMutation`**, never a `tenantMutation` (CLAUDE.md §2). A tenant must not be able to
+bill themselves, and must not be able to bill anyone else. `isolation.test.ts` pins it into the
+owner surface by name, with a fixture of VALID arguments — argument validation runs *before* the
+owner wrapper, so a malformed fixture would fail with a validator error that reads exactly like an
+authorization one.
+
+**Provenance comes from `ctx`, never from an argument.** `charges[].raisedBy` is the authenticated
+owner's identity, resolved by `requireOwner` before the handler runs; there is no parameter that
+could override it. A money figure a request body can author, stored in a row that later renders as
+the owner's own charge, is this repo's recorded provenance-laundering defect class. `periodForPost`
+**strips `raisedBy`** on the way to the posting action: it is a local fact, and the half of the
+module that talks to Stripe has no business reading it (§4).
+
+**`kind` is hard-coded at the call site and is deliberately NOT a parameter.** The metered kind
+stays in the schema union and stays unwritten — the phase's locked decision is that metering stays
+internal for v1, and the day metered events go to Stripe is the day the Customer Portal can no
+longer manage those subscriptions. Do not wire `spendEvents` to it. Do not derive an amount from
+cost. A `kind` parameter is exactly how that gets written by accident, which is why the test asserts
+the *source* carries no `kind: args.kind` and no write of the metered literal.
+
+**Every refusal is at the door, not at the invoice.** A charge `prepareInvoice` would later reject
+is refused here where the owner can see it, rather than silently turning a period into one that can
+only fail:
+
+| Refused | Because |
+|---|---|
+| a non-`pending` period (`claimed` / `posted` / `failed`) | an invoice already claimed or sent cannot grow, and a charge landing on a `claimed` row would ride onto a retry. It does **not** open a second period — that would split one month across two invoices |
+| an amount that is not a positive safe integer | direction lives in the kind, never in the sign; a credit is a Stripe credit note |
+| a `ref` that is not ref-safe, 1–64 chars | it is half the per-line Stripe idempotency key, which is an HTTP **header value** |
+| a tenant id that is not ref-safe | same reason, via `periodKeyFor` |
+| a second currency in one period | one invoice carries exactly one currency (`@pikar/revenue`'s law) |
+| a `MAX_PERIOD_CHARGES`-th line | beyond the cap `prepareInvoice` refuses the whole period |
+
+**Raising the same `ref` twice is a no-op, and the FIRST amount stands.** `ref` is half the per-line
+idempotency key, so a second line under the same ref would be *replayed* by Stripe rather than added
+— a silently short bill. Re-raising is not a revaluation; to change an amount, raise a new `ref`.
+
+**The window is derived once.** `monthWindow(occurredAt)` produces the UTC month, half-open
+`[periodStart, periodEnd)` — the same window `prepareInvoice` filters against. Deriving it anywhere
+else is how a charge gets opened into a period that later answers `no_charges_in_period`: a bill for
+nothing that also consumes the period's only claim. `periodEnd` doubles as `dueAt`, so a period
+becomes claimable the instant its month closes and never mid-month.
+
+**Operationally there is no admin UI** (`ponytail:` at the site). The owner reaches this through the
+Convex dashboard or a script. The upgrade path is an owner-only panel beside `BillingPanel` — the
+validation and the provenance law live in the mutation, so a UI would only have to call it.
 
 ## The Ledger — `billingEvents` is a SEPARATE book from `spendEvents` (28.1-06, BILL-03)
 
@@ -533,6 +584,10 @@ append-only table that cannot take it back.
 | A CLEARED balance stops being reported and stops aging | `funds_available` at zero is the only signal that a hold ended; skipping it reported money we no longer hold | `billingWebhook.test.ts` — "a funds_available of ZERO clears the hold"; `reconcile.test.ts` — "a balance that has gone to ZERO is an observation" |
 | An OUT-OF-ORDER redelivery never lowers a newer amount, and never resurrects a cleared hold | Stripe does not guarantee delivery order and a CashBalance carries no `id`, so only an exact same-`eventId` redelivery is caught upstream | `billingWebhook.test.ts` — "neither lowers a newer amount nor restarts the clock" |
 | Money held AGAIN after a clear gets a NEW 75/90 clock | Carrying the old date forward renders fresh money as already swept | `billingWebhook.test.ts` — "starts a NEW clock, not the cleared hold's" |
+| `billingPeriods` has exactly ONE writer and it is owner-only | A tenant must not be able to bill themselves or anyone else; a period is money on a customer's bill | `isolation.test.ts` pins `billingRollup.raiseAdjustment` into the owner surface by name; `billingRollup.test.ts` — a non-owner and an unauthenticated caller are refused and write NOTHING |
+| The stored author of a charge is the AUTHENTICATED owner, never an argument | A money figure a request body can author, stored as the owner's own charge, is the provenance-laundering defect class | `billingRollup.test.ts` — "the stored author is the AUTHENTICATED owner, never an argument" |
+| A non-`pending` period REFUSES a new charge, and does not open a second one | An invoice already claimed or sent cannot grow, and a second period would split one month across two invoices | `billingRollup.test.ts` — one test per `claimed`/`posted`/`failed`, each asserting the charges are byte-identical afterwards |
+| Raising the same `ref` twice adds ONE charge, at the FIRST amount | `ref` is half the per-line Stripe idempotency key: a second line under it is REPLAYED, not added — a silently short bill | `billingRollup.test.ts` — "the SAME ref twice adds ONE charge" |
 | One period produces exactly ONE invoice | The most expensive defect this subsystem can ship is a second bill for one month | `billingRollup.test.ts` — double tick queues ONE post; a `posted` period is never re-claimed and refuses a re-post BEFORE fetch |
 | The cron points at a MUTATION, never at the action | A scheduled action is at-most-once and never retried — a dropped period is silent | `billingRollup.test.ts` — `crons.ts` must name `.tick` and must NOT name `postInvoice`; `tick` is asserted callable as a mutation AND declared `internalMutation` by name |
 | `postInvoice` is the ONLY action in the module | Each action is another at-most-once link in the chain | `billingRollup.test.ts` — exactly one `internalAction(` in the source |
@@ -625,6 +680,10 @@ append-only table that cannot take it back.
   in `isolation.test.ts`'s `NON_TENANT_LEADING` with a written reason, or the suite fails.
 - **Never** widen this into `connectorFetch.ts` (a GET-only read transport with a deliberately empty
   `stripe: []` allow-list) or into `SPEND_RAILS`.
+- **Adding a second writer of `billingPeriods`:** don't, without changing this line first. The
+  single-writer rule is what makes "the stored author is the authenticated owner" checkable at all.
+  If a writer must exist, it states its own `raisedBy` (the field is REQUIRED so it cannot inherit
+  the owner's by omission), and it refuses a non-`pending` period the same way.
 - **Writing or touching a SOURCE SCAN** (`expect(src).not.toMatch(...)`): import `codeOf` from
   `packages/backend/__fixtures__/sourceScan.ts`. Do not paste a stripper. That helper has been
   wrong twice — once eating 63% of a module including every export, once truncating every line at
@@ -823,11 +882,12 @@ which is how `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` escaped classification entirely
 
 - ~~**The effect switch handles the four MAPPING types only.**~~ **CLOSED by 28.1-06** — the
   invoice, refund and cash-balance arms all write the ledger now, and the switch is exhaustive.
-- **NOTHING PRODUCES A `billingPeriods` ROW.** The rollup, the cron, the claim, the bounded post
-  and the settle are all real; the thing that would OPEN a period for a tenant and accumulate its
-  charges does not exist. So the daily cron runs, finds nothing due, and does nothing — for every
-  tenant, every day. **BILL-04 should be read as "the invoicing mechanism is correct and bounded",
-  not as "invoices are produced."**
+- ~~**NOTHING PRODUCES A `billingPeriods` ROW.**~~ **CLOSED by 28.1-10** — `raiseAdjustment` is
+  the producer, and deliberately the ONLY one. What remains open is narrower and is a DECISION, not
+  a gap: **there is no automatic producer.** No subscription renewal, no usage meter and no cron
+  opens a period; a period exists because the owner raised a charge on it. Recurring subscription
+  revenue is collected by Stripe on the SUBSCRIPTION rail (28.1-04's hosted Checkout), which never
+  touches `billingPeriods` — this table is for one-off charges Pikar bills itself.
 - **No invoice has ever been posted to Stripe.** Every request above is asserted against a stubbed
   `fetch`. `pending_invoice_items_behavior`, the finalize endpoint's `hosted_invoice_url`, and
   `amount_due` carrying Stripe Tax are all read from Stripe's documentation, not from a response.
