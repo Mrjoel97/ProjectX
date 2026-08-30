@@ -1,5 +1,72 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-31 (**THE TENANT PACK LANE EXISTS AND IS EARNABLE.** `planTenantActivation`
+> refused every `pack-*` tenant row unconditionally; `assertTenantPackActivationEvidence` now demands
+> the SAME THREE PLANES a global pack body clears, keyed to the row id. `PACK_GATE_ERROR` is still
+> the literal, so every caller and test matching on it still sees a refusal — what changed is that it
+> can now be satisfied.
+>
+> THE PRICE WAS SMALLER THAN RECORDED. The old comment named "the two evidence columns plus a
+> tenant-scoped pack eval runner". Measured, ONE column was owed:
+>  1. PROVENANCE — no column. The row already stores `templateId`, `templateVersion`,
+>     `customizationValues`, `customizationHash`, so it is RECOMPUTED at activation. That is STRONGER
+>     than the global plane, whose own docstring admits it "checks SHAPE and the VERSION PIN, not that
+>     `bodySha256` is the hash of the body it sits beside". Values edited underneath their hash are
+>     refused here; a stored-blob check could not see it. It also refuses a candidate composed against
+>     a template that has since been republished — yesterday's adaptation on today's approved body.
+>  2. EVAL — `hasPassingTenantEvidence`, which already existed and only became TRUSTWORTHY on
+>     2026-08-30, when `shouldRecordEvidence` learned to verify the pinned body was actually loaded.
+>     Before that this plane was a certificate anyone could mint.
+>  3. BROWSER — the one new column, `tenantSkills.browserEvidence`, checked by
+>     `hasPassingTenantPackBrowserEvidence`, which pins the ROW ID and not name@version. Two tenants
+>     can each own version 2; a browser run against one must never certify the other, and a test
+>     drives exactly that case.
+>
+> SIX TESTS, POSITIVE WITNESS FIRST — without an activation that SUCCEEDS every refusal below it is
+> satisfied by a gate nobody can pass, which is the shape this phase kept finding. Dropping the
+> browser plane reddens three, including a pre-existing one.
+>
+> ⚠ WHAT IS NOT BUILT YET, so nobody reads this as finished: nothing PRODUCES tenant pack evidence.
+> The golden runner still refuses `pack-`-named rows (it drives `llm:runCockpitAgent` and never runs a
+> pack specialist), and no browser gate emits a `tenantTarget`-pinned artifact. So the lane is open
+> and correct, and in practice still unreachable until an evidence producer exists for planes 2 and 3.
+> That is a smaller, better-defined job than it was — but it is a job, not a detail.)
+
+> Last verified: 2026-08-30 (**A SAVED CUSTOMIZATION NOW TAKES EFFECT — AND NOT BY ACTIVATING
+> ANYTHING.** Phase 29 shipped the customizer with the gap admitted on screen: *"Pikar cannot make a
+> workflow customization live in this release."* Two routes could close it and they are not
+> equivalent. Activating the tenant's composed `tenantSkills` body is what `PACK_GATE` refuses, and
+> refuses correctly — a tenant-authored PROMPT going live needs provenance, eval and browser evidence
+> the overlay has no column for. Applying the tenant's VALUES asks a smaller question, because what
+> the form collects is a CLOSED SCHEMA of four settings, not a prompt.
+>
+> `runWorkflowPack` now reads the tenant's newest `customizationValues`, renders them through
+> `renderCustomization(schema, values)` — schema-driven, so a key the template has since dropped
+> vanishes and an undeclared key can never reach the prompt — wraps them in
+> `customizationRunBlock`, and passes the result to `preflightPrompt`. **`PACK_GATE` is untouched,
+> `cockpit.ts` still passes no `tenantSkillIds`, and the composed body is still never activated.**
+>
+> THE ORDER IN THE PROMPT IS THE SECURITY PROPERTY, not the framing sentence. Settings sit AFTER the
+> code-owned source truth (so a note claiming a source is available is contradicted by the line above
+> it) and BEFORE the user's request (so the untrusted text stays last and the settings are never the
+> antecedent of the user's pronouns — the failure that made four `sales-call-prep` runs save the
+> preflight paragraph as their deliverable). The tool grant is still `toolsForWorkflowPack(packId)`
+> from the operation matrix; no string a tenant types can widen it.
+>
+> HOW IT IS TESTED, and why it needed a new seam. A scripted mock replies the same whatever it is
+> asked, so there was no way to observe the prompt — testing the pieces would have left the CALL SITE
+> untested, which is exactly the hole this repo has shipped before. `__runWorkflowPackWithScript`
+> (already the test-only door) now returns the composed prompt when a mock is supplied; production
+> `runWorkflowPack` is unchanged. Dropping `settingsBlock` from the call site reddens three tests.
+>
+> TWO USER-FACING SENTENCES WENT FROM TRUE TO FALSE and were rewritten in the same change, because a
+> backend fix that leaves the screen lying is not a fix: `ACTIVATION_NOTE` in the customizer, and the
+> pin notice `customization_not_applied` — renamed to `customization_applied` across all four files
+> that name it. The pin test asserts the RENDERED STRING, not the enum, because the enum was renamed
+> in the same commit and a literal-only check would have gone green over a screen still telling users
+> their settings are ignored. The new pin sentence says **current** settings: the run reads the
+> tenant's NEWEST row, not the one the pin remembered.)
+
 > Last verified: 2026-08-30 (**THE "UNEXPLAINED" SERIAL-WORKER HANG IS EXPLAINED: a rapid
 > `page.goto` loop poisons the NEXT page in the same browser context.** Reproduced deterministically
 > with a four-test serial probe counting buttons inside `main.canvas-main` after a fixed 6s settle:

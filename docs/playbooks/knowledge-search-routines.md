@@ -1,5 +1,84 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-30 (**THE TWO PROVIDER PROBES ARE IMPLEMENTED, AND THE `dst-boundary` DATE
+> IS NOW DERIVED — because the one I hardcoded was wrong by seven weeks.**
+>
+> THE DATE. The refusal used to name "2026-10-25 (EU), 2026-11-01 (US)". Scanning all 418 IANA zones
+> instead of the two a northern-hemisphere engineer thinks of first, the real answer is **2026-09-06**
+> — America/Santiago and Pacific/Easter. `nextTransition` / `soonestTransition` derive it from `Intl`
+> now, so the message cannot go stale, cannot be wrong next year, and names the cheapest zone to use.
+> A hardcoded answer to "when is the next transition" is wrong the moment a tenant lives somewhere the
+> author did not picture.
+>
+> THE PROBES. `provider-read` counts a bounded read through `gmail.probeReadCount`.
+> `oauth-expiry-reauth` observes `gmailTokens.expiresAt` ADVANCING across a read that needed a valid
+> token — a fact about stored state before and after, not a claim the script makes about itself. It
+> REFUSES when the token has not expired: a read that never needed a refresh is not evidence of one.
+> Neither calls a provider endpoint directly; both drive the app's own paths, so the trace is of the
+> code a scheduled routine would run.
+>
+> ⚠ THE LESSON WORTH MORE THAN THE PROBES. `convexProbe` returned `null` on ANY failure, and the
+> probes read `null` as "the deployment answered: no grant". It was the same defect as the eval
+> gate's — a check that cannot tell "we looked and it was absent" from "we could not look" — written
+> an hour after fixing that one. The `UNREACHABLE` sentinel caught THREE real failures the moment it
+> existed, every one of which had been reporting a confident "no provider grant" on a deployment that
+> was answering fine:
+>   1. `npx` -> ENOENT (a .cmd shim on win32; `execFile` does not resolve it)
+>   2. `npx.cmd` -> EINVAL (Node 24 refuses to execFile a .cmd without a shell — CVE-2024-27980)
+>   3. the convex CLI exits with `UV_HANDLE_CLOSING` AFTER printing the answer, so `execFileSync`
+>      throws over a good result — intermittently, which is why the same tenant read "no grant" once
+>      and "unreachable" the next time
+> Fixed by spawning the CLI's `bin/main.js` with `process.execPath` (no shell, so JSON crosses as one
+> argv element) and letting the RESULT decide rather than the exit code. **If you add a probe here,
+> make "could not ask" a distinct outcome before you write the happy path.**)
+
+> Last verified: 2026-08-30 (**THE RECURRENCE GATE CAN NOW TELL A LIVE TRACE FROM A FILE THAT
+> EXISTS — and the answer for all three rows is still `defer`.** `checkEvidenceRef` proves a ref
+> names a distinct, non-empty file inside the repo and NOTHING MORE; the script's own header says
+> so, and round 1 shipped twelve fabricated rows past all three modes on that weakness. The
+> consequence was concrete: `dst-boundary` cites the recurrence spike's unit test in the shipped
+> artifact, and the distance from `missing` to a fabricated `enable-safe` was editing one word from
+> `automated` to `live`.
+>
+> `checkLiveEvidenceArtifact` closes that for the three REQUIRED_LIVE rows: the ref must be an
+> artifact `collect-recurrence-evidence.mjs` wrote, naming that row's own probe and recording an
+> observation. Cross-citation is refused too — a real DST artifact cannot certify `provider-read`,
+> which is the mistake a hurried copy-paste actually makes. **The narrowing is scoped:** the nine
+> non-live rows keep the documented weakness, and a test asserts they do, so "the gate got stricter
+> by accident" is itself caught.
+>
+> WHAT THE COLLECTOR CAN AND CANNOT DO, because a green `--self-check` must not be over-read.
+> `dst-boundary` is COMPLETE — whether a zone crossed a transition is `Intl` arithmetic, proven in
+> BOTH directions including the owner's own UTC+3 zone, which never transitions and therefore can
+> never produce this row locally. `oauth-expiry-reauth` and `provider-read` have their PRECONDITION
+> half complete and their COLLECTION half unexercised: every `gmailTokens` row on this deployment
+> reads `packeval-not-a-real-token` and `connectorConnections` is empty, so both refuse — correctly,
+> and that refusal is what is tested. The provider call each would make has never run.
+>
+> SO THE DECISION IS UNCHANGED, and the gate still says so: `--matrix` 0, `--eligibility` 1,
+> `--validate-decision` 0. What changed is that it can no longer be talked out of it. `enable-safe`
+> now needs a real grant on the deployment carrying the evidence AND a run spanning a real DST
+> transition — the next are 2026-10-25 (EU) and 2026-11-01 (US). No amount of code moves either.
+>
+> ⚠ THE FIXTURE ARTIFACTS SAY `observed: true` FOR PROBES THAT NEVER RAN. Both harnesses write them
+> to run their positive case and both delete them unconditionally, including on a failing run; they
+> are gitignored as well, because a killed run must not leave a ready-made forgery where a `live`
+> row could cite it. If you ever find one on disk, delete it — it is not evidence of anything.)
+
+> Last verified: 2026-08-30 (**ROUT-01's LAST GAP CLOSED: a saved customization now changes a run.**
+> `pinnedWorkflows.checkReadiness` no longer emits `customization_not_applied` — the notice is
+> `customization_applied`, and its sentence names **current** settings because `runWorkflowPack`
+> reads the tenant's NEWEST `customizationValues` rather than the row the pin remembered. A user who
+> edits their settings after pinning gets the new ones, and that sentence is the only place they
+> would learn it.
+>
+> `customizationRunBlock` (new, `@pikar/core/workflowCustomization`) is the framing that keeps tenant
+> words DATA rather than instructions. Full rationale in `workflow-packs.md`; the part that belongs
+> here is the ordering contract, because it constrains anything else this subsystem adds to a pack
+> prompt: **code-owned source truth first, tenant settings second, untrusted user request LAST.**
+> Adding a block after the request would re-open the pronoun-antecedent failure regardless of what it
+> says about itself.)
+
 > Last verified: 2026-08-30 (**THE PLANNER WAS SKIPPING THE TENANT'S OWN VAULT**, found by the live
 > synthesizer run and closed the same day. *"What have we agreed with customers about pricing and
 > discounts?"* returned `evidenceCount: 0` while the answering document sat embedded and retrievable

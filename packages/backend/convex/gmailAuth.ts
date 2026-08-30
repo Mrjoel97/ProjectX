@@ -153,6 +153,41 @@ export const hasGmailConnection = internalQuery({
       .unique()) !== null,
 });
 
+/**
+ * REFS-ONLY grant state for the recurrence evidence collector (ROUT-02).
+ *
+ * `getTokens` above returns the row, refresh token and all — which is correct for the internal
+ * callers that need to spend it, and WRONG for anything a human runs through `npx convex run`,
+ * because the CLI prints its result to stdout and into whatever captured it. This returns the three
+ * facts an evidence probe actually needs and nothing that could be spent:
+ *
+ *   - `present`   — is there a grant at all
+ *   - `real`      — is it a real token or one of the `packeval-not-a-real-token` fixtures
+ *   - `expiresAt` — the access-token clock, which is how a refresh is OBSERVED (it advances)
+ *
+ * `real` is derived from the fixture sentinel rather than from an env flag, so a deployment that
+ * genuinely holds a real grant cannot be talked into reading as a fixture (or the reverse) by a
+ * setting. The token itself never leaves this function.
+ */
+export const grantState = internalQuery({
+  args: { tenantId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId },
+  ): Promise<{ present: boolean; real: boolean; expiresAt: number | null }> => {
+    const row = await ctx.db
+      .query("gmailTokens")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    if (row === null) return { present: false, real: false, expiresAt: null };
+    return {
+      present: true,
+      real: !row.refreshToken.includes("not-a-real-token"),
+      expiresAt: row.expiresAt ?? null,
+    };
+  },
+});
+
 /** Persist a freshly-refreshed access token (keeps the refresh clock intact). */
 export const updateAccess = internalMutation({
   args: { tenantId: v.string(), accessToken: v.string(), expiresAt: v.number() },

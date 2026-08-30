@@ -385,6 +385,7 @@
     "packages/backend/convex/knowledgeSearch",
     "packages/backend/convex/knowledgeExternalSources",
     "packages/backend/convex/knowledgeLlm",
+    "packages/backend/scripts/collect-recurrence-evidence",
     "packages/backend/convex/schema.test.ts"
   ],
   "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],

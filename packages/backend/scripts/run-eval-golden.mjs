@@ -1255,9 +1255,23 @@ function configuredDeployment() {
  * loop. `--self-check` asserts that ORDERING against the source, because a rule that is only true
  * because of where it sits is a rule one refactor away from being false.
  *
- * ⚠ WHAT THIS RULE DOES NOT CHECK, AND IT IS A REAL HAZARD (recorded 2026-08-28, wave-2
- * remediation, NOT fixed here). It never asks whether the PINNED SKILL WAS ACTUALLY EXERCISED by
- * the run. `SKILL_NAMES` is derived from `GATED_SKILLS`, so every gated name is a valid `--skill`
+ * ✅ IT NOW CHECKS THAT THE PINNED BODY WAS ACTUALLY EXERCISED (2026-08-30). Until then it did
+ * not, and that was the hazard recorded here on 2026-08-28: `SKILL_NAMES` is derived from
+ * `GATED_SKILLS`, so every gated name was a valid `--skill` pin — including one this runner
+ * structurally could not reach. For such a skill a green, unfiltered, non-empty run wrote a
+ * `pass: true` evidence row certifying a body it never loaded: a certificate manufactured for work
+ * that did not happen, the provenance-laundering shape this repo has paid for before. It is why two
+ * Phase-29 bodies were REMOVED from `GATED_SKILLS` rather than left behind a gate that only looked
+ * like protection.
+ *
+ * The fix is the one written down here as "real plumbing": `observed` carries what the run ACTUALLY
+ * loaded, read back from the audit plane by `smokeAssert:observedSkillLoads` — rows written from
+ * skill rows fetched out of the registry whose body string went to the provider, never from the
+ * `--skill` argument. A pin absent from that set certifies nothing.
+ *
+ * ⚠ THE CLAUSE IS FAIL-CLOSED ON ITS OWN INPUT. `observed === null` (the read failed, or nobody
+ * performed it) REFUSES rather than falls through. A verification that silently degrades to "yes"
+ * when it cannot run is the same false certificate wearing a different hat. `SKILL_NAMES` is derived from `GATED_SKILLS`, so every gated name is a valid `--skill`
  * pin — including one this runner structurally cannot reach, because it drives
  * `llm:runCockpitAgent` and nothing else. For such a skill a green, unfiltered, non-empty run
  * writes a `pass: true` evidence row certifying a body it never loaded: a certificate
@@ -1273,8 +1287,30 @@ function configuredDeployment() {
  * which skills were loaded, and record evidence for a pin only if that pin appears. That is real
  * plumbing and it needs a paid run to verify, so it is written down here rather than guessed at.
  */
-function shouldRecordEvidence({ allGreen, casesTotal, filters }) {
-  return allGreen === true && casesTotal > 0 && filters.length === 0;
+function shouldRecordEvidence({ allGreen, casesTotal, filters, pins, tenantTargets, observed }) {
+  if (allGreen !== true) return false;
+  if (!(casesTotal > 0)) return false;
+  if (filters.length !== 0) return false;
+
+  const globalPins = pins ?? [];
+  const tenantPins = tenantTargets ?? [];
+  if (globalPins.length === 0 && tenantPins.length === 0) return true;
+
+  // THERE IS SOMETHING TO CERTIFY AND NO OBSERVATION OF IT. Refuse. `null` here is the read having
+  // failed or never been attempted, and "we could not look" must never read the same as "we looked
+  // and it was there" — that equivalence is the entire defect this clause closes.
+  if (observed === null || observed === undefined) return false;
+
+  const loadedKeys = new Set(observed.map((o) => `${o.name}@${o.version}`));
+  if (!globalPins.every((p) => loadedKeys.has(`${p.name}@${p.version}`))) return false;
+
+  // A TENANT candidate is identified by its ROW ID, never by name@version: two tenants can each
+  // own version 2 of the same name, so a version match across scopes would certify one tenant's
+  // body with another's run. The scope check is not decoration.
+  const loadedTenantIds = new Set(
+    observed.filter((o) => o.scope === "tenant" && o.skillId).map((o) => o.skillId),
+  );
+  return tenantPins.every((t) => loadedTenantIds.has(t.candidateId));
 }
 
 /** The exact refs/counts-only evidence body. Built HERE (pure, no I/O) so the self-check can assert
@@ -2758,6 +2794,82 @@ function selfCheck() {
     false,
     "a failed run certifies nothing",
   );
+
+  // 8d-ii. THE OBSERVATION CLAUSE (2026-08-30). Every assertion above passes a run with NO pins,
+  //        which is precisely why the hole survived: the rule was only ever exercised on inputs
+  //        where there was nothing to certify. These pin something.
+  const GLOBAL_PIN = [{ name: "cockpit-agent", version: 9 }];
+  const okBase = { allGreen: true, casesTotal: 36, filters: [] };
+  const loadedCockpit9 = [
+    { name: "cockpit-agent", version: 9, scope: "global", skillId: "g1", bodyHash: "h", loads: 4 },
+  ];
+  assert.equal(
+    shouldRecordEvidence({ ...okBase, pins: GLOBAL_PIN, observed: loadedCockpit9 }),
+    true,
+    "a pin the run DID load is certifiable — the positive witness, without which every assertion below passes vacuously",
+  );
+  assert.equal(
+    shouldRecordEvidence({ ...okBase, pins: GLOBAL_PIN, observed: [] }),
+    false,
+    "a green run that never LOADED the pinned body certifies nothing — the manufactured-certificate hole",
+  );
+  assert.equal(
+    shouldRecordEvidence({
+      ...okBase,
+      pins: GLOBAL_PIN,
+      observed: [{ ...loadedCockpit9[0], version: 8 }],
+    }),
+    false,
+    "loading a DIFFERENT version of the right name is not evidence for the pinned one",
+  );
+  assert.equal(
+    shouldRecordEvidence({ ...okBase, pins: GLOBAL_PIN, observed: null }),
+    false,
+    "FAIL CLOSED: unable to read what ran must refuse, never fall through to yes",
+  );
+  assert.equal(
+    shouldRecordEvidence({ ...okBase, pins: [], tenantTargets: [], observed: null }),
+    true,
+    "a run with NOTHING pinned is unaffected — the clause bites only when there is a claim to check",
+  );
+
+  // The tenant scope, where identity is a ROW ID and a version number is not enough: two tenants
+  // can each own version 2 of the same name, so matching on name@version across scopes would
+  // certify one tenant's candidate with another tenant's run.
+  const TENANT_TARGET = [{ name: "offer-architect", version: 2, candidateId: "k57rowA" }];
+  assert.equal(
+    shouldRecordEvidence({
+      ...okBase,
+      tenantTargets: TENANT_TARGET,
+      observed: [
+        { name: "offer-architect", version: 2, scope: "tenant", skillId: "k57rowA", loads: 1 },
+      ],
+    }),
+    true,
+    "a tenant candidate whose ROW was loaded is certifiable",
+  );
+  assert.equal(
+    shouldRecordEvidence({
+      ...okBase,
+      tenantTargets: TENANT_TARGET,
+      observed: [
+        { name: "offer-architect", version: 2, scope: "tenant", skillId: "k57rowB", loads: 1 },
+      ],
+    }),
+    false,
+    "ANOTHER TENANT'S row at the same name@version is not evidence — the row id is the identity",
+  );
+  assert.equal(
+    shouldRecordEvidence({
+      ...okBase,
+      tenantTargets: TENANT_TARGET,
+      observed: [
+        { name: "offer-architect", version: 2, scope: "global", skillId: "k57rowA", loads: 1 },
+      ],
+    }),
+    false,
+    "a GLOBAL load cannot certify a tenant candidate even at the same id — the scope check is not decoration",
+  );
   // …and the ORDERING that makes "an over-cap or interrupted run records none" true: `abortEnv`
   // exits from INSIDE the case loop, so the evidence block is unreachable. A rule that holds only
   // because of where it sits is one refactor from being false, so it is asserted against the source.
@@ -2768,7 +2880,10 @@ function selfCheck() {
   //     THIS line, and everything after it is self-check text, not the live path.
   const liveSource = runnerSource.slice(runnerSource.lastIndexOf("function attemptCase("));
   const abortAt = runnerSource.lastIndexOf("function abortEnv");
-  const evidenceAt = liveSource.indexOf("shouldRecordEvidence({ allGreen, casesTotal, filters })");
+  // The anchor tracks the CALL SITE, and it moved on 2026-08-30 when the rule gained its
+  // observation clause. That this line had to change is the tripwire working: an anchor that still
+  // matched after the call site was rewritten would be pinning a seam that no longer exists.
+  const evidenceAt = liveSource.indexOf("const record = shouldRecordEvidence({");
   const capCheckAt = liveSource.indexOf("COST CAP EXCEEDED");
   assert.ok(abortAt > 0 && evidenceAt > 0 && capCheckAt > 0, "the cost-cap/evidence seams exist");
   assert.ok(
@@ -3935,11 +4050,50 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
   // A partial run may never produce an EVAL_GATE input.
   // 21-03: ONE rule, named, for BOTH scopes — see `shouldRecordEvidence`. It also closes the
   // zero-case hole the old inline condition had (`0 === 0` is "all green").
-  const record = shouldRecordEvidence({ allGreen, casesTotal, filters });
+  // 2026-08-30: WHAT THE RUN ACTUALLY LOADED, read back from the audit plane BEFORE deciding.
+  // Never derived from `pins` — a check fed by the claim it is checking proves nothing. A failed
+  // read leaves `observed` null, and `shouldRecordEvidence` refuses on null rather than falling
+  // through: "we could not look" must not read the same as "we looked and it was there".
+  let observed = null;
+  if (pins.length || tenantTargets.length) {
+    try {
+      observed = parse(must("smokeAssert:observedSkillLoads", { tenant }, RETRY_READ)).loaded;
+      console.log(
+        `[eval:golden] observed skill loads: ${
+          observed.length
+            ? observed
+                .map(
+                  (o) =>
+                    `${o.name}@${o.version}${o.scope === "tenant" ? "(tenant)" : ""}x${o.loads}`,
+                )
+                .join(" ")
+            : "NONE"
+        }`,
+      );
+    } catch (e) {
+      observed = null;
+      console.log(
+        `[eval:golden] observation read FAILED — evidence will be REFUSED: ${String(e.message).slice(0, 140)}`,
+      );
+    }
+  }
+  const record = shouldRecordEvidence({
+    allGreen,
+    casesTotal,
+    filters,
+    pins,
+    tenantTargets,
+    observed,
+  });
   if (allGreen && (pins.length || tenantTargets.length) && !record) {
-    console.log(
-      `[eval:golden] evidence SUPPRESSED — ${filters.length ? "partial run (--only)" : "zero cases"}. Re-run unfiltered to gate.`,
-    );
+    const why = filters.length
+      ? "partial run (--only)"
+      : casesTotal === 0
+        ? "zero cases"
+        : observed === null
+          ? "the run's actual skill loads could not be read — a pin cannot be certified unobserved"
+          : "a PINNED BODY WAS NEVER LOADED by this run — the run does not exercise what it pins";
+    console.log(`[eval:golden] evidence SUPPRESSED — ${why}.`);
   }
   if (record && pins.length) {
     const skillVersions = skillVersionsOf(pins);

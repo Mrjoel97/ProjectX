@@ -980,3 +980,39 @@ export const knowledgeQuery = internalAction({
     };
   },
 });
+
+/**
+ * A BOUNDED LIVE READ THAT RETURNS ONLY A COUNT — the `provider-read` / `oauth-expiry-reauth`
+ * evidence probe (ROUT-02).
+ *
+ * WHY IT EXISTS RATHER THAN THE COLLECTOR CALLING `listInbox` DIRECTLY. `listInbox` resolves to
+ * `messages: InboxMessageMeta[]` — subjects and senders. `collect-recurrence-evidence.mjs` drives
+ * it through `npx convex run`, whose result is printed to stdout and into whatever captured it, so
+ * a probe built on `listInbox` would spill a real mailbox's metadata into a terminal, a CI log or
+ * an evidence file. This returns the ONE number an evidence artifact may carry.
+ *
+ * It is a thin wrapper on purpose: the trace has to be of the code a scheduled routine would
+ * actually run, so the read itself is `listInbox`, unchanged, including its refs-only
+ * `mailbox.listed` audit row. The only thing this adds is a narrower return type — which is the
+ * whole point, because a narrower type is the enforcement (`agentSteps.tool`'s argument: a
+ * `count: number` literally cannot hold a subject line).
+ */
+export const probeReadCount = internalAction({
+  args: { tenantId: v.string(), correlationId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, correlationId },
+  ): Promise<{ ok: boolean; count: number; reason?: string }> => {
+    const res: ListInboxResult = await ctx.runAction(internal.gmail.listInbox, {
+      tenantId,
+      correlationId,
+      range: "today",
+      // Deliberately small. This is a liveness probe, not a sync: reading more would cost the
+      // tenant's quota to prove the same single fact.
+      maxResults: 3,
+    });
+    if (!res.ok) return { ok: false, count: 0, reason: res.reason };
+    // `.length` and nothing else. There is no branch here that can return a message.
+    return { ok: true, count: res.messages.length };
+  },
+});

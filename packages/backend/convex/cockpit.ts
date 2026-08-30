@@ -660,10 +660,26 @@ export const proposeEmailPlan = internalMutation({
     mode: v.union(v.literal("individual"), v.literal("group")),
     subject: v.string(),
     body: v.string(),
+    /**
+     * The cockpit-agent version that ACTUALLY DREW THIS DRAFT. Append-only, internal-only, and
+     * never model-suppliable — `buildCockpitTools` passes its own EVAL-01 pin, which the eval
+     * runner set and the model cannot reach.
+     *
+     * WHY IT EXISTS (2026-08-30). Without it this mutation read `by_name_status(name, "active")`
+     * and stamped THAT — but `runCockpitAgent` loads the PINNED candidate, so on every
+     * `--skill cockpit-agent@N` gate run the plan row named the ACTIVE body as the author of a
+     * draft the CANDIDATE wrote. The error did not stay here: `executePlan` copies
+     * `plan.skillVersion` onto every request row and feedback is keyed
+     * `requestId -> request.skillVersion`, so a rating collected during a gate run trained the
+     * wrong body, and the gate's own evidence could not be checked against what ran.
+     *
+     * Absent = the unpinned production path, byte-identical to before: read the active row.
+     */
+    skillVersion: v.optional(v.number()),
   },
   handler: async (
     ctx,
-    { planId, recipients, mode, subject, body },
+    { planId, recipients, mode, subject, body, skillVersion: pinnedVersion },
   ): Promise<{ escalated: true } | undefined> => {
     const plan = await ctx.db.get(planId);
     // Skill-version attribution (08 IMPR-01): stamp the plan with the cockpit-agent version that
@@ -671,11 +687,19 @@ export const proposeEmailPlan = internalMutation({
     // the EXACT skill version that produced the response. Read the active row directly (this is a
     // mutation, same db access loadSkill uses) — but NEVER throw: a missing active row (shouldn't
     // happen post-seed) degrades to unattributable (undefined), it does not break a propose.
-    const activeCockpit = await ctx.db
-      .query("skills")
-      .withIndex("by_name_status", (q) => q.eq("name", COCKPIT_AGENT_SKILL).eq("status", "active"))
-      .unique();
-    const skillVersion = activeCockpit?.version;
+    // A PIN WINS, and it is read WITHOUT touching the registry: the caller already resolved and
+    // ran that body, so re-deriving it here could only disagree with what happened. No pin → the
+    // active row, exactly as before.
+    const activeCockpit =
+      pinnedVersion === undefined
+        ? await ctx.db
+            .query("skills")
+            .withIndex("by_name_status", (q) =>
+              q.eq("name", COCKPIT_AGENT_SKILL).eq("status", "active"),
+            )
+            .unique()
+        : null;
+    const skillVersion = pinnedVersion ?? activeCockpit?.version;
     // REVW-02 (cockpit): a RE-propose of an ALREADY-proposed plan is the live gate's "regenerate"
     // (the agent redrafting a proposed plan on a further user edit). Route it through the SAME
     // @pikar/core classifier the pipeline gate uses (07-03) so the "regenerate past the cap = an

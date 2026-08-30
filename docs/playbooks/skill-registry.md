@@ -1,5 +1,67 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-31 (**THE TENANT PACK LANE EXISTS AND IS EARNABLE.** `planTenantActivation`
+> refused every `pack-*` tenant row unconditionally; `assertTenantPackActivationEvidence` now demands
+> the SAME THREE PLANES a global pack body clears, keyed to the row id. `PACK_GATE_ERROR` is still
+> the literal, so every caller and test matching on it still sees a refusal — what changed is that it
+> can now be satisfied.
+>
+> THE PRICE WAS SMALLER THAN RECORDED. The old comment named "the two evidence columns plus a
+> tenant-scoped pack eval runner". Measured, ONE column was owed:
+>  1. PROVENANCE — no column. The row already stores `templateId`, `templateVersion`,
+>     `customizationValues`, `customizationHash`, so it is RECOMPUTED at activation. That is STRONGER
+>     than the global plane, whose own docstring admits it "checks SHAPE and the VERSION PIN, not that
+>     `bodySha256` is the hash of the body it sits beside". Values edited underneath their hash are
+>     refused here; a stored-blob check could not see it. It also refuses a candidate composed against
+>     a template that has since been republished — yesterday's adaptation on today's approved body.
+>  2. EVAL — `hasPassingTenantEvidence`, which already existed and only became TRUSTWORTHY on
+>     2026-08-30, when `shouldRecordEvidence` learned to verify the pinned body was actually loaded.
+>     Before that this plane was a certificate anyone could mint.
+>  3. BROWSER — the one new column, `tenantSkills.browserEvidence`, checked by
+>     `hasPassingTenantPackBrowserEvidence`, which pins the ROW ID and not name@version. Two tenants
+>     can each own version 2; a browser run against one must never certify the other, and a test
+>     drives exactly that case.
+>
+> SIX TESTS, POSITIVE WITNESS FIRST — without an activation that SUCCEEDS every refusal below it is
+> satisfied by a gate nobody can pass, which is the shape this phase kept finding. Dropping the
+> browser plane reddens three, including a pre-existing one.
+>
+> ⚠ WHAT IS NOT BUILT YET, so nobody reads this as finished: nothing PRODUCES tenant pack evidence.
+> The golden runner still refuses `pack-`-named rows (it drives `llm:runCockpitAgent` and never runs a
+> pack specialist), and no browser gate emits a `tenantTarget`-pinned artifact. So the lane is open
+> and correct, and in practice still unreachable until an evidence producer exists for planes 2 and 3.
+> That is a smaller, better-defined job than it was — but it is a job, not a detail.)
+
+> Last verified: 2026-08-30 (**THE EVAL GATE NOW VERIFIES THAT THE PINNED BODY RAN.**
+> `shouldRecordEvidence` built its certificate from `skillVersionsOf(pins)` — the caller's own claim
+> — so a green, unfiltered, non-empty run wrote `pass: true` for a body it never loaded. That is why
+> `knowledge-query-planner` / `knowledge-synthesizer` were EXEMPTED from `GATED_SKILLS` rather than
+> protected by it.
+>
+> The runner now reads back `smokeAssert:observedSkillLoads` — `subagent.completed` rows (already
+> written by `runSpecialistTurn` since 21-03) plus a new `agent.skill_loaded` row from the cockpit
+> loop — and refuses any pin absent from that set. Tenant candidates match on ROW ID and scope, never
+> `name@version`: two tenants can each own version 2. **Fail-closed on its own input:** a null
+> observation REFUSES, because "we could not look" must not read the same as "we looked".
+>
+> AN ATTRIBUTION BUG UNDER IT, worth knowing about separately: `proposeEmailPlan` stamped
+> `plans.skillVersion` from the ACTIVE row while `runCockpitAgent` loads the PINNED candidate, so on
+> every gate run the plan row named the wrong author — and `executePlan` copies that onto every
+> request row, where feedback is keyed to it. Ratings collected during a gate run trained the wrong
+> body. The mutation now takes the version that actually ran; unpinned production is unchanged.
+>
+> THE UNGATING DECISION IS HALF-CLOSED AND SAYS SO. Its forward tripwire fired on landing, as
+> written. The false-certificate half is closed (the assertion is inverted, so restoring the old
+> one-line rule reddens it). The DEADLOCK half still holds: the runner drives `llm:runCockpitAgent`
+> and cannot reach a toolless knowledge call, so gating those two would not be dangerous — it would
+> make them unactivatable. Re-gating needs BOTH false, and a second test names the verbs that will
+> say so.
+>
+> `agent.skill_loaded` is written ONLY on a pinned run: an unpinned turn's attribution already exists
+> on the plan row, and charging the cockpit hot path an audit insert plus an aggregate write per
+> message to serve a test harness is not a trade worth making. It is classified in
+> `AUDIT_VIEWER_EVENTS` — refs only: name, version, body hash, pinned flag.)
+
 > Last verified: 2026-08-30 (`knowledge-query-planner` -> **v2**, and a lesson about how to verify
 > ANY body edit. THE EDIT: v1 priced omission at zero — *"a source you leave out is reported to the
 > user, plainly, as not searched — which is honest and cheap"* — while giving inclusion the only

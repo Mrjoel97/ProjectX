@@ -118,3 +118,10 @@ Skills/*.pdf
 # file per live browser gate, regenerable by re-running the gate. Verified against `git ls-files`:
 # ZERO tracked files match.
 .playwright/
+
+# Fixture evidence artifacts written and deleted by `check-routine-gate.mjs --self-check` and by
+# `routineDecision.test.ts`. Both remove them unconditionally; this is the belt-and-braces so a
+# killed run can never leave a file saying `observed: true` for a probe that never ran sitting
+# where a `live` row could cite it. Verified against `git ls-files`: ZERO tracked files match.
+packages/backend/scripts/.selfcheck-artifacts/
+packages/backend/scripts/.test-artifacts/

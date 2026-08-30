@@ -102,6 +102,7 @@ import {
   checkBaseVersion,
   customizationSchemaFor,
   hasPassingPackBrowserEvidence,
+  hasPassingTenantPackBrowserEvidence,
   hasValidPackProvenance,
   isWorkflowPackSkill,
   renderCustomization,
@@ -286,6 +287,102 @@ async function planGlobalActivation(
  * internal callers, and `requireOwner` lives on the public wrapper — two independent gates
  * (docs/playbooks/authorization.md invariant 9).
  */
+/**
+ * THE TENANT PACK LANE: the same three planes a GLOBAL pack body must clear, keyed to a row id.
+ *
+ * WHAT THIS REPLACED. `planTenantActivation` used to throw `PACK_GATE` for every `pack-*` name at
+ * every scope, and correctly so: `publishPackCustomization` could mint the row, `hasPassingTenantEvidence`
+ * alone would have activated it, and that predicate is the suite-less one the pack gate exists to
+ * refuse. Running a weaker subset and calling it the gate was rightly declined.
+ *
+ * WHAT THE PRICE ACTUALLY WAS, once measured. The old comment named "the two evidence columns plus a
+ * tenant-scoped pack eval runner". Only ONE column was owed:
+ *
+ *  1. PROVENANCE — no column. A tenant row already stores `templateId`, `templateVersion`,
+ *     `customizationValues` and `customizationHash`, so provenance is RECOMPUTED here and compared.
+ *     That is strictly stronger than the global plane, which checks the SHAPE of a stored blob and
+ *     says so in its own docstring: it "checks SHAPE and the VERSION PIN, not that `bodySha256` is
+ *     the hash of the body it sits beside". Here the hash IS recomputed from the stored values, so a
+ *     row whose values were edited underneath its hash cannot activate.
+ *     It also requires the customization to be against the CURRENTLY APPROVED template version — a
+ *     candidate composed against a template that has since been republished is stale, and activating
+ *     it would put yesterday's adaptation on today's approved body.
+ *  2. EVAL — `hasPassingTenantEvidence`, which already existed. It became trustworthy earlier today:
+ *     until `shouldRecordEvidence` learned to verify the pinned body was actually LOADED, a green
+ *     run certified pins it never ran, so this plane was a certificate anyone could mint.
+ *  3. BROWSER — the one new column, `tenantSkills.browserEvidence`, checked by
+ *     `hasPassingTenantPackBrowserEvidence` which pins the ROW ID rather than name@version. Two
+ *     tenants can each own version 2; a browser run against one must never certify the other.
+ *
+ * FAIL-CLOSED AND UNORDERED. Every missing plane is collected and named, rather than throwing on the
+ * first: an operator fixing one at a time would otherwise need three round trips to learn what is
+ * wrong. The throw still carries `PACK_GATE_ERROR`, so every existing caller and test that matches
+ * on that literal still sees a refusal — what changed is that it is now EARNABLE.
+ */
+async function assertTenantPackActivationEvidence(
+  ctx: MutationCtx,
+  row: Doc<"tenantSkills">,
+): Promise<void> {
+  const missing: string[] = [];
+
+  // ── PLANE 1: provenance, recomputed ─────────────────────────────────────────────────────────
+  const provenanceOk = await (async (): Promise<boolean> => {
+    const { templateId, templateVersion, customizationValues, customizationHash } = row;
+    if (
+      typeof templateId !== "string" ||
+      typeof templateVersion !== "number" ||
+      typeof customizationValues !== "string" ||
+      typeof customizationHash !== "string"
+    ) {
+      return false;
+    }
+    // The template this row claims to customize must be the one that is APPROVED AND ACTIVE now.
+    // `loadSkill` fails closed on an unseeded/absent name, which is the correct answer here too.
+    let activeTemplateVersion: number;
+    try {
+      activeTemplateVersion = (await loadSkill(ctx, `pack-${templateId}`)).version;
+    } catch {
+      return false;
+    }
+    if (activeTemplateVersion !== templateVersion) return false;
+
+    const schema = customizationSchemaFor(templateId, templateVersion);
+    if (!schema.ok) return false;
+    let values: unknown;
+    try {
+      values = JSON.parse(customizationValues);
+    } catch {
+      return false;
+    }
+    // THE RECOMPUTE. A row whose stored values were changed without its hash moving fails here.
+    const recomputed = await contentHash(
+      canonicalCustomization(schema.value, values as Record<string, never>),
+    );
+    return recomputed === customizationHash;
+  })();
+  if (!provenanceOk) missing.push("provenance");
+
+  // ── PLANE 2: the pinned eval run ────────────────────────────────────────────────────────────
+  if (!hasPassingTenantEvidence(row.evidence, tenantTargetOf(row))) missing.push("eval");
+
+  // ── PLANE 3: the authenticated multi-viewport browser run of THIS row ───────────────────────
+  if (
+    !hasPassingTenantPackBrowserEvidence(row.browserEvidence, {
+      candidateId: String(row._id),
+      name: row.name,
+      version: row.version,
+    })
+  ) {
+    missing.push("browser");
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `${PACK_GATE_ERROR}: tenant pack candidate ${String(row._id)} lacks ${missing.join(", ")} evidence`,
+    );
+  }
+}
+
 async function planTenantActivation(
   ctx: MutationCtx,
   candidateId: Id<"tenantSkills">,
@@ -320,9 +417,10 @@ async function planTenantActivation(
   // lane is genuinely wanted, the work is the two evidence columns plus a tenant-scoped pack eval
   // runner — not deleting this branch.
   if (isWorkflowPackSkill(row.name)) {
-    throw new Error(
-      `${PACK_GATE_ERROR}: ${row.name} is a workflow pack — the tenant overlay carries no provenance or browser evidence, so a tenant pack candidate cannot be activated at any scope`,
-    );
+    // THE TENANT LANE EXISTS NOW (2026-08-30) — and it is the SAME three planes as global, not a
+    // weaker subset. See `assertTenantPackActivationEvidence` for what each one costs and why
+    // provenance needed no column.
+    await assertTenantPackActivationEvidence(ctx, row);
   }
 
   let ownerApproval: OwnerApproval | null = null;
@@ -2387,3 +2485,52 @@ async function logTenantActivation(
     },
   });
 }
+
+/**
+ * The tenant's newest saved customization for one pack skill, or `null`.
+ *
+ * ROUT-01 (2026-08-30): this is what makes a saved customization TAKE EFFECT. `runWorkflowPack`
+ * reads it, renders it through the approved schema and passes the result into the run as settings —
+ * the approved template stays the governing body, so nothing tenant-authored goes live and
+ * `planTenantActivation`'s `PACK_GATE` is untouched.
+ *
+ * NEWEST BY VERSION, not "the active one": there is no active tenant pack row and cannot be. It is
+ * the same `by_tenant_name_version` `take(1)` read `workflowPackDiscovery` uses to fill the form
+ * and `readTenantPublishState` uses to compute the base version, so the settings a run applies are
+ * exactly the ones the customizer last showed the user.
+ *
+ * Returns the raw stored JSON. Parsing and rendering belong to the caller, which holds the schema.
+ */
+export const newestTenantCustomization = internalQuery({
+  args: { tenantId: v.string(), name: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, name },
+  ): Promise<{
+    customizationValues: string;
+    templateVersion: number;
+    version: number;
+  } | null> => {
+    const newest = (
+      await ctx.db
+        .query("tenantSkills")
+        .withIndex("by_tenant_name_version", (q) => q.eq("tenantId", tenantId).eq("name", name))
+        .order("desc")
+        .take(1)
+    )[0];
+    // A `system` rollback baseline carries no template lineage and no values — indistinguishable
+    // from "never customized" for this purpose, and treated as such rather than half-applied.
+    if (
+      newest === undefined ||
+      newest.customizationValues === undefined ||
+      newest.templateVersion === undefined
+    ) {
+      return null;
+    }
+    return {
+      customizationValues: newest.customizationValues,
+      templateVersion: newest.templateVersion,
+      version: newest.version,
+    };
+  },
+});
