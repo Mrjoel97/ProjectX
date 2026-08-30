@@ -137,8 +137,7 @@ async function claimable(ctx: MutationCtx, nowMs: number): Promise<Doc<"billingP
     .take(PERIOD_SCAN_LIMIT);
   out.push(
     ...claimed.filter(
-      (row) =>
-        row.attempts < MAX_PERIOD_ATTEMPTS && nowMs - (row.claimedAt ?? 0) >= CLAIM_STALE_MS,
+      (row) => row.attempts < MAX_PERIOD_ATTEMPTS && nowMs - (row.claimedAt ?? 0) >= CLAIM_STALE_MS,
     ),
   );
   return out;
@@ -223,7 +222,10 @@ export const periodForPost = internalQuery({
 
 // ── The document, decided before anything is sent ─────────────────────────────────────────────
 
-type Prepared = { currency: string; lines: { ref: string; kind: ChargeKind; amountMinor: number }[] };
+type Prepared = {
+  currency: string;
+  lines: { ref: string; kind: ChargeKind; amountMinor: number }[];
+};
 
 /**
  * Decide the whole document from the claim row, or refuse it with a code — PURELY, and before a
@@ -363,7 +365,9 @@ export const postInvoice = internalAction({
           "period[start]": seconds(period.periodStart),
           "period[end]": seconds(period.periodEnd),
         },
-        { idempotencyKey: `billing-invoice-item:${period.tenantId}:${period.periodKey}:${line.ref}` },
+        {
+          idempotencyKey: `billing-invoice-item:${period.tenantId}:${period.periodKey}:${line.ref}`,
+        },
       );
       if (!item.ok) return await fail(item.error.code ?? `stripe_${item.error.kind}`);
     }
@@ -377,9 +381,11 @@ export const postInvoice = internalAction({
     );
     if (!finalized.ok) return await fail(finalized.error.code ?? `stripe_${finalized.error.kind}`);
 
-    const body = finalized.value as
-      | { hosted_invoice_url?: unknown; amount_due?: unknown; currency?: unknown }
-      | null;
+    const body = finalized.value as {
+      hosted_invoice_url?: unknown;
+      amount_due?: unknown;
+      currency?: unknown;
+    } | null;
     const hostedInvoiceUrl = stripeHostedUrl(body?.hosted_invoice_url);
     // A finalized invoice with no usable hosted url is a bill nobody can pay. Reported as a
     // failure, never as a success with a missing link.

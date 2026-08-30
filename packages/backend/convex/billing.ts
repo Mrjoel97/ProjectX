@@ -326,3 +326,96 @@ export const unappliedFunds = tenantQuery({
     };
   },
 });
+
+/**
+ * How many invoices one read returns. A monthly biller reaches this in four years, so the cap is
+ * about never letting a money surface run unbounded — not about the number being expected.
+ */
+export const INVOICE_PAGE_LIMIT = 50;
+
+/**
+ * BILL-04: the tenant's invoices, as ONE LINK EACH.
+ *
+ * B2B customers who cannot pay by card pay on Stripe's HOSTED INVOICE PAGE
+ * (`invoice.hosted_invoice_url`). We serve that link and nothing else: no invoice renderer, no
+ * payment form, no card field and no custom 3DS anywhere in this repo (locked decision, and
+ * `billing.test.ts` scans both this subsystem and `apps/web` to hold it). The hosted page is also
+ * what handles authentication and, where the merchant's country supports it, prints the bank
+ * transfer instructions.
+ *
+ * BANK TRANSFER IS COUNTRY-GATED AND THIS DEPLOYMENT CANNOT ANSWER IT. `BANK_TRANSFER_ENABLED` is
+ * `true` in config but `HEAD_OFFICE_COUNTRY` is null and `CONFIG_CONFIRMED` is false — the
+ * business is not registered yet. If bank transfer turns out NOT to be available for the eventual
+ * country, nothing here changes and nothing here is faked: the hosted page simply serves card
+ * payment and the transfer instructions do not appear. The code path is not deleted, because the
+ * law it encodes (we serve a link, we never render a payment surface) is what makes it safe to
+ * enable later. Recorded in `docs/playbooks/billing.md`.
+ *
+ * ONLY `posted` PERIODS. A `pending` or `claimed` period is work in progress and a `failed` one is
+ * an operator's problem — neither is a document anybody owes money on, and neither has a hosted
+ * url to serve. Showing them would turn an internal state machine into a billing statement.
+ *
+ * COVERAGE IS REPORTED SEPARATELY, exactly as `unappliedFunds` does it: an empty list under
+ * `unknown` means "this ledger has never watched this tenant", an empty list under `known` means
+ * "there is genuinely no invoice". Missing history is unknown, never zero (`@pikar/core`'s
+ * `cash.ts`).
+ */
+export const invoices = tenantQuery({
+  args: {},
+  returns: v.object({
+    coverage: v.union(v.literal("unknown"), v.literal("known")),
+    coverageStartedAt: v.union(v.number(), v.null()),
+    invoices: v.array(
+      v.object({
+        periodKey: v.string(),
+        periodStart: v.number(),
+        periodEnd: v.number(),
+        postedAt: v.number(),
+        amountMinor: v.number(),
+        currency: v.string(),
+        /** Stripe's, verbatim. It was validated to an https `*.stripe.com` origin before it was
+         *  stored (`billingApi.stripeHostedUrl`); nothing re-writes it on the way out. */
+        hostedInvoiceUrl: v.string(),
+      }),
+    ),
+    /** True when the cap bit. A silently partial list of bills is a wrong one. */
+    truncated: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const coverageStartedAt = await billingCoverageFor(ctx, ctx.tenantId);
+    const page = await ctx.db
+      .query("billingPeriods")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .take(INVOICE_PAGE_LIMIT + 1);
+
+    return {
+      coverage: coverageStartedAt === null ? ("unknown" as const) : ("known" as const),
+      coverageStartedAt,
+      invoices: page
+        .slice(0, INVOICE_PAGE_LIMIT)
+        // ponytail: filter after the page rather than a fourth index on `status`. Ceiling: a
+        // tenant with more than INVOICE_PAGE_LIMIT unposted periods would push posted ones off
+        // the page. Upgrade path: a `by_tenant_status` index, the day a producer exists at all.
+        .flatMap((row) =>
+          row.status === "posted" &&
+          row.hostedInvoiceUrl !== undefined &&
+          row.postedAt !== undefined &&
+          row.amountMinor !== undefined &&
+          row.currency !== undefined
+            ? [
+                {
+                  periodKey: row.periodKey,
+                  periodStart: row.periodStart,
+                  periodEnd: row.periodEnd,
+                  postedAt: row.postedAt,
+                  amountMinor: row.amountMinor,
+                  currency: row.currency,
+                  hostedInvoiceUrl: row.hostedInvoiceUrl,
+                },
+              ]
+            : [],
+        ),
+      truncated: page.length > INVOICE_PAGE_LIMIT,
+    };
+  },
+});

@@ -16,10 +16,10 @@ import type { Id } from "./_generated/dataModel";
 import {
   CLAIM_STALE_MS,
   INVOICE_LINE_LABELS,
+  invoiceIdempotencyKey,
   MAX_PERIOD_ATTEMPTS,
   MAX_PERIOD_CHARGES,
   PERIOD_SCAN_LIMIT,
-  invoiceIdempotencyKey,
   periodKeyFor,
 } from "./billingRollup";
 import schema from "./schema";
@@ -120,7 +120,9 @@ async function queuedPosts(t: ReturnType<typeof convexTest>): Promise<unknown[]>
   const rows = (await t.run((ctx) =>
     ctx.db.system.query("_scheduled_functions").collect(),
   )) as Array<{ name: string; state: { kind: string } }>;
-  return rows.filter((row) => row.name.includes("billingRollup") && row.name.includes("postInvoice"));
+  return rows.filter(
+    (row) => row.name.includes("billingRollup") && row.name.includes("postInvoice"),
+  );
 }
 
 /** No outbound call may happen in a Task-1 test: `tick` is a mutation and cannot fetch. */
@@ -766,8 +768,20 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
     const now = Date.now();
     const id = await seedPeriod(t, tenantId, {
       charges: [
-        { ref: "same", kind: "usage", amountMinor: 100, currency: "USD", occurredAt: now - 2 * DAY },
-        { ref: "same", kind: "usage", amountMinor: 250, currency: "USD", occurredAt: now - 2 * DAY },
+        {
+          ref: "same",
+          kind: "usage",
+          amountMinor: 100,
+          currency: "USD",
+          occurredAt: now - 2 * DAY,
+        },
+        {
+          ref: "same",
+          kind: "usage",
+          amountMinor: 250,
+          currency: "USD",
+          occurredAt: now - 2 * DAY,
+        },
       ],
     });
     stubStripe();

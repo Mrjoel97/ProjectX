@@ -73,5 +73,10 @@ crons.interval("reliability-sweep", { minutes: 30 }, internal.reliabilitySweep.r
 //
 // 07:00 UTC, after `worm-export` (03), `gmail-token-expiry-scan` (04) and
 // `vault-pending-extraction-sweep` (05), so the money path is not competing with the daily sweeps.
-crons.daily("billing-invoice-rollup", { hourUTC: 7, minuteUTC: 0 }, internal.billingRollup.tick, {});
+crons.daily(
+  "billing-invoice-rollup",
+  { hourUTC: 7, minuteUTC: 0 },
+  internal.billingRollup.tick,
+  {},
+);
 export default crons;

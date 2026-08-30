@@ -6,7 +6,9 @@
 > behaviour change, and **this is not a re-verification of anything below.** The
 > `Last verified` line still means what it said.
 
-> Last verified: 2026-08-30 against 28.1-06 (`billingEvents` / `billingCoverage` /
+> Last verified: 2026-08-30 against 28.1-07 (`billingPeriods` — the DURABLE INVOICE CLAIM ROW —
+> plus `convex/billingRollup.ts`, the `billing-invoice-rollup` cron and `billing.invoices`;
+> offline at $0, 17 mutations run) — after 28.1-06 (`billingEvents` / `billingCoverage` /
 > `billingUnapplied` — the billing BOOK OF RECORD, the money arms of the effect switch, and
 > `unappliedFunds`; offline at $0) — after 28.1-05 (`billingCustomers` — the tenant↔Stripe-customer
 > mapping — plus the refusal to auto-provision, `eventFacts` as the redact-then-write boundary,
@@ -100,6 +102,10 @@ name or an env prefix:
   extracted from the inline ternary so the 75/90 boundaries have ONE definition, and
   `REF_TOKEN` was exported so the Convex adapter validates against the same pattern that
   built the values instead of a third copy.
+- **28.1-07 added NO pure module.** The rollup is scheduling, transport and a claim row —
+  Convex-shaped work with no portable domain law in it. The one thing that looked like domain
+  logic, `prepareInvoice`, is a plain exported function inside `billingRollup.ts` because it
+  reads `Doc<"billingPeriods">` and has exactly one caller (CLAUDE.md §8 rung 1).
 - `packages/billing/src/tax.ts` — `taxPosture` + `renderTaxPosture` + the written-out
   `TAXABILITY_REASONS` table. BILL-05's whole code surface. Pure; the product tax code is an
   ARGUMENT, never read from config inside the function. **28.1-06 added
@@ -255,6 +261,54 @@ the tenant's `stripeCustomerId` — `null` for every tenant until 28.1-05 — so
    one that reads `outcome`.
 7. `200`, always fast. A timeout is a delivery failure to Stripe and buys a retry storm.
 
+### Outbound — invoice (28.1-07, BILL-04)
+
+Stripe has **no built-in recurrence for standalone invoices**, so the schedule is ours. The shape
+below is dictated by Convex's scheduling guarantees, not chosen:
+
+```
+crons.daily("billing-invoice-rollup", 07:00 UTC)
+        │
+        ▼
+internal.billingRollup.tick            MUTATION — exactly-once, auto-retried on internal error
+        │  claims each DUE period:  status -> "claimed", claimedAt, attempts + 1
+        │  scheduler.runAfter(0, postInvoice)   ← ATOMIC with the claim; rollback schedules nothing
+        ▼
+internal.billingRollup.postInvoice     ACTION — AT MOST ONCE, never auto-retried
+        │  1. POST /v1/invoices        pending_invoice_items_behavior=exclude   ← THE BOUND
+        │  2. POST /v1/invoiceitems    one per in-window charge, invoice=<id>, explicit period
+        │  3. POST /v1/invoices/<id>/finalize   ← mints hosted_invoice_url; a DRAFT has none
+        ▼
+internal.billingRollup.settlePeriod    MUTATION — settles ONLY a `claimed` row
+           posted  (terminal: invoice id, hosted url, Stripe's amount_due)
+           failed  (a code token; re-claimable until MAX_PERIOD_ATTEMPTS)
+```
+
+**Why the cron points at a MUTATION.** Scheduled ACTIONS are at-most-once and are **not**
+auto-retried; scheduled MUTATIONS are exactly-once and auto-retried on an internal error. A cron
+aimed straight at `postInvoice` drops an entire billing period in silence — no retry, no error
+surface, no invoice. A cron run is also *skipped* while the previous one is still executing, which
+is the second reason the outbound work cannot live in the tick. `billingRollup.test.ts` fails if
+`crons.ts` ever names `postInvoice`.
+
+**Why `billingPeriods` is the guard and the `Idempotency-Key` is not.** Stripe prunes idempotency
+keys once they are ~24h old and then treats a reuse as a brand-new request, so a rollup retried a
+day later with the identical key mints a **second invoice**. The header is a same-day belt; the
+claim row never expires. Every refusal in `postInvoice` is checked against the ROW, before
+`stripePost` is reached — the test that proves it clears the stub's key memory entirely and asserts
+`fetch` is never called.
+
+**Why the invoice is created before its lines.** `POST /v1/invoices` pulls **all** pending invoice
+items for a customer, so creating items first and rolling them afterwards is unbounded by
+construction: the leftovers of a period that failed last month land on this month's bill. The
+document is created first with `pending_invoice_items_behavior=exclude`, each line is attached to
+that invoice by id, and only then is it finalized. (This is a deliberate DEVIATION from the 28.1-07
+plan, which specified items-first.)
+
+**Where a period comes from: NOWHERE YET.** No code in this deployment inserts a `billingPeriods`
+row. The rollup is complete and its INPUT has no producer — the same posture `reconcileEvent` had
+between 28.1-03 and 28.1-06. Every test seeds its periods by hand.
+
 ## The Ledger — `billingEvents` is a SEPARATE book from `spendEvents` (28.1-06, BILL-03)
 
 **Owner decision, 2026-08-28. Do not reopen it.** Money-in gets its own table. It is NOT a fourth
@@ -397,6 +451,16 @@ append-only table that cannot take it back.
 | Missing billing history reads as UNKNOWN, never zero | A zero that means "we were not watching" is a confident lie about revenue | `billingLedger.test.ts` (null is not 0) + `billing.test.ts` (`coverage: "unknown"` ≠ `"known"` with an empty list) |
 | `cash_balance.funds_available` books ZERO ledger rows | It is leftover money, not an arrival | `billingWebhook.test.ts` — "ONE unapplied row and ZERO ledger rows" |
 | A re-observed balance never restarts the 75/90-day clock | The clock is what makes the row actionable before Stripe takes the money back | `billingWebhook.test.ts` — "updates the amount and never restarts" |
+| One period produces exactly ONE invoice | The most expensive defect this subsystem can ship is a second bill for one month | `billingRollup.test.ts` — double tick queues ONE post; a `posted` period is never re-claimed and refuses a re-post BEFORE fetch |
+| The cron points at a MUTATION, never at the action | A scheduled action is at-most-once and never retried — a dropped period is silent | `billingRollup.test.ts` — `crons.ts` must name `.tick` and must NOT name `postInvoice`; `tick` is asserted callable as a mutation AND declared `internalMutation` by name |
+| `postInvoice` is the ONLY action in the module | Each action is another at-most-once link in the chain | `billingRollup.test.ts` — exactly one `internalAction(` in the source |
+| A `claimed` period past `CLAIM_STALE_MS` is RE-CLAIMED | A severed scheduler chain writes no terminal and throws nothing; nothing else would notice | `billingRollup.test.ts` — stale re-claim, and a fresh claim is NOT taken |
+| A failure leaves the period re-claimable, up to `MAX_PERIOD_ATTEMPTS` | A transient Stripe failure costs a day, not a period; a permanent one stops rather than hammering Stripe daily | `billingRollup.test.ts` — failed→posted on the next tick; attempts 4 retried, 5 stops |
+| The invoice is bounded by the PERIOD, never by "whatever is pending" | `POST /v1/invoices` sweeps every unattached pending item the customer has | `billingRollup.test.ts` — `pending_invoice_items_behavior=exclude`, lines attached by invoice id, an out-of-window charge is excluded |
+| The same period re-posted sends the same KEY **and** the same BODY | Stripe errors when a key is replayed with different parameters | `billingRollup.test.ts` — two runs compared field by field, with a non-vacuity length pin |
+| A hosted url is validated to an https `*.stripe.com` origin before it is stored | It is stored and later rendered as a link — an unvalidated one is an open redirect | `billingRollup.test.ts` — `invoice.stripe.com.evil.example` is refused, nothing stored |
+| No card field, CVC, expiry or 3DS exists in the repo — INCLUDING `apps/web` | Stripe-hosted everything is the locked decision; a card input is that decision reversed by accident | `billing.test.ts` — the pattern scan over `convex/billing*`, `packages/billing/src` **and** `apps/web/app/**/*.tsx`, each with a non-vacuity pin |
+| Every `stripePost` CALL SITE passes an `idempotencyKey` | A unit test of the transport cannot tell you a caller forgot | `billing.test.ts` — call-site scan over `convex/billing*.ts`, asserting WHICH modules it found |
 | `SPEND_RAILS` stays exactly the three COST rails | Phase 26 Finance renders those totals as what Pikar SPENDS | `billing.test.ts` — written-out literal + `finance.summary` byte-identical with/without `billingEvents` |
 | The billing ledger writer is INSERT-ONLY | `audit_immutable` is a lie otherwise | `billingLedger.test.ts` — source scan for `patch`/`replace`/`delete` |
 | A money event for an unmapped Stripe customer writes NO ledger row | A misattributed payment is permanent; an unattributed one is recoverable | `billingWebhook.test.ts` — "dead-letters and writes NO ledger row" |
@@ -484,7 +548,7 @@ append-only table that cannot take it back.
 
 ```bash
 cd packages/billing && npx vitest run && npx tsc --noEmit
-cd packages/backend && npx vitest run convex/billing convex/env.test.ts convex/importGuard.test.ts convex/dashboardSchema.test.ts convex/deadLetters.test.ts convex/isolation.test.ts
+cd packages/backend && npx vitest run convex/billing convex/env.test.ts convex/importGuard.test.ts convex/dashboardSchema.test.ts convex/deadLetters.test.ts convex/isolation.test.ts convex/reliabilitySweep.test.ts
 cd packages/backend && npx tsc --noEmit          # SEPARATELY — chaining reports the wrong exit code
 cd packages/core   && npx vitest run && npx tsc --noEmit
 node scripts/check-playbooks.mjs < /dev/null     # READ ITS STDOUT — it always exits 0
@@ -503,8 +567,37 @@ node scripts/check-playbooks.mjs < /dev/null     # READ ITS STDOUT — it always
   events. A handler cannot tell a fabricated one from a real one — that is what makes the
   coverage both $0 and complete for the SHAPES Stripe documents. It is NOT evidence that
   Stripe sends those shapes.
+- `convex/billing` also picks up `billingRollup.test.ts` (same prefix). `reliabilitySweep.test.ts`
+  is in the list because it pins the CRON COUNT — 28.1-07 moved it 5 → 6, and a job added
+  without touching that number is meant to be red.
+- The rollup's Stripe calls are a stubbed `fetch` that records every Request. Nothing there is
+  evidence that Stripe ACCEPTS `pending_invoice_items_behavior`, that a finalize returns
+  `hosted_invoice_url`, or that `amount_due` carries tax. **No invoice has ever been posted.**
 - Manual/live: nothing here has been verified against Stripe. A live check needs 28.1-02's
   credentials plus `stripe listen --forward-to` and `stripe trigger`.
+
+## Operations — a `claimed` billing period that is not moving (28.1-07)
+
+A `billingPeriods` row sitting at `status: "claimed"` for more than `CLAIM_STALE_MS` (one hour)
+means the SCHEDULER CHAIN WAS SEVERED: `tick` claimed the period and scheduled `postInvoice`, and
+that action died before `settlePeriod` ran. Actions are at-most-once and are not auto-retried, so
+nothing will resume it on its own.
+
+**You do not need to do anything.** The NEXT daily tick re-claims any `claimed` row past the
+threshold and schedules the post again, which is why the row is not lost. `reliability-sweep`
+(every 30 min, `crons.ts`) remains the repo's general surface for non-terminal states; a second
+watchdog for this table was deliberately not built.
+
+**When to actually look:** a row at `status: "failed"` with `attempts >= MAX_PERIOD_ATTEMPTS` (5)
+has STOPPED. It stays in the table, visible, with a `failureCode` — read that code first:
+
+| `failureCode` | Meaning |
+| --- | --- |
+| `no_stripe_customer` | The tenant has no `billingCustomers` mapping. Nothing is auto-provisioned; see the orphan runbook below. |
+| `mixed_currency` / `duplicate_charge_ref` / `unusable_charge_amount` / `too_many_charges` | The period row itself is malformed — a producer bug, not a Stripe problem. |
+| `no_charges_in_period` | Every charge on the row falls outside `[periodStart, periodEnd)`. |
+| `no_hosted_url` / `unreadable_invoice_total` | Stripe finalized the invoice but the response could not be read. **A Stripe invoice may exist**; check the Dashboard before re-running anything. |
+| anything else | Stripe's own `error.code`, or `stripe_http` / `stripe_network` / `stripe_timeout`. |
 
 ## Operations — reconciling an ORPHANED Stripe customer (28.1-05)
 
@@ -634,6 +727,27 @@ which is how `CONNECTOR_CREDENTIAL_KEY_V1`/`_V2` escaped classification entirely
 
 - ~~**The effect switch handles the four MAPPING types only.**~~ **CLOSED by 28.1-06** — the
   invoice, refund and cash-balance arms all write the ledger now, and the switch is exhaustive.
+- **NOTHING PRODUCES A `billingPeriods` ROW.** The rollup, the cron, the claim, the bounded post
+  and the settle are all real; the thing that would OPEN a period for a tenant and accumulate its
+  charges does not exist. So the daily cron runs, finds nothing due, and does nothing — for every
+  tenant, every day. **BILL-04 should be read as "the invoicing mechanism is correct and bounded",
+  not as "invoices are produced."**
+- **No invoice has ever been posted to Stripe.** Every request above is asserted against a stubbed
+  `fetch`. `pending_invoice_items_behavior`, the finalize endpoint's `hosted_invoice_url`, and
+  `amount_due` carrying Stripe Tax are all read from Stripe's documentation, not from a response.
+- **Bank transfer on the hosted invoice page is COUNTRY-GATED and unanswerable here.**
+  `BANK_TRANSFER_ENABLED` is `true` in config, but `HEAD_OFFICE_COUNTRY` is null and
+  `CONFIG_CONFIRMED` is `false` — the business is not registered. If transfer turns out not to be
+  available for the eventual country, nothing in the code changes and nothing is faked: the hosted
+  page serves card payment and the transfer instructions simply do not appear. The code path stays,
+  because the law it encodes (we serve a link, we never render a payment surface) is what makes it
+  safe to enable later.
+- **`billing.invoices` has no caller in `apps/web` either**, and a test asserts that — so the
+  invoice list is a query nobody calls, exactly like `unappliedFunds`.
+- **The invoice list filters `posted` AFTER paging.** A tenant with more than
+  `INVOICE_PAGE_LIMIT` (50) unposted periods could push posted ones off the page. Marked
+  `ponytail:` at the site with `by_tenant_status` as the upgrade path; not reachable while no
+  producer exists.
 - **No UI renders any of the ledger.** `unappliedFunds` has no caller in `apps/web`, so the
   75/90-day clock is visible only to a query nobody calls. `taxPosture`/`renderTaxPosture` still
   have no renderer either (28.1-03's gap, unchanged).

@@ -3037,11 +3037,7 @@ export default defineSchema({
         /** Unique within the period and ref-safe: it is half of the PER-ITEM idempotency key, so a
          *  same-day retry re-sends the same item rather than adding a second copy of it. */
         ref: v.string(),
-        kind: v.union(
-          v.literal("subscription"),
-          v.literal("usage"),
-          v.literal("adjustment"),
-        ),
+        kind: v.union(v.literal("subscription"), v.literal("usage"), v.literal("adjustment")),
         /** POSITIVE minor units, like `billingEvents`. A credit is a Stripe credit note, not a
          *  negative invoice line — direction never lives in the sign. */
         amountMinor: v.number(),

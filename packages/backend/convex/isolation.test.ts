@@ -207,7 +207,8 @@ const NON_TENANT_LEADING: Record<string, string> = {
   // `billingRollup.tick` and `billingRollup.periodForPost`, both internal and both reached only
   // from the cron chain; there is no tenant-facing caller and no argument a caller could supply.
   // The tenant-facing surface (`billing.invoices`) uses `by_tenant`, which does lead with tenantId.
-  "billingPeriods.by_status_dueAt": "deployment-wide claim scan from the cron; no tenant-facing caller",
+  "billingPeriods.by_status_dueAt":
+    "deployment-wide claim scan from the cron; no tenant-facing caller",
 };
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {
