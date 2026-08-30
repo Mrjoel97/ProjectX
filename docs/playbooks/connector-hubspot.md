@@ -1,6 +1,15 @@
 # Playbook: HubSpot connector (REVN-01)
 
-> Last verified: 2026-08-28 against 28-05 (the read-only rail: auth lifecycle, bounded CRM reads,
+> Last verified: 2026-08-30 (gap audit of the connector plane) — **`hubspotReadForTenant` was
+> DELETED.** It was an `internalAction` taking an arbitrary `tenantId` and returning the FULL
+> unsanitized `HubSpotReadResult`, with a doc comment naming `scripts/smoke-hubspot-read.mjs` as its
+> caller. That script calls `hubspot:hubspotReadEvidence` instead, and nothing anywhere called
+> `hubspotReadForTenant` — no test, no script, no plan. It was a leftover from before the sanitized
+> evidence read existed in the same plan, and it left HubSpot as the ONLY lane with three read
+> surfaces where QuickBooks, Stripe and PayPal each have exactly two (`readEntity` for the tenant,
+> `<provider>ReadEvidence` for the lane runner). The two survivors are `hubspotRead` (tenantAction,
+> tenant from `ctx`) and `hubspotReadEvidence` (internal, counts/states/labels, 3 sample refs).
+> Lane gate still `consistent`, `read-only` still 2 modules. Prior: 2026-08-28 against 28-05 (the read-only rail: auth lifecycle, bounded CRM reads,
 > the revocation-cascade probe and the lane smoke)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-05, 28-22) · Related ADRs: none yet
 

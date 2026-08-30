@@ -1208,6 +1208,123 @@ describe("the derived figures come from finance.ts, never from here", () => {
   });
 });
 
+/**
+ * `openInvoices` shipped in 28-07 with NO test of any kind — the only export in this module without
+ * one, found by scanning the connector plane for functions nothing calls. Its three siblings each
+ * pin the lane gate; this one pinned nothing, so the gate could have been dropped from it alone and
+ * every suite in the repo would still have been green.
+ */
+describe("openInvoices — the receivables read", () => {
+  const invoiceRow = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    object: "invoice",
+    status: "open",
+    total: 5000,
+    amount_remaining: 5000,
+    currency: "usd",
+    created: Math.floor(Date.now() / 1000) - 3600,
+    due_date: Math.floor(Date.now() / 1000) + 86_400,
+    customer: "cus_Test",
+    ...over,
+  });
+
+  // THE GATE, ON THIS DOOR TOO. A tenant read is gated on `lane === "passed"`; an ungated read here
+  // would publish a connected account's receivables on an admission nobody proved.
+  test.each([
+    ["an unsealed lane", undefined],
+    ["a PARKED lane", "parked" as const],
+    ["a FAILED lane", "failed" as const],
+  ])("%s makes the read unavailable", async (_name, lane) => {
+    const h = await harness();
+    if (lane !== undefined) await sealLane(h.t, { lane });
+    await seedConnection(h.t, h.tenantA);
+    const fetchMock = vi.fn(async () => listResponse([invoiceRow("in_1")]));
+    vi.stubGlobal("fetch", fetchMock);
+    const projection = await h.asA.action(api.stripeConnector.openInvoices, {
+      environment: "sandbox",
+    });
+    expect(projection.state).toBe("unavailable");
+    // Refused BEFORE the request: a gated read that still spends the call has only hidden the data.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("a passed lane returns receivables with what is still OWED, not just what was billed", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        listResponse([invoiceRow("in_1"), invoiceRow("in_2", { amount_remaining: 1500 })]),
+      ),
+    );
+    const projection = await h.asA.action(api.stripeConnector.openInvoices, {
+      environment: "sandbox",
+    });
+    expect(projection.state).toBe("ready");
+    // The narrowing the suite already uses. Safe only because the assertion ABOVE fires first: an
+    // unavailable projection fails there rather than returning early past everything below.
+    if (projection.state === "unavailable") return;
+    expect(projection.items).toHaveLength(2);
+    // `total` is what was billed and `outstanding` is what is still owed. Collapsing them would
+    // report a fully-paid invoice as money still coming in.
+    expect(projection.items[1]?.total).toEqual({ minor: 5000, currency: "USD" });
+    expect(projection.items[1]?.outstanding).toEqual({ minor: 1500, currency: "USD" });
+  });
+
+  // The module comment says NO AGING IS COMPUTED HERE, because `finance.agingReport` needs one
+  // currency and Stripe hands back several — 28-12 owns that. This pins the decision so a later
+  // plan cannot quietly add a single-currency aging field to a multi-currency source.
+  test("it computes NO aging — the projection carries rows and coverage, nothing derived", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        listResponse([invoiceRow("in_1"), invoiceRow("in_2", { currency: "eur" })]),
+      ),
+    );
+    const projection = await h.asA.action(api.stripeConnector.openInvoices, {
+      environment: "sandbox",
+    });
+    expect(projection.state).toBe("ready");
+    if (projection.state === "unavailable") return;
+    const keys = Object.keys(projection);
+    expect(keys).not.toContain("aging");
+    expect(keys).not.toContain("buckets");
+    expect(keys).not.toContain("confidence");
+    // Both currencies survive as rows. A derived total here would have had to pick one.
+    expect(projection.items).toHaveLength(2);
+  });
+
+  // `RECEIVABLE_INVOICE_STATUSES` admits open and paid only. A draft is not a receivable, and
+  // counting one would invent revenue that was never billed.
+  test("a draft invoice is rejected VISIBLY — the read reports itself partial, not ready", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        listResponse([invoiceRow("in_1"), invoiceRow("in_draft", { status: "draft" })]),
+      ),
+    );
+    const projection = await h.asA.action(api.stripeConnector.openInvoices, {
+      environment: "sandbox",
+    });
+    // NOT `ready`. A dropped row degrades the read to `partial`, which is the honest answer: the
+    // caller is told the picture is incomplete rather than handed a short list that looks whole.
+    // Asserting `ready` here would have passed only if the drop were silent.
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.items).toHaveLength(1);
+    expect(projection.items[0]?.ref.id).toBe("in_1");
+    // And it NAMES what it could not read, so the gap is actionable rather than merely flagged.
+    expect(projection.missing.length).toBeGreaterThan(0);
+  });
+});
+
 describe("lane evidence carries no vendor payload", () => {
   test("evidence is counts, states and closed labels only", async () => {
     const h = await harness();

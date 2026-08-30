@@ -1,6 +1,15 @@
 # Playbook: Stripe connector (REVN-03)
 
-> Last verified: 2026-08-28 against 28-07 (the read-only Stripe App lane: OAuth, bounded reads and
+> Last verified: 2026-08-30 (gap audit of the connector plane) — **`openInvoices` had NO TEST OF
+> ANY KIND** and was the only export in `stripeConnector.ts` without one; its three siblings each
+> pin the lane gate, so the gate could have been dropped from `openInvoices` alone and every suite
+> in the repo would still have been green. Six tests added: the gate refuses on an unsealed, a
+> `parked` AND a `failed` lane and refuses BEFORE the request (a gated read that still spends the
+> call has only hidden the data); `total` and `outstanding` stay separate; NO aging is computed
+> here (the 28-12 boundary, now pinned so a later plan cannot add a single-currency aging field to
+> a multi-currency source); a `draft` invoice is rejected rather than counted. **Non-vacuity
+> proven by mutation** — swapping `gatedRead` for `readEntityRows` in `openInvoices` alone killed
+> exactly the three gate cases and nothing else. Prior: 2026-08-28 against 28-07 (the read-only Stripe App lane: OAuth, bounded reads and
 > the lane gate script)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-07, 28-24) · Related ADRs: none yet
 

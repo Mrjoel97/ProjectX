@@ -174,17 +174,6 @@ export const hubspotRead = tenantAction({
     readHubSpotDataset(ctx, { ...args, tenantId: ctx.tenantId }),
 });
 
-/** The lane runner's read (`scripts/smoke-hubspot-read.mjs`). Internal, so no browser reaches it. */
-export const hubspotReadForTenant = internalAction({
-  args: {
-    tenantId: v.string(),
-    environment: environmentArg,
-    dataset: datasetArg,
-    windowDays: v.optional(v.number()),
-  },
-  handler: (ctx, args): Promise<HubSpotReadResult> => readHubSpotDataset(ctx, args),
-});
-
 /**
  * The sanitized shape the smoke script records as lane evidence: counts, states and closed labels.
  * REFS ARE CAPPED AND HASHED-BY-ABSENCE — the source ids are already opaque provider ids, and
