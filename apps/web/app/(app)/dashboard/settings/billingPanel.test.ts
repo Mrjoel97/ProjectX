@@ -298,6 +298,19 @@ describe("manage subscription — never provoke a Stripe customer into existence
     expect(markup).toContain(manageSubscription("unknown").reason);
   });
 
+  test("the portal call is guarded in code, not only by the disabled attribute", () => {
+    // `disabled` is a presentation fact a devtools user can strip, and `portalLink` must never be
+    // called for a tenant we cannot prove has a Stripe customer — the refusal exists so nothing
+    // provokes one into existence.
+    //
+    // ponytail: a SOURCE assertion, and its ceiling is honest — `BillingPanel` calls `useQuery`
+    // and cannot be rendered in this DOM-free runner, so this fails when the guard is deleted but
+    // proves nothing about the call at runtime. Upgrade path: a Playwright assertion on
+    // `/dashboard/settings` for a tenant with no `billingCustomers` row.
+    const source = read("./BillingPanel.tsx");
+    expect(source).toMatch(/if \(!manageSubscription\([^)]*\)\.enabled\) return;/);
+  });
+
   test("the rendered control is live once a billing record exists", () => {
     const markup = view({ status: { state: "subscribed" } });
     expect(markup).not.toMatch(/<button[^>]*disabled/);
