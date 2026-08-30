@@ -76,9 +76,14 @@ describe("estimateMediaUsd — video, priced per video-second", () => {
 });
 
 describe("estimateMediaUsd — the billing units differ, and the tests sit side by side", () => {
-  it("GPT Image 2 low portrait reserves one cent including prompt allowance", () => {
+  it("GPT Image 2 low portrait reserves the MEASURED $0.006, not the guessed $0.01", () => {
+    // The number is the reservation, not the invoice: OpenRouter billed $0.004875 for exactly this
+    // request on 2026-08-30 (33.1-PRICE-EVIDENCE.md) and the row rounds UP, because a reservation on
+    // a no-refunds rail may never come in under the charge.
     const { model, width, height } = MEDIA_DEFAULT_IMAGE;
-    expect(usd({ kind: "image", model, width, height })).toBeCloseTo(0.01, 10);
+    expect(usd({ kind: "image", model, width, height })).toBeCloseTo(0.006, 10);
+    // …and it is strictly above the measured floor. This is what "rounded up" MEANS, asserted.
+    expect(usd({ kind: "image", model, width, height })).toBeGreaterThan(0.004875);
   });
   it("TTS does NOT round its thousands: 1,200 chars → $0.018 exactly", () => {
     expect(usd(voice(1200))).toBeCloseTo(0.018, 10);
@@ -218,20 +223,34 @@ const FIXTURES = JSON.parse(read("./media.fixtures.json")) as {
 };
 
 describe("the price tables agree with the committed vendor fixture", () => {
-  const byKind = (k: string) => {
-    const e = FIXTURES.entries.find((x) => x.kind === k);
-    if (!e) throw new Error(`no fixture entry for ${k}`);
-    return e;
+  // WAS `entries.find(...)` — FIRST MATCH ONLY, so a SECOND fixture entry of the same kind was
+  // never checked against its table row at all. That held while every kind was a singleton and
+  // stops holding the moment one is not (33.1-04 adds a second `video` entry), which is why the
+  // helper is fixed HERE rather than there: a guard inherited already working beats a guard
+  // somebody has to remember to widen.
+  const allOfKind = (k: string) => {
+    const es = FIXTURES.entries.filter((x) => x.kind === k);
+    // …and the loops below cannot pass VACUOUSLY on an empty filter.
+    if (es.length === 0) throw new Error(`no fixture entry for ${k}`);
+    return es;
   };
 
-  it("video rates match, per resolution", () => {
-    const e = byKind("video");
-    expect(MEDIA_VIDEO_PRICING[e.id]).toEqual(e.rates);
+  it("EVERY fixture entry of a kind matches its table row, not just the first", () => {
+    for (const e of allOfKind("video")) expect(MEDIA_VIDEO_PRICING[e.id]).toEqual(e.rates);
+    for (const e of allOfKind("image")) expect(MEDIA_IMAGE_PRICING[e.id]).toBe(e.rate);
+    for (const e of allOfKind("tts")) expect(MEDIA_TTS_PRICING[e.id]).toBe(e.rate);
+    for (const e of allOfKind("stt")) expect(MEDIA_STT_PRICING[e.id]).toBe(e.rate);
   });
-  it("image, tts and stt rates match", () => {
-    expect(MEDIA_IMAGE_PRICING[byKind("image").id]).toBe(byKind("image").rate);
-    expect(MEDIA_TTS_PRICING[byKind("tts").id]).toBe(byKind("tts").rate);
-    expect(MEDIA_STT_PRICING[byKind("stt").id]).toBe(byKind("stt").rate);
+
+  it("the PINNED image id is the route-qualified one, spelled out", () => {
+    // A LITERAL, not `MEDIA_DEFAULT_IMAGE.model` on both sides. The pin, the price key and the
+    // fixture id are three copies of one string; comparing two of them to each other proves only
+    // that they are equal to themselves. `openai/gpt-image-2` and not `gpt-image-2`, because
+    // `buildSubmitBody` sends this value to OpenRouter UNSTRIPPED and the gateway keys on the route.
+    expect(MEDIA_DEFAULT_IMAGE.model).toBe("openai/gpt-image-2");
+    expect(allOfKind("image").map((e) => e.id)).toContain("openai/gpt-image-2");
+    // The superseded bare id stays PRICEABLE for historical rows, and is NOT the pin.
+    expect(MEDIA_IMAGE_PRICING["gpt-image-2"]).toBe(0.01);
   });
   it("every fixture entry records a live endpoint and any deprecation has a shutdown date", () => {
     for (const e of FIXTURES.entries) {
@@ -361,8 +380,14 @@ describe("the scene-kind price table — §2.3, and why the cheap kinds are not 
 
   it("a still costs the same at 12 s as at 2 s — duration freedom IS the lever", () => {
     expect(sceneUsd("animated_image", 12)).toBe(sceneUsd("animated_image", 2));
-    // 40x, at 4 s. The block contract had no way to express this and bought a clip every time.
-    expect(sceneUsd("generated_video", 4) / sceneUsd("animated_image", 4)).toBeCloseTo(40, 10);
+    // 66.7x at 4 s ($0.40 / $0.006). WAS 40x, against a still priced at a GUESSED $0.01; measuring
+    // the still on 2026-08-30 made the lever BIGGER, not smaller. The block contract had no way to
+    // express this and bought a clip every time.
+    //
+    // Recomputed rather than deleted, and it is not decoration: this ratio is the "40x cost lever"
+    // ADR-019 rests on, and a deleted assertion is a claim nobody checks. Expect to touch this line
+    // again in 33.1-04, when the video rate moves the numerator — one place, deliberately.
+    expect(sceneUsd("generated_video", 4) / sceneUsd("animated_image", 4)).toBeCloseTo(200 / 3, 10);
   });
 
   it("a generated clip is priced at ITS OWN length, and one off the provider grid is refused", () => {

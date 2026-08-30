@@ -1,5 +1,57 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-30 (33.1-03 — **THE STILL PLANE IS ON OPENROUTER AND ITS PRICE ROW IS
+> MEASURED RATHER THAN GUESSED.** The block below decided both planes would move; this is the image
+> half, landed. Video has NOT moved yet — 33.1-05 owns it, and until then
+> `submitLine`/`pollOpenAiVideoTask` still post to `api.openai.com`.
+>
+> **What changed.** `submitLine`'s image arm posts to `https://openrouter.ai/api/v1/images` on
+> `OPENROUTER_API_KEY`. The video, TTS and STT arms still read `OPENAI_API_KEY` — the credential is
+> chosen from `spec.kind` on one line, so **grepping `media.ts` for `api.openai.com` tells you
+> nothing about where an image goes**; three legitimate other users of that host remain in the file.
+> The test asserts the RESOLVED url handed to `fetch`, and so must any future one.
+>
+> **The price row is a MEASUREMENT.** `MEDIA_IMAGE_PRICING["openai/gpt-image-2"] = 0.006`, from one
+> real call on 2026-08-30 that billed **$0.004875** for `(1024x1536, quality: low, n: 1)` —
+> $0.004740 fixed (`image_tokens: 158`, constant for that geometry) plus $0.000135 of prompt. The
+> row rounds UP by $0.001125 because it is a pre-request RESERVATION on a no-refunds rail; that
+> headroom is ~225 further prompt tokens. It replaces a self-described "conservative" $0.01 that was
+> **2x the real cost**. Raw response and the re-runnable command:
+> `.planning/phases/33.1-*/33.1-PRICE-EVIDENCE.md`. Deriving from a table again, rather than from a
+> call, is a regression.
+>
+> **`size`, NEVER `aspect_ratio`, and NEVER BOTH.** The same probe sent each. They are **not
+> interchangeable**: `aspect_ratio: "9:16"` returns **864x1536** at $0.003735 (120 image tokens),
+> `size: "1024x1536"` returns **1024x1536** at $0.004875 (158). `size` reproduces
+> `MEDIA_DEFAULT_IMAGE`'s exact geometry, so the migration changed the transport and not the
+> picture. **The deferred finding, with its evidence already in hand:** stills are 2:3 while the reel
+> is 1080x1920 (9:16), so every generated still is reshaped by the assembler to fit a frame it was
+> never composed for — and the correctly-composed option is also **23% cheaper**. That is its own
+> phase, because it changes what every still LOOKS like.
+>
+> **THREE COPIES OF ONE STRING.** `MEDIA_DEFAULT_IMAGE.model`, `MEDIA_IMAGE_PRICING`'s live key and
+> `media.fixtures.json`'s image `id` are all `openai/gpt-image-2` and **must move together** — the
+> fixture-parity test is what enforces it. Route-qualified deliberately: `buildSubmitBody`'s image
+> arm sends `spec.model` UNSTRIPPED, and OpenRouter does not know a bare `gpt-image-2`. (The `tts`
+> arm's `.replace(/^openai\//, "")` is correct for `tts` and would be a bug here.)
+>
+> **THE HISTORICAL ROWS STAY.** `"gpt-image-2": 0.01` and `"wan2.5-t2i-preview": 0.03` remain in
+> `MEDIA_IMAGE_PRICING` with no submit path, for the same reason the `wan2.5-*` video rows do:
+> `mediaJobs` rows written before a cutover carry the old id, and an unpriceable historical row is a
+> **refused read**, not a cheaper one. They are not fallbacks — rule 2 forbids falling back to
+> another row, and no code can select them.
+>
+> **DERIVED NUMBERS MOVED WITH IT** (`media.fixtures.json`'s `sceneKinds` is `_derived` and the test
+> recomputes it): `animated_image` $0.01 -> $0.006, the §2.3 mixed 30 s reel $1.24 -> $1.224, and
+> ADR-019's cost lever **40x -> 66.7x** — measuring the still made the lever bigger, not smaller.
+> `stockLeaning` did not move; it buys no still. Also fixed here, one plan early: the fixture-parity
+> helper used `entries.find`, so a SECOND entry of a kind was never checked at all. It now iterates
+> every entry and refuses an empty filter — 33.1-04 adds a second `video` entry and inherits a guard
+> that works. Mutation-verified both ways.
+>
+> **`succession.replacementWiredUp` IS STILL `false` AND MUST STAY SO.** Images do not earn it: the
+> flag stands the runway tripwire down for the VIDEO row, and no video submit path has landed.)
+
 > Last verified: 2026-08-30 (**THE SUCCESSOR CHANGED, AND SO DID THE TRANSPORT — `x-ai/grok-imagine-video`
 > ON OPENROUTER, [ADR-027](../decisions/027-grok-imagine-video-succeeds-sora-2-on-openrouter.md).**
 >
@@ -4374,9 +4426,16 @@ npx convex run media:spendForPeriod \
 deployment-wide figure is the sum of per-tenant runs, never one unscoped query. The window is
 **half-open** `[sinceMs, untilMs)`, so consecutive periods partition rows exactly once.
 
-Compare the returned `actualCents` total against fal's billing page for the same window. A gap
-means the table is wrong, not that the meter is wrong — the meter records what the provider
+Compare the returned `actualCents` total against the PROVIDER's billing page for the same window.
+A gap means the table is wrong, not that the meter is wrong — the meter records what the provider
 reported.
+
+**WHICH billing page is now a per-kind question, and the text above is stale where it says "fal".**
+fal has not billed this product since the 20-series cutover. As of 33.1-03: **images** reconcile
+against **openrouter.ai -> Activity** (each row carries the same `usage.cost` the price row was
+measured from, so this comparison is exact rather than approximate); **video, voiceover and
+captions** reconcile against the **OpenAI** usage page until 33.1-05 moves video to OpenRouter too.
+Stock lines reserve $0 and appear on no bill at all.
 
 **THREE CAVEATS TRAVEL WITH THAT NUMBER, and `spendForPeriod` puts each one in its own payload
 rather than relying on you to remember this page:**

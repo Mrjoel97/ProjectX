@@ -42,9 +42,29 @@ export const MEDIA_VIDEO_SECONDS: Record<string, readonly number[]> = {
 
 /** USD per successfully generated image. */
 export const MEDIA_IMAGE_PRICING: Record<string, number> = {
+  // ── HISTORICAL ONLY. No submit path routes to either id; both are here so `mediaJobs` rows
+  // written before their cutover stay PRICEABLE. An unpriceable historical row is a refused read
+  // (`unknown_model`), not a cheaper one. Neither is a fallback: rule 2 forbids falling back to
+  // another row, and nothing in the code can select these.
   "wan2.5-t2i-preview": 0.03,
-  // Conservative low-quality 1024x1536 reservation including a short prompt-input allowance.
+  // The bare id, as submitted to api.openai.com/v1/images/generations before 33.1-03. The 0.01 was
+  // self-described "conservative" — a guess made without a measurement, and 2x the real cost.
   "gpt-image-2": 0.01,
+
+  // ── THE LIVE ROW. MEASURED, not estimated.
+  // One real OpenRouter call on 2026-08-30 for `(1024x1536, quality: low, n: 1)` returned
+  // `usage.cost` = **$0.004875** at a 27-token prompt, of which $0.004740 is the fixed image cost
+  // (`image_tokens: 158`, constant for this geometry and quality) and $0.000135 the prompt.
+  // Raw response, request body and command:
+  //   .planning/phases/33.1-.../33.1-PRICE-EVIDENCE.md
+  //
+  // ROUNDED UP TO 0.006, and the gap is $0.001125 of deliberate headroom. This is a pre-request
+  // RESERVATION on a no-refunds rail (rule 1), so it must be >= what the vendor actually charges,
+  // and only the PROMPT half varies (at $0.000005/token). $0.001125 buys ~225 prompt tokens on top
+  // of the probe's 27 — real scene prompts observed on 2026-08-30 ran ~40-55 tokens. A fractional-
+  // cent measurement rounded DOWN would be silent drift, so the rounding is stated rather than
+  // folded away.
+  "openai/gpt-image-2": 0.006,
 };
 
 /** USD per 1000 SUBMITTED characters. Character billing is the REQUIREMENT, not a preference: the
@@ -134,8 +154,12 @@ export const MEDIA_DEFAULT_VIDEO = {
   seconds: 4,
 } as const;
 
+/** ROUTE-QUALIFIED deliberately: since 33.1-03 the still plane posts to OpenRouter, which keys on
+ *  `openai/gpt-image-2`, and `buildSubmitBody`'s image arm sends `spec.model` through UNSTRIPPED.
+ *  This string, `MEDIA_IMAGE_PRICING`'s live key and `media.fixtures.json`'s image `id` are three
+ *  copies of one value and must move together — the fixture-parity test is what enforces that. */
 export const MEDIA_DEFAULT_IMAGE = {
-  model: "gpt-image-2",
+  model: "openai/gpt-image-2",
   width: 1024,
   height: 1536,
 } as const;

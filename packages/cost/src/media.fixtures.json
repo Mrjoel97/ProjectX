@@ -1,6 +1,6 @@
 {
  "_what": "Provider-price provenance for the media estimator. Values were read from the official OpenAI documentation.",
- "_how_to_refresh": "Re-read the OpenAI model and pricing pages, then run packages/cost/src/media.test.ts.",
+ "_how_to_refresh": "Re-read the OpenAI model and pricing pages, then run packages/cost/src/media.test.ts. THE IMAGE ROW IS NOT REFRESHED THAT WAY: since 33.1-03 it is MEASURED, not read — re-run the one-call probe recorded in .planning/phases/33.1-*/33.1-PRICE-EVIDENCE.md and take usage.cost from the response.",
  "source": "https://developers.openai.com/api/docs/models/sora-2",
  "readAt": "2026-08-14",
  "entries": [
@@ -91,18 +91,18 @@
    "notes": "Verbose JSON with word timestamps is requested for caption timing."
   },
   {
-   "id": "gpt-image-2",
+   "id": "openai/gpt-image-2",
    "kind": "image",
    "unit": "USD per successfully generated image",
-   "rate": 0.01,
-   "confidence": "MEDIUM",
+   "rate": 0.006,
+   "confidence": "HIGH",
    "vendor": {
-    "pricingInfoOverride": "GPT Image 2 low 1024x1536 output costs $0.005 plus prompt input tokens; reserve $0.01.",
+    "pricingInfoOverride": "MEASURED, not quoted: one live OpenRouter call on 2026-08-30 for a 1024x1536 quality:low image returned usage.cost $0.004875 (image_tokens 158 = $0.004740 fixed, plus $0.000135 for a 27-token prompt). Reserved at $0.006 - the extra $0.001125 is prompt-token headroom for ~225 further tokens.",
     "status": "public",
     "deprecated": false,
     "removed": false
    },
-   "notes": "Conservative per-image reservation: low-quality 1024x1536 output plus a short prompt-input allowance."
+   "notes": "Route-qualified id: the still plane posts to openrouter.ai/api/v1/images and the id travels unstripped. The adapter pins size 1024x1536, quality low, n 1, output_format png. size and NOT aspect_ratio - the same probe showed they are not interchangeable (aspect_ratio 9:16 returns 864x1536 at $0.003735), and the cheaper, better-composed 9:16 option is deferred to its own phase because it changes what every still looks like."
   }
  ],
  "sceneKinds": {
@@ -122,7 +122,7 @@
    {
     "visual": "animated_image",
     "buys": "image",
-    "usdAt4s": 0.01,
+    "usdAt4s": 0.006,
     "durations": "any"
    },
    {
@@ -153,10 +153,10 @@
    }
   ],
   "reel30s": {
-   "_what": "The §2.3 worked example, REPRICED against the shipped tables. The plan's $1.36-vs-$3.00 predated the gpt-image-2 cutover, and the all-generated column turned out not to exist at all.",
+   "_what": "The §2.3 worked example, REPRICED against the shipped tables. The plan's $1.36-vs-$3.00 predated the gpt-image-2 cutover, and the all-generated column turned out not to exist at all. Repriced again on 2026-08-30 (33.1-03) when the still row moved from a guessed $0.01 to a measured $0.006: mixed went $1.24 -> $1.224. stockLeaning did NOT move - it buys one generated clip and four free-library scenes, and no still at all.",
    "mixed": {
     "scenes": "3 generated x 4s + 4 stills x 4s + 1 card x 2s",
-    "pictureUsd": 1.24
+    "pictureUsd": 1.224
    },
    "generatedOnly": {
     "reachable": false,
