@@ -34,13 +34,8 @@ const backendSources = import.meta.glob("./billing*.ts", {
 }) as Record<string, string>;
 
 /** Source with comments stripped, so a guard cannot punish its own documentation
- *  (`billing.test.ts` idiom — line comments first, deliberately). */
-const codeOf = (content: string): string =>
-  content
-    .split("\n")
-    .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*"))
-    .join("\n")
-    .replace(/\/\*[\s\S]*?\*\//g, "");
+ *  (`billing.test.ts` idiom, repaired in 28.1-07 — see the long note there). */
+const codeOf = (content: string): string => content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
 
 const rollupCode = (): string => {
   const raw = backendSources["./billingRollup.ts"];
@@ -138,6 +133,7 @@ function stubForbiddenFetch(): void {
 beforeEach(() => {
   vi.stubEnv("BILLING_STRIPE_SECRET_KEY", "sk_test_SENTINEL");
   stubForbiddenFetch();
+  driven = new Set<string>();
 });
 
 afterEach(() => {
@@ -443,10 +439,29 @@ async function mapCustomer(t: ReturnType<typeof convexTest>, tenantId: string, c
   );
 }
 
-/** Claim the period and run the whole scheduled chain, as the cron would. */
+/**
+ * Claim, then run whatever the claim SCHEDULED — the cron chain end to end.
+ *
+ * The posts are driven from `_scheduled_functions` rather than invented, so a tick that scheduled
+ * nothing runs nothing here. `driven` is what keeps a second tick from re-running a job the first
+ * tick already handed us; the queue rows outlive their execution in convex-test.
+ */
+let driven = new Set<string>();
+
 async function rollup(t: ReturnType<typeof convexTest>) {
   await t.mutation(internal.billingRollup.tick, {});
-  await t.finishInProgressScheduledFunctions();
+  const queued = (await t.run((ctx) =>
+    ctx.db.system.query("_scheduled_functions").collect(),
+  )) as Array<{ _id: unknown; name: string; args: unknown[] }>;
+  for (const job of queued) {
+    if (!job.name.includes("billingRollup") || !job.name.includes("postInvoice")) continue;
+    if (driven.has(String(job._id))) continue;
+    driven.add(String(job._id));
+    await t.action(
+      internal.billingRollup.postInvoice,
+      job.args[0] as { periodId: Id<"billingPeriods"> },
+    );
+  }
 }
 
 describe("postInvoice rolls ONE bounded document and settles the claim", () => {
@@ -512,6 +527,9 @@ describe("postInvoice rolls ONE bounded document and settles the claim", () => {
 
     await rollup(t);
     const first = calls.map((c) => ({ url: c.url, body: c.body, key: keyOf(c) }));
+    // NON-VACUITY. Two empty recordings compare equal, so "same key, same body" over a rollup
+    // that never called Stripe is a green light over nothing.
+    expect(first.length).toBe(3);
 
     // The action died after the POST and before the settle: the row is `claimed` and stale.
     await t.run((ctx) =>

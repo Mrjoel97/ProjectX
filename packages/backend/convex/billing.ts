@@ -15,7 +15,7 @@ import { unappliedStage } from "@pikar/billing/reconcile";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalQuery } from "./_generated/server";
-import { stripePost } from "./billingApi";
+import { stripeHostedUrl, stripePost } from "./billingApi";
 import { billingCoverageFor } from "./billingLedger";
 import { tenantAction, tenantQuery } from "./lib/functions";
 
@@ -27,9 +27,6 @@ import { tenantAction, tenantQuery } from "./lib/functions";
  * link that has already been spent. Sixty seconds collapses a double-click and nothing more.
  */
 export const PORTAL_IDEMPOTENCY_WINDOW_MS = 60_000;
-
-/** Where a hosted Stripe page is allowed to send a browser. */
-const STRIPE_HOSTED_SUFFIX = ".stripe.com";
 
 /** The result shape both doors return: a hosted url, or a code-token refusal. Never prose. */
 type Door = { ok: true; url: string } | { ok: false; reason: string };
@@ -118,28 +115,17 @@ export function checkoutParams(input: {
 }
 
 /**
- * Lift ONLY the hosted url out of a Stripe response, and only if it points at Stripe.
+ * Lift ONLY the hosted url out of a Checkout/Portal session response, and only if it is Stripe's.
  *
- * The caller redirects a browser to whatever comes back, so an unvalidated `url` field is an
- * open redirect with a Stripe response as its source. Everything else in the response — the
- * customer id, `customer_details.email`, the amount — is dropped here rather than at the UI.
+ * The caller redirects a browser to whatever comes back, so an unvalidated `url` field is an open
+ * redirect with a Stripe response as its source. Everything else in the response — the customer
+ * id, `customer_details.email`, the amount — is dropped here rather than at the UI.
  *
- * ponytail: host suffix check, not an allow-list of `checkout.` and `billing.`. Ceiling: it would
- * accept a Stripe CUSTOM DOMAIN only if that domain were still under stripe.com, and we configure
- * none. Upgrade path: if a custom Checkout domain is ever configured, name it explicitly here.
+ * The origin check itself lives in `billingApi.ts` (`stripeHostedUrl`), shared with the invoice
+ * rollup, which reads the same class of url off `invoice.hosted_invoice_url`.
  */
 function hostedUrl(value: unknown): string | null {
-  const raw = (value as { url?: unknown } | null)?.url;
-  if (typeof raw !== "string") return null;
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== "https:") return null;
-  if (!parsed.hostname.endsWith(STRIPE_HOSTED_SUFFIX)) return null;
-  return raw;
+  return stripeHostedUrl((value as { url?: unknown } | null)?.url);
 }
 
 /**

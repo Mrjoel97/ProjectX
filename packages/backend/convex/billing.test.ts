@@ -136,16 +136,17 @@ async function withTenantOnFinance() {
  * Source with comments stripped, so a guard cannot punish its own documentation. A file that
  * WARNS against card data or against reusing the read rail reads exactly like one that does it.
  *
- * Line comments FIRST, and the order is load-bearing (`env.test.ts` measured this): stripping
- * block comments first lets a `/*` inside a `//` comment open a block that runs to the next
- * closing marker anywhere in the file, swallowing real code in between.
+ * ONE alternation, not two passes, and it is a 28.1-07 REPAIR of a scan that was nearly vacuous.
+ * The previous version dropped every line starting with `*` FIRST — which ate the closing marker
+ * of every multi-line JSDoc block, leaving the opening `/**` to swallow everything up to the next
+ * surviving marker. Measured on `billingRollup.ts`: 380 lines of real code reduced to 12. A
+ * NEGATIVE scan over a blanked file passes for the wrong reason, so the damage was invisible.
+ *
+ * The alternation scans left to right, so whichever comment opens first consumes the other — a
+ * `/*` inside a `//` line cannot open a block (the `env.test.ts` hazard), and a `//` inside a
+ * block comment is inert. `notBlanked` below is the tripwire that would have caught the original.
  */
-const codeOf = (content: string): string =>
-  content
-    .split("\n")
-    .filter((line) => !line.trim().startsWith("//") && !line.trim().startsWith("*"))
-    .join("\n")
-    .replace(/\/\*[\s\S]*?\*\//g, "");
+const codeOf = (content: string): string => content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
 
 beforeEach(() => {
   calls = [];
@@ -397,6 +398,11 @@ describe("no card data and no 3DS exists anywhere in this subsystem", () => {
   test("the scan actually read both halves of the subsystem", () => {
     // Without this the assertion below is a green light over an empty glob.
     expect(scanned.length).toBeGreaterThanOrEqual(8);
+    // …and over a file the comment stripper GUTTED. Every module here declares something; a
+    // stripper that ate the declarations would make every negative scan below pass vacuously.
+    const blanked = scanned.filter(([, content]) => !/\bexport\b/.test(content)).map(([p]) => p);
+    expect(blanked).toEqual([]);
+    expect(codeOf("const a = 1; // /* not a block\nconst b = 2;")).toContain("const b = 2;");
     expect(scanned.map(([p]) => p)).toContain("./billing.ts");
     expect(scanned.map(([p]) => p)).toContain("../../billing/src/config.ts");
     // …and the pattern really does match the thing it is looking for.

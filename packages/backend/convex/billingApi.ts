@@ -177,6 +177,35 @@ export async function stripePost(
   });
 }
 
+/** Where a hosted Stripe page is allowed to send a browser. */
+const STRIPE_HOSTED_SUFFIX = ".stripe.com";
+
+/**
+ * Validate a hosted Stripe url out of a Stripe response.
+ *
+ * A caller either redirects a browser to this or stores it and renders it as a link, so an
+ * unvalidated url field is an open redirect with a Stripe response as its source. It lives HERE,
+ * beside the transport, because both consumers read it off a Stripe body: `billing.ts` off a
+ * Checkout/Portal session's `url`, and `billingRollup.ts` off an invoice's `hosted_invoice_url`.
+ * One definition, or the second copy is the one that forgets the scheme check.
+ *
+ * ponytail: host SUFFIX check, not an allow-list of `checkout.`/`billing.`/`invoice.`. Ceiling: it
+ * would accept a Stripe CUSTOM DOMAIN only if that domain were still under stripe.com, and we
+ * configure none. Upgrade path: if a custom domain is ever configured, name it explicitly here.
+ */
+export function stripeHostedUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:") return null;
+  if (!parsed.hostname.endsWith(STRIPE_HOSTED_SUFFIX)) return null;
+  return raw;
+}
+
 /**
  * A READ. No `Idempotency-Key`: Stripe honours it on POST only, and sending one on a GET is a
  * silent no-op that reads like a guarantee.
