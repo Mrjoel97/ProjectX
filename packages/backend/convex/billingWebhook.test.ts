@@ -1031,6 +1031,51 @@ describe("the money arms write OUR ledger, and Stripe is only the processor", ()
     expect(held[0]?.observedAt).toBe(1_700_000_000_000);
   });
 
+  test("a funds_available of ZERO clears the hold — it stops being reported and stops aging", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, fundsBody({ id: "evt_f1", created: 1_700_000_000, available: { usd: 2500 } }));
+    await send(t, fundsBody({ id: "evt_f2", created: 1_800_000_000, available: { usd: 0 } }));
+
+    const held = await unapplied(t);
+    // The row SURVIVES at zero rather than being deleted, and that is the whole ordering guard:
+    // a deleted row takes `amountAt` with it, so Stripe redelivering `evt_f1` inside its retry
+    // window would re-insert 2500 as a brand-new hold that nothing is ever going to clear again.
+    expect(held).toHaveLength(1);
+    expect(held[0]?.amountMinor).toBe(0);
+  });
+
+  test("an OUT-OF-ORDER redelivery neither lowers a newer amount nor restarts the clock", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, fundsBody({ id: "evt_f2", created: 1_800_000_000, available: { usd: 900 } }));
+    // Stripe does not guarantee delivery order. This one was CREATED first and arrives second.
+    await send(t, fundsBody({ id: "evt_f1", created: 1_700_000_000, available: { usd: 2500 } }));
+
+    const held = await unapplied(t);
+    expect(held).toHaveLength(1);
+    // The newer amount stands. Taking the older one would report money that has already moved.
+    expect(held[0]?.amountMinor).toBe(900);
+    // And the sweep clock keeps the time of the FIRST sighting that opened the hold — the older
+    // delivery must not push `observedAt` backwards or forwards. The row was opened at f2.
+    expect(held[0]?.observedAt).toBe(1_800_000_000_000);
+  });
+
+  test("money held again AFTER a clear starts a NEW clock, not the cleared hold's", async () => {
+    const t = harness();
+    await seedMappedTenant(t);
+    await send(t, fundsBody({ id: "evt_f1", created: 1_700_000_000, available: { usd: 2500 } }));
+    await send(t, fundsBody({ id: "evt_f2", created: 1_800_000_000, available: { usd: 0 } }));
+    await send(t, fundsBody({ id: "evt_f3", created: 1_900_000_000, available: { usd: 700 } }));
+
+    const held = await unapplied(t);
+    expect(held).toHaveLength(1);
+    expect(held[0]?.amountMinor).toBe(700);
+    // Keeping the original `observedAt` here is the dangerous direction: fresh money would render
+    // as an aged hold, "swept" on a 75/90 clock it has never been on.
+    expect(held[0]?.observedAt).toBe(1_900_000_000_000);
+  });
+
   test("refund.created and credit_note.created are refunds, POSITIVE, direction in the phase", async () => {
     const t = harness();
     await seedMappedTenant(t);

@@ -575,9 +575,15 @@ async function applyMoney(
  * same thing, and a plain insert would report one pile of money two, three, four times on a screen
  * whose whole job is to say how much we hold.
  *
- * THE AMOUNT MOVES, `observedAt` DOES NOT. Stripe attempts to RETURN unreconciled funds at 75 days
- * and SWEEPS them at 90; restarting that clock on every notification would hide exactly the row
- * that is about to be taken away.
+ * THE AMOUNT MOVES, `observedAt` DOES NOT — while the hold lasts. Stripe attempts to RETURN
+ * unreconciled funds at 75 days and SWEEPS them at 90; restarting that clock on every notification
+ * would hide exactly the row that is about to be taken away. Money held again AFTER the balance
+ * reached zero is a different hold on a fresh clock, and that one does restart.
+ *
+ * A ZERO CLEARS THE HOLD (28.1-11 #8) and the row stays, at zero. Deleting it would take `amountAt`
+ * with it, and Stripe redelivers for days: the pre-clear event arriving afterwards would re-insert
+ * the old figure as a brand-new hold that no later delivery is going to clear again. Readers
+ * exclude zeros, so nothing renders.
  */
 async function observeUnapplied(
   ctx: MutationCtx,
@@ -594,15 +600,29 @@ async function observeUnapplied(
         .eq("currency", observation.amount.currency),
     )
     .first();
-  if (existing) {
-    await ctx.db.patch(existing._id, { amountMinor: observation.amount.minor });
+  if (!existing) {
+    // A zero with no row is the steady state of every customer who has never left funds behind.
+    if (observation.amount.minor === 0) return;
+    await ctx.db.insert("billingUnapplied", {
+      tenantId,
+      stripeObjectId: observation.stripeObjectId,
+      amountMinor: observation.amount.minor,
+      currency: observation.amount.currency,
+      observedAt,
+      amountAt: observedAt,
+    });
     return;
   }
-  await ctx.db.insert("billingUnapplied", {
-    tenantId,
-    stripeObjectId: observation.stripeObjectId,
+  // OUT OF ORDER (28.1-11 #13). Stripe does not guarantee delivery order, so an older `created`
+  // reaching us second must not overwrite a newer figure or re-open a cleared hold. `<=` also
+  // makes a plain redelivery a no-op, which a CashBalance cannot get from the by-object dedupe
+  // because it carries no `id`.
+  if (observedAt <= existing.amountAt) return;
+  await ctx.db.patch(existing._id, {
     amountMinor: observation.amount.minor,
-    currency: observation.amount.currency,
-    observedAt,
+    amountAt: observedAt,
+    // Reopening a cleared row is a NEW hold, so its clock starts here. Carrying the old date
+    // forward would render fresh money as already returned or swept.
+    ...(existing.amountMinor === 0 ? { observedAt } : {}),
   });
 }

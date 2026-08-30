@@ -322,13 +322,17 @@ export const unappliedFunds = tenantQuery({
       .query("billingUnapplied")
       .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
       .take(UNAPPLIED_FUNDS_PAGE_LIMIT + 1);
+    // A ZEROED row is a hold that CLEARED, kept only so a late Stripe redelivery cannot resurrect
+    // it (28.1-11 #8). It is not money we hold, so it never reaches a surface — and it must never
+    // arrive here wearing an age and a 75/90 stage over an amount of nothing.
+    const held = page.filter((row) => row.amountMinor !== 0);
     const now = Date.now();
 
     return {
       // `null` is the unknown, and it is not collapsed into a zero anywhere on the way out.
       coverage: coverageStartedAt === null ? ("unknown" as const) : ("known" as const),
       coverageStartedAt,
-      funds: page.slice(0, UNAPPLIED_FUNDS_PAGE_LIMIT).map((row) => {
+      funds: held.slice(0, UNAPPLIED_FUNDS_PAGE_LIMIT).map((row) => {
         // From `observedAt`, which is when the money was FIRST seen unapplied and never moves —
         // so the clock keeps running while the row sits here, which is the behaviour that makes
         // the 75/90 stages mean anything. Two currencies are two rows and are never combined.

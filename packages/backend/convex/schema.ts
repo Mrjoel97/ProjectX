@@ -2971,9 +2971,18 @@ export default defineSchema({
     tenantId: v.string(),
     /** The `cus_…` whose cash balance holds it. Half of the re-observation key below. */
     stripeObjectId: v.string(),
+    /** ZERO means the hold CLEARED. The row survives at zero rather than being deleted, because
+     *  deleting it would delete `amountAt` — and a Stripe redelivery of the pre-clear event would
+     *  then re-insert the old figure as a brand-new hold with nothing left to clear it. Readers
+     *  exclude zeros; this row is a guard, not a balance. */
     amountMinor: v.number(),
     currency: v.string(),
     observedAt: v.number(),
+    /** `event.created` of the delivery that set `amountMinor`. Stripe does not guarantee delivery
+     *  order, so an older event arriving second must be ignored rather than believed. Distinct
+     *  from `observedAt`, which is the start of the 75/90 clock and does not move while the hold
+     *  lasts. */
+    amountAt: v.number(),
   })
     // `by_tenant`, NOT the `by_tenant_observedAt` 28.1-06's plan specified. `tenant_owned` puts
     // this table on the erasure and export walks, and BOTH hard-code `.withIndex("by_tenant")`

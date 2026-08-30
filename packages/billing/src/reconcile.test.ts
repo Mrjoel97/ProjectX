@@ -293,6 +293,25 @@ describe("cash_balance.funds_available — LEFTOVER money, not an arrival", () =
     expect(observations.map((o) => ("amount" in o ? o.amount : null))).toEqual([
       { minor: 1050, currency: "USD" },
       { minor: 900, currency: "JPY" },
+      // EUR at zero is CARRIED, not dropped (28.1-11 #8). Dropping it is how a hold that has
+      // actually cleared went on being reported, and went on aging, forever: the writer only ever
+      // learns a balance is gone from the notification that says it is gone.
+      { minor: 0, currency: "EUR" },
+    ]);
+  });
+
+  test("a balance that has gone to ZERO is an observation, because the clear IS the signal", () => {
+    const { movements, observations } = run("cash_balance.funds_available", balance({ usd: 0 }));
+    expect(movements).toEqual([]);
+    expect(observations).toEqual([
+      {
+        kind: "unapplied-funds",
+        amount: { minor: 0, currency: "USD" },
+        correlationId: "billing/cus_1",
+        stripeObjectId: "cus_1",
+        ageDays: 0,
+        stage: "held",
+      },
     ]);
   });
 });

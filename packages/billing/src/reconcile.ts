@@ -294,7 +294,11 @@ function fundsAvailable(
     if (typeof minor !== "number") return err("funds-available: an amount must be a number");
     const money = moneyFromMinor(Math.abs(minor), currency);
     if (!money.ok) return err(`funds-available: ${money.error}`);
-    if (money.value.minor === 0) continue;
+    // ZERO IS CARRIED, NOT SKIPPED (28.1-11 #8). This event is the only notification that a hold
+    // has cleared, so dropping the zero left the writer with no clearing signal at all: a balance
+    // that Stripe applied months ago went on being reported, and went on aging toward "swept",
+    // for as long as the row lived. The writer decides what a zero means; this function only
+    // reports what the balance says.
     observations.push({
       kind: "unapplied-funds",
       amount: money.value,

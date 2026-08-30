@@ -611,6 +611,7 @@ async function seedUnapplied(
         amountMinor: row.amountMinor,
         currency: row.currency ?? "USD",
         observedAt: Date.now() - row.ageDays * DAY,
+        amountAt: Date.now() - row.ageDays * DAY,
       });
     }
   });
@@ -691,6 +692,22 @@ describe("unapplied funds are visible WITH their age", () => {
     const result = await as.query(api.billing.unappliedFunds, {});
     expect(result.funds).toHaveLength(UNAPPLIED_FUNDS_PAGE_LIMIT);
     expect(result.truncated).toBe(true);
+  });
+
+  test("a CLEARED hold is not money — a zeroed row never reaches the surface", async () => {
+    const { as, tenantId } = await withTenant();
+    await openBillingCoverage(as, tenantId);
+    await seedUnapplied(as, tenantId, [
+      { stripeObjectId: "cus_cleared", amountMinor: 0, ageDays: 80 },
+      { stripeObjectId: "cus_held", amountMinor: 2500, ageDays: 3 },
+    ]);
+
+    const result = await as.query(api.billing.unappliedFunds, {});
+    // The zeroed row is kept by the WRITER so a late redelivery cannot resurrect the hold
+    // (28.1-11 #8/#13). It is not a hold, so it is not rendered — and it must not arrive here
+    // wearing an 80-day age and a "return-attempted" stage over an amount of nothing.
+    expect(result.funds.map((f) => f.stripeObjectId)).toEqual(["cus_held"]);
+    expect(result.coverage).toBe("known");
   });
 
   test("UNAPPLIED_FUNDS_PAGE_LIMIT is 100", () => {
