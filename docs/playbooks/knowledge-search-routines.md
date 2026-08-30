@@ -1,5 +1,37 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-30 (**THE TWO PROVIDER PROBES ARE IMPLEMENTED, AND THE `dst-boundary` DATE
+> IS NOW DERIVED — because the one I hardcoded was wrong by seven weeks.**
+>
+> THE DATE. The refusal used to name "2026-10-25 (EU), 2026-11-01 (US)". Scanning all 418 IANA zones
+> instead of the two a northern-hemisphere engineer thinks of first, the real answer is **2026-09-06**
+> — America/Santiago and Pacific/Easter. `nextTransition` / `soonestTransition` derive it from `Intl`
+> now, so the message cannot go stale, cannot be wrong next year, and names the cheapest zone to use.
+> A hardcoded answer to "when is the next transition" is wrong the moment a tenant lives somewhere the
+> author did not picture.
+>
+> THE PROBES. `provider-read` counts a bounded read through `gmail.probeReadCount`.
+> `oauth-expiry-reauth` observes `gmailTokens.expiresAt` ADVANCING across a read that needed a valid
+> token — a fact about stored state before and after, not a claim the script makes about itself. It
+> REFUSES when the token has not expired: a read that never needed a refresh is not evidence of one.
+> Neither calls a provider endpoint directly; both drive the app's own paths, so the trace is of the
+> code a scheduled routine would run.
+>
+> ⚠ THE LESSON WORTH MORE THAN THE PROBES. `convexProbe` returned `null` on ANY failure, and the
+> probes read `null` as "the deployment answered: no grant". It was the same defect as the eval
+> gate's — a check that cannot tell "we looked and it was absent" from "we could not look" — written
+> an hour after fixing that one. The `UNREACHABLE` sentinel caught THREE real failures the moment it
+> existed, every one of which had been reporting a confident "no provider grant" on a deployment that
+> was answering fine:
+>   1. `npx` -> ENOENT (a .cmd shim on win32; `execFile` does not resolve it)
+>   2. `npx.cmd` -> EINVAL (Node 24 refuses to execFile a .cmd without a shell — CVE-2024-27980)
+>   3. the convex CLI exits with `UV_HANDLE_CLOSING` AFTER printing the answer, so `execFileSync`
+>      throws over a good result — intermittently, which is why the same tenant read "no grant" once
+>      and "unreachable" the next time
+> Fixed by spawning the CLI's `bin/main.js` with `process.execPath` (no shell, so JSON crosses as one
+> argv element) and letting the RESULT decide rather than the exit code. **If you add a probe here,
+> make "could not ask" a distinct outcome before you write the happy path.**)
+
 > Last verified: 2026-08-30 (**THE RECURRENCE GATE CAN NOW TELL A LIVE TRACE FROM A FILE THAT
 > EXISTS — and the answer for all three rows is still `defer`.** `checkEvidenceRef` proves a ref
 > names a distinct, non-empty file inside the repo and NOTHING MORE; the script's own header says

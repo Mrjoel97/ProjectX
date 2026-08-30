@@ -1,3 +1,25 @@
+> Last verified: 2026-08-30 (**TWO REFS-ONLY PROBE SURFACES ON THE GMAIL RAIL, for the ROUT-02
+> recurrence evidence collector. No cockpit behaviour changed and no existing function was touched.**
+>
+> `gmailAuth.grantState` -> `{present, real, expiresAt}` and `gmail.probeReadCount` -> `{ok, count}`.
+> Both exist because the collector drives them through the convex CLI, whose result is printed to
+> stdout and into whatever captured it:
+>
+> - `gmailAuth.getTokens` returns the row, REFRESH TOKEN AND ALL. Correct for the internal callers
+>   that spend it, catastrophic for anything a human runs from a terminal. `grantState` answers the
+>   three questions an evidence probe has and returns nothing that can be spent. `real` is derived
+>   from the fixture sentinel in the token itself, not from an env flag, so no setting can make a
+>   real grant read as a fixture or the reverse.
+> - `listInbox` resolves to `messages: InboxMessageMeta[]` — subjects and senders. A probe built on
+>   it would spill a real mailbox's metadata into a terminal, a CI log or an evidence file.
+>   `probeReadCount` is a thin wrapper that returns `.length` and nothing else: the read itself is
+>   still `listInbox`, unchanged, including its refs-only `mailbox.listed` audit row, because the
+>   trace has to be of the code a scheduled routine would actually run. The narrower RETURN TYPE is
+>   the enforcement — a `count: number` cannot hold a subject line.
+>
+> `maxResults: 3`, deliberately: this is a liveness probe, not a sync, and reading more would spend
+> the tenant's quota to prove the same single fact.)
+
 > Last verified: 2026-08-30 (**A PLAYWRIGHT HAZARD THAT APPLIES TO EVERY SPEC UNDER `apps/web/e2e`,
 > not just the pack ones: a rapid `page.goto` loop POISONS THE NEXT PAGE in the same browser
 > context.** Reproduced deterministically — a four-test serial probe counting buttons inside
