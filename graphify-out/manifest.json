@@ -6205,8 +6205,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/media.md": {
-    "mtime": 1788114633.4084127,
-    "ast_hash": "55d763ead85f2986868d09d77833ab0a",
+    "mtime": 1788121103.9806418,
+    "ast_hash": "e3db591b8b826fa3403af18782b20044",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-08-02-profile-tabs-blueprint-segments-design.md": {
@@ -6235,8 +6235,8 @@
     "semantic_hash": ""
   },
   "packages/cost/src/media.fixtures.json": {
-    "mtime": 1788113425.4900508,
-    "ast_hash": "5e6555868dd10a8e7fa75b03a81de98c",
+    "mtime": 1788121616.7826817,
+    "ast_hash": "1e1bdbc5e1bee757ec4d585ec472e513",
     "semantic_hash": ""
   },
   "packages/backend/vitest.diag.mts": {
@@ -6375,13 +6375,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/media.ts": {
-    "mtime": 1788112844.7697423,
-    "ast_hash": "06e72ad5ec8f2a1386c42dee028dcc6f",
+    "mtime": 1788121617.0852115,
+    "ast_hash": "10c0f83c2b669a811c00c2ee336f910a",
     "semantic_hash": ""
   },
   "packages/backend/convex/media.test.ts": {
-    "mtime": 1788114691.5099945,
-    "ast_hash": "f4d8262f1cc848eaa4388406c05d7ad9",
+    "mtime": 1788121618.5624714,
+    "ast_hash": "d4c33119813b8b4b41525c1348d676c6",
     "semantic_hash": ""
   },
   ".planning/phases/20-media-canvas/20-04-SUMMARY.md": {
