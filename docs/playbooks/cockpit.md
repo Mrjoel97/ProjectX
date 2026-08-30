@@ -1,4 +1,10 @@
-> Last verified: 2026-08-29 (28.1-05 — **`http.ts` ONLY**, and only the Stripe billing route at
+> Last verified: 2026-08-30 (the 28-09 callback slice — **`http.ts` ONLY**: three connector OAuth
+> callback routes, `/connectors/{hubspot,quickbooks,stripe}/callback/<env>`, each a thin dispatcher
+> to the auth module's existing `internalAction` and gated on `providerGates.connectPermitted` —
+> the ADMISSION axis, never `availableProviders`, because gating the callback on a passed lane
+> deadlocks the phase. The route census in `microsoftAuth.test.ts` moved 8 -> 11 and caught it.
+> PayPal deliberately has no route. Owned by docs/playbooks/revenue-connectors.md; only the
+> wiring lives here. Prior: 2026-08-29, 28.1-05 — **`http.ts` ONLY**, and only the Stripe billing route at
 > the bottom of the file. The route now calls `eventFacts(event.type, event.data.object)` at the
 > trust boundary and passes ONLY the resulting ids into `receiveAndApply`; the parsed Stripe
 > object never crosses into Convex. `event.created` is threaded through in milliseconds as the
@@ -675,8 +681,9 @@
 > route's only reachable caller was therefore somebody holding the secret, for whom it offered an
 > outbound fetch and a terminal `succeeded` write. Provider truth and the removal record: ADR-024.
 >
-> `http.ts` now holds the OAuth callbacks, `/skillopt/*`, `GET /media/blob/*` and the unsubscribe
-> pair. `contacts.ts`'s unsubscribe token is the last living copy of the 20-06 stateless-token
+> `http.ts` now holds the OAuth callbacks (Gmail, Microsoft, and — since the 28-09 slice — the
+> hubspot/quickbooks/stripe connector callbacks, which belong to revenue-connectors.md),
+> `/skillopt/*`, `GET /media/blob/*` and the unsubscribe pair. `contacts.ts`'s unsubscribe token is the last living copy of the 20-06 stateless-token
 > pattern, and its comment says so rather than pointing at the deleted route.
 > Last verified: 2026-08-21 (25.1-05 Task 2, D11 — **THE MEMO CARD RENDERS ITS DOCUMENT AND SHOWS
 > ITS SOURCES.** `MemoCardBody` (exported from `cards.tsx`, hook-free) replaces the memo branch's
@@ -1107,7 +1114,8 @@
 > re-consent now. Mutation-proven: gating on `connected` reddens that case.
 >
 > **NO SECOND OAUTH SURFACE WAS ADDED, and a test asserts it** — `microsoftAuth.test.ts` pins
-> `http.route(` at exactly 8 and at most one Microsoft callback path. 17-06 built the authorize
+> `http.route(` at exactly 11 (8 until the 28-09 connector callbacks; the pin is on the TOTAL, so
+> any route appearing or disappearing has to be justified) and at most one Microsoft callback path. 17-06 built the authorize
 > URL, callback, consent page and token row; a plan named "provider lifecycle" is precisely the one
 > that would quietly add a second, so the absence is measured rather than assumed.
 >

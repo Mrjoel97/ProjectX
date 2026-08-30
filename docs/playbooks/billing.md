@@ -1,5 +1,14 @@
 # Playbook: Billing — Pikar's OWN merchant account (Phase 28.1)
 
+> **Test-hygiene pass, 2026-08-30 (found by the 28-09 callback slice's full-suite run, not by a
+> billing change).** `billingWebhook.test.ts`'s "the stored row carries no payload" assertion
+> scanned the WHOLE stored row — `_creationTime` included — for the fixture's `1200`. A
+> millisecond epoch contains "1200" whenever those four digits line up, and one did
+> (`1788120082071`), so the test went red for a reason that had nothing to do with a payload. It
+> now asserts the row's CLOSED KEY SET and scans only the row's own fields, which is the stronger
+> check: a new field carrying a Stripe body is caught whatever its value happens to be. **No
+> behaviour change; nothing below is re-verified by this.**
+
 > **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
 > subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
 > steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no

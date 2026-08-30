@@ -1,6 +1,7 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-28 against 28-07 (the read-only Stripe App lane, `postTokenForm`'s
+> Last verified: 2026-08-30 against the 28-09 callback-route slice (`http.ts`,
+> `providerGates.connectPermitted`, `connectorCallbacks.test.ts`), on top of 28-07 (the read-only Stripe App lane, `postTokenForm`'s
 > `bearerAuth` input and `readPages`' Stripe version pin), 28-06 (QuickBooks) and 28-05 (HubSpot),
 > on top of 28-26's provider gate plane, 28-04's OAuth state and read transport and 28-03's
 > credential envelope and four tables
@@ -318,6 +319,55 @@ On 2026-08-27 all four providers were admitted `approved_production` and **not o
 run**; three of those four admissions rest on owner testimony rather than evidence. If the two ever
 collapsed into one flag, the wave-7 seals would be decorative and a provider would go discoverable on
 a say-so. **`approved_production` + `lane: parked` is the normal state for most of this phase.**
+
+### The OAuth callback gates on ADMISSION, not on the lane — and why it must
+
+`convex/http.ts` registers three callback routes (`connectorCallbacks.test.ts` owns their tests):
+
+| Route | Handler | Environment |
+|---|---|---|
+| `/connectors/hubspot/callback/<env>` | `hubspotAuth.completeHubSpotConnect` | last path segment |
+| `/connectors/quickbooks/callback/<env>` | `quickbooksAuth.handleCallback` | last path segment |
+| `/connectors/stripe/callback/<env>` | `stripeAuth.handleCallback` | last path segment |
+
+**PayPal has no route and must not be given one.** `paypalAuth.beginConnect` refuses by design
+(`PAYPAL_PARTNER_SURFACE_GAP`) and mints no state, because a state row implies a callback that is
+coming. There is nothing to call back.
+
+The gate is `providerGates.connectPermitted` — the **admission** axis plus liveness (a row exists,
+the lane is not `failed`, `reviewBy` is in the future). It is deliberately **not**
+`availableProviders`, and the reason is a deadlock:
+
+```
+lane `passed`  needs  live evidence
+live evidence  needs  a completed grant
+a completed grant needs  the callback route
+the callback route (if gated on `passed`)  needs  lane `passed`
+```
+
+Gate the callback on the lane and no provider can ever pass. Gate it on the admission and the loop
+opens exactly where the register says it should: `approved_production` means *permission to start*,
+which is precisely what an owner needs in order to produce the evidence wave 7 judges. A `parked`
+lane therefore accepts a callback while staying invisible to every tenant through
+`availableProviders`. **This is the two axes doing the job they were separated for.** Do not
+"simplify" the callback onto `availableProviders`; it re-closes the loop.
+
+Three properties the routes hold, all tested:
+
+- **The gate runs before the provider handler**, proven by consequence — after a refused callback the
+  one-time state is still UNBURNED, which can only be true if nothing consumed it. A forged,
+  replayed or out-of-gate callback costs zero code exchanges and zero writes.
+- **A callback always redirects.** `requireQbApp` and `requireStripeApp` read configuration *before*
+  consuming the state and throw by name; without the route's catch an unconfigured deployment
+  answers a provider redirect with a 500 on the Convex site origin and copies a provider message
+  into a log line. Both are refused as `unavailable` instead.
+- **The redirect carries a closed set only** — `?connect=<provider>&result=<CONNECT_RESULTS>`. No
+  `error_description`, no code, no token, no account name (CLAUDE.md §4).
+
+The environment is a **path segment**, not a query parameter: the redirect URI is registered with the
+provider and echoed back verbatim, so a query parameter would have to survive the provider's round
+trip and could be edited by whoever opens the link. `pathPrefix`, not a glob — Convex's router has
+no `*` syntax.
 
 **The composite rule** (`resolveProviderEligibility`, and nothing else may re-derive it) — a provider
 is available only when EVERY one of these holds, and a refusal names each axis that refused:
@@ -789,6 +839,16 @@ implying it happened.
   but the deletion report says nothing about whether the four provider grants were revoked upstream
   — which, per Invariant 12, is often "we could not". `tenantDelete.ts` is owned by
   `audit-dead-letter.md` and no Phase 28 plan currently claims it. Flagged, not fixed.
+- **The connect-START is not yet gated, and 28-09 Task 2 owns closing it.** `hubspotAuth.hubspotConnectUrl`,
+  `quickbooksAuth.beginConnect` and `stripeAuth.beginConnect` are `tenantAction`s that mint a state
+  for any provider. Now that the callbacks exist, a tenant who called one directly could complete a
+  grant against a provider whose lane is `parked`. The window is bounded and owner-controlled: it
+  opens only once the owner has BOTH configured that provider's deployment credentials AND sealed a
+  gate row, which is exactly the evidence-gathering window — and the credential is inert, because
+  every reader gates on `availableProviders`. It is still a stored credential nobody uses. 28-09
+  Task 2 renders only passed providers; the connect projection it adds must refuse the same way.
+- **No route exists for PayPal and none should be added** without first closing
+  `no-documented-revoke-endpoint` (28-25). `beginConnect` refusing is the tested branch.
 - Deferred by phase boundary: refunds, credits, PayPal invoice sends, CRM cleanup, journal entries,
   any accounting mutation, and the Canva/DocuSign/Slack/Square connector candidates.
 - Webhooks are out of scope for v1 (polling only). The suitability records still capture each

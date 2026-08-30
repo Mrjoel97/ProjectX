@@ -24,6 +24,7 @@
 // access. Every tenant reads the identical projection and none of them can write one.
 import {
   type Admission,
+  admissionPermits,
   type ConnectorEnvironment,
   type Eligibility,
   type Lane,
@@ -168,6 +169,36 @@ export const inspectGate = ownerQuery({
       openConditions: openConditionIdsFor(provider),
       eligibility: resolve(row === null ? null : asRecord(row), provider, Date.now()),
     };
+  },
+});
+
+/**
+ * May an OAuth consent for this provider be COMPLETED in this environment?
+ *
+ * This is the callback route's only gate, and it is deliberately NOT `availableProviders`. Those two
+ * questions are different, and collapsing them deadlocks the phase:
+ *
+ *   - `availableProviders` asks "may a TENANT see and use this?" — it needs `lane === "passed"`,
+ *     which needs live evidence, which needs a completed grant, which needs this route.
+ *   - This asks "may a grant be completed at all?" — the ADMISSION axis alone, which is precisely
+ *     what `approved_production` means: permission to START. Wave 7 (28-22..25) judges the lane
+ *     with the evidence a completed grant produces; it cannot be the prerequisite for producing it.
+ *
+ * So a lane that is `parked` still permits a callback while remaining invisible to every tenant —
+ * the exact separation `providerGates` was built with two fields to express.
+ *
+ * What it still refuses: no row at all (nobody has judged this provider, so nothing permits it), a
+ * `failed` lane (a lane discovered broken must not accept new grants), an admission that does not
+ * reach this environment, and an expired review date (an approval that outlived its evidence is not
+ * an approval). The answer is one boolean — a route has no use for a reason it must not echo.
+ */
+export const connectPermitted = internalQuery({
+  args: { provider: providerValidator, environment: environmentValidator },
+  handler: async (ctx, { provider, environment }): Promise<boolean> => {
+    const row = await rowFor(ctx, provider, environment);
+    if (row === null || row.lane === "failed") return false;
+    if (row.reviewBy <= Date.now()) return false;
+    return admissionPermits(row.admission, environment);
   },
 });
 

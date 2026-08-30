@@ -126,13 +126,28 @@ describe("POST /billing/stripe/webhook — acceptance", () => {
   });
 
   // CLAUDE.md §4: the stored row carries ids, types and counts ONLY.
+  //
+  // The FIELD SET is the assertion, and the substring scan runs over the row's own fields only.
+  // Scanning the whole row including `_creationTime` looked stronger and was a random red: a
+  // millisecond epoch contains "1200" whenever those four digits line up, and one did
+  // (`1788120082071`), failing a test about a payload for a reason that had nothing to do with one.
+  // Convex mints `_id` and `_creationTime`; neither can carry a Stripe body, and a closed key set
+  // catches a NEW field carrying one whatever its value happens to be.
   test("the stored row carries no payload — the amount in the body never reaches the DB", async () => {
     const t = harness();
     const payload = body();
     await deliver(t, payload, await signedHeader(payload));
     const stored = await rows(t);
-    expect(JSON.stringify(stored[0])).not.toContain("1200");
-    expect(JSON.stringify(stored[0])).not.toContain("amount_paid");
+    const { _id, _creationTime, ...own } = stored[0] as Record<string, unknown>;
+    expect(Object.keys(own).sort()).toEqual([
+      "eventId",
+      "eventType",
+      "objectId",
+      "receivedAt",
+      "status",
+    ]);
+    expect(JSON.stringify(own)).not.toContain("1200");
+    expect(JSON.stringify(own)).not.toContain("amount_paid");
   });
 });
 

@@ -168,8 +168,18 @@ export type Eligibility = {
   unresolvedConditions: readonly string[];
 };
 
-/** Production exposure needs the production decision; sandbox accepts either approval. */
-const admissionPermits = (admission: Admission, environment: ConnectorEnvironment): boolean =>
+/**
+ * Production exposure needs the production decision; sandbox accepts either approval.
+ *
+ * Exported because the OAuth callback route gates on THIS axis alone (28-09 slice): an admission is
+ * permission to START, which is exactly what an owner needs to gather the live evidence wave 7
+ * judges. Tenant-facing discovery gates on the FULL rule below, where a lane that has not passed is
+ * still invisible. One rule, two callers, no second copy.
+ */
+export const admissionPermits = (
+  admission: Admission,
+  environment: ConnectorEnvironment,
+): boolean =>
   admission === "approved_production" ||
   (admission === "approved_beta" && environment === "sandbox");
 

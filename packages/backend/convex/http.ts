@@ -2,11 +2,13 @@ import { eventFacts } from "@pikar/billing/events";
 import { reconcileEvent } from "@pikar/billing/reconcile";
 import { invoiceTaxabilityReason } from "@pikar/billing/tax";
 import { GOOGLE_SCOPES, type MicrosoftCallbackError, notificationMessage } from "@pikar/core";
+import type { ConnectorEnvironment, Provider } from "@pikar/revenue";
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
-import { httpAction } from "./_generated/server";
+import { type ActionCtx, httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { verifyStripeSignature } from "./billingWebhook";
+import { type ConnectResult, callbackRedirectPath, DEFAULT_REDIRECT_PATH } from "./connectorOAuth";
 import { verifyState } from "./gmailAuth";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
@@ -162,6 +164,168 @@ http.route({
     });
     return seeOther("/dashboard/profile");
   }),
+});
+
+// ── Phase 28 connector OAuth callbacks (hubspot, quickbooks, stripe) ──────────────────────
+//
+// PULLED FORWARD out of 28-09 wave 8, because without these routes the phase cannot finish.
+// `hubspotAuth.completeHubSpotConnect`, `quickbooksAuth.handleCallback` and
+// `stripeAuth.handleCallback` all shipped in waves 5-7 as `internalAction`s with a comment saying
+// the route that calls them belongs to a later plan. That plan (28-09) depends on wave 7's pass/park
+// judgments — and those judgments need live evidence, which needs a completed grant, which needs
+// these routes. Nothing could ever pass. See `providerGates.connectPermitted` for the axis that
+// breaks the cycle without opening a parked provider to tenants.
+//
+// PayPal has NO route here and must not get one: `paypalAuth.beginConnect` refuses by design
+// (`PAYPAL_PARTNER_SURFACE_GAP`) and mints no state, because a state row implies a callback that is
+// coming. There is nothing to call back.
+//
+// The routes are DUMB ON PURPOSE. Every one of them does the same five things and delegates the
+// rest: bounce to SITE_URL, read the environment out of the path, refuse anything the gate does not
+// permit, hand the provider's own parameters to the provider's handler, and redirect to a path
+// carrying nothing but the provider name and a closed-set result. The exchange, the state burn, the
+// account checks and the sealing all live in the auth modules where they are already tested.
+//
+// WHY `pathPrefix` AND NOT A QUERY PARAMETER for the environment: the redirect URI is registered
+// with the provider and echoed back verbatim, so a query parameter would have to survive the
+// provider's own round trip and could be edited by whoever opens the link. A path segment is part
+// of the registered URI itself. `pathPrefix`, not a glob — Convex's router has no `*` syntax (the
+// 20-06 lesson, same as /media/blob/ and /unsubscribe/ below).
+const CONNECTOR_ENVIRONMENTS: readonly ConnectorEnvironment[] = ["sandbox", "production"];
+
+/**
+ * What a provider's callback handler is, from this file's point of view: given the provider's own
+ * query parameters, finish the consent and say where the browser goes next. The returned path has
+ * already been through `callbackRedirectPath`, so it carries the provider and a closed-set result
+ * and nothing else.
+ */
+type FinishConsent = (
+  ctx: ActionCtx,
+  args: {
+    environment: ConnectorEnvironment;
+    state: string;
+    code?: string;
+    denied?: boolean;
+    /** Intuit's company identifier. Passed through untouched; only `quickbooksAuth` validates it. */
+    realmId?: string;
+  },
+) => Promise<string>;
+
+/**
+ * The one callback body, shared by all three routes so a hardening applied to one cannot miss the
+ * others. (The 28.1-11 lesson: a repair that reaches two of three copies is the defect, not the
+ * fix.)
+ *
+ * ORDER IS THE SAFETY PROPERTY, and it is the same order the auth modules use internally: refuse
+ * everything refusable BEFORE the provider's handler is reached, so a forged, replayed or
+ * out-of-gate callback costs zero code exchanges, zero external calls and zero writes.
+ */
+function connectorCallback(provider: Provider, finish: FinishConsent) {
+  return httpAction(async (ctx, req) => {
+    // This runs on the Convex site origin; it MUST bounce the browser back to the app so the user
+    // never dead-ends on this domain, exactly as the two callbacks above do.
+    const site = process.env.SITE_URL ?? "http://localhost:3111";
+    const seeOther = (path: string) =>
+      new Response(null, { status: 303, headers: { Location: `${site}${path}` } });
+    // A refusal knows no redirect path — the state row that holds one has not been read yet, and
+    // reading it before the gate would leak whether a state exists. So refusals land on the default.
+    const fail = (result: ConnectResult) =>
+      seeOther(callbackRedirectPath(DEFAULT_REDIRECT_PATH, provider, result));
+
+    const url = new URL(req.url);
+    const environment = url.pathname.split("/").pop() ?? "";
+    if (!(CONNECTOR_ENVIRONMENTS as readonly string[]).includes(environment)) {
+      return fail("unavailable");
+    }
+    const env = environment as ConnectorEnvironment;
+
+    // The provider's own `error` parameter. It is read as a BOOLEAN and never echoed: an OAuth
+    // error_description can carry an account name, a directory id or the authorization code itself,
+    // and a redirect is written to browser history, sent as a Referer and logged by every proxy in
+    // between (CLAUDE.md §4, and the Microsoft route's first divergence above).
+    const denied = url.searchParams.get("error") !== null;
+    const state = url.searchParams.get("state") ?? "";
+    // No state means nothing binds this callback to a tenant, so there is nothing to burn and
+    // nobody to tell. This is indistinguishable from a stray GET and is treated as one.
+    if (state === "") return fail(denied ? "denied" : "invalid_state");
+
+    // THE GATE. Admission only — see `providerGates.connectPermitted` for why this is not
+    // `availableProviders`. It runs BEFORE the handler, so an out-of-gate callback never reaches a
+    // state row, a client secret or the provider.
+    const permitted = await ctx.runQuery(internal.providerGates.connectPermitted, {
+      provider,
+      environment: env,
+    });
+    if (!permitted) return fail("unavailable");
+
+    const code = url.searchParams.get("code") ?? undefined;
+    const realmId = url.searchParams.get("realmId") ?? undefined;
+    // A CALLBACK ALWAYS REDIRECTS. `quickbooksAuth` and `stripeAuth` both read their deployment
+    // configuration BEFORE consuming the state and throw by name when it is missing, which on an
+    // unconfigured deployment would surface here as a 500 — a dead end on the Convex site origin,
+    // and a thrown provider message copied into a log line. Neither is acceptable on the one route
+    // a user reaches from someone else's website, so the throw becomes the same closed-set refusal
+    // as every other failure.
+    try {
+      return seeOther(await finish(ctx, { environment: env, state, code, denied, realmId }));
+    } catch {
+      return fail("unavailable");
+    }
+  });
+}
+
+// HubSpot's handler takes a REQUIRED code and returns the stored redirect path un-composed, so the
+// denial branch and the `?connect=` composition happen here rather than there. The state row is
+// left to expire on a denial: burning it would need the code path that requires a code.
+http.route({
+  pathPrefix: "/connectors/hubspot/callback/",
+  method: "GET",
+  handler: connectorCallback("hubspot", async (ctx, { environment, state, code, denied }) => {
+    if (denied || code === undefined) {
+      return callbackRedirectPath(
+        DEFAULT_REDIRECT_PATH,
+        "hubspot",
+        denied ? "denied" : "invalid_state",
+      );
+    }
+    const done = await ctx.runAction(internal.hubspotAuth.completeHubSpotConnect, {
+      code,
+      state,
+      environment,
+    });
+    return callbackRedirectPath(done.redirectPath, "hubspot", done.result);
+  }),
+});
+
+// QuickBooks and Stripe both compose their own `redirectTo` with `callbackRedirectPath`, and both
+// take `denied` so a refusal BURNS the one-time state instead of leaving it to expire. `realmId` is
+// Intuit's company identifier and is passed straight through to the handler that validates it —
+// this route neither parses nor stores it.
+http.route({
+  pathPrefix: "/connectors/quickbooks/callback/",
+  method: "GET",
+  handler: connectorCallback(
+    "quickbooks",
+    async (ctx, args) =>
+      (await ctx.runAction(internal.quickbooksAuth.handleCallback, args)).redirectTo,
+  ),
+});
+
+http.route({
+  pathPrefix: "/connectors/stripe/callback/",
+  method: "GET",
+  handler: connectorCallback(
+    "stripe",
+    async (ctx, { environment, state, code, denied }) =>
+      (
+        await ctx.runAction(internal.stripeAuth.handleCallback, {
+          environment,
+          state,
+          code,
+          denied,
+        })
+      ).redirectTo,
+  ),
 });
 
 // IMPR-02 trajectory export: the authenticated seam the CI SkillOpt job pulls PII-scrubbed
