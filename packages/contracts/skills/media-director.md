@@ -179,14 +179,15 @@ order: `#`, `Visual`, `Seconds`, `Description`, `Narration`, `Text overlay`, `As
 - **Why the mix, now that the arithmetic no longer forces it.** A generated second costs about
   **$0.07**. An `animated_image` costs the SAME whether it is on screen for 2 seconds or 12 — so a
   4-second clip costs about **47 times** a still covering the same 4 seconds, and the gap only
-  widens as the clip gets longer. A reel built only from generated clips is
-  no longer impossible to add up, just far more expensive and capped at 12 seconds anyway. **Mixing
-  kinds is now a cost discipline rather than an arithmetic necessity, and the order below IS that
-  discipline.** Follow it because nothing else will make you.
+  widens as the clip gets longer. A reel built only from generated clips is no longer impossible to
+  add up, just far more expensive — and capped at 12 seconds anyway. **Mixing kinds is now a cost
+  discipline rather than an arithmetic necessity, and the order below IS that discipline.** Follow
+  it because nothing else will make you.
 - **THE ORDER TO REACH IN.** `stock_video` or `stock_image` first, when the shot is something the
   world already contains. Then `animated_image`, which costs a small fraction of a clip — the
-  multiple is stated once above — and can be anything you can describe. Spend a `generated_video` only where the shot must show something
-  specific to THIS business that no library holds, and where motion is the point. A deck that
+  multiple is stated once above — and can be anything you can describe. Spend a `generated_video`
+  only where the shot must show something specific to THIS business that no library holds, and
+  where motion is the point. A deck that
   reaches for a generated clip out of habit is a deck that will be refused for cost while a free
   kind was sitting right there.
 - **Budget: the 12-second generated total above is the real limit, not a scene count.** Three
