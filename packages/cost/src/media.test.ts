@@ -326,18 +326,47 @@ describe("the price tables agree with the committed vendor fixture", () => {
   // only break on the day the vendor breaks it has no warning value at all. Each failure below
   // names the decision it wants, so a red build here is actionable rather than merely alarming.
   const PINNED_MODELS = new Set<string>([MEDIA_DEFAULT_VIDEO.model, MEDIA_DEFAULT_IMAGE.model]);
+  /**
+   * IN SCOPE = every PINNED model, PLUS every entry still carrying an unretired `succession`.
+   *
+   * Keying on `PINNED_MODELS` alone was a hole, and 33.1-04 walked straight into it: repinning
+   * `MEDIA_DEFAULT_VIDEO` to the successor drops the DYING model out of the set, so all three
+   * alarms below `continue` past `sora-2` and go green **while the submit path still posts to the
+   * endpoint being withdrawn**. Measured, not theorised: with the repin landed and `sora-2`'s
+   * shutdown moved to five days out, this file was green.
+   *
+   * That is the same self-certification shape commit 7012068 closed one level up, where keying on
+   * `status !== "decision_pending"` meant that WRITING THE ADR disarmed the alarm. A decision is
+   * not a migration, and NEITHER IS A REPIN. The exit condition is unchanged and is still the only
+   * one: `replacementWiredUp === true`, which plan 33.1-05 sets beside the landed submit path.
+   *
+   * **`deprecated` is the THIRD arm, and it was added by mutation rather than by design.** The
+   * plan proposed `pinned || succession !== undefined`; mutation 3 (delete `sora-2`'s succession
+   * block outright) came back GREEN under it, because an unpinned entry with no succession falls
+   * out of scope — so the alarm "a deprecated model carries a written succession decision" could
+   * be silenced by DELETING the thing it asks for. Fixed in the predicate, not in the fixture.
+   *
+   * ponytail: one predicate, three call sites. Not a fixture-scanning helper module — this is a
+   * test file and the whole mechanism is one line.
+   */
+  const inScope = (e: {
+    id: string;
+    succession?: unknown;
+    vendor: Record<string, unknown>;
+  }): boolean =>
+    PINNED_MODELS.has(e.id) || e.succession !== undefined || e.vendor.deprecated === true;
   const daysUntil = (iso: string): number =>
     Math.floor((Date.parse(`${iso}T00:00:00Z`) - Date.now()) / 86_400_000);
 
-  it("A PINNED MODEL THAT IS DEPRECATED CARRIES A WRITTEN SUCCESSION DECISION", () => {
+  it("A DEPRECATED MODEL IN SCOPE CARRIES A WRITTEN SUCCESSION DECISION", () => {
     // The point is that "we know" has to become "it is written down". A deprecation with nobody
     // named as its replacement is how a dependency dies quietly.
     for (const e of FIXTURES.entries) {
-      if (!e.vendor.deprecated || !PINNED_MODELS.has(e.id)) continue;
+      if (!e.vendor.deprecated || !inScope(e)) continue;
       const succession = (e as { succession?: { status?: string; why?: string } }).succession;
       expect(
         succession,
-        `${e.id} is deprecated and PINNED, but no \`succession\` is recorded in media.fixtures.json`,
+        `${e.id} is deprecated and IN SCOPE, but no \`succession\` is recorded in media.fixtures.json`,
       ).toBeDefined();
       expect(succession?.status).toMatch(/^(decision_pending|decided|migrated)$/);
       expect((succession?.why ?? "").length, `${e.id}: succession.why must say WHY`).toBeGreaterThan(
@@ -346,11 +375,11 @@ describe("the price tables agree with the committed vendor fixture", () => {
     }
   });
 
-  it("A PINNED MODEL IS NOT ALREADY PAST ITS SHUTDOWN DATE", () => {
+  it("A MODEL IN SCOPE IS NOT ALREADY PAST ITS SHUTDOWN DATE", () => {
     // The last line of defence. If this is red, the product is shipping requests to an endpoint the
     // vendor has withdrawn — every `generated_video` scene is failing right now.
     for (const e of FIXTURES.entries) {
-      if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
+      if (!e.vendor.shutdown || !inScope(e)) continue;
       expect(
         daysUntil(String(e.vendor.shutdown)),
         `${e.id} SHUT DOWN on ${e.vendor.shutdown}. It is still pinned. Migrate it now.`,
@@ -370,12 +399,15 @@ describe("the price tables agree with the committed vendor fixture", () => {
     // the cheap half; the submit path is the half that keeps reels rendering. Keyed that way, the
     // ONLY surviving alarm was "the shutdown must not have passed", which fires the day after
     // production breaks. A decision is not a migration, and the tripwire now says so.
+    //
+    // 33.1-04 widened the SCOPE for the same reason (see `inScope`): a REPIN is not a migration
+    // either, and keying on `PINNED_MODELS` alone let the repin disarm this.
     const RUNWAY_DAYS = 14;
     for (const e of FIXTURES.entries) {
       const succession = (e as {
         succession?: { status?: string; replacementWiredUp?: boolean };
       }).succession;
-      if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
+      if (!e.vendor.shutdown || !inScope(e)) continue;
       // Only a WIRED replacement stands the tripwire down. `migrated` means the code moved;
       // anything else — undecided, or decided-but-unwired — still needs runway.
       if (succession?.status === "migrated" || succession?.replacementWiredUp === true) continue;
