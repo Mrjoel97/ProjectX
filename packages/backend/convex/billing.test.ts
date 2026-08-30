@@ -20,6 +20,7 @@ import { api } from "./_generated/api";
 import {
   billingPeriodKey,
   checkoutParams,
+  INVOICE_PAGE_LIMIT,
   PORTAL_IDEMPOTENCY_WINDOW_MS,
   UNAPPLIED_FUNDS_PAGE_LIMIT,
 } from "./billing";
@@ -35,6 +36,17 @@ const backendSources = import.meta.glob("./billing*.ts", {
 }) as Record<string, string>;
 
 const packageSources = import.meta.glob("../../billing/src/*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+/**
+ * The WEB app's own source. 28.1-07 (BILL-04) requires the no-card-data proof to cover the half a
+ * browser renders, not only the backend: the locked decision is Stripe-hosted everything, and a
+ * card input appearing in a page is that decision being reversed by accident.
+ */
+const webSources = import.meta.glob("../../../apps/web/app/**/*.tsx", {
   query: "?raw",
   import: "default",
   eager: true,
@@ -116,6 +128,12 @@ async function tenantOn(t: ReturnType<typeof convexTest>) {
 
 /** Boot a backend with one tenant on it. */
 const withTenant = () => tenantOn(convexTest(schema, modules));
+
+/** …and keep the backend handle, for tests that have to seed rows a producer would write. */
+async function withTenantHandle() {
+  const t = convexTest(schema, modules);
+  return { t, ...(await tenantOn(t)) };
+}
 
 const rateLimiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
@@ -727,5 +745,233 @@ describe("the spend plane is untouched by the billing ledger", () => {
     // And the revenue is nowhere in the Finance payload at all.
     expect(JSON.stringify(after)).not.toContain("490000");
     expect(JSON.stringify(after)).not.toContain("JPY");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-07 (BILL-04) — the hosted invoice page, and the proof no card data exists.
+//
+// The tenant-facing half of the rollup is ONE link. B2B customers who cannot pay by card pay on
+// Stripe's Hosted Invoice Page; we serve `invoice.hosted_invoice_url` and nothing else. There is
+// no invoice renderer, no payment form and no card field anywhere in this repo, and the scans at
+// the bottom of this file are what keep it that way.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+const HOSTED_INVOICE = "https://invoice.stripe.com/i/acct_SENTINEL/test_SENTINELPAGE";
+
+/** A period row in whatever state the test needs. There is no producer in the app yet. */
+async function seedInvoicePeriod(
+  t: ReturnType<typeof convexTest>,
+  tenantId: string,
+  over: Partial<{
+    periodKey: string;
+    status: "pending" | "claimed" | "posted" | "failed";
+    hostedInvoiceUrl: string;
+    amountMinor: number;
+    currency: string;
+    postedAt: number;
+  }> = {},
+) {
+  const now = Date.now();
+  const status = over.status ?? "posted";
+  return await t.run((ctx) =>
+    ctx.db.insert("billingPeriods", {
+      tenantId,
+      periodKey: over.periodKey ?? "2026-08",
+      periodStart: now - 30 * 86_400_000,
+      periodEnd: now - 86_400_000,
+      dueAt: now - 3_600_000,
+      status,
+      charges: [
+        {
+          ref: "sub-1",
+          kind: "subscription" as const,
+          amountMinor: 4900,
+          currency: "USD",
+          occurredAt: now - 15 * 86_400_000,
+        },
+      ],
+      attempts: 1,
+      ...(status === "posted"
+        ? {
+            postedAt: over.postedAt ?? now,
+            stripeInvoiceId: "in_SENTINELINVOICE",
+            hostedInvoiceUrl: over.hostedInvoiceUrl ?? HOSTED_INVOICE,
+            amountMinor: over.amountMinor ?? 4900,
+            currency: over.currency ?? "USD",
+          }
+        : {}),
+    }),
+  );
+}
+
+/** Open billing coverage the way the first recorded movement would. */
+async function openCoverage(t: ReturnType<typeof convexTest>, tenantId: string) {
+  await t.run((ctx) =>
+    ctx.db.insert("billingCoverage", { tenantId, coverageStartedAt: Date.now() - 86_400_000 }),
+  );
+}
+
+describe("invoices serves the hosted page and never fabricates a zero", () => {
+  test("a tenant we have never watched gets UNKNOWN coverage, not an empty bill history", async () => {
+    const { as } = await withTenant();
+    const answer = await as.query(api.billing.invoices, {});
+    expect(answer.coverage).toBe("unknown");
+    expect(answer.coverageStartedAt).toBeNull();
+    expect(answer.invoices).toEqual([]);
+    expect(answer.truncated).toBe(false);
+  });
+
+  test("KNOWN-and-empty is a DIFFERENT answer from UNKNOWN-and-empty", async () => {
+    const t = convexTest(schema, modules);
+    const a = await tenantOn(t);
+    const b = await tenantOn(t);
+    await openCoverage(t, a.tenantId);
+
+    const known = await a.as.query(api.billing.invoices, {});
+    const unknown = await b.as.query(api.billing.invoices, {});
+
+    expect(known.coverage).toBe("known");
+    expect(known.invoices).toEqual([]);
+    // The `CashFigure` law: an empty list under `unknown` means "we have never watched this
+    // tenant"; an empty list under `known` means "there is genuinely no invoice". Rendering both
+    // as "no bills" is the mistake this assertion exists to prevent.
+    expect(known).not.toEqual(unknown);
+  });
+
+  test("a posted period is returned with its hosted url VERBATIM and Stripe's own total", async () => {
+    const { t, as, tenantId } = await withTenantHandle();
+    await openCoverage(t, tenantId);
+    await seedInvoicePeriod(t, tenantId);
+
+    const answer = await as.query(api.billing.invoices, {});
+
+    expect(answer.coverage).toBe("known");
+    expect(answer.invoices).toHaveLength(1);
+    const invoice = answer.invoices[0];
+    // Passed through unchanged. Nothing in this codebase renders an invoice or a payment field.
+    expect(invoice?.hostedInvoiceUrl).toBe(HOSTED_INVOICE);
+    expect(invoice?.amountMinor).toBe(4900);
+    expect(invoice?.currency).toBe("USD");
+    expect(invoice?.periodKey).toBe("2026-08");
+    expect(typeof invoice?.postedAt).toBe("number");
+  });
+
+  test("a period that has NOT been posted is not a bill and is not returned", async () => {
+    const { t, as, tenantId } = await withTenantHandle();
+    await openCoverage(t, tenantId);
+    for (const status of ["pending", "claimed", "failed"] as const) {
+      await seedInvoicePeriod(t, tenantId, { status, periodKey: `2026-0${status.length}` });
+    }
+
+    const answer = await as.query(api.billing.invoices, {});
+
+    // A claimed period is work in progress; a failed one is an operator's problem, not a document
+    // the customer owes money on. Neither has a hosted url to serve.
+    expect(answer.invoices).toEqual([]);
+    expect(answer.coverage).toBe("known");
+  });
+
+  test("ANOTHER tenant's invoice is never in this tenant's list", async () => {
+    const t = convexTest(schema, modules);
+    const a = await tenantOn(t);
+    const b = await tenantOn(t);
+    await openCoverage(t, a.tenantId);
+    await seedInvoicePeriod(t, b.tenantId, {
+      hostedInvoiceUrl: "https://invoice.stripe.com/i/acct_OTHER/test_OTHERTENANT",
+    });
+
+    const answer = await a.as.query(api.billing.invoices, {});
+
+    expect(answer.invoices).toEqual([]);
+    expect(JSON.stringify(answer)).not.toMatch(/OTHERTENANT/);
+  });
+
+  test("an unauthenticated caller gets nothing", async () => {
+    const t = convexTest(schema, modules);
+    await expect(t.query(api.billing.invoices, {})).rejects.toThrow();
+  });
+
+  test("the page limit is FIFTY, written out, and a full page says it is truncated", async () => {
+    expect(INVOICE_PAGE_LIMIT).toBe(50);
+    const { t, as, tenantId } = await withTenantHandle();
+    await openCoverage(t, tenantId);
+    for (let i = 0; i <= INVOICE_PAGE_LIMIT; i++) {
+      await seedInvoicePeriod(t, tenantId, { periodKey: `2026-${String(i).padStart(3, "0")}` });
+    }
+
+    const answer = await as.query(api.billing.invoices, {});
+
+    expect(answer.invoices).toHaveLength(INVOICE_PAGE_LIMIT);
+    // Said out loud: a silently partial list of bills is a wrong one.
+    expect(answer.truncated).toBe(true);
+  });
+});
+
+describe("no invoice, payment form or card field exists anywhere a user can see", () => {
+  const FORBIDDEN = ["card_number", "cvc", "exp_month", "exp_year", "three_d_secure", "3ds"];
+  const pattern = new RegExp(FORBIDDEN.join("|"), "i");
+
+  test("the web app scan is reading real files, not an empty glob", () => {
+    expect(Object.keys(webSources).length).toBeGreaterThan(20);
+    expect(pattern.test("<input name='card_number' />")).toBe(true);
+  });
+
+  test("the WEB app contains no card field and no 3DS handling either", () => {
+    // The backend half is scanned above. This is the half a browser actually renders: the locked
+    // decision is Stripe-hosted everything, so a card input appearing here is the decision being
+    // reversed by accident.
+    const offenders = Object.entries(webSources)
+      .filter(([, content]) => pattern.test(codeOf(content)))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  test("no web file renders an invoice document — we serve Stripe's hosted page", () => {
+    // A renderer would need a total, a line-item loop and a tax line. We serve one anchor tag's
+    // worth of surface, and today not even that: `billing.invoices` has no caller in apps/web.
+    const callers = Object.entries(webSources)
+      .filter(([, content]) => /api\.billing\.invoices/.test(codeOf(content)))
+      .map(([path]) => path);
+    expect(callers).toEqual([]);
+  });
+});
+
+describe("every mutating Stripe call carries an idempotency key — proven at the CALL SITES", () => {
+  /** The window a call's arguments may span. Every call site in this repo is well inside it. */
+  const CALL_SPAN = 1200;
+
+  const callSites = Object.entries(backendSources)
+    .filter(([path]) => !path.endsWith(".test.ts") && path !== "./billingApi.ts")
+    .flatMap(([path, content]) => {
+      const code = codeOf(content);
+      return [...code.matchAll(/stripePost\(/g)].map((match) => ({
+        path,
+        text: code.slice(match.index ?? 0, (match.index ?? 0) + CALL_SPAN),
+      }));
+    });
+
+  test("the scan found the call sites it is supposed to guard", () => {
+    // Non-vacuity. A unit test of `stripePost` cannot tell you a CALLER forgot, and an empty
+    // list of call sites passes the assertion below for the wrong reason.
+    expect(callSites.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(callSites.map((site) => site.path))).toEqual(
+      new Set(["./billing.ts", "./billingRollup.ts"]),
+    );
+  });
+
+  test("no stripePost call site omits idempotencyKey", () => {
+    const offenders = callSites
+      .filter((site) => !/idempotencyKey/.test(site.text))
+      .map((site) => site.path);
+    expect(offenders).toEqual([]);
+  });
+
+  test("…and stripeGet never pretends to carry one, because Stripe ignores it on a GET", () => {
+    const wrong = Object.entries(backendSources)
+      .filter(([path]) => !path.endsWith(".test.ts") && path !== "./billingApi.ts")
+      .filter(([, content]) => /stripeGet\([^)]*idempotencyKey/.test(codeOf(content)))
+      .map(([path]) => path);
+    expect(wrong).toEqual([]);
   });
 });
