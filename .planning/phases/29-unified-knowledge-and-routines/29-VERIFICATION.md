@@ -141,7 +141,7 @@ that cannot already be true.*
 
 | Item | Owner |
 |---|---|
-| **29-13 Task 3 — owner review of the running app** | the owner; a human act, blocking |
+| ~~29-13 Task 3 — owner review~~ | **APPROVED 2026-08-30.** Covers the reviewed surfaces only; the rows below are unaffected. |
 | Synthesizer against a real model with a connected source | needs a tenant with live Gmail/Drive |
 | Save completion signal on the customizer | product fix, not scoped here |
 | Unexplained serial-worker hang in the pack isolation spec | root cause not established; see spec header |

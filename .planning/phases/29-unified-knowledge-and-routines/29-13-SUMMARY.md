@@ -1,7 +1,7 @@
 # 29-13 — SUMMARY: branch-correct routine UX, and the final gates
 
-**Status: THE DEFERRED BRANCH IS BUILT AND PROVEN IN A REAL BROWSER. Task 3's owner checkpoint is
-the one thing this summary cannot close for itself.**
+**Status: COMPLETE. The deferred branch is built and proven in a real browser, and Task 3's owner
+checkpoint was APPROVED on 2026-08-30 (§6).**
 
 Commit: `fd71212`. Executed 2026-08-30; the two artifacts were begun by an agent that died mid-flight
 (`API Error: Connection lost mid-response`) and were completed, corrected and proven by the
@@ -79,16 +79,31 @@ in precisely the way it was built to prevent.
 the goal-backward read. Rules honoured: **no connected-provider, DST, OAuth or live-recurrence row is
 marked green**, because none has live evidence — that absence is the basis of the `defer` verdict.
 
-## 6. Task 3 — THE OWNER CHECKPOINT IS NOT CLOSED BY THIS DOCUMENT
+## 6. Task 3 — OWNER APPROVED, 2026-08-30
 
-The plan's final task is `checkpoint:human-verify`, blocking. The verified app was brought up and
-every automated gate below it was run, but **an owner review is a human act and this summary does not
-claim it happened.** What an owner should exercise:
+**The owner reviewed the running app and approved.** Recorded verbatim rather than paraphrased:
+*"i approve and i have checked what you asked me to, you may proceed."*
 
-- unified knowledge search on `/dashboard/workspace` — cited answers and per-source gap states;
-- `/dashboard/workflows` — customize a pack, save, reload;
-- pin a workflow and press **Run again** (this spends money);
-- confirm there is **no** recurring control or promise anywhere, the deferred branch's whole claim.
+What was put to them, and what the app was configured as at review time:
+
+- sign-in at `http://127.0.0.1:3111` as the seeded owner account;
+- unified knowledge search on `/dashboard/workspace` — per-source outcomes, and an unconnected
+  mailbox saying so rather than reading as empty;
+- `/dashboard/workflows` — the four-field closed customization schema, save, reload;
+- pin a workflow and press **Run again** twice — two separate conversations, no replayed plan;
+- the absence of any schedule / pause / resume / revoke control, the deferred branch's whole claim.
+
+**The deployment was in its KEYED configuration for this review** — `PIKAR_OFFLINE_FIXTURES=1` but
+both model keys present, so `offlineSeamAvailable()` was FALSE and the review exercised REAL models
+at real cost, not the \$0 fixture seam. That was stated to the owner before they reviewed.
+
+Two known conditions were disclosed in advance so they would not be read as defects found in review:
+the save emits no confirmation (29-10 §3), and a saved customization reports that it is not used
+(`PACK_GATE`, fail-closed).
+
+**This approval covers the reviewed surfaces only.** It does NOT convert any of the "NOT MET" rows
+below into met — in particular the synthesizer still has no live evidence, and activation/rollback
+remain unreachable.
 
 ## 7. Honest gaps this phase closes WITH, carried into the record
 

@@ -144,7 +144,7 @@ no code change. **Add the seed to the deploy runbook.**
 | 29-12-02 | 12 | 8 | ROUT-02 | scheduler races/absence | `node packages/backend/scripts/check-routine-gate.mjs .planning/phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md --validate-decision && cd packages/backend && pnpm vitest run routines routineDecision gmailAuth guardrails` | ❌ conditional W0/TDD | ✅ green |
 | 29-13-01 | 13 | 9 | ROUT-02 | conditional structural UI/E2E | `cd apps/web && pnpm vitest run routineBranch && cd apps/web && npx playwright test e2e/routines.spec.ts && pnpm --filter @pikar/web build` | ❌ conditional W0/TDD | ✅ green |
 | 29-13-02 | 13 | 9 | KNOW-01/ROUT-01/ROUT-02 | full Nyquist/repository | `pnpm --filter @pikar/core test && pnpm --filter @pikar/backend test && pnpm --filter @pikar/web test && pnpm --filter @pikar/backend typecheck && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && echo '{}' | node scripts/check-playbooks.mjs check` | ✅ infrastructure | ✅ green |
-| 29-13-03 | 13 | 9 | KNOW-01/ROUT-01/ROUT-02 | final owner checkpoint | `cd apps/web && npx playwright test e2e/knowledge-search.spec.ts e2e/workflow-packs.spec.ts e2e/routines.spec.ts && pnpm --filter @pikar/web build`; then review the single final app start | ❌ owner evidence | ⬜ **OPEN — owner checkpoint, a human act** |
+| 29-13-03 | 13 | 9 | KNOW-01/ROUT-01/ROUT-02 | final owner checkpoint | `cd apps/web && npx playwright test e2e/knowledge-search.spec.ts e2e/workflow-packs.spec.ts e2e/routines.spec.ts && pnpm --filter @pikar/web build`; then review the single final app start | ❌ owner evidence | ✅ **owner approved 2026-08-30** (reviewed surfaces only; see 29-13-SUMMARY §6) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -183,6 +183,11 @@ Existing Vitest, convex-test, authenticated Playwright, and production-build inf
 - [x] Deferred recurrence has an affirmative absence test, not merely missing code.
 - [x] `nyquist_compliant: true` set in frontmatter.
 
-**Approval:** execution complete for plans 01–13 with the exceptions listed under "NOT MET" above.
-The single remaining blocking item is **29-13 Task 3, the owner review** — every automated gate
-beneath it has been run and its real output is recorded here.
+**Approval:** execution complete for plans 01–13, and **29-13 Task 3 was approved by the owner on
+2026-08-30** after reviewing the running app. Every automated gate has been run and its real output
+is recorded above.
+
+**The owner's approval does not close the "NOT MET" rows.** Those remain open work, not oversights:
+the synthesizer has no live evidence, activation and rollback are structurally unreachable this
+release, the three required recurrence rows have no live trace (which is what `decision: defer`
+rests on), and the customizer save has no completion signal.
