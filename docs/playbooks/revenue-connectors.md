@@ -1,6 +1,21 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-31 against the 28-09 CONNECT-START gate (`connectorOAuth.mintConnectState`,
+> Last verified: 2026-08-31 — **THE COMPLETION GATE EXISTS NOW.**
+> `scripts/check-phase28-completion.mjs` was cited by the release table and by 28-27 and had never
+> been written, so the strongest statement about phase completion in this repository was a
+> paragraph. It composes: the six REVN statements read from `.planning/REQUIREMENTS.md`, the
+> providers each one NAMES derived from its own words (never a hand-typed map — REVN-04..06 name
+> none and inherit all four, because a composition over an unproven lane is not complete either),
+> and each lane read by re-running `check-provider-lane.mjs` rather than re-implementing its rule.
+> **A requirement is complete only when every provider it names has a PASSED lane** — not
+> `consistent`, not `approved_production`, not "built and tested". It names `subset` as a first-class
+> outcome so partial value can ship without the word "complete" being used loosely, and an
+> UNREACHABLE lane gate is never a pass. `--self-test` is 7 cases, every guard observed refusing.
+> Run against the tree today: **incomplete, all six REVN pending, `--strict` exits 1.**
+> A defect found in its own first draft, worth the line: the Windows entry-point comparison
+> (`file://` + a backslash path vs the real `file:///C:/…`) never matched, so the script exited 0
+> having done nothing — a gate that cannot fail, the class this repo keeps finding.
+> Prior: 2026-08-31 against the 28-09 CONNECT-START gate (`connectorOAuth.mintConnectState`,
 > `providerGates.connectStartAllowed` / `passedProviderGates`, `__fixtures__/providerGates.ts`) —
 > **STARTING a consent is now gated, not just completing one.** Read from the working diff by the
 > 33.1 lane, which does not own this subsystem; recorded because §9 asks a change to travel with its
@@ -371,7 +386,7 @@ as a finished phase.
 | **lane `passed`** | One provider holds a current suitability decision **and** a controlled live read/revoke gate observed green. | `resolveProviderEligibility` over the `providerGates` row; `scripts/check-provider-lane.mjs` over the tree — LANDED, 28-26 | That provider may appear in the product. |
 | **lane `parked`** | Blocked, deferred, or evidence missing/expired. | same | Provider hidden; dependents report unknown coverage, not zero. |
 | **subset release** | At least one lane `passed` and its workflows shipped. | owner | Users get value. **This is NOT phase completion.** |
-| **phase complete** | REVN-01, REVN-02 and REVN-03 each require *every* provider they name to hold a current production-suitability decision and a `passed` live read/revoke gate. | `scripts/check-phase28-completion.mjs` [PLANNED] | Only then may Phase 28 be closed. |
+| **phase complete** | REVN-01, REVN-02 and REVN-03 each require *every* provider they name to hold a current production-suitability decision and a `passed` live read/revoke gate. | `scripts/check-phase28-completion.mjs` — LANDED 2026-08-31 | Only then may Phase 28 be closed. Today: `incomplete`, `--strict` exits 1. |
 
 A suitability record carries an owner, a review date, evidence links, a decision
 (`approved_beta` | `approved_production` | `blocked` | `deferred`) and an expiry/re-review trigger.
@@ -845,7 +860,7 @@ implying it happened.
 | `node scripts/check-provider-lane.mjs --all` | No lane contradicts its record. Exit 0 today with 13 pending rows. **Consistent is not passed.** | offline |
 | `node scripts/check-provider-lane.mjs --self-test` | Every row observed going RED under a rename/substitution mutation, the real tree clean, and every seal combination — including the one that must resolve to `pass`. | offline |
 | `node scripts/check-provider-lane.mjs --verify-gate` | Runs the gate behaviour tests directly, rather than grepping for the branch. | offline |
-| `node scripts/check-phase28-completion.mjs` [PLANNED] | All lanes `passed` — the only proof of phase completion. | offline |
+| `node scripts/check-phase28-completion.mjs` (add `--strict` for the gate, `--self-test` for its 7 guards) | All lanes `passed` — the only proof of phase completion. | offline |
 
 ## Operational notes
 
