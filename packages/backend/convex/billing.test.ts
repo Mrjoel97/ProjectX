@@ -17,7 +17,7 @@ import { codeOf } from "../__fixtures__/sourceScan";
 // renders. Relative imports: the packages block deep specifiers (guardrails.test.ts idiom).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import {
   billingPeriodKey,
   checkoutParams,
@@ -1068,5 +1068,213 @@ describe("every mutating Stripe call carries an idempotency key — proven at th
       .filter(([, content]) => /stripeGet\([^)]*idempotencyKey/.test(codeOf(content)))
       .map(([path]) => path);
     expect(wrong).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-08 (BILL-06) — the ERASURE arm. A subscription that outlives its tenant charges a card
+// belonging to nobody, and `tenantDelete.ts` said nothing about billing at all.
+//
+// The two properties that matter here are opposites, and both are easy to get wrong:
+//   1. It must NEVER THROW. An erasure that stops because Stripe is down is worse than one that
+//      completes with a recorded failure the owner can act on.
+//   2. It must NEVER REPORT A SILENT SUCCESS. A "no-op cancel" that reads as done is exactly how a
+//      subscription survives the tenant, and it looks identical to a real cancel in the audit row.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("terminateBilling — cancel immediately, never throw, never lie about it", () => {
+  const SUB = "sub_SENTINELSUBSCRIPTION";
+
+  async function mapped(
+    over: { subscriptionId?: string | null; customer?: string } = {},
+  ): Promise<{ t: ReturnType<typeof convexTest>; tenantId: string }> {
+    const t = convexTest(schema, modules);
+    const { tenantId } = await tenantOn(t);
+    await t.run((ctx) =>
+      ctx.db.insert("billingCustomers", {
+        tenantId,
+        stripeCustomerId: over.customer ?? "cus_SENTINELCUSTOMER",
+        status: "active",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        ...(over.subscriptionId === null || over.subscriptionId === undefined
+          ? {}
+          : { subscriptionId: over.subscriptionId }),
+      }),
+    );
+    return { t, tenantId };
+  }
+
+  const terminate = (t: ReturnType<typeof convexTest>, tenantId: string) =>
+    t.action(internal.billing.terminateBilling, { tenantId });
+
+  test("an active subscription is cancelled IMMEDIATELY, by DELETE, with an idempotency key", async () => {
+    const { t, tenantId } = await mapped({ subscriptionId: SUB });
+    stubStripe({ status: 200, body: { id: SUB, object: "subscription", status: "canceled" } });
+
+    expect(await terminate(t, tenantId)).toEqual({
+      hadSubscription: true,
+      cancelled: true,
+      failure: false,
+    });
+
+    const call = sent(0);
+    // DELETE, not a POST carrying `cancel_at_period_end`. Scheduling a cancellation for the period
+    // boundary is precisely the failure BILL-06 names — the card keeps being charged until then.
+    expect(call.url).toBe(`https://api.stripe.com/v1/subscriptions/${SUB}`);
+    expect(call.body).not.toContain("cancel_at_period_end");
+    expect(call.headers["Idempotency-Key"]).toContain(SUB);
+    expect(call.headers["Idempotency-Key"]).toContain(tenantId);
+  });
+
+  test("NO subscription is not a failure, and it never calls fetch", async () => {
+    const { t, tenantId } = await mapped({ subscriptionId: null });
+    stubForbiddenFetch();
+
+    expect(await terminate(t, tenantId)).toEqual({
+      hadSubscription: false,
+      cancelled: false,
+      failure: false,
+    });
+    expect(calls).toEqual([]);
+  });
+
+  test("NO billing customer at all is not a failure, and it never calls fetch", async () => {
+    const t = convexTest(schema, modules);
+    const { tenantId } = await tenantOn(t);
+    stubForbiddenFetch();
+
+    expect(await terminate(t, tenantId)).toEqual({
+      hadSubscription: false,
+      cancelled: false,
+      failure: false,
+    });
+    expect(calls).toEqual([]);
+  });
+
+  for (const status of [400, 402, 404, 429, 500, 503]) {
+    test(`a Stripe ${status} is a recorded FAILURE and does not throw`, async () => {
+      const { t, tenantId } = await mapped({ subscriptionId: SUB });
+      stubStripe({
+        status,
+        body: { error: { code: "resource_missing", message: "SENTINEL prose" } },
+      });
+
+      const result = await terminate(t, tenantId);
+      expect(result.hadSubscription).toBe(true);
+      expect(result.cancelled).toBe(false);
+      expect(result.failure).toBe(true);
+      // A CODE token, never Stripe's prose (§4). The whole result is stringified because a message
+      // smuggled into any field would land in the `tenant.deleted` audit row.
+      expect(JSON.stringify(result)).not.toContain("SENTINEL prose");
+      expect(result.failureCode).toMatch(/^[a-z0-9_]+$/);
+    });
+  }
+
+  test("a NETWORK throw is caught and reported, never propagated to the erasure", async () => {
+    const { t, tenantId } = await mapped({ subscriptionId: SUB });
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("SENTINEL network down");
+    });
+
+    const result = await terminate(t, tenantId);
+    expect(result).toMatchObject({ hadSubscription: true, cancelled: false, failure: true });
+    expect(JSON.stringify(result)).not.toContain("SENTINEL network down");
+  });
+
+  test("an UNSET secret key is a FAILURE naming the configuration, never a silent success", async () => {
+    const { t, tenantId } = await mapped({ subscriptionId: SUB });
+    vi.stubEnv("BILLING_STRIPE_SECRET_KEY", "");
+    stubForbiddenFetch();
+
+    const result = await terminate(t, tenantId);
+    // The dangerous shape is `{ cancelled: true }` here — a no-op that reads as done. It must say
+    // it did nothing AND say why, and it must not have called Stripe with no credential.
+    expect(result).toEqual({
+      hadSubscription: true,
+      cancelled: false,
+      failure: true,
+      failureCode: "billing_not_configured",
+    });
+    expect(calls).toEqual([]);
+  });
+
+  test("a stored subscription id of the wrong SHAPE never reaches a request path", async () => {
+    const { t, tenantId } = await mapped({ subscriptionId: "sub_../../v1/customers" });
+    stubForbiddenFetch();
+
+    const result = await terminate(t, tenantId);
+    expect(result).toEqual({
+      hadSubscription: true,
+      cancelled: false,
+      failure: true,
+      failureCode: "unusable_subscription_id",
+    });
+    expect(calls).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-08 — THE PHASE-WIDE NAMING BOUNDARY, enforced rather than documented.
+//
+// Two Stripe integrations live in this repo and they point in OPPOSITE directions across OPPOSITE
+// trust boundaries:
+//
+//   Pikar's OWN merchant account, charging outward (this phase)
+//     `packages/billing/`, `convex/billing*.ts`, `BILLING_STRIPE_*` — write-capable secret key
+//
+//   A TENANT's Stripe account, read-only (Phase 28)
+//     `packages/revenue/src/providers/stripe.ts`, `convex/stripeAuth|stripeConnector.ts`,
+//     `STRIPE_APP_*` — an OAuth app grant into somebody else's books
+//
+// The naming split is the safety property of the whole phase, and a split enforced only by
+// convention is a split that survives until the first tired afternoon. If the two ever share a
+// module or a secret, a write-capable merchant key reaches a surface built to read a customer's
+// account — a mix-up that would be invisible in every test, because both are "a Stripe key that
+// works".
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("Pikar's merchant rail and the tenant-reading rail never touch", () => {
+  const FORBIDDEN_IN_BILLING = [
+    "STRIPE_APP_",
+    "connectorFetch",
+    "providers/stripe",
+    "stripeAuth",
+    "stripeConnector",
+  ];
+
+  const billingModules = Object.entries({ ...backendSources, ...packageSources }).filter(
+    ([path]) => !path.endsWith(".test.ts"),
+  );
+
+  test("the scan reads BOTH halves of the merchant rail", () => {
+    // Without this the assertion below is a green light over an empty glob (28.1-11 #10).
+    expect(billingModules.length).toBeGreaterThanOrEqual(8);
+    expect(billingModules.map(([p]) => p)).toContain("./billingApi.ts");
+    expect(billingModules.map(([p]) => p)).toContain("../../billing/src/reconcile.ts");
+    // …and the patterns really do match the thing they are looking for.
+    for (const needle of FORBIDDEN_IN_BILLING) {
+      expect(`prefix ${needle} suffix`).toContain(needle);
+    }
+  });
+
+  test("no billing module names the tenant-reading rail", () => {
+    const offenders = billingModules
+      .flatMap(([path, content]) =>
+        FORBIDDEN_IN_BILLING.filter((needle) => codeOf(content).includes(needle)).map(
+          (needle) => `${path} -> ${needle}`,
+        ),
+      )
+      .sort();
+    expect(offenders).toEqual([]);
+  });
+
+  test("no billing module reads a STRIPE_APP_ secret, and none reads BILLING_ outside its owner", () => {
+    // `BILLING_STRIPE_SECRET_KEY` has exactly ONE consumer, `billingApi.ts`, so the write-capable
+    // key has one place it can leak from rather than five.
+    const readers = billingModules
+      .filter(([, content]) => codeOf(content).includes("BILLING_STRIPE_SECRET_KEY"))
+      .map(([path]) => path);
+    expect(readers).toEqual(["./billingApi.ts"]);
   });
 });

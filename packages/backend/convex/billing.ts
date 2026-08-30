@@ -14,8 +14,8 @@ import { subscriptionState } from "@pikar/billing/events";
 import { unappliedStage } from "@pikar/billing/reconcile";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalQuery } from "./_generated/server";
-import { stripeHostedUrl, stripePost } from "./billingApi";
+import { internalAction, internalQuery } from "./_generated/server";
+import { billingConfigured, stripeDelete, stripeHostedUrl, stripePost } from "./billingApi";
 import { billingCoverageFor } from "./billingLedger";
 import { tenantAction, tenantQuery } from "./lib/functions";
 
@@ -440,5 +440,106 @@ export const invoices = tenantQuery({
         ),
       truncated: page.length > INVOICE_PAGE_LIMIT,
     };
+  },
+});
+
+// ── BILL-06: the erasure arm ──────────────────────────────────────────────────────────────────
+
+/** Stripe subscription ids are a prefix plus base62. Shape-checked before it is interpolated into
+ *  a request path — a raw stored string reaching a URL is path injection. */
+const SUBSCRIPTION_ID = /^sub_[A-Za-z0-9]{1,128}$/;
+
+/** The subscription to terminate, or `null` when this tenant never had one. Read from
+ *  `billingCustomers` — which is `tenant_owned`, and therefore DELETED by the erasure page loop.
+ *  That is precisely why the billing arm must run BEFORE the loop. */
+export const subscriptionForTermination = internalQuery({
+  args: { tenantId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { tenantId }) => {
+    const row = await ctx.db
+      .query("billingCustomers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .first();
+    return row?.subscriptionId ?? null;
+  },
+});
+
+/**
+ * Cancel a tenant's subscription IMMEDIATELY, as part of erasing them (BILL-06).
+ *
+ * Immediately, not at the period end: the tenant is being deleted, and a subscription left running
+ * to the period boundary goes on charging a card belonging to nobody — which is the exact failure
+ * the requirement names. Stripe's immediate cancellation is `DELETE /v1/subscriptions/{id}`.
+ *
+ * **IT MUST NEVER THROW.** `deleteTenantData` records a `failure` rather than aborting, and an
+ * erasure that stops because Stripe is down is a worse outcome than one that completes with a
+ * recorded failure the owner can act on. Every failure class — an HTTP error, a timeout, a network
+ * drop, missing configuration, an unusable stored id — comes back as `failure: true` with a CODE.
+ *
+ * **AND AN ABSENT SUBSCRIPTION IS NOT A FAILURE.** A tenant who never subscribed has nothing to
+ * cancel; reporting that as a failure would train the owner to ignore the field. But a missing
+ * SECRET KEY is a failure, and loudly: a "no-op cancel" that reports done is how a subscription
+ * outlives the tenant it belonged to, and it would look identical to success in the audit row.
+ */
+export const terminateBilling = internalAction({
+  args: { tenantId: v.string() },
+  returns: v.object({
+    hadSubscription: v.boolean(),
+    cancelled: v.boolean(),
+    failure: v.boolean(),
+    failureCode: v.optional(v.string()),
+  }),
+  handler: async (ctx, { tenantId }) => {
+    const subscriptionId = await ctx.runQuery(internal.billing.subscriptionForTermination, {
+      tenantId,
+    });
+    if (subscriptionId === null) {
+      return { hadSubscription: false, cancelled: false, failure: false };
+    }
+    if (!SUBSCRIPTION_ID.test(subscriptionId)) {
+      return {
+        hadSubscription: true,
+        cancelled: false,
+        failure: true,
+        failureCode: "unusable_subscription_id",
+      };
+    }
+    if (!billingConfigured()) {
+      // Asked BEFORE the call, not caught after it. `stripeDelete` throws on a missing key, and a
+      // caught throw here would be indistinguishable from a network fault — the owner needs to
+      // know the difference between "Stripe refused" and "we never asked".
+      return {
+        hadSubscription: true,
+        cancelled: false,
+        failure: true,
+        failureCode: "billing_not_configured",
+      };
+    }
+    try {
+      const result = await stripeDelete(`/v1/subscriptions/${subscriptionId}`, {
+        // Derived from the pair, so a retry re-sends the SAME cancellation rather than a new one.
+        idempotencyKey: `billing-terminate:${tenantId}:${subscriptionId}`,
+      });
+      if (!result.ok) {
+        // A code token, never Stripe prose (§4). `StripeFailure.kind` is already a closed set and
+        // `code` is shape-checked at the transport.
+        return {
+          hadSubscription: true,
+          cancelled: false,
+          failure: true,
+          failureCode: `stripe_${result.error.kind}`,
+        };
+      }
+      return { hadSubscription: true, cancelled: true, failure: false };
+    } catch {
+      // The transport already turns network and timeout faults into `err(...)`, so reaching here
+      // means something unforeseen. It still may not abort an erasure.
+      return {
+        hadSubscription: true,
+        cancelled: false,
+        failure: true,
+        failureCode: "billing_terminate_threw",
+      };
+    }
   },
 });

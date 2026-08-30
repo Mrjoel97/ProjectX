@@ -1,5 +1,30 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-30 (28.1-08 — **THE ERASURE SEQUENCE HAS A THIRD PROVIDER ARM: BILLING.**
+>
+> `tenantDelete.ts` said nothing about billing, so erasing a tenant left a live Stripe subscription
+> charging a card belonging to nobody (BILL-06). The arm is a third block of the exact shape Google
+> and Microsoft already use — its own `try/catch`, recording `failure` rather than aborting — and it
+> sits **above the `deleteTenantDataPage` loop**. That position is the design, not a preference:
+> `billingCustomers` is `tenant_owned`, so the loop deletes the row holding the `subscriptionId`,
+> and an arm below it would find nothing to cancel and report `hadSubscription: false` —
+> indistinguishable from a tenant who never subscribed.
+>
+> **BOTH closed unions were widened**, the TypeScript `ProviderDeletionResult` and the Convex
+> `providerResultValidator`. Widening one and not the other is a runtime rejection under a green
+> typecheck. The arm is APPENDED to `providers`, so every assertion indexing `providers[0]`/`[1]`
+> stays true unchanged.
+>
+> **The `tenant.deleted` audit row** now carries `billingLocalRowDeleted` /
+> `billingRevokedAtProvider` / `billingFailure` through the existing
+> `payload[\`${provider.provider}…\`]` pattern — booleans only, no `cus_`, no `sub_`, no address,
+> asserted by a whole-row string scan (§4).
+>
+> **The erasure tradeoff is now asserted, not just commented:** `billingCustomers`, `billingPeriods`
+> and `billingUnapplied` are erased; `billingEvents` and `billingCoverage` are `audit_immutable` and
+> SURVIVE. A tenant erasure removes the mapping and the working rows; it does not rewrite Pikar's
+> financial book. `tenantDelete.test.ts` 13/13. Details in `billing.md`.)
+
 > Last verified: 2026-08-29 (28.1-05 — **`deadLetters.workflowId` IS NOW OPTIONAL, THE TABLE HAS A
 > `source` DISCRIMINATOR, AND `billingCustomers` IS CLASSIFIED `tenant_owned`.**
 >

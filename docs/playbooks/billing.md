@@ -59,7 +59,9 @@
 > NOT proven. **This is a `Last verified` bump for the surface only, not a re-verification of the
 > sections below.**
 
-> Last verified: 2026-08-30 against 28.1-10 (`raiseAdjustment` — the ONLY writer of
+> Last verified: 2026-08-30 against 28.1-08 (**THE PHASE SEAL** — the tenant-erasure billing arm,
+> `terminateBilling`, and the enforced naming boundary between Pikar's merchant rail and Phase 28's
+> tenant-reading one) — after 28.1-10 (`raiseAdjustment` — the ONLY writer of
 > `billingPeriods`, owner-only, provenance from `ctx`; the rollup finally has an input) — after
 > 28.1-11 (the ADVERSARIAL-AUDIT FIX WAVE — 15 confirmed defects
 > across waves 1-7, every one seen RED before its fix; the correlation defects, the double-invoice
@@ -81,48 +83,47 @@
 > Build history: `.planning/phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/`
 > · Related ADRs: none yet
 
-> **Status: PARTLY IMPLEMENTED.** At the `Last verified` sha the billing code on disk is the
-> inbound webhook receiver and its dedupe table, the pure domain modules, the outbound transport
-> plus the two hosted doors (`billingApi.ts`, `billing.ts`), **and — new in 28.1-05 — the
-> tenant↔Stripe-customer mapping `billingCustomers`, filled by the first four arms of the effect
-> switch.**
+> **Status: COMPLETE ON DISK, UNPROVEN AGAINST STRIPE.** Phase 28.1 is sealed at 28.1-08. Every
+> plan has landed: the webhook receiver and its dedupe table (28.1-01), the Dashboard configuration
+> mirror (28.1-02), the pure tax posture and event-to-phase mapping (28.1-03), the outbound
+> transport with hosted Checkout and Customer Portal (28.1-04), the tenant↔Stripe-customer mapping
+> and the refusal to auto-provision (28.1-05), the `billingEvents` book of record and the money arms
+> (28.1-06), the scheduled invoice rollup with a durable period claim (28.1-07), the tenant-facing
+> `BillingPanel` (28.1-09), `raiseAdjustment` as the rollup's only writer (28.1-10), the
+> adversarial-audit fix wave (28.1-11), and the erasure arm plus this seal (28.1-08).
 >
-> **What 28.1-05 changed about the two sentences below.** `portalLink` and `billingStatus` are no
-> longer structurally dead: a tenant with a `billingCustomers` row now reaches the Customer Portal
-> and reads a real state. They remain unexercised against Stripe, and `billingStatus` still
-> answers `unknown` for every tenant on this deployment because no delivery has ever arrived.
-> The effect switch now handles FOUR event types (`checkout.session.completed` and all three
-> `customer.subscription.*`); the invoice, refund, credit-note and cash-balance arms are still
-> empty and still record `status: "ignored"` rather than a flattering `applied`.
+> **NOTHING IN THIS PHASE HAS EVER SPOKEN TO STRIPE.** Every test in it is offline at $0 against a
+> stubbed `fetch` and a fabricated `whsec_…`. A green suite proves the LAW — that the code sends
+> what we believe Stripe wants and refuses what it cannot read — and proves nothing whatsoever about
+> what Stripe actually does. Read every claim below with that qualifier attached.
 >
-> **NOTHING HAS EVER SPOKEN TO STRIPE, AND NOTHING IS BILLED YET.** 28.1-04 built the request; it
-> did not send one. **No `BILLING_STRIPE_*` variable is set in any deployment**, so every one of
-> these surfaces currently throws naming the missing variable — which is the correct and current
-> state, not a bug. There is still no invoice, no ledger write and no tenant↔customer mapping, so
-> `portalLink` refuses for EVERY tenant and `billingStatus` answers `unknown` for every tenant. The
-> effect switch in `receiveAndApply` handles **zero** event types: every verified delivery is
-> recorded `status: "ignored"`. Every test is offline at $0 against a stubbed `fetch` and a
-> fabricated `whsec_test_…` secret; **none of them proves Stripe accepts anything.**
+> **What is set, and what is not.** `BILLING_STRIPE_SECRET_KEY` was set on the LOCAL deployment on
+> 2026-08-30 (test-mode `sk_test_…`, owner-supplied, to be rotated). `BILLING_STRIPE_PRICE_ID` and
+> `BILLING_STRIPE_WEBHOOK_SECRET` are **unset everywhere**, and Convex env vars are PER-DEPLOYMENT —
+> the cloud dev and production deployments carry no billing variable at all. So on any deployment a
+> user can reach, `billingStatus` answers `unknown` for every tenant, both lists are empty under
+> `coverage: "unknown"`, and `startCheckout` refuses naming the missing price. That is the correct
+> current state, not a bug.
 >
-> **28.1-03 added `tax.ts` and `reconcile.ts` — PURE FUNCTIONS WITH NO CALLER.** They are fully
-> specified and mutation-proven offline, and **nothing invokes them**: `receiveAndApply`'s effect
-> switch is still empty and no movement has ever reached a table. The `billingEvents` book of
-> record and the wiring are **28.1-06**. A green `reconcile.test.ts` proves the LAW, not that any
-> money was ever reconciled.
+> **What a live run would need, in order.** None of this has been done:
 >
-> **28.1-02 close-out (2026-08-29): REAL TEST-MODE STRIPE OBJECTS NOW EXIST.**
-> `prod_VA8pHxqMVhfHZ3` and `price_1U9oXpV05ajSTq7I4Z4U1se9` (USD 4900/month, 14-day trial,
-> `tax_behavior: exclusive`, tax code `txcd_10105002`) were created through the Stripe API on
-> `acct_1U9DJHV05ajSTq7I`, **test mode only** — the business is not registered, so live mode is
-> empty and untouched. The price AMOUNT is a placeholder, tagged `pikar_placeholder_amount` in
-> Stripe metadata. **`CONFIG_CONFIRMED` stays `false`, and `HEAD_OFFICE_COUNTRY` is the only
-> reason** — an unregistered business has no head office, so that null is a fact rather than an
-> unanswered question. **No webhook endpoint was registered, deliberately:** `CONVEX_SITE_URL` is
-> `http://127.0.0.1:3211` and Stripe cannot reach it; a registered endpoint would fail every
-> delivery and be auto-disabled. Use `stripe listen` locally instead.
+> 1. A test-mode secret key on the deployment under test (`npx convex env set` — never `.env`,
+>    never Vercel, and `npx convex env list` echoes VALUES, so run it privately).
+> 2. `BILLING_STRIPE_PRICE_ID` — `price_1U9oXpV05ajSTq7I4Z4U1se9` already exists in test mode on
+>    `acct_1U9DJHV05ajSTq7I`; its AMOUNT is a placeholder tagged `pikar_placeholder_amount`.
+> 3. `stripe listen --forward-to {CONVEX_SITE_URL}/billing/stripe/webhook`, whose output IS the
+>    `BILLING_STRIPE_WEBHOOK_SECRET`. No endpoint is registered in the Dashboard, deliberately:
+>    `CONVEX_SITE_URL` is not reachable from the internet, and a registered endpoint would fail
+>    every delivery and be auto-disabled.
+> 4. `stripe trigger` once per locked event type, and — for the bank-transfer arm, which is the one
+>    carrying the central money law — `POST /v1/test_helpers/customers/{id}/fund_cash_balance`,
+>    because a cash balance cannot be produced by a trigger.
+> 5. For the erasure arm (BILL-06): a subscription that actually exists, then
+>    `deleteTenantData`, then confirm at Stripe that it reads `canceled` and not
+>    `cancel_at_period_end`.
 >
-> Everything marked **[PLANNED]** below is a contract a later plan must satisfy, not a claim that
-> code exists. Do not cite a [PLANNED] line as evidence that something works.
+> Everything marked **[PLANNED]** below is a contract, not a claim that code exists. Do not cite a
+> [PLANNED] line as evidence that something works.
 
 ## Purpose
 
@@ -417,6 +418,61 @@ becomes claimable the instant its month closes and never mid-month.
 Convex dashboard or a script. The upgrade path is an owner-only panel beside `BillingPanel` — the
 validation and the provenance law live in the mutation, so a UI would only have to call it.
 
+### Tenant erasure — cancel BEFORE the walk (28.1-08, BILL-06)
+
+`convex/tenantDelete.ts` said nothing about billing until this plan, so erasing a tenant left a live
+subscription charging a card belonging to nobody. There is now a third provider arm beside Google
+and Microsoft, and **its position in the sequence is the whole design**:
+
+```
+deleteTenantData (tenantAction)
+  ├─ authorizeTenantDeletion  → { googleConnected, microsoftConnected, billingActive }
+  ├─ google  disconnect      ┐
+  ├─ microsoft disconnect    ├─ REVOKE FIRST, all three, each in its own try/catch
+  ├─ billing terminate       ┘
+  └─ deleteTenantDataPage loop over deletableTables()   ← DELETES billingCustomers
+```
+
+**`billingCustomers` is `tenant_owned`, so the page loop erases the row holding `subscriptionId` —
+the only place it is stored.** An arm moved below the loop finds nothing to cancel and reports
+`hadSubscription: false`, which is indistinguishable from a tenant who never subscribed: a silent,
+permanent leak. The regression test does not trust source order; it asserts `revokedAtProvider:
+true`, which can only be true if the read happened while the row still existed.
+
+**BOTH closed unions must carry `"billing"`** — the TypeScript `ProviderDeletionResult` and the
+Convex `providerResultValidator`. Widening one and not the other is a runtime rejection under a
+perfectly green typecheck.
+
+`terminateBilling` **cancels immediately** (`DELETE /v1/subscriptions/{id}`), never
+`cancel_at_period_end` — scheduling the cancellation for the period boundary is the exact failure
+BILL-06 names. It **never throws**: an HTTP error, a timeout, a network drop, an unusable stored id
+and missing configuration all come back as `failure: true` with a code token, because an erasure
+that stops because Stripe is down is a worse outcome than one that completes with a recorded failure
+the owner can act on. And it **never reports a silent success**: an absent subscription is
+`hadSubscription: false, failure: false`, but an unset secret key is `billing_not_configured` and a
+failure — a no-op cancel that reads as done is how a subscription outlives its tenant, and in the
+audit row it would look identical to a real cancellation.
+
+**THE ERASURE TRADEOFF, and it is deliberate.** A tenant deletion removes `billingCustomers`,
+`billingPeriods` and `billingUnapplied` (`tenant_owned`) and **does not touch `billingEvents` or
+`billingCoverage`** (`audit_immutable`, excluded from both the deletion walk and the export walk).
+Erasing a tenant removes the mapping and the working rows; it does not rewrite Pikar's financial
+book. Both halves are asserted in `tenantDelete.test.ts` so the tradeoff stays visible rather than
+surviving only as a comment.
+
+### The usage-billing migration trigger — a migration, not a flag flip
+
+`kind: "usage"` is in the `billingPeriods.charges` union and is deliberately **unwritten**
+(`raiseAdjustment` hard-codes the adjustment literal; a `kind` parameter is how the metered one gets
+written by accident). The phase's locked decision is that metering stays internal for v1, and the
+reason is operational rather than aesthetic:
+
+**The day metered events go to Stripe, the Customer Portal can no longer manage those
+subscriptions.** Stripe's hosted portal does not handle usage-based prices; management moves to the
+Subscription Update API, which means building and owning a plan-change surface this repo currently
+gets for free from a hosted page. Do not wire `spendEvents` to it. Do not derive a billable amount
+from cost. When it is time, plan it as a migration with a portal replacement in the same phase.
+
 ## The Ledger — `billingEvents` is a SEPARATE book from `spendEvents` (28.1-06, BILL-03)
 
 **Owner decision, 2026-08-28. Do not reopen it.** Money-in gets its own table. It is NOT a fourth
@@ -679,7 +735,18 @@ append-only table that cannot take it back.
 - **Adding an index to `billingCustomers`:** any index not leading with `tenantId` must be named
   in `isolation.test.ts`'s `NON_TENANT_LEADING` with a written reason, or the suite fails.
 - **Never** widen this into `connectorFetch.ts` (a GET-only read transport with a deliberately empty
-  `stripe: []` allow-list) or into `SPEND_RAILS`.
+  `stripe: []` allow-list) or into `SPEND_RAILS`. **This is now ENFORCED, not advised:**
+  `billing.test.ts`'s "Pikar's merchant rail and the tenant-reading rail never touch" scans every
+  module under `packages/billing/` and `convex/billing*.ts` for `STRIPE_APP_`, `connectorFetch`,
+  `providers/stripe`, `stripeAuth` and `stripeConnector`, and pins `BILLING_STRIPE_SECRET_KEY` to
+  exactly ONE consumer (`billingApi.ts`). The two rails point in opposite directions across
+  opposite trust boundaries, and if they ever share a module or a secret, a write-capable merchant
+  key reaches a surface built to read somebody else's books — invisible in every other test,
+  because both are "a Stripe key that works".
+- **Adding a provider arm to `tenantDelete.ts`:** widen BOTH the TypeScript union and the Convex
+  validator, put the block ABOVE the page loop if it reads anything from a `tenant_owned` table,
+  and APPEND to the `providers` array rather than inserting — every existing assertion indexes by
+  position.
 - **Adding a second writer of `billingPeriods`:** don't, without changing this line first. The
   single-writer rule is what makes "the stored author is the authenticated owner" checkable at all.
   If a writer must exist, it states its own `raisedBy` (the field is REQUIRED so it cannot inherit

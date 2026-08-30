@@ -177,6 +177,50 @@ export async function stripePost(
   });
 }
 
+/**
+ * Is the outbound rail configured at all? `requireSecret`/`requireApiVersion` THROW, which is right
+ * for a call that must not proceed — but a caller that has to report "configured or not" as a
+ * FAILURE CODE rather than an exception needs to ask without catching. The env read stays in this
+ * module, so `BILLING_STRIPE_SECRET_KEY` still has exactly one consumer (28.1-08).
+ */
+export function billingConfigured(): boolean {
+  const key = process.env.BILLING_STRIPE_SECRET_KEY;
+  return typeof key === "string" && key.trim() !== "";
+}
+
+/**
+ * A DESTRUCTIVE Stripe call, and the only one in this repo.
+ *
+ * Stripe's IMMEDIATE cancellation is `DELETE /v1/subscriptions/{id}`. `POST` with
+ * `cancel_at_period_end` schedules one instead, which is the wrong answer for a tenant erasure
+ * (BILL-06): the subscription would go on charging a card belonging to nobody until the period
+ * boundary, which is precisely the failure the requirement names.
+ *
+ * Keyed like `stripePost`, and required for the same reason — a Convex action is at-most-once, so a
+ * cancellation retried without a key is a second DELETE that Stripe treats as a brand-new request.
+ * Read the idempotency contract at the top of this file: the header is a same-day belt only.
+ */
+export async function stripeDelete(
+  path: string,
+  opts: { idempotencyKey: string },
+): Promise<Result<unknown, StripeFailure>> {
+  const key = requireSecret();
+  const version = requireApiVersion();
+  const idempotencyKey = opts?.idempotencyKey;
+  if (typeof idempotencyKey !== "string" || idempotencyKey.trim() === "") {
+    throw new Error("stripeDelete requires a non-blank idempotencyKey");
+  }
+  return send(`${STRIPE_API_BASE}${path}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      Accept: "application/json",
+      "Stripe-Version": version,
+      "Idempotency-Key": idempotencyKey,
+    },
+  });
+}
+
 /** Where a hosted Stripe page is allowed to send a browser. */
 const STRIPE_HOSTED_SUFFIX = ".stripe.com";
 
