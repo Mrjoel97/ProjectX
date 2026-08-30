@@ -1,6 +1,32 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
-> Last verified: 2026-08-27 (**THE SUCCESSOR IS CHOSEN — `veo-3.1-lite`, ADR-026 — AND RECORDING
+> Last verified: 2026-08-30 (**THE SUCCESSOR CHANGED, AND SO DID THE TRANSPORT — `x-ai/grok-imagine-video`
+> ON OPENROUTER, [ADR-027](../decisions/027-grok-imagine-video-succeeds-sora-2-on-openrouter.md).**
+>
+> ADR-027 supersedes ADR-026's video half. The owner chose Grok over `veo-3.1-lite` for one
+> property: durations **1–15, any integer**, which retires the `illegal_generated_duration` failure
+> class outright where Veo's `4/6/8` only narrows it. It was bought with two costs the ADR states in
+> sections of their own — **xAI becomes a new data-transfer counterparty** (reversing ADR-026's
+> decisive argument, knowingly), and **the "no reel from generated video alone" guarantee stops being
+> structural**: at $0.07/s on a 1–15 grid, a 15 s all-generated reel is $1.05 and a 30 s is $2.10,
+> both under the $3.50 cap, both previously impossible. Mitigated by `MEDIA_GENERATED_SECONDS_CAP`
+> (12 s, enforced in `chooseMediaBatch`, governed refusal `over_generated_seconds`) — **which is a
+> ceiling somebody can raise, not an arithmetic impossibility. Read ADR-027 §"What the mitigation is
+> not" before touching it.**
+>
+> **BOTH MEDIA PLANES NOW GO THROUGH OPENROUTER**, images included (`openai/gpt-image-2`, same model,
+> new door). The trigger was not only the 2026-09-24 withdrawal: the OpenAI account read
+> `credit_balance_exhausted` on 2026-08-30 and **no media had generated since ~2026-08-17.**
+>
+> **A TRAP FOR ANYONE REPINNING A MEDIA MODEL:** `PINNED_MODELS` is derived from
+> `MEDIA_DEFAULT_VIDEO.model`, so repinning drops `sora-2` out of the set and all three shutdown
+> tripwires `continue` past it — green, with nothing wired. Re-keyed onto "carries an unretired
+> succession" in 33.1-04. Check this before you move a pin.
+>
+> ---
+>
+> **SUPERSEDED — kept because its lesson outlived its decision.** Recorded 2026-08-27 (**THE
+> SUCCESSOR IS CHOSEN — `veo-3.1-lite`, ADR-026 — AND RECORDING
 > THAT DECISION ALMOST DISARMED THE ALARM THAT FOUND IT.**
 >
 > The runway tripwire keyed on `succession.status !== "decision_pending"`. Writing the ADR flips
