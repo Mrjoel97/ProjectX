@@ -374,6 +374,27 @@ export const persistDeck = internalMutation({
         environment: v.string(),
         texture: v.string(),
         typography: v.optional(v.string()),
+        /**
+         * 33.1-01. **This object is a hand-maintained mirror of `plans.artDirection` in
+         * `schema.ts`, and `v.object` is CLOSED** — so a field the parser emits and the schema
+         * already stores is not a no-op here, it is a THROW at the write boundary. That is the
+         * failure class this comment exists for, not the field.
+         *
+         * `e2b281f` ("the music bed") widened the parser, the schema, the price table, the
+         * renderer, the assembler and the skill body, and not this. Live from then until
+         * 2026-08-30, EVERY storyboard carrying a `Music:` line died here — after
+         * `dispatchAndLand` had already landed the memo, so the plan row survived at
+         * `kind: "memo"` carrying the model's raw prose and nothing looked like a crash.
+         *
+         * Any future `artDirection` field lands in `schema.ts` AND here in the same commit.
+         *
+         * `v.string()`, matching `schema.ts` exactly — NOT a union of the four `MUSIC_MOODS`
+         * slugs. The closed set lives in `@pikar/core/storyboard` and is enforced by the parser
+         * that writes this; restating it in a package that cannot import it would be a third copy
+         * to keep in step, and the one that fails loudest — by refusing a row every other layer
+         * accepts. Same reasoning as the schema comment it mirrors.
+         */
+        music: v.optional(v.string()),
         references: v.array(v.string()),
         avoid: v.string(),
       }),
