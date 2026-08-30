@@ -27,12 +27,37 @@ visible.
 
 **NOT DELIVERED, and it matters:**
 
-- **The synthesizer has never answered from real evidence.** The live run produced a
-  `knowledge.plan` ledger row and **no `knowledge.synth` row**: the E2E tenant has no connected
-  source, so the planner found nothing readable and the card took the honest "no source could be
-  searched" branch. The synthesis half — citation binding, conflict rendering, confidence — is
-  proven only by unit tests and the offline fixture seam. **Closing it needs a tenant with a live
-  Gmail or Drive connection.**
+- ~~**The synthesizer has never answered from real evidence.**~~ **CLOSED 2026-08-30.** A document was ingested through the REAL paste pipeline
+(`vault.vaultIngestText`, the same mutation the vault Dropzone calls), `vaultRag:embedDoc` embedded
+it with `openai/text-embedding-3-small`, and a live search returned a cited claim from it:
+
+| | |
+|---|---|
+| claim | *"The standard plan is billed at 240 USD per seat per year, with a 15 percent discount for annual prepayment."* |
+| evidence | `source: vault`, `sourceRef: mx779n1q0s630q8da64qcdzzjx8df97n`, `authority: tenant_owned`, `freshness: current` |
+| counts | `evidenceCount: 1`, `invalidCitationCount: 0`, `conflictCount: 0`, `confidence: "low"` |
+| ledger | `knowledge:synth:4dd6bdf6…`, kind `knowledge.synthesize`, `or/openai/gpt-4o-mini`, `phase: "actual"`, 1¢ |
+
+The claim is faithful to the seeded document, and the citation resolves to the row that was ingested.
+Citation binding, authority and freshness scoring are now proven against a real model on real
+retrieval, not only by unit tests and the offline fixture seam.
+
+**A BEHAVIOURAL FINDING THE ATTEMPT SURFACED, worth more than the gate it closed.** The FIRST live
+question — *"What have we agreed with customers about pricing and discounts?"* — returned
+`evidenceCount: 0` and no synthesis, because the planner marked **`vault: unplanned`** and planned
+`crm-facts` instead, which is not connected. The tenant's own pricing document was sitting in the
+vault, embedded and retrievable, and the natural phrasing of the question never reached it. Only
+*"What do our saved documents and notes say about…"* planned the vault.
+That is not a defect in the synthesizer and it is not dishonest output — every source correctly
+reported its own state — but **a user asking about their own documents in ordinary words can be told
+nothing was found while the answer is in their vault.** The planner is a registry skill
+(`knowledge-query-planner`), so this is tunable through the skill body and the eval gate rather than
+through code. Recorded for whoever owns that body next.
+
+The browser half of this run could not be used: `auth:store retrieveAccountWithCredentials` began
+timing out at Convex's 1s mutation limit (8 consecutive times) while the backend was busy embedding,
+so sign-in failed. The search was driven directly through `knowledgeSearch:search` with an
+`--identity`, which exercises the same tenantAction the panel calls.
 - **CRM and support projections are `not_landed`**, as the owner ruled on 2026-08-27. Phase 28's
   connector rails do not exist; the search rail is Vault + Drive + Gmail.
 
@@ -142,7 +167,8 @@ that cannot already be true.*
 | Item | Owner |
 |---|---|
 | ~~29-13 Task 3 — owner review~~ | **APPROVED 2026-08-30.** Covers the reviewed surfaces only; the rows below are unaffected. |
-| Synthesizer against a real model with a connected source | needs a tenant with live Gmail/Drive |
+| ~~Synthesizer against a real model~~ | **CLOSED 2026-08-30** — proven via a real vault ingest + embed; see KNOW-01 above |
+| Planner leaves the vault `unplanned` for ordinary phrasings | open — a registry skill body (`knowledge-query-planner`), tunable through the eval gate |
 | Save completion signal on the customizer | product fix, not scoped here |
 | Unexplained serial-worker hang in the pack isolation spec | root cause not established; see spec header |
 | `env.test.ts` `QUICKBOOKS_*` red | **Phase 28 lane** (added by 28-06) |

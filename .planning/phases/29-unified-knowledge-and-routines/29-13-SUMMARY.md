@@ -107,9 +107,11 @@ remain unreachable.
 
 ## 7. Honest gaps this phase closes WITH, carried into the record
 
-- **The synthesizer has no live evidence.** The live knowledge run produced a real `knowledge.plan`
-  spend row but **no `knowledge.synth` row** — the E2E tenant has no connected source, so the planner
-  found nothing readable and the card took the honest "no source could be searched" branch.
+- ~~**The synthesizer has no live evidence.**~~ **CLOSED 2026-08-30** — a document ingested through
+  the real `vault.vaultIngestText` pipeline and embedded by `vaultRag:embedDoc` produced a cited
+  claim and a `knowledge.synthesize` ledger row. **A new gap took its place:** the planner left
+  `vault: unplanned` for an ordinary pricing question and planned the unconnected `crm-facts`, so a
+  tenant document that WAS retrievable went unsearched. See 29-VERIFICATION.md, KNOW-01.
 - **Activation and rollback of a tenant pack candidate are unreachable** (`PACK_GATE`, fail-closed,
   both `ownerMutation`), and a published customization is **inert** (`cockpit.ts` passes no
   `tenantSkillIds`).

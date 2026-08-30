@@ -103,7 +103,8 @@ no code change. **Add the seed to the deploy runbook.**
 | Exact-version **activation** of a tenant pack candidate | **NOT MET.** `planTenantActivation` refuses every `pack-*` with `PACK_GATE`, fail-closed; activation and rollback are `ownerMutation`. |
 | **Rollback** of a tenant pack candidate | **NOT MET**, same reason. |
 | A published customization taking effect | **NOT MET.** `cockpit.ts` passes no `tenantSkillIds`, so it is inert; a run uses the approved template. |
-| **Synthesizer** against a real model in a browser | **NOT MET.** The live run produced a `knowledge.plan` row but **no `knowledge.synth` row** — the E2E tenant has no connected source, so the planner found nothing readable and the card took the honest "no source could be searched" branch. |
+| **Synthesizer** against a real model | **MET 2026-08-30.** A document ingested through the real `vault.vaultIngestText` pipeline and embedded by `vaultRag:embedDoc` produced a cited claim and a `knowledge.synthesize` ledger row (`knowledge:synth:4dd6bdf6…`, `phase: "actual"`, 1¢). Driven through `knowledgeSearch:search` with an identity — the browser half was blocked by a transient `auth:store` 1s-timeout under embedding load, not by the feature. |
+| Planner plans the VAULT for an ordinary pricing question | **NOT MET, newly found.** The first live question left `vault: unplanned` and planned the unconnected `crm-facts`, so a tenant's own embedded document was never searched. Tunable via the `knowledge-query-planner` skill body. |
 | `oauth-expiry-reauth` / `dst-boundary` / `provider-read` **live** evidence | **ABSENT.** This is the basis of `decision: defer` and must NOT be marked green. |
 | Save **completion signal** on the customizer | **MISSING.** No toast, no `role="status"`, no `role="alert"`; navigating after Save aborts the write. |
 | 29-13 Task 3 **owner review** | **OPEN.** A human act; no document can close it. |
@@ -188,6 +189,6 @@ Existing Vitest, convex-test, authenticated Playwright, and production-build inf
 is recorded above.
 
 **The owner's approval does not close the "NOT MET" rows.** Those remain open work, not oversights:
-the synthesizer has no live evidence, activation and rollback are structurally unreachable this
+the planner can leave the vault unplanned, activation and rollback are structurally unreachable this
 release, the three required recurrence rows have no live trace (which is what `decision: defer`
 rests on), and the customizer save has no completion signal.

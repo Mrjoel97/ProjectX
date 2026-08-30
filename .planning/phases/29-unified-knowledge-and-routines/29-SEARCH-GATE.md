@@ -180,6 +180,41 @@ live assertion permits via `knowledge-empty`. It does mean the **synthesizer bod
 exercised against a real model in a browser**. Closing that needs a tenant with a connected source
 (§2.5), which remains the open item it already was.
 
+### 4.2b THE SYNTHESIZER GAP IN §4.2 IS NOW CLOSED (2026-08-30, later the same day)
+
+§4.2 above is a true record of THAT run and is left standing. It has since been closed — and not by
+connecting a provider, but by putting a document into the vault through the REAL path:
+`vault.vaultIngestText` (the mutation the vault Dropzone itself calls), which `vaultRag:embedDoc`
+then embedded with `openai/text-embedding-3-small`.
+
+A live search returned a cited claim from it:
+
+> *"The standard plan is billed at 240 USD per seat per year, with a 15 percent discount for annual
+> prepayment."*
+> — `source: vault`, `sourceRef: mx779n1q0s630q8da64qcdzzjx8df97n`, `authority: tenant_owned`,
+> `freshness: current`, `evidenceCount: 1`, `invalidCitationCount: 0`, `confidence: "low"`.
+
+Ledger: `knowledge:synth:4dd6bdf6…`, kind `knowledge.synthesize`, `or/openai/gpt-4o-mini`,
+`phase: "actual"`, 1¢. The claim is faithful to the ingested document and the citation resolves to
+the row that was written. Citation binding, authority and freshness are now proven against a real
+model on real retrieval, not only by unit tests and the offline fixture seam.
+
+**AND IT FOUND SOMETHING WORTH MORE THAN THE GATE IT CLOSED.** The FIRST live question —
+*"What have we agreed with customers about pricing and discounts?"* — returned `evidenceCount: 0`
+and no synthesis, because the planner marked **`vault: unplanned`** and planned `crm-facts`, which
+is not connected. The tenant's own pricing document was embedded and retrievable the whole time.
+Only *"What do our saved documents and notes say about…"* planned the vault.
+
+Nothing lied — every source correctly reported its own state — but **a user asking about their own
+documents in ordinary words can be told nothing was found while the answer sits in their vault.**
+The planner is a registry skill (`knowledge-query-planner`), so this is tunable through the skill
+body and the eval gate rather than through code. Recorded for whoever owns that body next.
+
+The browser could not be used for this run: `auth:store retrieveAccountWithCredentials` began timing
+out at Convex's 1s mutation limit (8 consecutive times) while the backend was busy embedding, so
+sign-in failed. The search was driven through `knowledgeSearch:search` with an `--identity` — the
+same tenantAction the panel calls.
+
 ### 4.3 Preconditions that were true for these runs
 
 - Offline rows: `PIKAR_OFFLINE_FIXTURES=1` **and both model keys unset on the deployment** —
