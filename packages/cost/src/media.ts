@@ -29,15 +29,31 @@ export type VideoRes = "480p" | "720p" | "1080p";
 
 /** USD per video-second, per resolution. */
 export const MEDIA_VIDEO_PRICING: Record<string, Partial<Record<VideoRes, number>>> = {
+  // ── HISTORICAL ONLY, exactly like the two superseded image ids below. No submit path routes to
+  // either of these since 33.1-05; they stay so `mediaJobs` rows written before their cutover are
+  // still PRICEABLE. Neither is a FALLBACK: rule 2 forbids falling back to another row, and
+  // nothing in the code can select a model that is not `MEDIA_DEFAULT_VIDEO.model`.
   "wan2.5-t2v-preview": { "480p": 0.05, "720p": 0.1, "1080p": 0.15 },
   "sora-2": { "720p": 0.1 },
+
+  // ── THE LIVE ROW (33.1-04). xAI's published rates, read 2026-08-30 and corroborated by a live
+  // paid call the same day: `{duration: 5, resolution: "480p"}` returned `usage.cost` 0.25, which
+  // is exactly 5 x $0.05. **No 1080p key**, because xAI publishes none — rule 2 makes that
+  // `unknown_model` rather than a silent downgrade to the 720p tier. See ADR-027.
+  "x-ai/grok-imagine-video": { "480p": 0.05, "720p": 0.07 },
 };
 
-/** Provider-supported generated durations. Kept model-specific so historical Wan rows remain
- *  priceable without allowing an unsupported duration to reach Sora. */
+/** Provider-supported generated durations. Kept model-specific so historical rows remain
+ *  priceable without allowing an unsupported duration to reach the pinned model. */
 export const MEDIA_VIDEO_SECONDS: Record<string, readonly number[]> = {
   "wan2.5-t2v-preview": [5, 10],
   "sora-2": [4, 8, 12],
+  // xAI's published grid is **1-15, any integer**, and it is written out rather than generated:
+  // this is a money table, and fifteen integers read at a glance where `Array.from` does not.
+  // The GRID is why grok was chosen — it retires `illegal_generated_duration` for every length a
+  // model can sensibly ask for. `@pikar/core`'s `GENERATED_CLIP_SECONDS` is the second copy of
+  // this same list and the two must move together; `media.test.ts` asserts they are equal.
+  "x-ai/grok-imagine-video": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
 };
 
 /** USD per successfully generated image. */
@@ -146,10 +162,20 @@ export const MEDIA_JOB_CAP_USD = 3.5;
  * "render (incl. one retry)" so the coverage is explicit on screen. */
 export const MEDIA_SANDBOX_USD_PER_RENDER = 0.04;
 
-/** Sora 2's lowest supported tier and duration are pinned deliberately. Six four-second clips cost
- *  $2.40, leaving room under the existing whole-job cap for voice, captions and render. */
+/** ROUTE-QUALIFIED, like the image pin: since 33.1-05 the video plane posts to OpenRouter, which
+ *  keys on `x-ai/grok-imagine-video`. This string, `MEDIA_VIDEO_PRICING`'s live key,
+ *  `MEDIA_VIDEO_SECONDS`'s live key and `media.fixtures.json`'s video id are four copies of one
+ *  value and must move together — the fixture-parity test is what enforces that.
+ *
+ *  720p and 4 s are KEPT from the sora-2 pin. At $0.07/s six four-second clips are $1.68 against
+ *  the unchanged $3.50 cap (they were $2.40 on sora-2), so the successor leaves MORE room for
+ *  voice, captions and render, not less — the test ADR-026 sets for a migration.
+ *
+ *  480p exists in the row and is deliberately NOT pinned: dropping the tier is a picture-quality
+ *  decision and improvements do not ride in on a migration (33.1-PRICE-EVIDENCE.md makes the same
+ *  argument for the still's geometry). */
 export const MEDIA_DEFAULT_VIDEO = {
-  model: "sora-2",
+  model: "x-ai/grok-imagine-video",
   resolution: "720p",
   seconds: 4,
 } as const;

@@ -27,12 +27,12 @@
    "succession": {
     "status": "decided",
     "raisedOn": "2026-08-26",
-    "decidedOn": "2026-08-27",
-    "decisionRecord": "docs/decisions/026-veo-31-lite-succeeds-sora-2.md",
-    "replacement": "veo-3.1-lite",
+    "decidedOn": "2026-08-30",
+    "decisionRecord": "docs/decisions/027-grok-imagine-video-succeeds-sora-2-on-openrouter.md",
+    "replacement": "x-ai/grok-imagine-video",
     "replacementWiredUp": false,
-    "whatRemains": "ADR-026 records the DECISION; the wiring is a separate build. Still to do: submit/poll/download against Google's endpoint replacing the three api.openai.com/v1/videos call sites, a veo-3.1-lite row in MEDIA_VIDEO_PRICING plus its MEDIA_VIDEO_SECONDS durations, repinning MEDIA_DEFAULT_VIDEO, and the credential in Convex env vars (never Vercel). Until replacementWiredUp is true, a reel still submits to an endpoint that is being withdrawn.",
-    "why": "OpenAI is retiring the VIDEOS API ITSELF on 2026-09-24, not merely this model, and names NO replacement. sora-2-pro carries the SAME shutdown date, so the successor cannot be an OpenAI model - which means it amends ADR-024 ('OpenAI is the provider for every media kind') and is an owner decision about where customer prompts are sent. Corroborated 2026-08-26 across developers.openai.com/api/docs/deprecations and independent trade coverage; announced 2026-03-24.",
+    "whatRemains": "33.1-04 landed the PRICE ROW, the 1-15 duration grid and the repin of MEDIA_DEFAULT_VIDEO. Still to do (plan 33.1-05): the submit path itself - a JSON POST to openrouter.ai/api/v1/videos replacing the multipart api.openai.com/v1/videos call, its 202 -> polling_url -> unsigned_urls[0] poller beside pollOpenAiVideoTask, and the OPENROUTER_API_KEY on the video leg. A repin is NOT a migration: until replacementWiredUp is true a reel still submits to the endpoint being withdrawn, whatever MEDIA_DEFAULT_VIDEO now says.",
+    "why": "OpenAI is retiring the VIDEOS API ITSELF on 2026-09-24, not merely this model, and names NO replacement. sora-2-pro carries the SAME shutdown date, so the successor cannot be an OpenAI model - which means it amends ADR-024 ('OpenAI is the provider for every media kind') and is an owner decision about where customer prompts are sent. Corroborated 2026-08-26 across developers.openai.com/api/docs/deprecations and independent trade coverage; announced 2026-03-24. ADR-027 (2026-08-30) supersedes ADR-026's veo-3.1-lite choice: the owner took grok-imagine-video for its 1-15 any-integer duration grid, knowingly accepting xAI as a new recipient of customer scene prompts.",
     "shortlistPricedPerOutputSecond": [
      {
       "model": "veo-3.1-lite",
@@ -61,6 +61,23 @@
      }
     ]
    }
+  },
+  {
+   "id": "x-ai/grok-imagine-video",
+   "kind": "video",
+   "unit": "USD per output video-second, per resolution",
+   "rates": {
+    "480p": 0.05,
+    "720p": 0.07
+   },
+   "confidence": "HIGH",
+   "vendor": {
+    "pricingInfoOverride": "xAI's Grok Imagine video on OpenRouter costs $0.05 per second at 480p and $0.07 per second at 720p, for durations of 1 to 15 seconds (any integer). READ 2026-08-30 from openrouter.ai/x-ai/grok-imagine-video, and corroborated the same day by a live paid call: duration 5 at 480p returned usage.cost 0.25, exactly 5 x $0.05.",
+    "status": "public",
+    "deprecated": false,
+    "removed": false
+   },
+   "notes": "Route-qualified id: the video plane posts to openrouter.ai/api/v1/videos and the id travels unstripped. No 1080p rate is published, so a 1080p request is unknown_model rather than a silent downgrade. The 1-15 grid is the reason this counterparty was accepted - see ADR-027."
   },
   {
    "id": "openai/tts-1",
@@ -112,11 +129,23 @@
    {
     "visual": "generated_video",
     "buys": "video",
-    "usdAt4s": 0.4,
+    "usdAt4s": 0.28,
     "durations": [
+     1,
+     2,
+     3,
      4,
+     5,
+     6,
+     7,
      8,
-     12
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15
     ]
    },
    {
@@ -153,18 +182,21 @@
    }
   ],
   "reel30s": {
-   "_what": "The §2.3 worked example, REPRICED against the shipped tables. The plan's $1.36-vs-$3.00 predated the gpt-image-2 cutover, and the all-generated column turned out not to exist at all. Repriced again on 2026-08-30 (33.1-03) when the still row moved from a guessed $0.01 to a measured $0.006: mixed went $1.24 -> $1.224. stockLeaning did NOT move - it buys one generated clip and four free-library scenes, and no still at all.",
+   "_what": "The §2.3 worked example, REPRICED against the shipped tables. The plan's $1.36-vs-$3.00 predated the gpt-image-2 cutover, and the all-generated column turned out not to exist at all. Repriced on 2026-08-30 (33.1-03) when the still row moved from a guessed $0.01 to a measured $0.006: mixed went $1.24 -> $1.224. Repriced AGAIN the same day (33.1-04) when the clip rate moved from sora-2's $0.10/s to grok's $0.07/s: mixed $1.224 -> $0.864, stockLeaning $0.40 -> $0.28.",
    "mixed": {
     "scenes": "3 generated x 4s + 4 stills x 4s + 1 card x 2s",
-    "pictureUsd": 1.224
+    "pictureUsd": 0.864,
+    "generatedSeconds": 12,
+    "_generatedSeconds": "3 x 4 s = 12, which is EXACTLY MEDIA_GENERATED_SECONDS_CAP. This deck sits ON the boundary with zero slack - a one-second nudge to any generated scene makes it illegal - and media.test.ts asserts that deliberately, because the cap was chosen to keep this deck and media-director.md's worked answer legal as written."
    },
    "generatedOnly": {
     "reachable": false,
-    "why": "every clip length sora-2 supports is a multiple of 4 s, so no sum of them is 30"
+    "why": "NOT ARITHMETIC ANY MORE. On grok's 1..15 grid a 30 s all-generated deck IS composable (2 x 15 s) and prices at $2.10, which is under the $3.50 job cap - so nothing in the pricing refuses it. What refuses it is MEDIA_GENERATED_SECONDS_CAP (12 s of generated video per reservation, $0.84 at $0.07/s), added by 33.1-04 to restore in code the guarantee the wider grid destroyed. Both numbers are recorded because the mechanism moved: $2.10 is what it would cost, 12 s is what stops it.",
+    "wouldCostUsd": 2.1
    },
    "stockLeaning": {
     "scenes": "1 generated x 4s + 3 stock_video x 6s + 1 stock_image x 8s",
-    "pictureUsd": 0.4,
+    "pictureUsd": 0.28,
     "_what": "The lever the skill body teaches, priced: the same 30 seconds as `mixed` at a third of its picture cost, because four of its five scenes come from a free library instead of a generator."
    }
   },
@@ -172,6 +204,7 @@
    15,
    30,
    60
-  ]
+  ],
+  "_targetsUnreachableByGeneratedVideoAlone": "UNCHANGED at [15, 30, 60], but for ONE reason now instead of two. Until 33.1-04: 15 and 30 failed the ARITHMETIC (every sora-2 length was a multiple of 4) while 60 failed the JOB CAP ($6.00 > $3.50) - one property asserted through two mechanisms without saying so. Since 33.1-04 all three are refused by MEDIA_GENERATED_SECONDS_CAP = 12, which is below min(TARGET_DURATIONS) = 15, so the property holds for any future target duration rather than only for these three. If this array ever reads [60], the cap did not land."
  }
 }

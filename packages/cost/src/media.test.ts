@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { MUSIC_MOODS, TARGET_DURATIONS, type VisualKind } from "@pikar/core/storyboard";
+import {
+  GENERATED_CLIP_SECONDS,
+  MUSIC_MOODS,
+  TARGET_DURATIONS,
+  type VisualKind,
+} from "@pikar/core/storyboard";
 import { describe, expect, it } from "vitest";
 import {
   chooseMediaBatch,
@@ -57,7 +62,27 @@ const codeOf = (spec: MediaSpec) => {
 };
 
 describe("estimateMediaUsd — video, priced per video-second", () => {
-  it("Sora 2 720p x 4 s = $0.40", () => expect(usd(clip())).toBeCloseTo(0.4, 10));
+  it("the PINNED video model is grok on OpenRouter, spelled out", () => {
+    // A LITERAL on one side, like the image pin's test: the default, the price key and the fixture
+    // id are three copies of one string, and comparing two of them proves only self-equality.
+    expect(MEDIA_DEFAULT_VIDEO.model).toBe("x-ai/grok-imagine-video");
+    // The superseded row stays PRICEABLE for historical `mediaJobs` rows, and is NOT the pin.
+    expect(MEDIA_VIDEO_PRICING["sora-2"]).toEqual({ "720p": 0.1 });
+  });
+  it("Grok 720p x 4 s = $0.28, and $0.07/s is under the $0.10/s it replaces", () => {
+    expect(usd(clip())).toBeCloseTo(0.28, 10);
+    expect(MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.["720p"]).toBe(0.07);
+    expect(MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.["480p"]).toBe(0.05);
+  });
+  it("a NON-multiple-of-4 length prices at ITS OWN length — the grid xAI publishes", () => {
+    // The defect this phase exists to kill: 5 and 7 were `illegal_duration` on the Sora grid.
+    for (const s of [1, 5, 6, 7, 10, 13, 15]) {
+      expect(usd(clip("720p", s))).toBeCloseTo(s * 0.07, 10);
+    }
+    // The 480p leg is the MEASURED one: a live paid call on 2026-08-30 for
+    // `{duration: 5, resolution: "480p"}` returned `usage.cost` 0.25 = exactly 5 x $0.05.
+    expect(usd(clip("480p", 5))).toBeCloseTo(0.25, 10);
+  });
   it("an unpriced model → unknown_model (a Veo-class endpoint is not in the table)", () => {
     expect(codeOf({ kind: "video", model: "fal-ai/veo3", resolution: "720p", seconds: 4 })).toBe(
       "unknown_model",
@@ -65,10 +90,14 @@ describe("estimateMediaUsd — video, priced per video-second", () => {
   });
   it("a resolution missing from the model's row → unknown_model, NEVER a tier fallback", () => {
     expect(codeOf(clip("4k" as VideoRes))).toBe("unknown_model");
+    // xAI publishes 480p and 720p and no 1080p, so a 1080p request is refused rather than
+    // silently downgraded to the tier below it (rule 2). The sora-2 row had no 480p and this is
+    // the same question asked of the new row.
+    expect(codeOf(clip("1080p", 4))).toBe("unknown_model");
   });
-  it("a Sora duration outside {4,8,12} → illegal_duration", () => {
-    for (const s of [3, 5, 10, 15, 0]) expect(codeOf(clip("720p", s))).toBe("illegal_duration");
-    for (const s of [4, 8, 12]) expect(codeOf(clip("720p", s))).toBe("ok");
+  it("the grid is WIDER, not OPEN: 16, 0 and a fraction are still illegal_duration", () => {
+    for (const s of [16, 20, 0, -4, 4.5]) expect(codeOf(clip("720p", s))).toBe("illegal_duration");
+    for (const s of [1, 4, 8, 12, 15]) expect(codeOf(clip("720p", s))).toBe("ok");
   });
   it("a non-finite duration is refused, never NaN dollars", () => {
     expect(codeOf(clip("480p", Number.NaN))).toBe("illegal_duration");
@@ -114,9 +143,9 @@ describe("estimateMediaUsd — the billing units differ, and the tests sit side 
   });
 });
 
-// The §4.1 job, as data. This is the reel the phase is budgeted around.
+// The §4.1 job, as data. This is the reel the phase was budgeted around.
 const JOB_4_1: MediaSpec[] = [
-  ...Array.from({ length: 6 }, () => clip()), // 6 x 720p x 4 s = $2.400
+  ...Array.from({ length: 6 }, () => clip()), // 6 x 720p x 4 s = $1.680 (was $2.400 on sora-2)
   voice(1200), //                                voice            = $0.018
   voice(1200), //                                retry allowance  = $0.018
   { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 }, // captions = $0.006
@@ -124,28 +153,54 @@ const JOB_4_1: MediaSpec[] = [
 ];
 
 describe("estimateBatchUsd + the job cap", () => {
-  it("the six-block Sora job totals $2.482 and PASSES the $3.50 cap", () => {
+  it("the six-block job PRICES at $1.762 — grok made the §4.1 reel 29% cheaper", () => {
+    // Was $2.482 at sora-2's $0.10/s. The successor is cheaper than the model it replaces, which
+    // is the test ADR-026 sets for a migration and the reason MEDIA_JOB_CAP_USD does not move.
     const total = estimateBatchUsd(JOB_4_1);
     expect(total.ok).toBe(true);
-    // 33-04: was 2.462 — the render line doubled at its source to reserve the one auto retry.
-    if (total.ok) expect(total.value).toBeCloseTo(2.482, 10);
-    const chosen = chooseMediaBatch(JOB_4_1, MEDIA_JOB_CAP_USD);
-    expect(chosen.ok).toBe(true);
-    if (chosen.ok) expect(chosen.value.estCents).toBe(249);
+    if (total.ok) expect(total.value).toBeCloseTo(1.762, 10);
   });
-  it("9 Sora blocks at 720p ($3.60+) → over_job_cap", () => {
-    const job = [...Array.from({ length: 9 }, () => clip()), { kind: "render" } as MediaSpec];
+  it("MEDIA_JOB_CAP_USD IS STILL $3.50 — a successor needing a bigger cap is a worse outcome", () => {
+    // Asserted on its own, against a literal, because this is the phase where it would slip:
+    // ADR-026 is explicit that a replacement that needs the ceiling raised is a regression
+    // wearing a migration's clothes. Grok is CHEAPER, so nothing here has to move.
+    expect(MEDIA_JOB_CAP_USD).toBe(3.5);
+  });
+  it("THE TWO COPIES OF THE PROVIDER GRID AGREE — the drift that went unnoticed last cutover", () => {
+    // `@pikar/core` deliberately does not depend on `@pikar/cost` (the dependency runs the other
+    // way), so the pinned model's duration grid is written out in both packages. They drifted at
+    // the OpenAI cutover and nothing noticed — `isBuyableClipLength`'s comment in
+    // `packages/backend/convex/media.ts` records what that cost. This one line is what makes
+    // "keep them in step" enforceable rather than aspirational.
+    expect([...GENERATED_CLIP_SECONDS]).toEqual([...(MEDIA_VIDEO_SECONDS[VIDEO_MODEL] ?? [])]);
+  });
+  it("13 grok blocks at 720p ($3.64) → over_job_cap", () => {
+    // WAS 9, at the sora-2 rate. Nine grok clips are $2.52 and pass, so the count had to be
+    // recomputed rather than left standing: an over-cap test whose job is UNDER the cap asserts
+    // nothing at all. 12 x $0.28 = $3.36 is the last passing count; 13 is $3.64.
+    const job = [...Array.from({ length: 13 }, () => clip()), { kind: "render" } as MediaSpec];
     const r = chooseMediaBatch(job, MEDIA_JOB_CAP_USD);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("over_job_cap");
   });
-  it("12 Sora blocks at 720p ($4.80+) → over_job_cap", () => {
+  it("20 grok blocks at 720p ($5.60) → over_job_cap", () => {
     const r = chooseMediaBatch(
-      Array.from({ length: 12 }, () => clip()),
+      Array.from({ length: 20 }, () => clip()),
       MEDIA_JOB_CAP_USD,
     );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("over_job_cap");
+  });
+  it("A 30-SECOND ALL-GENERATED REEL NOW PRICES AT $2.10, UNDER THE $3.50 JOB CAP", () => {
+    // The fact the generated-seconds cap exists to answer, asserted rather than skipped past.
+    // On the Sora grid this deck was not composable at all (every length a multiple of 4); on
+    // grok's 1..15 it is two 15-second clips at $0.07/s, and the ARITHMETIC no longer refuses it.
+    // If this is the only thing that changed, kind-mixing has dropped from structural to advisory.
+    const thirty = [clip("720p", 15), clip("720p", 15)];
+    const total = estimateBatchUsd(thirty);
+    expect(total.ok && total.value).toBeCloseTo(2.1, 10);
+    const r = chooseMediaBatch(thirty, MEDIA_JOB_CAP_USD);
+    expect(r.ok ? "ok" : r.error.code).not.toBe("over_job_cap");
   });
   it("ANY member's Err propagates — one unpriceable line refuses the whole job", () => {
     const r = estimateBatchUsd([
@@ -158,7 +213,7 @@ describe("estimateBatchUsd + the job cap", () => {
   it("free line items contribute 0 and never make a job unknown_model", () => {
     const r = estimateBatchUsd([clip(), { kind: "free" }, { kind: "free" }]);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value).toBeCloseTo(0.4, 10);
+    if (r.ok) expect(r.value).toBeCloseTo(0.28, 10);
   });
   it("a non-positive cap refuses rather than passing everything", () => {
     for (const cap of [0, -1, Number.NaN]) {
@@ -380,20 +435,28 @@ describe("the scene-kind price table — §2.3, and why the cheap kinds are not 
 
   it("a still costs the same at 12 s as at 2 s — duration freedom IS the lever", () => {
     expect(sceneUsd("animated_image", 12)).toBe(sceneUsd("animated_image", 2));
-    // 66.7x at 4 s ($0.40 / $0.006). WAS 40x, against a still priced at a GUESSED $0.01; measuring
-    // the still on 2026-08-30 made the lever BIGGER, not smaller. The block contract had no way to
-    // express this and bought a clip every time.
+    // 46.7x at 4 s ($0.28 / $0.006) — `140 / 3`, written as the arithmetic rather than as a
+    // decimal so the numerator and denominator are both legible.
     //
-    // Recomputed rather than deleted, and it is not decoration: this ratio is the "40x cost lever"
-    // ADR-019 rests on, and a deleted assertion is a claim nobody checks. Expect to touch this line
-    // again in 33.1-04, when the video rate moves the numerator — one place, deliberately.
-    expect(sceneUsd("generated_video", 4) / sceneUsd("animated_image", 4)).toBeCloseTo(200 / 3, 10);
+    // THIS NUMBER HAS MOVED TWICE IN ONE DAY: 40x (a $0.40 clip over a GUESSED $0.01 still), then
+    // 66.7x when 33.1-03 measured the still at $0.006, then 46.7x when 33.1-04 moved the clip to
+    // grok's $0.07/s. That is precisely why nothing a user or a model reads may RESTATE it: since
+    // 33.1-04 every sentence about the lever DERIVES it from this table (`mediaCanvasView.ts`'s
+    // `CLIP_VS_STILL_RATIO`), so a price move updates the copy instead of contradicting it.
+    expect(sceneUsd("generated_video", 4) / sceneUsd("animated_image", 4)).toBeCloseTo(140 / 3, 10);
   });
 
-  it("a generated clip is priced at ITS OWN length, and one off the provider grid is refused", () => {
-    expect(sceneUsd("generated_video", 8)).toBeCloseTo(0.8, 10);
-    expect(sceneUsd("generated_video", 12)).toBeCloseTo(1.2, 10);
-    for (const seconds of [5, 6, 10, 15]) {
+  it("a generated clip is priced at ITS OWN length, and the grid is WIDER — not absent", () => {
+    // INVERTED on 2026-08-30 (33.1-04), not deleted. 5, 6, 10 and 15 were `illegal_duration` on
+    // the sora-2 grid and are now ordinary lengths — that inversion IS the phase.
+    for (const seconds of [5, 6, 7, 10, 15]) {
+      expect(sceneUsd("generated_video", seconds)).toBeCloseTo(seconds * 0.07, 10);
+    }
+    expect(sceneUsd("generated_video", 8)).toBeCloseTo(0.56, 10);
+    expect(sceneUsd("generated_video", 12)).toBeCloseTo(0.84, 10);
+    // The grid is wider, not open. A scene the provider cannot make is still refused HERE, at the
+    // free gate, rather than inside a sandbox that has already been bought.
+    for (const seconds of [16, 0]) {
       const r = sceneVisualSpec("generated_video", seconds);
       expect(r.ok ? "ok" : r.error.code).toBe("illegal_duration");
     }
