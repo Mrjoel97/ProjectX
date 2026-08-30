@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   DECIDERS,
   DECISIONS,
@@ -30,6 +30,7 @@ import {
   validateDecision,
   validateMatrix,
 } from "../scripts/check-routine-gate.mjs";
+import { renderArtifact } from "../scripts/collect-recurrence-evidence.mjs";
 
 // 29-11 — THE RECURRENCE GATE, PROVEN IN BOTH DIRECTIONS, INCLUDING ITS PLUMBING.
 //
@@ -92,6 +93,37 @@ const newRoot = () => {
 };
 afterAll(() => {
   for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
+  rmSync(liveArtifactDir, { recursive: true, force: true });
+});
+
+// ── LIVE ROWS NOW NEED A COLLECTED ARTIFACT (2026-08-30) ──────────────────────────────────────
+//
+// `checkLiveEvidenceArtifact` makes a `live` row cite something `collect-recurrence-evidence.mjs`
+// wrote, for that row's own probe. Every green fixture below therefore needs three real artifacts,
+// and they must live INSIDE the repo root because the containment rule refuses anything outside it
+// — a `mkdtemp` under the OS temp dir would be rejected before the artifact was even read.
+//
+// REMOVED IN `afterAll`, unconditionally. Each says `observed: true` for a probe that never ran,
+// which is exactly the fabricated evidence this gate exists to refuse; leaving them on disk would
+// hand a future `live` row a ready-made forgery that satisfies the very rule they are here to test.
+const liveArtifactDir = join(repoRoot, "packages/backend/scripts/.test-artifacts");
+const liveRefs: Record<string, string> = {};
+beforeAll(() => {
+  mkdirSync(liveArtifactDir, { recursive: true });
+  for (const probe of REQUIRED_LIVE_ROWS) {
+    writeFileSync(
+      join(liveArtifactDir, `${probe}.md`),
+      renderArtifact({
+        probe,
+        observed: true,
+        collectedAt: "2026-01-01T00:00:00Z",
+        deployment: "unit-test-fixture",
+        detail: { note: "written and deleted by routineDecision.test.ts" },
+      }),
+      "utf8",
+    );
+    liveRefs[probe] = `packages/backend/scripts/.test-artifacts/${probe}.md`;
+  }
 });
 
 describe("the closed schema is genuinely closed", () => {
@@ -401,15 +433,34 @@ describe("a `pass` row's citation — the check round 1 claimed and did not have
     // reviewable diff. It does not make fabrication impossible.
     expect(FIXTURE_REFS).toContain("turbo.json");
     expect(new Set(FIXTURE_REFS).size).toBe(12);
-    expect(validateDecision(green, { repoRoot }).ok).toBe(true);
+    expect(validateDecision(greenFixture(liveRefs), { repoRoot }).ok).toBe(true);
+  });
+
+  test("THE LIMIT NARROWED 2026-08-30: it no longer covers the three LIVE rows", () => {
+    // The weakness above is still real for the nine non-live rows — `turbo.json` remains a
+    // resolving, distinct, meaningless citation the gate accepts. What changed is that the three
+    // rows `--eligibility` demands a LIVE trace for can no longer be satisfied that way: they must
+    // cite an artifact `collect-recurrence-evidence.mjs` wrote, naming that row's own probe.
+    //
+    // This is the case that mattered. `dst-boundary` cites `routineSchedule.test.ts` in the SHIPPED
+    // artifact — a real, distinct, resolving file — and the only distance between `missing` and a
+    // fabricated `enable-safe` was editing one word from `automated` to `live`. That edit now fails.
+    const relabelled = greenFixture(); // live rows citing repo manifests, the pre-artifact shape
+    const r = eligibility(relabelled, { repoRoot });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join("\n")).toContain("is not a collected evidence artifact");
+    // Non-live rows are untouched by the new rule — the narrowing is scoped, not general.
+    expect(r.errors.join("\n")).not.toContain("row `cost`");
   });
 });
 
 describe("--eligibility: the green path is reachable, and the live demand is real", () => {
-  const green = greenFixture();
+  // Built lazily: `liveRefs` is filled in `beforeAll`, and a module-level `greenFixture(liveRefs)`
+  // would capture an empty object.
+  const g = () => greenFixture(liveRefs);
 
   test("a fully green matrix with live refs on the three required rows IS eligible", () => {
-    const r = eligibility(green, { repoRoot });
+    const r = eligibility(g(), { repoRoot });
     expect(r.errors).toEqual([]);
     expect(r.ok).toBe(true);
   });
@@ -418,21 +469,21 @@ describe("--eligibility: the green path is reachable, and the live demand is rea
   // refuse. Flip one required row away from `live` and eligibility must die on that row alone.
   for (const id of REQUIRED_LIVE_ROWS) {
     test(`relabelling \`${id}\` from live to manual loses eligibility`, () => {
-      const r = eligibility(patchRow(green, id, "evidenceType", "manual"), { repoRoot });
+      const r = eligibility(patchRow(g(), id, "evidenceType", "manual"), { repoRoot });
       expect(r.ok).toBe(false);
       expect(r.errors.join("\n")).toContain(`row \`${id}\` requires LIVE evidence`);
       expect(r.errors.join("\n")).toContain("is not a live trace");
     });
 
     test(`relabelling \`${id}\` from live to automated loses eligibility`, () => {
-      const r = eligibility(patchRow(green, id, "evidenceType", "automated"), { repoRoot });
+      const r = eligibility(patchRow(g(), id, "evidenceType", "automated"), { repoRoot });
       expect(r.ok).toBe(false);
       expect(r.errors.join("\n")).toContain(`row \`${id}\` requires LIVE evidence`);
     });
   }
 
   test("a single non-required row going red loses eligibility", () => {
-    const r = eligibility(patchRow(green, "cost", "status", "fail"), { repoRoot });
+    const r = eligibility(patchRow(g(), "cost", "status", "fail"), { repoRoot });
     expect(r.ok).toBe(false);
     expect(r.errors.join("\n")).toContain("row `cost` is `fail`, not `pass`");
   });
@@ -441,7 +492,7 @@ describe("--eligibility: the green path is reachable, and the live demand is rea
     // `live` is demanded on three rows, not twelve. If this ever fails, the gate got stricter by
     // accident and the three-row rule stopped being the thing under test. (The fixture already
     // gives non-required rows `manual`, so `automated` is the flip that actually changes a byte.)
-    expect(eligibility(patchRow(green, "cost", "evidenceType", "automated"), { repoRoot }).ok).toBe(
+    expect(eligibility(patchRow(g(), "cost", "evidenceType", "automated"), { repoRoot }).ok).toBe(
       true,
     );
   });
@@ -525,7 +576,7 @@ describe("--validate-decision", () => {
   });
 
   test("`enable-safe` over a genuinely green matrix is ACCEPTED", () => {
-    expect(validateDecision(green, { repoRoot }).ok).toBe(true);
+    expect(validateDecision(greenFixture(liveRefs), { repoRoot }).ok).toBe(true);
   });
 });
 
@@ -809,7 +860,11 @@ describe("the exit codes, read from a SPAWNED process", () => {
   });
 
   test("a SCHEMA-VALID enable-safe exits 0 — the gate is not hard-coded to refuse", () => {
-    const p = artifactFile("green.md", green);
+    // `greenFixture(liveRefs)`, not the bare `green` above: since `checkLiveEvidenceArtifact`
+    // landed, the three live rows must cite a collected artifact, and this is the case whose whole
+    // job is proving the gate CAN say yes. The other spawned cases here assert failures and are
+    // unaffected — they fail for their own reasons, which is why they were not touched.
+    const p = artifactFile("green.md", greenFixture(liveRefs));
     expect(run(p, "--eligibility").code).toBe(0);
     expect(run(p, "--validate-decision").code).toBe(0);
     expect(run(p, "--validate-decision").out).toContain("(decision: enable-safe)");

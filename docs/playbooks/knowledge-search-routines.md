@@ -1,5 +1,38 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-30 (**THE RECURRENCE GATE CAN NOW TELL A LIVE TRACE FROM A FILE THAT
+> EXISTS — and the answer for all three rows is still `defer`.** `checkEvidenceRef` proves a ref
+> names a distinct, non-empty file inside the repo and NOTHING MORE; the script's own header says
+> so, and round 1 shipped twelve fabricated rows past all three modes on that weakness. The
+> consequence was concrete: `dst-boundary` cites the recurrence spike's unit test in the shipped
+> artifact, and the distance from `missing` to a fabricated `enable-safe` was editing one word from
+> `automated` to `live`.
+>
+> `checkLiveEvidenceArtifact` closes that for the three REQUIRED_LIVE rows: the ref must be an
+> artifact `collect-recurrence-evidence.mjs` wrote, naming that row's own probe and recording an
+> observation. Cross-citation is refused too — a real DST artifact cannot certify `provider-read`,
+> which is the mistake a hurried copy-paste actually makes. **The narrowing is scoped:** the nine
+> non-live rows keep the documented weakness, and a test asserts they do, so "the gate got stricter
+> by accident" is itself caught.
+>
+> WHAT THE COLLECTOR CAN AND CANNOT DO, because a green `--self-check` must not be over-read.
+> `dst-boundary` is COMPLETE — whether a zone crossed a transition is `Intl` arithmetic, proven in
+> BOTH directions including the owner's own UTC+3 zone, which never transitions and therefore can
+> never produce this row locally. `oauth-expiry-reauth` and `provider-read` have their PRECONDITION
+> half complete and their COLLECTION half unexercised: every `gmailTokens` row on this deployment
+> reads `packeval-not-a-real-token` and `connectorConnections` is empty, so both refuse — correctly,
+> and that refusal is what is tested. The provider call each would make has never run.
+>
+> SO THE DECISION IS UNCHANGED, and the gate still says so: `--matrix` 0, `--eligibility` 1,
+> `--validate-decision` 0. What changed is that it can no longer be talked out of it. `enable-safe`
+> now needs a real grant on the deployment carrying the evidence AND a run spanning a real DST
+> transition — the next are 2026-10-25 (EU) and 2026-11-01 (US). No amount of code moves either.
+>
+> ⚠ THE FIXTURE ARTIFACTS SAY `observed: true` FOR PROBES THAT NEVER RAN. Both harnesses write them
+> to run their positive case and both delete them unconditionally, including on a failing run; they
+> are gitignored as well, because a killed run must not leave a ready-made forgery where a `live`
+> row could cite it. If you ever find one on disk, delete it — it is not evidence of anything.)
+
 > Last verified: 2026-08-30 (**ROUT-01's LAST GAP CLOSED: a saved customization now changes a run.**
 > `pinnedWorkflows.checkReadiness` no longer emits `customization_not_applied` — the notice is
 > `customization_applied`, and its sentence names **current** settings because `runWorkflowPack`

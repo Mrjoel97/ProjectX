@@ -101,8 +101,17 @@
  * Do not read this script's exit code through a pipe.
  */
 
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { argv, exit, platform, stdout } from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -139,6 +148,10 @@ export function fileIdentity(abs) {
  * may not be dropped to make the matrix green and a row may not be invented to pad it: the
  * parser requires this exact set, once each.
  */
+// Imported, never re-typed: if the artifact format is versioned up, the gate must move with
+// the collector or it would keep accepting the old shape.
+import { ARTIFACT_MARKER, renderArtifact } from "./collect-recurrence-evidence.mjs";
+
 export const ROW_IDS = [
   "standing-approval",
   "material-change-reapproval",
@@ -383,6 +396,70 @@ export function validateMatrix(text, { repoRoot = repoRootDefault, artifactPath 
 }
 
 /**
+ * A `live` row must cite a COLLECTED ARTIFACT for its own probe — the half `checkEvidenceRef`
+ * cannot do.
+ *
+ * WHAT THIS CLOSES. `checkEvidenceRef` proves a ref names a non-empty file inside the repo and
+ * nothing more; the docstring at the top of this file says so, and round 1 shipped twelve
+ * fabricated rows past all three modes on exactly that weakness. Under it, a `live` row could cite
+ * `README.md`, or — worse, because it would look right to a reviewer — the very unit test whose
+ * insufficiency is the reason the row demands a live trace at all. The recurrence spike's own unit
+ * test in `@pikar/core` is what `dst-boundary` cites TODAY while sitting at `missing`, and the
+ * one-word edit from `automated` to `live` was the whole distance.
+ *
+ * (That file is NOT named here on purpose: `routineDecision.test.ts` scans every non-test source
+ * file for the spike's module name and fails on a hit, deliberately without distinguishing an
+ * import from a comment. A blunt rule is the right one for "nothing reaches this module yet", and
+ * exempting prose would be the first crack in it.)
+ *
+ * Now a `live` row must point at something `collect-recurrence-evidence.mjs` wrote, and the
+ * artifact must name THIS row's probe. Cross-citation is refused too: a real DST artifact cannot
+ * certify `provider-read`, which is the mistake a hurried copy-paste actually makes.
+ *
+ * THE CEILING, AND IT IS REAL. A determined editor can hand-write an artifact claiming
+ * `observed: true`. No file-based evidence scheme can prevent that, and pretending otherwise would
+ * be the same overclaim round 1 made. What changes is the SHAPE OF THE LIE: forging a structured
+ * record that names a probe and a result, rather than pointing one field at a file that happens to
+ * exist. Same standard this file already applies to `decidedBy` — a closed set cannot stop a lie,
+ * it stops the lie being invisible.
+ */
+export function checkLiveEvidenceArtifact(ref, probe, repoRoot = repoRootDefault) {
+  const cited = checkEvidenceRef(ref, repoRoot);
+  if (!cited.ok) return cited; // not a citation at all — that error is already the right one
+  let head;
+  try {
+    head = readFileSync(
+      cited.path.startsWith("/") ? cited.path : resolve(repoRoot, cited.path),
+      "utf8",
+    );
+  } catch {
+    return { ok: false, path: cited.path, reason: "could not be read" };
+  }
+  if (!head.startsWith(ARTIFACT_MARKER)) {
+    return {
+      ok: false,
+      path: cited.path,
+      reason:
+        "is not a collected evidence artifact — a `live` row must cite one written by " +
+        "`collect-recurrence-evidence.mjs`, not an arbitrary file. A unit test relabelled `live` " +
+        "is the exact substitution this rule exists to refuse",
+    };
+  }
+  const named = /^probe: (.+)$/m.exec(head)?.[1]?.trim();
+  if (named !== probe) {
+    return {
+      ok: false,
+      path: cited.path,
+      reason: `is an artifact for \`${named ?? "(no probe named)"}\`, not for \`${probe}\``,
+    };
+  }
+  if (!/^observed: true$/m.test(head)) {
+    return { ok: false, path: cited.path, reason: "does not record an observation" };
+  }
+  return { ok: true, path: cited.path };
+}
+
+/**
  * Is `enable-safe` earned? Every row `pass` — which drags in every `--matrix` rule, including
  * the citation checks, because a `pass` row is exactly what those rules police — and the three
  * required rows carrying `live` evidence. Any schema failure fails this too: an unparseable
@@ -400,6 +477,13 @@ export function eligibility(text, opts = {}) {
           `row \`${row.id}\` requires LIVE evidence and carries \`${row.evidenceType}\` — ` +
             "a code path, a unit test or a manual attestation is not a live trace",
         );
+      } else if (REQUIRED_LIVE_ROWS.includes(row.id)) {
+        // It SAYS `live`. Now make it prove it: the ref must be a collected artifact for this
+        // exact probe. Without this the previous branch is satisfied by one word.
+        const art = checkLiveEvidenceArtifact(row.evidenceRef, row.id, opts.repoRoot);
+        if (!art.ok) {
+          errors.push(`row \`${row.id}\` claims LIVE evidence but its ref ${art.reason}`);
+        }
       }
     }
   }
@@ -578,7 +662,32 @@ ${USAGE}`);
  * eligibility are different properties and this list no longer blurs them.
  */
 function selfCheck() {
-  const green = greenFixture();
+  // THE POSITIVE CASES NEED REAL ARTIFACTS, because `checkLiveEvidenceArtifact` now reads the
+  // cited file's bytes. Written into a temp directory INSIDE the repo (the containment rule refuses
+  // anything outside it) and removed in the `finally` below, so the self-check leaves nothing behind
+  // that could later be mistaken for collected evidence — an artifact claiming `observed: true`
+  // must never outlive the assertion it exists for.
+  const artifactDir = resolve(repoRootDefault, "packages/backend/scripts/.selfcheck-artifacts");
+  mkdirSync(artifactDir, { recursive: true });
+  const liveRefs = {};
+  for (const probe of REQUIRED_LIVE_ROWS) {
+    const file = join(artifactDir, `${probe}.md`);
+    writeFileSync(
+      file,
+      renderArtifact({
+        probe,
+        observed: true,
+        collectedAt: "2026-01-01T00:00:00Z",
+        deployment: "self-check-fixture",
+        detail: { note: "written and deleted by --self-check" },
+      }),
+      "utf8",
+    );
+    liveRefs[probe] = `packages/backend/scripts/.selfcheck-artifacts/${probe}.md`;
+  }
+  const green = greenFixture(liveRefs);
+  // The SAME fixture with its live rows pointing at a manifest instead — the pre-artifact shape.
+  const greenCitingNonArtifacts = greenFixture();
   const overlapRef = `evidenceRef: ${fixtureRef("overlap")}#overlap`;
   // Corrupting a row by RENAMING it also makes a required row missing, so the unknown-id and
   // duplicate-id rules never run and both mutations survive. Both cases below APPEND a row, and
@@ -729,6 +838,44 @@ function selfCheck() {
         false,
     ],
     ["eligibility: a fully green fixture IS eligible", () => eligibility(green).ok === true],
+    // THE ARTIFACT RULE. The positive case above is what makes these three falsifiable: without it
+    // they would all pass on a gate that simply never says yes.
+    [
+      "eligibility: a LIVE row citing a NON-ARTIFACT is refused (the one-word relabel)",
+      () => {
+        const res = eligibility(greenCitingNonArtifacts);
+        return (
+          res.ok === false && res.errors.some((e) => /is not a collected evidence artifact/.test(e))
+        );
+      },
+    ],
+    [
+      "eligibility: a LIVE row citing ANOTHER probe's artifact is refused (the copy-paste)",
+      () => {
+        const swapped = greenFixture({
+          ...liveRefs,
+          "provider-read": liveRefs["dst-boundary"],
+        });
+        const res = eligibility(swapped);
+        return (
+          res.ok === false && res.errors.some((e) => /is an artifact for `dst-boundary`/.test(e))
+        );
+      },
+    ],
+    [
+      "eligibility: an artifact that records NO observation is refused",
+      () => {
+        const file = join(artifactDir, "unobserved.md");
+        writeFileSync(file, `${ARTIFACT_MARKER}\nprobe: provider-read\nobserved: false\n`, "utf8");
+        const res = eligibility(
+          greenFixture({
+            ...liveRefs,
+            "provider-read": "packages/backend/scripts/.selfcheck-artifacts/unobserved.md",
+          }),
+        );
+        return res.ok === false && res.errors.some((e) => /does not record an observation/.test(e));
+      },
+    ],
     [
       "eligibility: a required row relabelled live -> manual is NOT eligible",
       () => eligibility(green.replace("evidenceType: live", "evidenceType: manual")).ok === false,
@@ -786,6 +933,12 @@ function selfCheck() {
       ? `self-check: all ${cases.length} cases behaved\n`
       : `self-check: ${bad} of ${cases.length} case(s) did not\n`,
   );
+  // THE FIXTURE ARTIFACTS MUST NOT SURVIVE THIS FUNCTION. Each says `observed: true` for a probe
+  // that never ran — precisely the fabricated evidence this gate exists to refuse. Left on disk
+  // they would be citable by a later `live` row and would SATISFY the artifact rule added above,
+  // turning a hardening measure into a supply of forgeries. Removed unconditionally, including on
+  // a failing run: a red self-check is exactly when someone is editing nearby.
+  rmSync(artifactDir, { recursive: true, force: true });
   return bad === 0 ? 0 : 1;
 }
 
@@ -831,11 +984,16 @@ export const fixtureRef = (id) => {
  * on disk. Every row cites a DIFFERENT real file, because `pass` rows may not share one. It is
  * schema-valid and says NOTHING about routines - see the header's residuals.
  */
-export function greenFixture() {
-  const rows = ROW_IDS.map(
-    (id, n) =>
-      `  - id: ${id}\n    status: pass\n    evidenceType: ${REQUIRED_LIVE_ROWS.includes(id) ? "live" : "manual"}\n    evidenceRef: ${FIXTURE_REFS[n]}#${id}`,
-  ).join("\n");
+export function greenFixture(liveRefs = {}) {
+  const rows = ROW_IDS.map((id, n) => {
+    const live = REQUIRED_LIVE_ROWS.includes(id);
+    // A LIVE row cites a collected artifact when one is supplied. Without `liveRefs` this fixture
+    // is deliberately NOT eligible any more: since `checkLiveEvidenceArtifact` landed, a `live` row
+    // pointing at a manifest is exactly the relabelling the gate now refuses, and a fixture that
+    // still passed would be asserting the old, weaker rule.
+    const ref = live && liveRefs[id] ? liveRefs[id] : `${FIXTURE_REFS[n]}#${id}`;
+    return `  - id: ${id}\n    status: pass\n    evidenceType: ${live ? "live" : "manual"}\n    evidenceRef: ${ref}`;
+  }).join("\n");
   return `---\ndecision: enable-safe\ndecidedAt: 2026-01-01\ndecidedBy: fixture\nmatrix:\n${rows}\n---\n`;
 }
 

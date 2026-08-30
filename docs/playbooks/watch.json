@@ -1,6 +1,11 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
-  "tracing.md": ["packages/backend/convex/lib/foglamp.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts",
+    "packages/backend/convex/schema.ts"
+  ],
+  "tracing.md": [
+    "packages/backend/convex/lib/foglamp.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -366,7 +371,11 @@
     "scripts/smoke-stripe-read.mjs",
     "docs/connectors/stripe-suitability.md"
   ],
-  "billing.md": ["packages/billing", "packages/backend/convex/billing", "docs/billing/"],
+  "billing.md": [
+    "packages/billing",
+    "packages/backend/convex/billing",
+    "docs/billing/"
+  ],
   "connector-paypal.md": [
     "packages/revenue/src/providers/paypal",
     "packages/backend/convex/paypalAuth",
@@ -385,9 +394,13 @@
     "packages/backend/convex/knowledgeSearch",
     "packages/backend/convex/knowledgeExternalSources",
     "packages/backend/convex/knowledgeLlm",
-    "packages/backend/convex/schema.test.ts"
+    "packages/backend/convex/schema.test.ts",
+    "packages/backend/scripts/collect-recurrence-evidence"
   ],
-  "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
+  "revenue-crm.md": [
+    "packages/revenue/src/crm",
+    "packages/backend/convex/revenueCrm"
+  ],
   "revenue-finance.md": [
     "packages/revenue/src/money",
     "packages/revenue/src/finance",
