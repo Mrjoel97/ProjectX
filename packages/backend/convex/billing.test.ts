@@ -962,11 +962,21 @@ describe("no invoice, payment form or card field exists anywhere a user can see"
 
   test("no web file renders an invoice document — we serve Stripe's hosted page", () => {
     // A renderer would need a total, a line-item loop and a tax line. We serve one anchor tag's
-    // worth of surface, and today not even that: `billing.invoices` has no caller in apps/web.
+    // worth of surface, and 28.1-09 is when that anchor first appeared: this used to assert
+    // `billing.invoices` had NO caller in apps/web, which was true and was the gap, not the goal.
     const callers = Object.entries(webSources)
       .filter(([, content]) => /api\.billing\.invoices/.test(codeOf(content)))
-      .map(([path]) => path);
-    expect(callers).toEqual([]);
+      .map(([path]) => path.split("/").pop());
+    expect(callers).toEqual(["BillingPanel.tsx"]);
+
+    const panel = codeOf(
+      Object.entries(webSources).find(([path]) => path.endsWith("BillingPanel.tsx"))?.[1] ?? "",
+    );
+    // Non-vacuity: a blanked file would satisfy every negative below for the wrong reason.
+    expect(panel.length).toBeGreaterThan(2000);
+    expect(panel).toContain("hostedInvoiceUrl");
+    // …and it serves the link rather than rebuilding the document Stripe already renders.
+    expect(panel).not.toMatch(/line_items|lineItems|subtotal|amount_due|total_taxes|tax_amount/i);
   });
 });
 
