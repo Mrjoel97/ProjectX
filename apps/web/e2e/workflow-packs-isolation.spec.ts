@@ -9,11 +9,28 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 // A. So it is not the reused `page`: the trigger is something the serial WORKER accumulates.
 // Playwright gives each spec file its own worker process, which is why splitting it fixes it.
 //
-// THE ROOT CAUSE IS NOT ESTABLISHED, and this comment is here so nobody reads the green tick as if
-// it were. What is known: A's session is valid (the route renders and `settle()` succeeds), and the
-// hang is on the pack list specifically. Prime suspect is the Convex websocket in that worker after
-// the preceding test's reload loop, which would make this an app-level resilience question rather
-// than a test one. Worth a look if it recurs elsewhere.
+// ROOT CAUSE, FOUND 2026-08-30 AND REPRODUCED DETERMINISTICALLY. It is not positional and it is not
+// this test: **a rapid `page.goto` loop poisons the NEXT page in the same browser context.**
+//
+// A four-test serial probe, each test loading /dashboard/workflows and counting the buttons inside
+// `main.canvas-main` after a fixed 6s settle:
+//
+//     baseline                 buttons=14  chars=3791
+//     inside the reload loop   buttons=14  chars=3791   <- the looping page itself is FINE
+//     immediately after it     buttons=0   chars=0      <- the NEXT test renders nothing
+//
+// Five identical tests with NO loop all read buttons=14, so it is the loop and not the position.
+// In the failing state the shell is painted and the route is right (`settle()` succeeds on the
+// heading), the session is valid (`Sign out` present, no redirect), there are no console errors —
+// the client subscriptions simply never resolve, so every `useQuery` stays undefined and the page
+// content never mounts. Consistent with Convex websockets from the abandoned navigations not being
+// released before the next client opens one.
+//
+// WHY THAT MATTERS BEYOND THIS FILE: `workflow-packs.spec.ts`'s persistence test drives exactly such
+// a loop (`expect(...).toPass()` re-reads by reloading), so ANY test after it in the same worker
+// inherits the poisoned context. Splitting this file fixes it because Playwright gives each spec
+// file its own worker and therefore its own browser context. If a third test ever needs to follow a
+// reload loop, give it its own file too — or stop reloading to re-read.
 
 const STORAGE_STATE = process.env.PIKAR_E2E_STORAGE_STATE ?? "e2e/.auth/user.json";
 

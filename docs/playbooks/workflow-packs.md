@@ -1,5 +1,29 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-30 (**THE "UNEXPLAINED" SERIAL-WORKER HANG IS EXPLAINED: a rapid
+> `page.goto` loop poisons the NEXT page in the same browser context.** Reproduced deterministically
+> with a four-test serial probe counting buttons inside `main.canvas-main` after a fixed 6s settle:
+>
+>     baseline                 buttons=14  chars=3791
+>     inside the reload loop   buttons=14  chars=3791   <- the looping page itself is FINE
+>     immediately after it     buttons=0   chars=0      <- the NEXT test renders nothing
+>
+> Five identical tests with NO loop all read 14, so it is the LOOP, not the position — the earlier
+> guess ("something the serial worker accumulates") was the right neighbourhood and the wrong
+> mechanism. In the failing state the shell is painted, the route is right, the session is valid
+> (`Sign out` present, no redirect) and there are no console errors: the client subscriptions simply
+> never resolve, so every `useQuery` stays undefined and the content never mounts. Consistent with
+> Convex websockets from the abandoned navigations not being released before the next client opens.
+>
+> **This is not confined to one test.** `workflow-packs.spec.ts`'s persistence test drives exactly
+> such a loop — `expect(...).toPass()` re-reads by reloading — so ANY test after it in the same
+> worker inherits the poisoned context. Splitting the isolation test into its own file works because
+> Playwright gives each spec FILE its own worker and therefore its own browser context. A third test
+> following a reload loop needs its own file too, or a way to re-read without reloading.
+>
+> Note the loop exists only because the save had no completion signal to await; that is fixed in the
+> entry above, so the reload-retry may be reducible now.)
+
 > Last verified: 2026-08-30 (**THE SAVE NOW SAYS IT SAVED. The state to render it already existed
 > and nothing read it.** `setOutcome({kind: "saved"})` was set on the success arm and no branch
 > rendered `outcome.kind === "saved"` — only `refused` and `transport` were shown. So success and
