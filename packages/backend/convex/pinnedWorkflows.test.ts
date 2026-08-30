@@ -528,14 +528,14 @@ describe("checkReadiness answers about now, not about what the pin remembers", (
   });
 
   // THE HONESTY CONSTRAINT. A pin that names a customization must say the run will not use it.
-  // MUTATION: delete the `customization_not_applied` push → red.
+  // MUTATION: delete the `customization_applied` push → red.
   test("a pinned customization is reported as NOT applied, every time", async () => {
     const t = setup();
     await seedPack(t, "pack-brand-review", packBrandReviewSkillBody);
     await seedCustomization(t, A, { name: "pack-brand-review", templateId: "brand-review" });
     const id = await pinBrandReview(t);
     const check = await as(t, A).query(api.pinnedWorkflows.checkReadiness, { id });
-    expect(check.ok && check.notices).toEqual(["customization_not_applied"]);
+    expect(check.ok && check.notices).toEqual(["customization_applied"]);
     expect(check.ok && check.customizationPinned).toBe(true);
   });
 
@@ -830,7 +830,7 @@ describe("two presses are two runs", { timeout: 120_000 }, () => {
 
     await as(t, A).action(api.pinnedWorkflows.runAgain, { id: pin.id });
     const [event] = await pinRunEvents(t);
-    // template_republished + customization_not_applied + sources_unavailable (finance-inputs).
+    // template_republished + customization_applied + sources_unavailable (finance-inputs).
     expect(event?.payload.noticeCount).toBe(3);
     expect(event?.payload.sourceUnavailableCount).toBe(1);
     expect(event?.payload.templateVersion).toBe(4);
@@ -1112,7 +1112,7 @@ describe("the sentences this surface renders about other modules are still true 
     expect(binding.slice(sites[1] ?? 0, model)).toContain("costUsd: 0");
   });
 
-  // If this goes red, `customization_not_applied` has become a lie and the copy must change with
+  // If this goes red, `customization_applied` has become a lie and the copy must change with
   // it — a pinned customization would now reach the model.
   test("cockpit.ts still passes NO tenantSkillIds to the pack binding", () => {
     expect(cockpit).toContain("runWorkflowPack");

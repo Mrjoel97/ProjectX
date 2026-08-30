@@ -1,5 +1,17 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-08-30 (**ONE NEW AUDIT EVENT, CLASSIFIED: `agent.skill_loaded`.** Written by
+> the cockpit loop on a PINNED run only, carrying the skill name, the version that actually loaded, a
+> SHA-256 of the exact body string and a `pinned` flag — refs only (§4), and the body itself never
+> enters the payload. It exists so `run-eval-golden.mjs` can refuse to certify a skill body no run
+> exercised; `smokeAssert:observedSkillLoads` reads it back alongside `subagent.completed`.
+>
+> Classified in `AUDIT_VIEWER_EVENTS` rather than parked in the test-only `NOT_PRODUCTION` set: it is
+> written by a real code path against a real deployment, and "which body did the gate actually run"
+> is exactly a governance fact the owner should be able to see. **Rare is not the same as fake** —
+> the defect that list warns about is inventing a row for an event nothing writes, not admitting one
+> written seldom. `reportsGovernance.test.ts` caught the omission on the first full run.)
+
 > Last verified: 2026-08-30 (**MERGE-ONLY ENTRY — the Phase 29 lane integrating `origin/main`.** No
 > behaviour in this subsystem changed on the 29 side. Two things landed here and both are recorded
 > because the classification registry is the export/deletion walk's only map:

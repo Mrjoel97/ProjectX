@@ -1,5 +1,19 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-08-30 (**ROUT-01's LAST GAP CLOSED: a saved customization now changes a run.**
+> `pinnedWorkflows.checkReadiness` no longer emits `customization_not_applied` — the notice is
+> `customization_applied`, and its sentence names **current** settings because `runWorkflowPack`
+> reads the tenant's NEWEST `customizationValues` rather than the row the pin remembered. A user who
+> edits their settings after pinning gets the new ones, and that sentence is the only place they
+> would learn it.
+>
+> `customizationRunBlock` (new, `@pikar/core/workflowCustomization`) is the framing that keeps tenant
+> words DATA rather than instructions. Full rationale in `workflow-packs.md`; the part that belongs
+> here is the ordering contract, because it constrains anything else this subsystem adds to a pack
+> prompt: **code-owned source truth first, tenant settings second, untrusted user request LAST.**
+> Adding a block after the request would re-open the pronoun-antecedent failure regardless of what it
+> says about itself.)
+
 > Last verified: 2026-08-30 (**THE PLANNER WAS SKIPPING THE TENANT'S OWN VAULT**, found by the live
 > synthesizer run and closed the same day. *"What have we agreed with customers about pricing and
 > discounts?"* returned `evidenceCount: 0` while the answering document sat embedded and retrievable

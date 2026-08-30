@@ -78,8 +78,24 @@ export type PublishOutcome =
 
 // ── The copy. Deliberately module-private: it is proved by rendering the view, not by calling it. ──
 
+/**
+ * WHAT SAVING ACTUALLY DOES, stated once at the top of the form.
+ *
+ * REWRITTEN 2026-08-30, and the previous sentence is worth keeping in view because it was TRUE when
+ * written: "Pikar cannot make a workflow customization live in this release. Saving one records
+ * your settings; no workflow you start uses them yet." `runWorkflowPack` now reads the tenant's
+ * saved VALUES and renders them into the run through the approved template's own schema, so that
+ * sentence became a lie the moment the backend landed — which is why it is replaced in the same
+ * change rather than left for a later sweep.
+ *
+ * WHAT IS STILL TRUE AND STILL SAID: the settings shape WORDING, not authority. The composed
+ * `tenantSkills` body is still never activated (`planTenantActivation` refuses every `pack-*` with
+ * `PACK_GATE`), the tool grant is still `toolsForWorkflowPack(packId)` derived from the operation
+ * matrix, and no string a tenant types can widen either. The second sentence is that promise, and
+ * `WorkflowPackCustomizer.test.ts` cites the code that keeps it.
+ */
 const ACTIVATION_NOTE =
-  "Pikar cannot make a workflow customization live in this release. Saving one records your settings; no workflow you start uses them yet.";
+  "Your saved settings are applied when you run this workflow: they shape its wording, tone and how much it reports. They never change which of your sources it can read, or what it may save or send.";
 
 const TRANSPORT_ERROR = "That could not be saved. Check your connection and try again.";
 

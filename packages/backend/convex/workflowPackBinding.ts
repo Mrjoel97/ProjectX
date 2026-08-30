@@ -27,11 +27,14 @@
 // `workflowPackOutcomes.ts` joins on exactly that. See `PACK_DERIVED_METRIC_SOURCES` in @pikar/core.
 
 import {
+  customizationRunBlock,
+  customizationSchemaFor,
   MISSING_SOURCE_UNLOCK,
   PACK_SOURCE_LABEL,
   type PackOutcome,
   type PackPreflight,
   packPreflight,
+  renderCustomization,
   resolveWorkflowPack,
   toolsForWorkflowPack,
   type WorkflowPackId,
@@ -74,7 +77,21 @@ const PACK_PAUSED_REPLY =
  * six bodies cannot each name a source differently, and placed ABOVE the user's request so the
  * untrusted text stays the FINAL line (the `buildTurnPrompt` convention).
  */
-export function preflightPrompt(pre: PackPreflight, request: string): string {
+export function preflightPrompt(
+  pre: PackPreflight,
+  request: string,
+  /**
+   * The tenant's saved settings for this pack, already framed by `customizationRunBlock`. ROUT-01:
+   * this is how a saved customization TAKES EFFECT without a tenant-authored body going live — the
+   * approved template is still the governing prompt and these are inputs to it.
+   *
+   * PLACED AFTER THE SOURCE TRUTH AND BEFORE THE REQUEST, and both halves of that matter. After,
+   * so a settings note cannot contradict what code resolved about source availability. Before, so
+   * the untrusted user request stays the FINAL line and this block is never the antecedent of the
+   * user's pronouns.
+   */
+  settings?: string | null,
+): string {
   const lines = pre.sources.map(({ source, state }) => `- ${PACK_SOURCE_LABEL[source]}: ${state}`);
   const unlocks = pre.missingKnown.map(
     (s) => `- ${PACK_SOURCE_LABEL[s]} — would need ${MISSING_SOURCE_UNLOCK[s]}`,
@@ -92,6 +109,7 @@ export function preflightPrompt(pre: PackPreflight, request: string): string {
     // so there is no longer anything for a pronoun to be resolved INTO. Do not re-add one.
     ...lines,
     ...(unlocks.length > 0 ? ["", "Unreadable in this workflow at all:", ...unlocks] : []),
+    ...(settings ? ["", settings] : []),
     "",
     "The user asks:",
     request,
@@ -302,6 +320,43 @@ async function runPackTurn(
   const before =
     (await ctx.runQuery(internal.vaultSources.latestCreated, { tenantId, threadId }))?.docIds ?? [];
 
+  // ── THE SAVED CUSTOMIZATION, APPLIED (ROUT-01, 2026-08-30) ──────────────────────────────────
+  //
+  // Until now `cockpit.ts` passed no `tenantSkillIds`, so a tenant could fill in the customizer,
+  // see "Saved", and have every run ignore it — the surface said so out loud rather than pretending
+  // otherwise. This is the honest closure of that gap, and it deliberately does NOT activate the
+  // tenant's composed body: `PACK_GATE` still refuses that at every scope, because a tenant-authored
+  // PROMPT going live needs provenance/eval/browser evidence the overlay cannot carry. The VALUES
+  // are a different question. The approved template stays the governing body and these are inputs.
+  //
+  // RENDERED THROUGH THE SCHEMA, NEVER FROM THE STORED JSON DIRECTLY. `renderCustomization` iterates
+  // `schema.fields`, so a key the template has since dropped simply vanishes and an undeclared key
+  // can never reach the prompt — the same property that makes a stale saved form safe to reopen.
+  // Composed once, so the string the model receives and the string a test can read are the same
+  // object rather than two calls that could drift.
+  const saved = await ctx.runQuery(internal.skills.newestTenantCustomization, {
+    tenantId,
+    name: spec.skillName,
+  });
+  const settingsBlock =
+    saved === null
+      ? null
+      : ((): string | null => {
+          const schema = customizationSchemaFor(packId, saved.templateVersion);
+          if (!schema.ok) return null; // unknown template → run the approved body unmodified
+          try {
+            return customizationRunBlock(
+              renderCustomization(schema.value, JSON.parse(saved.customizationValues)),
+            );
+          } catch {
+            // Unparseable stored JSON is a corrupt row, not a reason to fail a run the user asked
+            // for. Fall back to the approved template exactly as if nothing were saved.
+            return null;
+          }
+        })();
+
+  const composedPrompt = preflightPrompt(flight, args.text, settingsBlock);
+
   try {
     const res = await traced(
       {
@@ -317,7 +372,7 @@ async function runPackTurn(
           skillName: spec.skillName,
           // THE grant, derived from 27-02's operation matrix. Never hand-typed, never widened here.
           toolNames: toolsForWorkflowPack(packId),
-          prompt: preflightPrompt(flight, args.text),
+          prompt: composedPrompt,
           // `turnId` IS `runId` — the join key for spend and steps (see the header).
           turnId: runId,
           threadId,
@@ -391,6 +446,13 @@ async function runPackTurn(
       outcome,
       costUsd: res.costUsd,
       skillVersion: res.skillVersion,
+      // OFFLINE ONLY, and gated on the mock rather than on an env flag or a caller argument.
+      // `__runWorkflowPackWithScript` is already the test-only door; without this there is NO way
+      // to assert that a saved customization reached the model, because a scripted mock returns a
+      // fixed reply no matter what it is asked. Testing the pieces separately would leave exactly
+      // the hole this repo has been bitten by: a capability that works and a call site that never
+      // passes it, with every unit test green.
+      ...(mockScript === undefined ? {} : { composedPrompt }),
     };
   } catch (err) {
     // The terminal lands on EVERY exit — a run that started and never terminated is a hole in every

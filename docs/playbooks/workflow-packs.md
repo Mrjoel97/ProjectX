@@ -1,5 +1,40 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-30 (**A SAVED CUSTOMIZATION NOW TAKES EFFECT — AND NOT BY ACTIVATING
+> ANYTHING.** Phase 29 shipped the customizer with the gap admitted on screen: *"Pikar cannot make a
+> workflow customization live in this release."* Two routes could close it and they are not
+> equivalent. Activating the tenant's composed `tenantSkills` body is what `PACK_GATE` refuses, and
+> refuses correctly — a tenant-authored PROMPT going live needs provenance, eval and browser evidence
+> the overlay has no column for. Applying the tenant's VALUES asks a smaller question, because what
+> the form collects is a CLOSED SCHEMA of four settings, not a prompt.
+>
+> `runWorkflowPack` now reads the tenant's newest `customizationValues`, renders them through
+> `renderCustomization(schema, values)` — schema-driven, so a key the template has since dropped
+> vanishes and an undeclared key can never reach the prompt — wraps them in
+> `customizationRunBlock`, and passes the result to `preflightPrompt`. **`PACK_GATE` is untouched,
+> `cockpit.ts` still passes no `tenantSkillIds`, and the composed body is still never activated.**
+>
+> THE ORDER IN THE PROMPT IS THE SECURITY PROPERTY, not the framing sentence. Settings sit AFTER the
+> code-owned source truth (so a note claiming a source is available is contradicted by the line above
+> it) and BEFORE the user's request (so the untrusted text stays last and the settings are never the
+> antecedent of the user's pronouns — the failure that made four `sales-call-prep` runs save the
+> preflight paragraph as their deliverable). The tool grant is still `toolsForWorkflowPack(packId)`
+> from the operation matrix; no string a tenant types can widen it.
+>
+> HOW IT IS TESTED, and why it needed a new seam. A scripted mock replies the same whatever it is
+> asked, so there was no way to observe the prompt — testing the pieces would have left the CALL SITE
+> untested, which is exactly the hole this repo has shipped before. `__runWorkflowPackWithScript`
+> (already the test-only door) now returns the composed prompt when a mock is supplied; production
+> `runWorkflowPack` is unchanged. Dropping `settingsBlock` from the call site reddens three tests.
+>
+> TWO USER-FACING SENTENCES WENT FROM TRUE TO FALSE and were rewritten in the same change, because a
+> backend fix that leaves the screen lying is not a fix: `ACTIVATION_NOTE` in the customizer, and the
+> pin notice `customization_not_applied` — renamed to `customization_applied` across all four files
+> that name it. The pin test asserts the RENDERED STRING, not the enum, because the enum was renamed
+> in the same commit and a literal-only check would have gone green over a screen still telling users
+> their settings are ignored. The new pin sentence says **current** settings: the run reads the
+> tenant's NEWEST row, not the one the pin remembered.)
+
 > Last verified: 2026-08-30 (**THE "UNEXPLAINED" SERIAL-WORKER HANG IS EXPLAINED: a rapid
 > `page.goto` loop poisons the NEXT page in the same browser context.** Reproduced deterministically
 > with a four-test serial probe counting buttons inside `main.canvas-main` after a fixed 6s settle:

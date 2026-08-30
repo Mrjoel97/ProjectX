@@ -33,7 +33,7 @@
 //     `tenantSkillIds`, so even an activated row would be inert on this path.
 //
 // So a re-run runs the APPROVED GLOBAL TEMPLATE. That is surfaced as the named, visible
-// `customization_not_applied` notice rather than described as "running your customization", and
+// `customization_applied` notice rather than described as "running your customization", and
 // the claim about `cockpit.ts` is pinned by a test that reads `cockpit.ts` — an absolute about
 // another module is only as true as the module.
 //
@@ -109,7 +109,7 @@ export type PinBlocker = "paused" | "template_not_active";
 
 export type PinNotice =
   | "template_republished"
-  | "customization_not_applied"
+  | "customization_applied"
   | "customization_missing"
   | "sources_unavailable";
 
@@ -267,7 +267,7 @@ async function readinessFor(
     notices.push(
       mine === null || mine.tenantId !== tenantId
         ? "customization_missing"
-        : "customization_not_applied",
+        : "customization_applied",
     );
   }
 

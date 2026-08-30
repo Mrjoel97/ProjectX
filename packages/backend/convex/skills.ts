@@ -2387,3 +2387,52 @@ async function logTenantActivation(
     },
   });
 }
+
+/**
+ * The tenant's newest saved customization for one pack skill, or `null`.
+ *
+ * ROUT-01 (2026-08-30): this is what makes a saved customization TAKE EFFECT. `runWorkflowPack`
+ * reads it, renders it through the approved schema and passes the result into the run as settings —
+ * the approved template stays the governing body, so nothing tenant-authored goes live and
+ * `planTenantActivation`'s `PACK_GATE` is untouched.
+ *
+ * NEWEST BY VERSION, not "the active one": there is no active tenant pack row and cannot be. It is
+ * the same `by_tenant_name_version` `take(1)` read `workflowPackDiscovery` uses to fill the form
+ * and `readTenantPublishState` uses to compute the base version, so the settings a run applies are
+ * exactly the ones the customizer last showed the user.
+ *
+ * Returns the raw stored JSON. Parsing and rendering belong to the caller, which holds the schema.
+ */
+export const newestTenantCustomization = internalQuery({
+  args: { tenantId: v.string(), name: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, name },
+  ): Promise<{
+    customizationValues: string;
+    templateVersion: number;
+    version: number;
+  } | null> => {
+    const newest = (
+      await ctx.db
+        .query("tenantSkills")
+        .withIndex("by_tenant_name_version", (q) => q.eq("tenantId", tenantId).eq("name", name))
+        .order("desc")
+        .take(1)
+    )[0];
+    // A `system` rollback baseline carries no template lineage and no values — indistinguishable
+    // from "never customized" for this purpose, and treated as such rather than half-applied.
+    if (
+      newest === undefined ||
+      newest.customizationValues === undefined ||
+      newest.templateVersion === undefined
+    ) {
+      return null;
+    }
+    return {
+      customizationValues: newest.customizationValues,
+      templateVersion: newest.templateVersion,
+      version: newest.version,
+    };
+  },
+});

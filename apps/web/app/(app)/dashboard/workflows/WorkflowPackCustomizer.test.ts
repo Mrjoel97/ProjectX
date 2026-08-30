@@ -166,13 +166,13 @@ describe("the copy says what is true — no implied activation path", () => {
   // approval" or "awaiting review" describes a queue that does not exist.
   test("the activation note is rendered as its literal sentence", () => {
     expect(visible(render())).toContain(
-      "Pikar cannot make a workflow customization live in this release. Saving one records your settings; no workflow you start uses them yet.",
+      "Your saved settings are applied when you run this workflow: they shape its wording, tone and how much it reports. They never change which of your sources it can read, or what it may save or send.",
     );
   });
 
   test("the note is on the page before a pack is chosen, so it cannot be missed", () => {
     expect(visible(render({ selectedPackId: null }))).toContain(
-      "Pikar cannot make a workflow customization live in this release.",
+      "Your saved settings are applied when you run this workflow",
     );
   });
 

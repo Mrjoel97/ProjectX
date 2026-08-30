@@ -17,7 +17,7 @@ import { WorkflowPackPreflight } from "../workspace/WorkflowPackPreflight";
 // FOUR TRUE THINGS THIS SURFACE SAYS THAT ARE UNCOMFORTABLE, and each one is a state the server
 // resolves rather than a sentence this file decided:
 //
-//   1. `customization_not_applied` — a pinned run takes the APPROVED GLOBAL TEMPLATE. A tenant's
+//   1. `customization_applied` — a pinned run takes the APPROVED GLOBAL TEMPLATE. A tenant's
 //      saved settings are a `tenantSkills` candidate, `PACK_GATE` refuses to activate one, and
 //      `cockpit.ts` passes no `tenantSkillIds`. Rendering "runs your customization" would be a lie
 //      with a green test over it.
@@ -110,8 +110,17 @@ function noticeLine(notice: Pin["notices"][number], pin: Pin): string {
   switch (notice) {
     case "template_republished":
       return `This pin remembers version ${pin.templateVersion}. Version ${pin.activeVersion} is the approved one now, and that is what Run again uses.`;
-    case "customization_not_applied":
-      return "Your saved settings for this workflow are not used. Pikar cannot make a customization live in this release, so Run again uses the approved workflow.";
+    case "customization_applied":
+      // REWRITTEN 2026-08-30. It used to read "Your saved settings for this workflow are not used.
+      // Pikar cannot make a customization live in this release, so Run again uses the approved
+      // workflow." — true when written, false the moment `runWorkflowPack` began rendering the
+      // tenant's saved VALUES into the run. Note what is still true and still said: the APPROVED
+      // workflow is what runs; the settings adjust it, they do not replace it.
+      //
+      // "current" is doing real work. The run reads the tenant's NEWEST saved settings, not the ones
+      // this pin remembered — so a user who edited them after pinning gets the new ones, and this
+      // sentence is the only place they would find that out.
+      return "Run again uses the approved workflow with your current saved settings for it — including any you changed after pinning.";
     case "customization_missing":
       return "The settings this pin remembered are no longer there. Run again uses the approved workflow.";
     case "sources_unavailable":

@@ -100,6 +100,18 @@ const DECK_SHAPE = [
  *    flattened to a total at the write site.
  */
 export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = {
+  // WHICH SKILL BODY A PINNED RUN ACTUALLY LOADED (2026-08-30). Written only when a caller pins a
+  // version — in practice the eval runner — and it is the row `smokeAssert:observedSkillLoads`
+  // reads back so `run-eval-golden.mjs` can refuse to certify a body no run exercised.
+  //
+  // Classified PRODUCTION rather than parked in `NOT_PRODUCTION`: it is written by a real code path
+  // against a real deployment, and "which body did the gate actually run" is precisely a governance
+  // fact the owner should be able to see. Rare is not the same as fake — the defect that list warns
+  // about is inventing a row for an event nothing writes, not admitting one written seldom.
+  //
+  // REFS ONLY (§4): a name, a version number, a SHA-256 of the body, and whether the run was pinned.
+  // The body itself is never in the payload, so there is nothing here to project that could leak it.
+  "agent.skill_loaded": ["skillName", "skillVersion", "skillBodyHash", "pinned"],
   "blueprint.confirmed": [
     "docId",
     "sourceDocCount",

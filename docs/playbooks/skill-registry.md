@@ -1,5 +1,35 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-30 (**THE EVAL GATE NOW VERIFIES THAT THE PINNED BODY RAN.**
+> `shouldRecordEvidence` built its certificate from `skillVersionsOf(pins)` — the caller's own claim
+> — so a green, unfiltered, non-empty run wrote `pass: true` for a body it never loaded. That is why
+> `knowledge-query-planner` / `knowledge-synthesizer` were EXEMPTED from `GATED_SKILLS` rather than
+> protected by it.
+>
+> The runner now reads back `smokeAssert:observedSkillLoads` — `subagent.completed` rows (already
+> written by `runSpecialistTurn` since 21-03) plus a new `agent.skill_loaded` row from the cockpit
+> loop — and refuses any pin absent from that set. Tenant candidates match on ROW ID and scope, never
+> `name@version`: two tenants can each own version 2. **Fail-closed on its own input:** a null
+> observation REFUSES, because "we could not look" must not read the same as "we looked".
+>
+> AN ATTRIBUTION BUG UNDER IT, worth knowing about separately: `proposeEmailPlan` stamped
+> `plans.skillVersion` from the ACTIVE row while `runCockpitAgent` loads the PINNED candidate, so on
+> every gate run the plan row named the wrong author — and `executePlan` copies that onto every
+> request row, where feedback is keyed to it. Ratings collected during a gate run trained the wrong
+> body. The mutation now takes the version that actually ran; unpinned production is unchanged.
+>
+> THE UNGATING DECISION IS HALF-CLOSED AND SAYS SO. Its forward tripwire fired on landing, as
+> written. The false-certificate half is closed (the assertion is inverted, so restoring the old
+> one-line rule reddens it). The DEADLOCK half still holds: the runner drives `llm:runCockpitAgent`
+> and cannot reach a toolless knowledge call, so gating those two would not be dangerous — it would
+> make them unactivatable. Re-gating needs BOTH false, and a second test names the verbs that will
+> say so.
+>
+> `agent.skill_loaded` is written ONLY on a pinned run: an unpinned turn's attribution already exists
+> on the plan row, and charging the cockpit hot path an audit insert plus an aggregate write per
+> message to serve a test harness is not a trade worth making. It is classified in
+> `AUDIT_VIEWER_EVENTS` — refs only: name, version, body hash, pinned flag.)
+
 > Last verified: 2026-08-30 (`knowledge-query-planner` -> **v2**, and a lesson about how to verify
 > ANY body edit. THE EDIT: v1 priced omission at zero — *"a source you leave out is reported to the
 > user, plainly, as not searched — which is honest and cheap"* — while giving inclusion the only

@@ -254,15 +254,24 @@ describe("a pinned workflow says what will actually run", () => {
     expect(button("Remove pin").disabled).toBe(false);
   });
 
-  // THE HONESTY CONSTRAINT. `PACK_GATE` refuses to activate a pack-named tenant candidate and
-  // `cockpit.ts` passes no `tenantSkillIds`, so a pinned run takes the approved global template.
-  // MUTATION: drop the `customization_not_applied` arm from `noticeLine` → red.
-  test("a pinned customization is announced as NOT used", async () => {
-    server.pins = [{ ...PIN, notices: ["customization_not_applied"], customizationPinned: true }];
+  // THE HONESTY CONSTRAINT, INVERTED 2026-08-30 WHEN THE FACT CHANGED. This test used to assert the
+  // opposite sentence — "Your saved settings for this workflow are not used" — and it was correct
+  // until `runWorkflowPack` began rendering the tenant's saved VALUES into the run. `PACK_GATE` is
+  // unchanged and still refuses to activate a pack-named tenant candidate; what changed is that
+  // applying the values never needed activation.
+  //
+  // THE ASSERTION IS ON THE RENDERED STRING, not the notice literal, because the literal was renamed
+  // in the same change and a test that only checked the enum would have gone green on a screen still
+  // telling users their settings are ignored.
+  // MUTATION: drop the `customization_applied` arm from `noticeLine` → red.
+  test("a pinned customization is announced as APPLIED, current settings and all", async () => {
+    server.pins = [{ ...PIN, notices: ["customization_applied"], customizationPinned: true }];
     await mount();
     expect(text()).toContain(
-      "Your saved settings for this workflow are not used. Pikar cannot make a customization live in this release, so Run again uses the approved workflow.",
+      "Run again uses the approved workflow with your current saved settings for it — including any you changed after pinning.",
     );
+    // The old claim must be GONE, not merely outranked by a new line elsewhere on the page.
+    expect(text()).not.toContain("are not used");
     // And it is NOT a refusal: the run still happens.
     expect(button("Run again").disabled).toBe(false);
   });
@@ -582,7 +591,7 @@ describe("what a screen reader hears, and what nobody may read", () => {
   test("no READINESS state of this surface implies anything runs by itself", async () => {
     const states: PinRow[] = [
       PIN,
-      { ...PIN, notices: ["customization_not_applied", "sources_unavailable"] },
+      { ...PIN, notices: ["customization_applied", "sources_unavailable"] },
       { ...PIN, notices: ["template_republished", "customization_missing"], activeVersion: 9 },
       { ...PIN, runnable: false, blockers: ["paused", "template_not_active"] },
     ];
