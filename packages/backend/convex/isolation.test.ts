@@ -201,6 +201,13 @@ const NON_TENANT_LEADING: Record<string, string> = {
   // is no tenant-facing caller: the only reader is `recordBillingMovement`, inside the webhook's
   // internalMutation.
   "billingEvents.by_correlation": "correlation identity read, internal; tenant filtered in code",
+  // 28.1-07. The invoice rollup is DEPLOYMENT-WIDE work, not a tenant's request: the daily cron
+  // has no tenant in hand and finds due periods across every tenant by (status, dueAt) — that IS
+  // the query, so a tenant-leading index cannot serve it. The only readers are
+  // `billingRollup.tick` and `billingRollup.periodForPost`, both internal and both reached only
+  // from the cron chain; there is no tenant-facing caller and no argument a caller could supply.
+  // The tenant-facing surface (`billing.invoices`) uses `by_tenant`, which does lead with tenantId.
+  "billingPeriods.by_status_dueAt": "deployment-wide claim scan from the cron; no tenant-facing caller",
 };
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {

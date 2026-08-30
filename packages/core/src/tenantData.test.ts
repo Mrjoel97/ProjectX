@@ -26,7 +26,8 @@ describe("tenant table classification registry", () => {
     // looked exactly the same. A tripwire nobody can distinguish from noise is not a tripwire.
     // + billingCustomers (28.1-05, the tenant<->Stripe-customer mapping).
     // + billingEvents, billingCoverage, billingUnapplied (28.1-06, the billing book of record).
-    expect(schemaTables).toHaveLength(55);
+    // + billingPeriods (28.1-07, the invoice claim row — `tenant_owned`, argued in tenantData.ts).
+    expect(schemaTables).toHaveLength(56);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });

@@ -2984,4 +2984,90 @@ export default defineSchema({
     // The re-observation key. Currency is part of it because two currencies never combine into one
     // figure (`@pikar/revenue`'s law), so a EUR balance is a different row from a USD one.
     .index("by_tenant_object_currency", ["tenantId", "stripeObjectId", "currency"]),
+  /**
+   * Phase 28.1 (BILL-04) — THE DURABLE CLAIM ROW. One period, one invoice.
+   *
+   * THIS TABLE IS THE GUARD, AND THE `Idempotency-Key` HEADER IS NOT. Stripe prunes idempotency
+   * keys once they are ~24h old and then treats a reuse as a brand-new request, so a rollup
+   * retried a day later with the identical key mints a SECOND invoice and double-bills the
+   * customer. `billingApi.ts` carries the same contract at the transport; this row is what
+   * actually holds it, because it never expires.
+   *
+   * THE STATUS MACHINE, and every transition is a mutation (exactly-once) rather than an action
+   * (at-most-once, never auto-retried):
+   *   pending  ──tick──▶ claimed ──settlePeriod──▶ posted   (terminal)
+   *                         │                  └─▶ failed   (re-claimable, up to MAX_PERIOD_ATTEMPTS)
+   *                         └── stale past CLAIM_STALE_MS ──▶ re-claimed by a later tick
+   * A `claimed` row older than the stale threshold means the scheduler chain was SEVERED — the
+   * action died between the claim and the settle. The next tick recovers it; nothing is dropped.
+   *
+   * `charges` LIVES ON THE ROW ON PURPOSE. The invoice document is bounded by what this row says
+   * it contains, not by "whatever is pending in Stripe" — `POST /v1/invoices` would otherwise
+   * sweep in every unattached invoice item the customer has, including the leftovers of a failed
+   * earlier period. `billingRollup.postInvoice` creates the invoice FIRST with
+   * `pending_invoice_items_behavior=exclude` and attaches these items to it by id.
+   *
+   * CLAUDE.md §4: no prose reaches Stripe from here. A charge carries a code-owned `kind` from a
+   * CLOSED union, and the human-readable line description is looked up from that union in
+   * `billingRollup.ts`. A free-text description field would be the one door by which customer
+   * content could be written onto a document and mailed out.
+   *
+   * NO PRODUCER EXISTS YET. Nothing in this deployment writes a row here; the rollup is complete
+   * and its input is not. Said out loud so a green suite is not read as a running biller.
+   */
+  billingPeriods: defineTable({
+    tenantId: v.string(),
+    /** The UTC month, `YYYY-MM` (`periodKeyFor`). Ref-safe, because the Stripe idempotency key —
+     *  an HTTP HEADER VALUE — is derived from it and from the tenant id. */
+    periodKey: v.string(),
+    /** The billing window, half-open `[periodStart, periodEnd)`. A charge whose `occurredAt` falls
+     *  outside it is excluded from the document rather than smuggled onto the wrong month. */
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    /** When the rollup may claim this period. Before it, `tick` leaves the row alone. */
+    dueAt: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("claimed"),
+      v.literal("posted"),
+      v.literal("failed"),
+    ),
+    charges: v.array(
+      v.object({
+        /** Unique within the period and ref-safe: it is half of the PER-ITEM idempotency key, so a
+         *  same-day retry re-sends the same item rather than adding a second copy of it. */
+        ref: v.string(),
+        kind: v.union(
+          v.literal("subscription"),
+          v.literal("usage"),
+          v.literal("adjustment"),
+        ),
+        /** POSITIVE minor units, like `billingEvents`. A credit is a Stripe credit note, not a
+         *  negative invoice line — direction never lives in the sign. */
+        amountMinor: v.number(),
+        currency: v.string(),
+        occurredAt: v.number(),
+      }),
+    ),
+    claimedAt: v.optional(v.number()),
+    postedAt: v.optional(v.number()),
+    stripeInvoiceId: v.optional(v.string()),
+    /** Stripe's `invoice.hosted_invoice_url`, validated to a `*.stripe.com` https origin before it
+     *  is stored. This is the ONLY payment surface: card or bank transfer, on Stripe's page. */
+    hostedInvoiceUrl: v.optional(v.string()),
+    /** Stripe's amount_due on the FINALIZED invoice, not our sum of `charges` — Stripe Tax adds
+     *  lines we did not send, and reporting our own subtotal as the bill would understate it. */
+    amountMinor: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    /** A code token (`stripe_http`, `no_stripe_customer`, ...). Never Stripe prose (§4). */
+    failureCode: v.optional(v.string()),
+    attempts: v.number(),
+  })
+    // `by_tenant`, leading with tenantId and carrying periodKey, so ONE index serves the erasure
+    // walk, the export walk (both hard-code `.withIndex("by_tenant")`) and the per-period lookup.
+    .index("by_tenant", ["tenantId", "periodKey"])
+    // The claim scan. Does NOT lead with tenantId — deliberately, and justified by name in
+    // `isolation.test.ts`: the rollup is deployment-wide and has no tenant in hand until it reads
+    // a row. Every consumer is an internalMutation reached only from the cron.
+    .index("by_status_dueAt", ["status", "dueAt"]),
 });

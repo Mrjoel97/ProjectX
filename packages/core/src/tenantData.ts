@@ -202,6 +202,33 @@ export const TENANT_TABLE_CLASSIFICATION = {
    * problem `billingCustomers` is deletable to avoid.
    */
   billingUnapplied: "tenant_owned",
+  /**
+   * Phase 28.1 (28.1-07) — the invoice CLAIM row: the guard that makes one billing period produce
+   * exactly one invoice. `tenant_owned`, and the neighbour it does NOT join is `billingEvents`.
+   *
+   * NOT `audit_immutable`, and the reason is the first of that category's two obligations rather
+   * than a judgement call: the writer must be INSERT-ONLY (CLAUDE.md §3), and this row EXISTS to
+   * be patched — `pending → claimed → posted|failed` is the whole mechanism. A table whose status
+   * machine is three `ctx.db.patch` calls cannot honestly claim an append-only category, exactly
+   * the argument that put `billingUnapplied` here rather than beside the ledger.
+   *
+   * The "a customer must not be able to erase Pikar's own books" argument that made `billingEvents`
+   * immutable does not reach this table, and the difference is where the MONEY is recorded. What
+   * was actually collected is a `billingEvents` row, written from the webhook, append-only and
+   * outside the erasure walk. This row is the SCHEDULING artifact that produced the document; its
+   * financial outcome survives its deletion. Pikar's books are not made erasable by making the
+   * claim erasable.
+   *
+   * Being deletable is also coherent with what the claim protects. It guards against a SECOND
+   * invoice for the same period, and `postInvoice` cannot post at all without a `billingCustomers`
+   * row — which is `tenant_owned` and is deleted by the same walk. A tenant whose periods are gone
+   * is a tenant that can no longer be invoiced, so there is nothing left for the guard to guard.
+   *
+   * And the export half is the tenant's own bill: `hostedInvoiceUrl`, the line items they were
+   * charged for, the amount and the currency. Omitting that from a data export while including
+   * `billingUnapplied` would be an incoherent pair.
+   */
+  billingPeriods: "tenant_owned",
 } as const satisfies Readonly<Record<string, TenantTableCategory>>;
 
 export type ClassifiedTenantTable = keyof typeof TENANT_TABLE_CLASSIFICATION;
