@@ -1,3 +1,22 @@
+> Last verified: 2026-08-30 (**A PLAYWRIGHT HAZARD THAT APPLIES TO EVERY SPEC UNDER `apps/web/e2e`,
+> not just the pack ones: a rapid `page.goto` loop POISONS THE NEXT PAGE in the same browser
+> context.** Reproduced deterministically — a four-test serial probe counting buttons inside
+> `main.canvas-main` after a fixed 6s settle read `14` at baseline, `14` inside the loop itself, and
+> **`0` in the very next test**; five identical tests with no loop all read `14`.
+>
+> In the failing state everything that usually indicates a broken test looks FINE: the shell is
+> painted, the route is right, the session is valid (`Sign out` present, no redirect) and the console
+> is clean. The client subscriptions simply never resolve, so every `useQuery` stays undefined and
+> the page content never mounts — which presents as a locator timeout and reads like a product bug.
+> Consistent with Convex websockets from the abandoned navigations not being released before the
+> next client opens one.
+>
+> **What to do about it:** do not re-read by reloading. If a spec must poll for server state, poll
+> without navigating; if it genuinely has to reload in a loop, put anything that runs after it in a
+> SEPARATE SPEC FILE — Playwright gives each file its own worker and therefore its own browser
+> context, which is the only reason the pack isolation test passes.
+> Full write-up in `docs/playbooks/workflow-packs.md`.)
+
 > Last verified: 2026-08-30 (29-10 — **TWO NEW E2E SPECS UNDER THIS PLAYBOOK'S WATCHED PATH, AND ONE
 > PRODUCT GAP THEY FOUND.** `apps/web/e2e/workflow-packs.spec.ts` and `workflow-packs-isolation.spec.ts`
 > gate `/dashboard/workflows` (5 passed, PW_EXIT=0). The detail that belongs HERE rather than only in
