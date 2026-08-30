@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 19192 nodes · 22981 edges · 1823 communities (1709 shown, 114 thin omitted)
+- 19192 nodes · 22981 edges · 1822 communities (1708 shown, 114 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 94 edges (avg confidence: 0.71)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5f6ba56e`
+- Built from commit: `7e3edd24`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -784,7 +784,6 @@
 - Phase 28: Connector-Backed Revenue Pack — Research
 - Phase 33 Plan 06: Reel-first canvas Summary
 - Phase 33 Plan 07: Guided intake and variations on the canvas Summary
-- Phase 19.1: Bulk Contact Import (CSV) Verification Report
 - Migration Patterns Reference
 - Convex Auth
 - compilerOptions
@@ -1366,7 +1365,6 @@
 - 12-04-PLAN.md
 - 12-05-PLAN.md
 - 12-06-PLAN.md
-- Standard Stack
 - agentSteps (table)
 - attachments (table)
 - audit (table)
@@ -1440,7 +1438,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (1823 total, 114 thin omitted)
+## Communities (1822 total, 114 thin omitted)
 
 ### Community 0 - "functions.ts"
 Cohesion: 0.05
@@ -1655,8 +1653,8 @@ Cohesion: 0.08
 Nodes (23): 1. Push Filters To Storage, 2. Minimize Data Sources, 3. Minimize Row Size, 4. Isolate Frequently-Updated Fields, 5. Match Consistency To Read Patterns, Aggregates, Backfills, Check for redundant indexes (+15 more)
 
 ### Community 63 - "notificationMessage"
-Cohesion: 0.18
-Nodes (11): Amendments after research (2026-08-10), Bulk contact import (CSV) — design, Decisions, Decomposition, Failure handling, Interface, Out of scope, Problem (+3 more)
+Cohesion: 0.13
+Nodes (15): Amendments after research (2026-08-10), Architecture, Backend — two new public functions in `contacts.ts`, Bulk contact import (CSV) — design, Decisions, Decomposition, Failure handling, Interface (+7 more)
 
 ### Community 64 - "vault.test.ts"
 Cohesion: 0.22
@@ -2303,12 +2301,12 @@ Cohesion: 0.09
 Nodes (26): buildOnboardingFolderIntake(), extension(), isOnboardingTextFile(), isPrivateOrGenerated(), MIME_BY_EXTENSION, onboardingFolderDisplayPath(), OnboardingFolderFile, onboardingFolderMimeType() (+18 more)
 
 ### Community 253 - "vaultTranscribe.test.ts"
-Cohesion: 0.20
-Nodes (9): 33.1-05 — SUMMARY, must_haves, Not done here, and stated plainly, One process defect found, worth carrying forward, Task 1 — the live probe, and what it changed, Task 2 — the adapter, Task 3 — the flag, and the mutation that earns it, The probe changed the adapter twice, and both changes were the plan being wrong in a useful way (+1 more)
+Cohesion: 0.06
+Nodes (35): dependencies, @auth/core, convex, @convex-dev/agent, @convex-dev/auth, next, @pikar/backend, @pikar/contracts (+27 more)
 
 ### Community 254 - "Phase 15.1 Plan 02: The Tier's Home — `convex/tenantProfile.ts` Summary"
 Cohesion: 0.06
-Nodes (35): dependencies, @auth/core, convex, @convex-dev/agent, @convex-dev/auth, next, @pikar/backend, @pikar/contracts (+27 more)
+Nodes (34): Add After Validation (mid-milestone), Anti-Features, Anti-Features, Anti-Features, Anti-Features, Anti-Features, Anti-Features, Capability 1 — Persona-Aware Business/Idea Evaluation Engine (+26 more)
 
 ### Community 255 - "officeText.test.ts"
 Cohesion: 0.18
@@ -2316,7 +2314,7 @@ Nodes (9): body, card, DataControls(), DeleteState, deleteTenantData, ExportStat
 
 ### Community 256 - "Phase 3.11: Inbox Reply - Research"
 Cohesion: 0.06
-Nodes (34): Add After Validation (mid-milestone), Anti-Features, Anti-Features, Anti-Features, Anti-Features, Anti-Features, Anti-Features, Capability 1 — Persona-Aware Business/Idea Evaluation Engine (+26 more)
+Nodes (31): 1. Closed native-source registry, 2. Bounded query decomposition, 3. Deterministic deduplication and scoring, 4. Toolless synthesis with citation validation, 5. Workflow-pack customization, 6. Manual pinned routine baseline, Adapter and Convex tests, Architecture Patterns (+23 more)
 
 ### Community 257 - "skilloptExport.test.ts"
 Cohesion: 0.40
@@ -2344,7 +2342,7 @@ Nodes (13): File Structure, Final verification, Global Constraints, Live Finance
 
 ### Community 263 - "buildCockpitTools"
 Cohesion: 0.06
-Nodes (31): 1. Closed native-source registry, 2. Bounded query decomposition, 3. Deterministic deduplication and scoring, 4. Toolless synthesis with citation validation, 5. Workflow-pack customization, 6. Manual pinned routine baseline, Adapter and Convex tests, Architecture Patterns (+23 more)
+Nodes (31): Agent Evaluation, Connected Product Surfaces — Pulled Before Private Beta, Connector-Backed Revenue Pack, Curated Pack Pilot, Discoverability, Email Cockpit, Executive Agent & Planning, Expansion (+23 more)
 
 ### Community 264 - "ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned"
 Cohesion: 0.18
@@ -2356,7 +2354,7 @@ Nodes (17): applyFinanceClaims(), aggregateModules, modules, writeFigureRow(), a
 
 ### Community 266 - "contactImport.ts"
 Cohesion: 0.06
-Nodes (31): Agent Evaluation, Connected Product Surfaces — Pulled Before Private Beta, Connector-Backed Revenue Pack, Curated Pack Pilot, Discoverability, Email Cockpit, Executive Agent & Planning, Expansion (+23 more)
+Nodes (30): 21-07 Task 1 — the free pre-check RAN, and it passes, Attempt 3 — run `e35a0bb4`… then run 3: the model RAN, and the gate is STILL not valid, Consequence, Fixture 28 is marginal, and this is measured rather than inferred, Root cause: 21-03's tenant pin is invisible to the golden-eval Gmail bypass, Root cause: `tenantSkillIds` is threaded through dispatch but NOT through `runCockpitAgent`, Run 3 executed for real — and the result does not measure the candidate, Run 4 — `d0afcca9`: both fixes work. **39/41, `$0.5731`.** Gate still not passed. (+22 more)
 
 ### Community 267 - "crmCard.test.ts"
 Cohesion: 0.18
@@ -2376,7 +2374,7 @@ Nodes (5): aggregateModules, modules, rateLimiterModules, workflowModules, workp
 
 ### Community 271 - "reviewThreshold.ts"
 Cohesion: 0.06
-Nodes (30): 21-07 Task 1 — the free pre-check RAN, and it passes, Attempt 3 — run `e35a0bb4`… then run 3: the model RAN, and the gate is STILL not valid, Consequence, Fixture 28 is marginal, and this is measured rather than inferred, Root cause: 21-03's tenant pin is invisible to the golden-eval Gmail bypass, Root cause: `tenantSkillIds` is threaded through dispatch but NOT through `runCockpitAgent`, Run 3 executed for real — and the result does not measure the candidate, Run 4 — `d0afcca9`: both fixes work. **39/41, `$0.5731`.** Gate still not passed. (+22 more)
+Nodes (30): Architecture Patterns, Bio Research Exclusion, Code Examples, Common Pitfalls, Connector Gates, Data — File-First Dataset Validation Pack, Design — Design and Accessibility Critique Pack, Don't Hand-Roll (+22 more)
 
 ### Community 272 - "bfsNeighbors"
 Cohesion: 0.18
@@ -2411,8 +2409,8 @@ Cohesion: 0.04
 Nodes (52): ConnectMicrosoftPage(), ADR-0018, httpAction, esc(), http, ADR-0017, ADR-0018, ADR-0024 (+44 more)
 
 ### Community 281 - "bfsNeighbors"
-Cohesion: 0.06
-Nodes (30): Architecture Patterns, Bio Research Exclusion, Code Examples, Common Pitfalls, Connector Gates, Data — File-First Dataset Validation Pack, Design — Design and Accessibility Critique Pack, Don't Hand-Roll (+22 more)
+Cohesion: 0.07
+Nodes (29): Carried-forward debt neither lane owns, Constraint on Lane A: dispatch stays tier-agnostic, Execution order: 16 → 18 → 19. The reason is a correctness hazard, not a preference., ⚠ Gate on the typecheck DELTA — `pnpm typecheck` lies, How each session starts, Locked decisions for Phase 18 (owner, 2026-07-31), Parallel Build Lanes (multi-session), Phase 14/15 additions to the shared-singleton list (+21 more)
 
 ### Community 282 - "Phase 15.2 — 15.2-07 (legacy XLS / SheetJS)"
 Cohesion: 0.20
@@ -2428,7 +2426,7 @@ Nodes (7): Phase 16 — 16-05 (the hosted search capability), Phase 17 — 17-02
 
 ### Community 285 - "ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned"
 Cohesion: 0.07
-Nodes (29): Carried-forward debt neither lane owns, Constraint on Lane A: dispatch stays tier-agnostic, Execution order: 16 → 18 → 19. The reason is a correctness hazard, not a preference., ⚠ Gate on the typecheck DELTA — `pnpm typecheck` lies, How each session starts, Locked decisions for Phase 18 (owner, 2026-07-31), Parallel Build Lanes (multi-session), Phase 14/15 additions to the shared-singleton list (+21 more)
+Nodes (29): 1. Existing `pipelineWorkflow` anatomy, 2. Reused primitives — exact signatures, 3. Proposed `deliverApprovedPlan` shape, 4. Idempotency — double-approve sends once, 5. Zero-sends-before-Approve enforcement point, 6. Redaction — what goes in audit/DLQ payloads (CLAUDE §4), 7. Smoke-test plan (matches the existing harness), 8. Open questions / risks (+21 more)
 
 ### Community 286 - "page.tsx"
 Cohesion: 0.08
@@ -2452,7 +2450,7 @@ Nodes (52): actionLabel(), ageLabel(), ApprovalKindBadge(), ApprovalsStateNotice
 
 ### Community 291 - "Phase 15 — Sub-agent dispatch + generalized executor"
 Cohesion: 0.07
-Nodes (29): 1. Existing `pipelineWorkflow` anatomy, 2. Reused primitives — exact signatures, 3. Proposed `deliverApprovedPlan` shape, 4. Idempotency — double-approve sends once, 5. Zero-sends-before-Approve enforcement point, 6. Redaction — what goes in audit/DLQ payloads (CLAUDE §4), 7. Smoke-test plan (matches the existing harness), 8. Open questions / risks (+21 more)
+Nodes (29): A1 + A5 — the refund mechanism, and reversing `media.ts`, A2 — the cross-midnight money bug, A3 — the throwing `check()`, A4 — the estimator that cannot see the cost, A6 — "the byte cap does not apply to Drive" is factually wrong, A7 — Drive metadata has no size for native docs, Claude's Discretion, Deferred Ideas (+21 more)
 
 ### Community 292 - "ADR-004: Agents and humans are peer actors over shared governed state; irreversible actions are human-only mutations"
 Cohesion: 0.33
@@ -2464,7 +2462,7 @@ Nodes (16): Call Prep, Check-in / QBR, Connectors (Optional), Demo / Presentatio
 
 ### Community 295 - "vaultDrive.test.ts"
 Cohesion: 0.07
-Nodes (29): A1 + A5 — the refund mechanism, and reversing `media.ts`, A2 — the cross-midnight money bug, A3 — the throwing `check()`, A4 — the estimator that cannot see the cost, A6 — "the byte cap does not apply to Drive" is factually wrong, A7 — Drive metadata has no size for native docs, Claude's Discretion, Deferred Ideas (+21 more)
+Nodes (29): 0. Headline, 1. Claim-by-claim reconciliation of the audit's GOVN-03 gap list, 1a. Google revocation ordering (lane brief claim), 1b. DataControls wiring (lane brief claim), 2. Offline-provable evidence (exact observed output), 2a. Backend tests, 2b. Web tests, 2c. Core tests (+21 more)
 
 ### Community 296 - "Document Drafter (v1)"
 Cohesion: 0.33
@@ -2512,11 +2510,11 @@ Nodes (11): 15.3-01 — schema, 15.3-02 — read-surface survivability + cap sin
 
 ### Community 307 - "session.ts"
 Cohesion: 0.07
-Nodes (29): 0. Headline, 1. Claim-by-claim reconciliation of the audit's GOVN-03 gap list, 1a. Google revocation ordering (lane brief claim), 1b. DataControls wiring (lane brief claim), 2. Offline-provable evidence (exact observed output), 2a. Backend tests, 2b. Web tests, 2c. Core tests (+21 more)
+Nodes (29): dependencies, ai, @ai-sdk/google, @ai-sdk/google-vertex, @ai-sdk/openai, @auth/core, @aws-sdk/client-s3, convex (+21 more)
 
 ### Community 308 - "worm.ts"
 Cohesion: 0.07
-Nodes (29): dependencies, ai, @ai-sdk/google, @ai-sdk/google-vertex, @ai-sdk/openai, @auth/core, @aws-sdk/client-s3, convex (+21 more)
+Nodes (27): files, ignoreUnknown, includes, formatter, enabled, indentStyle, indentWidth, lineWidth (+19 more)
 
 ### Community 309 - "graph.test.ts"
 Cohesion: 0.10
@@ -2524,7 +2522,7 @@ Nodes (24): InputRow(), CASH_INPUTS, CashInputField, validateCashInput(), FieldP
 
 ### Community 311 - "planTenantActivation"
 Cohesion: 0.07
-Nodes (27): files, ignoreUnknown, includes, formatter, enabled, indentStyle, indentWidth, lineWidth (+19 more)
+Nodes (27): 1.1 There is no canvas. "Live work canvas" is brand copy over a CSS section., 1.2 There is no public read path, and the default-deny posture is deliberate., 1.3 Automation is compile-time. A per-user schedule is impossible by construction., 1.4 The step vocabulary already exists as a palette., 1. Status quo — what the repo actually has today, 2. The panel protocol — the reusable mechanism for every "canvas", 3.1 Agent-built landing pages → Phase 18, as an output FORMAT, 3.2 Workflow / automation generator → a routine is a skill body plus a trigger row (+19 more)
 
 ### Community 312 - "dataModel.d.ts"
 Cohesion: 0.24
@@ -2540,7 +2538,7 @@ Nodes (26): ATTACHMENTS, attachmentUrls, byThread, CANDIDATES, clearCandidates, 
 
 ### Community 315 - "Task 7 report — the `readFinance` tool"
 Cohesion: 0.07
-Nodes (27): 1.1 There is no canvas. "Live work canvas" is brand copy over a CSS section., 1.2 There is no public read path, and the default-deny posture is deliberate., 1.3 Automation is compile-time. A per-user schedule is impossible by construction., 1.4 The step vocabulary already exists as a palette., 1. Status quo — what the repo actually has today, 2. The panel protocol — the reusable mechanism for every "canvas", 3.1 Agent-built landing pages → Phase 18, as an output FORMAT, 3.2 Workflow / automation generator → a routine is a skill body plus a trigger row (+19 more)
+Nodes (27): 1. [Rule 4-adjacent, decided on evidence] `MEDIA_SANDBOX_SNAPSHOT_ID` is NOT in the manifest — the plan's must_have is wrong, 2. [Rule 3 — the two drift directions are one atomic edit] `FAL_WEBHOOK_SECRET` was delisted in Task 2, not Task 1, 3. [Rule 1 — root cause across siblings] Five stale references outside the plan's file list, 4. [Rule 1] Two guards went red and both were RIGHT to, 5. [Rule 1 — a guard that had never matched its own documentation] `tenantSkillReview.test.ts`'s panel slice, 6. [Task-3 discovery] The D13 research premise was two-thirds wrong, 7. [Task-2 discovery, deferred not acted on] The Wan poller's retention has silently expired, 8. Two shared files carry FOREIGN uncommitted hunks (+19 more)
 
 ### Community 316 - "pipeline-uat.spec.ts"
 Cohesion: 0.13
@@ -2548,7 +2546,7 @@ Nodes (15): approveWithOneSuppressed(), Auth, authFor(), convexBin, convexRun(),
 
 ### Community 317 - "page.tsx"
 Cohesion: 0.07
-Nodes (27): 1. [Rule 4-adjacent, decided on evidence] `MEDIA_SANDBOX_SNAPSHOT_ID` is NOT in the manifest — the plan's must_have is wrong, 2. [Rule 3 — the two drift directions are one atomic edit] `FAL_WEBHOOK_SECRET` was delisted in Task 2, not Task 1, 3. [Rule 1 — root cause across siblings] Five stale references outside the plan's file list, 4. [Rule 1] Two guards went red and both were RIGHT to, 5. [Rule 1 — a guard that had never matched its own documentation] `tenantSkillReview.test.ts`'s panel slice, 6. [Task-3 discovery] The D13 research premise was two-thirds wrong, 7. [Task-2 discovery, deferred not acted on] The Wan poller's retention has silently expired, 8. Two shared files carry FOREIGN uncommitted hunks (+19 more)
+Nodes (25): A provider-specific reconnect bug was fixed, Accomplishments, Connection pages remain separate, Decisions Made, Deviations from Plan, Files Created/Modified, Next Phase Readiness, Performance (+17 more)
 
 ### Community 318 - "server.d.ts"
 Cohesion: 0.18
@@ -2556,7 +2554,7 @@ Nodes (10): Cash & Finance (QuickBooks), Commitments (Google Calendar), Customer
 
 ### Community 319 - "tenant.ts"
 Cohesion: 0.07
-Nodes (25): A provider-specific reconnect bug was fixed, Accomplishments, Connection pages remain separate, Decisions Made, Deviations from Plan, Files Created/Modified, Next Phase Readiness, Performance (+17 more)
+Nodes (26): 1. The Microsoft OAuth collision was RESOLVED, and it made `25-06` stale, 2. Production is LIVE with no admission gate — and BETA-01 is Phase 25's own requirement, 3. Production Convex is AHEAD of `main`, deployed off a feature branch, 4. GOVN-03 has orphaned scope with no plan in any phase — and 17-06 regressed its standard, 5. The blocker ordering in the previous audit was inverted for Phase 18, Baseline inventory — measured, not asserted, Blocking conditions that remain, and are NOT prerequisite completeness, Disposition — how the lane proceeds (+18 more)
 
 ### Community 320 - "VaultBrowseControls.tsx"
 Cohesion: 0.12
@@ -2588,7 +2586,7 @@ Nodes (4): ASSEMBLE_FONT, fail(), mkspeech(), smoke_assemble.sh script
 
 ### Community 327 - "connectionsSurface.test.ts"
 Cohesion: 0.07
-Nodes (26): 1. The Microsoft OAuth collision was RESOLVED, and it made `25-06` stale, 2. Production is LIVE with no admission gate — and BETA-01 is Phase 25's own requirement, 3. Production Convex is AHEAD of `main`, deployed off a feature branch, 4. GOVN-03 has orphaned scope with no plan in any phase — and 17-06 regressed its standard, 5. The blocker ordering in the previous audit was inverted for Phase 18, Baseline inventory — measured, not asserted, Blocking conditions that remain, and are NOT prerequisite completeness, Disposition — how the lane proceeds (+18 more)
+Nodes (26): 10. Rate limiting / cost kill-switch, 1. Orchestration: Convex Workflow component (replaces Inngest), 2. Auth: Convex Auth (replaces Better Auth for the beta), 3. Vector search + GraphRAG modeling, 4. Realtime UX (subscriptions), 5. Python sidecars + file storage, 6. Audit / compliance, 7. Scheduled functions (watchdog + token refresh) (+18 more)
 
 ### Community 328 - "searchVaultSpine.test.ts"
 Cohesion: 0.08
@@ -2599,8 +2597,8 @@ Cohesion: 0.02
 Nodes (78): modules, T, aggregateModules, modules, modules, modules, T, modules (+70 more)
 
 ### Community 330 - "microsoft.ts"
-Cohesion: 0.07
-Nodes (26): 10. Rate limiting / cost kill-switch, 1. Orchestration: Convex Workflow component (replaces Inngest), 2. Auth: Convex Auth (replaces Better Auth for the beta), 3. Vector search + GraphRAG modeling, 4. Realtime UX (subscriptions), 5. Python sidecars + file storage, 6. Audit / compliance, 7. Scheduled functions (watchdog + token refresh) (+18 more)
+Cohesion: 0.08
+Nodes (25): Backend Contract Plan, Backend Read Plane, Blast Radius and Pitfalls, Current Architecture, Design-to-Behavior Mapping, Empty and Failure States, Executive Finding, Existing Infrastructure (+17 more)
 
 ### Community 333 - "crmCard.test.ts"
 Cohesion: 0.50
@@ -2628,7 +2626,7 @@ Nodes (7): Environment — the deployment was DOWN and had to be recovered first
 
 ### Community 339 - "cockpitBlueprint.test.ts"
 Cohesion: 0.08
-Nodes (25): Backend Contract Plan, Backend Read Plane, Blast Radius and Pitfalls, Current Architecture, Design-to-Behavior Mapping, Empty and Failure States, Executive Finding, Existing Infrastructure (+17 more)
+Nodes (24): Agent Mode, Checklist, Convex Quickstart, Development vs Production, Environment variables, Install, Next.js (App Router), Next Steps (+16 more)
 
 ### Community 340 - "vaultDrive.test.ts"
 Cohesion: 0.20
@@ -2644,7 +2642,7 @@ Nodes (7): aggregateModules, harness(), modules, ownerHarness(), Seed, tenantHar
 
 ### Community 343 - "DriveBrowser.tsx"
 Cohesion: 0.08
-Nodes (24): Agent Mode, Checklist, Convex Quickstart, Development vs Production, Environment variables, Install, Next.js (App Router), Next Steps (+16 more)
+Nodes (24): 0. Why this phase exists — the reel is currently unreachable, 1. Decision: do NOT ship an interim restore first, 2.1 Target duration (step 2), 2.2 The Scene (step 3), 2.3 The provider grid is a real constraint — name it, don't hide it, 2.4 Narration moves to a master timeline (step 6), 2.5 The guarantees that must survive, 2.6 Sidecar and captions (step 8) (+16 more)
 
 ### Community 344 - "groundedSources.test.ts"
 Cohesion: 0.20
@@ -2672,15 +2670,15 @@ Nodes (8): 1. `## Where things stand`, 2. `## What I could not see`, 3. `## The 
 
 ### Community 350 - "createdDocs.test.ts"
 Cohesion: 0.08
-Nodes (24): 0. Why this phase exists — the reel is currently unreachable, 1. Decision: do NOT ship an interim restore first, 2.1 Target duration (step 2), 2.2 The Scene (step 3), 2.3 The provider grid is a real constraint — name it, don't hide it, 2.4 Narration moves to a master timeline (step 6), 2.5 The guarantees that must survive, 2.6 Sidecar and captions (step 8) (+16 more)
+Nodes (24): 1. Extend the Phase 21 tenant overlay, 2. Add one structurally candidate-only internal writer, 3. Expose the tool only to the Executive Agent, 4. Make owner approval and eval evidence independent, then conjunctive, 5. Replace status-only rollback eligibility for the tenant overlay, Architecture Patterns, Automated layers and commands, Common Pitfalls (+16 more)
 
 ### Community 351 - "httpAuth.test.ts"
 Cohesion: 0.08
-Nodes (24): 1. Extend the Phase 21 tenant overlay, 2. Add one structurally candidate-only internal writer, 3. Expose the tool only to the Executive Agent, 4. Make owner approval and eval evidence independent, then conjunctive, 5. Replace status-only rollback eligibility for the tenant overlay, Architecture Patterns, Automated layers and commands, Common Pitfalls (+16 more)
+Nodes (25): Phase 10: Vault->Agent Grounding, Phase 11: Persona Onboarding & Business Profile, Phase 12: Business Evaluation Engine, Phase 13: Proactive In-App Review, Phase 14: Flagship Voice-Doc Workflow, Phase 15.1: Fact-Derived Tier & Conversational Onboarding (INSERTED), Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out (INSERTED), Phase 15.3: Vault Folders - Folder Ingest, Synthesis and Drill-In (INSERTED) (+17 more)
 
 ### Community 352 - "vaultGround.test.ts"
 Cohesion: 0.08
-Nodes (25): Phase 10: Vault->Agent Grounding, Phase 11: Persona Onboarding & Business Profile, Phase 12: Business Evaluation Engine, Phase 13: Proactive In-App Review, Phase 14: Flagship Voice-Doc Workflow, Phase 15.1: Fact-Derived Tier & Conversational Onboarding (INSERTED), Phase 15.2: Vault Universal Format Recognition & Extraction Fan-Out (INSERTED), Phase 15.3: Vault Folders - Folder Ingest, Synthesis and Drill-In (INSERTED) (+17 more)
+Nodes (23): 1. Push Filters To Storage, 2. Minimize Data Sources, 3. Minimize Row Size, 4. Isolate Frequently-Updated Fields, 5. Match Consistency To Read Patterns, Aggregates, Backfills, Check for redundant indexes (+15 more)
 
 ### Community 353 - "Phase Details - Milestone v2.0"
 Cohesion: 0.22
@@ -2696,7 +2694,7 @@ Nodes (6): MemoCardBody(), retrievedLabel(), AUG, JUL, MARKDOWN, render()
 
 ### Community 357 - "vaultSealing.test.ts"
 Cohesion: 0.08
-Nodes (23): 1. Push Filters To Storage, 2. Minimize Data Sources, 3. Minimize Row Size, 4. Isolate Frequently-Updated Fields, 5. Match Consistency To Read Patterns, Aggregates, Backfills, Check for redundant indexes (+15 more)
+Nodes (23): Critical Pitfalls, Integration Gotchas, "Looks Done But Isn't" Checklist, Performance / Cost Traps, Pitfall 10: Durable-orchestration learning curve eats the timeline, Pitfall 11: Integration scope creep (the "provider-agnostic adapter" trap), Pitfall 12: Multi-user isolation retrofitted instead of designed in, Pitfall 1: Google OAuth verification silently kills the 4-week plan (Gmail send) (+15 more)
 
 ### Community 358 - "optimizerBreach.ts"
 Cohesion: 0.29
@@ -2727,12 +2725,12 @@ Cohesion: 0.33
 Nodes (6): flushTelemetry(), Fog, IntegrationContext, IntegrationInput, traced(), foglamp
 
 ### Community 366 - "How to verify"
-Cohesion: 0.08
-Nodes (23): Critical Pitfalls, Integration Gotchas, "Looks Done But Isn't" Checklist, Performance / Cost Traps, Pitfall 10: Durable-orchestration learning curve eats the timeline, Pitfall 11: Integration scope creep (the "provider-agnostic adapter" trap), Pitfall 12: Multi-user isolation retrofitted instead of designed in, Pitfall 1: Google OAuth verification silently kills the 4-week plan (Gmail send) (+15 more)
+Cohesion: 0.09
+Nodes (22): ACTN-02 IS STILL NOT SATISFIED, Anchor Drift Report, Claims in the plan that were FALSE at HEAD, Commits, Deviations from Plan, Measured Evidence, Mutation Ledger, Next Plan Readiness (+14 more)
 
 ### Community 367 - "dataModel.d.ts"
 Cohesion: 0.09
-Nodes (22): ACTN-02 IS STILL NOT SATISFIED, Anchor Drift Report, Claims in the plan that were FALSE at HEAD, Commits, Deviations from Plan, Measured Evidence, Mutation Ledger, Next Plan Readiness (+14 more)
+Nodes (22): CAN-SPAM footer and the unsubscribe link, Claude's Discretion, Consent record (SC#4), Deferred Ideas, Established Patterns, Existing Code Insights, How contacts get created, How CRM writes reach the Approve gate (+14 more)
 
 ### Community 368 - "ADR-010: `SPECIALIST_ROUTES` is a SUPERSET of what `diagnose()` emits"
 Cohesion: 0.33
@@ -2740,7 +2738,7 @@ Nodes (6): ADR-010: `SPECIALIST_ROUTES` is a SUPERSET of what `diagnose()` emits
 
 ### Community 369 - "metering.ts"
 Cohesion: 0.09
-Nodes (22): CAN-SPAM footer and the unsubscribe link, Claude's Discretion, Consent record (SC#4), Deferred Ideas, Established Patterns, Existing Code Insights, How contacts get created, How CRM writes reach the Approve gate (+14 more)
+Nodes (22): 1. `requireOwner` is BUILT — reuse it, do not build it, 2. Invites are EMAIL-BOUND (owner decision 2026-08-09) — reverses `09-CONTEXT.md`, 3. Outlook is FULL PARITY (owner decision 2026-08-09) — the de-scope lever was NOT taken, 4. The isolation surface grew by an order of magnitude, Additions since 2026-07-24, BETA-02 / BETA-05 shape — the isolation gate, Bookkeeping defects to correct during this phase, Claude's Discretion (+14 more)
 
 ### Community 370 - "cashSpine.ts"
 Cohesion: 0.53
@@ -2748,15 +2746,15 @@ Nodes (3): CashInputState, age(), financeSpineLine()
 
 ### Community 372 - "ADR-019: The scene timeline supersedes the uniform block deck"
 Cohesion: 0.09
-Nodes (22): 1. `requireOwner` is BUILT — reuse it, do not build it, 2. Invites are EMAIL-BOUND (owner decision 2026-08-09) — reverses `09-CONTEXT.md`, 3. Outlook is FULL PARITY (owner decision 2026-08-09) — the de-scope lever was NOT taken, 4. The isolation surface grew by an order of magnitude, Additions since 2026-07-24, BETA-02 / BETA-05 shape — the isolation gate, Bookkeeping defects to correct during this phase, Claude's Discretion (+14 more)
+Nodes (22): Critical Pitfalls, Integration Gotchas, "Looks Done But Isn't" Checklist, Performance / Cost Traps, Pitfall 1: Agent-authored skill self-activates live (self-modification bypasses the eval gate), Pitfall 2: Untrusted vault/web content becomes instructions (indirect prompt injection through grounding + research), Pitfall 3: Multi-agent dispatch fans out into runaway loops / cost / context bloat with no accountability, Pitfall 4: Business-evaluation engine emits generic / hallucinated / fabricated-gap advice with false confidence (+14 more)
 
 ### Community 373 - "n"
 Cohesion: 0.09
-Nodes (22): Critical Pitfalls, Integration Gotchas, "Looks Done But Isn't" Checklist, Performance / Cost Traps, Pitfall 1: Agent-authored skill self-activates live (self-modification bypasses the eval gate), Pitfall 2: Untrusted vault/web content becomes instructions (indirect prompt injection through grounding + research), Pitfall 3: Multi-agent dispatch fans out into runaway loops / cost / context bloat with no accountability, Pitfall 4: Business-evaluation engine emits generic / hallucinated / fabricated-gap advice with false confidence (+14 more)
+Nodes (23): Phase 03.2.1: Agent-Driven Cockpit (INSERTED), Phase 1: Foundation & Governance Substrate, Phase 2: Thin End-to-End Slice, Phase 33.1: Media provider migration to OpenRouter: grok-imagine-video replaces sora-2 before the Videos API withdrawal, gpt-image-2 onto OpenRouter with native batching, and the persistDeck music-field fix (INSERTED), Phase 3.10: Cockpit Conversation Repair (INSERTED), Phase 3.11: Inbox Reply (INSERTED), Phase 3.1: Cockpit Core (INSERTED), Phase 3.2: Inbox Reading (INSERTED) (+15 more)
 
 ### Community 374 - "stepText"
 Cohesion: 0.09
-Nodes (23): Phase 03.2.1: Agent-Driven Cockpit (INSERTED), Phase 1: Foundation & Governance Substrate, Phase 2: Thin End-to-End Slice, Phase 33.1: Media provider migration to OpenRouter: grok-imagine-video replaces sora-2 before the Videos API withdrawal, gpt-image-2 onto OpenRouter with native batching, and the persistDeck music-field fix (INSERTED), Phase 3.10: Cockpit Conversation Repair (INSERTED), Phase 3.11: Inbox Reply (INSERTED), Phase 3.1: Cockpit Core (INSERTED), Phase 3.2: Inbox Reading (INSERTED) (+15 more)
+Nodes (21): Accepted risks, Auth, Gmail OAuth, tokens, Claude's Discretion, Content plane vs log plane (CLAUDE.md §4 boundary), Correlation and identifiers, Deferred Ideas, Established Patterns, Executive Agent — routing and LLM surface (+13 more)
 
 ### Community 375 - "deletableTables"
 Cohesion: 0.29
@@ -2776,7 +2774,7 @@ Nodes (6): How It Works, If Connectors Available, Output, /process-doc, Tips, Us
 
 ### Community 379 - "badge"
 Cohesion: 0.09
-Nodes (21): Accepted risks, Auth, Gmail OAuth, tokens, Claude's Discretion, Content plane vs log plane (CLAUDE.md §4 boundary), Correlation and identifiers, Deferred Ideas, Established Patterns, Executive Agent — routing and LLM surface (+13 more)
+Nodes (21): Claude's Discretion, Cost, metering & accessibility, Deferred Ideas, Entry point & document scoping, Established Patterns, Existing Code Insights, Governance invariants (locked — carried forward, not decisions to revisit), Grounding — how the report reaches the live agent (+13 more)
 
 ### Community 380 - "Anthropic Knowledge-Work Plugins"
 Cohesion: 0.33
@@ -2784,7 +2782,7 @@ Nodes (5): Anthropic Knowledge-Work Plugins, Note on the upstream root `LICENSE`
 
 ### Community 381 - "ADR-018: One Microsoft connection, not two — Calendar and Mail share a single delegated grant"
 Cohesion: 0.09
-Nodes (21): Claude's Discretion, Cost, metering & accessibility, Deferred Ideas, Entry point & document scoping, Established Patterns, Existing Code Insights, Governance invariants (locked — carried forward, not decisions to revisit), Grounding — how the report reaches the live agent (+13 more)
+Nodes (21): Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, How `vaultSweep.test.ts` drives a migration under convex-test, Issues Encountered, Metrics (+13 more)
 
 ### Community 382 - "emailBusinessAction"
 Cohesion: 0.29
@@ -2792,11 +2790,11 @@ Nodes (6): How to run this, Never, Sales Call Prep (v1), The prep — every sect
 
 ### Community 383 - "deltaLine"
 Cohesion: 0.09
-Nodes (21): Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, How `vaultSweep.test.ts` drives a migration under convex-test, Issues Encountered, Metrics (+13 more)
+Nodes (21): Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Draft key version bump, Files Modified, Issues Encountered, Measurement error caught (not a code deviation, but the phase's own lesson repeating) (+13 more)
 
 ### Community 384 - "PlanAttachments"
 Cohesion: 0.09
-Nodes (21): Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Draft key version bump, Files Modified, Issues Encountered, Measurement error caught (not a code deviation, but the phase's own lesson repeating) (+13 more)
+Nodes (21): Citation validation is a trust boundary (NOT a place to be lazy), Claude's Discretion, Deferred Ideas, Definition of done, Drift — two stages, no separate detector, Existing-code improvement in scope, Implementation Decisions, Parallel-lane constraint (READ BEFORE PLANNING WAVES) (+13 more)
 
 ### Community 385 - "page.tsx"
 Cohesion: 0.25
@@ -2804,11 +2802,11 @@ Nodes (7): Campaign Plan (v1), How to run this, Never, The plan, What you can ac
 
 ### Community 387 - "knowledgeWorkProvenance.test.ts"
 Cohesion: 0.09
-Nodes (21): Citation validation is a trust boundary (NOT a place to be lazy), Claude's Discretion, Deferred Ideas, Definition of done, Drift — two stages, no separate detector, Existing-code improvement in scope, Implementation Decisions, Parallel-lane constraint (READ BEFORE PLANNING WAVES) (+13 more)
+Nodes (21): Claude's Discretion, D10 — Caps for an assembled job (LOCKED, owner, 2026-08-01 — SUPERSEDES D4's numbers), D11 — The renderer runs in `apps/web`, token-free (LOCKED, owner, 2026-08-01), D12 — Two corrections the re-scope forces (from `20-RESEARCH-DELTA.md`), D13 — LongCat-Video: evaluated, DECLINED for now, settled at the live gate (owner, 2026-08-01), D14 — SC #1's wording was wrong and is corrected (2026-08-01), D1 — Surface: a new `media` specialist route (LOCKED, owner, 2026-08-01), D2 — The media specialist PROPOSES and OPENS THE CANVAS; it never GENERATES (LOCKED) (+13 more)
 
 ### Community 389 - "matchHint"
 Cohesion: 0.09
-Nodes (21): Claude's Discretion, D10 — Caps for an assembled job (LOCKED, owner, 2026-08-01 — SUPERSEDES D4's numbers), D11 — The renderer runs in `apps/web`, token-free (LOCKED, owner, 2026-08-01), D12 — Two corrections the re-scope forces (from `20-RESEARCH-DELTA.md`), D13 — LongCat-Video: evaluated, DECLINED for now, settled at the live gate (owner, 2026-08-01), D14 — SC #1's wording was wrong and is corrected (2026-08-01), D1 — Surface: a new `media` specialist route (LOCKED, owner, 2026-08-01), D2 — The media specialist PROPOSES and OPENS THE CANVAS; it never GENERATES (LOCKED) (+13 more)
+Nodes (21): Anti-vacuity, Backend (`skills.ts`), Deviations, Four mutations that were GREEN (or red for the wrong reason) on first attempt, Graph, Measured Results, Mutation Ledger, Next (+13 more)
 
 ### Community 390 - "reportPack.ts"
 Cohesion: 0.40
@@ -2816,19 +2814,19 @@ Nodes (3): sources, NOTE: `internalQuery`/`internalMutation`/`internalAction` ar
 
 ### Community 391 - "SenderCell"
 Cohesion: 0.09
-Nodes (21): Anti-vacuity, Backend (`skills.ts`), Deviations, Four mutations that were GREEN (or red for the wrong reason) on first attempt, Graph, Measured Results, Mutation Ledger, Next (+13 more)
+Nodes (21): 1. Add a tenant-owned registry overlay, 2. Publish an adaptation, not an unguarded replacement, 3. Reuse the existing gate with unambiguous tenant pins, 4. Saved prompts are the pre-beta routine, Anti-vacuity and mutation checks, Authorization and capability, Cockpit and saved prompts, Definition of done (+13 more)
 
 ### Community 392 - "Phase 21 Research: User-Authored Skills & Routines"
 Cohesion: 0.09
-Nodes (21): 1. Add a tenant-owned registry overlay, 2. Publish an adaptation, not an unguarded replacement, 3. Reuse the existing gate with unambiguous tenant pins, 4. Saved prompts are the pre-beta routine, Anti-vacuity and mutation checks, Authorization and capability, Cockpit and saved prompts, Definition of done (+13 more)
+Nodes (21): Additive schema ownership, Approvals, Automated layers, Command Center v2, Content, Cross-Cutting Architecture, Executive Finding, Existing rails to reuse (+13 more)
 
 ### Community 393 - "Phase 26: Connected Product Pages - Research"
 Cohesion: 0.09
-Nodes (21): Additive schema ownership, Approvals, Automated layers, Command Center v2, Content, Cross-Cutting Architecture, Executive Finding, Existing rails to reuse (+13 more)
+Nodes (21): (1) vault→agent wiring — the immediate root, (2) real sub_agent dispatch — one governed loop, swappable (skill, toolset), (3) business-evaluation engine + scheduled proactive in-app review, (4) non-email tools (calendar · web research · doc/content creation · contacts/CRM), (5) media canvas over the Pikar-Ai MCP service, (6) dynamic / agent-authored skills over the eval-gated registry, Anti-Pattern 1: Making an external side-effect an LLM tool, Anti-Pattern 2: A sub-agent as a nested `generateText` loop (+13 more)
 
 ### Community 394 - "Architecture Research"
-Cohesion: 0.09
-Nodes (21): (1) vault→agent wiring — the immediate root, (2) real sub_agent dispatch — one governed loop, swappable (skill, toolset), (3) business-evaluation engine + scheduled proactive in-app review, (4) non-email tools (calendar · web research · doc/content creation · contacts/CRM), (5) media canvas over the Pikar-Ai MCP service, (6) dynamic / agent-authored skills over the eval-gated registry, Anti-Pattern 1: Making an external side-effect an LLM tool, Anti-Pattern 2: A sub-agent as a nested `generateText` loop (+13 more)
+Cohesion: 0.10
+Nodes (20): 1. Use point-in-time reads when live updates are not valuable, 2. Batch related data into fewer queries, 3. Use skip to avoid unnecessary subscriptions, 4. Isolate frequently-updated fields into separate documents, 5. Use the aggregate component for counts and sums, 6. Narrow query read sets, 7. Remove `Date.now()` from queries, 8. Consider pagination strategy (+12 more)
 
 ### Community 395 - "ReconnectBanner.tsx"
 Cohesion: 0.16
@@ -2844,11 +2842,11 @@ Nodes (14): 1. Purpose, 2. The suite (4 skills), 3. The self-improvement loop (o
 
 ### Community 398 - "Fix Order"
 Cohesion: 0.10
-Nodes (20): 1. Use point-in-time reads when live updates are not valuable, 2. Batch related data into fewer queries, 3. Use skip to avoid unnecessary subscriptions, 4. Isolate frequently-updated fields into separate documents, 5. Use the aggregate component for counts and sums, 6. Narrow query read sets, 7. Remove `Date.now()` from queries, 8. Consider pagination strategy (+12 more)
+Nodes (20): 1. Existing agent-thread setup (file paths + what exists), 2. Tool-definition pattern for proposeEmailPlan / executePlan, 3. Skills registry — loading the drafter body + seeding, 4. Proposed `artifacts` table schema (redaction-safe), 5. executePlan → deliverApprovedPlan handoff seam + idempotency, 6. SMOKE:: offline draft path, 7. Open questions / risks, Metadata (+12 more)
 
 ### Community 399 - "Phase 3.1: Cockpit Core — Research (AGENT-THREAD + TOOLS + ARTIFACTS lane)"
 Cohesion: 0.10
-Nodes (20): 1. Existing agent-thread setup (file paths + what exists), 2. Tool-definition pattern for proposeEmailPlan / executePlan, 3. Skills registry — loading the drafter body + seeding, 4. Proposed `artifacts` table schema (redaction-safe), 5. executePlan → deliverApprovedPlan handoff seam + idempotency, 6. SMOKE:: offline draft path, 7. Open questions / risks, Metadata (+12 more)
+Nodes (20): 1. What exists to reuse (exact paths), 2. Connect-Gmail bug — current state after `18c8442`, 3. Resizable two-pane — recommendation, 4. Artifact-card rendering (PLAN / DRAFT / REPORT) + live REPORT, 5. Teal token wiring, 6. Open questions / risks, 7. Integration seams consumed from siblings (names only, not internals), Metadata (+12 more)
 
 ### Community 400 - "routing.ts"
 Cohesion: 0.25
@@ -2860,7 +2858,7 @@ Nodes (5): modules, seedRequest(), seedTelemetry(), seedTelemetryFixture(), T
 
 ### Community 403 - "Phase 3.1: Cockpit Core — Research (UI / Frontend lane)"
 Cohesion: 0.10
-Nodes (20): 1. What exists to reuse (exact paths), 2. Connect-Gmail bug — current state after `18c8442`, 3. Resizable two-pane — recommendation, 4. Artifact-card rendering (PLAN / DRAFT / REPORT) + live REPORT, 5. Teal token wiring, 6. Open questions / risks, 7. Integration seams consumed from siblings (names only, not internals), Metadata (+12 more)
+Nodes (20): Accomplishments, Auto-fixed Issues, Backend `tsc --noEmit` error count (for plan 02 to compare against), Chosen threshold values, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified (+12 more)
 
 ### Community 404 - "Design"
 Cohesion: 0.17
@@ -2868,27 +2866,27 @@ Nodes (12): Accessibility (§6 — requirements, not suggestions), Attach a vaul
 
 ### Community 405 - "Phase 15.1 Plan 01: Wave-0 Freeze — Fact-Derived Tier Summary"
 Cohesion: 0.10
-Nodes (20): Accomplishments, Auto-fixed Issues, Backend `tsc --noEmit` error count (for plan 02 to compare against), Chosen threshold values, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified (+12 more)
+Nodes (20): Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Modified, Issues Encountered, Metrics, Mutation-check results (+12 more)
 
 ### Community 406 - "Phase 15.1 Plan 03: The Subtraction — No Caller-Supplied Tier Summary"
 Cohesion: 0.10
-Nodes (20): Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Modified, Issues Encountered, Metrics, Mutation-check results (+12 more)
+Nodes (20): Already ruled out — do NOT re-investigate, Claude's Discretion, Data model, Deferred Ideas, Definition of done, `extractGraph` cap, Format coverage, Implementation Decisions (+12 more)
 
 ### Community 407 - "Implementation Decisions"
 Cohesion: 0.10
-Nodes (20): Already ruled out — do NOT re-investigate, Claude's Discretion, Data model, Deferred Ideas, Definition of done, `extractGraph` cap, Format coverage, Implementation Decisions (+12 more)
+Nodes (20): 1. Fixture 36's op-type gap — CLOSED, and it went red, 2. `e2e/pipeline.spec.ts` — RAN, 2/2 PASSED, 3. The `media-director` gating hole — RESOLVED, and it was not an owner call, Auto-fixed, Dependency graph, Deviations from plan, Folded-in items, Issues encountered (+12 more)
 
 ### Community 408 - "Phase 19 Plan 10: Close the phase honestly Summary"
 Cohesion: 0.10
-Nodes (20): 1. Fixture 36's op-type gap — CLOSED, and it went red, 2. `e2e/pipeline.spec.ts` — RAN, 2/2 PASSED, 3. The `media-director` gating hole — RESOLVED, and it was not an owner call, Auto-fixed, Dependency graph, Deviations from plan, Folded-in items, Issues encountered (+12 more)
+Nodes (20): 19-13 CONTINUATION — the paperwork the owner would not let stand, Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Measured, this session (+12 more)
 
 ### Community 409 - "Phase 19 Plan 13: Consent Record Gap Closure Summary"
 Cohesion: 0.10
-Nodes (20): 19-13 CONTINUATION — the paperwork the owner would not let stand, Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Measured, this session (+12 more)
+Nodes (20): Anti-vacuity, Biome, measured against HEAD rather than asserted, Deviations, Graph, Measured Results, Mutation Ledger, Next, NOT DONE AND NOT CLAIMED (+12 more)
 
 ### Community 410 - "Phase 21 Plan 03: Exact Tenant Candidate Evaluation Summary"
 Cohesion: 0.10
-Nodes (20): Anti-vacuity, Biome, measured against HEAD rather than asserted, Deviations, Graph, Measured Results, Mutation Ledger, Next, NOT DONE AND NOT CLAIMED (+12 more)
+Nodes (20): Architecture constraints (must hold), D10 — image plans on approvals can NEVER approve, D11 — memo card renders raw markdown; sources withheld, D12 — env manifest blind spots + dead fal code, D13 — DLQ is write-only, D14 — ADR drift, D1 — batchToRender refusal writes no terminal (primary silent stall), D2 — renderReel scheduled bare (no retrier, no onComplete) (+12 more)
 
 ### Community 411 - "VaultBrowseControls.tsx"
 Cohesion: 0.29
@@ -2896,11 +2894,11 @@ Nodes (8): DIRECTORY_INPUT_ATTRIBUTES, FolderOpenControl(), dropzoneSource, Vaul
 
 ### Community 412 - "searchVaultSpine.test.ts"
 Cohesion: 0.10
-Nodes (20): Architecture constraints (must hold), D10 — image plans on approvals can NEVER approve, D11 — memo card renders raw markdown; sources withheld, D12 — env manifest blind spots + dead fal code, D13 — DLQ is write-only, D14 — ADR drift, D1 — batchToRender refusal writes no terminal (primary silent stall), D2 — renderReel scheduled bare (no retrier, no onComplete) (+12 more)
+Nodes (20): 0. Prerequisites — a runnable authenticated stack, 0b. Two things to hold me to, 10. Final approval — HOME-01 and all of Phase 26, 1. Desktop / tablet / mobile, 26-20 Task 2 — Command Center v2 and Phase 26 owner UAT (BLOCKING, open), 2. Clear the blockers IN ORDER, and record each recommendation, 3. The binding-constraint card, including the INSUFFICIENT copy, 4. Read each source stat's definition and confirm it matches what the backend counts (+12 more)
 
 ### Community 413 - "26-20 Task 2 — Command Center v2 and Phase 26 owner UAT (BLOCKING, open)"
 Cohesion: 0.10
-Nodes (20): 0. Prerequisites — a runnable authenticated stack, 0b. Two things to hold me to, 10. Final approval — HOME-01 and all of Phase 26, 1. Desktop / tablet / mobile, 26-20 Task 2 — Command Center v2 and Phase 26 owner UAT (BLOCKING, open), 2. Clear the blockers IN ORDER, and record each recommendation, 3. The binding-constraint card, including the INSUFFICIENT copy, 4. Read each source stat's definition and confirm it matches what the backend counts (+12 more)
+Nodes (20): Architecture Approach, Confidence Assessment, Critical Pitfalls, Executive Summary, Expected Features, Gaps to Address, Implications for Roadmap, Key Findings (+12 more)
 
 ### Community 414 - "Process / SOP Builder (v1)"
 Cohesion: 0.29
@@ -2912,7 +2910,7 @@ Nodes (23): aggregateModules, drainBothRails(), filesCosting(), manifestOf(), mo
 
 ### Community 416 - "Implications for Roadmap"
 Cohesion: 0.10
-Nodes (20): Architecture Approach, Confidence Assessment, Critical Pitfalls, Executive Summary, Expected Features, Gaps to Address, Implications for Roadmap, Key Findings (+12 more)
+Nodes (19): 15-minute cap + abnormal end, Accessibility, Brief detail, Brief + plan handoff, Claude's Discretion, Consent & privacy, Conversation feel, Deferred Ideas (+11 more)
 
 ### Community 417 - "workflowPackDiscovery.test.ts"
 Cohesion: 0.50
@@ -2920,23 +2918,23 @@ Nodes (3): deletableTables(), schemaSource, schemaTables
 
 ### Community 418 - "Implementation Decisions"
 Cohesion: 0.10
-Nodes (19): 15-minute cap + abnormal end, Accessibility, Brief detail, Brief + plan handoff, Claude's Discretion, Consent & privacy, Conversation feel, Deferred Ideas (+11 more)
+Nodes (19): §4 audit-plane compliance, Dependency graph, Deviations from Plan, In-app surface (production build, real browser), Issues Encountered, Metrics, Phase 13 Plan 04: Live Verification Summary, Pre-run snapshot (+11 more)
 
 ### Community 419 - "Phase 13 Plan 04: Live Verification Summary"
 Cohesion: 0.10
-Nodes (19): §4 audit-plane compliance, Dependency graph, Deviations from Plan, In-app surface (production build, real browser), Issues Encountered, Metrics, Phase 13 Plan 04: Live Verification Summary, Pre-run snapshot (+11 more)
+Nodes (19): Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, How `buildSpecialistPrompt` was driven from the test, Issues Encountered, Metrics, Mutation-check results (+11 more)
 
 ### Community 420 - "Phase 15.1 Plan 05: The Tier Becomes Perceivable Summary"
 Cohesion: 0.10
-Nodes (19): Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, How `buildSpecialistPrompt` was driven from the test, Issues Encountered, Metrics, Mutation-check results (+11 more)
+Nodes (19): Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Mutation-check results, Next Phase Readiness (+11 more)
 
 ### Community 421 - "Phase 15.1 Plan 06: Ask, Don't Guess — the Conversational Turn Summary"
 Cohesion: 0.10
-Nodes (19): Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Mutation-check results, Next Phase Readiness (+11 more)
+Nodes (19): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+11 more)
 
 ### Community 422 - "Phase 15 Plan 03: The Governed Dispatcher Summary"
 Cohesion: 0.10
-Nodes (19): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+11 more)
+Nodes (19): Claude's Discretion, D10 — "SOPHISTICATED": agentic depth on hosted search (owner directive, 2026-07-27) (LOCKED), D11 — "HIGHLY RELIABLE": a degradation contract, proven two ways (owner, 2026-07-27) (LOCKED), D12 — the research route gets its OWN wall-clock budget (owner, 2026-07-27) (LOCKED), D1 — Web access: OpenAI's HOSTED web_search (LOCKED), D2 — One swap seam, not an abstraction layer (LOCKED), D3 — `research` joins the closed route union (LOCKED), D4 — The tool-set is the containment (derived from SC#1, non-negotiable) (+11 more)
 
 ### Community 423 - "scorecard.py"
 Cohesion: 0.40
@@ -2948,47 +2946,47 @@ Nodes (10): aggregateModules, completeJourney(), modules, provUsage(), rateLimit
 
 ### Community 425 - "Implementation Decisions"
 Cohesion: 0.10
-Nodes (19): Claude's Discretion, D10 — "SOPHISTICATED": agentic depth on hosted search (owner directive, 2026-07-27) (LOCKED), D11 — "HIGHLY RELIABLE": a degradation contract, proven two ways (owner, 2026-07-27) (LOCKED), D12 — the research route gets its OWN wall-clock budget (owner, 2026-07-27) (LOCKED), D1 — Web access: OpenAI's HOSTED web_search (LOCKED), D2 — One swap seam, not an abstraction layer (LOCKED), D3 — `research` joins the closed route union (LOCKED), D4 — The tool-set is the containment (derived from SC#1, non-negotiable) (+11 more)
+Nodes (19): Accomplishments, Auto-fixed Issues, Decisions Made, Declared (planned) deviation, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+11 more)
 
 ### Community 426 - "Phase 17.1 Plan 02: Blueprint Substrate & the business-blueprint Skill Row Summary"
 Cohesion: 0.10
-Nodes (19): Accomplishments, Auto-fixed Issues, Decisions Made, Declared (planned) deviation, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+11 more)
+Nodes (19): 1. [Rule 1 — root cause, sibling caller] `titleFor` carried the same defect one element up, 2. [Rule 2 — provenance safety] `plans.ts` `resetPlan` clears `sources` (a file outside the plan's list), 3. [Rule 3 — a stale comment that argued against the change] `dispatch.ts:1096-1098`, 4. `evaluations.ts` was normalised from CRLF to LF on disk, 5. Commit granularity: RED and GREEN per task, four commits, Accomplishments, Dependency graph, Deviations from Plan (+11 more)
 
 ### Community 427 - "Phase 25.1 Plan 05: Memo Rendering & Research Sources Summary"
 Cohesion: 0.10
-Nodes (19): 1. [Rule 1 — root cause, sibling caller] `titleFor` carried the same defect one element up, 2. [Rule 2 — provenance safety] `plans.ts` `resetPlan` clears `sources` (a file outside the plan's list), 3. [Rule 3 — a stale comment that argued against the change] `dispatch.ts:1096-1098`, 4. `evaluations.ts` was normalised from CRLF to LF on disk, 5. Commit granularity: RED and GREEN per task, four commits, Accomplishments, Dependency graph, Deviations from Plan (+11 more)
+Nodes (19): Acceptance criteria, Constraints that bind every plan here, D1. The storyboard write boundary rejects every deck carrying a music bed (LIVE, TODAY), D2. `/v1/videos` is withdrawn on 2026-09-24, and our own tripwire reddens on 2026-09-10, D3. The OpenAI account has no credit, so nothing generates at all, Images — `POST https://openrouter.ai/api/v1/images` (synchronous), In scope, L1. Video → `x-ai/grok-imagine-video` via OpenRouter (+11 more)
 
 ### Community 428 - "Research Specialist (v1)"
 Cohesion: 0.11
 Nodes (17): Always search before you answer, Cite per claim, with the retrieval date, Cross-check every claim, Declare it — prose alone does not reach the system, Decompose before you search, Find the words real people use, How to build a query that returns something, "Insufficient evidence" is a first-class, honourable outcome (+9 more)
 
 ### Community 429 - "Phase 33.1 PRD — Media provider migration to OpenRouter"
-Cohesion: 0.10
-Nodes (19): Acceptance criteria, Constraints that bind every plan here, D1. The storyboard write boundary rejects every deck carrying a music bed (LIVE, TODAY), D2. `/v1/videos` is withdrawn on 2026-09-24, and our own tripwire reddens on 2026-09-10, D3. The OpenAI account has no credit, so nothing generates at all, Images — `POST https://openrouter.ai/api/v1/images` (synchronous), In scope, L1. Video → `x-ai/grok-imagine-video` via OpenRouter (+11 more)
-
-### Community 430 - "Fix Order"
 Cohesion: 0.11
 Nodes (18): 1. Bound your reads, 2. Read smaller shapes, 3. Break large mutations into batches, 4. Move heavy work to actions, 5. Trim return values, 6. Replace `ctx.runQuery` and `ctx.runMutation` with helper functions, 7. Avoid unnecessary `runAction` calls, Common Causes (+10 more)
 
-### Community 431 - "Pikar Consistency Audit"
+### Community 430 - "Fix Order"
 Cohesion: 0.11
 Nodes (18): Batches of content, not one reel per chat, Documents in their true form, G13 — The Goal Engine (Chief-of-Staff loop), | Gap | Planned today? | Proposed vehicle | Size |, Inconsistency is one defect class, not many bugs, Long-running work and the single-agent ceiling, Pikar Consistency Audit, Research that convinces (+10 more)
 
-### Community 432 - "Implementation Decisions"
+### Community 431 - "Pikar Consistency Audit"
 Cohesion: 0.11
 Nodes (18): Budget / kill-switch behavior during generation, Claude's Discretion, Deferred Ideas, Document content & naming, Document format, Established Patterns, Existing Code Insights, Implementation Decisions (+10 more)
 
-### Community 433 - "Implementation Decisions"
+### Community 432 - "Implementation Decisions"
 Cohesion: 0.11
 Nodes (18): Agent ↔ vault interaction (users AND agents share one substrate), Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Extraction & graph schema (VALT-02), Hybrid retrieval & grounding (VALT-03), Implementation Decisions (+10 more)
 
-### Community 434 - "Implementation Decisions"
+### Community 433 - "Implementation Decisions"
 Cohesion: 0.11
 Nodes (18): Business profile structure — Lean core set, Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Implementation Decisions, Intake modalities (v1 — all three ship), Integration Points (+10 more)
 
-### Community 435 - "Phase 14 Plan 04: The Doc-Grounded Mint Summary"
+### Community 434 - "Implementation Decisions"
 Cohesion: 0.11
 Nodes (18): 1. [Rule 1 — the plan's stated interface was wrong] the document read is `docForMint`, not `internal.vault.getDoc`, 2. [Rule 1 — bug, pre-existing] `voiceToken.test.ts` referenced `internal.voiceToken.mintClientSecret`, 3. [Rule 1 — mine] the Phase-6 exact-key assertion had to widen by one, Accomplishments, Decisions Made, Deviations from Plan, `docForMint` instead of `internal.vault.getDoc` (the plan's stated interface, again), Files Created/Modified (+10 more)
+
+### Community 435 - "Phase 14 Plan 04: The Doc-Grounded Mint Summary"
+Cohesion: 0.11
+Nodes (18): Decisions Made, Dependency graph, Deviations from Plan, Files Modified, Issues Encountered, Metrics, Mutation-check results, Next Phase Readiness (+10 more)
 
 ### Community 436 - "ADR-012: The `media` route ships a FINISHED REEL — a dispatchable specialist whose product costs money and which cannot spend any"
 Cohesion: 0.13
@@ -2996,11 +2994,11 @@ Nodes (15): ADR-012: The `media` route ships a FINISHED REEL — a dispatchable 
 
 ### Community 437 - "Phase 15.1 Plan 04: The Rubric Follows the Table Summary"
 Cohesion: 0.11
-Nodes (18): Decisions Made, Dependency graph, Deviations from Plan, Files Modified, Issues Encountered, Metrics, Mutation-check results, Next Phase Readiness (+10 more)
+Nodes (18): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+10 more)
 
 ### Community 438 - "Phase 15.3 Plan 04: Folder Ingest Orchestration Summary"
 Cohesion: 0.11
-Nodes (18): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+10 more)
+Nodes (18): Accomplishments, Auto-fixed Issues, Decisions Made, Deliberate departure from the plan's letter, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+10 more)
 
 ### Community 439 - "Grand Slam Offer Canvas"
 Cohesion: 0.17
@@ -3008,23 +3006,23 @@ Nodes (11): 0. Market & Niche  — playbook 01, 1. Dream Outcome  — playbook 0
 
 ### Community 440 - "Phase 15 Plan 04: "Act on this" Runs the Specialist Summary"
 Cohesion: 0.11
-Nodes (18): Accomplishments, Auto-fixed Issues, Decisions Made, Deliberate departure from the plan's letter, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+10 more)
+Nodes (18): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred / Unpaid Gate, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+10 more)
 
 ### Community 441 - "Phase 15 Plan 06: Runnable Specialist Bodies + a Multi-Pin Eval Gate Summary"
 Cohesion: 0.11
-Nodes (18): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred / Unpaid Gate, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+10 more)
+Nodes (18): 1. [Blocked by FOREIGN work — reported, deliberately NOT satisfied] `check-playbooks` blocks on two playbooks this plan does not own, 2. [Rule 1 - planning arithmetic] The spine's size budget did not close as planned, 3. [Recorded, not auto-fixed] The plan's second required mutation is behaviour-preserving, Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified (+10 more)
 
 ### Community 442 - "Phase 17.1 Plan 03: Precedence, the Citation Gate and the Spine Summary"
 Cohesion: 0.11
-Nodes (18): 1. [Blocked by FOREIGN work — reported, deliberately NOT satisfied] `check-playbooks` blocks on two playbooks this plan does not own, 2. [Rule 1 - planning arithmetic] The spine's size budget did not close as planned, 3. [Recorded, not auto-fixed] The plan's second required mutation is behaviour-preserving, Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified (+10 more)
+Nodes (18): 1. [Rule 1 - Test fixture] Preserved an explicitly missing text field, 2. [Shared-tree verification deferral] Full-suite gate reserved for stable integration, 3. [Foreign work — deliberately not satisfied] Global playbook hook names another lane, Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified (+10 more)
 
 ### Community 443 - "Phase 17.1 Plan 04: Blueprint Read Plane Summary"
 Cohesion: 0.11
-Nodes (18): 1. [Rule 1 - Test fixture] Preserved an explicitly missing text field, 2. [Shared-tree verification deferral] Full-suite gate reserved for stable integration, 3. [Foreign work — deliberately not satisfied] Global playbook hook names another lane, Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified (+10 more)
+Nodes (18): Accomplishments, Authentication Gates, Auto-fixed Issues, Deviations from Plan, Enforcement Mutation Ledger, Google-Only / Create-Only Traceability Note, Issues Encountered, Next Phase Readiness (+10 more)
 
 ### Community 444 - "Phase 17 Plan 04: Approve-Only Calendar Enforcement Summary"
 Cohesion: 0.11
-Nodes (18): Accomplishments, Authentication Gates, Auto-fixed Issues, Deviations from Plan, Enforcement Mutation Ledger, Google-Only / Create-Only Traceability Note, Issues Encountered, Next Phase Readiness (+10 more)
+Nodes (18): 17-08 SUMMARY — governed calendar management: management, minus Microsoft delete, 1. The registry lifecycle, 2. Result and audit tables, 3. Provider endpoint matrix, 4. THE NO-CANCELLATION-MESSAGE INVARIANT, 5. Microsoft delete, stated in ADR-023's own words, 6. Mutation ledger, 7. The readback (+10 more)
 
 ### Community 445 - "Document Analyst (v1)"
 Cohesion: 0.18
@@ -3032,7 +3030,7 @@ Nodes (10): Document Analyst (v1), How you open, How you talk, Looking things up
 
 ### Community 446 - "17-08 SUMMARY — governed calendar management: management, minus Microsoft delete"
 Cohesion: 0.11
-Nodes (18): 17-08 SUMMARY — governed calendar management: management, minus Microsoft delete, 1. The registry lifecycle, 2. Result and audit tables, 3. Provider endpoint matrix, 4. THE NO-CANCELLATION-MESSAGE INVARIANT, 5. Microsoft delete, stated in ADR-023's own words, 6. Mutation ledger, 7. The readback (+10 more)
+Nodes (18): Architecture shape — LOCKED (owner, 2026-07-31), Claude's Discretion, Deferred Ideas, Environment cautions, Established Patterns, Existing Code Insights, Grounding, provenance & the feedback loop, Implementation Decisions (+10 more)
 
 ### Community 447 - "selfCheck"
 Cohesion: 0.11
@@ -3040,51 +3038,51 @@ Nodes (11): aggregateModules, modules, rateLimiterModules, seedMailbox(), seedMe
 
 ### Community 448 - "Implementation Decisions"
 Cohesion: 0.11
-Nodes (18): Architecture shape — LOCKED (owner, 2026-07-31), Claude's Discretion, Deferred Ideas, Environment cautions, Established Patterns, Existing Code Insights, Grounding, provenance & the feedback loop, Implementation Decisions (+10 more)
+Nodes (18): Accomplishments, Budget — the ceiling was breached, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Next Phase Readiness (+10 more)
 
 ### Community 449 - "Phase 19 Plan 09: Teach the Body, Owe the Fixture Summary"
 Cohesion: 0.11
-Nodes (18): Accomplishments, Budget — the ceiling was breached, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Next Phase Readiness (+10 more)
+Nodes (18): Anti-vacuity, Deviations, Graph, Measured Results, Mutation Proofs, Next, NOT DONE AND NOT CLAIMED, Phase 21 Plan 05: Routine v0 — Pinned Prompts Summary (+10 more)
 
 ### Community 450 - "Phase 21 Plan 05: Routine v0 — Pinned Prompts Summary"
 Cohesion: 0.11
-Nodes (18): Anti-vacuity, Deviations, Graph, Measured Results, Mutation Proofs, Next, NOT DONE AND NOT CLAIMED, Phase 21 Plan 05: Routine v0 — Pinned Prompts Summary (+10 more)
+Nodes (18): 1. [Rule 1 — smaller honest fix] `cockpit.ts`, `cockpit.test.ts` and `cockpit.md` were NOT touched, 2. [Rule 3 — blocking the plan's own test requirement] `AwaitingCard` split into a shell + `AwaitingCardBody`, 3. [Rule 2 — same defect, sibling callers] discard and schedule joined the outcome channel, 4. Tasks 1 and 2 share one RED and one GREEN commit, Accomplishments, Dependency graph, Deviations from Plan, Issues Encountered (+10 more)
 
 ### Community 451 - "Phase 25.1 Plan 04: Approvals Feedback Summary"
 Cohesion: 0.11
-Nodes (18): 1. [Rule 1 — smaller honest fix] `cockpit.ts`, `cockpit.test.ts` and `cockpit.md` were NOT touched, 2. [Rule 3 — blocking the plan's own test requirement] `AwaitingCard` split into a shell + `AwaitingCardBody`, 3. [Rule 2 — same defect, sibling callers] discard and schedule joined the outcome channel, 4. Tasks 1 and 2 share one RED and one GREEN commit, Accomplishments, Dependency graph, Deviations from Plan, Issues Encountered (+10 more)
+Nodes (18): 10. Stated plainly: what I could NOT verify, 11. Files, 1. Baseline, by FAILURE COUNT, 2. RED before GREEN — the exact observed text, per task, 33.1-04 — SUMMARY, 3. The tripwire re-key — three mutations, and the arm the plan did not have, 4. The cap — three mutations, 5. The block-deck fork — resolved as A, with the reddened-fixture list (+10 more)
 
 ### Community 452 - "33.1-04 — SUMMARY"
 Cohesion: 0.11
-Nodes (18): 10. Stated plainly: what I could NOT verify, 11. Files, 1. Baseline, by FAILURE COUNT, 2. RED before GREEN — the exact observed text, per task, 33.1-04 — SUMMARY, 3. The tripwire re-key — three mutations, and the arm the plan did not have, 4. The cap — three mutations, 5. The block-deck fork — resolved as A, with the reddened-fixture list (+10 more)
+Nodes (18): Claude's Discretion, Constants that move, Constants that must NOT move, Deferred Ideas, Everything the money boundary already refuses must keep refusing, Implementation Decisions, Models — locked by the owner on 2026-08-30, Phase 33.1: Media provider migration to OpenRouter - Context (+10 more)
 
 ### Community 453 - "Implementation Decisions"
 Cohesion: 0.11
-Nodes (18): Claude's Discretion, Constants that move, Constants that must NOT move, Deferred Ideas, Everything the money boundary already refuses must keep refusing, Implementation Decisions, Models — locked by the owner on 2026-08-30, Phase 33.1: Media provider migration to OpenRouter - Context (+10 more)
+Nodes (17): Adding Index, Adding New Table, Adding Optional Field, Breaking Changes: The Deployment Workflow, Common Migration Patterns, Common Pitfalls, Convex Migration Helper, Don't Delete Data (+9 more)
 
 ### Community 454 - "Convex Migration Helper"
 Cohesion: 0.11
-Nodes (17): Adding Index, Adding New Table, Adding Optional Field, Breaking Changes: The Deployment Workflow, Common Migration Patterns, Common Pitfalls, Convex Migration Helper, Don't Delete Data (+9 more)
+Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Gate Cycle (Task 2), Human Verify (Task 3) (+9 more)
 
 ### Community 455 - "Phase 03.10 Plan 06: Cockpit Conversational Memory Summary"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Gate Cycle (Task 2), Human Verify (Task 3) (+9 more)
+Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Interface Adaptation (not a fix), Issues Encountered (+9 more)
 
 ### Community 456 - "Phase 3.11 Plan 02: Reply-Drafter Skill + Toolless draftReply Summary"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Interface Adaptation (not a fix), Issues Encountered (+9 more)
+Nodes (17): 1. PDF Generation (Convex `"use node"` action), 2. Gmail Multipart Attachment Send, 3. Convex Storage Round-Trip (generate → send → download), 4. Codebase Integration Seams (with file:line), Answer up front — the whole change is small and mostly reuse, Open Questions (for the planner to resolve — none block planning), Phase 3.3: Attachment Generation — Research, Reuse map (verbatim, do not rebuild) (+9 more)
 
 ### Community 457 - "4. Codebase Integration Seams (with file:line)"
 Cohesion: 0.11
-Nodes (17): 1. PDF Generation (Convex `"use node"` action), 2. Gmail Multipart Attachment Send, 3. Convex Storage Round-Trip (generate → send → download), 4. Codebase Integration Seams (with file:line), Answer up front — the whole change is small and mostly reuse, Open Questions (for the planner to resolve — none block planning), Phase 3.3: Attachment Generation — Research, Reuse map (verbatim, do not rebuild) (+9 more)
+Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+9 more)
 
 ### Community 458 - "Phase 3.5 Plan 02: Deferred Send — setSendTime Fast-Path Summary"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+9 more)
+Nodes (17): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Live smokes (against :3210, all PASS), Metrics (+9 more)
 
 ### Community 459 - "Phase 7 Plan 06: Resilience & Ops Hardening — Phase Close (autonomous portion)"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Live smokes (against :3210, all PASS), Metrics (+9 more)
+Nodes (17): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+9 more)
 
 ### Community 460 - "Phase 8 Plan 05: SkillOpt Write-Back (candidate + evidence) Summary"
 Cohesion: 0.11
@@ -3092,11 +3090,11 @@ Nodes (17): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions 
 
 ### Community 461 - "Phase 8 Plan 06: Feedback Control + Optimizer Ops Panel Summary"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+9 more)
+Nodes (17): 1. [Rule 1 — the plan's stated interface was wrong] `startSession` validates via `ctx.db.get`, not `internal.vault.getDoc`, 2. [Rule 3 — blocking, environment] The copied `_generated/api.d.ts` predates `voiceDoc.ts`, 3. [Rule 3 — blocking] Registering the workflow component to silence stderr made the suite exit non-zero, Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered (+9 more)
 
 ### Community 462 - "Phase 14 Plan 03: Doc-Scoped Session + Retrieval Summary"
 Cohesion: 0.11
-Nodes (17): 1. [Rule 1 — the plan's stated interface was wrong] `startSession` validates via `ctx.db.get`, not `internal.vault.getDoc`, 2. [Rule 3 — blocking, environment] The copied `_generated/api.d.ts` predates `voiceDoc.ts`, 3. [Rule 3 — blocking] Registering the workflow component to silence stderr made the suite exit non-zero, Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered (+9 more)
+Nodes (17): Auto-fixed, Choices inside the plan's latitude (not deviations), Deviations from Plan, Issues Encountered, NEW KNOWN GAP — PPTX titles-only, and scaffolding-only output reports `ready`, Next Plan Readiness, NOT PROVEN, Owner verdict — APPROVED, but only PARTIALLY OBSERVED (+9 more)
 
 ### Community 463 - "Lead Engine — get engaged leads (Core Four + Lead Getters)"
 Cohesion: 0.18
@@ -3112,19 +3110,19 @@ Nodes (10): 1. Anchor to an eternal market, 2. Check the growth direction, 3. Ra
 
 ### Community 466 - "Phase 15.2 Plan 05: The Live Phase Gate Summary"
 Cohesion: 0.11
-Nodes (17): Auto-fixed, Choices inside the plan's latitude (not deviations), Deviations from Plan, Issues Encountered, NEW KNOWN GAP — PPTX titles-only, and scaffolding-only output reports `ready`, Next Plan Readiness, NOT PROVEN, Owner verdict — APPROVED, but only PARTIALLY OBSERVED (+9 more)
+Nodes (17): Auto-fixed, Choices inside the plan's latitude (not deviations), Deviations from Plan, OPEN ITEMS FOR THE PHASE VERIFIER — do not let these be rounded up, Performance, Phase 15.2 Plan 07: Legacy XLS via SheetJS Summary, Pitfall 9's predictor was WRONG, and is now corrected, ponytail ceilings, all MEASURED against 0.20.3 (+9 more)
 
 ### Community 467 - "Phase 15.2 Plan 07: Legacy XLS via SheetJS Summary"
 Cohesion: 0.11
-Nodes (17): Auto-fixed, Choices inside the plan's latitude (not deviations), Deviations from Plan, OPEN ITEMS FOR THE PHASE VERIFIER — do not let these be rounded up, Performance, Phase 15.2 Plan 07: Legacy XLS via SheetJS Summary, Pitfall 9's predictor was WRONG, and is now corrected, ponytail ceilings, all MEASURED against 0.20.3 (+9 more)
+Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+9 more)
 
 ### Community 468 - "Phase 15.3 Plan 01: Schema, Requirements and Roadmap Summary"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+9 more)
+Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Is the refund provably clamped and idempotent?, Issues Encountered, Metrics (+9 more)
 
 ### Community 469 - "Phase 15.3 Plan 03: The Folder Budget Wall Summary"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Is the refund provably clamped and idempotent?, Issues Encountered, Metrics (+9 more)
+Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+9 more)
 
 ### Community 470 - "Phase 15 Plan 01: Wave-0 Freeze Summary"
 Cohesion: 0.11
@@ -3136,11 +3134,11 @@ Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 472 - "Phase 15 Plan 05: The Generalized Action Executor Summary"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+9 more)
+Nodes (17): 1. [Preflight overridden by the orchestrator — recorded, not auto-fixed] Lanes 15.2 / 16 / 17 are STILL LIVE, 2. [Blocked by FOREIGN work — reported, deliberately NOT satisfied] `check-playbooks` blocks on two playbooks this plan does not own, Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+9 more)
 
 ### Community 473 - "Phase 17.1 Plan 01: Blueprint Structural Half Summary"
 Cohesion: 0.11
-Nodes (17): 1. [Preflight overridden by the orchestrator — recorded, not auto-fixed] Lanes 15.2 / 16 / 17 are STILL LIVE, 2. [Blocked by FOREIGN work — reported, deliberately NOT satisfied] `check-playbooks` blocks on two playbooks this plan does not own, Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+9 more)
+Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+9 more)
 
 ### Community 474 - "Phase 17.1 Plan 05: Governed Blueprint Draft Synthesis Summary"
 Cohesion: 0.11
@@ -3156,27 +3154,27 @@ Nodes (57): ArtDirection, Block, BLOCK_REFUSAL_WHY, cellsOf(), CLAIM_QUANTIFIED,
 
 ### Community 477 - "Phase 17.1 Plan 08: D2 Blueprint Confirmation Gate Summary"
 Cohesion: 0.11
-Nodes (17): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+9 more)
+Nodes (17): 1. [Rule 1 — the plan falsified an existing test it did not mention], 2. [Rule 1 — a strict MIME equality would have refused valid CSVs], 3. [Rule 3 — the row cap had to be checked before `mapRows`], 4. [Plan-internal] One commit, not per-task commits, 5. [Noted] The local `confirm()` was renamed to `runImport()`, Commits, Deferred / Out of Scope, Deviations from Plan (+9 more)
 
 ### Community 478 - "Phase 19.1 Plan 06: The CSV Import Panel Summary"
 Cohesion: 0.11
-Nodes (17): 1. [Rule 1 — the plan falsified an existing test it did not mention], 2. [Rule 1 — a strict MIME equality would have refused valid CSVs], 3. [Rule 3 — the row cap had to be checked before `mapRows`], 4. [Plan-internal] One commit, not per-task commits, 5. [Noted] The local `confirm()` was renamed to `runImport()`, Commits, Deferred / Out of Scope, Deviations from Plan (+9 more)
+Nodes (17): Backend surface, Consent, Data model, Decisions added 2026-08-10 AFTER research (19.1-RESEARCH.md), all LOCKED, Deferred Ideas, Format and scale, Implementation Decisions, Interface (+9 more)
 
 ### Community 479 - "Implementation Decisions"
 Cohesion: 0.11
-Nodes (17): Backend surface, Consent, Data model, Decisions added 2026-08-10 AFTER research (19.1-RESEARCH.md), all LOCKED, Deferred Ideas, Format and scale, Implementation Decisions, Interface (+9 more)
+Nodes (17): Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, `docs/playbooks/skill-registry.md` was updated too, and is not in the plan's `files_modified`, In-plan judgement calls, Metrics, One worked answer instead of two fragments (+9 more)
 
 ### Community 480 - "Phase 33 Plan 09: media-director v3 — the specialist learns to write what the parsers read"
 Cohesion: 0.11
-Nodes (17): Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, `docs/playbooks/skill-registry.md` was updated too, and is not in the plan's `files_modified`, In-plan judgement calls, Metrics, One worked answer instead of two fragments (+9 more)
+Nodes (17): Auto-fixed issues, Deferred Issues, Dependency graph, Deviations from Plan, In-plan judgement calls, Metrics, Phase 33 Plan 13: The proposal stage gets a failure card, and the two parser edits get disclosed Summary, Self-Check: PASSED (+9 more)
 
 ### Community 481 - "Phase 33 Plan 13: The proposal stage gets a failure card, and the two parser edits get disclosed Summary"
 Cohesion: 0.11
-Nodes (17): Auto-fixed issues, Deferred Issues, Dependency graph, Deviations from Plan, In-plan judgement calls, Metrics, Phase 33 Plan 13: The proposal stage gets a failure card, and the two parser edits get disclosed Summary, Self-Check: PASSED (+9 more)
+Nodes (17): §A — The evaluations data-model split (plan-independent; write it now), §B — The free move: `gaps[].proofMetric` gains a path, Blast radius — VERIFIED CONTAINED, §C — Plan-derived work (FILL IN when the two plan sets land), Check left behind, Commit sequence, §D — Sibling commit: weekly-review hardening (NOT part of Wave 0), `evaluations` slims (+9 more)
 
 ### Community 482 - "§A — The evaluations data-model split (plan-independent; write it now)"
-Cohesion: 0.11
-Nodes (17): §A — The evaluations data-model split (plan-independent; write it now), §B — The free move: `gaps[].proofMetric` gains a path, Blast radius — VERIFIED CONTAINED, §C — Plan-derived work (FILL IN when the two plan sets land), Check left behind, Commit sequence, §D — Sibling commit: weekly-review hardening (NOT part of Wave 0), `evaluations` slims (+9 more)
+Cohesion: 0.12
+Nodes (16): Advanced Patterns, Authentication and environment access, Checklist, Choose the Shape, Client-facing API, Component Skeleton, Convex Create Component, Critical Rules (+8 more)
 
 ### Community 483 - "Phase 25 Plan 03: Isolation Gate Summary"
 Cohesion: 0.12
@@ -3184,23 +3182,23 @@ Nodes (14): Accomplishments, Decisions Made, Deviations from Plan, Files Created
 
 ### Community 484 - "Convex Create Component"
 Cohesion: 0.12
-Nodes (16): Advanced Patterns, Authentication and environment access, Checklist, Choose the Shape, Client-facing API, Component Skeleton, Convex Create Component, Critical Rules (+8 more)
+Nodes (17): scripts, codegen, dev, eval:golden, eval:packs, probe:gemini, probe:gemini:grounded, seed (+9 more)
 
 ### Community 485 - "scripts"
 Cohesion: 0.12
-Nodes (17): scripts, codegen, dev, eval:golden, eval:packs, probe:gemini, probe:gemini:grounded, seed (+9 more)
+Nodes (16): 10. Migration, 11. Checks left behind, 12. Affected surfaces, 13. Risks, 1. Problem, 2. Goal, 3. Locked decisions, 4.1 The new table (+8 more)
 
 ### Community 486 - "Design — Business Tier & Conversational Onboarding"
 Cohesion: 0.12
-Nodes (16): 10. Migration, 11. Checks left behind, 12. Affected surfaces, 13. Risks, 1. Problem, 2. Goal, 3. Locked decisions, 4.1 The new table (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
 
 ### Community 487 - "Phase 01 Plan 06: DLQ + awaitEvent-Timeout Race Smoke Patterns Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+8 more)
 
 ### Community 488 - "Phase 2 Plan 07: Authenticated Surface Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+8 more)
+Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Gate Cycle (Task 2), Human Verify (Task 3), Issues Encountered (+8 more)
 
 ### Community 489 - "The renderer (20-15)"
 Cohesion: 0.17
@@ -3216,15 +3214,15 @@ Nodes (6): Business overview — Zawadi Growth Studio, Customers and revenue, Di
 
 ### Community 492 - "Phase 03.10 Plan 07: Post-Pick Trust Repair Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Gate Cycle (Task 2), Human Verify (Task 3), Issues Encountered (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Design choice within plan latitude (not a fix), Deviations from Plan, Issues Encountered, Metrics (+8 more)
 
 ### Community 493 - "Phase 3.11 Plan 03: Delivery Threading Spine Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Design choice within plan latitude (not a fix), Deviations from Plan, Issues Encountered, Metrics (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Next Phase Readiness (+8 more)
 
 ### Community 494 - "Phase 3.11 Plan 04: replyToMessage Tool Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Next Phase Readiness (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+8 more)
 
 ### Community 495 - "spend.ts"
 Cohesion: 0.25
@@ -3240,11 +3238,11 @@ Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues,
 
 ### Community 498 - "Phase 03.2 Plan 04: Cockpit Name-Resolution Turn Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
 
 ### Community 499 - "Phase 3.5 Plan 01: Deferred Send Foundation Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
+Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+8 more)
 
 ### Community 500 - "Financial Spine — canonical definitions"
 Cohesion: 0.20
@@ -3288,7 +3286,7 @@ Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from P
 
 ### Community 510 - "Phase 3.6 Plan 05: Phase Gate Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+8 more)
+Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Environment Handling, Eval Runs (live spend on local-joel_feruzi-pikar_ai_50c69), Files Created/Modified, Issues Encountered (+8 more)
 
 ### Community 511 - "Pending Pages + Knowledge Vault: Pre-Implementation Integration Map"
 Cohesion: 0.14
@@ -3296,7 +3294,7 @@ Nodes (13): 10. Failure and observability map, 13. Release strategy, 14. Definit
 
 ### Community 512 - "Phase 3.7 Plan 09: Phase Close — inbox-digest v2 Eval-Gated & Human-Verified Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Environment Handling, Eval Runs (live spend on local-joel_feruzi-pikar_ai_50c69), Files Created/Modified, Issues Encountered (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
 
 ### Community 513 - "Phase 04 Plan 02: Attachment Extractor Skill Summary"
 Cohesion: 0.12
@@ -3312,23 +3310,23 @@ Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 516 - "Phase 8 Plan 04: Trajectory Export (PII-scrubbed) Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
+Nodes (16): Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Flagged for Research/Planning (not user decisions — resolve in RESEARCH/PLAN), Go-live gating, Implementation Decisions, Integration Points (+8 more)
 
 ### Community 517 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (16): Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Flagged for Research/Planning (not user decisions — resolve in RESEARCH/PLAN), Go-live gating, Implementation Decisions, Integration Points (+8 more)
+Nodes (16): §4 audit split (planner invariant — not optional), Claude's Discretion, Deferred Ideas, Empty / no-match behavior, Established Patterns, Existing Code Insights, Implementation Decisions, Integration Points (+8 more)
 
 ### Community 518 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (16): §4 audit split (planner invariant — not optional), Claude's Discretion, Deferred Ideas, Empty / no-match behavior, Established Patterns, Existing Code Insights, Implementation Decisions, Integration Points (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+8 more)
 
 ### Community 519 - "Phase 11 Plan 04: Editable Business-Profile Page Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deferred Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+8 more)
+Nodes (16): Claude's Discretion, Confidence & thin-data honesty, Deferred Ideas, Established Patterns, Existing Code Insights, Framework selection, Gap → action triage (BEVL-02 core), Governance invariants (locked — carried forward, not decisions to revisit) (+8 more)
 
 ### Community 520 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (16): Claude's Discretion, Confidence & thin-data honesty, Deferred Ideas, Established Patterns, Existing Code Insights, Framework selection, Gap → action triage (BEVL-02 core), Governance invariants (locked — carried forward, not decisions to revisit) (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
 
 ### Community 521 - "Phase 13 Plan 02: The Weekly Proactive Review Cron Summary"
 Cohesion: 0.12
@@ -3336,51 +3334,51 @@ Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 522 - "Phase 13 Plan 03: The In-App Review Surface Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+8 more)
+Nodes (16): Cadence and tenant selection, Claude's Discretion, Constraints Worth Flagging to the Planner, Deferred Ideas, Established Patterns, Existing Code Insights, Governance (SC#2 and SC#3), Implementation Decisions (+8 more)
 
 ### Community 523 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (16): Cadence and tenant selection, Claude's Discretion, Constraints Worth Flagging to the Planner, Deferred Ideas, Established Patterns, Existing Code Insights, Governance (SC#2 and SC#3), Implementation Decisions (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Choices inside the plan's latitude (not deviations), Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Plan Readiness (+8 more)
 
 ### Community 524 - "Phase 15.2 Plan 04: Staleness, the Graph Cap, and Failure Copy Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Choices inside the plan's latitude (not deviations), Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Plan Readiness (+8 more)
+Nodes (16): Auto-fixed, Choices inside the plan's latitude (not deviations), Deviations from Plan, Handoff — DO NOT LOSE, Issues Encountered, Next Plan Readiness, NOT PROVEN, Performance (+8 more)
 
 ### Community 525 - "Phase 15.2 Plan 06: Per-Page Fan-Out Summary"
 Cohesion: 0.12
-Nodes (16): Auto-fixed, Choices inside the plan's latitude (not deviations), Deviations from Plan, Handoff — DO NOT LOSE, Issues Encountered, Next Plan Readiness, NOT PROVEN, Performance (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Next Phase Readiness (+8 more)
 
 ### Community 526 - "Phase 15.3 Plan 02: Vault Read Survivability + Cap Single-Source Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Next Phase Readiness (+8 more)
+Nodes (16): Claude's Discretion, Deferred Ideas, Established Patterns, Eval gate (consequence of rewriting the bodies), Existing Code Insights, Implementation Decisions, Integration Points, Limits and refusal behavior (+8 more)
 
 ### Community 527 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (16): Claude's Discretion, Deferred Ideas, Established Patterns, Eval gate (consequence of rewriting the bodies), Existing Code Insights, Implementation Decisions, Integration Points, Limits and refusal behavior (+8 more)
+Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Mutation Check (+8 more)
 
 ### Community 528 - "Phase 17.1 Plan 06: Standing Cockpit Blueprint Context Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Mutation Check (+8 more)
+Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Owner Checklist (manual, not a plan blocker) (+8 more)
 
 ### Community 529 - "Phase 17 Plan 02: Google Calendar Adapter and Terminal Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Owner Checklist (manual, not a plan blocker) (+8 more)
+Nodes (16): Accomplishments, Authenticated browser gate still blocked, Auto-fixed Issues, Card and browser evidence, Deviations from Plan, Issues Encountered, `listManagedCalendarEvents`, Mutation evidence (+8 more)
 
 ### Community 530 - "Phase 17 Plan 09: Managed-event discovery and safe staging Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Authenticated browser gate still blocked, Auto-fixed Issues, Card and browser evidence, Deviations from Plan, Issues Encountered, `listManagedCalendarEvents`, Mutation evidence (+8 more)
+Nodes (16): Current Automated Evidence — 2026-08-10, Evidence Review, Final Assessment, G1 — Microsoft/Outlook Calendar is absent, G2 — Calendar event management is absent, G3 — Shipped Google slice lacks owner live evidence, G4 — Current Convex behavior gate does not complete, Gaps (+8 more)
 
 ### Community 531 - "Phase 17: Calendar Actions Verification Report"
 Cohesion: 0.12
-Nodes (16): Current Automated Evidence — 2026-08-10, Evidence Review, Final Assessment, G1 — Microsoft/Outlook Calendar is absent, G2 — Calendar event management is absent, G3 — Shipped Google slice lacks owner live evidence, G4 — Current Convex behavior gate does not complete, Gaps (+8 more)
+Nodes (16): 1. [Rule 1 — the plan's render form would have weakened an existing assertion], 2. [Rule 2 — missing type safety the plan asked for in prose only], 3. [Plan-internal] One commit, not per-task commits, 4. [Noted] Two existing assertions had to be updated, which the plan did not mention, Commits, Deferred / Out of Scope, Deviations from Plan, Mutation Evidence (+8 more)
 
 ### Community 532 - "Phase 19.1 Plan 05: pipelineTiles Reports Its Scan Bound Summary"
 Cohesion: 0.12
-Nodes (16): 1. [Rule 1 — the plan's render form would have weakened an existing assertion], 2. [Rule 2 — missing type safety the plan asked for in prose only], 3. [Plan-internal] One commit, not per-task commits, 4. [Noted] Two existing assertions had to be updated, which the plan did not mention, Commits, Deferred / Out of Scope, Deviations from Plan, Mutation Evidence (+8 more)
+Nodes (16): Accomplishments, Blocking Checkpoint: Live Activation, Current Offline Verification, Decisions Made, Dependency graph, Deviations from the Original Wave Table, Historical Browser Evidence (Not Re-run Here), Landed Wave Commits (+8 more)
 
 ### Community 533 - "Phase 20.2: Scene Timeline Reels — Code and Offline Evidence Summary"
 Cohesion: 0.12
-Nodes (16): Accomplishments, Blocking Checkpoint: Live Activation, Current Offline Verification, Decisions Made, Dependency graph, Deviations from the Original Wave Table, Historical Browser Evidence (Not Re-run Here), Landed Wave Commits (+8 more)
+Nodes (16): Anti-vacuity, Deviations, Graph, Measured Results, Mutation Proofs, Next, NOT DONE AND NOT CLAIMED, Panel mutations (Task 3) (+8 more)
 
 ### Community 534 - "Media Director (v1)"
 Cohesion: 0.12
@@ -3388,7 +3386,7 @@ Nodes (15): 1. BRIEF, 2. SCRIPT, 3. ART DIRECTION, 4. SCENE DECK, 5. SCENE PROMP
 
 ### Community 535 - "Phase 21 Plan 02: Tenant Candidate Write/Read and Effective Loading Summary"
 Cohesion: 0.12
-Nodes (16): Anti-vacuity, Deviations, Graph, Measured Results, Mutation Proofs, Next, NOT DONE AND NOT CLAIMED, Panel mutations (Task 3) (+8 more)
+Nodes (16): Auto-assembled reel, Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Failure & retry, Grounded citations, Guided intake (+8 more)
 
 ### Community 536 - "Diagnostic Tree — diagnose and route"
 Cohesion: 0.22
@@ -3420,7 +3418,7 @@ Nodes (8): Attribution, Design, Growth OS — a self-improvement skill suite for
 
 ### Community 543 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (16): Auto-assembled reel, Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Failure & retry, Grounded citations, Guided intake (+8 more)
+Nodes (15): Cancel a Running Migration, Check Migration Status, Configuration Options, Custom Batch Size, Define a Migration, Dry Run, Installation, Migrate a Subset Using an Index (+7 more)
 
 ### Community 544 - "Global Constraints"
 Cohesion: 0.25
@@ -3428,23 +3426,23 @@ Nodes (7): Global Constraints, Self-Review, Task 1: `pickableDocs` query + the s
 
 ### Community 545 - "Migrations Component Reference"
 Cohesion: 0.12
-Nodes (15): Cancel a Running Migration, Check Migration Status, Configuration Options, Custom Batch Size, Define a Migration, Dry Run, Installation, Migrate a Subset Using an Index (+7 more)
+Nodes (15): 1. Reduce read set size, 2. Split hot documents, 3. Move non-critical work to scheduled functions, 4. Combine competing writes, Broad read sets causing false conflicts, Common Causes, Core Principle, Fan-out from triggers or cascading writes (+7 more)
 
 ### Community 546 - "OCC Conflict Resolution"
 Cohesion: 0.12
-Nodes (15): 1. Reduce read set size, 2. Split hot documents, 3. Move non-critical work to scheduled functions, 4. Combine competing writes, Broad read sets causing false conflicts, Common Causes, Core Principle, Fan-out from triggers or cascading writes (+7 more)
+Nodes (15): 1. Scope the problem, 2. Trace the full read and write set, 3. Apply fixes from the relevant reference, 4. Fix sibling functions together, 5. Verify before finishing, Checklist, Convex Performance Audit, Escalate Larger Fixes (+7 more)
 
 ### Community 547 - "Convex Performance Audit"
 Cohesion: 0.12
-Nodes (15): 1. Scope the problem, 2. Trace the full read and write set, 3. Apply fixes from the relevant reference, 4. Fix sibling functions together, 5. Verify before finishing, Checklist, Convex Performance Audit, Escalate Larger Fixes (+7 more)
+Nodes (15): compilerOptions, allowJs, allowSyntheticDefaultImports, forceConsistentCasingInFileNames, isolatedModules, jsx, lib, module (+7 more)
 
 ### Community 548 - "compilerOptions"
 Cohesion: 0.12
-Nodes (15): compilerOptions, allowJs, allowSyntheticDefaultImports, forceConsistentCasingInFileNames, isolatedModules, jsx, lib, module (+7 more)
+Nodes (15): CORRECTION 2026-08-16 (later the same day) — "NO TOOL WAS CALLED" WAS WRONG., Cost ledger, Fix, Historical record — the superseded decision follows, Leading hypothesis (UNTESTED — recorded so it is not re-derived), Next options, with honest prices, RESOLVED 2026-08-16 — THE FIXTURE WAS WRONG AND THE AGENT WAS RIGHT., Root cause (+7 more)
 
 ### Community 549 - "finance-update-fails-only-in-full-sequence.md"
 Cohesion: 0.12
-Nodes (15): CORRECTION 2026-08-16 (later the same day) — "NO TOOL WAS CALLED" WAS WRONG., Cost ledger, Fix, Historical record — the superseded decision follows, Leading hypothesis (UNTESTED — recorded so it is not re-derived), Next options, with honest prices, RESOLVED 2026-08-16 — THE FIXTURE WAS WRONG AND THE AGENT WAS RIGHT., Root cause (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 550 - "Phase 1 Plan 01: Foundation & Governance Substrate Summary"
 Cohesion: 0.12
@@ -3452,7 +3450,7 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 551 - "Phase 1 Plan 4: Skills Registry & Loader Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
 
 ### Community 552 - "Phase 15.1 Plan 02: The Tier's Home — `convex/tenantProfile.ts` Summary"
 Cohesion: 0.33
@@ -3460,7 +3458,7 @@ Nodes (5): Current goals and scorecard, Goal 1 — consistent collected revenue,
 
 ### Community 553 - "Phase 2 Plan 01: Phase-2 Data Substrate Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 554 - "ADR-013: The render worker is an ephemeral Vercel Sandbox driven from `apps/web` — and no Vercel access token exists anywhere in the system"
 Cohesion: 0.18
@@ -3468,19 +3466,19 @@ Nodes (11): ADR-013: The render worker is an ephemeral Vercel Sandbox driven fro
 
 ### Community 555 - "Phase 2 Plan 02: Executive Agent LLM Surface Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics (+7 more)
 
 ### Community 556 - "Phase 2 Plan 05: Gmail Delivery Integration Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Auto-fixed / adapted, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 557 - "Phase 2 Plan 6: Pipeline Spine + Operator Dead-Letter Surface Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed / adapted, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
 
 ### Community 558 - "Phase 03.10 Plan 02: Cockpit Panel Demotion Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 559 - "Phase 03.10 Plan 04: Cockpit Propose-Deadlock + Collapsible Brief Summary"
 Cohesion: 0.12
@@ -3488,7 +3486,7 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 560 - "Phase 3.11 Plan 01: Inbox-Reply Groundwork Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Authentication Gates, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
 
 ### Community 561 - "The landing plane (20-06)"
 Cohesion: 0.20
@@ -3500,7 +3498,7 @@ Nodes (15): Accomplishments, Authentication Gates, Decisions Made, Dependency gr
 
 ### Community 563 - "Phase 3.11 Plan 06: Phase Close — Live In-Thread Reply Human-Verify Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Authentication Gates, Decisions Made, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Environment/Process (not a code fix), Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 564 - "Phase 21 Research: User-Authored Skills & Routines"
 Cohesion: 0.18
@@ -3508,7 +3506,7 @@ Nodes (10): Global Constraints, Known behaviour change, Scorecard Field Provenan
 
 ### Community 565 - "Phase 03.1 Plan 02: Cockpit Frontend + E2E Scaffolding Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Environment/Process (not a code fix), Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 566 - "Phase 03.1 Plan 03: emailIntent Slot-Filling Brain Summary"
 Cohesion: 0.12
@@ -3516,11 +3514,11 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 567 - "Phase 3.1 Plan 04: Delivery Fan-out Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Authentication Gates, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 568 - "Phase 03.1 Plan 09: Cockpit E2E + Human Verification Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Authentication Gates, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): 1. The one-paragraph answer, 2. Consolidated reuse map (what NOT to build), 3. New work, by lane (each maps to success criteria), 4. ⚠ CROSS-LANE DECISION #1 — the PLAN/REPORT data model (planner MUST resolve), 5. ⚠ CROSS-LANE DECISION #2 — conversation control (planner MUST resolve), 6. Other confirmed constraints (do not violate), 7. Consolidated open questions (non-blocking unless noted), Phase 3.1: Cockpit Core — Research (synthesized) (+7 more)
 
 ### Community 569 - "8.1 Approvals — `/dashboard/approvals`"
 Cohesion: 0.18
@@ -3528,15 +3526,15 @@ Nodes (11): 8.1 Approvals — `/dashboard/approvals`, Approvals blast radius, Aw
 
 ### Community 570 - "Phase 3.1: Cockpit Core — Research (synthesized)"
 Cohesion: 0.12
-Nodes (15): 1. The one-paragraph answer, 2. Consolidated reuse map (what NOT to build), 3. New work, by lane (each maps to success criteria), 4. ⚠ CROSS-LANE DECISION #1 — the PLAN/REPORT data model (planner MUST resolve), 5. ⚠ CROSS-LANE DECISION #2 — conversation control (planner MUST resolve), 6. Other confirmed constraints (do not violate), 7. Consolidated open questions (non-blocking unless noted), Phase 3.1: Cockpit Core — Research (synthesized) (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 571 - "Phase 3.2 Plan 01: needs_resolution seam + pure contact-resolution helpers Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Claude's Discretion, Deferred Ideas, Ephemerality, auth, latency & audit (governance), Established Patterns, Existing Code Insights, How matches surface (resolution card in the workspace pane), Implementation Decisions, Integration Points (+7 more)
 
 ### Community 572 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (15): Claude's Discretion, Deferred Ideas, Ephemerality, auth, latency & audit (governance), Established Patterns, Existing Code Insights, How matches surface (resolution card in the workspace pane), Implementation Decisions, Integration Points (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 573 - "Phase 3.3 Plan 01: Attachment Generation Engine Summary"
 Cohesion: 0.12
@@ -3552,23 +3550,23 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 576 - "Phase 03.3 Plan 06: Attachment Generation Phase Close Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Ambiguity & bounds, Cancel semantics, Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Failure at fire time (locked, design doc), Implementation Decisions (+7 more)
 
 ### Community 577 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (15): Ambiguity & bounds, Cancel semantics, Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Failure at fire time (locked, design doc), Implementation Decisions (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 578 - "Phase 03.6 Plan 02: EVAL-02 Read Side Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Golden set & assertions (EVAL-01), Housekeeping, Implementation Decisions, Integration Points (+7 more)
 
 ### Community 579 - "Implementation Decisions"
 Cohesion: 0.12
-Nodes (15): Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Golden set & assertions (EVAL-01), Housekeeping, Implementation Decisions, Integration Points (+7 more)
+Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
 
 ### Community 580 - "Phase 03.7 Plan 07: Inbox Briefing Synopsis (the lede) Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 581 - "Phase 3.8 Plan 03: Lane 2 — Office Parsers Summary"
 Cohesion: 0.12
@@ -3576,11 +3574,11 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 582 - "Phase 3.8 Plan 04: Lane 3 — Sweep + Vault UI + E2E Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Auto-fixed / handled, Backlog sweep (production one-shot), Deferred / carry-over (reconciled), Dependency graph, Deviations from Plan, E2E skip-guards removed, Graph, Merged-whole verification (offline, no live dev) (+7 more)
 
 ### Community 583 - "Phase 3.8 Plan 06: Integration — Merge, Prove Green, Heal Backlog Summary"
 Cohesion: 0.12
-Nodes (15): Auto-fixed / handled, Backlog sweep (production one-shot), Deferred / carry-over (reconciled), Dependency graph, Deviations from Plan, E2E skip-guards removed, Graph, Merged-whole verification (offline, no live dev) (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 584 - "Phase 3 Plan 01: Guardrails Domain Logic Summary"
 Cohesion: 0.12
@@ -3592,19 +3590,19 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 586 - "Phase 4 Plan 04: Backend Intake Spine Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Cross-Lane Note (for Lane A), Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 587 - "Phase 4 Plan 05: Intake UI (IntakeControls.tsx + Playwright E2E) Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Cross-Lane Note (for Lane A), Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments (Task 1 only), Cross-Lane Note (unchanged from 04-05, restated for Task 2's benefit), Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 588 - "Phase 4 Plan 06: Phase Close (Task 1 of 3 — PAUSED AT CHECKPOINT) Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments (Task 1 only), Cross-Lane Note (unchanged from 04-05, restated for Task 2's benefit), Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 589 - "Phase 5 Plan 02: Vault Schema + RAG Instance + Graph-Extractor Skill Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+7 more)
 
 ### Community 590 - "Phase 5 Plan 03: Graph Plane (extractGraph + vaultGraph) Summary"
 Cohesion: 0.12
@@ -3616,7 +3614,7 @@ Nodes (3): ALTERNATE, convexBin, SCENES
 
 ### Community 592 - "Phase 5 Plan 04: Vault Ingest Pipeline Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered (+7 more)
+Nodes (15): Accomplishments, Decisions Made, Deferred / Carry-forward, Dependency graph, Deviations from Plan, Environment workaround (not committed), Files Created/Modified, Issues Encountered (+7 more)
 
 ### Community 593 - "Playbook 07 — Customer Referrals"
 Cohesion: 0.25
@@ -3660,11 +3658,11 @@ Nodes (7): Attribution, Pricing — the Price-to-Value Discrepancy and the Virtu
 
 ### Community 603 - "Phase 5 Plan 07: Knowledge Vault Phase-Close Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Decisions Made, Deferred / Carry-forward, Dependency graph, Deviations from Plan, Environment workaround (not committed), Files Created/Modified, Issues Encountered (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 604 - "Phase 6 Plan 01: Voice Foundations Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
 
 ### Community 605 - "traceParity.test.ts"
 Cohesion: 0.32
@@ -3672,7 +3670,7 @@ Nodes (6): CARDS, REPO, SCHEMA, schemaToolLiterals(), sliceBlock(), verbKeys()
 
 ### Community 606 - "Phase 6 Plan 02: Voice Data + Registry Skills Foundation Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 607 - "Phase 06 Plan 03: Voice Token Seam Summary"
 Cohesion: 0.12
@@ -3688,11 +3686,11 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 610 - "Phase 6 Plan 7: Post-Call Brief Review + Plan Handoff Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
 
 ### Community 611 - "Phase 7 Plan 01: Wave-0 Foundation Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 612 - "Phase 7 Plan 02: Real WORM S3 Export Summary"
 Cohesion: 0.12
@@ -3704,11 +3702,11 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 614 - "Phase 7 Plan 04: Cockpit Resilience — Agent-Timeout Notification + Fail-Closed Revise Cap Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
 
 ### Community 615 - "Phase 8 Plan 07: SkillOpt Offline Batch Runner Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 616 - "12. Implementation sequence"
 Cohesion: 0.20
@@ -3720,19 +3718,19 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 618 - "Phase 11 Plan 03: Conversational Onboarding & First-Run Gate Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Auto-fixed Issues, Carried-Forward Deferred Items (still open, NOT fixed here), Deferred Verification — carried into 12-06, Dependency graph, Deviations from Plan, Next, Phase 12 Plan 05: Gap → Approvable Next-Step Memo Summary, Scope boundaries honored (+7 more)
 
 ### Community 619 - "Phase 12 Plan 05: Gap → Approvable Next-Step Memo Summary"
 Cohesion: 0.12
-Nodes (15): Auto-fixed Issues, Carried-Forward Deferred Items (still open, NOT fixed here), Deferred Verification — carried into 12-06, Dependency graph, Deviations from Plan, Next, Phase 12 Plan 05: Gap → Approvable Next-Step Memo Summary, Scope boundaries honored (+7 more)
+Nodes (15): Auto-fixed Issues, Carried-Forward Deferred Items (still open), Dependency graph, Deviations from Plan, Known Gap — logged, NOT fixed, Next, Phase 12 Plan 06: Eval Gate — Assessment Fixtures + Cockpit Teaching Summary, Scope boundaries honored (+7 more)
 
 ### Community 620 - "Phase 12 Plan 06: Eval Gate — Assessment Fixtures + Cockpit Teaching Summary"
 Cohesion: 0.12
-Nodes (15): Auto-fixed Issues, Carried-Forward Deferred Items (still open), Dependency graph, Deviations from Plan, Known Gap — logged, NOT fixed, Next, Phase 12 Plan 06: Eval Gate — Assessment Fixtures + Cockpit Teaching Summary, Scope boundaries honored (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 621 - "Phase 13 Plan 01: Proactive Review Foundations Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (16): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: Append-only optional args on a shared function, Pattern 2: Structural absence over instruction (the least-privilege tool-set), Pattern 3: Governed stop = conversational reply, never a DLQ, Pattern 4: Closed union + exhaustive switch as the fail-closed mechanism, Pattern 5: An action that mints its own turnId so the trace works off the loop's caller, Question 1: Where the router lives, and what `sub_agent` does today (+8 more)
 
 ### Community 622 - "Decision"
 Cohesion: 0.20
@@ -3740,11 +3738,11 @@ Nodes (9): 1. Marketing is a pre-beta milestone, and the override is recorded as
 
 ### Community 623 - "Architecture Patterns"
 Cohesion: 0.12
-Nodes (16): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: Append-only optional args on a shared function, Pattern 2: Structural absence over instruction (the least-privilege tool-set), Pattern 3: Governed stop = conversational reply, never a DLQ, Pattern 4: Closed union + exhaustive switch as the fail-closed mechanism, Pattern 5: An action that mints its own turnId so the trace works off the loop's caller, Question 1: Where the router lives, and what `sub_agent` does today (+8 more)
+Nodes (15): 16-09 live golden gate blocked before fixture execution (2026-07-30) — DID NOT REPRODUCE 2026-07-31, 16-09 SETTLED 2026-07-31 — the research plane is built but the agent was never TOLD about it, DEFERRED 2026-08-02 (owner) — ACTN-03 is ENGINEERING-COMPLETE and BLOCKED ON BILLING ONLY, Discarded with the lane worktree (2026-07-31), Original record (2026-07-30, lane worktree `agent/research-16-09`), Phase 16 Deferred Items, Status and the three doors, The one consequence of deferring — READ THIS BEFORE PLANNING 18-08 (+7 more)
 
 ### Community 624 - "Phase 16 Deferred Items"
 Cohesion: 0.12
-Nodes (15): 16-09 live golden gate blocked before fixture execution (2026-07-30) — DID NOT REPRODUCE 2026-07-31, 16-09 SETTLED 2026-07-31 — the research plane is built but the agent was never TOLD about it, DEFERRED 2026-08-02 (owner) — ACTN-03 is ENGINEERING-COMPLETE and BLOCKED ON BILLING ONLY, Discarded with the lane worktree (2026-07-31), Original record (2026-07-30, lane worktree `agent/research-16-09`), Phase 16 Deferred Items, Status and the three doors, The one consequence of deferring — READ THIS BEFORE PLANNING 18-08 (+7 more)
+Nodes (15): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Deviations from Plan, Issues Encountered, Next Phase Readiness, Performance (+7 more)
 
 ### Community 625 - "One-Page Advertising Checklist"
 Cohesion: 0.29
@@ -3800,27 +3798,27 @@ Nodes (6): build_stack(), main(), _parse_inline_item(), items: list of {'name', 
 
 ### Community 638 - "Phase 17 Plan 03: Governed Calendar Tool Surface Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Deviations from Plan, Issues Encountered, Next Phase Readiness, Performance (+7 more)
+Nodes (15): 1. [Rule 1 - Bug] The research's `not.toMatch(/onerror/i)` assertion is unsatisfiable, 2. [Rule 3 - Blocking] CRLF would silently break the structural test's anchor, 3. [Rule 1 - Bug] Two interpolations the research's shape would have left raw, 4. [Documentation] The plan's stated collision expectation is off by one, check-playbooks, Commits, Deviations from Plan, Gates (+7 more)
 
 ### Community 639 - "Phase 18 Plan 01: Format parameterization + the HTML renderer Summary"
 Cohesion: 0.12
-Nodes (15): 1. [Rule 1 - Bug] The research's `not.toMatch(/onerror/i)` assertion is unsatisfiable, 2. [Rule 3 - Blocking] CRLF would silently break the structural test's anchor, 3. [Rule 1 - Bug] Two interpolations the research's shape would have left raw, 4. [Documentation] The plan's stated collision expectation is off by one, check-playbooks, Commits, Deviations from Plan, Gates (+7 more)
+Nodes (15): 17.1-01 early-flip trap). `requirements mark-complete PIPE-01` was NOT run., Accomplishments, and the lane's standing rule is that PIPE-01/ACTN-05 stay Pending until the phase closes (the, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness (+7 more)
 
 ### Community 640 - "Phase 19 Plan 03: The CAN-SPAM postal address Summary"
 Cohesion: 0.12
-Nodes (15): 17.1-01 early-flip trap). `requirements mark-complete PIPE-01` was NOT run., Accomplishments, and the lane's standing rule is that PIPE-01/ACTN-05 stay Pending until the phase closes (the, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 641 - "Phase 25.1 Plan 01: renderReel Honest Terminals Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
 
 ### Community 642 - "Phase 25.1 Plan 02: Stuck-Work Watchdog Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Mutation results (each reddens exactly ONE test, and no other), Next Phase Readiness (+7 more)
 
 ### Community 643 - "Phase 25.1 Plan 03: Media Vault Persistence Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Dependency graph, Deviations from Plan, Issues Encountered, Metrics, Mutation results (each reddens exactly ONE test, and no other), Next Phase Readiness (+7 more)
+Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
 
 ### Community 644 - "Phase 33 Plan 02: Plan-Row State + Governed Mutations Summary"
 Cohesion: 0.12
@@ -3836,19 +3834,19 @@ Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 647 - "Phase 33 Plan 04: Failure/Retry Backend Summary"
 Cohesion: 0.12
-Nodes (15): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+7 more)
+Nodes (15): A code is never prose, Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, In-plan judgement calls, Metrics, Phase 33 Plan 08: Grounded citations and clear failure on the canvas Summary (+7 more)
 
 ### Community 648 - "Phase 33 Plan 08: Grounded citations and clear failure on the canvas Summary"
 Cohesion: 0.12
-Nodes (15): A code is never prose, Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, In-plan judgement calls, Metrics, Phase 33 Plan 08: Grounded citations and clear failure on the canvas Summary (+7 more)
+Nodes (15): Add After Validation (v1.x), Anti-Features (Commonly Requested, Often Problematic), Competitive Landscape Snapshot (mid-2026), Competitor Feature Analysis, Dependency Notes, Differentiators (Competitive Advantage), Feature Dependencies, Feature Landscape (+7 more)
 
 ### Community 649 - "Feature Research"
 Cohesion: 0.12
-Nodes (15): Add After Validation (v1.x), Anti-Features (Commonly Requested, Often Problematic), Competitive Landscape Snapshot (mid-2026), Competitor Feature Analysis, Dependency Notes, Differentiators (Competitive Advantage), Feature Dependencies, Feature Landscape (+7 more)
+Nodes (15): 1. Business-evaluation engine — **NO new dependencies**, 2. Real sub-agent dispatch — **NO new runtime dependency** (promote one devDep), 3. Non-email action tools, 4. Media canvas (images + video ≤3 min) — **add an MCP client; the Pikar-Ai MCP IS the media backend**, 5. Dynamic / self-authored skills — **NO new dependency**, 6. ISO 9001:2015 QMS tooling for software — **NO runtime dependency (mostly docs + native tables)**, 7. Microsoft Graph / Outlook (second email provider, DLVR-02) — **add MSAL; keep API calls on raw `fetch`**, Alternatives Considered (+7 more)
 
 ### Community 650 - "Recommended Stack — per new capability"
-Cohesion: 0.12
-Nodes (15): 1. Business-evaluation engine — **NO new dependencies**, 2. Real sub-agent dispatch — **NO new runtime dependency** (promote one devDep), 3. Non-email action tools, 4. Media canvas (images + video ≤3 min) — **add an MCP client; the Pikar-Ai MCP IS the media backend**, 5. Dynamic / self-authored skills — **NO new dependency**, 6. ISO 9001:2015 QMS tooling for software — **NO runtime dependency (mostly docs + native tables)**, 7. Microsoft Graph / Outlook (second email provider, DLVR-02) — **add MSAL; keep API calls on raw `fetch`**, Alternatives Considered (+7 more)
+Cohesion: 0.13
+Nodes (14): dependencies, fflate, @pikar/cost, xlsx, devDependencies, vitest, exports, name (+6 more)
 
 ### Community 651 - "reportsView.test.ts"
 Cohesion: 0.15
@@ -3856,11 +3854,11 @@ Nodes (12): BusinessSection(), GovernanceSection(), OwnerSection(), PERIODS, Sec
 
 ### Community 652 - "package.json"
 Cohesion: 0.13
-Nodes (14): dependencies, fflate, @pikar/cost, xlsx, devDependencies, vitest, exports, name (+6 more)
+Nodes (14): ⚠ A stale claim that was propagated into 11 files — partially swept, Also still open from the previous handoff, Context Handoff — 2026-07-27, ⏸ CURRENT POSITION (updated 2026-07-27, after the freeze + waves 2-3), Environment, ⚠ NEW — the typecheck baseline is not clean, and `pnpm typecheck` lies, Phase 16 — what is owed, Phase 17 — done, nothing owed (+6 more)
 
 ### Community 653 - "Context Handoff — 2026-07-27"
 Cohesion: 0.13
-Nodes (14): ⚠ A stale claim that was propagated into 11 files — partially swept, Also still open from the previous handoff, Context Handoff — 2026-07-27, ⏸ CURRENT POSITION (updated 2026-07-27, after the freeze + waves 2-3), Environment, ⚠ NEW — the typecheck baseline is not clean, and `pnpm typecheck` lies, Phase 16 — what is owed, Phase 17 — done, nothing owed (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
 
 ### Community 654 - "Phase 1 Plan 2: Tenant-Scoping Substrate Summary"
 Cohesion: 0.13
@@ -3868,7 +3866,7 @@ Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from P
 
 ### Community 655 - "Phase 1 Plan 03: Insert-Only Audit Module Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
+Nodes (14): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+6 more)
 
 ### Community 656 - "Phase 01 / Plan 05: Graphify Activation + Ponytail Discipline Summary"
 Cohesion: 0.13
@@ -3880,7 +3878,7 @@ Nodes (14): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph
 
 ### Community 658 - "Phase 2 Plan 04: Review Gate Decision Union + Write-Once Telemetry Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Auto-fixed Issues, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
 
 ### Community 659 - "ltgp_cac.py"
 Cohesion: 0.60
@@ -3912,11 +3910,11 @@ Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from P
 
 ### Community 666 - "Phase 03.1 Plan 06: Plans Adapter + Cockpit Draft Seam Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
+Nodes (14): 1. Existing `packages/core` conventions (the template), 2. Email validation to reuse (do NOT rebuild), 3. Recommended `emailIntent` API shape, 4. How the mode (individual/group) slot fits, 5. Test approach (the ONE runnable check), 6. Open questions / risks, Confidence, Key findings (+6 more)
 
 ### Community 667 - "Phase 3.1: Cockpit Core — Research (Pure `emailIntent` Module)"
 Cohesion: 0.13
-Nodes (14): 1. Existing `packages/core` conventions (the template), 2. Email validation to reuse (do NOT rebuild), 3. Recommended `emailIntent` API shape, 4. How the mode (individual/group) slot fits, 5. Test approach (the ONE runnable check), 6. Open questions / risks, Confidence, Key findings (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
 
 ### Community 668 - "Phase 03.2.1 Plan 01: Cockpit-Agent Skill Registry Seed Summary"
 Cohesion: 0.13
@@ -3928,11 +3926,11 @@ Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from P
 
 ### Community 670 - "Phase 03.2.1 Plan 05: Clean FSM→Agent Cutover Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Gap-closure during verification (live-only defects), Issues Encountered, Metrics (+6 more)
 
 ### Community 671 - "Phase 03.2.1 Plan 06: Phase Close — Cockpit Playbook Rewrite + Live Human-Verify Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Gap-closure during verification (live-only defects), Issues Encountered, Metrics (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
 
 ### Community 672 - "Phase 03.2 Plan 02: Transient Candidate Fields Summary"
 Cohesion: 0.13
@@ -3980,11 +3978,11 @@ Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from P
 
 ### Community 688 - "Phase 3.8 Plan 01: Wave-0 Extraction Contract Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
+Nodes (14): Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Failure & progress UX, Format coverage (v1), Implementation Decisions, Integration Points (+6 more)
 
 ### Community 689 - "Implementation Decisions"
 Cohesion: 0.13
-Nodes (14): Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Failure & progress UX, Format coverage (v1), Implementation Decisions, Integration Points (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
 
 ### Community 690 - "Phase 3 Plan 02: Guardrail Schema Rails Summary"
 Cohesion: 0.13
@@ -4032,11 +4030,11 @@ Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from P
 
 ### Community 701 - "Phase 8 Plan 03: Optimizer Eligibility (Trigger Policy) Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
+Nodes (14): Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Feedback capture UX (IMPR-01), Implementation Decisions, Integration Points, Phase 8: Self-Improvement - Context (+6 more)
 
 ### Community 702 - "Implementation Decisions"
 Cohesion: 0.13
-Nodes (14): Claude's Discretion, Deferred Ideas, Established Patterns, Existing Code Insights, Feedback capture UX (IMPR-01), Implementation Decisions, Integration Points, Phase 8: Self-Improvement - Context (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
 
 ### Community 703 - "Phase 11 Plan 02: Onboarding Adapter (embed + retrieve + redaction) Summary"
 Cohesion: 0.13
@@ -4052,55 +4050,55 @@ Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from P
 
 ### Community 706 - "Phase 12 Plan 03: Business Evaluation Engine Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
+Nodes (14): Auto-fixed Issues, Carried-Forward Deferred Items (still open, NOT fixed here), Deferred Verification — Task 3 (NOT passed, NOT skipped), Dependency graph, Deviations from Plan, Next, Phase 12 Plan 04: Cockpit Evaluation Surface Summary, Process Deviation (+6 more)
 
 ### Community 707 - "Phase 12 Plan 04: Cockpit Evaluation Surface Summary"
 Cohesion: 0.13
-Nodes (14): Auto-fixed Issues, Carried-Forward Deferred Items (still open, NOT fixed here), Deferred Verification — Task 3 (NOT passed, NOT skipped), Dependency graph, Deviations from Plan, Next, Phase 12 Plan 04: Cockpit Evaluation Surface Summary, Process Deviation (+6 more)
+Nodes (14): 10. Lane collision surface (Phases 16 + 17 are LIVE), 11. Open items the planner must resolve, 12. Deliberately NOT re-investigated, 1. The current call chain — exact sites, 2. ★ CENTRAL FINDING — the sniff cannot live at the scheduling gate, 3. The silent-skip blast radius is THREE sites, not one, 4. Magic-byte signatures, 5. ★ SheetJS — HIGHEST RISK, must be a SPIKE not an assumption (+6 more)
 
 ### Community 708 - "Phase 15.2 Research — Vault Universal Format Recognition & Extraction Fan-Out"
 Cohesion: 0.13
-Nodes (14): 10. Lane collision surface (Phases 16 + 17 are LIVE), 11. Open items the planner must resolve, 12. Deliberately NOT re-investigated, 1. The current call chain — exact sites, 2. ★ CENTRAL FINDING — the sniff cannot live at the scheduling gate, 3. The silent-skip blast radius is THREE sites, not one, 4. Magic-byte signatures, 5. ★ SheetJS — HIGHEST RISK, must be a SPIKE not an assumption (+6 more)
+Nodes (14): 15.3-09 — the Google Drive rail (VALT-13), `39522a1` — the picker shows the FILES, from the same single request, `d677d84` — we render the Drive picker ourselves, Dependency graph, Deviations from the plan, stated, Follow-up, 2026-08-05 — the picker, and what the live run actually proved, Owed, Tech tracking (+6 more)
 
 ### Community 709 - "15.3-09 — the Google Drive rail (VALT-13)"
 Cohesion: 0.13
-Nodes (14): 15.3-09 — the Google Drive rail (VALT-13), `39522a1` — the picker shows the FILES, from the same single request, `d677d84` — we render the Drive picker ourselves, Dependency graph, Deviations from the plan, stated, Follow-up, 2026-08-05 — the picker, and what the live run actually proved, Owed, Tech tracking (+6 more)
+Nodes (14): Claude's Discretion, Deferred Ideas, Empty and Error States, Folder Browse, Implementation Decisions, Phase 15.4: Vault Redesign and Scoped Browse Correctness - Context, Phase Boundary, Preview (+6 more)
 
 ### Community 710 - "Implementation Decisions"
 Cohesion: 0.13
-Nodes (14): Claude's Discretion, Deferred Ideas, Empty and Error States, Folder Browse, Implementation Decisions, Phase 15.4: Vault Redesign and Scoped Browse Correctness - Context, Phase Boundary, Preview (+6 more)
+Nodes (14): 1. Agent preflight — zero provider writes, 2. Owner checkpoint A — delegated consent only, 3. Availability and approved create — both providers, 4. Stage updates, then owner checkpoint B — make both etags stale, 5. Conflict refusal, fresh restage, and approved updates, 6. Delete semantics and cleanup, 7. Owner checkpoint C — final visual check, 8. Final machine reconciliation (+6 more)
 
 ### Community 711 - "Phase 17 Calendar Actions — agent-operated live UAT runbook"
 Cohesion: 0.13
-Nodes (14): 1. Agent preflight — zero provider writes, 2. Owner checkpoint A — delegated consent only, 3. Availability and approved create — both providers, 4. Stage updates, then owner checkpoint B — make both etags stale, 5. Conflict refusal, fresh restage, and approved updates, 6. Delete semantics and cleanup, 7. Owner checkpoint C — final visual check, 8. Final machine reconciliation (+6 more)
+Nodes (14): Deviations from Plan, Mutation check (mandatory, performed), Notes for the Next Plan, Phase 18 Plan 04: The Vault Write Plane Summary, Self-Check: PASSED, The decision that must not be changed later, The playbook hook passed, and that is a FALSE NEGATIVE — record it, The retrieval exclusion is an ABSENCE, and it is annotated as one (+6 more)
 
 ### Community 712 - "Phase 18 Plan 04: The Vault Write Plane Summary"
 Cohesion: 0.13
-Nodes (14): Deviations from Plan, Mutation check (mandatory, performed), Notes for the Next Plan, Phase 18 Plan 04: The Vault Write Plane Summary, Self-Check: PASSED, The decision that must not be changed later, The playbook hook passed, and that is a FALSE NEGATIVE — record it, The retrieval exclusion is an ABSENCE, and it is annotated as one (+6 more)
+Nodes (14): Deviations from Plan, Notes for the Next Plan, Phase 18 Plan 07: The Output Card Summary, Self-Check: PASSED, SourceCard is byte-unchanged, ⚠ STILL OWED, AND BOTH BELONG TO 18-09, The exact copy that shipped, The null case is in the spec on purpose (+6 more)
 
 ### Community 713 - "Phase 18 Plan 07: The Output Card Summary"
 Cohesion: 0.13
-Nodes (14): Deviations from Plan, Notes for the Next Plan, Phase 18 Plan 07: The Output Card Summary, Self-Check: PASSED, SourceCard is byte-unchanged, ⚠ STILL OWED, AND BOTH BELONG TO 18-09, The exact copy that shipped, The null case is in the spec on purpose (+6 more)
+Nodes (14): 1. [Rule 2 — Missing critical functionality] A `CONSENT_WORDING_REQUIRED` floor on the helper, 2. [Plan-internal] One commit, not per-task commits, 3. [Noted, not a deviation] `filled` has no equality short-circuit, 4. [Recorded] The no-op skip DOES change one hand-add behaviour, Commits, Deferred / Out of Scope, Deviations from Plan, Mutation Evidence (+6 more)
 
 ### Community 714 - "Phase 19.1 Plan 03: fill-empty-only as a Flag on the ONE Writer Summary"
 Cohesion: 0.13
-Nodes (14): 1. [Rule 2 — Missing critical functionality] A `CONSENT_WORDING_REQUIRED` floor on the helper, 2. [Plan-internal] One commit, not per-task commits, 3. [Noted, not a deviation] `filled` has no equality short-circuit, 4. [Recorded] The no-op skip DOES change one hand-add behaviour, Commits, Deferred / Out of Scope, Deviations from Plan, Mutation Evidence (+6 more)
+Nodes (14): 1. [Rule 1 — Bug in the plan's premise] The createdAt tie had to be forced with a sentinel, 2. [Plan-internal] One commit, not per-task commits, 3. [Beyond the plan's list] Two extra assertions, 4. [Noted] The plan's line numbers were stale, Commits, Deferred / Out of Scope, Deviations from Plan, Mutation Evidence (+6 more)
 
 ### Community 715 - "Phase 19.1 Plan 04: matchExisting and importContacts Summary"
 Cohesion: 0.13
-Nodes (14): 1. [Rule 1 — Bug in the plan's premise] The createdAt tie had to be forced with a sentinel, 2. [Plan-internal] One commit, not per-task commits, 3. [Beyond the plan's list] Two extra assertions, 4. [Noted] The plan's line numbers were stale, Commits, Deferred / Out of Scope, Deviations from Plan, Mutation Evidence (+6 more)
+Nodes (14): Automated evidence collected 2026-08-16, Environmental/incomplete checks, Gaps summary, Goal Achievement, Key-link verification, Live evidence already obtained, Observable truths, Optional live presentation spot-check (+6 more)
 
 ### Community 716 - "Phase 22: Owner Authorization Primitive Verification Report"
 Cohesion: 0.13
-Nodes (14): Automated evidence collected 2026-08-16, Environmental/incomplete checks, Gaps summary, Goal Achievement, Key-link verification, Live evidence already obtained, Observable truths, Optional live presentation spot-check (+6 more)
+Nodes (14): 23-03 SUMMARY — the model can now draft a skill, and still cannot activate one, Ceiling, Deliberately NOT done, Measured, Mutation evidence (all executed and restored), Next, Real-loop evidence, not shim evidence, Shared-tree note (+6 more)
 
 ### Community 717 - "23-03 SUMMARY — the model can now draft a skill, and still cannot activate one"
 Cohesion: 0.13
-Nodes (14): 23-03 SUMMARY — the model can now draft a skill, and still cannot activate one, Ceiling, Deliberately NOT done, Measured, Mutation evidence (all executed and restored), Next, Real-loop evidence, not shim evidence, Shared-tree note (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Governance moved to a shared seam, Next Phase Readiness, Performance, Phase 25 Plan 05: Microsoft Delivery Arm Summary (+6 more)
 
 ### Community 718 - "Phase 25 Plan 05: Microsoft Delivery Arm Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Governance moved to a shared seam, Next Phase Readiness, Performance, Phase 25 Plan 05: Microsoft Delivery Arm Summary (+6 more)
+Nodes (14): 26-17 — Reports, connected end to end, and the nav that only lit after the owner said so, A test a prose comment could satisfy is not a test, Blockers hit, and what they actually were, Deviations, Evidence, One vocabulary, two renderers, Owner verdict, Rollback (+6 more)
 
 ### Community 719 - "vaultExtract.ts"
 Cohesion: 0.03
@@ -4108,31 +4106,31 @@ Nodes (81): applyClassification, countTerminal(), deleteVaultDoc, docEntities, g
 
 ### Community 720 - "26-17 — Reports, connected end to end, and the nav that only lit after the owner said so"
 Cohesion: 0.13
-Nodes (14): 26-17 — Reports, connected end to end, and the nav that only lit after the owner said so, A test a prose comment could satisfy is not a test, Blockers hit, and what they actually were, Deviations, Evidence, One vocabulary, two renderers, Owner verdict, Rollback (+6 more)
+Nodes (14): Candidate and exposure gate, Claude's Discretion, Deferred Ideas, Execution starts at 27-02, not 27-01, Implementation Decisions, Native adaptation, Outcome measurement, Owner decisions — 2026-08-23 (binding; do not re-litigate) (+6 more)
 
 ### Community 721 - "Implementation Decisions"
 Cohesion: 0.13
-Nodes (14): Candidate and exposure gate, Claude's Discretion, Deferred Ideas, Execution starts at 27-02, not 27-01, Implementation Decisions, Native adaptation, Outcome measurement, Owner decisions — 2026-08-23 (binding; do not re-litigate) (+6 more)
+Nodes (14): 10. For 33.1-04 and 33.1-05, 1. Baseline, by FAILURE COUNT, 2. RED, observed before the fix — the exact text, 33.1-03 — SUMMARY, 3. What changed, 4. The parity guard, and the mutation check that proves it, 5. A regression this plan caused, and what caught it, 6. Post-fix gates — every exit code on its own line (+6 more)
 
 ### Community 722 - "33.1-03 — SUMMARY"
 Cohesion: 0.13
-Nodes (14): 10. For 33.1-04 and 33.1-05, 1. Baseline, by FAILURE COUNT, 2. RED, observed before the fix — the exact text, 33.1-03 — SUMMARY, 3. What changed, 4. The parity guard, and the mutation check that proves it, 5. A regression this plan caused, and what caught it, 6. Post-fix gates — every exit code on its own line (+6 more)
+Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
 
 ### Community 723 - "Phase 33 Plan 01: Storyboard Parse Contracts Summary"
 Cohesion: 0.13
-Nodes (14): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+6 more)
+Nodes (14): Accumulated Context, Blockers/Concerns, Current Position, Decisions, Historical Position — Phase 14 (SUPERSEDED, kept for context), Lane Status, Milestone v2.0 Phase Map, Pending Todos (+6 more)
 
 ### Community 724 - "Project State"
 Cohesion: 0.13
-Nodes (14): Accumulated Context, Blockers/Concerns, Current Position, Decisions, Historical Position — Phase 14 (SUPERSEDED, kept for context), Lane Status, Milestone v2.0 Phase Map, Pending Todos (+6 more)
+Nodes (14): compilerOptions, declaration, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, lib, module, moduleResolution (+6 more)
 
 ### Community 725 - "compilerOptions"
-Cohesion: 0.13
-Nodes (14): compilerOptions, declaration, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, lib, module, moduleResolution (+6 more)
+Cohesion: 0.14
+Nodes (13): dependencies, @pikar/core, @pikar/pii, devDependencies, vitest, exports, name, private (+5 more)
 
 ### Community 726 - "package.json"
 Cohesion: 0.14
-Nodes (13): dependencies, @pikar/core, @pikar/pii, devDependencies, vitest, exports, name, private (+5 more)
+Nodes (13): Card + Activity-Step UI (research priority #8), Don't Hand-Roll, evaluateBusiness Tool Shape (research priority #2), Gap→Action Wiring (research priority #5), Grounding (research priority #3), How golden fixtures get added (grounded-assessment + healthy no-gaps), Metadata, Open Questions (+5 more)
 
 ### Community 727 - "officeText.test.ts"
 Cohesion: 0.15
@@ -4140,7 +4138,7 @@ Nodes (5): MONTHS, pts(), NOTE: extractOfficeText takes ONE argument. No MIME ty
 
 ### Community 728 - "Phase 12: Business Evaluation Engine - Research"
 Cohesion: 0.14
-Nodes (13): Card + Activity-Step UI (research priority #8), Don't Hand-Roll, evaluateBusiness Tool Shape (research priority #2), Gap→Action Wiring (research priority #5), Grounding (research priority #3), How golden fixtures get added (grounded-assessment + healthy no-gaps), Metadata, Open Questions (+5 more)
+Nodes (13): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance (+5 more)
 
 ### Community 729 - "Phase 15.4 Plan 02: Connected Nord Edge Vault Browse Summary"
 Cohesion: 0.14
@@ -4156,15 +4154,15 @@ Nodes (8): 8.7 Knowledge Vault redesign — `/dashboard/vault`, Browse state map
 
 ### Community 732 - "Phase 15.4 Plan 03: Governed Vault Preview and Import Summary"
 Cohesion: 0.14
-Nodes (13): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance (+5 more)
+Nodes (13): Deviations from Plan, Mutation checks (both performed, both reverted green), Notes for the Next Plan, Phase 18 Plan 06: The createDocument Tool Summary, Self-Check: PASSED, The audit payload, The exact SMOKE sentinel 18-07's spec must send, The one design call this plan had to make: how the card accumulates (+5 more)
 
 ### Community 733 - "Phase 18 Plan 06: The createDocument Tool Summary"
 Cohesion: 0.14
-Nodes (13): Deviations from Plan, Mutation checks (both performed, both reverted green), Notes for the Next Plan, Phase 18 Plan 06: The createDocument Tool Summary, Self-Check: PASSED, The audit payload, The exact SMOKE sentinel 18-07's spec must send, The one design call this plan had to make: how the card accumulates (+5 more)
+Nodes (14): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1 — The write: a new `internalMutation` in `vault.ts`, copying `ingestFromAttachment`, Pattern 2 — The tool: one key in `buildCockpitTools`, an EXPLICIT closed enum, Pattern 2b — Revision: the SAME tool, one optional `replace` #index (the locked replace-in-place), Pattern 3 — Provenance: ONE optional field carrying both provenance and the deferred promotion bit, Pattern 4 — Retrieval exclusion is STRUCTURAL: don't ingest, Pattern 5 — Format parameterization: the concrete minimal diff (SC#4) (+6 more)
 
 ### Community 734 - "Architecture Patterns"
 Cohesion: 0.14
-Nodes (14): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1 — The write: a new `internalMutation` in `vault.ts`, copying `ingestFromAttachment`, Pattern 2 — The tool: one key in `buildCockpitTools`, an EXPLICIT closed enum, Pattern 2b — Revision: the SAME tool, one optional `replace` #index (the locked replace-in-place), Pattern 3 — Provenance: ONE optional field carrying both provenance and the deferred promotion bit, Pattern 4 — Retrieval exclusion is STRUCTURAL: don't ingest, Pattern 5 — Format parameterization: the concrete minimal diff (SC#4) (+6 more)
+Nodes (13): 1. [Plan-internal] One commit, no per-task TDD commits — the plan's own objective, 2. [Rule 3 — Blocking] The playbook's HOOK ARTIFACT entry was deleted, not merely superseded, 3. Baseline was 0, not the expected 2, Commits, Deferred / Out of Scope, Deviations from Plan, Mutation Evidence, Phase 19.1 Plan 02: The Two Union Widenings Summary (+5 more)
 
 ### Community 735 - "The submit adapter (20-05)"
 Cohesion: 0.29
@@ -4172,19 +4170,19 @@ Nodes (7): Failure → a CODE, never provider prose, THE EXHAUSTIVENESS RULE, Th
 
 ### Community 736 - "Phase 19.1 Plan 02: The Two Union Widenings Summary"
 Cohesion: 0.14
-Nodes (13): 1. [Plan-internal] One commit, no per-task TDD commits — the plan's own objective, 2. [Rule 3 — Blocking] The playbook's HOOK ARTIFACT entry was deleted, not merely superseded, 3. Baseline was 0, not the expected 2, Commits, Deferred / Out of Scope, Deviations from Plan, Mutation Evidence, Phase 19.1 Plan 02: The Two Union Widenings Summary (+5 more)
+Nodes (13): Convex Limits — the batch-size evidence, Don't Hand-Roll, Metadata, No migration is required, Open Questions, `packages/core` Conventions, Phase 19.1: Bulk Contact Import (CSV) — Research, Phase Requirements (+5 more)
 
 ### Community 737 - "Phase 19.1: Bulk Contact Import (CSV) — Research"
 Cohesion: 0.14
-Nodes (13): Convex Limits — the batch-size evidence, Don't Hand-Roll, Metadata, No migration is required, Open Questions, `packages/core` Conventions, Phase 19.1: Bulk Contact Import (CSV) — Research, Phase Requirements (+5 more)
+Nodes (14): Common Pitfalls, P10 — the shared working tree, P11 — the backend vitest fork crashes under component registration pressure, P12 — the typecheck baseline may not be zero, P13 — `createdAt` ties on a bulk import, P1 — `upsertContact`'s arg validator is a hand-maintained union with nothing binding it, P2 — `ORIGINS` in `core/src/contacts.ts:126` is typed `readonly string[]`, P3 — the Pipeline consent chip drops `source` entirely (+6 more)
 
 ### Community 738 - "Common Pitfalls"
 Cohesion: 0.14
-Nodes (14): Common Pitfalls, P10 — the shared working tree, P11 — the backend vitest fork crashes under component registration pressure, P12 — the typecheck baseline may not be zero, P13 — `createdAt` ties on a bulk import, P1 — `upsertContact`'s arg validator is a hand-maintained union with nothing binding it, P2 — `ORIGINS` in `core/src/contacts.ts:126` is typed `readonly string[]`, P3 — the Pipeline consent chip drops `source` entirely (+6 more)
+Nodes (13): Auto-fixed, Deviations from Plan, Judgement calls recorded, Notes for the next plans, Phase 19 Plan 08: Contacts-first resolution and the CRM staging tool Summary, Self-Check: PASSED, Task 1 — contacts-first + the one staging tool (`b982c68` RED, `c9b42eb` GREEN), Task 2 — the three registration surfaces (same commit, `c9b42eb`) (+5 more)
 
 ### Community 739 - "Phase 19 Plan 08: Contacts-first resolution and the CRM staging tool Summary"
 Cohesion: 0.14
-Nodes (13): Auto-fixed, Deviations from Plan, Judgement calls recorded, Notes for the next plans, Phase 19 Plan 08: Contacts-first resolution and the CRM staging tool Summary, Self-Check: PASSED, Task 1 — contacts-first + the one staging tool (`b982c68` RED, `c9b42eb` GREEN), Task 2 — the three registration surfaces (same commit, `c9b42eb`) (+5 more)
+Nodes (13): Accomplishments, Authentication Gates, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance (+5 more)
 
 ### Community 740 - "The 7-Level Roadmap (Zero to $100M)"
 Cohesion: 0.50
@@ -4228,11 +4226,11 @@ Nodes (3): main(), _offer(), simulate()
 
 ### Community 750 - "Phase 20 Plan 20: Finance Fingerprint Reconciliation Summary"
 Cohesion: 0.14
-Nodes (13): Accomplishments, Authentication Gates, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance (+5 more)
+Nodes (13): Backend typecheck OOM — measured, not hidden, Deviations, Graph, Measured Results, Mutation Proofs (both mandated rows in 21-VALIDATION.md's ledger), Next, NOT DONE AND NOT CLAIMED, Phase 21 Plan 01: Contracts and Schema Foundation Summary (+5 more)
 
 ### Community 751 - "Phase 21 Plan 01: Contracts and Schema Foundation Summary"
 Cohesion: 0.14
-Nodes (13): Backend typecheck OOM — measured, not hidden, Deviations, Graph, Measured Results, Mutation Proofs (both mandated rows in 21-VALIDATION.md's ledger), Next, NOT DONE AND NOT CLAIMED, Phase 21 Plan 01: Contracts and Schema Foundation Summary (+5 more)
+Nodes (13): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance (+5 more)
 
 ### Community 752 - "Phase 22.1 Plan 04: Tenant Data Export Summary"
 Cohesion: 0.14
@@ -4240,7 +4238,7 @@ Nodes (13): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from 
 
 ### Community 753 - "Phase 26 Plan 04: Approvals Read Model Summary"
 Cohesion: 0.14
-Nodes (13): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance (+5 more)
+Nodes (13): a non-owner state no route mounts, a presentation rollback no runtime switch implements, and a, asserted "only evidence is missing" and then asked for three things that could not be produced:, - authorization.md / dashboard-pages.md / cockpit.md: the inverse, and two false claims about, browser run whose own command does not filter and whose owner grant had no inverse. What it, claimed about the IMPLEMENTATION was accurate and is unchanged — the route, projection, controls,, Closed in pre-flight, already on disk, NOT to be redone by this plan:, component tests and nav are landed and correct. Only the EVIDENCE tasks are rewritten., deployment-wide switch ON. (+5 more)
 
 ### Community 754 - "Voice-doc: the consolidated Phase-14 record (14-09)"
 Cohesion: 0.15
@@ -4248,11 +4246,11 @@ Nodes (13): §4 — the log plane, quoted verbatim, Accepted ceilings, each with
 
 ### Community 755 - "26-10-PLAN.md"
 Cohesion: 0.14
-Nodes (13): a non-owner state no route mounts, a presentation rollback no runtime switch implements, and a, asserted "only evidence is missing" and then asked for three things that could not be produced:, - authorization.md / dashboard-pages.md / cockpit.md: the inverse, and two false claims about, browser run whose own command does not filter and whose owner grant had no inverse. What it, claimed about the IMPLEMENTATION was accurate and is unchanged — the route, projection, controls,, Closed in pre-flight, already on disk, NOT to be redone by this plan:, component tests and nav are landed and correct. Only the EVIDENCE tasks are rewritten., deployment-wide switch ON. (+5 more)
+Nodes (13): Accomplishments, Adversarial review of this diff — four confirmed defects, all fixed, `customer-complaint` is granted `proposePlan`, and is the only pack that is, Facts downstream plans must carry, Key Decisions and Deviations, Mutations observed RED, then restored green, Next, Owner decisions, taken 2026-08-23 (after the first five commits) (+5 more)
 
 ### Community 756 - "Phase 27 Plan 02: Native Pack Contracts Summary"
-Cohesion: 0.14
-Nodes (13): Accomplishments, Adversarial review of this diff — four confirmed defects, all fixed, `customer-complaint` is granted `proposePlan`, and is the only pack that is, Facts downstream plans must carry, Key Decisions and Deviations, Mutations observed RED, then restored green, Next, Owner decisions, taken 2026-08-23 (after the first five commits) (+5 more)
+Cohesion: 0.15
+Nodes (12): 10. Frontend brand & UI — read `docs/design/BRAND.md`, 1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter, 2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module, 3. The audit module is insert-only, 4. Audit and dead-letter payloads must be redaction-safe, 5. No hardcoded agent prompts — skills load from the registry, 6. Pinned pre-1.0 component versions must not be bumped casually, 7. Boot order (+4 more)
 
 ### Community 757 - "probe-gemini.mjs"
 Cohesion: 0.25
@@ -4260,15 +4258,15 @@ Nodes (6): args, FIXES, grounded, model, run, starts
 
 ### Community 758 - "Pikar AI — Repository Conventions"
 Cohesion: 0.15
-Nodes (12): 10. Frontend brand & UI — read `docs/design/BRAND.md`, 1. Domain logic lives in pure-TS `packages/*`; `convex/` is a thin adapter, 2. Raw `query`/`mutation`/`action` imports are BANNED outside the wrapper module, 3. The audit module is insert-only, 4. Audit and dead-letter payloads must be redaction-safe, 5. No hardcoded agent prompts — skills load from the registry, 6. Pinned pre-1.0 component versions must not be bumped casually, 7. Boot order (+4 more)
+Nodes (12): dependencies, zod, devDependencies, vitest, exports, name, private, scripts (+4 more)
 
 ### Community 759 - "package.json"
 Cohesion: 0.15
-Nodes (12): dependencies, zod, devDependencies, vitest, exports, name, private, scripts (+4 more)
+Nodes (12): dependencies, ai, devDependencies, vitest, exports, name, private, scripts (+4 more)
 
 ### Community 760 - "package.json"
 Cohesion: 0.15
-Nodes (12): dependencies, ai, devDependencies, vitest, exports, name, private, scripts (+4 more)
+Nodes (12): dependencies, @pikar/core, devDependencies, vitest, exports, name, private, scripts (+4 more)
 
 ### Community 761 - "package.json"
 Cohesion: 0.15
@@ -4276,47 +4274,47 @@ Nodes (12): dependencies, @pikar/core, devDependencies, vitest, exports, name, p
 
 ### Community 762 - "package.json"
 Cohesion: 0.15
-Nodes (12): dependencies, @pikar/core, devDependencies, vitest, exports, name, private, scripts (+4 more)
+Nodes (12): Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required, Invariant Checks (CLAUDE.md), Key Link Verification, Observable Truths, Phase 03.5: Deferred Send Verification Report (+4 more)
 
 ### Community 763 - "Goal Achievement"
 Cohesion: 0.15
-Nodes (12): Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required, Invariant Checks (CLAUDE.md), Key Link Verification, Observable Truths, Phase 03.5: Deferred Send Verification Report (+4 more)
+Nodes (12): Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, Live smoke evidence (Task 3 automation, pre-checkpoint), Metrics, Performance, Phase 3.8 Plan 02: Lane 1 — PDF + Image Extraction Summary (+4 more)
 
 ### Community 764 - "Phase 3.8 Plan 02: Lane 1 — PDF + Image Extraction Summary"
 Cohesion: 0.15
-Nodes (12): Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, Live smoke evidence (Task 3 automation, pre-checkpoint), Metrics, Performance, Phase 3.8 Plan 02: Lane 1 — PDF + Image Extraction Summary (+4 more)
+Nodes (12): Decisions & findings, Deviations from plan, Honesty notes, Key files, Mutation-check results (all three scans PROVEN to fail, then restored byte-identical), Next, Objective, Plan 03.9-02 — Summary (+4 more)
 
 ### Community 767 - "Plan 03.9-02 — Summary"
 Cohesion: 0.15
-Nodes (12): Decisions & findings, Deviations from plan, Honesty notes, Key files, Mutation-check results (all three scans PROVEN to fail, then restored byte-identical), Next, Objective, Plan 03.9-02 — Summary (+4 more)
+Nodes (12): 1. SC3 — Live attachment + dictation → delivered email reflects the content, past guardrails, Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required (Deferred by Design), Key Link Verification, Lane B Boundary Check, Observable Truths (+4 more)
 
 ### Community 768 - "Goal Achievement"
 Cohesion: 0.15
-Nodes (12): 1. SC3 — Live attachment + dictation → delivered email reflects the content, past guardrails, Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required (Deferred by Design), Key Link Verification, Lane B Boundary Check, Observable Truths (+4 more)
+Nodes (12): 1. Visual 1:1 brand check, 2. Live embed + hybrid vector+graph retrieval, Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required, Key Link Verification, Observable Truths (+4 more)
 
 ### Community 769 - "Goal Achievement"
 Cohesion: 0.15
-Nodes (12): 1. Visual 1:1 brand check, 2. Live embed + hybrid vector+graph retrieval, Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required, Key Link Verification, Observable Truths (+4 more)
+Nodes (12): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+4 more)
 
 ### Community 770 - "Phase 6: Live Voice Sessions — Close Summary"
 Cohesion: 0.15
-Nodes (12): Accomplishments, Decisions Made, Dependency graph, Deviations from Plan, Files Created/Modified, Issues Encountered, Metrics, Next Phase Readiness (+4 more)
+Nodes (12): 1. Real S3 WORM object under COMPLIANCE Object Lock, 2. Real external email delivered to a live mailbox, Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required, Key Link Verification, Observable Truths (+4 more)
 
 ### Community 771 - "Goal Achievement"
 Cohesion: 0.15
-Nodes (12): 1. Real S3 WORM object under COMPLIANCE Object Lock, 2. Real external email delivered to a live mailbox, Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required, Key Link Verification, Observable Truths (+4 more)
+Nodes (12): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance, Phase 14 Plan 02: Pure Voice-Doc Domain Summary (+4 more)
 
 ### Community 772 - "Phase 14 Plan 02: Pure Voice-Doc Domain Summary"
 Cohesion: 0.15
-Nodes (12): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance, Phase 14 Plan 02: Pure Voice-Doc Domain Summary (+4 more)
+Nodes (13): Common Pitfalls, Pitfall 10 — Prompt injection is materially stronger in system instructions than in a tool return, Pitfall 11 — Skill seeding version collisions (cross-lane), Pitfall 12 — The known pre-existing red, Pitfall 1 — Widening `evaluations.framework` breaks the web typecheck, Pitfall 2 — `runEvaluation` silently accepts a framework it cannot handle, Pitfall 3 — The gated-skill deadlock, Pitfall 4 — The instruction budget is not free, and it is billed every turn (+5 more)
 
 ### Community 773 - "Common Pitfalls"
 Cohesion: 0.15
-Nodes (13): Common Pitfalls, Pitfall 10 — Prompt injection is materially stronger in system instructions than in a tool return, Pitfall 11 — Skill seeding version collisions (cross-lane), Pitfall 12 — The known pre-existing red, Pitfall 1 — Widening `evaluations.framework` breaks the web typecheck, Pitfall 2 — `runEvaluation` silently accepts a framework it cannot handle, Pitfall 3 — The gated-skill deadlock, Pitfall 4 — The instruction budget is not free, and it is billed every turn (+5 more)
+Nodes (12): Auto-fixed / ordering deviations, Choices inside the plan's latitude (not deviations), Deviations from Plan, For the next plan (15.2-03), Mutation checks — six mutations, six confirmed RED, all reverted green, Phase 15.2 Plan 02: Universal Format Coverage (Pure Layer) Summary, Self-Check: PASSED, Success criteria (+4 more)
 
 ### Community 774 - "Phase 15.2 Plan 02: Universal Format Coverage (Pure Layer) Summary"
 Cohesion: 0.15
-Nodes (12): Auto-fixed / ordering deviations, Choices inside the plan's latitude (not deviations), Deviations from Plan, For the next plan (15.2-03), Mutation checks — six mutations, six confirmed RED, all reverted green, Phase 15.2 Plan 02: Universal Format Coverage (Pure Layer) Summary, Self-Check: PASSED, Success criteria (+4 more)
+Nodes (12): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance, Phase 15.4 Plan 01: Folder-Scoped Vault Search Summary (+4 more)
 
 ### Community 775 - "attemptCase"
 Cohesion: 0.20
@@ -4324,95 +4322,91 @@ Nodes (14): abortEnv(), attemptCase(), authoringTenantFor(), checkExpectations()
 
 ### Community 776 - "Phase 15.4 Plan 01: Folder-Scoped Vault Search Summary"
 Cohesion: 0.15
-Nodes (12): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance, Phase 15.4 Plan 01: Folder-Scoped Vault Search Summary (+4 more)
+Nodes (13): Common Pitfalls, Pitfall 10: `evaluateBusiness` is a WRITE, despite the "read-only" framing, Pitfall 11: The `dailySpendCents` window is global, not per tenant, Pitfall 12: Synthetic driver text vs. §5, Pitfall 1: `gap.route` is a `string`, so the "closed enum" SC #1 relies on does not exist yet, Pitfall 2: A Convex mutation cannot call an action — and the Approve race it creates, Pitfall 3: A missing `agentSteps.tool` literal fails SILENTLY in production, Pitfall 4: Convex generated-API circular type inference collapses `apps/web` to `any` (+5 more)
 
 ### Community 777 - "Common Pitfalls"
 Cohesion: 0.15
-Nodes (13): Common Pitfalls, Pitfall 10: `evaluateBusiness` is a WRITE, despite the "read-only" framing, Pitfall 11: The `dailySpendCents` window is global, not per tenant, Pitfall 12: Synthetic driver text vs. §5, Pitfall 1: `gap.route` is a `string`, so the "closed enum" SC #1 relies on does not exist yet, Pitfall 2: A Convex mutation cannot call an action — and the Approve race it creates, Pitfall 3: A missing `agentSteps.tool` literal fails SILENTLY in production, Pitfall 4: Convex generated-API circular type inference collapses `apps/web` to `any` (+5 more)
+Nodes (13): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness (+5 more)
 
 ### Community 778 - "Phase 17.1 Plan 09: Profile Blueprint Confirmation Surface Summary"
 Cohesion: 0.15
-Nodes (13): Accomplishments, Authentication Gates, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness (+5 more)
+Nodes (12): BLPR-01 — synthesis, precedence, confirm gate, BLPR-02 — the spine, staleness, drift, Both, Item → Plan/Task Map, Manual-Only Verifications, Phase 17.1 — Validation Strategy, Planning-time corrections to this document, Requirement → Test Map (+4 more)
 
 ### Community 779 - "Phase 17.1 — Validation Strategy"
 Cohesion: 0.15
-Nodes (12): BLPR-01 — synthesis, precedence, confirm gate, BLPR-02 — the spine, staleness, drift, Both, Item → Plan/Task Map, Manual-Only Verifications, Phase 17.1 — Validation Strategy, Planning-time corrections to this document, Requirement → Test Map (+4 more)
+Nodes (12): 1. [Rule 3 — Blocking] The concurrent finance lane had already made half of Task 3's edit, 2. [Plan-internal conflict] Five TDD commits instead of Task 3's single five-file commit, 3. Barrel export placed BEFORE `./contacts`, not after, Commits, Deviations from Plan, Key Decisions, Mutation Evidence, Phase 19.1 Plan 01: The Pure CSV Import Brain Summary (+4 more)
 
 ### Community 780 - "Phase 19.1 Plan 01: The Pure CSV Import Brain Summary"
 Cohesion: 0.15
-Nodes (12): 1. [Rule 3 — Blocking] The concurrent finance lane had already made half of Task 3's edit, 2. [Plan-internal conflict] Five TDD commits instead of Task 3's single five-file commit, 3. Barrel export placed BEFORE `./contacts`, not after, Commits, Deviations from Plan, Key Decisions, Mutation Evidence, Phase 19.1 Plan 01: The Pure CSV Import Brain Summary (+4 more)
+Nodes (12): Auto-fixed / adjusted, Deviations from Plan, Field-name choices left to discretion, Known issue — a foreign lane's work landed in commit `38ac3d2`, Notes for the next plans, Phase 19 Plan 01: Contacts substrate Summary, Self-Check: PASSED, Task 1 — the pure contacts core (commit `0abc73b`) (+4 more)
 
 ### Community 781 - "Phase 19 Plan 01: Contacts substrate Summary"
 Cohesion: 0.15
-Nodes (12): Auto-fixed / adjusted, Deviations from Plan, Field-name choices left to discretion, Known issue — a foreign lane's work landed in commit `38ac3d2`, Notes for the next plans, Phase 19 Plan 01: Contacts substrate Summary, Self-Check: PASSED, Task 1 — the pure contacts core (commit `0abc73b`) (+4 more)
+Nodes (13): Common Pitfalls, Pitfall 10: `eval:golden` on a stale candidate version, Pitfall 11: A new Convex module reads as +1 typecheck error until codegen, Pitfall 12: Adding a public page to `apps/web` without the middleware edit, Pitfall 1: The `plans.kind` / `patchPlan` mirror, Pitfall 2: A new cockpit tool with no `agentSteps.tool` literal, Pitfall 3: Filtering suppressed addresses AFTER the group join, Pitfall 4: A refusal that runs after the CAS patch (+5 more)
 
 ### Community 782 - "Common Pitfalls"
 Cohesion: 0.15
-Nodes (13): Common Pitfalls, Pitfall 10: `eval:golden` on a stale candidate version, Pitfall 11: A new Convex module reads as +1 typecheck error until codegen, Pitfall 12: Adding a public page to `apps/web` without the middleware edit, Pitfall 1: The `plans.kind` / `patchPlan` mirror, Pitfall 2: A new cockpit tool with no `agentSteps.tool` literal, Pitfall 3: Filtering suppressed addresses AFTER the group join, Pitfall 4: A refusal that runs after the CAS patch (+5 more)
+Nodes (12): 20-10 — SUMMARY, Task 1 — the `cards.tsx` branch, kept to its stated size, Task 2 — the canvas, Task 3 — the gate and the five affordances, The 18-07 collision, resolved, The one legitimate hardcoded colour, The reel region's five states, and the one that is a trap, The toggle (owner request, not in the plan) (+4 more)
 
 ### Community 783 - "20-10 — SUMMARY"
 Cohesion: 0.15
-Nodes (12): 20-10 — SUMMARY, Task 1 — the `cards.tsx` branch, kept to its stated size, Task 2 — the canvas, Task 3 — the gate and the five affordances, The 18-07 collision, resolved, The one legitimate hardcoded colour, The reel region's five states, and the one that is a trap, The toggle (owner request, not in the plan) (+4 more)
+Nodes (13): 10. Pitfalls, ranked by how likely this phase is to go wrong, 10. Wan 2.5 is a `-preview` endpoint, 11. Treating `none_reported` as "clean", 12. `check-playbooks` blocking on FOUR playbooks, not one, 1. Estimating at one resolution and submitting at the provider's default — **the money bug**, 2. Batch cost blowout on a multi-shot storyboard — **D4's named risk**, 3. A signed asset URL reaching audit — **content leak AND a live credential**, 4. An unauthenticated webhook (+5 more)
 
 ### Community 784 - "10. Pitfalls, ranked by how likely this phase is to go wrong"
 Cohesion: 0.15
-Nodes (13): 10. Pitfalls, ranked by how likely this phase is to go wrong, 10. Wan 2.5 is a `-preview` endpoint, 11. Treating `none_reported` as "clean", 12. `check-playbooks` blocking on FOUR playbooks, not one, 1. Estimating at one resolution and submitting at the provider's default — **the money bug**, 2. Batch cost blowout on a multi-shot storyboard — **D4's named risk**, 3. A signed asset URL reaching audit — **content leak AND a live credential**, 4. An unauthenticated webhook (+5 more)
+Nodes (12): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Issues Encountered, Next Phase Readiness, Performance, Phase 23 Plan 05: Owner/Eval Agent Activation Summary (+4 more)
 
 ### Community 785 - "Phase 23 Plan 05: Owner/Eval Agent Activation Summary"
 Cohesion: 0.15
-Nodes (12): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Issues Encountered, Next Phase Readiness, Performance, Phase 23 Plan 05: Owner/Eval Agent Activation Summary (+4 more)
+Nodes (13): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Next Phase Readiness, Only the backend projection landed, Performance, Phase 25 Plan 04: First-Send Projection Summary (+5 more)
 
 ### Community 786 - "Phase 25 Plan 04: First-Send Projection Summary"
 Cohesion: 0.15
-Nodes (13): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Next Phase Readiness, Only the backend projection landed, Performance, Phase 25 Plan 04: First-Send Projection Summary (+5 more)
+Nodes (12): Core — already pinned, reuse as-is, Custom-domain decision brief (SC#6) — facts for the `checkpoint:decision`, Don't Hand-Roll, Explicitly NOT to add, Metadata, Open Questions, Phase 25: Private Beta Productionization - Research, Phase Requirements (+4 more)
 
 ### Community 787 - "Phase 25: Private Beta Productionization - Research"
 Cohesion: 0.15
-Nodes (12): Core — already pinned, reuse as-is, Custom-domain decision brief (SC#6) — facts for the `checkpoint:decision`, Don't Hand-Roll, Explicitly NOT to add, Metadata, Open Questions, Phase 25: Private Beta Productionization - Research, Phase Requirements (+4 more)
+Nodes (12): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance, Phase 26 Plan 01: Shared Dashboard Contracts Summary (+4 more)
 
 ### Community 788 - "Phase 26 Plan 01: Shared Dashboard Contracts Summary"
 Cohesion: 0.15
-Nodes (12): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance, Phase 26 Plan 01: Shared Dashboard Contracts Summary (+4 more)
+Nodes (12): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance (+4 more)
 
 ### Community 789 - "Phase 26 Plan 02: Additive Dashboard Schema Foundation Summary"
 Cohesion: 0.15
-Nodes (12): Accomplishments, Auto-fixed Issues, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance (+4 more)
+Nodes (12): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance, Phase 26 Plan 03: Approvals State Transitions and Delivery Progress Summary (+4 more)
 
 ### Community 790 - "Phase 26 Plan 03: Approvals State Transitions and Delivery Progress Summary"
 Cohesion: 0.15
-Nodes (12): Accomplishments, Decisions Made, Deviations from Plan, Files Created/Modified, Issues Encountered, Next Phase Readiness, Performance, Phase 26 Plan 03: Approvals State Transitions and Delivery Progress Summary (+4 more)
+Nodes (12): Common Pitfalls, Don't Hand-Roll, Executive Summary, Normalized Bounded Read Models, Phase 28: Connector-Backed Revenue Pack — Research, Planning Recommendation, Requirement Coverage, Research Confidence (+4 more)
 
 ### Community 791 - "Phase 28: Connector-Backed Revenue Pack — Research"
 Cohesion: 0.15
-Nodes (12): Common Pitfalls, Don't Hand-Roll, Executive Summary, Normalized Bounded Read Models, Phase 28: Connector-Backed Revenue Pack — Research, Planning Recommendation, Requirement Coverage, Research Confidence (+4 more)
+Nodes (12): Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, In-plan judgement calls, Metrics, Phase 33 Plan 06: Reel-first canvas Summary, Self-Check: PASSED (+4 more)
 
 ### Community 792 - "Phase 33 Plan 06: Reel-first canvas Summary"
 Cohesion: 0.15
-Nodes (12): Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, In-plan judgement calls, Metrics, Phase 33 Plan 06: Reel-first canvas Summary, Self-Check: PASSED (+4 more)
-
-### Community 793 - "Phase 33 Plan 07: Guided intake and variations on the canvas Summary"
-Cohesion: 0.15
 Nodes (12): Auto-fixed Issues, Deferred Issues, Dependency graph, Deviations from Plan, In-plan judgement calls, Metrics, Phase 33 Plan 07: Guided intake and variations on the canvas Summary, Self-Check: PASSED (+4 more)
 
-### Community 794 - "Phase 19.1: Bulk Contact Import (CSV) Verification Report"
-Cohesion: 0.17
-Nodes (8): Anti-Patterns Found, Goal Achievement, Human Verification — CLOSED BY OWNER DECISION 2026-08-11, Label-binding test debt — RESOLVED, Observable Truths, Phase 19.1: Bulk Contact Import (CSV) Verification Report, Requirements Coverage, Verdict
-
-### Community 795 - "Migration Patterns Reference"
+### Community 793 - "Phase 33 Plan 07: Guided intake and variations on the canvas Summary"
 Cohesion: 0.17
 Nodes (11): Adding a Required Field, Changing a Field Type, Cleaning Up Orphaned Documents, Deleting a Field, Dual Read, Dual Write (Preferred), Migration Patterns Reference, Small Table Shortcut (+3 more)
 
-### Community 796 - "Convex Auth"
+### Community 795 - "Migration Patterns Reference"
 Cohesion: 0.17
 Nodes (11): Checklist, Concrete Steps, Convex Auth, Expected Files and Decisions, Gotchas, Human Handoff, Production, Validation (+3 more)
 
-### Community 797 - "compilerOptions"
+### Community 796 - "Convex Auth"
 Cohesion: 0.17
 Nodes (11): compilerOptions, allowJs, jsx, module, moduleResolution, noEmit, skipLibCheck, types (+3 more)
 
-### Community 798 - "External Integrations"
+### Community 797 - "compilerOptions"
 Cohesion: 0.17
 Nodes (11): Authentication and Identity, Configuration Touchpoints, Convex Platform, Database, Search, and Storage, Deployment and Hosting, External Integrations, Google OAuth and Gmail, HTTP Endpoints, Callbacks, and Webhooks (+3 more)
+
+### Community 798 - "External Integrations"
+Cohesion: 0.17
+Nodes (11): Adding Tests, CI and Automation Behavior, Commands, Convex Test Harness Patterns, Coverage and Current Gaps, Fixtures and Mocking, Frameworks and Configuration, Playwright Behavior (+3 more)
 
 ### Community 799 - "Free stock footage (the other $0 line, and the opposite shape)"
 Cohesion: 0.17
@@ -4420,39 +4414,39 @@ Nodes (12): Ceiling and upgrade path, Free stock footage (the other $0 line, and
 
 ### Community 800 - "Testing Guide"
 Cohesion: 0.17
-Nodes (11): Adding Tests, CI and Automation Behavior, Commands, Convex Test Harness Patterns, Coverage and Current Gaps, Fixtures and Mocking, Frameworks and Configuration, Playwright Behavior (+3 more)
+Nodes (11): 10. Open questions, 1. Problem, 2. Goal, 3. Fixed frame — invariants that hold no matter what, 4. Architecture, 5. PII / redaction in the reasoning loop, 6. Guardrails, error handling, testing, 7. Rollout — clean cutover (+3 more)
 
 ### Community 801 - "Design — Agent-Driven Cockpit (capability #1)"
 Cohesion: 0.17
-Nodes (11): 10. Open questions, 1. Problem, 2. Goal, 3. Fixed frame — invariants that hold no matter what, 4. Architecture, 5. PII / redaction in the reasoning loop, 6. Guardrails, error handling, testing, 7. Rollout — clean cutover (+3 more)
+Nodes (11): 1. The loop, mapped onto what actually exists, 2. Design convictions (owner-endorsed), 3. Written prohibitions the design must respect (all verified), 4. What a Goal Engine phase actually builds (sketch, not a PLAN), 5. Companion concept — the Business Ledger (living dossier), 6. Sequencing and prerequisites, Invariant 1 — a living document is a RENDERED VIEW over provenance-tagged claims, never a free-text file the agent edits, Invariant 2 — the raw source is never replaced by the structured version (+3 more)
 
 ### Community 802 - "The Goal Engine (Chief-of-Staff loop) — design capture"
 Cohesion: 0.17
-Nodes (11): 1. The loop, mapped onto what actually exists, 2. Design convictions (owner-endorsed), 3. Written prohibitions the design must respect (all verified), 4. What a Goal Engine phase actually builds (sketch, not a PLAN), 5. Companion concept — the Business Ledger (living dossier), 6. Sequencing and prerequisites, Invariant 1 — a living document is a RENDERED VIEW over provenance-tagged claims, never a free-text file the agent edits, Invariant 2 — the raw source is never replaced by the structured version (+3 more)
+Nodes (11): Auto-fixed Issues, Dependency graph, Deviations from Plan, Metrics, Notes for Plan 05, Out-of-scope (not fixed), Phase 03.2.1 Plan 04: runCockpitAgent Governed Tool-Loop Summary, Self-Check: PASSED (+3 more)
 
 ### Community 803 - "Phase 03.2.1 Plan 04: runCockpitAgent Governed Tool-Loop Summary"
 Cohesion: 0.17
-Nodes (11): Auto-fixed Issues, Dependency graph, Deviations from Plan, Metrics, Notes for Plan 05, Out-of-scope (not fixed), Phase 03.2.1 Plan 04: runCockpitAgent Governed Tool-Loop Summary, Self-Check: PASSED (+3 more)
+Nodes (11): Claude's Discretion, Cutover, Deferred Ideas, Engine, Implementation Decisions (LOCKED), Phase 03.2.1: Agent-Driven Cockpit — Context, Phase Boundary, Redaction (§2-D) (+3 more)
 
 ### Community 804 - "Implementation Decisions (LOCKED)"
 Cohesion: 0.17
-Nodes (11): Claude's Discretion, Cutover, Deferred Ideas, Engine, Implementation Decisions (LOCKED), Phase 03.2.1: Agent-Driven Cockpit — Context, Phase Boundary, Redaction (§2-D) (+3 more)
+Nodes (11): Auto-fixed Issues, Dependency graph, Deviations from Plan, Metrics, Phase 03.2 Plan 05: Resolution Card UI Summary, Plan-reading clarifications (not deviations, but worth recording), Playbook, Self-Check: PASSED (+3 more)
 
 ### Community 805 - "Phase 03.2 Plan 05: Resolution Card UI Summary"
 Cohesion: 0.17
-Nodes (11): Auto-fixed Issues, Dependency graph, Deviations from Plan, Metrics, Phase 03.2 Plan 05: Resolution Card UI Summary, Plan-reading clarifications (not deviations, but worth recording), Playbook, Self-Check: PASSED (+3 more)
+Nodes (11): Decisions & findings, Deviations from plan, Honesty notes, Key files, Next, Objective, Plan 03.9-03 — Summary, Self-Check: PASSED (+3 more)
 
 ### Community 806 - "Plan 03.9-03 — Summary"
 Cohesion: 0.17
-Nodes (11): Decisions & findings, Deviations from plan, Honesty notes, Key files, Next, Objective, Plan 03.9-03 — Summary, Self-Check: PASSED (+3 more)
+Nodes (11): 1. Live grounded-turn UI render (Plan 03 Manual-Only UAT), 2. Live skill-gate activation (SC5) — ✓ CLOSED 2026-07-24, Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required, Key Link Verification, Observable Truths (Success Criteria, ROADMAP Phase 10) (+3 more)
 
 ### Community 807 - "Goal Achievement"
 Cohesion: 0.17
-Nodes (11): 1. Live grounded-turn UI render (Plan 03 Manual-Only UAT), 2. Live skill-gate activation (SC5) — ✓ CLOSED 2026-07-24, Anti-Patterns Found, Gaps Summary, Goal Achievement, Human Verification Required, Key Link Verification, Observable Truths (Success Criteria, ROADMAP Phase 10) (+3 more)
+Nodes (11): 1. [Rule 4 — architectural, USER-APPROVED] The "zero edits to `evaluations.ts`" premise was false, 2. [Rule 3 — blocking] `proactiveReview.ts` carried the widened framework forward, 3. [Rule 3 — blocking] Playbook ordering vs. the §9 Stop hook, 4. [Rule 3 — environment] No `node_modules` and no `CONVEX_DEPLOYMENT` in this worktree, Deviations from Plan, For the next plans, Phase 14 Plan 01: Wave-0 Freeze Commit Summary, Self-Check: PASSED (+3 more)
 
 ### Community 808 - "Phase 14 Plan 01: Wave-0 Freeze Commit Summary"
 Cohesion: 0.17
-Nodes (11): 1. [Rule 4 — architectural, USER-APPROVED] The "zero edits to `evaluations.ts`" premise was false, 2. [Rule 3 — blocking] `proactiveReview.ts` carried the widened framework forward, 3. [Rule 3 — blocking] Playbook ordering vs. the §9 Stop hook, 4. [Rule 3 — environment] No `node_modules` and no `CONVEX_DEPLOYMENT` in this worktree, Deviations from Plan, For the next plans, Phase 14 Plan 01: Wave-0 Freeze Commit Summary, Self-Check: PASSED (+3 more)
+Nodes (11): Auto-fixed, Choices inside the plan's latitude (not deviations), Deviations from Plan, For the next plans, Mutation checks — seven mutations, seven confirmed RED, all reverted green, Phase 15.2 Plan 03: Permissive Scheduling + In-Action Rail Dispatch Summary, Self-Check: PASSED, Success criteria (+3 more)
 
 ### Community 809 - "AdminView.tsx"
 Cohesion: 0.13
@@ -4460,7 +4454,7 @@ Nodes (19): modules, sources, ADR-0017, ADR-0022, ENV_MANIFEST, EnvSpec, EnvTier
 
 ### Community 810 - "Phase 15.2 Plan 03: Permissive Scheduling + In-Action Rail Dispatch Summary"
 Cohesion: 0.17
-Nodes (11): Auto-fixed, Choices inside the plan's latitude (not deviations), Deviations from Plan, For the next plans, Mutation checks — seven mutations, seven confirmed RED, all reverted green, Phase 15.2 Plan 03: Permissive Scheduling + In-Action Rail Dispatch Summary, Self-Check: PASSED, Success criteria (+3 more)
+Nodes (11): 15.3-05 — sealing (VALT-07), Accepted limitation (documented at the site and in the playbook), Dependency graph, Deviations from the plan, Mutation verification — all five run, each RED against exactly its test, Notes for the next plan, Rejected, Tech tracking (+3 more)
 
 ### Community 811 - "8.6 Command Center v2 — `/dashboard`"
 Cohesion: 0.29
@@ -4468,19 +4462,19 @@ Nodes (7): 8.6 Command Center v2 — `/dashboard`, Binding constraint, Command C
 
 ### Community 812 - "15.3-05 — sealing (VALT-07)"
 Cohesion: 0.17
-Nodes (11): 15.3-05 — sealing (VALT-07), Accepted limitation (documented at the site and in the playbook), Dependency graph, Deviations from the plan, Mutation verification — all five run, each RED against exactly its test, Notes for the next plan, Rejected, Tech tracking (+3 more)
+Nodes (11): 16-09 — the research eval gate, 1. The structural floor — a run that never searched writes no vault document, 2. A regression this plan caused and caught, 3. Two provenance claims corrected before they hardened, Gates at handoff, Historical blocker (resolved), Historical checkpoint state (resolved), Open risks for whoever runs the gate (+3 more)
 
 ### Community 813 - "16-09 — the research eval gate"
 Cohesion: 0.17
-Nodes (11): 16-09 — the research eval gate, 1. The structural floor — a run that never searched writes no vault document, 2. A regression this plan caused and caught, 3. Two provenance claims corrected before they hardened, Gates at handoff, Historical blocker (resolved), Historical checkpoint state (resolved), Open risks for whoever runs the gate (+3 more)
+Nodes (12): 17.1-10 live-gate audit, 1. Repair the environment, then re-authorize one bounded L6 recovery run, 2. Owner performs L1 and L7, `aba002b1`: stopped before the paid fixture loop, Authorized recovery evidence on 2026-08-12, `dafc544c`: Blueprint-proven, partial and non-certifying, Decision, Minimal checkpoint to resume (+4 more)
 
 ### Community 814 - "17.1-10 live-gate audit"
 Cohesion: 0.17
-Nodes (12): 17.1-10 live-gate audit, 1. Repair the environment, then re-authorize one bounded L6 recovery run, 2. Owner performs L1 and L7, `aba002b1`: stopped before the paid fixture loop, Authorized recovery evidence on 2026-08-12, `dafc544c`: Blueprint-proven, partial and non-certifying, Decision, Minimal checkpoint to resume (+4 more)
+Nodes (11): Claude's Discretion, D1 — Mirror the shipped `gmail.ts` adapter; do not invent a second integration shape, D2 — The write is an ACTION TYPE, never a tool side effect (SC#1, hard), D3 — The read tool follows `listInbox`, including its §4 discipline, D4 — Tenant scoping and an isolation assertion ship WITH the surface (SC#3), D5 — Provider scope: decide and record, do not silently do both or neither, Deferred Ideas, Implementation Decisions (+3 more)
 
 ### Community 815 - "Implementation Decisions"
 Cohesion: 0.17
-Nodes (11): Claude's Discretion, D1 — Mirror the shipped `gmail.ts` adapter; do not invent a second integration shape, D2 — The write is an ACTION TYPE, never a tool side effect (SC#1, hard), D3 — The read tool follows `listInbox`, including its §4 discipline, D4 — Tenant scoping and an isolation assertion ship WITH the surface (SC#3), D5 — Provider scope: decide and record, do not silently do both or neither, Deferred Ideas, Implementation Decisions (+3 more)
+Nodes (12): Anti-Patterns Found, Full independent re-run, this session (not inherited from the coordinator's numbers), Gap 1 -- CLOSED: the done screen now counts every rejected row, Gap 2 -- CLOSED: a disabled `primary` button now looks disabled, Goal Achievement, Human Verification — CLOSED BY OWNER DECISION 2026-08-11, Label-binding test debt — RESOLVED, Observable Truths (+4 more)
 
 ### Community 816 - "Phase 19 Plan 02: The person store Summary"
 Cohesion: 0.17
@@ -5032,31 +5026,31 @@ Nodes (9): 33.1-01 — SUMMARY, must_haves, Not done here, deliberately, The fix
 
 ### Community 960 - "Phase 33.1 — Validation Strategy"
 Cohesion: 0.20
-Nodes (9): Falsifiability Notes, Gotchas that have cost this repo real time — do not rediscover them, Manual-Only Verifications, Per-Task Verification Map, Phase 33.1 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off (+1 more)
+Nodes (9): 33.1-05 — SUMMARY, must_haves, Not done here, and stated plainly, One process defect found, worth carrying forward, Task 1 — the live probe, and what it changed, Task 2 — the adapter, Task 3 — the flag, and the mutation that earns it, The probe changed the adapter twice, and both changes were the plan being wrong in a useful way (+1 more)
 
 ### Community 961 - "Architecture Patterns"
 Cohesion: 0.20
-Nodes (10): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: The pipeline is ALREADY unattended — extend, don't rebuild, Pattern 2: One plan row, two decks — the picked deck is the ONLY deck the money sees, Pattern 3: Brief chips = plan-row fields + §-parser + the `shotsChangedAt` staleness idiom, Pattern 4: Citations ride the deck contract, confirmation rides the provenance idiom, Pattern 5: Failure cards = `mediaCanvasView.failureText()` grown up, codes underneath, Pattern 6: The one auto-retry SUPERSEDES a recorded decision — do it narrowly and say so (+2 more)
+Nodes (9): Falsifiability Notes, Gotchas that have cost this repo real time — do not rediscover them, Manual-Only Verifications, Per-Task Verification Map, Phase 33.1 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off (+1 more)
 
 ### Community 962 - "2026-07-26-voice-doc-picker-design.md"
 Cohesion: 0.22
 Nodes (5): 14-09 — SC4 proven statically, then verified by voice, Deliberately left open, Gates, The environment trap that nearly read as a product bug, What shipped
 
 ### Community 963 - "package.json"
-Cohesion: 0.22
-Nodes (8): exports, ./api, ./render/assembleScript, ./render/burnCapsScript, name, private, type, version
+Cohesion: 0.20
+Nodes (10): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: The pipeline is ALREADY unattended — extend, don't rebuild, Pattern 2: One plan row, two decks — the picked deck is the ONLY deck the money sees, Pattern 3: Brief chips = plan-row fields + §-parser + the `shotsChangedAt` staleness idiom, Pattern 4: Citations ride the deck contract, confirmation rides the provenance idiom, Pattern 5: Failure cards = `mediaCanvasView.failureText()` grown up, codes underneath, Pattern 6: The one auto-retry SUPERSEDES a recorded decision — do it narrowly and say so (+2 more)
 
 ### Community 964 - "Technology Stack"
 Cohesion: 0.22
-Nodes (8): AI, Validation, and Content Processing, Backend and Data Framework, Build and Configuration, Developer and Test Tooling, Frontend Framework, Languages and Runtimes, Repository Shape, Technology Stack
+Nodes (8): exports, ./api, ./render/assembleScript, ./render/burnCapsScript, name, private, type, version
 
 ### Community 965 - "Agent Eval Gate (Phase 3.6)"
 Cohesion: 0.22
-Nodes (8): 1. Problem, 2. Design, 3. Phase spec (GSD form — paste-ready for ROADMAP.md), 4. Out of scope, 5. Phase 8 impact (re-scope note), 6. Open questions (resolve during /gsd:plan-phase), Agent Eval Gate (Phase 3.6), Phase 3.6: Agent Eval Gate (INSERTED)
+Nodes (8): AI, Validation, and Content Processing, Backend and Data Framework, Build and Configuration, Developer and Test Tooling, Frontend Framework, Languages and Runtimes, Repository Shape, Technology Stack
 
 ### Community 966 - "Service architecture, post-beta — design note"
 Cohesion: 0.22
-Nodes (8): 1. "Service" means a boundary, never a deployment, 2. The four tiers (the framework the owner's list was missing), 3. Item-by-item verdicts, 4. The one decision that gates the most expensive work: autonomy, 5. What is missing (data), 6. Why reliability is not an architecture problem here (the part to remember), 7. Recommended order, Service architecture, post-beta — design note
+Nodes (8): 1. Problem, 2. Design, 3. Phase spec (GSD form — paste-ready for ROADMAP.md), 4. Out of scope, 5. Phase 8 impact (re-scope note), 6. Open questions (resolve during /gsd:plan-phase), Agent Eval Gate (Phase 3.6), Phase 3.6: Agent Eval Gate (INSERTED)
 
 ### Community 967 - "ADR-024: OpenAI is the whole media provider — Sora 2 for video, GPT Image 2 for stills, and the fal callback is deleted rather than retained"
 Cohesion: 0.22
@@ -5064,231 +5058,231 @@ Nodes (9): 1. OpenAI is the provider for every media kind, 2. The fal callback i
 
 ### Community 968 - "Phase 3.10: Cockpit Conversation Repair - Context"
 Cohesion: 0.22
-Nodes (8): Agent stalled-resolution recovery (Defect B), Deferred Ideas, Governance invariants (unchanged, restated because both defects touch their surfaces), Implementation Decisions, Panel arbitration (Defect A), Phase 3.10: Cockpit Conversation Repair - Context, Phase Boundary, Specific Ideas
+Nodes (8): 1. "Service" means a boundary, never a deployment, 2. The four tiers (the framework the owner's list was missing), 3. Item-by-item verdicts, 4. The one decision that gates the most expensive work: autonomy, 5. What is missing (data), 6. Why reliability is not an architecture problem here (the part to remember), 7. Recommended order, Service architecture, post-beta — design note
 
 ### Community 969 - "Phase 3.1 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Manual-Only Verifications, Per-Task Verification Map, Phase 3.1 — Validation Strategy, Sampling Rate, SC → Plan / Task map (populated at plan time), Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): Agent stalled-resolution recovery (Defect B), Deferred Ideas, Governance invariants (unchanged, restated because both defects touch their surfaces), Implementation Decisions, Panel arbitration (Defect A), Phase 3.10: Cockpit Conversation Repair - Context, Phase Boundary, Specific Ideas
 
 ### Community 970 - "Phase 3.2 Plan 06: Close Inbox-Reading Phase (Playbook + CKPT-01) Summary"
 Cohesion: 0.22
-Nodes (8): Authentication / human gates, Deviations from Plan, Phase 3.2 Plan 06: Close Inbox-Reading Phase (Playbook + CKPT-01) Summary, Self-Check: PASSED, Task 1 — playbook + watch (commit `4348527`), Task 2 — CKPT-01 human-verify (APPROVED), Verification, What was done
+Nodes (8): Manual-Only Verifications, Per-Task Verification Map, Phase 3.1 — Validation Strategy, Sampling Rate, SC → Plan / Task map (populated at plan time), Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 971 - "Phase 03.4 Plan 01: recipientBodies Content-Plane Foundation Summary"
 Cohesion: 0.22
-Nodes (8): Build-time confirmation (lane flag resolved), Commits, Deviations from Plan, Phase 03.4 Plan 01: recipientBodies Content-Plane Foundation Summary, Scope boundary held, Self-Check: PASSED, Verification, What was built
+Nodes (8): Authentication / human gates, Deviations from Plan, Phase 3.2 Plan 06: Close Inbox-Reading Phase (Playbook + CKPT-01) Summary, Self-Check: PASSED, Task 1 — playbook + watch (commit `4348527`), Task 2 — CKPT-01 human-verify (APPROVED), Verification, What was done
 
 ### Community 972 - "Phase 03.4 Plan 02: personalizeRecipient Tool + Group Gate Summary"
 Cohesion: 0.22
-Nodes (8): Ceilings / carry-forward, Commits, Deviations from Plan, Phase 03.4 Plan 02: personalizeRecipient Tool + Group Gate Summary, Scope boundary held, Self-Check: PASSED, Verification, What was built
+Nodes (8): Build-time confirmation (lane flag resolved), Commits, Deviations from Plan, Phase 03.4 Plan 01: recipientBodies Content-Plane Foundation Summary, Scope boundary held, Self-Check: PASSED, Verification, What was built
 
 ### Community 973 - "Phase 03.4 Plan 03: executePlan Seed Override + PLAN Card Per-Recipient Bodies Summary"
 Cohesion: 0.22
-Nodes (8): Ceilings / carry-forward, Commits, Deviations from Plan, Phase 03.4 Plan 03: executePlan Seed Override + PLAN Card Per-Recipient Bodies Summary, Scope boundary held, Self-Check: PASSED, Verification, What was built
+Nodes (8): Ceilings / carry-forward, Commits, Deviations from Plan, Phase 03.4 Plan 02: personalizeRecipient Tool + Group Gate Summary, Scope boundary held, Self-Check: PASSED, Verification, What was built
 
 ### Community 974 - "Phase 03.4 Plan 04: Phase Close — E2E + smoke distinct-body + playbook (CKPT-03) Summary"
 Cohesion: 0.22
-Nodes (8): CKPT-03 human-verify — PENDING (the sole live-only proof), Commits, Deviations from Plan, Phase 03.4 Plan 04: Phase Close — E2E + smoke distinct-body + playbook (CKPT-03) Summary, Scope boundary held, Self-Check: PASSED, Verification, What was built
+Nodes (8): Ceilings / carry-forward, Commits, Deviations from Plan, Phase 03.4 Plan 03: executePlan Seed Override + PLAN Card Per-Recipient Bodies Summary, Scope boundary held, Self-Check: PASSED, Verification, What was built
 
 ### Community 975 - "Phase 3.5 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Convex scheduled-function testing (offline, the pivotal capability), Manual-Only Verifications, Per-Task Verification Map, Phase 3.5 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): CKPT-03 human-verify — PENDING (the sole live-only proof), Commits, Deviations from Plan, Phase 03.4 Plan 04: Phase Close — E2E + smoke distinct-body + playbook (CKPT-03) Summary, Scope boundary held, Self-Check: PASSED, Verification, What was built
 
 ### Community 976 - "Locked Decisions"
 Cohesion: 0.22
-Nodes (9): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Golden set & assertions (EVAL-01), Housekeeping, Locked Decisions, Production read-side (EVAL-02), Runner, The gate (+1 more)
+Nodes (8): Convex scheduled-function testing (offline, the pivotal capability), Manual-Only Verifications, Per-Task Verification Map, Phase 3.5 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 977 - "Common Pitfalls"
 Cohesion: 0.22
-Nodes (9): Common Pitfalls, Pitfall 1: `seedSkills` publish-on-change bypasses the gate (CRITICAL), Pitfall 2: Eval certifies the wrong version, Pitfall 3: Live-model nondeterminism read as regression, Pitfall 4: Governed stops misread as failures, Pitfall 5: Classifier archival is undone by the next dev boot, Pitfall 6: EVAL-02 card overpromises what telemetry contains, Pitfall 7: §9 Stop hook blocks the phase-close turn (+1 more)
+Nodes (9): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Golden set & assertions (EVAL-01), Housekeeping, Locked Decisions, Production read-side (EVAL-02), Runner, The gate (+1 more)
 
 ### Community 978 - "Phase 3.7 Plan 04: The BRIEFING Card + Offline E2E Summary"
 Cohesion: 0.22
-Nodes (8): Deviations from Plan, Key Decisions, Notes for Next Plans, Phase 3.7 Plan 04: The BRIEFING Card + Offline E2E Summary, Self-Check: PASSED, The E2E is BLOCKED, and for TWO reasons — the second is new, Verification, What Was Built
+Nodes (9): Common Pitfalls, Pitfall 1: `seedSkills` publish-on-change bypasses the gate (CRITICAL), Pitfall 2: Eval certifies the wrong version, Pitfall 3: Live-model nondeterminism read as regression, Pitfall 4: Governed stops misread as failures, Pitfall 5: Classifier archival is undone by the next dev boot, Pitfall 6: EVAL-02 card overpromises what telemetry contains, Pitfall 7: §9 Stop hook blocks the phase-close turn (+1 more)
 
 ### Community 979 - "Phase 03.7 — UAT"
 Cohesion: 0.22
-Nodes (8): Fixed during the checkpoint session (already landed), Gap 1 — The briefing is a receipt, not a report, Gap 2 — Deferred to Phase 3.9 (not gap-closure on 3.7), Gaps, Phase 03.7 — UAT, Resolution path, Still blocked, What passed
+Nodes (8): Deviations from Plan, Key Decisions, Notes for Next Plans, Phase 3.7 Plan 04: The BRIEFING Card + Offline E2E Summary, Self-Check: PASSED, The E2E is BLOCKED, and for TWO reasons — the second is new, Verification, What Was Built
 
 ### Community 980 - "Common Pitfalls"
 Cohesion: 0.22
-Nodes (9): Common Pitfalls, Pitfall 1: unpdf's pdf.js 5.x needs `Promise.withResolvers` — Convex node actions default to Node 20, Pitfall 2: The closed status union, Pitfall 3: The seam's identity wall (blocks Lanes 1, 3, and 4 at integration), Pitfall 4: pnpm-lock.yaml is a shared singleton nobody listed, Pitfall 5: `watch.json` entries are prefixes — new files aren't covered by existing ones, Pitfall 6: Convex 1 MiB document size limit vs extracted text, Pitfall 7: OOXML gotchas that break naive walks (+1 more)
+Nodes (8): Fixed during the checkpoint session (already landed), Gap 1 — The briefing is a receipt, not a report, Gap 2 — Deferred to Phase 3.9 (not gap-closure on 3.7), Gaps, Phase 03.7 — UAT, Resolution path, Still blocked, What passed
 
 ### Community 981 - "Phase 4 Plan 03: Intake Schema + Transcription Pricing Summary"
 Cohesion: 0.22
-Nodes (8): Auto-fixed Issues, Concurrency note (not a Rule 1-4 deviation — a shared-worktree race, documented per plan's PARALLEL WAVE warning), Cross-Lane Announcement, Deviations from Plan, Phase 4 Plan 03: Intake Schema + Transcription Pricing Summary, Requirements Tracking Note, Self-Check: PASSED, What Was Built
+Nodes (9): Common Pitfalls, Pitfall 1: unpdf's pdf.js 5.x needs `Promise.withResolvers` — Convex node actions default to Node 20, Pitfall 2: The closed status union, Pitfall 3: The seam's identity wall (blocks Lanes 1, 3, and 4 at integration), Pitfall 4: pnpm-lock.yaml is a shared singleton nobody listed, Pitfall 5: `watch.json` entries are prefixes — new files aren't covered by existing ones, Pitfall 6: Convex 1 MiB document size limit vs extracted text, Pitfall 7: OOXML gotchas that break naive walks (+1 more)
 
 ### Community 982 - "Phase 7 Plan 05: User-Facing Notification Matrix Summary"
 Cohesion: 0.22
-Nodes (8): Auto-fixed Issues, Commits, Deviations from Plan, NOT run (live-only, phase gate), Phase 7 Plan 05: User-Facing Notification Matrix Summary, Self-Check: PASSED, Verification, What shipped
+Nodes (8): Auto-fixed Issues, Concurrency note (not a Rule 1-4 deviation — a shared-worktree race, documented per plan's PARALLEL WAVE warning), Cross-Lane Announcement, Deviations from Plan, Phase 4 Plan 03: Intake Schema + Transcription Pricing Summary, Requirements Tracking Note, Self-Check: PASSED, What Was Built
 
 ### Community 983 - "Phase 8 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Held-out Set Partitioning, Manual-Only Verifications, Per-Requirement Verification Map, Phase 8 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): Auto-fixed Issues, Commits, Deviations from Plan, NOT run (live-only, phase gate), Phase 7 Plan 05: User-Facing Notification Matrix Summary, Self-Check: PASSED, Verification, What shipped
 
 ### Community 984 - "Phase 11 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Manual-Only Verifications, Per-Task Verification Map, Phase 11 — Validation Strategy, Sampling Rate, Test Infrastructure, The four SCs, mapped to concrete assertions, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): Held-out Set Partitioning, Manual-Only Verifications, Per-Requirement Verification Map, Phase 8 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 985 - "Architecture Patterns"
 Cohesion: 0.22
-Nodes (9): Anti-patterns to avoid, Architecture Patterns, Pattern 1 — Declare the retrieval tool at mint, in the session config `voiceToken.ts` already builds, Pattern 2 — Relay the call through the EXISTING `response.done` case (do not pin a new event name), Pattern 3 — Doc-scoped retrieval: reuse `vaultGround`'s engine, filtered to one doc, Pattern 4 — Findings producer: `vaultLlm.ts` shape, citations welded in code, Pattern 5 — Reach the Approve gate without a route jump: render the exported `CardList`, Pattern 6 — The §4 split for the retrieval tool (+1 more)
+Nodes (8): Manual-Only Verifications, Per-Task Verification Map, Phase 11 — Validation Strategy, Sampling Rate, Test Infrastructure, The four SCs, mapped to concrete assertions, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 986 - "Phase 15.1: Fact-Derived Tier & Conversational Onboarding — Context"
 Cohesion: 0.22
-Nodes (8): Claude's Discretion, Deferred Ideas, Implementation Decisions, LOCKED upstream (design doc D1–D7), Owner decisions on the research's open questions (2026-07-26), Phase 15.1: Fact-Derived Tier & Conversational Onboarding — Context, Phase Boundary, Specific Ideas
+Nodes (9): Anti-patterns to avoid, Architecture Patterns, Pattern 1 — Declare the retrieval tool at mint, in the session config `voiceToken.ts` already builds, Pattern 2 — Relay the call through the EXISTING `response.done` case (do not pin a new event name), Pattern 3 — Doc-scoped retrieval: reuse `vaultGround`'s engine, filtered to one doc, Pattern 4 — Findings producer: `vaultLlm.ts` shape, citations welded in code, Pattern 5 — Reach the Approve gate without a route jump: render the exported `CardList`, Pattern 6 — The §4 split for the retrieval tool (+1 more)
 
 ### Community 987 - "Architecture Patterns"
 Cohesion: 0.22
-Nodes (9): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1 — `deriveTier` is a pure function in `@pikar/core` and the ONLY writer, Pattern 2 — The subtraction reaches the validator, not just the page, Pattern 3 — New table + `@convex-dev/migrations` backfill (widen-migrate-narrow, degenerate case), Pattern 4 — Scripted spine, conversational skin: the slot machine is code, not prompt, Pattern 5 — New skills follow the 5-file mirror; the preset set is a registry set, Pattern 6 — Tier as a filter/ordering layer over `SPECIALISTS`, never a router fork (+1 more)
+Nodes (8): Claude's Discretion, Deferred Ideas, Implementation Decisions, LOCKED upstream (design doc D1–D7), Owner decisions on the research's open questions (2026-07-26), Phase 15.1: Fact-Derived Tier & Conversational Onboarding — Context, Phase Boundary, Specific Ideas
 
 ### Community 988 - "Code Examples"
 Cohesion: 0.22
-Nodes (9): Code Examples, The backfill precedent, The caller-supplied tier (SC#1) — verified current, The dispatch seam (SC#5) — verified current, The markdown string-match (SC#2) — verified current, The one-prescription problem (SC#5) — verified current, The persona pills (SC#1, UI half) — verified current, The reuse target and its blocker (SC#3) (+1 more)
+Nodes (9): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1 — `deriveTier` is a pure function in `@pikar/core` and the ONLY writer, Pattern 2 — The subtraction reaches the validator, not just the page, Pattern 3 — New table + `@convex-dev/migrations` backfill (widen-migrate-narrow, degenerate case), Pattern 4 — Scripted spine, conversational skin: the slot machine is code, not prompt, Pattern 5 — New skills follow the 5-file mirror; the preset set is a registry set, Pattern 6 — Tier as a filter/ordering layer over `SPECIALISTS`, never a router fork (+1 more)
 
 ### Community 989 - "15.3-06 — the folder digest (VALT-08, VALT-09, VALT-10)"
 Cohesion: 0.22
-Nodes (8): 15.3-06 — the folder digest (VALT-08, VALT-09, VALT-10), Dependency graph, Deviations, Notes for the next plan (15.3-07, the drill-in UI), Tech tracking, The verify pass — three defects found after the suite was already green, Verification, What shipped
+Nodes (9): Code Examples, The backfill precedent, The caller-supplied tier (SC#1) — verified current, The dispatch seam (SC#5) — verified current, The markdown string-match (SC#2) — verified current, The one-prescription problem (SC#5) — verified current, The persona pills (SC#1, UI half) — verified current, The reuse target and its blocker (SC#3) (+1 more)
 
 ### Community 990 - "15.3-07 — the folder surface (VALT-05/06/08/10/11)"
 Cohesion: 0.22
-Nodes (8): 15.3-07 — the folder surface (VALT-05/06/08/10/11), Deliberately not fixed, Dependency graph, Notes for the next plan, Tech tracking, The verify pass — four majors after the suite was green and the build passed, Verification, What shipped
+Nodes (8): 15.3-06 — the folder digest (VALT-08, VALT-09, VALT-10), Dependency graph, Deviations, Notes for the next plan (15.3-07, the drill-in UI), Tech tracking, The verify pass — three defects found after the suite was already green, Verification, What shipped
 
 ### Community 991 - "15.3-08 — document identity classification (VALT-12)"
 Cohesion: 0.22
-Nodes (8): 15.3-08 — document identity classification (VALT-12), Dependency graph, Notes for the next plan, Tech tracking, The `crypto is not defined` flake is NOT ours, The verify pass — three defects after green, Verification, What shipped
+Nodes (8): 15.3-07 — the folder surface (VALT-05/06/08/10/11), Deliberately not fixed, Dependency graph, Notes for the next plan, Tech tracking, The verify pass — four majors after the suite was green and the build passed, Verification, What shipped
 
 ### Community 992 - "3. Data model, sealing, retrieval and digest staleness"
 Cohesion: 0.22
-Nodes (9): 3.1 Table shape and the widening, 3.2 ⚠ The `origin` exclusion is structural by OMISSION, not a filter, 3.3 The digest must be INGESTED — copy `research.ts:167-184` verbatim, 3.4 ⚠ Sealing needs THREE sites, not one, 3.5 ⚠ Cancel + the sealing predicate — a one-word bug, 3.6 ⚠ The graph leak is partial and cannot be closed cheaply, 3.7 ⚠ `DRIFT_SCAN_CAP = 100` is a `.take()`, and it is unsound at folder scale, 3.8 Playbook gating for new files (+1 more)
+Nodes (8): 15.3-08 — document identity classification (VALT-12), Dependency graph, Notes for the next plan, Tech tracking, The `crypto is not defined` flake is NOT ours, The verify pass — three defects after green, Verification, What shipped
 
 ### Community 993 - "4. Document identity classification"
 Cohesion: 0.22
-Nodes (9): 4.1 The union: shape locked, membership discretionary, HOME is a real decision, 4.2 Schema (zero migration), 4.3 The skill row — five mechanical edits, in order, 4.4 Where classification runs, 4.5 ⚠ Classification failure must not fail the ingest, 4.6 User-set wins — precedence is CODE, not a prompt, 4.7 The two UI surfaces, 4.8 ⚠ Cent rounding multiplies folder cost 2× (+1 more)
+Nodes (9): 3.1 Table shape and the widening, 3.2 ⚠ The `origin` exclusion is structural by OMISSION, not a filter, 3.3 The digest must be INGESTED — copy `research.ts:167-184` verbatim, 3.4 ⚠ Sealing needs THREE sites, not one, 3.5 ⚠ Cancel + the sealing predicate — a one-word bug, 3.6 ⚠ The graph leak is partial and cannot be closed cheaply, 3.7 ⚠ `DRIFT_SCAN_CAP = 100` is a `.take()`, and it is unsound at folder scale, 3.8 Playbook gating for new files (+1 more)
 
 ### Community 994 - "5. The Google Drive export rail"
 Cohesion: 0.22
-Nodes (9): 5.1 ⚠ A locked decision is factually wrong, 5.2 ⚠ "Estimate from Drive metadata" survives only with a conservative fallback, 5.3 The scope, and what it does to existing users, 5.4 The API calls, 5.5 How bytes enter the spine, 5.6 Re-import and dedup, 5.7 Failure modes that fail SILENTLY, 5.8 Audit and playbooks (+1 more)
+Nodes (9): 4.1 The union: shape locked, membership discretionary, HOME is a real decision, 4.2 Schema (zero migration), 4.3 The skill row — five mechanical edits, in order, 4.4 Where classification runs, 4.5 ⚠ Classification failure must not fail the ingest, 4.6 User-set wins — precedence is CODE, not a prompt, 4.7 The two UI surfaces, 4.8 ⚠ Cent rounding multiplies folder cost 2× (+1 more)
 
 ### Community 995 - "16-02 — SUMMARY"
 Cohesion: 0.22
-Nodes (8): 16-02 — SUMMARY, An anomaly I chased down rather than recorded and moved past, Carried forward, Deviations from the plan, OQ-2 is SETTLED, THE finding every later plan depends on, Three more findings that change later plans, Verification
+Nodes (9): 5.1 ⚠ A locked decision is factually wrong, 5.2 ⚠ "Estimate from Drive metadata" survives only with a conservative fallback, 5.3 The scope, and what it does to existing users, 5.4 The API calls, 5.5 How bytes enter the spine, 5.6 Re-import and dedup, 5.7 Failure modes that fail SILENTLY, 5.8 Audit and playbooks (+1 more)
 
 ### Community 996 - "16-03 — SUMMARY"
 Cohesion: 0.22
-Nodes (8): 16-03 — SUMMARY, D5-CORRECTED — what the fence deliberately does NOT claim, Deviations from the plan, Mutation-checks — all four run, RED observed, restored GREEN, The three shipped assertions this plan had to update — none is a weakening, Verification, What landed, What this unblocks / still owes
+Nodes (8): 16-02 — SUMMARY, An anomaly I chased down rather than recorded and moved past, Carried forward, Deviations from the plan, OQ-2 is SETTLED, THE finding every later plan depends on, Three more findings that change later plans, Verification
 
 ### Community 997 - "16-04 — SUMMARY"
 Cohesion: 0.22
-Nodes (8): 16-04 — SUMMARY, A flaky test, not a regression, Carried forward — the version-collision rule, Deviations from the plan, The body — D10's six requirements, each its own section, Unblocked by this plan, Verification, What landed
+Nodes (8): 16-03 — SUMMARY, D5-CORRECTED — what the fence deliberately does NOT claim, Deviations from the plan, Mutation-checks — all four run, RED observed, restored GREEN, The three shipped assertions this plan had to update — none is a weakening, Verification, What landed, What this unblocks / still owes
 
 ### Community 998 - "Phase 16 Plan 07: The Vault Terminal Summary"
 Cohesion: 0.22
-Nodes (8): Deviations from Plan, Issues Encountered, Next, Phase 16 Plan 07: The Vault Terminal Summary, The honest boundary — what the fence and header actually buy, The two artifacts, and which one is authoritative for whom, Verification, What landed
+Nodes (8): 16-04 — SUMMARY, A flaky test, not a regression, Carried forward — the version-collision rule, Deviations from the plan, The body — D10's six requirements, each its own section, Unblocked by this plan, Verification, What landed
 
 ### Community 999 - "Architecture Patterns"
 Cohesion: 0.22
-Nodes (9): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1 — the pure merge with compile-time totality, Pattern 2 — the seam edit: unshift AFTER the budget loop, Pattern 3 — the one-shot structured call (copy `vaultLlm.ts` verbatim), Pattern 4 — the skill row + its drift guard, Pattern 5 — `tenantProfiles` widening. **Migration-free, with one required-field trap.**, Pattern 6 — the `graphNodes` index and read (+1 more)
+Nodes (8): Deviations from Plan, Issues Encountered, Next, Phase 16 Plan 07: The Vault Terminal Summary, The honest boundary — what the fence and header actually buy, The two artifacts, and which one is authoritative for whom, Verification, What landed
 
 ### Community 1000 - "Phase 17 — Gap-Closure Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Live Evidence Contract, Manual-Only Gates, Per-Task Verification Map — 24/24, Phase 17 — Gap-Closure Validation Strategy, Required Mutation Ledger, Sampling and Wave Gates, Test Infrastructure, Validation Sign-Off
+Nodes (9): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1 — the pure merge with compile-time totality, Pattern 2 — the seam edit: unshift AFTER the budget loop, Pattern 3 — the one-shot structured call (copy `vaultLlm.ts` verbatim), Pattern 4 — the skill row + its drift guard, Pattern 5 — `tenantProfiles` widening. **Migration-free, with one required-field trap.**, Pattern 6 — the `graphNodes` index and read (+1 more)
 
 ### Community 1001 - "Phase 18: Document & Content Creation - Research"
 Cohesion: 0.22
-Nodes (8): Don't Hand-Roll, Metadata, Open Questions, Phase 18: Document & Content Creation - Research, Phase Requirements, Registration Checklist, State of the Art, Summary
+Nodes (8): Live Evidence Contract, Manual-Only Gates, Per-Task Verification Map — 24/24, Phase 17 — Gap-Closure Validation Strategy, Required Mutation Ledger, Sampling and Wave Gates, Test Infrastructure, Validation Sign-Off
 
 ### Community 1002 - "Common Pitfalls"
 Cohesion: 0.22
-Nodes (9): Common Pitfalls, Pitfall 1 — The gated `cockpit-agent` candidate stream (EXECUTION BLOCKER), Pitfall 2 — The swallowed step-insert (bitten TWICE, and there are TWO live instances right now), Pitfall 3 — `pnpm typecheck` lies, AND the baseline is 150, not 52, Pitfall 4 — Playbooks: four are forced, and the changed-set is the whole working tree, Pitfall 5 — `vault.test.ts` contains a literal NUL byte, Pitfall 6 — `renderAndStore` is a closure, not an exported function, Pitfall 7 — ROADMAP.md contradicts the locked decision in TWO places (+1 more)
+Nodes (8): Don't Hand-Roll, Metadata, Open Questions, Phase 18: Document & Content Creation - Research, Phase Requirements, Registration Checklist, State of the Art, Summary
 
 ### Community 1003 - "Phase 18 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Manual-Only Verifications, Per-Task Verification Map, Phase 18 — Validation Strategy, Sampling Rate, Test-authoring cautions (verified at HEAD, 2026-08-01), Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (9): Common Pitfalls, Pitfall 1 — The gated `cockpit-agent` candidate stream (EXECUTION BLOCKER), Pitfall 2 — The swallowed step-insert (bitten TWICE, and there are TWO live instances right now), Pitfall 3 — `pnpm typecheck` lies, AND the baseline is 150, not 52, Pitfall 4 — Playbooks: four are forced, and the changed-set is the whole working tree, Pitfall 5 — `vault.test.ts` contains a literal NUL byte, Pitfall 6 — `renderAndStore` is a closure, not an exported function, Pitfall 7 — ROADMAP.md contradicts the locked decision in TWO places (+1 more)
 
 ### Community 1004 - "Phase 19: Contacts, CRM & Follow-ups — Research"
 Cohesion: 0.22
-Nodes (8): Don't Hand-Roll, Metadata, Open Questions, Phase 19: Contacts, CRM & Follow-ups — Research, Phase Requirements, Registration surfaces (the checklist that must land in one commit), State of the Art, Summary
+Nodes (8): Manual-Only Verifications, Per-Task Verification Map, Phase 18 — Validation Strategy, Sampling Rate, Test-authoring cautions (verified at HEAD, 2026-08-01), Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1005 - "20-01 — SUMMARY"
 Cohesion: 0.22
-Nodes (8): 20-01 — SUMMARY, All six mutation checks — every one observed RED, then restored, Deliberate deviations from the plan — read these before writing a dependent plan, PREFLIGHT — live figures observed 2026-08-02 (vendor-direct, verbatim), The D12(a) mutation check — observed numbers, The exact fal request-schema field names — for plans 20-05 and 20-14, What shipped, What the next plans inherit
+Nodes (8): Don't Hand-Roll, Metadata, Open Questions, Phase 19: Contacts, CRM & Follow-ups — Research, Phase Requirements, Registration surfaces (the checklist that must land in one commit), State of the Art, Summary
 
 ### Community 1006 - "20-02 — SUMMARY"
 Cohesion: 0.22
-Nodes (8): 20-02 — SUMMARY, Lane gate — re-checked at execution, and it is CLEAR, `plans.kind` is UNTOUCHED — and it is now a THREE-way mirror, The deck field names AS SHIPPED — 20-08 writes these, 20-09 edits them, The DELIBERATE DEVIATION the plan asked to be recorded, The render-plane field names AS SHIPPED — 20-16 patches these, 20-10 renders them, Verification, What shipped
+Nodes (8): 20-01 — SUMMARY, All six mutation checks — every one observed RED, then restored, Deliberate deviations from the plan — read these before writing a dependent plan, PREFLIGHT — live figures observed 2026-08-02 (vendor-direct, verbatim), The D12(a) mutation check — observed numbers, The exact fal request-schema field names — for plans 20-05 and 20-14, What shipped, What the next plans inherit
 
 ### Community 1007 - "20-19 — SUMMARY"
 Cohesion: 0.22
-Nodes (8): 20-19 — SUMMARY, ALL THREE OUTCOMES OBSERVED — 2026-08-02, before the workflow was trusted, Design decisions worth knowing, One thing this plan did NOT do, Registration note — a foreign session got there first, The four ids AS THE CATALOG RETURNED THEM, 2026-08-02, Verification, What shipped
+Nodes (8): 20-02 — SUMMARY, Lane gate — re-checked at execution, and it is CLEAR, `plans.kind` is UNTOUCHED — and it is now a THREE-way mirror, The deck field names AS SHIPPED — 20-08 writes these, 20-09 edits them, The DELIBERATE DEVIATION the plan asked to be recorded, The render-plane field names AS SHIPPED — 20-16 patches these, 20-10 renders them, Verification, What shipped
 
 ### Community 1008 - "21-06 — SUMMARY"
 Cohesion: 0.22
-Nodes (8): 21-06 — SUMMARY, One coverage hole found while doing this, NOT fixed here, Shared-tree note, Task 1 — the authenticated browser proof, Task 2 — the free gate, Task 3 — the refs-only handoff, The mutation ledger — all 22 rows executed, red observed, restored green, What did NOT happen
+Nodes (8): 20-19 — SUMMARY, ALL THREE OUTCOMES OBSERVED — 2026-08-02, before the workflow was trusted, Design decisions worth knowing, One thing this plan did NOT do, Registration note — a foreign session got there first, The four ids AS THE CATALOG RETURNED THEM, 2026-08-02, Verification, What shipped
 
 ### Community 1009 - "21-07 COMPLETE — the frozen candidate carries a passing held-out gate"
 Cohesion: 0.22
-Nodes (8): 21-07 COMPLETE — the frozen candidate carries a passing held-out gate, A methodology error worth not repeating, Defects found and fixed while getting here, Live browser confirmation, The handoff was never touched, The re-cut earned itself twice, What 21-08 inherits, and the one ordering rule, What it cost, and what it took
+Nodes (8): 21-06 — SUMMARY, One coverage hole found while doing this, NOT fixed here, Shared-tree note, Task 1 — the authenticated browser proof, Task 2 — the free gate, Task 3 — the refs-only handoff, The mutation ledger — all 22 rows executed, red observed, restored green, What did NOT happen
 
 ### Community 1010 - "Phase 21: User-Authored Skills & Routines Verification Report"
 Cohesion: 0.22
-Nodes (8): Current Source and Test Evidence, Goal Achievement, Live Evidence Boundary, Phase 21: User-Authored Skills & Routines Verification Report, Recorded Commit Continuity, Three-Source Requirement Cross-Check, Validation and Documentation Reconciliation, Verdict
+Nodes (8): 21-07 COMPLETE — the frozen candidate carries a passing held-out gate, A methodology error worth not repeating, Defects found and fixed while getting here, Live browser confirmation, The handoff was never touched, The re-cut earned itself twice, What 21-08 inherits, and the one ordering rule, What it cost, and what it took
 
 ### Community 1011 - "Phase 22.1 Plan 05: Tenant Deletion Summary"
 Cohesion: 0.22
-Nodes (8): Accomplishments, Deviations from Plan, Live Production Evidence, Not Verified, Phase 22.1 Plan 05: Tenant Deletion Summary, Self-Check: PASSED, Task Commits, The Production Defect This Gate Caught
+Nodes (8): Current Source and Test Evidence, Goal Achievement, Live Evidence Boundary, Phase 21: User-Authored Skills & Routines Verification Report, Recorded Commit Continuity, Three-Source Requirement Cross-Check, Validation and Documentation Reconciliation, Verdict
 
 ### Community 1012 - "22-02 Summary — owner-gate the four Phase-8 endpoints"
 Cohesion: 0.22
-Nodes (8): 22-02 Summary — owner-gate the four Phase-8 endpoints, Evidence, Mutation checks, New tests (all negative cases anti-vacuous), Notes for the next reader, Playbooks, The vulnerability was documented in the source, What was deliberately NOT changed
+Nodes (8): Accomplishments, Deviations from Plan, Live Production Evidence, Not Verified, Phase 22.1 Plan 05: Tenant Deletion Summary, Self-Check: PASSED, Task Commits, The Production Defect This Gate Caught
 
 ### Community 1013 - "Phase 22 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Deployment Verifications, Mutation Checks, Per-Task Verification Map, Phase 22 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): 22-02 Summary — owner-gate the four Phase-8 endpoints, Evidence, Mutation checks, New tests (all negative cases anti-vacuous), Notes for the next reader, Playbooks, The vulnerability was documented in the source, What was deliberately NOT changed
 
 ### Community 1014 - "Deferred items — phase 25.1"
 Cohesion: 0.22
-Nodes (8): 1. `isolation.test.ts` owner-gate fixture missing for `skills.activateAgentCandidate` (RED on this branch), 2. `plans.resetPlan` still does not clear the whole media plane, 3. `mediaCanvasView.ts` has no copy for the newer reason codes, 4. `llmRedaction.test.ts`'s dispatch scan cannot see a URL leak, 5. `pollWanTask` is unreachable — the "pre-cutover tasks" retention has silently expired, 6. `llmRedaction.test.ts` still bans `FAL_WEBHOOK_SECRET` by name, 7. `stripCode` in `llmRedaction.test.ts` mis-reads a slash-star inside a LINE comment, Deferred items — phase 25.1
+Nodes (8): Deployment Verifications, Mutation Checks, Per-Task Verification Map, Phase 22 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1015 - "1. The invite gate — `callbacks.createOrUpdateUser` (BETA-01) — **HIGH confidence, source-verified**"
 Cohesion: 0.22
-Nodes (9): 1.1 The mechanism, and why it satisfies "no row persists", 1.2 What `createOrUpdateUser` receives — and what it does NOT, 1.3 Getting the OAuth subject into the callback — widen `profile()`, 1.4 The two subject formats (SC#2's test matrix) — **HIGH confidence**, 1.5 The invite code cannot ride the OAuth round-trip — **HIGH confidence, and it is the design's load-bearing fact**, 1.6 The password flow is asymmetric — and needs the code as a real factor, 1.7 The refusal UX — a silent bounce unless you plan for it, 1.8 Sketch of the callback (+1 more)
+Nodes (8): 1. `isolation.test.ts` owner-gate fixture missing for `skills.activateAgentCandidate` (RED on this branch), 2. `plans.resetPlan` still does not clear the whole media plane, 3. `mediaCanvasView.ts` has no copy for the newer reason codes, 4. `llmRedaction.test.ts`'s dispatch scan cannot see a URL leak, 5. `pollWanTask` is unreachable — the "pre-cutover tasks" retention has silently expired, 6. `llmRedaction.test.ts` still bans `FAL_WEBHOOK_SECRET` by name, 7. `stripCode` in `llmRedaction.test.ts` mis-reads a slash-star inside a LINE comment, Deferred items — phase 25.1
 
 ### Community 1016 - "Phase 26 Plan 07: Reasoning and Ingest Ledger Instrumentation Summary"
 Cohesion: 0.22
-Nodes (8): Deviations from Plan, Follow-up sweep (2026-08-09, commit `5a69982`) — the deferred design, implemented, Issues Encountered, Next Phase Readiness, Phase 26 Plan 07: Reasoning and Ingest Ledger Instrumentation Summary, The design work behind it, Verification, Where the movements land
+Nodes (9): 1.1 The mechanism, and why it satisfies "no row persists", 1.2 What `createOrUpdateUser` receives — and what it does NOT, 1.3 Getting the OAuth subject into the callback — widen `profile()`, 1.4 The two subject formats (SC#2's test matrix) — **HIGH confidence**, 1.5 The invite code cannot ride the OAuth round-trip — **HIGH confidence, and it is the design's load-bearing fact**, 1.6 The password flow is asymmetric — and needs the code as a real factor, 1.7 The refusal UX — a silent bounce unless you plan for it, 1.8 Sketch of the callback (+1 more)
 
 ### Community 1017 - "Phase 26 Plan 08: Media Rail Ledger Instrumentation Summary"
 Cohesion: 0.22
-Nodes (8): Deviations from Plan, Follow-up (commit `b34115e`) — the two "26-09 must honour" notes, fixed instead, Issues Encountered, Next Phase Readiness, Phase 26 Plan 08: Media Rail Ledger Instrumentation Summary, The one place the two planes diverge on purpose, Verification, Where the movements land
+Nodes (8): Deviations from Plan, Follow-up sweep (2026-08-09, commit `5a69982`) — the deferred design, implemented, Issues Encountered, Next Phase Readiness, Phase 26 Plan 07: Reasoning and Ingest Ledger Instrumentation Summary, The design work behind it, Verification, Where the movements land
 
 ### Community 1018 - "Plan 26-20: Command Center v2, owner-approved"
 Cohesion: 0.22
-Nodes (8): Final gate, FOUR defects it caught that 3,900 unit tests, three typechecks and a production build did not, On approval, OPEN — needs an owner ruling, not blocking, Owner UAT — what was actually said, Plan 26-20: Command Center v2, owner-approved, Rollback, The browser gate — 8/8, executed
+Nodes (8): Deviations from Plan, Follow-up (commit `b34115e`) — the two "26-09 must honour" notes, fixed instead, Issues Encountered, Next Phase Readiness, Phase 26 Plan 08: Media Rail Ledger Instrumentation Summary, The one place the two planes diverge on purpose, Verification, Where the movements land
 
 ### Community 1019 - "Phase 26 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Manual-Only Verifications, Per-Plan Verification Map, Phase 26 — Validation Strategy, Required Non-Vacuity and Mutation Checks, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): Final gate, FOUR defects it caught that 3,900 unit tests, three typechecks and a production build did not, On approval, OPEN — needs an owner ruling, not blocking, Owner UAT — what was actually said, Plan 26-20: Command Center v2, owner-approved, Rollback, The browser gate — 8/8, executed
 
 ### Community 1020 - "Phase 27 Plan 01: Upstream Pin and Provenance Summary"
 Cohesion: 0.22
-Nodes (8): Deviations from the plan, Failure modes proven RED, then restored, Next, Performance, Phase 27 Plan 01: Upstream Pin and Provenance Summary, Step 0: the mandatory re-inventory, and what it found, The licence anomaly, Verification — all executed
+Nodes (8): Manual-Only Verifications, Per-Plan Verification Map, Phase 26 — Validation Strategy, Required Non-Vacuity and Mutation Checks, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1021 - "Phase 27 Plan 03: Pack Measurement Plane Summary"
 Cohesion: 0.22
-Nodes (8): Accomplishments, Deviations from the plan, Mutations observed RED, then restored green, Next, Performance, Phase 27 Plan 03: Pack Measurement Plane Summary, The finding worth carrying forward, Verification — all executed
+Nodes (8): Deviations from the plan, Failure modes proven RED, then restored, Next, Performance, Phase 27 Plan 01: Upstream Pin and Provenance Summary, Step 0: the mandatory re-inventory, and what it found, The licence anomaly, Verification — all executed
 
 ### Community 1022 - "27-08 — Final provenance, six DEV candidates, and an eval runner that can go red"
 Cohesion: 0.22
-Nodes (8): 27-08 — Final provenance, six DEV candidates, and an eval runner that can go red, Decisions the next plan must carry, Evidence, Per-pack DEV version numbers (read back, not assumed), Per-pack eval verdict, The finding that shaped this plan, To run the evals (once the balance is topped up), What is not done, and why
+Nodes (8): Accomplishments, Deviations from the plan, Mutations observed RED, then restored green, Next, Performance, Phase 27 Plan 03: Pack Measurement Plane Summary, The finding worth carrying forward, Verification — all executed
 
 ### Community 1023 - "Phase 27 Decision Memo — Curated Knowledge-Work Pack Pilot"
 Cohesion: 0.22
-Nodes (8): Blockers that survived, Phase 27 Decision Memo — Curated Knowledge-Work Pack Pilot, Phase 27 — Readiness Audit, Recommended execution order, Rotted premises, Verdict, What I would NOT do, What Phase 27 actually is
+Nodes (8): 27-08 — Final provenance, six DEV candidates, and an eval runner that can go red, Decisions the next plan must carry, Evidence, Per-pack DEV version numbers (read back, not assumed), Per-pack eval verdict, The finding that shaped this plan, To run the evals (once the balance is topped up), What is not done, and why
 
 ### Community 1024 - "Plan Topology"
 Cohesion: 0.22
-Nodes (9): Plan Topology, Wave 0 — admission and dependency evidence, Wave 1 — pure contracts, encryption, schema, Wave 2 — independent auth adapters, Wave 3 — bounded provider reads, Wave 4 — deterministic business finance, Wave 5 — CRM/revenue workflows, Wave 6 — invoice reminder containment (+1 more)
+Nodes (8): Blockers that survived, Phase 27 Decision Memo — Curated Knowledge-Work Pack Pilot, Phase 27 — Readiness Audit, Recommended execution order, Rotted premises, Verdict, What I would NOT do, What Phase 27 actually is
 
 ### Community 1025 - "n"
 Cohesion: 0.36
@@ -5296,43 +5290,43 @@ Nodes (7): main(), MUSIC_EXTS, MUSIC_SRC, readMusicLibrary(), step(), n(), count
 
 ### Community 1026 - "Phase 28 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Completion Contract, Exact Per-Task Verification Map, Gate Rules, Hard Preconditions, Non-Vacuity Checks, Phase 28 — Validation Strategy, Sign-Off, Test Infrastructure
+Nodes (9): Plan Topology, Wave 0 — admission and dependency evidence, Wave 1 — pure contracts, encryption, schema, Wave 2 — independent auth adapters, Wave 3 — bounded provider reads, Wave 4 — deterministic business finance, Wave 5 — CRM/revenue workflows, Wave 6 — invoice reminder containment (+1 more)
 
 ### Community 1027 - "Phase 29 — Validation Strategy"
 Cohesion: 0.22
-Nodes (8): Manual-Only Verifications, Per-Task Verification Map, Phase 29 — Validation Strategy, Required Non-Vacuity and Mutation Checks, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): Completion Contract, Exact Per-Task Verification Map, Gate Rules, Hard Preconditions, Non-Vacuity Checks, Phase 28 — Validation Strategy, Sign-Off, Test Infrastructure
 
 ### Community 1028 - "33.1 — Adversarial audit of the landed work (waves 1–2)"
 Cohesion: 0.22
-Nodes (8): 33.1 — Adversarial audit of the landed work (waves 1–2), CONFIRMED — the stale cost ratio, found independently by TWO lenses, NOT VERIFIED — refutation budget exhausted at 4 (declared, not hidden), Ownership — do NOT patch these out of band, REFUTED — recorded so they are not re-raised, Required fix — and it is NOT "change 40 to 67", Sites — verified by direct inspection, not taken on the finder's word, What six lenses could NOT see
+Nodes (8): Manual-Only Verifications, Per-Task Verification Map, Phase 29 — Validation Strategy, Required Non-Vacuity and Mutation Checks, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1029 - "Plan 33-05: Auto-assembled reel — vault save + regenerate ordering"
 Cohesion: 0.22
-Nodes (8): Dependency graph, Deviation / recovery note, Metrics, Plan 33-05: Auto-assembled reel — vault save + regenerate ordering, Task commits, Tech tracking, Verification, What shipped
+Nodes (8): 33.1 — Adversarial audit of the landed work (waves 1–2), CONFIRMED — the stale cost ratio, found independently by TWO lenses, NOT VERIFIED — refutation budget exhausted at 4 (declared, not hidden), Ownership — do NOT patch these out of band, REFUTED — recorded so they are not re-raised, Required fix — and it is NOT "change 40 to 67", Sites — verified by direct inspection, not taken on the finder's word, What six lenses could NOT see
 
 ### Community 1030 - "Common Pitfalls"
 Cohesion: 0.22
-Nodes (9): Common Pitfalls, Pitfall 1: Planning on an unseeded skill body, Pitfall 2: The body edit shifting model behavior elsewhere, Pitfall 3: Vacuous tests on the new gates, Pitfall 4: Breaking the reservation contract with variation state, Pitfall 5: The Sora clock, Pitfall 6: Re-arming the render after a per-scene fix, Pitfall 7: CRLF + docs edit mechanics (+1 more)
+Nodes (8): Dependency graph, Deviation / recovery note, Metrics, Plan 33-05: Auto-assembled reel — vault save + regenerate ordering, Task commits, Tech tracking, Verification, What shipped
 
 ### Community 1031 - "Roadmap: Pikar-AI"
 Cohesion: 0.22
-Nodes (8): EXTERNAL BLOCKER (non-code, unscheduled): the legal entity, Milestone v2.0 - Platform -> Private Beta (Phases 10-25), Overview, Phase 25.1: Consistency and Reliability Hardening (INSERTED), Phase 26: Connected product pages, Phases, Progress, Roadmap: Pikar-AI
+Nodes (9): Common Pitfalls, Pitfall 1: Planning on an unseeded skill body, Pitfall 2: The body edit shifting model behavior elsewhere, Pitfall 3: Vacuous tests on the new gates, Pitfall 4: Breaking the reservation contract with variation state, Pitfall 5: The Sora clock, Pitfall 6: Re-arming the render after a per-scene fix, Pitfall 7: CRLF + docs edit mechanics (+1 more)
 
 ### Community 1032 - "package.json"
-Cohesion: 0.25
-Nodes (7): exports, name, private, scripts, typecheck, type, version
+Cohesion: 0.22
+Nodes (8): EXTERNAL BLOCKER (non-code, unscheduled): the legal entity, Milestone v2.0 - Platform -> Private Beta (Phases 10-25), Overview, Phase 25.1: Consistency and Reliability Hardening (INSERTED), Phase 26: Connected product pages, Phases, Progress, Roadmap: Pikar-AI
 
 ### Community 1033 - "Packaged Convex Components"
 Cohesion: 0.25
-Nodes (7): Build Flow, Checklist, Default Approach, Package Exports, Packaged Convex Components, Testing, When to Choose This
+Nodes (7): exports, name, private, scripts, typecheck, type, version
 
 ### Community 1034 - "01-08 Summary — Public web surface (PARTIAL)"
 Cohesion: 0.25
-Nodes (7): 01-08 Summary — Public web surface (PARTIAL), Commits, Deferred (NOT done), GDPR obligations a document cannot satisfy, The guard, Unverified claims in the legal documents, What shipped
+Nodes (7): Build Flow, Checklist, Default Approach, Package Exports, Packaged Convex Components, Testing, When to Choose This
 
 ### Community 1035 - "Phase 1 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 1 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): 01-08 Summary — Public web surface (PARTIAL), Commits, Deferred (NOT done), GDPR obligations a document cannot satisfy, The guard, Unverified claims in the legal documents, What shipped
 
 ### Community 1036 - "The music bed (the $0 line)"
 Cohesion: 0.25
@@ -5344,283 +5338,283 @@ Nodes (8): Ceiling and upgrade path, Cost, It can never fail the reel, Testabili
 
 ### Community 1038 - "Phase 2: Thin End-to-End Slice - Research"
 Cohesion: 0.25
-Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 2: Thin End-to-End Slice - Research, Phase Requirements, State of the Art, Summary
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 1 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1039 - "Code Examples"
 Cohesion: 0.25
-Nodes (8): Aggregate over audit (verified pattern), Attachment upload (Convex file storage, standard pattern), Code Examples, Convex Auth Google sign-in (verified), convex.config.ts — register the two new components (verified), Gmail send via raw REST, wrapped by retrier (verified endpoints), Migration client + first migration (verified), Structured routing via AI Gateway (verified pattern)
+Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 2: Thin End-to-End Slice - Research, Phase Requirements, State of the Art, Summary
 
 ### Community 1041 - "Phase 2 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 2 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): Aggregate over audit (verified pattern), Attachment upload (Convex file storage, standard pattern), Code Examples, Convex Auth Google sign-in (verified), convex.config.ts — register the two new components (verified), Gmail send via raw REST, wrapped by retrier (verified endpoints), Migration client + first migration (verified), Structured routing via AI Gateway (verified pattern)
 
 ### Community 1042 - "Phase 03.10 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.10 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 2 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1043 - "Phase 3.11 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.11 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.10 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1044 - "Phase 03.1 Plan 05: Cockpit Structural Shell Summary"
 Cohesion: 0.25
-Nodes (7): Auto-fixed Issues, Deferred Issues, Deviations from Plan, Phase 03.1 Plan 05: Cockpit Structural Shell Summary, Self-Check: PASSED, Verification, What shipped
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.11 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1045 - "03.1-07-SUMMARY.md"
 Cohesion: 0.25
-Nodes (7): 03.1-07: Cockpit orchestration seam (SC2/SC3/SC4), Dependency graph, Deviations, Notes for the orchestrator, Tasks, Tech tracking, Verification
+Nodes (7): Auto-fixed Issues, Deferred Issues, Deviations from Plan, Phase 03.1 Plan 05: Cockpit Structural Shell Summary, Self-Check: PASSED, Verification, What shipped
 
 ### Community 1046 - "Phase 03.2.1: Agent-Driven Cockpit — Research"
 Cohesion: 0.25
-Nodes (7): Files changed (from design §8), Locked decisions (from the design record — do not relitigate), Phase 03.2.1: Agent-Driven Cockpit — Research, Pitfalls / risks, Suggested plan decomposition (guidance — planner owns the final shape), Tool set (each wraps an existing governed primitive), Validation Architecture
+Nodes (7): 03.1-07: Cockpit orchestration seam (SC2/SC3/SC4), Dependency graph, Deviations, Notes for the orchestrator, Tasks, Tech tracking, Verification
 
 ### Community 1047 - "Phase 03.2.1 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.2.1 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Files changed (from design §8), Locked decisions (from the design record — do not relitigate), Phase 03.2.1: Agent-Driven Cockpit — Research, Pitfalls / risks, Suggested plan decomposition (guidance — planner owns the final shape), Tool set (each wraps an existing governed primitive), Validation Architecture
 
 ### Community 1048 - "Phase 3.2 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.2 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.2.1 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1049 - "Phase 3.3 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.3 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.2 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1050 - "Phase 3.4 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.4 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.3 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1051 - "Phase 3.6: Agent Eval Gate - Research"
 Cohesion: 0.25
-Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 3.6: Agent Eval Gate - Research, Phase Requirements, State of the Art (repo-internal), Summary
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.4 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1052 - "Phase 3.6 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.6 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 3.6: Agent Eval Gate - Research, Phase Requirements, State of the Art (repo-internal), Summary
 
 ### Community 1053 - "Phase 3.7 Plan 01: Pure Briefing Module Summary"
 Cohesion: 0.25
-Nodes (7): Deviations from Plan, Key Decisions, Notes for Next Plans, Phase 3.7 Plan 01: Pure Briefing Module Summary, Self-Check: PASSED, Verification, What Was Built
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3.6 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1054 - "Phase 3.7 Plan 02: Gmail Read Plane + Briefing Content Plane Summary"
 Cohesion: 0.25
-Nodes (7): Deviations from Plan, Key Decisions, Notes for Next Plans, Phase 3.7 Plan 02: Gmail Read Plane + Briefing Content Plane Summary, Self-Check: PASSED, Verification, What Was Built
+Nodes (7): Deviations from Plan, Key Decisions, Notes for Next Plans, Phase 3.7 Plan 01: Pure Briefing Module Summary, Self-Check: PASSED, Verification, What Was Built
 
 ### Community 1055 - "Phase 3.7 Plan 03: The Briefing Brain Summary"
 Cohesion: 0.25
-Nodes (7): Deviations from Plan, Key Decisions, Notes for Next Plans, Phase 3.7 Plan 03: The Briefing Brain Summary, Self-Check: PASSED, Verification, What Was Built
+Nodes (7): Deviations from Plan, Key Decisions, Notes for Next Plans, Phase 3.7 Plan 02: Gmail Read Plane + Briefing Content Plane Summary, Self-Check: PASSED, Verification, What Was Built
 
 ### Community 1056 - "Phase 03.7 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.7 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Deviations from Plan, Key Decisions, Notes for Next Plans, Phase 3.7 Plan 03: The Briefing Brain Summary, Self-Check: PASSED, Verification, What Was Built
 
 ### Community 1057 - "Phase 03.8 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.8 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.7 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1058 - "Architecture Patterns"
 Cohesion: 0.25
-Nodes (8): Anti-patterns to avoid, Architecture Patterns, Pattern 1: emit from the SDK's callbacks, not from the tools (the whole backend, ~20 lines), Pattern 2: the `briefings.ts` adapter, verbatim, Pattern 3: the driver owns turn lifecycle; the SDK owns step lifecycle, Pattern 4: a THIRD independent `useQuery` in `CardList` (the trap 03.7-04 already sprang), Pattern 5: derive the chat bubble from the same query — but keep `busy` for the first turn, Recommended shape
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.8 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1059 - "Phase 03.9 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.9 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (8): Anti-patterns to avoid, Architecture Patterns, Pattern 1: emit from the SDK's callbacks, not from the tools (the whole backend, ~20 lines), Pattern 2: the `briefings.ts` adapter, verbatim, Pattern 3: the driver owns turn lifecycle; the SDK owns step lifecycle, Pattern 4: a THIRD independent `useQuery` in `CardList` (the trap 03.7-04 already sprang), Pattern 5: derive the chat bubble from the same query — but keep `busy` for the first turn, Recommended shape
 
 ### Community 1060 - "Phase 3 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 03.9 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1061 - "Phase 4 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 4 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 3 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1062 - "Phase 5: Knowledge Vault & GraphRAG - Research"
 Cohesion: 0.25
-Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 5: Knowledge Vault & GraphRAG - Research, Phase Requirements, State of the Art, Summary
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 4 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1063 - "Phase 5 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 5 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 5: Knowledge Vault & GraphRAG - Research, Phase Requirements, State of the Art, Summary
 
 ### Community 1064 - "Phase 6 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 6 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 5 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1065 - "Phase 7 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Nyquist Notes, Per-Requirement Verification Map, Phase 7 — Validation Strategy, Sampling Rate, Test Infrastructure, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 6 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1066 - "Phase 10 Plan 01: Vault Grounding Hydration Summary"
 Cohesion: 0.25
-Nodes (7): Deferred / Out of Scope, Deviations from Plan, Phase 10 Plan 01: Vault Grounding Hydration Summary, Self-Check: PASSED, Tasks, Verification, What Was Built
+Nodes (7): Manual-Only Verifications, Nyquist Notes, Per-Requirement Verification Map, Phase 7 — Validation Strategy, Sampling Rate, Test Infrastructure, Wave 0 Requirements
 
 ### Community 1067 - "Phase 10 Plan 02: searchVault Cockpit Grounding Tool Summary"
 Cohesion: 0.25
-Nodes (7): Deferred / Out of Scope, Deviations from Plan, Phase 10 Plan 02: searchVault Cockpit Grounding Tool Summary, Self-Check: PASSED, Tasks, Verification, What Was Built
+Nodes (7): Deferred / Out of Scope, Deviations from Plan, Phase 10 Plan 01: Vault Grounding Hydration Summary, Self-Check: PASSED, Tasks, Verification, What Was Built
 
 ### Community 1068 - "Phase 10 Plan 03: Vault-Grounding Source-Card Read-Side Summary"
 Cohesion: 0.25
-Nodes (7): Deferred / Out of Scope, Deviations from Plan, Phase 10 Plan 03: Vault-Grounding Source-Card Read-Side Summary, Self-Check: PASSED, Tasks, Verification, What Was Built
+Nodes (7): Deferred / Out of Scope, Deviations from Plan, Phase 10 Plan 02: searchVault Cockpit Grounding Tool Summary, Self-Check: PASSED, Tasks, Verification, What Was Built
 
 ### Community 1069 - "Phase 10 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 10 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Deferred / Out of Scope, Deviations from Plan, Phase 10 Plan 03: Vault-Grounding Source-Card Read-Side Summary, Self-Check: PASSED, Tasks, Verification, What Was Built
 
 ### Community 1070 - "Phase 12 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 12 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 10 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1071 - "Phase 13: Proactive In-App Review - Research"
 Cohesion: 0.25
-Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 13: Proactive In-App Review - Research, Phase Requirements, State of the Art, Summary
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 12 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1072 - "Phase 13 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 13 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 13: Proactive In-App Review - Research, Phase Requirements, State of the Art, Summary
 
 ### Community 1073 - "Plan 14-05 Summary — the findings producer"
 Cohesion: 0.25
-Nodes (7): 1. SMOKE seam was reachable from untrusted input — fixed (`5678f22`), 2. `internal.vault.getDoc` was the wrong interface — for the third consecutive plan, Commits, Deviations, Gates, Notes for later waves, Plan 14-05 Summary — the findings producer
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 13 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1074 - "Plan 14-06 Summary — the browser relay"
 Cohesion: 0.25
-Nodes (7): 1. `window.location.search` instead of `useSearchParams` + `<Suspense>`, 2. `REALTIME_CLIENT_EVENTS.updateSession` added to `@pikar/voice`, Commits, Deviations, Gates, Notes for later waves, Plan 14-06 Summary — the browser relay
+Nodes (7): 1. SMOKE seam was reachable from untrusted input — fixed (`5678f22`), 2. `internal.vault.getDoc` was the wrong interface — for the third consecutive plan, Commits, Deviations, Gates, Notes for later waves, Plan 14-05 Summary — the findings producer
 
 ### Community 1075 - "Plan 14-07 Summary — the entry point and the in-call context"
 Cohesion: 0.25
-Nodes (8): 1. The failed-doc explainer lives in `PreviewModal`, not `DocGrid`, 2. `DocStrip` links to the vault instead of opening `PreviewModal`, Commits, Deviations, Gates, Notes for later waves, Out-of-scope fix worth flagging: `.convex/` was not gitignored, Plan 14-07 Summary — the entry point and the in-call context
+Nodes (7): 1. `window.location.search` instead of `useSearchParams` + `<Suspense>`, 2. `REALTIME_CLIENT_EVENTS.updateSession` added to `@pikar/voice`, Commits, Deviations, Gates, Notes for later waves, Plan 14-06 Summary — the browser relay
 
 ### Community 1076 - "Plan 14-08 Summary — the post-call outcome"
 Cohesion: 0.25
-Nodes (7): Commits, Cross-lane check (asked for explicitly), Defect found and fixed in 14-01's seeder, Gates, Notes for 14-09, Plan 14-08 Summary — the post-call outcome, Two of my own assumptions were wrong, and the code was right
+Nodes (8): 1. The failed-doc explainer lives in `PreviewModal`, not `DocGrid`, 2. `DocStrip` links to the vault instead of opening `PreviewModal`, Commits, Deviations, Gates, Notes for later waves, Out-of-scope fix worth flagging: `.convex/` was not gitignored, Plan 14-07 Summary — the entry point and the in-call context
 
 ### Community 1077 - "Open Questions"
 Cohesion: 0.25
-Nodes (8): Open Questions, Q1 — How does the conversational onboarding get its loop? (blocks SC#3), Q2 — What does "which specialists are offered" mean when `diagnose()` returns exactly one? (blocks SC#5), Q3 — Does `financialsPresent` still override the tier? (affects SC#5), Q4 — There is no owner primitive for D6's admin-granted enterprise, Q5 — Is `apps/web` unfrozen for 15.1?, Q6 — Is `onboarding-agent` a gated skill?, Q7 — Exact facts field types
+Nodes (7): Commits, Cross-lane check (asked for explicitly), Defect found and fixed in 14-01's seeder, Gates, Notes for 14-09, Plan 14-08 Summary — the post-call outcome, Two of my own assumptions were wrong, and the code was right
 
 ### Community 1078 - "2. The four live-only verifications — RUNNABLE DEBT (recorded during 15.1-07)"
 Cohesion: 0.25
-Nodes (7): 1. Backend full-suite run is FLAKY on this worktree (found during 15.1-01), 2. The four live-only verifications — RUNNABLE DEBT (recorded during 15.1-07), Deferred items — Phase 15.1, SC#1c paid — profile page, 2026-07-26 (real browser, real deployment), SC#3 paid — a real conversational turn, 2026-07-26 (real model), SC#5 run but NOT confirmed — 2026-07-26. **This row stays OPEN.**, SC#6 paid — live backfill, 2026-07-26 (local deployment `local-joel_feruzi-pikar_ai_50c69-1`)
+Nodes (8): Open Questions, Q1 — How does the conversational onboarding get its loop? (blocks SC#3), Q2 — What does "which specialists are offered" mean when `diagnose()` returns exactly one? (blocks SC#5), Q3 — Does `financialsPresent` still override the tier? (affects SC#5), Q4 — There is no owner primitive for D6's admin-granted enterprise, Q5 — Is `apps/web` unfrozen for 15.1?, Q6 — Is `onboarding-agent` a gated skill?, Q7 — Exact facts field types
 
 ### Community 1079 - "15.3-UAT.md"
 Cohesion: 0.25
-Nodes (7): 1. Populated Shared Drive Import Full Path, 2. References-Only Evidence Is Consistent, 3. Unchanged Re-import Is Idempotent, Current Test, Gaps, Summary, Tests
+Nodes (7): 1. Backend full-suite run is FLAKY on this worktree (found during 15.1-01), 2. The four live-only verifications — RUNNABLE DEBT (recorded during 15.1-07), Deferred items — Phase 15.1, SC#1c paid — profile page, 2026-07-26 (real browser, real deployment), SC#3 paid — a real conversational turn, 2026-07-26 (real model), SC#5 run but NOT confirmed — 2026-07-26. **This row stays OPEN.**, SC#6 paid — live backfill, 2026-07-26 (local deployment `local-joel_feruzi-pikar_ai_50c69-1`)
 
 ### Community 1080 - "Phase 15.3 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 15.3 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): 1. Populated Shared Drive Import Full Path, 2. References-Only Evidence Is Consistent, 3. Unchanged Re-import Is Idempotent, Current Test, Gaps, Summary, Tests
 
 ### Community 1081 - "Phase 15.3: Vault Folders Verification Report"
 Cohesion: 0.25
-Nodes (7): Committed and Live Evidence Review, Current Focused Validation, Gaps and Limitations, Goal Achievement, Human Verification Steps, Phase 15.3: Vault Folders Verification Report, Verdict
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 15.3 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1082 - "Phase 15.4 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 15.4 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Committed and Live Evidence Review, Current Focused Validation, Gaps and Limitations, Goal Achievement, Human Verification Steps, Phase 15.3: Vault Folders Verification Report, Verdict
 
 ### Community 1083 - "Phase 15: Sub-Agent Dispatch & Generalized Action Executor - Research"
 Cohesion: 0.25
-Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 15: Sub-Agent Dispatch & Generalized Action Executor - Research, Phase Requirements, State of the Art, Summary
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 15.4 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1084 - "Phase 15 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 15 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 15: Sub-Agent Dispatch & Generalized Action Executor - Research, Phase Requirements, State of the Art, Summary
 
 ### Community 1085 - "16-01 — SUMMARY"
 Cohesion: 0.25
-Nodes (7): 16-01 — SUMMARY, Deviations from the plan, Environment notes for the next plan in this lane, The two questions this plan's `<output>` block requires answering, ⚠ Typecheck: measured as a DELTA, because "clean" was never achievable, Verification — all run, all passing, What landed
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 15 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1086 - "Phase 16 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 16 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): 16-01 — SUMMARY, Deviations from the plan, Environment notes for the next plan in this lane, The two questions this plan's `<output>` block requires answering, ⚠ Typecheck: measured as a DELTA, because "clean" was never achievable, Verification — all run, all passing, What landed
 
 ### Community 1087 - "20-03 — SUMMARY"
 Cohesion: 0.25
-Nodes (7): 20-03 — SUMMARY, Deviations from the plan, Files (the five-file `documentDrafter` mirror, plus the round trip), The D8 reversal is applied, not straddled, The two decisions the plan asked to be recorded, Verification, What the next plans inherit
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 16 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1088 - "20-18 — SUMMARY"
 Cohesion: 0.25
-Nodes (7): 20-18 — SUMMARY, Both mutation checks — OBSERVED RED, then restored byte-identical, Deliberate design decisions worth knowing, Note for whoever builds 20-06, The three things that would have made the number lie, The two signatures VERBATIM, Verification
+Nodes (7): 20-03 — SUMMARY, Deviations from the plan, Files (the five-file `documentDrafter` mirror, plus the round trip), The D8 reversal is applied, not straddled, The two decisions the plan asked to be recorded, Verification, What the next plans inherit
 
 ### Community 1089 - "Phase 20 — provider evaluation"
 Cohesion: 0.25
-Nodes (7): 1. Correction to the spike: SC #3 was never blocked, 2. What the media rail actually has to do, 3. Provider comparison, 4. The finding that should change the budget design, 5. Open questions for implementation (not blockers), Phase 20 — provider evaluation, Sources
+Nodes (7): 20-18 — SUMMARY, Both mutation checks — OBSERVED RED, then restored byte-identical, Deliberate design decisions worth knowing, Note for whoever builds 20-06, The three things that would have made the number lie, The two signatures VERBATIM, Verification
 
 ### Community 1090 - "5. NEW PITFALLS (extending `20-RESEARCH.md` §10, which still holds in full)"
 Cohesion: 0.25
-Nodes (8): 13. A voice line that overruns its window is only detected AFTER the clips are paid for — **the new money bug**, 14. `persistent: true` is the SDK DEFAULT — a cross-tenant leak created by an unset option, 15. A TTS model with a `speed` parameter is a live violation of D8's no-time-stretch rule, 16. `deny-all` egress and a per-invocation ffmpeg download are mutually exclusive, 17. The assemble script as a `skills` registry row = remote code execution, 18. Hobby-plan sandbox exhaustion is an OUTAGE, not a bill, 19. `ffmpeg` stderr contains tenant content, 5. NEW PITFALLS (extending `20-RESEARCH.md` §10, which still holds in full)
+Nodes (7): 1. Correction to the spike: SC #3 was never blocked, 2. What the media rail actually has to do, 3. Provider comparison, 4. The finding that should change the budget design, 5. Open questions for implementation (not blockers), Phase 20 — provider evaluation, Sources
 
 ### Community 1091 - "22.1-01 Summary — Disconnect Google (revoke, then delete)"
 Cohesion: 0.25
-Nodes (7): 22.1-01 Summary — Disconnect Google (revoke, then delete), Deliberate non-goals (recorded in cockpit.md's Known gaps), Evidence, Phase 22.1 is NOT complete, Requirement — GOVN-03 (minted 2026-08-01), The three decisions worth not relitigating, What shipped
+Nodes (8): 13. A voice line that overruns its window is only detected AFTER the clips are paid for — **the new money bug**, 14. `persistent: true` is the SDK DEFAULT — a cross-tenant leak created by an unset option, 15. A TTS model with a `speed` parameter is a live violation of D8's no-time-stretch rule, 16. `deny-all` egress and a per-invocation ffmpeg download are mutually exclusive, 17. The assemble script as a `skills` registry row = remote code execution, 18. Hobby-plan sandbox exhaustion is an OUTAGE, not a bill, 19. `ffmpeg` stderr contains tenant content, 5. NEW PITFALLS (extending `20-RESEARCH.md` §10, which still holds in full)
 
 ### Community 1092 - "22.1-02 Summary — per-tenant budget keying, with the ceiling kept"
 Cohesion: 0.25
-Nodes (7): 22.1-02 Summary — per-tenant budget keying, with the ceiling kept, Consequences worth knowing, Evidence, One guard widened, never relaxed, Outstanding, The decision that shaped this plan, What shipped
+Nodes (7): 22.1-01 Summary — Disconnect Google (revoke, then delete), Deliberate non-goals (recorded in cockpit.md's Known gaps), Evidence, Phase 22.1 is NOT complete, Requirement — GOVN-03 (minted 2026-08-01), The three decisions worth not relitigating, What shipped
 
 ### Community 1093 - "Phase 22.1 Plan 03: CI Gate Summary"
 Cohesion: 0.25
-Nodes (7): Accomplishments, Deviations from Plan, Not Verified, Phase 22.1 Plan 03: CI Gate Summary, Self-Check: PASSED, Task 1 — quiescent final local gate, Tasks 2 and 3 — the synthetic three-red proof: DEFERRED
+Nodes (7): 22.1-02 Summary — per-tenant budget keying, with the ceiling kept, Consequences worth knowing, Evidence, One guard widened, never relaxed, Outstanding, The decision that shaped this plan, What shipped
 
 ### Community 1094 - "Phase 22.1 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Anti-Vacuous Notes, Coverage Map, Manual-Only Rows, Not Verified, Phase 22.1 — Validation Strategy, Sampling Rate, Test Infrastructure
+Nodes (7): Accomplishments, Deviations from Plan, Not Verified, Phase 22.1 Plan 03: CI Gate Summary, Self-Check: PASSED, Task 1 — quiescent final local gate, Tasks 2 and 3 — the synthetic three-red proof: DEFERRED
 
 ### Community 1095 - "Phase 22.1 — Goal Verification"
 Cohesion: 0.25
-Nodes (7): Evidence limits, Phase 22.1 — Goal Verification, Phase goal, restated, Plan completion, Requirement closure, Success criteria, What this phase found that no test could
+Nodes (7): Anti-Vacuous Notes, Coverage Map, Manual-Only Rows, Not Verified, Phase 22.1 — Validation Strategy, Sampling Rate, Test Infrastructure
 
 ### Community 1096 - "22-01 Summary — identity + owner substrate"
 Cohesion: 0.25
-Nodes (7): 22-01 Summary — identity + owner substrate, Deviations from the plan as written, Evidence, Key finding: the identity swap is provably behaviour-preserving, Task 3 — RAN LIVE 2026-08-01. PASS., Typecheck delta (measured with `--force`; `pnpm typecheck` caches a stale pass and lies), What shipped
+Nodes (7): Evidence limits, Phase 22.1 — Goal Verification, Phase goal, restated, Plan completion, Requirement closure, Success criteria, What this phase found that no test could
 
 ### Community 1097 - "22-03 Summary — owner-only `/ops` presentation"
 Cohesion: 0.25
-Nodes (7): 22-03 Summary — owner-only `/ops` presentation, Evidence, Mutation ledger (whole phase), Phase 22's total typecheck delta is ZERO, Task 3 — RAN LIVE 2026-08-01: boundary PASS, DOM half outstanding, The change, The codegen blocker — resolved, and how
+Nodes (7): 22-01 Summary — identity + owner substrate, Deviations from the plan as written, Evidence, Key finding: the identity swap is provably behaviour-preserving, Task 3 — RAN LIVE 2026-08-01. PASS., Typecheck delta (measured with `--force`; `pnpm typecheck` caches a stale pass and lies), What shipped
 
 ### Community 1098 - "Phase 22 — live UAT evidence (GOVN-01)"
 Cohesion: 0.25
-Nodes (7): ✅ 22-01 Task 3 — owner bootstrap. PASS., ✅ 22-03 Task 3, step 4 — THE trust boundary. PASS, both directions., ❌ 22-03 Task 3, steps 2/3/5 — the DOM half. NOT COMPLETED., Authenticated NON-owner → all four refuse, Environment left behind, Owner → all four work, Phase 22 — live UAT evidence (GOVN-01)
+Nodes (7): 22-03 Summary — owner-only `/ops` presentation, Evidence, Mutation ledger (whole phase), Phase 22's total typecheck delta is ZERO, Task 3 — RAN LIVE 2026-08-01: boundary PASS, DOM half outstanding, The change, The codegen blocker — resolved, and how
 
 ### Community 1099 - "Phase 23 prerequisite gate — run 2026-08-18, before the first edit"
 Cohesion: 0.25
-Nodes (7): Owner decision, Phase 23 prerequisite gate — run 2026-08-18, before the first edit, Read-only seam inventory (all present, all unchanged), Result, The two failures, stated exactly, Why waves 1-5 are unaffected, stated as a falsifiable claim, Why waves 6-9 are NOT merely "deferred paperwork"
+Nodes (7): ✅ 22-01 Task 3 — owner bootstrap. PASS., ✅ 22-03 Task 3, step 4 — THE trust boundary. PASS, both directions., ❌ 22-03 Task 3, steps 2/3/5 — the DOM half. NOT COMPLETED., Authenticated NON-owner → all four refuse, Environment left behind, Owner → all four work, Phase 22 — live UAT evidence (GOVN-01)
 
 ### Community 1100 - "23-02 SUMMARY — the inert writer, built before anything can reach it"
 Cohesion: 0.25
-Nodes (7): 23-02 SUMMARY — the inert writer, built before anything can reach it, Measured, Next, Task 1 — the shared seam, extracted and proven behaviour-neutral, Task 2 — `publishAgentCandidate`, Task 3 — mutation evidence (all executed, all restored, none left in the tree), What is still true after this plan
+Nodes (7): Owner decision, Phase 23 prerequisite gate — run 2026-08-18, before the first edit, Read-only seam inventory (all present, all unchanged), Result, The two failures, stated exactly, Why waves 1-5 are unaffected, stated as a falsifiable claim, Why waves 6-9 are NOT merely "deferred paperwork"
 
 ### Community 1101 - "25.1-07 — Live UAT checkpoint"
 Cohesion: 0.25
-Nodes (7): 25.1-07 — Live UAT checkpoint, Dependency graph, Finding: D4 is real, recurring, and currently invisible in production, NOT attested, NOT assumed — these remain open, Owner verdict, verbatim, Verdict, What production DATA proves (read-only `convex data --prod`, no mutations)
+Nodes (7): 23-02 SUMMARY — the inert writer, built before anything can reach it, Measured, Next, Task 1 — the shared seam, extracted and proven behaviour-neutral, Task 2 — `publishAgentCandidate`, Task 3 — mutation evidence (all executed, all restored, none left in the tree), What is still true after this plan
 
 ### Community 1102 - "Phase 25.1 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 25.1 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): 25.1-07 — Live UAT checkpoint, Dependency graph, Finding: D4 is real, recurring, and currently invisible in production, NOT attested, NOT assumed — these remain open, Owner verdict, verbatim, Verdict, What production DATA proves (read-only `convex data --prod`, no mutations)
 
 ### Community 1103 - "Phase 25 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 25 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 25.1 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1104 - "Phase 26 Plan 09: Tenant and Owner Cost Console Projections Summary"
 Cohesion: 0.25
-Nodes (7): Deviations from Plan, Issues Encountered, Next Phase Readiness, Phase 26 Plan 09: Tenant and Owner Cost Console Projections Summary, The two things that would have shipped a lie, Verification, What the surface is
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 25 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1105 - "26-11 — artifact provenance and the explicit trust promotion"
 Cohesion: 0.25
-Nodes (7): 26-11 — artifact provenance and the explicit trust promotion, DEVIATION — the plan told me to write an audit row, and the plan was wrong, Evidence, Not done / handed on, Owner decisions closed this session (all five open questions), Things worth not re-learning, What shipped
+Nodes (7): Deviations from Plan, Issues Encountered, Next Phase Readiness, Phase 26 Plan 09: Tenant and Owner Cost Console Projections Summary, The two things that would have shipped a lie, Verification, What the surface is
 
 ### Community 1106 - "26-12 — the Content shelf: one bounded read plane over artifacts that already exist"
 Cohesion: 0.25
-Nodes (7): 26-12 — the Content shelf: one bounded read plane over artifacts that already exist, A finding handed on, NOT fixed here, Corrections made in passing, DEVIATION — one schema line the plan did not list, Evidence, Not done / handed on, What shipped
+Nodes (7): 26-11 — artifact provenance and the explicit trust promotion, DEVIATION — the plan told me to write an audit row, and the plan was wrong, Evidence, Not done / handed on, Owner decisions closed this session (all five open questions), Things worth not re-learning, What shipped
 
 ### Community 1107 - "26-13.1 — the image lane, and the comment that hid it"
 Cohesion: 0.25
-Nodes (7): 26-13.1 — the image lane, and the comment that hid it, Evidence, Not done / handed on, ONE ASSERTION WAS LOOSENED ON PURPOSE, Search — narrows what is SHOWN, never what is LOOKED AT, The defect, and why the comment is the real lesson, What this was
+Nodes (7): 26-12 — the Content shelf: one bounded read plane over artifacts that already exist, A finding handed on, NOT fixed here, Corrections made in passing, DEVIATION — one schema line the plan did not list, Evidence, Not done / handed on, What shipped
 
 ### Community 1108 - "26-16 — the board pack: one transaction is the snapshot, and promotion is not a new authorship"
 Cohesion: 0.25
-Nodes (7): 26-16 — the board pack: one transaction is the snapshot, and promotion is not a new authorship, Deviations, Evidence, How this plan ran, Not done / handed on, The defect the hand review found, What shipped
+Nodes (7): 26-13.1 — the image lane, and the comment that hid it, Evidence, Not done / handed on, ONE ASSERTION WAS LOOSENED ON PURPOSE, Search — narrows what is SHOWN, never what is LOOKED AT, The defect, and why the comment is the real lesson, What this was
 
 ### Community 1109 - "failureCopy.ts"
 Cohesion: 0.12
@@ -5628,19 +5622,19 @@ Nodes (21): discussPillStyle(), DocGrid(), docLabel(), fmtSize(), folderChip(), 
 
 ### Community 1110 - "27-09 — The discovery surface, the owner primitive, and the deadlock they had to break"
 Cohesion: 0.25
-Nodes (7): 27-09 — The discovery surface, the owner primitive, and the deadlock they had to break, Decisions the next session must carry, Evidence, Near-misses worth keeping, Open RE-PLAN items, as resolved, The finding that had to be resolved before any of it, What is not done, and why
+Nodes (7): 26-16 — the board pack: one transaction is the snapshot, and promotion is not a new authorship, Deviations, Evidence, How this plan ran, Not done / handed on, The defect the hand review found, What shipped
 
 ### Community 1111 - "tenant.ts"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 30 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): 27-09 — The discovery surface, the owner primitive, and the deadlock they had to break, Decisions the next session must carry, Evidence, Near-misses worth keeping, Open RE-PLAN items, as resolved, The finding that had to be resolved before any of it, What is not done, and why
 
 ### Community 1112 - "Phase 33: Media Creation UX Overhaul - Research"
 Cohesion: 0.25
-Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 33: Media Creation UX Overhaul - Research, Phase Requirements, State of the Art, Summary
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 30 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1113 - "Phase 33 — Validation Strategy"
 Cohesion: 0.25
-Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 33 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
+Nodes (7): Don't Hand-Roll, Metadata, Open Questions, Phase 33: Media Creation UX Overhaul - Research, Phase Requirements, State of the Art, Summary
 
 ### Community 1114 - "buildBoardPackMarkdown"
 Cohesion: 0.52
@@ -5651,32 +5645,32 @@ Cohesion: 0.29
 Nodes (3): Dependency graph, Metrics, Tech tracking
 
 ### Community 1116 - "business-evaluation-no-grounded-findings.md"
-Cohesion: 0.29
-Nodes (6): Consequence, now discharged, Eliminated during investigation, Fix, Root cause, Verification, Why it escaped
+Cohesion: 0.25
+Nodes (7): Manual-Only Verifications, Per-Task Verification Map, Phase 33 — Validation Strategy, Sampling Rate, Test Infrastructure, Validation Sign-Off, Wave 0 Requirements
 
 ### Community 1117 - "ISO 9001:2015 as an Embedded QMS Layer"
 Cohesion: 0.29
-Nodes (6): Claim boundary (hard rule), Embedding decision: skills registry, not code, ISO 9001:2015 as an Embedded QMS Layer, Moat linkage, Phased sequencing, Why the cost is low: the harness is already ISO-shaped
+Nodes (6): Consequence, now discharged, Eliminated during investigation, Fix, Root cause, Verification, Why it escaped
 
 ### Community 1118 - "PII Engine — v1 Decision"
 Cohesion: 0.29
-Nodes (6): Ceilings (ponytail), Insertion points (already marked in code), Options considered, PII Engine — v1 Decision, Tensions Phase 3 planning MUST resolve (flagged, not silently decided), What the spike proves (`packages/pii`)
+Nodes (6): Claim boundary (hard rule), Embedding decision: skills registry, not code, ISO 9001:2015 as an Embedded QMS Layer, Moat linkage, Phased sequencing, Why the cost is low: the harness is already ISO-shaped
 
 ### Community 1119 - "Common Pitfalls"
 Cohesion: 0.29
-Nodes (7): Common Pitfalls, Pitfall 1: convex-test cannot exercise component-backed workflows, Pitfall 2: `--once` and Windows exit codes, Pitfall 3: missing `refresh_token` from the Gmail consent, Pitfall 4: `_generated` not present / codegen order, Pitfall 5: raw `query`/`mutation` import ban, Pitfall 6: AI SDK in Convex Node runtime
+Nodes (6): Ceilings (ponytail), Insertion points (already marked in code), Options considered, PII Engine — v1 Decision, Tensions Phase 3 planning MUST resolve (flagged, not silently decided), What the spike proves (`packages/pii`)
 
 ### Community 1120 - "03.11-01-PLAN.md"
 Cohesion: 0.29
-Nodes (6): schema.ts:133 plans: defineTable, schema.ts:263 agentSteps.tool: v.union(...), schema.ts:313 inboxFixtures: defineTable  (messages[] object at ~316), schema.ts:84  requests: defineTable, The exact schema anchors to extend (line refs from RESEARCH § Recommended file touch-set):, The precedent eval case shape (18-briefing-then-action.json) + the injection-probe precedent (17):
+Nodes (7): Common Pitfalls, Pitfall 1: convex-test cannot exercise component-backed workflows, Pitfall 2: `--once` and Windows exit codes, Pitfall 3: missing `refresh_token` from the Gmail consent, Pitfall 4: `_generated` not present / codegen order, Pitfall 5: raw `query`/`mutation` import ban, Pitfall 6: AI SDK in Convex Node runtime
 
 ### Community 1121 - "03.11-04-PLAN.md"
 Cohesion: 0.29
-Nodes (6): llm.ts:1155 listInbox strips ids (Pitfall 3 — the loop has NO message ids, so the tool takes a fuzzy ref), llm.ts:1202-1218 briefInbox rawBodies (the toolless-boundary static-scan precedent) ; draftReply from Plan 02, llm.ts:473/502 buildAgentContext + recipientNames (the label render — reuse verbatim, set recipientNames[addr]=displayName), llm.ts:591 buildCockpitTools (add the tool here) ; llm.ts:759 resolveContacts (server-side resolve, labels-only, no-guess), plans.ts patchPlan / resetPlan (03.10-05 built resetPlan because patchPlan drops undefined — clear must be explicit), The precedents to reuse (line refs from RESEARCH):
+Nodes (6): schema.ts:133 plans: defineTable, schema.ts:263 agentSteps.tool: v.union(...), schema.ts:313 inboxFixtures: defineTable  (messages[] object at ~316), schema.ts:84  requests: defineTable, The exact schema anchors to extend (line refs from RESEARCH § Recommended file touch-set):, The precedent eval case shape (18-briefing-then-action.json) + the injection-probe precedent (17):
 
 ### Community 1122 - "Architecture Patterns"
 Cohesion: 0.29
-Nodes (7): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: The dispatcher action (Lane 1, mirrors intake.ts structurally), Pattern 2: PDF text-layer-first with garbage heuristic (Lane 1), Pattern 3: One XML text-walk for all three Office formats (Lane 2), Pattern 4: Sweep as a migration + retry mutation (Lane 3), Recommended file layout (= lane ownership map)
+Nodes (6): llm.ts:1155 listInbox strips ids (Pitfall 3 — the loop has NO message ids, so the tool takes a fuzzy ref), llm.ts:1202-1218 briefInbox rawBodies (the toolless-boundary static-scan precedent) ; draftReply from Plan 02, llm.ts:473/502 buildAgentContext + recipientNames (the label render — reuse verbatim, set recipientNames[addr]=displayName), llm.ts:591 buildCockpitTools (add the tool here) ; llm.ts:759 resolveContacts (server-side resolve, labels-only, no-guess), plans.ts patchPlan / resetPlan (03.10-05 built resetPlan because patchPlan drops undefined — clear must be explicit), The precedents to reuse (line refs from RESEARCH):
 
 ### Community 1123 - "ADR-005: Live voice is browser-direct OpenAI Realtime over WebRTC, bounded by a single server wall-clock watchdog, with metering as telemetry"
 Cohesion: 0.29
@@ -5684,87 +5678,87 @@ Nodes (5): ADR-005: Live voice is browser-direct OpenAI Realtime over WebRTC, bo
 
 ### Community 1124 - "Validation Architecture"
 Cohesion: 0.29
-Nodes (7): Environment notes (from STATE.md — don't re-chase), Known-live blockers carried in from 03.7 (read before planning the E2E), Phase requirements → test map, Sampling rate, Test framework, Validation Architecture, Wave 0 gaps
+Nodes (7): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: The dispatcher action (Lane 1, mirrors intake.ts structurally), Pattern 2: PDF text-layer-first with garbage heuristic (Lane 1), Pattern 3: One XML text-walk for all three Office formats (Lane 2), Pattern 4: Sweep as a migration + retry mutation (Lane 3), Recommended file layout (= lane ownership map)
 
 ### Community 1125 - "Architecture Patterns"
 Cohesion: 0.29
-Nodes (7): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: The read-only tool (mirror `searchVault` verbatim), Pattern 2: Skill body = canonical `.md` → derived `.ts` constant → sync-asserted, Pattern 3: Pure package function + Convex thin adapter (§1), Recommended structure, The two-shapes rule (STATE.md decision, locked)
+Nodes (7): Environment notes (from STATE.md — don't re-chase), Known-live blockers carried in from 03.7 (read before planning the E2E), Phase requirements → test map, Sampling rate, Test framework, Validation Architecture, Wave 0 gaps
 
 ### Community 1126 - "Common Pitfalls"
 Cohesion: 0.29
-Nodes (7): Common Pitfalls, Pitfall 1: Skill version collision (HIGH — from memory + `skills.ts`), Pitfall 2: Closed union / closed expect-vocab silently drops the new capability (HIGH), Pitfall 3: Assuming `deliverApprovedPlan` covers the memo (HIGH — see §Gap→Action), Pitfall 4: Fabricated metrics leaking through thin-data (HIGH — SC #1), Pitfall 5: PII-in-prose in audit/export (MEDIUM — §4 + STATE.md open blocker), Pitfall 6: §5 no-hardcoded-prompt scan ceiling (MEDIUM)
+Nodes (7): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: The read-only tool (mirror `searchVault` verbatim), Pattern 2: Skill body = canonical `.md` → derived `.ts` constant → sync-asserted, Pattern 3: Pure package function + Convex thin adapter (§1), Recommended structure, The two-shapes rule (STATE.md decision, locked)
 
 ### Community 1127 - "Phase 12 — Deferred / Out-of-Scope Items"
 Cohesion: 0.29
-Nodes (6): ~~Deferred verification added by 12-05 → 12-06 (the debt is now THREE-part)~~ — RESOLVED 2026-07-25, ~~Deferred verification carried forward from 12-04 → 12-06~~ — RESOLVED 2026-07-25, Eval fixture `18-briefing-then-action` degraded — OFFLINE REPAIR PREPARED, LIVE RECHECK OPEN, Known gap — logged during 12-06 verification, NOT fixed, Phase 12 — Deferred / Out-of-Scope Items, Pre-existing failures observed during 12-02 execution (NOT caused by 12-02)
+Nodes (7): Common Pitfalls, Pitfall 1: Skill version collision (HIGH — from memory + `skills.ts`), Pitfall 2: Closed union / closed expect-vocab silently drops the new capability (HIGH), Pitfall 3: Assuming `deliverApprovedPlan` covers the memo (HIGH — see §Gap→Action), Pitfall 4: Fabricated metrics leaking through thin-data (HIGH — SC #1), Pitfall 5: PII-in-prose in audit/export (MEDIUM — §4 + STATE.md open blocker), Pitfall 6: §5 no-hardcoded-prompt scan ceiling (MEDIUM)
 
 ### Community 1128 - "Architecture Patterns"
 Cohesion: 0.29
-Nodes (7): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: Cron → fan-out mutation → per-tenant action, Pattern 2: Direct `notifications` insert (the no-OAuth bypass), Pattern 3: Explicit-`tenantId` internal twin, Pattern 4: Static source-scan guard test, Recommended Layout
+Nodes (6): ~~Deferred verification added by 12-05 → 12-06 (the debt is now THREE-part)~~ — RESOLVED 2026-07-25, ~~Deferred verification carried forward from 12-04 → 12-06~~ — RESOLVED 2026-07-25, Eval fixture `18-briefing-then-action` degraded — OFFLINE REPAIR PREPARED, LIVE RECHECK OPEN, Known gap — logged during 12-06 verification, NOT fixed, Phase 12 — Deferred / Out-of-Scope Items, Pre-existing failures observed during 12-02 execution (NOT caused by 12-02)
 
 ### Community 1129 - "Code Examples"
 Cohesion: 0.29
-Nodes (7): Code Examples, Verified: `crons.weekly` type surface (convex 1.42.1), Verified: existing cron registration to extend, Verified: scheduled-function completion in tests, Verified: the barrier that makes an unregistered kind safe, Verified: the direct-insert cron mutation (the exact pattern to copy), Verified: the graceful-degradation read the pinned tab relies on
+Nodes (7): Anti-Patterns to Avoid, Architecture Patterns, Pattern 1: Cron → fan-out mutation → per-tenant action, Pattern 2: Direct `notifications` insert (the no-OAuth bypass), Pattern 3: Explicit-`tenantId` internal twin, Pattern 4: Static source-scan guard test, Recommended Layout
 
 ### Community 1130 - "Phase 15.1: Fact-Derived Tier & Conversational Onboarding — Research"
 Cohesion: 0.29
-Nodes (6): Don't Hand-Roll, Metadata, Phase 15.1: Fact-Derived Tier & Conversational Onboarding — Research, Phase Requirements, State of the Art, Summary
+Nodes (7): Code Examples, Verified: `crons.weekly` type surface (convex 1.42.1), Verified: existing cron registration to extend, Verified: scheduled-function completion in tests, Verified: the barrier that makes an unregistered kind safe, Verified: the direct-insert cron mutation (the exact pattern to copy), Verified: the graceful-degradation read the pinned tab relies on
 
 ### Community 1131 - "Code Examples"
 Cohesion: 0.29
-Nodes (7): Code Examples, Fail-closed specialist resolution (the SC #1 shape, mirroring `parseRouting`), Parameterizing the tool-set (the ONE `llm.ts` seam change), Reading the remaining daily budget (the Wave-0 addition), Refs-only lineage audit (no schema change needed), The exhaustive arm table (SC #4), Two-tenant isolation (copy this shape)
+Nodes (6): Don't Hand-Roll, Metadata, Phase 15.1: Fact-Derived Tier & Conversational Onboarding — Research, Phase Requirements, State of the Art, Summary
 
 ### Community 1132 - "16-05 — SUMMARY"
 Cohesion: 0.29
-Nodes (6): 16-05 — SUMMARY, Deviations, Still owed by this plan's siblings, The integration detail the plan could not have known, Verification, What landed
+Nodes (7): Code Examples, Fail-closed specialist resolution (the SC #1 shape, mirroring `parseRouting`), Parameterizing the tool-set (the ONE `llm.ts` seam change), Reading the remaining daily budget (the Wave-0 addition), Refs-only lineage audit (no schema change needed), The exhaustive arm table (SC #4), Two-tenant isolation (copy this shape)
 
 ### Community 1133 - "Architecture Patterns"
 Cohesion: 0.29
-Nodes (7): Anti-patterns to avoid, Architecture Patterns, Pattern 1 — a hosted tool is just another key of the tool record (recommended), Pattern 2 — the specialist's tool-set is its own const, not the shared one, Pattern 3 — the prompt seam, Pattern 4 — the vault write is a DISPATCHER terminal, never a tool, The dispatch seam (exactly what a new route plugs into)
+Nodes (6): 16-05 — SUMMARY, Deviations, Still owed by this plan's siblings, The integration detail the plan could not have known, Verification, What landed
 
 ### Community 1134 - "Phase 16: Research Sub-Agent & Web Research Verification Report"
 Cohesion: 0.29
-Nodes (6): Current Focused Checks, Goal Achievement, Live Evidence, Phase 16: Research Sub-Agent & Web Research Verification Report, Three-Source Requirement Cross-Check, Verdict
+Nodes (7): Anti-patterns to avoid, Architecture Patterns, Pattern 1 — a hosted tool is just another key of the tool record (recommended), Pattern 2 — the specialist's tool-set is its own const, not the shared one, Pattern 3 — the prompt seam, Pattern 4 — the vault write is a DISPATCHER terminal, never a tool, The dispatch seam (exactly what a new route plugs into)
 
 ### Community 1135 - "The Injection Seam — per-caller verdict (HIGHEST-VALUE SECTION)"
 Cohesion: 0.29
-Nodes (7): 1. `packages/backend/convex/llm.ts` — the `searchVault` tool. **UNSAFE. Three breakages.**, 2. `packages/backend/convex/evaluations.ts` — `runEvaluation`. **SAFE. Two behavioural notes.**, 3. `packages/backend/convex/voiceDoc.ts` — `docScopedPassages`. **SAFE, but the spine never reaches the model.**, 4 & 5. `onboarding.ts` and `tenantProfile.ts`. **Not callers. No accommodation needed.**, The five named callers — actual status, The Injection Seam — per-caller verdict (HIGHEST-VALUE SECTION), What the function returns today
+Nodes (6): Current Focused Checks, Goal Achievement, Live Evidence, Phase 16: Research Sub-Agent & Web Research Verification Report, Three-Source Requirement Cross-Check, Verdict
 
 ### Community 1136 - "17-07 — SUMMARY"
 Cohesion: 0.29
-Nodes (6): 17-07 — SUMMARY, Caveats on this evidence, Consequence for 17-08 — DO NOT START IT AS WRITTEN, The probe ran. `supported: false`., What this means, precisely, What was already done before this session
+Nodes (7): 1. `packages/backend/convex/llm.ts` — the `searchVault` tool. **UNSAFE. Three breakages.**, 2. `packages/backend/convex/evaluations.ts` — `runEvaluation`. **SAFE. Two behavioural notes.**, 3. `packages/backend/convex/voiceDoc.ts` — `docScopedPassages`. **SAFE, but the spine never reaches the model.**, 4 & 5. `onboarding.ts` and `tenantProfile.ts`. **Not callers. No accommodation needed.**, The five named callers — actual status, The Injection Seam — per-caller verdict (HIGHEST-VALUE SECTION), What the function returns today
 
 ### Community 1137 - "Deviations from Plan"
 Cohesion: 0.29
-Nodes (7): 1. [Rule 3 — Blocking] The harness CLI and the browser addressed DIFFERENT deployments, 2. [Rule 1 — the plan's own verify command cannot pass], 3. [Rule 3] The running stack was stale and had to be restarted, 4. [Beyond the plan] A second screenshot, 5. [Deviation from the plan's instruction, deliberate] `status: complete` was withheld until the gate closed, 6. [Shared working tree] Task 2's four files were committed by a FOREIGN LANE, Deviations from Plan
+Nodes (6): 17-07 — SUMMARY, Caveats on this evidence, Consequence for 17-08 — DO NOT START IT AS WRITTEN, The probe ran. `supported: false`., What this means, precisely, What was already done before this session
 
 ### Community 1138 - "6. The Pipeline route"
 Cohesion: 0.29
-Nodes (7): 26-01's shared contracts (`packages/core/src/dashboard.ts`) — what to consume, 6. The Pipeline route, BRAND tokens and patterns the page must use, How 26-10 built a connected route, Nav activation, THE 26-10 COVERAGE/CLAMP LESSON — the defect and its fix (commit `1a63992`), The corrected mockup (`docs/design/mockups/pending-pages.html:863-905`)
+Nodes (7): 1. [Rule 3 — Blocking] The harness CLI and the browser addressed DIFFERENT deployments, 2. [Rule 1 — the plan's own verify command cannot pass], 3. [Rule 3] The running stack was stale and had to be restarted, 4. [Beyond the plan] A second screenshot, 5. [Deviation from the plan's instruction, deliberate] `status: complete` was withheld until the gate closed, 6. [Shared working tree] Task 2's four files were committed by a FOREIGN LANE, Deviations from Plan
 
 ### Community 1139 - "20-16 — SUMMARY"
 Cohesion: 0.29
-Nodes (6): 20-16 — SUMMARY, Details worth not rediscovering, The design decision this plan made, and it is a refusal, The five must-have truths, and where each is enforced, Two orderings that are load-bearing, Verification
+Nodes (7): 26-01's shared contracts (`packages/core/src/dashboard.ts`) — what to consume, 6. The Pipeline route, BRAND tokens and patterns the page must use, How 26-10 built a connected route, Nav activation, THE 26-10 COVERAGE/CLAMP LESSON — the defect and its fix (commit `1a63992`), The corrected mockup (`docs/design/mockups/pending-pages.html:863-905`)
 
 ### Community 1140 - "2. Q2 — VERCEL SANDBOX MECHANICS"
 Cohesion: 0.29
-Nodes (7): 2.1 Bytes in, bytes out (HIGH — vendor docs), 2.2 Auth — and the crown-jewel problem, 2.3 Is `ffmpeg` present, installable, or must it be layered in?, 2.4 Max duration vs a realistic 6-block render — D9's stated failure condition, 2.5 What sandbox compute actually costs — satisfying D10's "estimate it or record why not", 2.6 The trust boundary — what to validate, what must never go in, 2. Q2 — VERCEL SANDBOX MECHANICS
+Nodes (6): 20-16 — SUMMARY, Details worth not rediscovering, The design decision this plan made, and it is a refusal, The five must-have truths, and where each is enforced, Two orderings that are load-bearing, Verification
 
 ### Community 1141 - "Phase 21 — live session 2026-08-18: what was executed, and what CANNOT be"
 Cohesion: 0.29
-Nodes (6): Consequence, Executed and verified, NOT executed — steps 3 and 4 are unrunnable as written, Phase 21 — live session 2026-08-18: what was executed, and what CANNOT be, Plan bug found, Re-cut needed for steps 3–4
+Nodes (7): 2.1 Bytes in, bytes out (HIGH — vendor docs), 2.2 Auth — and the crown-jewel problem, 2.3 Is `ffmpeg` present, installable, or must it be layered in?, 2.4 Max duration vs a realistic 6-block render — D9's stated failure condition, 2.5 What sandbox compute actually costs — satisfying D10's "estimate it or record why not", 2.6 The trust boundary — what to validate, what must never go in, 2. Q2 — VERCEL SANDBOX MECHANICS
 
 ### Community 1142 - "25-01 — security audit of the BETA-01 admission boundary"
 Cohesion: 0.29
-Nodes (6): 25-01 — security audit of the BETA-01 admission boundary, Evidence, Left open, deliberately, The defect: the OAuth path trusted an unverified email claim, The fix, What was verified, not assumed
+Nodes (6): Consequence, Executed and verified, NOT executed — steps 3 and 4 are unrunnable as written, Phase 21 — live session 2026-08-18: what was executed, and what CANNOT be, Plan bug found, Re-cut needed for steps 3–4
 
 ### Community 1143 - "Phase 26 Plan 06: Spend Ledger Core Summary"
 Cohesion: 0.29
-Nodes (6): Deviations from Plan, Issues Encountered, Next Phase Readiness, Phase 26 Plan 06: Spend Ledger Core Summary, Verification, What was built
+Nodes (6): 25-01 — security audit of the BETA-01 admission boundary, Evidence, Left open, deliberately, The defect: the OAuth path trusted an unverified email claim, The fix, What was verified, not assumed
 
 ### Community 1144 - "26-11-PLAN.md"
 Cohesion: 0.29
-Nodes (6): and 26-12 already carries the identical invariant as a negative test. The 26-11-side residue, is kept as Task 1's non-goal: research keeps `kind:"web_research"` / `source:"web_research"`, NOT a 26-11 truth (moved to 26-12, which owns the surface and can test it):, `packages/backend/convex/content.ts` does not exist until 26-12 (wave 9, depends_on 26-11),, "Research briefs are not projected into the narrowed Content artifact shelf.", so 26-12 has a discriminator to exclude on.
+Nodes (6): Deviations from Plan, Issues Encountered, Next Phase Readiness, Phase 26 Plan 06: Spend Ledger Core Summary, Verification, What was built
 
 ### Community 1145 - "Lane ownership (Phase 3.8)"
 Cohesion: 0.33
@@ -5772,27 +5766,27 @@ Nodes (6): Extraction lifecycle (Phase 3.8), Lane 1 — PDF + images (`convex/va
 
 ### Community 1146 - "26-13 Task 2 — Content artifact UAT (BLOCKING, open)"
 Cohesion: 0.29
-Nodes (6): 26-13 Task 2 — Content artifact UAT (BLOCKING, open), After you answer, The checklist (plan 26-13 Task 2, verbatim scope), The stack is already running, Two things to hold me to, What is already proven, so you do not need to re-check it
+Nodes (6): and 26-12 already carries the identical invariant as a negative test. The 26-11-side residue, is kept as Task 1's non-goal: research keeps `kind:"web_research"` / `source:"web_research"`, NOT a 26-11 truth (moved to 26-12, which owns the surface and can test it):, `packages/backend/convex/content.ts` does not exist until 26-12 (wave 9, depends_on 26-11),, "Research briefs are not projected into the narrowed Content artifact shelf.", so 26-12 has a discriminator to exclude on.
 
 ### Community 1147 - "Plan 26-19: the deterministic Command Center backend"
 Cohesion: 0.29
-Nodes (6): Copy correction, Known gap, carried to 26-20, Plan 26-19: the deterministic Command Center backend, The invariants, and the defects that produced them, Verification, What was built
+Nodes (6): 26-13 Task 2 — Content artifact UAT (BLOCKING, open), After you answer, The checklist (plan 26-13 Task 2, verbatim scope), The stack is already running, Two things to hold me to, What is already proven, so you do not need to re-check it
 
 ### Community 1148 - "Phase 27 Validation Strategy"
 Cohesion: 0.29
-Nodes (6): Manual checks, Per-plan verification map, Phase 27 Validation Strategy, Release gate, Sampling cadence, Test architecture
+Nodes (6): Copy correction, Known gap, carried to 26-20, Plan 26-19: the deterministic Command Center backend, The invariants, and the defects that produced them, Verification, What was built
 
 ### Community 1149 - "33.1-02 — SUMMARY"
 Cohesion: 0.29
-Nodes (6): 33.1-02 — SUMMARY, Carried forward, Delivered, Gates, observed, Not done here, The two costs, recorded rather than buried
+Nodes (6): Manual checks, Per-plan verification map, Phase 27 Validation Strategy, Release gate, Sampling cadence, Test architecture
 
 ### Community 1150 - "5. Synthesis"
 Cohesion: 0.33
 Nodes (6): 5.1 Three inputs, one of which costs money, 5.2 Probes derive from the blanks, 5.3 The model call, 5.4 Citation validation is a trust boundary, 5.5 Output is size-capped, 5. Synthesis
 
 ### Community 1151 - "Advanced Component Patterns"
-Cohesion: 0.33
-Nodes (5): Advanced Component Patterns, Class-based client wrappers, Deriving validators from schema, Function Handles for callbacks, Static configuration with a globals table
+Cohesion: 0.29
+Nodes (6): 33.1-02 — SUMMARY, Carried forward, Delivered, Gates, observed, Not done here, The two costs, recorded rather than buried
 
 ### Community 1152 - "The card palette (the wire that stopped three-quarters of the way)"
 Cohesion: 0.33
@@ -5804,19 +5798,19 @@ Nodes (6): Silence means unverified (the citation default, inverted), The ceilin
 
 ### Community 1154 - "Hybrid Convex Components"
 Cohesion: 0.33
-Nodes (5): Checklist, Default Advice, Hybrid Convex Components, Risks, What This Means
+Nodes (5): Advanced Component Patterns, Class-based client wrappers, Deriving validators from schema, Function Handles for callbacks, Static configuration with a globals table
 
 ### Community 1155 - "Local Convex Components"
 Cohesion: 0.33
-Nodes (5): Checklist, Default Layout, Local Convex Components, When to Choose This, Workflow Notes
+Nodes (5): Checklist, Default Advice, Hybrid Convex Components, Risks, What This Means
 
 ### Community 1156 - "devDependencies"
 Cohesion: 0.33
-Nodes (6): devDependencies, convex-test, @edge-runtime/vm, @types/node, vitest, xlsx
+Nodes (5): Checklist, Default Layout, Local Convex Components, When to Choose This, Workflow Notes
 
 ### Community 1157 - "calendar-api-service-disabled.md"
 Cohesion: 0.33
-Nodes (5): Current Focus, Eliminated, Evidence, Resolution, Symptoms
+Nodes (6): devDependencies, convex-test, @edge-runtime/vm, @types/node, vitest, xlsx
 
 ### Community 1158 - "first-login-second-attempt-auth-redirect.md"
 Cohesion: 0.33
@@ -5852,139 +5846,139 @@ Nodes (5): Current Focus, Eliminated, Evidence, Resolution, Symptoms
 
 ### Community 1166 - "03.11-02-PLAN.md"
 Cohesion: 0.33
-Nodes (5): draftCockpit is reachable from the tool-bearing draftBody at llm.ts:904, so feeding it a body, llm.ts:~2090 digestInbox ; llm.ts:357 draftCockpit (the shape to mirror; do NOT reuse it —, The gated-skill 5-file mirror precedent — inbox-digest (STATE 03.7-03):, The template to clone — digestInbox (toolless, gated-skill, fallback, explicit return type):, there would put mail one hop from the loop; RESEARCH Alternatives Considered / Open Q2).
+Nodes (5): Current Focus, Eliminated, Evidence, Resolution, Symptoms
 
 ### Community 1167 - "03.11-03-PLAN.md"
 Cohesion: 0.33
-Nodes (5): cockpit.ts:415 executePlan (requests insert ~:476) — single-arm-site startFanout at :371 stays UNCHANGED, gmail.ts:391 listInbox / :484 fetchInboxBodies / :242 search — already fetch metadata/full; extend to return the target headers, gmail.ts:78 buildMime (zero-attachment branch :84; multipart branch below) ; gmail.ts:138 send (POST body :182), gmailAuth.ts:120 getForDelivery (projection: subject:r.goal, body:r.editedBody??r.draft — new fields invisible unless added), The exact seams (line refs from RESEARCH):
+Nodes (5): draftCockpit is reachable from the tool-bearing draftBody at llm.ts:904, so feeding it a body, llm.ts:~2090 digestInbox ; llm.ts:357 draftCockpit (the shape to mirror; do NOT reuse it —, The gated-skill 5-file mirror precedent — inbox-digest (STATE 03.7-03):, The template to clone — digestInbox (toolless, gated-skill, fallback, explicit return type):, there would put mail one hop from the loop; RESEARCH Alternatives Considered / Open Q2).
 
 ### Community 1168 - "Phase 03.5 Plan 05: Reschedule a Canceled Send Summary"
 Cohesion: 0.33
-Nodes (5): Deviations from Plan, Phase 03.5 Plan 05: Reschedule a Canceled Send Summary, Self-Check: PASSED, Verification, What was built
+Nodes (5): cockpit.ts:415 executePlan (requests insert ~:476) — single-arm-site startFanout at :371 stays UNCHANGED, gmail.ts:391 listInbox / :484 fetchInboxBodies / :242 search — already fetch metadata/full; extend to return the target headers, gmail.ts:78 buildMime (zero-attachment branch :84; multipart branch below) ; gmail.ts:138 send (POST body :182), gmailAuth.ts:120 getForDelivery (projection: subject:r.goal, body:r.editedBody??r.draft — new fields invisible unless added), The exact seams (line refs from RESEARCH):
 
 ### Community 1169 - "Phase 03.5 Plan 06: Far-Future Scheduling Cap Summary"
 Cohesion: 0.33
-Nodes (5): Deviations from Plan, Phase 03.5 Plan 06: Far-Future Scheduling Cap Summary, Self-Check: PASSED, Verification, What was built
+Nodes (5): Deviations from Plan, Phase 03.5 Plan 05: Reschedule a Canceled Send Summary, Self-Check: PASSED, Verification, What was built
 
 ### Community 1170 - "Validation Architecture"
 Cohesion: 0.33
-Nodes (6): Live smoke / phase-close human-verify (each lane's own deployment), Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): Deviations from Plan, Phase 03.5 Plan 06: Far-Future Scheduling Cap Summary, Self-Check: PASSED, Verification, What was built
 
 ### Community 1171 - "Deferred Items — Phase 03 Guardrails"
 Cohesion: 0.33
-Nodes (5): Deferred (found during 03-04), Deferred Items — Phase 03 Guardrails, `pnpm -r typecheck` turbo runner quirk on @pikar/audit (out of scope for 03-01), Pre-existing audit.test.ts failure (out of scope for 03-02), Pre-existing backend test-file typecheck errors (out of scope for 03-02)
+Nodes (6): Live smoke / phase-close human-verify (each lane's own deployment), Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1172 - "Code Examples"
 Cohesion: 0.33
-Nodes (6): Browse list (cheap query, no vectors — VALT-04), Code Examples, Graph-extractor: structured JSON via `generateObject` (V8 action, mirrors `draftCockpit`), The `graph-extractor` skill (5-file mirror — mirror `document-drafter`), UI wiring (match screenshots, tokens only), `vaultIngestText` seam (Phase-4 + agent write path)
+Nodes (5): Deferred (found during 03-04), Deferred Items — Phase 03 Guardrails, `pnpm -r typecheck` turbo runner quirk on @pikar/audit (out of scope for 03-01), Pre-existing audit.test.ts failure (out of scope for 03-02), Pre-existing backend test-file typecheck errors (out of scope for 03-02)
 
 ### Community 1173 - "Growth OS Port (research priority #6 — what to scope)"
 Cohesion: 0.33
-Nodes (6): `cfa.py` → `cfa(...)`, `diagnose.py` → `diagnose(scorecard)`, Growth OS Port (research priority #6 — what to scope), `ltgp_cac.py` → `ltgpCac(...)`, References → rubric skill bodies (original wording), Scorecard template → TS type + default
+Nodes (6): Browse list (cheap query, no vectors — VALT-04), Code Examples, Graph-extractor: structured JSON via `generateObject` (V8 action, mirrors `draftCockpit`), The `graph-extractor` skill (5-file mirror — mirror `document-drafter`), UI wiring (match screenshots, tokens only), `vaultIngestText` seam (Phase-4 + agent write path)
 
 ### Community 1174 - "Inventory: what already exists"
 Cohesion: 0.33
-Nodes (6): A. Report ingestion / extraction (Phases 3.8 / 5) — consume, do not extend, B. Live voice sessions (Phase 6) — Lane C owns these files, C. Findings, citations, gap → plan → Approve (Phases 10 & 12) — read-only for this lane, D. Skills registry & eval gate, E. Governance / §4 enforcement precedents, Inventory: what already exists
+Nodes (6): `cfa.py` → `cfa(...)`, `diagnose.py` → `diagnose(scorecard)`, Growth OS Port (research priority #6 — what to scope), `ltgp_cac.py` → `ltgpCac(...)`, References → rubric skill bodies (original wording), Scorecard template → TS type + default
 
 ### Community 1175 - "Phase 14: Flagship Voice-Doc Workflow Verification Report"
 Cohesion: 0.33
-Nodes (6): Current Focused Checks, Goal Achievement, Phase 14: Flagship Voice-Doc Workflow Verification Report, Preserved Observations, Three-Source Requirement Cross-Check, Verdict
+Nodes (6): A. Report ingestion / extraction (Phases 3.8 / 5) — consume, do not extend, B. Live voice sessions (Phase 6) — Lane C owns these files, C. Findings, citations, gap → plan → Approve (Phases 10 & 12) — read-only for this lane, D. Skills registry & eval gate, E. Governance / §4 enforcement precedents, Inventory: what already exists
 
 ### Community 1176 - "Phase 15.4 Verification Report"
 Cohesion: 0.33
-Nodes (5): Gaps, Goal Achievement, Key Boundary Verification, Phase 15.4 Verification Report, Requirement Coverage
+Nodes (6): Current Focused Checks, Goal Achievement, Phase 14: Flagship Voice-Doc Workflow Verification Report, Preserved Observations, Three-Source Requirement Cross-Check, Verdict
 
 ### Community 1177 - "Phase 15 — deferred items"
 Cohesion: 0.33
-Nodes (5): Phase 15 — deferred items, `@pikar/audit` has no `tsconfig.json` (pre-existing since Phase 1), `replyToMessage` has no `VERB` entry (pre-existing since Phase 3.11), RESOLVED — the 15-06 specialist-body eval/activation gate, Two full-suite timeout flakes on the `"use node"` llm.ts import (pre-existing, load-induced)
+Nodes (5): Gaps, Goal Achievement, Key Boundary Verification, Phase 15.4 Verification Report, Requirement Coverage
 
 ### Community 1178 - "Code Examples"
 Cohesion: 0.33
-Nodes (6): Code Examples, Declaring the hosted tool (verified against `@ai-sdk/openai@4.0.11` `dist/index.d.ts:992`), Offline test fixture — a scripted hosted search WITHOUT a network call, Reading provenance out of the loop result (verified against `ai@7.0.20` `dist/index.js:4333`), The output fence (the SC#2 fence that actually ships), The refs-only audit (copy `vault.searched`, do not invent — D6)
+Nodes (5): Phase 15 — deferred items, `@pikar/audit` has no `tsconfig.json` (pre-existing since Phase 1), `replyToMessage` has no `VERB` entry (pre-existing since Phase 3.11), RESOLVED — the 15-06 specialist-body eval/activation gate, Two full-suite timeout flakes on the `"use node"` llm.ts import (pre-existing, load-induced)
 
 ### Community 1179 - "Validation Architecture"
 Cohesion: 0.33
-Nodes (6): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps, What is NOT offline-provable
+Nodes (6): Code Examples, Declaring the hosted tool (verified against `@ai-sdk/openai@4.0.11` `dist/index.d.ts:992`), Offline test fixture — a scripted hosted search WITHOUT a network call, Reading provenance out of the loop result (verified against `ai@7.0.20` `dist/index.js:4333`), The output fence (the SC#2 fence that actually ships), The refs-only audit (copy `vault.searched`, do not invent — D6)
 
 ### Community 1180 - "Validation Architecture"
 Cohesion: 0.33
-Nodes (6): ⚠ Claims that ONLY the live deployment run can prove, Phase Requirements → Test Map, Sampling rate, Test Framework, Validation Architecture, Wave 0 gaps
+Nodes (6): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps, What is NOT offline-provable
 
 ### Community 1181 - "18-08: teach createDocument — certified live on 2026-08-08"
 Cohesion: 0.33
-Nodes (5): 18-08: teach createDocument — certified live on 2026-08-08, Evidence, Scope note, What shipped, and when it was actually proven, What that first live run found
+Nodes (6): ⚠ Claims that ONLY the live deployment run can prove, Phase Requirements → Test Map, Sampling rate, Test Framework, Validation Architecture, Wave 0 gaps
 
 ### Community 1182 - "Validation Architecture"
 Cohesion: 0.33
-Nodes (6): Phase Requirements → Test Map, Sampling Rate, Tenant-isolation assertion for SC#3 — COPYABLE, compiles at HEAD, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): 18-08: teach createDocument — certified live on 2026-08-08, Evidence, Scope note, What shipped, and when it was actually proven, What that first live run found
 
 ### Community 1183 - "Code Examples"
 Cohesion: 0.33
-Nodes (6): Code Examples, RFC-4180 cases the parser must survive (fixture material), The compile-error bind to add (the `ARMS` idiom, `cockpit.md:488`), The one-shot preview query (not `useQuery`), The Playwright upload step, Widening the schema (no migration)
+Nodes (6): Phase Requirements → Test Map, Sampling Rate, Tenant-isolation assertion for SC#3 — COPYABLE, compiles at HEAD, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1184 - "Code Examples"
 Cohesion: 0.33
-Nodes (6): Code Examples, The inline arm, extended for `crm_write` (from `cockpit.ts:683`), The isolation assertion (from `media.test.ts:2465`), The per-address filter, before the group join (`cockpit.ts:796-800`), The send-path backstop (`gmail.ts:161`), The unsubscribe route (mirroring `http.ts:271`)
+Nodes (6): Code Examples, RFC-4180 cases the parser must survive (fixture material), The compile-error bind to add (the `ARMS` idiom, `cockpit.md:488`), The one-shot preview query (not `useQuery`), The Playwright upload step, Widening the schema (no migration)
 
 ### Community 1185 - "20-09 — SUMMARY"
 Cohesion: 0.33
-Nodes (5): 20-09 — SUMMARY, The decisions worth not rediscovering, The eight truths, and where each is enforced, Verification, What this plan did NOT include
+Nodes (6): Code Examples, The inline arm, extended for `crm_write` (from `cockpit.ts:683`), The isolation assertion (from `media.test.ts:2465`), The per-address filter, before the group join (`cockpit.ts:796-800`), The send-path backstop (`gmail.ts:161`), The unsubscribe route (mirroring `http.ts:271`)
 
 ### Community 1186 - "20-12 — SUMMARY"
 Cohesion: 0.33
-Nodes (5): 20-12 — SUMMARY, Deviations and open items, Task 5 — the no-spend conversational observation (owner, on PRODUCTION), The two RED cycles before green, and what they taught, What is live, and where
+Nodes (5): 20-09 — SUMMARY, The decisions worth not rediscovering, The eight truths, and where each is enforced, Verification, What this plan did NOT include
 
 ### Community 1187 - "5. Media job + asset schema"
 Cohesion: 0.33
-Nodes (6): 5.1 Where things live — and the constraint that forces the split, 5.2 `mediaJobs`, 5.3 Tenant-scoped refs for binary assets — how it works today (HIGH), 5.4 Where the isolation assertion goes, 5.5 CLAUDE.md §4 compliance — confirmed, and how it is enforced, 5. Media job + asset schema
+Nodes (5): 20-12 — SUMMARY, Deviations and open items, Task 5 — the no-spend conversational observation (owner, on PRODUCTION), The two RED cycles before green, and what they taught, What is live, and where
 
 ### Community 1188 - "Phase 20: Media Canvas — RESEARCH DELTA (2026-08-01 re-scope)"
 Cohesion: 0.33
-Nodes (5): 0. VERDICT ON THE LOCKED DECISIONS — read this first, Metadata, Open Questions, Phase 20: Media Canvas — RESEARCH DELTA (2026-08-01 re-scope), Phase Requirements
+Nodes (6): 5.1 Where things live — and the constraint that forces the split, 5.2 `mediaJobs`, 5.3 Tenant-scoped refs for binary assets — how it works today (HIGH), 5.4 Where the isolation assertion goes, 5.5 CLAUDE.md §4 compliance — confirmed, and how it is enforced, 5. Media job + asset schema
 
 ### Community 1189 - "1. Q1 — THE TTS PROVIDER AND ITS PUBLISHED PRICE"
 Cohesion: 0.33
-Nodes (6): 1.1 Does fal serve TTS with a published per-character USD price? YES — many., 1.2 Recommendation: `fal-ai/inworld-tts` — ONE row, 1.3 Costing the 6-block 60-second voiceover — the number D10 turns on, 1.4 Alternatives, evaluated on ADR-011's binding criterion, 1.5 Does the provider return per-request duration or character counts? NO — and that is GOOD., 1. Q1 — THE TTS PROVIDER AND ITS PUBLISHED PRICE
+Nodes (5): 0. VERDICT ON THE LOCKED DECISIONS — read this first, Metadata, Open Questions, Phase 20: Media Canvas — RESEARCH DELTA (2026-08-01 re-scope), Phase Requirements
 
 ### Community 1190 - "Validation Architecture (delta)"
 Cohesion: 0.33
-Nodes (6): How the sandbox runner is tested WITHOUT a real render, How the TTS price row is pinned WITHOUT spending, New surfaces → test map, Sampling rate (delta), Validation Architecture (delta), Wave 0 gaps (delta — additive to `20-RESEARCH.md`'s list)
+Nodes (6): 1.1 Does fal serve TTS with a published per-character USD price? YES — many., 1.2 Recommendation: `fal-ai/inworld-tts` — ONE row, 1.3 Costing the 6-block 60-second voiceover — the number D10 turns on, 1.4 Alternatives, evaluated on ADR-011's binding criterion, 1.5 Does the provider return per-request duration or character counts? NO — and that is GOOD., 1. Q1 — THE TTS PROVIDER AND ITS PUBLISHED PRICE
 
 ### Community 1191 - "Validation Architecture"
 Cohesion: 0.33
-Nodes (6): How the budget rail and the isolation assertion are tested WITHOUT spending real money, Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (6): How the sandbox runner is tested WITHOUT a real render, How the TTS price row is pinned WITHOUT spending, New surfaces → test map, Sampling rate (delta), Validation Architecture (delta), Wave 0 gaps (delta — additive to `20-RESEARCH.md`'s list)
 
 ### Community 1192 - "21-08 — the free half of the live gate: executed, except the half that cannot be"
 Cohesion: 0.33
-Nodes (5): 21-08 — the free half of the live gate: executed, except the half that cannot be, Deviations from the plan, Executed — PASS, NOT executed — steps 3 and 4, and they are not deferrable, Phase closure
+Nodes (6): How the budget rail and the isolation assertion are tested WITHOUT spending real money, Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1193 - "26-05: Connected Approvals route, owner-verified"
 Cohesion: 0.33
-Nodes (5): 26-05: Connected Approvals route, owner-verified, Defects found by the UAT (both fixed), Evidence, Owed, NOT closed by this plan, What shipped
+Nodes (5): 21-08 — the free half of the live gate: executed, except the half that cannot be, Deviations from the plan, Executed — PASS, NOT executed — steps 3 and 4, and they are not deferrable, Phase closure
 
 ### Community 1194 - "Plan 26-18: Sales Pipeline navigation activation"
 Cohesion: 0.33
-Nodes (5): Change, External gate consumed, Plan 26-18: Sales Pipeline navigation activation, Rollback, Verification
+Nodes (5): 26-05: Connected Approvals route, owner-verified, Defects found by the UAT (both fixed), Evidence, Owed, NOT closed by this plan, What shipped
 
 ### Community 1195 - "Phase 27 Plan 04: Business Pulse and Campaign Plan Summary"
 Cohesion: 0.33
-Nodes (5): Gates proven RED, then restored, Phase 27 Plan 04: Business Pulse and Campaign Plan Summary, Two corrections to earlier plans, Verification — all executed, What the adaptation actually removed
+Nodes (5): Change, External gate consumed, Plan 26-18: Sales Pipeline navigation activation, Rollback, Verification
 
 ### Community 1196 - "Phase 27 Plan 06: Process/SOP Builder and Brand Review Summary"
 Cohesion: 0.33
-Nodes (5): Brand Review ships starved, and says so first, Phase 27 Plan 06: Process/SOP Builder and Brand Review Summary, Process/SOP will not invent authority, Verification — all executed, Wave 2 is complete
+Nodes (5): Gates proven RED, then restored, Phase 27 Plan 04: Business Pulse and Campaign Plan Summary, Two corrections to earlier plans, Verification — all executed, What the adaptation actually removed
 
 ### Community 1197 - "Revenue Workflow Architecture"
 Cohesion: 0.33
-Nodes (6): Cash flow and payroll confidence, Customer pulse, Invoice reminders, Lead triage and call lists, Pipeline review, Revenue Workflow Architecture
+Nodes (5): Brand Review ships starved, and says so first, Phase 27 Plan 06: Process/SOP Builder and Brand Review Summary, Process/SOP will not invent authority, Verification — all executed, Wave 2 is complete
 
 ### Community 1198 - "Code Examples"
 Cohesion: 0.33
-Nodes (6): Code Examples, The estimate the UI reformats (do not recompute), The once-only guard idiom (for the auto-retry), The provenance-safe confirmation write, The stderr → code mapping the failure cards translate, The system-authored vault doc (auto-save precedent)
+Nodes (6): Cash flow and payroll confidence, Customer pulse, Invoice reminders, Lead triage and call lists, Pipeline review, Revenue Workflow Architecture
 
 ### Community 1199 - "Phases 14–25 milestone audit — 2026-08-20"
 Cohesion: 0.33
-Nodes (5): Dependency-safe closure order, External-only evidence, Outcome, Phase matrix, Phases 14–25 milestone audit — 2026-08-20
+Nodes (6): Code Examples, The estimate the UI reformats (do not recompute), The once-only guard idiom (for the auto-retry), The provenance-safe confirmation write, The stderr → code mapping the failure cards translate, The system-authored vault doc (auto-save precedent)
 
 ### Community 1200 - "ADR-007: Sub-agent capability is code-owned; the sub-agent prompt is registry-owned"
 Cohesion: 0.40
@@ -6011,64 +6005,64 @@ Cohesion: 0.40
 Nodes (5): Data model, New optional fields on `contacts`, The attestation wording, The consent tension, stated, Two union extensions
 
 ### Community 1206 - "Convex"
-Cohesion: 0.40
-Nodes (4): Convex, Route to the Right Skill, Start Here, When Not to Use
+Cohesion: 0.33
+Nodes (5): Dependency-safe closure order, External-only evidence, Outcome, Phase matrix, Phases 14–25 milestone audit — 2026-08-20
 
 ### Community 1207 - "Scheduled Send"
 Cohesion: 0.40
-Nodes (4): Amends (process rule: scope decisions name the PRD lines they change), Scheduled Send, Tier 1 — deferred send (v1, Phase 3.5, SCHD-01), Tier 2 — recurring send (deferred; design constraints recorded now)
+Nodes (4): Convex, Route to the Right Skill, Start Here, When Not to Use
 
 ### Community 1208 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (4): Amends (process rule: scope decisions name the PRD lines they change), Scheduled Send, Tier 1 — deferred send (v1, Phase 3.5, SCHD-01), Tier 2 — recurring send (deferred; design constraints recorded now)
 
 ### Community 1209 - "Phase 02 — Deferred Items"
 Cohesion: 0.40
-Nodes (4): 02-06 execution — pre-existing test failure (out of scope), 02-06 execution — pre-existing typecheck failures (out of scope), Phase 02 — Deferred Items, Pre-existing `tsc --noEmit` failures in backend test files (found during 02-01, Task 1)
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1210 - "Plan 03.10-03 Summary — stalled-resolution recovery through the registry gate"
 Cohesion: 0.40
-Nodes (4): Deviations, Key files, Plan 03.10-03 Summary — stalled-resolution recovery through the registry gate, Tasks
+Nodes (4): 02-06 execution — pre-existing test failure (out of scope), 02-06 execution — pre-existing typecheck failures (out of scope), Phase 02 — Deferred Items, Pre-existing `tsc --noEmit` failures in backend test files (found during 02-01, Task 1)
 
 ### Community 1211 - "Deferred Items — Phase 03.1 Cockpit Core"
 Cohesion: 0.40
-Nodes (4): Deferred Items — Phase 03.1 Cockpit Core, Pre-existing biome config warnings (found 03.1-01), Pre-existing `tsc --noEmit` errors in `*.test.ts` (found 03.1-01), Untracked `@pikar/core` WIP fails typecheck (found 03.1-01)
+Nodes (4): Deviations, Key files, Plan 03.10-03 Summary — stalled-resolution recovery through the registry gate, Tasks
 
 ### Community 1212 - "Code Examples"
 Cohesion: 0.40
-Nodes (5): Code Examples, Evidence record + gate check (refs/counts only, §4), Ops signals query shape (tenant-scoped, windowed, read-only), Runner skeleton (mirrors run-smoke-fanout.mjs structure, verified conventions), Script wiring
+Nodes (4): Deferred Items — Phase 03.1 Cockpit Core, Pre-existing biome config warnings (found 03.1-01), Pre-existing `tsc --noEmit` errors in `*.test.ts` (found 03.1-01), Untracked `@pikar/core` WIP fails typecheck (found 03.1-01)
 
 ### Community 1213 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): Code Examples, Evidence record + gate check (refs/counts only, §4), Ops signals query shape (tenant-scoped, windowed, read-only), Runner skeleton (mirrors run-smoke-fanout.mjs structure, verified conventions), Script wiring
 
 ### Community 1214 - "Video Transcription (Lane 4)"
 Cohesion: 0.40
-Nodes (5): 1. How intake transcribes audio today (verified in-repo — intake.ts:61–75, NOT llm.ts), 2. Video containers direct to the endpoint — yes, no ffmpeg, 3. Lane-4 ownership + Wave-0 additions, 4. Offline validation strategy (discretion resolved: SMOKE:: only, no video fixtures), Video Transcription (Lane 4)
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1215 - "Phase 3.8 — Deferred items (out-of-scope discoveries)"
 Cohesion: 0.40
-Nodes (4): From 03.8-02 (Lane 1, 2026-07-18), From 03.8-05 (Lane 4, 2026-07-18), Phase 3.8 — Deferred items (out-of-scope discoveries), Reconciliation (03.8-06 integration, 2026-07-18)
+Nodes (5): 1. How intake transcribes audio today (verified in-repo — intake.ts:61–75, NOT llm.ts), 2. Video containers direct to the endpoint — yes, no ffmpeg, 3. Lane-4 ownership + Wave-0 additions, 4. Offline validation strategy (discretion resolved: SMOKE:: only, no video fixtures), Video Transcription (Lane 4)
 
 ### Community 1216 - "Standard Stack"
 Cohesion: 0.40
-Nodes (5): Alternatives Considered, Core, New workspace package, Standard Stack, Supporting
+Nodes (4): From 03.8-02 (Lane 1, 2026-07-18), From 03.8-05 (Lane 4, 2026-07-18), Phase 3.8 — Deferred items (out-of-scope discoveries), Reconciliation (03.8-06 integration, 2026-07-18)
 
 ### Community 1217 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): Alternatives Considered, Core, New workspace package, Standard Stack, Supporting
 
 ### Community 1218 - "10-01-PLAN.md"
 Cohesion: 0.40
-Nodes (4): return shape, or ranking):, The engine you extend (extract its body into a shared helper — do NOT change its public signature,, The identity-less internalAction convention to MIRROR (explicit tenantId arg, no auth):, The identity placeholder that hydration replaces (do NOT edit — read-only context):
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1219 - "10-02-PLAN.md"
 Cohesion: 0.40
-Nodes (4): The content-plane adapter precedent to mirror for vaultSources.ts:, The refs-only insert-only audit surface + payload contract:, The template to COPY (briefInbox — the ONE tool doing the exact three-plane split):, The test harness:
+Nodes (4): return shape, or ranking):, The engine you extend (extract its body into a shared helper — do NOT change its public signature,, The identity-less internalAction convention to MIRROR (explicit tenantId arg, no auth):, The identity placeholder that hydration replaces (do NOT edit — read-only context):
 
 ### Community 1220 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (4): The content-plane adapter precedent to mirror for vaultSources.ts:, The refs-only insert-only audit surface + payload contract:, The template to COPY (briefInbox — the ONE tool doing the exact three-plane split):, The test harness:
 
 ### Community 1221 - "Validation Architecture"
 Cohesion: 0.40
@@ -6076,11 +6070,11 @@ Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Valid
 
 ### Community 1222 - "Code Examples"
 Cohesion: 0.40
-Nodes (5): Code Examples, Doc-scoped session start (schema + call shape), Offline-deterministic test seam, The §4-safe retrieval audit (mirrors `gmail.ts mailbox.searched`), The synthetic thread id (pure, testable)
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1223 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): Code Examples, Doc-scoped session start (schema + call shape), Offline-deterministic test seam, The §4-safe retrieval audit (mirrors `gmail.ts mailbox.searched`), The synthetic thread id (pure, testable)
 
 ### Community 1224 - "Validation Architecture"
 Cohesion: 0.40
@@ -6088,127 +6082,127 @@ Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Valid
 
 ### Community 1225 - "Phase 15.3: Vault Folders — Research"
 Cohesion: 0.40
-Nodes (4): A. Collisions with LOCKED decisions — resolve before planning, B. Blockers that are not collisions — but will sink the phase if unplanned, C. Accepted, documented limitations, Phase 15.3: Vault Folders — Research
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1226 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Existing infrastructure (nothing new to install), Live probes — NOT provable offline, Playbook gate is part of validation, not paperwork, The guarantee → check → mutation map, Validation Architecture
+Nodes (4): A. Collisions with LOCKED decisions — resolve before planning, B. Blockers that are not collisions — but will sink the phase if unplanned, C. Accepted, documented limitations, Phase 15.3: Vault Folders — Research
 
 ### Community 1227 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): Existing infrastructure (nothing new to install), Live probes — NOT provable offline, Playbook gate is part of validation, not paperwork, The guarantee → check → mutation map, Validation Architecture
 
 ### Community 1228 - "Sources"
 Cohesion: 0.40
-Nodes (5): Primary (HIGH confidence — first-hand reads at the paths/line numbers cited), Primary (HIGH confidence — installed library source, exact pinned versions), Secondary (MEDIUM confidence), Sources, Tertiary (LOW confidence)
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1229 - "Open Questions"
 Cohesion: 0.40
-Nodes (5): Open Questions, OQ-1 (BLOCKING, architectural) — how does the executive agent reach the research specialist in-turn?, OQ-2 (BLOCKING, empirical) — which model?, OQ-3 (non-blocking) — does a hosted search extend the step count?, OQ-4 (non-blocking) — `vaultSources` card for web findings?
+Nodes (5): Primary (HIGH confidence — first-hand reads at the paths/line numbers cited), Primary (HIGH confidence — installed library source, exact pinned versions), Secondary (MEDIUM confidence), Sources, Tertiary (LOW confidence)
 
 ### Community 1230 - "Code Examples (verified, in-repo)"
 Cohesion: 0.40
-Nodes (5): Code Examples (verified, in-repo), The deterministic serializer pair (round-trip contract), The free-string-kind vault doc (the live blueprint's shape), The prepend precedent (the pattern this phase generalizes), The refs-only audit (the `blueprint.confirmed` template)
+Nodes (5): Open Questions, OQ-1 (BLOCKING, architectural) — how does the executive agent reach the research specialist in-turn?, OQ-2 (BLOCKING, empirical) — which model?, OQ-3 (non-blocking) — does a hosted search extend the step count?, OQ-4 (non-blocking) — `vaultSources` card for web findings?
 
 ### Community 1231 - "Deferred Items"
 Cohesion: 0.40
-Nodes (4): 17-02 verification, 17-04 verification, 17-05 out-of-scope discoveries (logged, deliberately NOT fixed), Deferred Items
+Nodes (5): Code Examples (verified, in-repo), The deterministic serializer pair (round-trip contract), The free-string-kind vault doc (the live blueprint's shape), The prepend precedent (the pattern this phase generalizes), The refs-only audit (the `blueprint.confirmed` template)
 
 ### Community 1232 - "Union Blast Radius — the executor's walk"
 Cohesion: 0.40
-Nodes (5): `consentSource`: `"asserted-by-user" | "inbound-form"` **+ `"imported-attested"`**, `origin`: `"mailbox-resolved" | "user-entered" | "inbound"` **+ `"imported"`**, ⚠ Site 16 in full — this is the phase's `media`-in-`llm.ts` moment, ⚠ The other silent hazard: `SCAN_LIMIT` vs a 1,000-row import, Union Blast Radius — the executor's walk
+Nodes (4): 17-02 verification, 17-04 verification, 17-05 out-of-scope discoveries (logged, deliberately NOT fixed), Deferred Items
 
 ### Community 1233 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): `consentSource`: `"asserted-by-user" | "inbound-form"` **+ `"imported-attested"`**, `origin`: `"mailbox-resolved" | "user-entered" | "inbound"` **+ `"imported"`**, ⚠ Site 16 in full — this is the phase's `media`-in-`llm.ts` moment, ⚠ The other silent hazard: `SCAN_LIMIT` vs a 1,000-row import, Union Blast Radius — the executor's walk
 
 ### Community 1234 - "1. The `crm_write` action type — the complete edit list"
 Cohesion: 0.40
-Nodes (5): 1. The `crm_write` action type — the complete edit list, Current state of the two `satisfies` binds, The edit list — work top to bottom, ONE commit (20-07's rule), The `memo` arm — the exact template (`cockpit.ts:683-691`), The stale comment, verbatim (`packages/core/src/actionType.ts`, lines 33-41)
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1235 - "3. The un-omittable CAN-SPAM footer"
 Cohesion: 0.40
-Nodes (5): 3. The un-omittable CAN-SPAM footer, Can that point also enforce the fail-closed refusal? Partly — and it needs a second guard., Complications the planner must name, Prescription, Where the body is composed, in order
+Nodes (5): 1. The `crm_write` action type — the complete edit list, Current state of the two `satisfies` binds, The edit list — work top to bottom, ONE commit (20-07's rule), The `memo` arm — the exact template (`cockpit.ts:683-691`), The stale comment, verbatim (`packages/core/src/actionType.ts`, lines 33-41)
 
 ### Community 1236 - "4. The public unsubscribe route"
 Cohesion: 0.40
-Nodes (5): 4. The public unsubscribe route, Convex httpAction vs. an apps/web route handler — RECOMMEND `convex/http.ts`, CORS / CSP / app shell, Route shape, The HMAC path-segment pattern, verbatim from Phase 20-06
+Nodes (5): 3. The un-omittable CAN-SPAM footer, Can that point also enforce the fail-closed refusal? Partly — and it needs a second guard., Complications the planner must name, Prescription, Where the body is composed, in order
 
 ### Community 1237 - "5. Schema + isolation"
 Cohesion: 0.40
-Nodes (5): 5. Schema + isolation, Index conventions, The "all-optional new fields ⇒ no migration" precedent — CONFIRMED, The isolation-assertion test pattern (SC#2), The tenant-scoped wrapper pattern (`convex/lib/functions.ts`, read in full)
+Nodes (5): 4. The public unsubscribe route, Convex httpAction vs. an apps/web route handler — RECOMMEND `convex/http.ts`, CORS / CSP / app shell, Route shape, The HMAC path-segment pattern, verbatim from Phase 20-06
 
 ### Community 1240 - "7. The GATED_SKILLS serialization constraint"
 Cohesion: 0.40
-Nodes (5): 7. The GATED_SKILLS serialization constraint, CURRENT contention state for `cockpit-agent` — as of 2026-08-09, The version-collision gotcha — CONFIRMED, and it just bit someone, What this means for Phase 19's scheduling, Which bodies are gated (`packages/contracts/src/skill.ts:242-262`)
+Nodes (5): 5. Schema + isolation, Index conventions, The "all-optional new fields ⇒ no migration" precedent — CONFIRMED, The isolation-assertion test pattern (SC#2), The tenant-scoped wrapper pattern (`convex/lib/functions.ts`, read in full)
 
 ### Community 1241 - "8. Playbooks"
 Cohesion: 0.40
-Nodes (5): 8. Playbooks, A NEW playbook IS needed — and SC#7 requires it by name, Change-safety notes about the shared tree, Coverage of the paths this phase touches (`docs/playbooks/watch.json`, read in full), The SC#7 reconciliation the playbook must state, in these terms
+Nodes (5): 7. The GATED_SKILLS serialization constraint, CURRENT contention state for `cockpit-agent` — as of 2026-08-09, The version-collision gotcha — CONFIRMED, and it just bit someone, What this means for Phase 19's scheduling, Which bodies are gated (`packages/contracts/src/skill.ts:242-262`)
 
 ### Community 1242 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): 8. Playbooks, A NEW playbook IS needed — and SC#7 requires it by name, Change-safety notes about the shared tree, Coverage of the paths this phase touches (`docs/playbooks/watch.json`, read in full), The SC#7 reconciliation the playbook must state, in these terms
 
 ### Community 1243 - "11. Playbook (CLAUDE.md §9)"
 Cohesion: 0.40
-Nodes (5): 11.1 The new playbook, 11.2 `watch.json` prefixes `media.md` MUST register, 11.3 The three EXISTING playbooks this phase will also make stale, 11.4 The new ADR — what it must say (verified against ADR-009/010), 11. Playbook (CLAUDE.md §9)
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1244 - "1. fal.ai adapter mechanics + LIVE rates"
 Cohesion: 0.40
-Nodes (5): 1.1 Queue submission (HIGH confidence), 1.2 The callback payload (MEDIUM-HIGH), 1.3 LIVE rates, re-read 2026-08-01 — and the ADR-011 correction, 1.4 Where the adapter lives, 1. fal.ai adapter mechanics + LIVE rates
+Nodes (5): 11.1 The new playbook, 11.2 `watch.json` prefixes `media.md` MUST register, 11.3 The three EXISTING playbooks this phase will also make stale, 11.4 The new ADR — what it must say (verified against ADR-009/010), 11. Playbook (CLAUDE.md §9)
 
 ### Community 1245 - "4. The budget rail, concretely — AND the D4 batch answer"
 Cohesion: 0.40
-Nodes (5): 4.1 What exists today (HIGH — read from source, post-22.1-02), 4.2 The media price table — `packages/cost/src/media.ts`, 4.3 The second named window + the media kill switch, 4.4 **The batch answer — D4's sharpest open question**, 4. The budget rail, concretely — AND the D4 batch answer
+Nodes (5): 1.1 Queue submission (HIGH confidence), 1.2 The callback payload (MEDIUM-HIGH), 1.3 LIVE rates, re-read 2026-08-01 — and the ADR-011 correction, 1.4 Where the adapter lives, 1. fal.ai adapter mechanics + LIVE rates
 
 ### Community 1246 - "8. The canvas"
 Cohesion: 0.40
-Nodes (5): 8.1 How the right pane decides what to render (HIGH), 8.2 Reusable verbatim from `cards.tsx`, 8.3 BRAND / `globals.css` (CLAUDE.md §10), 8.4 What would need RESTRUCTURING rather than extension — flag these, 8. The canvas
+Nodes (5): 4.1 What exists today (HIGH — read from source, post-22.1-02), 4.2 The media price table — `packages/cost/src/media.ts`, 4.3 The second named window + the media kill switch, 4.4 **The batch answer — D4's sharpest open question**, 4. The budget rail, concretely — AND the D4 batch answer
 
 ### Community 1247 - "3. Q3 — THE CAPTIONS STEP"
 Cohesion: 0.40
-Nodes (5): 3.1 What the Higgsfield scripts imply, and what we should actually build, 3.2 Is STT a further PRICED line item? YES — and it is nearly free., 3.3 The hand-off contract — what the sidecar must carry, 3.4 Should captions ship in Phase 20? — a reasoned recommendation, 3. Q3 — THE CAPTIONS STEP
+Nodes (5): 8.1 How the right pane decides what to render (HIGH), 8.2 Reusable verbatim from `cards.tsx`, 8.3 BRAND / `globals.css` (CLAUDE.md §10), 8.4 What would need RESTRUCTURING rather than extension — flag these, 8. The canvas
 
 ### Community 1248 - "User Constraints (from CONTEXT.md, 2026-08-01 re-scope)"
 Cohesion: 0.40
-Nodes (5): Claude's Discretion (delta scope), Deferred Ideas (OUT OF SCOPE) — unchanged, Locked Decisions — NEW in this re-scope, Locked Decisions — UNCHANGED by the re-scope, User Constraints (from CONTEXT.md, 2026-08-01 re-scope)
+Nodes (5): 3.1 What the Higgsfield scripts imply, and what we should actually build, 3.2 Is STT a further PRICED line item? YES — and it is nearly free., 3.3 The hand-off contract — what the sidecar must carry, 3.4 Should captions ship in Phase 20? — a reasoned recommendation, 3. Q3 — THE CAPTIONS STEP
 
 ### Community 1249 - "Sources"
 Cohesion: 0.40
-Nodes (5): Primary — repo and local skill (HIGH; read from source this session), Primary — vendor-direct, machine-readable (HIGH), Secondary (MEDIUM — cross-checks only; no claim above rests on these alone), Sources, Tertiary (LOW — flagged, not relied on)
+Nodes (5): Claude's Discretion (delta scope), Deferred Ideas (OUT OF SCOPE) — unchanged, Locked Decisions — NEW in this re-scope, Locked Decisions — UNCHANGED by the re-scope, User Constraints (from CONTEXT.md, 2026-08-01 re-scope)
 
 ### Community 1250 - "Sources"
 Cohesion: 0.40
-Nodes (5): Primary — repo (HIGH; all read from source at the anchors cited inline), Primary — upstream source (HIGH), Secondary (MEDIUM — fal's own model/docs pages returned HTTP 429 to every fetch; each claim below has ≥2 independent sources), Sources, Tertiary (LOW — flagged for validation)
+Nodes (5): Primary — repo and local skill (HIGH; read from source this session), Primary — vendor-direct, machine-readable (HIGH), Secondary (MEDIUM — cross-checks only; no claim above rests on these alone), Sources, Tertiary (LOW — flagged, not relied on)
 
 ### Community 1251 - "3. The BETA-05 isolation suite — schema-derived enumeration — **HIGH confidence, API-verified**"
 Cohesion: 0.40
-Nodes (5): 3.1 The API exists and is public, 3.2 The three-bucket pattern that fails on an uncovered table, 3.3 The behavioural half — reuse 19-02's shape verbatim, 3.4 The pitfall that will bite: convex-test memory, 3. The BETA-05 isolation suite — schema-derived enumeration — **HIGH confidence, API-verified**
+Nodes (5): Primary — repo (HIGH; all read from source at the anchors cited inline), Primary — upstream source (HIGH), Secondary (MEDIUM — fal's own model/docs pages returned HTTP 429 to every fetch; each claim below has ≥2 independent sources), Sources, Tertiary (LOW — flagged for validation)
 
 ### Community 1252 - "4. Microsoft Graph — the mapping (DLVR-02)"
 Cohesion: 0.40
-Nodes (5): 4.1 Auth model, 4.2 Send — the high-leverage finding, 4.3 Four hard parity gaps in the send path, 4.4 Read plane — endpoint mapping (MEDIUM confidence; endpoints verified, wire shapes need one live call), 4. Microsoft Graph — the mapping (DLVR-02)
+Nodes (5): 3.1 The API exists and is public, 3.2 The three-bucket pattern that fails on an uncovered table, 3.3 The behavioural half — reuse 19-02's shape verbatim, 3.4 The pitfall that will bite: convex-test memory, 3. The BETA-05 isolation suite — schema-derived enumeration — **HIGH confidence, API-verified**
 
 ### Community 1253 - "Code Examples"
 Cohesion: 0.40
-Nodes (5): Code Examples, Enumerate every table and index from `schema.ts` at test time, Graph refresh — mirrors `freshAccessToken` exactly, plus two fields, Graph send — the whole difference from Gmail, The two-tenant harness (19-02's shape — copy it)
+Nodes (5): 4.1 Auth model, 4.2 Send — the high-leverage finding, 4.3 Four hard parity gaps in the send path, 4.4 Read plane — endpoint mapping (MEDIUM confidence; endpoints verified, wire shapes need one live call), 4. Microsoft Graph — the mapping (DLVR-02)
 
 ### Community 1254 - "Production Secret Inventory (research Q5)"
 Cohesion: 0.40
-Nodes (5): Convex deployment env (`npx convex env set`) — hosted deployment, Post-deploy step that is NOT a secret but IS a go-live gate, Production Secret Inventory (research Q5), The fail-closed check — recommended shape, Vercel env (client/deploy only)
+Nodes (5): Code Examples, Enumerate every table and index from `schema.ts` at test time, Graph refresh — mirrors `freshAccessToken` exactly, plus two fields, Graph send — the whole difference from Gmail, The two-tenant harness (19-02's shape — copy it)
 
 ### Community 1255 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (5): Convex deployment env (`npx convex env set`) — hosted deployment, Post-deploy step that is NOT a secret but IS a go-live gate, Production Secret Inventory (research Q5), The fail-closed check — recommended shape, Vercel env (client/deploy only)
 
 ### Community 1256 - "Phase 27 Plan 05: Complaint Response and Sales Call Prep Summary"
 Cohesion: 0.40
-Nodes (4): Customer Complaint is the one pack that stages a plan, Phase 27 Plan 05: Complaint Response and Sales Call Prep Summary, Sales Call Prep reads the calendar and never writes to it, Verification — all executed
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1257 - "Existing Architecture to Reuse"
 Cohesion: 0.40
-Nodes (5): Code-owned specialist grants, Existing Architecture to Reuse, Existing OAuth lifecycle, Governed action boundary, Tenant boundary
+Nodes (4): Customer Complaint is the one pack that stages a plan, Phase 27 Plan 05: Complaint Response and Sales Call Prep Summary, Sales Call Prep reads the calendar and never writes to it, Verification — all executed
 
 ### Community 1258 - "previewIndex"
 Cohesion: 0.50
@@ -6216,27 +6210,27 @@ Nodes (3): OutputCard(), previewIndex(), llm
 
 ### Community 1259 - "Provider Suitability Gates"
 Cohesion: 0.40
-Nodes (5): HubSpot — conditionally first, PayPal — partner approval gate, Provider Suitability Gates, QuickBooks Online — broad-scope risk, Stripe — Extension/read-only eligibility gate
+Nodes (5): Code-owned specialist grants, Existing Architecture to Reuse, Existing OAuth lifecycle, Governed action boundary, Tenant boundary
 
 ### Community 1260 - "Phase 33.1 — deferred items"
 Cohesion: 0.40
-Nodes (4): 1. `packages/backend/convex/dispatch.test.ts` is lint-RED before this phase touched it, 2. `packages/backend/convex/media.test.ts` — the caption BURN test is FLAKY, not a standing red, From 33.1-04 (2026-08-30), Phase 33.1 — deferred items
+Nodes (5): HubSpot — conditionally first, PayPal — partner approval gate, Provider Suitability Gates, QuickBooks Online — broad-scope risk, Stripe — Extension/read-only eligibility gate
 
 ### Community 1261 - "Validation Architecture"
 Cohesion: 0.40
-Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
+Nodes (4): 1. `packages/backend/convex/dispatch.test.ts` is lint-RED before this phase touched it, 2. `packages/backend/convex/media.test.ts` — the caption BURN test is FLAKY, not a standing red, From 33.1-04 (2026-08-30), Phase 33.1 — deferred items
 
 ### Community 1262 - "Phase 33 — deferred items"
 Cohesion: 0.40
-Nodes (4): 33-13 — two things seen while wiring the proposal failure card, ~~A cited document's TITLE is model-authored, even when `verified` is true~~ — CLOSED 2026-08-16, `d69fc29`, A cited document's TITLE is model-authored, even when `verified` is true (found in 33-08), Phase 33 — deferred items
+Nodes (5): Phase Requirements → Test Map, Sampling Rate, Test Framework, Validation Architecture, Wave 0 Gaps
 
 ### Community 1263 - "Post-Beta Knowledge-Work Expansion (Phases 27-30)"
 Cohesion: 0.40
-Nodes (5): Phase 27: Curated Knowledge-Work Pack Pilot, Phase 28: Connector-Backed Revenue Pack, Phase 29: Unified Knowledge and Routines, Phase 30: Optional Vertical Workflow Packs, Post-Beta Knowledge-Work Expansion (Phases 27-30)
+Nodes (4): 33-13 — two things seen while wiring the proposal failure card, ~~A cited document's TITLE is model-authored, even when `verified` is true~~ — CLOSED 2026-08-16, `d69fc29`, A cited document's TITLE is model-authored, even when `verified` is true (found in 33-08), Phase 33 — deferred items
 
 ### Community 1265 - "Architecture"
-Cohesion: 0.50
-Nodes (4): Architecture, Backend — two new public functions in `contacts.ts`, `packages/core/src/contactImport.ts`, Why there is no job queue
+Cohesion: 0.40
+Nodes (5): Phase 27: Curated Knowledge-Work Pack Pilot, Phase 28: Connector-Backed Revenue Pack, Phase 29: Unified Knowledge and Routines, Phase 30: Optional Vertical Workflow Packs, Post-Beta Knowledge-Work Expansion (Phases 27-30)
 
 ### Community 1266 - "tsconfig.json"
 Cohesion: 0.50
@@ -6464,77 +6458,73 @@ Nodes (4): Primary (HIGH confidence), Secondary (MEDIUM confidence), Sources, Te
 
 ### Community 1324 - "Re-Verification Summary"
 Cohesion: 0.50
-Nodes (4): Full independent re-run, this session (not inherited from the coordinator's numbers), Gap 1 -- CLOSED: the done screen now counts every rejected row, Gap 2 -- CLOSED: a disabled `primary` button now looks disabled, Re-Verification Summary
+Nodes (4): 2. The send-path suppression guard (SC#5) — the convergence map, Every path that reaches a Gmail send, Pure-TS placement (CLAUDE.md §1), Where per-recipient `requests` rows are seeded
 
 ### Community 1325 - "2. The send-path suppression guard (SC#5) — the convergence map"
 Cohesion: 0.50
-Nodes (4): 2. The send-path suppression guard (SC#5) — the convergence map, Every path that reaches a Gmail send, Pure-TS placement (CLAUDE.md §1), Where per-recipient `requests` rows are seeded
+Nodes (4): Alternatives Considered, Core — everything already installed and pinned, Standard Stack, Supporting — in-repo modules the phase consumes
 
 ### Community 1326 - "Standard Stack"
 Cohesion: 0.50
-Nodes (4): Alternatives Considered, Core — everything already installed and pinned, Standard Stack, Supporting — in-repo modules the phase consumes
+Nodes (4): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Locked Decisions, User Constraints (from 19-CONTEXT.md)
 
 ### Community 1327 - "User Constraints (from 19-CONTEXT.md)"
 Cohesion: 0.50
-Nodes (4): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Locked Decisions, User Constraints (from 19-CONTEXT.md)
+Nodes (4): Primary (HIGH confidence — all read from source 2026-08-09), Secondary (MEDIUM confidence), Sources, Tertiary (LOW confidence)
 
 ### Community 1328 - "Sources"
 Cohesion: 0.50
-Nodes (4): Primary (HIGH confidence — all read from source 2026-08-09), Secondary (MEDIUM confidence), Sources, Tertiary (LOW confidence)
+Nodes (4): 2.1 What `http.ts` does today (HIGH — read from source), 2.2 Does fal offer signature verification? (MEDIUM), 2.3 Recommendation — ONE mechanism, 2. Webhook authentication — CLOSES `20-PROVIDER-EVAL.md` §5 Q2
 
 ### Community 1329 - "2. Webhook authentication — CLOSES `20-PROVIDER-EVAL.md` §5 Q2"
 Cohesion: 0.50
-Nodes (4): 2.1 What `http.ts` does today (HIGH — read from source), 2.2 Does fal offer signature verification? (MEDIUM), 2.3 Recommendation — ONE mechanism, 2. Webhook authentication — CLOSES `20-PROVIDER-EVAL.md` §5 Q2
+Nodes (4): 7.1 The five-file mirror, exactly (HIGH — read from source), 7.2 Gated vs ungated — the 18-03 precedent, and whether it applies, 7.3 **But the narrowing DOES NOT extend to the dispatch entry point — get this right**, 7. The skill registry rows
 
 ### Community 1330 - "7. The skill registry rows"
 Cohesion: 0.50
-Nodes (4): 7.1 The five-file mirror, exactly (HIGH — read from source), 7.2 Gated vs ungated — the 18-03 precedent, and whether it applies, 7.3 **But the narrowing DOES NOT extend to the dispatch entry point — get this right**, 7. The skill registry rows
+Nodes (4): 9.1 `/art-direction` — The Art Director, 9.2 `/storyboard` — The Storyboarder ← **this is the contract**, 9.3 `/generate` — The Producer, 9. koda-stack media prompts (MIT) — the substance
 
 ### Community 1331 - "9. koda-stack media prompts (MIT) — the substance"
 Cohesion: 0.50
-Nodes (4): 9.1 `/art-direction` — The Art Director, 9.2 `/storyboard` — The Storyboarder ← **this is the contract**, 9.3 `/generate` — The Producer, 9. koda-stack media prompts (MIT) — the substance
+Nodes (4): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Locked Decisions, User Constraints (from CONTEXT.md)
 
 ### Community 1332 - "User Constraints (from CONTEXT.md)"
 Cohesion: 0.50
-Nodes (4): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Locked Decisions, User Constraints (from CONTEXT.md)
+Nodes (4): 4.1 The one table the ADR and the playbook both need, 4.2 The per-shot cents-floor interaction — a NEW money bug the re-scope creates, 4.3 The storage line nobody costed, 4. THE REVISED JOB ECONOMICS
 
 ### Community 1333 - "4. THE REVISED JOB ECONOMICS"
 Cohesion: 0.50
-Nodes (4): 4.1 The one table the ADR and the playbook both need, 4.2 The per-shot cents-floor interaction — a NEW money bug the re-scope creates, 4.3 The storage line nobody costed, 4. THE REVISED JOB ECONOMICS
+Nodes (4): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Locked Decisions, User Constraints (from `25-CONTEXT.md`)
 
 ### Community 1334 - "User Constraints (from `25-CONTEXT.md`)"
 Cohesion: 0.50
-Nodes (4): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Locked Decisions, User Constraints (from `25-CONTEXT.md`)
+Nodes (4): Primary (HIGH confidence), Secondary (MEDIUM confidence), Sources, Tertiary (LOW confidence — flagged for live validation)
 
 ### Community 1335 - "Sources"
 Cohesion: 0.50
-Nodes (4): Primary (HIGH confidence), Secondary (MEDIUM confidence), Sources, Tertiary (LOW confidence — flagged for live validation)
+Nodes (4): Credential and OAuth Architecture, Encrypted envelope, One-time OAuth state, Refresh and revoke
 
 ### Community 1336 - "Credential and OAuth Architecture"
 Cohesion: 0.50
-Nodes (4): Credential and OAuth Architecture, Encrypted envelope, One-time OAuth state, Refresh and revoke
+Nodes (4): Dependency Gates, Phase 19 — hard functional prerequisite, Phase 25 — hard deployment/auth prerequisite, not proof of encryption, Phase 27 — hard pack/exposure prerequisite
 
 ### Community 1337 - "Dependency Gates"
 Cohesion: 0.50
-Nodes (4): Dependency Gates, Phase 19 — hard functional prerequisite, Phase 25 — hard deployment/auth prerequisite, not proof of encryption, Phase 27 — hard pack/exposure prerequisite
+Nodes (4): Deterministic Finance Architecture, Money and currency, Required pure functions, Source authority and double-counting
 
 ### Community 1338 - "Deterministic Finance Architecture"
 Cohesion: 0.50
-Nodes (4): Deterministic Finance Architecture, Money and currency, Required pure functions, Source authority and double-counting
+Nodes (4): Alternatives Considered, Core (all existing, reuse), Provider stack (locked, ADR-017), Standard Stack
 
 ### Community 1339 - "Standard Stack"
 Cohesion: 0.50
-Nodes (4): Alternatives Considered, Core (all existing, reuse), Provider stack (locked, ADR-017), Standard Stack
+Nodes (4): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Locked Decisions, User Constraints (from CONTEXT.md)
 
 ### Community 1340 - "User Constraints (from CONTEXT.md)"
 Cohesion: 0.50
-Nodes (4): Claude's Discretion, Deferred Ideas (OUT OF SCOPE), Locked Decisions, User Constraints (from CONTEXT.md)
-
-### Community 1341 - "Sources"
-Cohesion: 0.50
 Nodes (4): Primary (HIGH confidence — read from repo), Secondary (MEDIUM-HIGH confidence), Sources, Tertiary (LOW confidence)
 
-### Community 1342 - "Milestone: Marketing (Phases 31-32) — PULLED PRE-BETA 2026-08-07"
+### Community 1341 - "Sources"
 Cohesion: 0.50
 Nodes (4): Milestone: Marketing (Phases 31-32) — PULLED PRE-BETA 2026-08-07, Phase 31: Marketing surface and funnel v0 (TRANCHE A — buildable now), Phase 32: Channel connection, publishing and metrics (TRANCHE B — GATED), Phase 33: Media creation UX overhaul: guided intake, storyboard variations, auto-assembled reel, reel-first canvas, clear failure retry, grounded citations
 
@@ -6546,23 +6536,23 @@ Nodes (3): ConstraintCard(), HealthCard(), healthOf()
 Cohesion: 0.67
 Nodes (3): 4.0 The rule is a pure function, not a prompt, 4.1 Both entry routes are permanent, 4. Precedence — typing wins (D5)
 
-### Community 1347 - "Standard Stack"
+### Community 1346 - "Deferred Items — Phase 03.3"
 Cohesion: 0.67
 Nodes (3): Alternatives Considered, Core (all existing), Standard Stack
 
-### Community 1348 - "Sources"
+### Community 1347 - "Standard Stack"
 Cohesion: 0.67
 Nodes (3): Primary (HIGH confidence — direct source reads, 2026-07-15, repo @ adc7dd0), Secondary / Tertiary, Sources
 
-### Community 1351 - "Standard Stack"
+### Community 1350 - "03.9-04-PLAN.md"
 Cohesion: 0.67
 Nodes (3): Core — all already installed; this phase adds NO dependency, Explicitly NOT used, Standard Stack
 
-### Community 1357 - "Storage Decision Inputs (research priority #4 — planner decides)"
+### Community 1356 - "Phase 8 — Deferred / Out-of-Scope Items"
 Cohesion: 0.67
 Nodes (3): Option A — `vaultDocuments` doc-kind (`kind: "business_scorecard"`), Option B — dedicated `evaluations` table, Storage Decision Inputs (research priority #4 — planner decides)
 
-### Community 1360 - "Code Examples"
+### Community 1359 - "16-06-PLAN.md"
 Cohesion: 0.67
 Nodes (3): Code Examples, Confidence from code, not prose, Provider endpoint containment
 

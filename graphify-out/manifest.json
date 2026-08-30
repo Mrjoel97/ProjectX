@@ -125,8 +125,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1788092235.8339362,
-    "ast_hash": "486d180ed51d4f87da1233336db3ff49",
+    "mtime": 1788125125.0260558,
+    "ast_hash": "88a561def50eeb51b07629d1ed007af3",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
@@ -5085,8 +5085,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/researchSpecialist.ts": {
-    "mtime": 1788092237.5447268,
-    "ast_hash": "7d73efb75b82abca70efb1d31af58946",
+    "mtime": 1788125124.434092,
+    "ast_hash": "9ea67a2a06d477e878cdabc6b3b1ef79",
     "semantic_hash": ""
   },
   "packages/core/src/calendar.test.ts": {
@@ -6295,13 +6295,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/render/assembleScript.test.ts": {
-    "mtime": 1788092235.6283917,
-    "ast_hash": "3db1db4694621cef7ff24e49e0af41e2",
+    "mtime": 1788125124.4968195,
+    "ast_hash": "db0d3ce8c42b075f21b4b97940c3e970",
     "semantic_hash": ""
   },
   "packages/backend/convex/render/assembleScript.ts": {
-    "mtime": 1788092235.6283917,
-    "ast_hash": "afea775692f81d51ffb29d43aa450763",
+    "mtime": 1788125124.4968195,
+    "ast_hash": "3305f427db98147717170803257881cd",
     "semantic_hash": ""
   },
   "packages/backend/convex/render/assemble_final.sh": {
@@ -6360,13 +6360,13 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/mediaDirector.ts": {
-    "mtime": 1788123421.2221477,
-    "ast_hash": "342d7efee4743bfec39d4b26295abd29",
+    "mtime": 1788125801.8328183,
+    "ast_hash": "203168a713617520a4e30899085551fc",
     "semantic_hash": ""
   },
   "packages/contracts/skills/media-director.md": {
-    "mtime": 1788123394.7484088,
-    "ast_hash": "606113d68b7a4a4fbc39ff970700ac5b",
+    "mtime": 1788125754.2544599,
+    "ast_hash": "c53a03e756a0ad59229adc7f0fdcbc1c",
     "semantic_hash": ""
   },
   ".planning/phases/20-media-canvas/20-03-SUMMARY.md": {
@@ -6470,13 +6470,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/render/renderReel.ts": {
-    "mtime": 1788092235.658151,
-    "ast_hash": "10425365c95e3f5bf8ec8ce58ee71d02",
+    "mtime": 1788125124.741431,
+    "ast_hash": "c5afe824240e377687f9ad453ebaa3a9",
     "semantic_hash": ""
   },
   "packages/core/src/render.test.ts": {
-    "mtime": 1788092238.376985,
-    "ast_hash": "a919318f1bbefd7246a3837bae4c4560",
+    "mtime": 1788125506.7059827,
+    "ast_hash": "0cd21dacdb17e9fbb8c73a3725ffdbc5",
     "semantic_hash": ""
   },
   "packages/core/src/render.ts": {
