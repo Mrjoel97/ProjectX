@@ -21,6 +21,7 @@ import {
   MAX_PERIOD_CHARGES,
   PERIOD_SCAN_LIMIT,
   periodKeyFor,
+  prepareInvoice,
 } from "./billingRollup";
 import schema from "./schema";
 
@@ -396,7 +397,10 @@ function stubStripe(over: { finalize?: { status: number; body?: unknown } } = {}
           object: "invoice",
           status: "open",
           hosted_invoice_url: HOSTED,
-          amount_due: 4900,
+          // DELIBERATELY NOT 4900. The single charge below is 4900, so an implementation that
+          // settled OUR subtotal instead of Stripe's `amount_due` would be indistinguishable from
+          // a correct one if these matched. Stripe Tax adds lines we never sent.
+          amount_due: 5390,
           currency: "usd",
         },
       };
@@ -558,8 +562,10 @@ describe("postInvoice rolls ONE bounded document and settles the claim", () => {
     expect(row?.status).toBe("posted");
     expect(row?.stripeInvoiceId).toBe(INVOICE_ID);
     expect(row?.hostedInvoiceUrl).toBe(HOSTED);
-    // Stripe's amount_due, not our subtotal: Stripe Tax adds lines we never sent.
-    expect(row?.amountMinor).toBe(4900);
+    // Stripe's amount_due, not our subtotal: Stripe Tax adds lines we never sent. The charge
+    // on the period is 4900; the finalized invoice is 5390.
+    expect(row?.amountMinor).toBe(5390);
+    expect(row?.amountMinor).not.toBe(4900);
     expect(row?.currency).toBe("USD");
     expect(typeof row?.postedAt).toBe("number");
     expect(row?.failureCode).toBeUndefined();
@@ -708,6 +714,15 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
           occurredAt: periodEnd + DAY,
         },
         {
+          // THE BOUNDARY, not the line. `periodEnd` is the NEXT period's first instant, so a
+          // charge sitting exactly on it is next month's. A `<=` window would bill it twice.
+          ref: "on-the-boundary",
+          kind: "usage",
+          amountMinor: 777_777,
+          currency: "USD",
+          occurredAt: periodEnd,
+        },
+        {
           ref: "last-month",
           kind: "usage",
           amountMinor: 888_888,
@@ -724,7 +739,7 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
     expect(items).toHaveLength(1);
     expect(form(items[0] as Recorded).get("amount")).toBe("700");
     // The half-open window: `periodEnd` itself is the NEXT period's first instant.
-    expect(calls.map((c) => c.body).join("|")).not.toMatch(/999999|888888/);
+    expect(calls.map((c) => c.body).join("|")).not.toMatch(/999999|888888|777777/);
   });
 
   test("a period whose every charge is out of window is failed, not invoiced for nothing", async () => {
@@ -814,6 +829,23 @@ describe("the document is bounded by the PERIOD, not by whatever is pending", ()
     expect(row?.failureCode).toBe("too_many_charges");
   });
 
+  test("a ZERO charge is refused as hard as a negative one — the boundary, not the line", async () => {
+    const { t, tenantId } = await withTenant();
+    await mapCustomer(t, tenantId, "cus_SENTINEL");
+    const now = Date.now();
+    const id = await seedPeriod(t, tenantId, {
+      charges: [
+        { ref: "free", kind: "usage", amountMinor: 0, currency: "USD", occurredAt: now - 2 * DAY },
+      ],
+    });
+    stubStripe();
+
+    await rollup(t);
+
+    expect(calls).toHaveLength(0);
+    expect((await readPeriod(t, id))?.failureCode).toBe("unusable_charge_amount");
+  });
+
   test("a non-positive or non-integer amount is refused — direction never lives in the sign", async () => {
     const { t, tenantId } = await withTenant();
     await mapCustomer(t, tenantId, "cus_SENTINEL");
@@ -853,5 +885,64 @@ describe("the module shape is the design", () => {
     expect(code).toMatch(/stripePost/);
     expect(code).not.toMatch(/\bfetch\(/);
     expect(code).not.toMatch(/api\.stripe\.com/);
+  });
+});
+
+describe("prepareInvoice decides the whole document before a byte goes out", () => {
+  const window = { periodStart: 1_000_000, periodEnd: 2_000_000 };
+  const charge = (over: Partial<Charge> = {}): Charge => ({
+    ref: "r1",
+    kind: "usage",
+    amountMinor: 100,
+    currency: "USD",
+    occurredAt: 1_500_000,
+    ...over,
+  });
+
+  test("EXACTLY the cap is allowed; one more is refused — the boundary, not the line", () => {
+    const atCap = Array.from({ length: MAX_PERIOD_CHARGES }, (_, i) => charge({ ref: `r${i}` }));
+    expect(prepareInvoice({ ...window, charges: atCap }).ok).toBe(true);
+    const overCap = [...atCap, charge({ ref: "one-too-many" })];
+    expect(prepareInvoice({ ...window, charges: overCap })).toEqual({
+      ok: false,
+      code: "too_many_charges",
+    });
+  });
+
+  test("a fractional amount is not money", () => {
+    expect(prepareInvoice({ ...window, charges: [charge({ amountMinor: 12.5 })] })).toEqual({
+      ok: false,
+      code: "unusable_charge_amount",
+    });
+  });
+
+  test("a charge ref that is not ref-safe is refused — it becomes a header value", () => {
+    expect(prepareInvoice({ ...window, charges: [charge({ ref: "has space" })] })).toEqual({
+      ok: false,
+      code: "unusable_charge_ref",
+    });
+  });
+
+  test("the currency is canonicalised UPPERCASE, never passed through as typed", () => {
+    const prepared = prepareInvoice({ ...window, charges: [charge({ currency: "usd" })] });
+    expect(prepared.ok && prepared.value.currency).toBe("USD");
+  });
+
+  test("an unknown currency is refused rather than sent to Stripe", () => {
+    expect(prepareInvoice({ ...window, charges: [charge({ currency: "XYZZY" })] })).toEqual({
+      ok: false,
+      code: "unusable_charge_currency",
+    });
+  });
+
+  test("the window is half-open: periodStart is IN, periodEnd is OUT", () => {
+    const start = prepareInvoice({
+      ...window,
+      charges: [charge({ occurredAt: window.periodStart })],
+    });
+    expect(start.ok).toBe(true);
+    expect(
+      prepareInvoice({ ...window, charges: [charge({ occurredAt: window.periodEnd })] }),
+    ).toEqual({ ok: false, code: "no_charges_in_period" });
   });
 });
