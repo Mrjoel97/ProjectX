@@ -1,5 +1,30 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-08-30 (**/admin NOW NAMES THE AGENTS THAT HAVE NO PROMPT ROW, AND THE
+> HEADLINE STOPPED LYING BY OMISSION.** `AdminView` renders `envCheck.unseededSkills` with the
+> exact remedy on screen (`npx convex run skills:seedSkills '{}'` from `packages/backend`) rather
+> than in a runbook nobody opens.
+>
+> **MEASURED, NOT HYPOTHETICAL.** Phase 29 added `knowledge-query-planner` and
+> `knowledge-synthesizer` to `SEEDS`. The deployment was never re-seeded. Unified knowledge search
+> was **completely inert** — the browser gate died on `NO_ACTIVE_SKILL: knowledge-query-planner` —
+> while the entire unit suite stayed green, because `convex-test` seeds the registry INSIDE each
+> test. One `npx convex run skills:seedSkills '{}'` turned the same spec green with no code change.
+> A whole feature was dark, and the one surface whose job is "is this deployment configured?" did
+> not look.
+>
+> The headline previously read *"Every required name is set."* — which stayed literally TRUE the
+> whole time a feature was dark, because it reported one dimension of a `ready` flag that now has
+> three. It now reads *"Every required name is set and every agent has its prompt."* when green, and
+> when red it composes the faults it actually found instead of naming only the first: two
+> independent faults collapsed into one message is how the second one gets missed.
+>
+> Tests (`adminPresentation.test.ts`, +3, 10 total): the missing agents are NAMED on screen with the
+> fixing command; the green headline mentions prompts; a required-name fault and an unseeded agent
+> are reported TOGETHER. Assertions are on the RENDERED markup, not on the presence of a field.
+> Both mutations observed RED: deleting the unseeded block (2 tests), and restoring the old headline
+> (1 test).)
+
 > Last verified: 2026-08-22 (26-17 — **ONE TEST SEAM, AND THE INVITE GATE IS UNMOVED.**
 > `invites.__seedInvite` is a new `internalMutation` that mints a `betaInvites` row for one
 > address without an owner session.

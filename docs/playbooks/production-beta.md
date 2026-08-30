@@ -1,5 +1,36 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-08-30 (**THE READINESS SCREEN NOW CHECKS THE SKILL REGISTRY, WHICH IT NEVER
+> DID.** `ops:envCheck` gains `unseededSkills: string[]` — every name in `REGISTRY_SKILL_NAMES`
+> (`skills.ts`, already exported) with no `status: "active"` row — and `ready` now turns on THREE
+> things: required env names, durable origins, **and a seeded registry**.
+>
+> **MEASURED, NOT HYPOTHETICAL.** Phase 29 added `knowledge-query-planner` and
+> `knowledge-synthesizer` to `SEEDS`. The deployment was never re-seeded. Unified knowledge search
+> was **completely inert** — the browser gate died on `NO_ACTIVE_SKILL: knowledge-query-planner` —
+> while the entire unit suite stayed green, because `convex-test` seeds the registry INSIDE each
+> test. One `npx convex run skills:seedSkills '{}'` turned the same spec green with no code change.
+> A whole feature was dark, and the one surface whose job is "is this deployment configured?" did
+> not look.
+>
+> **Why this belongs on the readiness screen rather than in a runbook.** §5 puts every agent prompt
+> in the `skills` table and `loadSkill` fails CLOSED (`NO_ACTIVE_SKILL`) — deliberately, so a
+> hardcoded prompt can never sneak in. That fail-closed behaviour is correct and unchanged. What was
+> missing is that **nothing reported the precondition**: `seedSkills` is an `internalMutation` an
+> operator must RUN, and its absence was invisible until a user touched the surface. An unseeded
+> skill is NOT a dark feature (a product decision) — it is a surface that throws on contact, so it
+> belongs in `ready`, not in `missingFeature`.
+>
+> Names only, like every other row here: a body is a prompt, not a readiness signal.
+> **Two existing tests asserted `ready === true` over an UNSEEDED registry** — i.e. over exactly
+> the deployment state that shipped a dark feature — and both now seed first. That they broke is the
+> change working.
+> Tests: 3 new in `env.test.ts` (unseeded is not ready and every agent is NAMED; seeding clears it,
+> so the check tracks the registry rather than a constant; ONE archived row breaks `ready` and only
+> that name is reported — the partial/drifted-seed case). Verified LIVE against the 1.24 GB local
+> deployment: 31 index lookups, `unseededSkills: []`, `ready: false` for localhost origins only.
+> `env.test.ts` 23 passed / 1 failed — the standing `QUICKBOOKS_*` red owned by 28-06, not this.)
+
 > Last verified: 2026-08-29 (**COMMENT-ONLY CORRECTION IN `convex/lib/env.ts`; NO READINESS
 > BEHAVIOUR CHANGED.** `missingEnv`'s comment above `fixturesActive` claimed the screen "cannot
 > announce a seam that is off (or stay quiet about one that is on)". **That was false**, and its own

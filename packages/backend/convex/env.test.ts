@@ -6,9 +6,10 @@
 // That is the same shape as Phase 22.1's table-classification drift test, for the same reason.
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { ENV_MANIFEST, isDurableOrigin, missingEnv, ORIGIN_ENV, REQUIRED_ENV } from "./lib/env";
 import schema from "./schema";
+import { REGISTRY_SKILL_NAMES } from "./skills";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 
@@ -215,13 +216,94 @@ describe("envCheck is owner-only and leaks nothing", () => {
     vi.stubEnv("CONVEX_SITE_URL", "https://woozy-wren-368.convex.site");
     vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://woozy-wren-368.convex.site/gmail/callback");
     const t = convexTest(schema, modules);
+    // SEED THE REGISTRY FIRST. As of 2026-08-30 `ready` also turns on the skill registry, and a
+    // fresh convexTest database has no rows — so without this the assertion below would be false
+    // for a reason that has nothing to do with the env dimension this test is about. Note what the
+    // previous version of this test was: `ready === true` asserted over an UNSEEDED registry, i.e.
+    // over exactly the deployment state that shipped a dark feature on 2026-08-30.
+    await t.mutation(internal.skills.seedSkills, {});
     const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
 
     const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
 
     expect(result.ready).toBe(true);
+    expect(result.unseededSkills).toEqual([]);
     // …while feature names are still reported as missing rather than hidden.
     expect(result.missingFeature.length).toBeGreaterThan(0);
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("an UNSEEDED SKILL REGISTRY is a broken deployment, and this screen now says so", () => {
+  // THE GAP THIS CLOSES, measured 2026-08-30. §5 puts every agent prompt in the `skills` table and
+  // `loadSkill` fails CLOSED (`NO_ACTIVE_SKILL`) — deliberately. But `seedSkills` is an
+  // internalMutation an operator must RUN, and nothing reported that it had not been. Phase 29
+  // shipped two new skill names into SEEDS, the deployment was never re-seeded, and unified
+  // knowledge search was INERT: the browser gate died on `NO_ACTIVE_SKILL` while the whole unit
+  // suite stayed green, because `convex-test` seeds the registry INSIDE each test.
+  const setEnvGreen = () => {
+    for (const name of REQUIRED_ENV) vi.stubEnv(name, "set");
+    vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
+    vi.stubEnv("CONVEX_SITE_URL", "https://woozy-wren-368.convex.site");
+    vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://woozy-wren-368.convex.site/gmail/callback");
+  };
+
+  test("an unseeded deployment is NOT ready, and every missing agent is named", async () => {
+    setEnvGreen();
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+
+    const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
+
+    // Every env dimension is green, so `ready` can only be false for the registry.
+    expect(result.missingRequired).toEqual([]);
+    expect(result.nonDurableOrigins).toEqual([]);
+    expect(result.ready).toBe(false);
+    // NAMED, not counted — an operator needs to know WHICH agent has no prompt.
+    expect(result.unseededSkills).toEqual([...REGISTRY_SKILL_NAMES]);
+    // The two names whose absence actually shipped a dark feature.
+    expect(result.unseededSkills).toContain("knowledge-query-planner");
+    expect(result.unseededSkills).toContain("knowledge-synthesizer");
+    vi.unstubAllEnvs();
+  });
+
+  test("seeding clears it — so the check tracks the registry, not a constant", async () => {
+    setEnvGreen();
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    await t.mutation(internal.skills.seedSkills, {});
+
+    const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
+
+    expect(result.unseededSkills).toEqual([]);
+    expect(result.ready).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
+  test("ONE archived agent is enough to break ready, and only that one is named", async () => {
+    // The half that matters after a partial or drifted seed: this must report the EXACT missing
+    // name, not "some are missing". Archiving one active row is the smallest real version of a
+    // registry that has drifted away from SEEDS. (`archived` — the status union is
+    // active|candidate|rolled_back|archived; there is no "retired".)
+    setEnvGreen();
+    const t = convexTest(schema, modules);
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    await t.mutation(internal.skills.seedSkills, {});
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) =>
+          q.eq("name", "knowledge-synthesizer").eq("status", "active"),
+        )
+        .unique();
+      if (row === null) throw new Error("fixture: knowledge-synthesizer was not seeded active");
+      await ctx.db.patch(row._id, { status: "archived" });
+    });
+
+    const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
+
+    expect(result.unseededSkills).toEqual(["knowledge-synthesizer"]);
+    expect(result.ready).toBe(false);
     vi.unstubAllEnvs();
   });
 });
@@ -258,6 +340,10 @@ describe("ADR-022: a SET but EPHEMERAL origin is caught, which missingRequired c
     vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://woozy-wren-368.convex.site/gmail/callback");
 
     const t = convexTest(schema, modules);
+    // Seed the registry: `ready` also turns on the skill rows now, and this test is about ORIGINS.
+    // Without it the assertion fails for an unrelated reason. (Second test to need this — the
+    // premise "every env name set ⇒ ready" quietly stopped being the whole story on 2026-08-30.)
+    await t.mutation(internal.skills.seedSkills, {});
     const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
     const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
 

@@ -40,13 +40,37 @@ function EnvReadiness() {
         Hosted configuration
       </p>
       <p style={{ margin: 0, color: env.ready ? "var(--ink)" : "#92400e", fontWeight: 600 }}>
+        {/* `ready` now turns on three things, so the headline may not name only one of them. It
+            used to say "Every required name is set." while the skill registry was unseeded and a
+            whole feature threw on contact. */}
         {env.ready
-          ? "Every required name is set."
-          : `${env.missingRequired.length} required name(s) missing — delivery or sign-in is broken.`}
+          ? "Every required name is set and every agent has its prompt."
+          : [
+              env.missingRequired.length > 0 &&
+                `${env.missingRequired.length} required name(s) missing — delivery or sign-in is broken.`,
+              env.unseededSkills.length > 0 &&
+                `${env.unseededSkills.length} agent(s) have no prompt row — those surfaces throw when used.`,
+              env.nonDurableOrigins.length > 0 && "An origin will stop resolving.",
+            ]
+              .filter(Boolean)
+              .join(" ")}
       </p>
       {env.missingRequired.length > 0 && (
         <p style={{ margin: 0, color: "#92400e" }}>
           <code>{env.missingRequired.join(", ")}</code>
+        </p>
+      )}
+      {env.unseededSkills.length > 0 && (
+        <p style={{ margin: 0, color: "#92400e" }}>
+          {/* §5 puts every agent prompt in the `skills` table and `loadSkill` fails CLOSED, so an
+              unseeded name is not a dark feature — it is a surface that throws when a user touches
+              it. Nothing reported this until 2026-08-30, when unified knowledge search shipped
+              INERT on a deployment nobody had re-seeded. The remedy is one command, so it is on
+              screen rather than in a runbook nobody opens. */}
+          Agents with no active prompt row: <code>{env.unseededSkills.join(", ")}</code>
+          <br />
+          Fix with <code>npx convex run skills:seedSkills &apos;&#123;&#125;&apos;</code> from{" "}
+          <code>packages/backend</code>.
         </p>
       )}
       {env.nonDurableOrigins.length > 0 && (
