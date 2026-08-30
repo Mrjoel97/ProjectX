@@ -316,16 +316,26 @@ describe("startCheckout opens a hosted Stripe Checkout with a trial and a card u
 describe("checkoutParams refuses an unconfigured trial rather than inventing one", () => {
   test("a null TRIAL_DAYS throws naming the constant", () => {
     expect(() =>
-      checkoutParams({ tenantId: "t", priceId: PRICE, trialDays: null, customerId: null,
-      origin: ORIGIN }),
+      checkoutParams({
+        tenantId: "t",
+        priceId: PRICE,
+        trialDays: null,
+        customerId: null,
+        origin: ORIGIN,
+      }),
     ).toThrow(/TRIAL_DAYS/);
   });
 
   test("a zero or fractional trial is not a trial and is refused too", () => {
     for (const trialDays of [0, -1, 1.5]) {
       expect(() =>
-        checkoutParams({ tenantId: "t", priceId: PRICE, trialDays, customerId: null,
-      origin: ORIGIN }),
+        checkoutParams({
+          tenantId: "t",
+          priceId: PRICE,
+          trialDays,
+          customerId: null,
+          origin: ORIGIN,
+        }),
       ).toThrow(/TRIAL_DAYS/);
     }
   });
