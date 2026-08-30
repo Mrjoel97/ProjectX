@@ -1005,6 +1005,15 @@ const VIDEO: SubmittableSpec = {
   resolution: MEDIA_DEFAULT_VIDEO.resolution,
   seconds: MEDIA_DEFAULT_VIDEO.seconds,
 };
+/** The route-qualified id is a LITERAL here, not `MEDIA_DEFAULT_IMAGE.model`. A constant the
+ *  test imports moves the oracle with the subject, so it pins nothing. */
+const IMAGE = {
+  kind: "image",
+  model: "openai/gpt-image-2",
+  width: MEDIA_DEFAULT_IMAGE.width,
+  height: MEDIA_DEFAULT_IMAGE.height,
+} as const satisfies SubmittableSpec;
+
 const TTS: SubmittableSpec = {
   kind: "tts",
   model: MEDIA_DEFAULT_VOICE.model,
@@ -1032,6 +1041,10 @@ function stubMediaEnv() {
   vi.stubEnv("Video_and_image_API_Key", "test-key");
   vi.stubEnv("WAN_API_BASE_URL", "https://workspace.ap-southeast-1.maas.aliyuncs.com");
   vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
+  // DELIBERATELY DIFFERENT from the OpenAI sentinel. The image arm reads this one and the
+  // tts/stt/video arms read the other; identical values would let a test that reads the wrong
+  // variable pass by coincidence, which is the failure mode 33.1-03 exists to close.
+  vi.stubEnv("OPENROUTER_API_KEY", "openrouter-test-key");
   vi.stubEnv("FAL_WEBHOOK_SECRET", "test-secret");
   vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
 }
@@ -1135,6 +1148,15 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
     });
   });
 
+  test("the image model keeps its OpenRouter route prefix — the tts strip must NOT reach here", () => {
+    // The tts arm does `.replace(/^openai\//, "")` because it posts to OpenAI's own API, which
+    // does not know a route prefix. The image arm posts to OpenRouter, which DOES — stripping here
+    // would send `gpt-image-2` to a gateway that has never heard of that id.
+    expect(buildSubmitBody(IMAGE, "a poster").model).toBe("openai/gpt-image-2");
+    // …and the tts arm still strips, so this is a statement about WHICH arm, not about neither.
+    expect(buildSubmitBody(TTS, "n").model).toBe("tts-1");
+  });
+
   test("the switch ends in a `never` binding, and no `default` returns a body", () => {
     expect(mediaCode).toMatch(/const\s+_never\s*:\s*never\s*=\s*spec/);
     expect(mediaCode).not.toMatch(/default:\s*\n?\s*return\s*\{/);
@@ -1215,31 +1237,130 @@ describe("OpenAI Sora submit contract", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("GPT Image 2 decodes the returned PNG and keeps it off the job payload", async () => {
-    const encoded = btoa(String.fromCharCode(137, 80, 78, 71));
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: [{ b64_json: encoded }] }), {
-        status: 200,
-        headers: { "x-request-id": "image_req_1" },
-      }),
-    );
+  test("the VIDEO arm still submits to OpenAI on the OpenAI key — 33.1-05 owns that move", async () => {
+    // Pins the boundary of this plan. The image plane moved; the video plane did not, and a change
+    // that quietly took it along would be a migration nobody decided.
+    const fetchMock = acceptFetch();
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv();
-    const result = await submitLine(
-      {
-        kind: "image",
-        model: MEDIA_DEFAULT_IMAGE.model,
-        width: MEDIA_DEFAULT_IMAGE.width,
-        height: MEDIA_DEFAULT_IMAGE.height,
-      },
-      "a baobab at dawn",
+    await submitLine(VIDEO, "p");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.openai.com/v1/videos");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer openai-test-key");
+  });
+});
+
+// ── 33.1-03: the still-image plane on OpenRouter ──────────────────────────────────────
+//
+// VALIDATION.md trap 3, and it is the reason every assertion below reads the RESOLVED first
+// argument handed to the fetch mock rather than grepping the source: `api.openai.com` LEGITIMATELY
+// survives in media.ts for TTS, STT and the retained Sora poller, so its absence is unassertable
+// and its presence proves nothing about where an image request goes.
+describe("OpenRouter image submit contract", () => {
+  /** One PNG-shaped success, fresh per call — a Response body is a single-read stream. */
+  const imageOk = () =>
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          // The measured shape, 2026-08-30 (33.1-PRICE-EVIDENCE.md): `media_type` rides alongside
+          // `b64_json` and is ignored, exactly as it was on OpenAI. No response-shape change.
+          data: [{ b64_json: btoa(String.fromCharCode(137, 80, 78, 71)), media_type: "image/png" }],
+        }),
+        { status: 200, headers: { "x-request-id": "image_req_1" } },
+      ),
     );
+
+  test("the RESOLVED url is OpenRouter's images endpoint, not OpenAI's", async () => {
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    await submitLine(IMAGE, "a baobab at dawn");
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(url.host).toBe("openrouter.ai");
+    expect(url.pathname).toBe("/api/v1/images");
+  });
+
+  test("the bearer is the OPENROUTER key — the two sentinels differ, so a wrong read cannot pass", async () => {
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    // Guarding the guard: were these two ever set to the same string, the assertion below would go
+    // green while `submitLine` read the wrong variable.
+    expect(process.env.OPENROUTER_API_KEY).not.toBe(process.env.OPENAI_API_KEY);
+    await submitLine(IMAGE, "p");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer openrouter-test-key",
+    );
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+  });
+
+  test("a missing OPENROUTER_API_KEY refuses before fetch, and names THAT variable", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    await expect(submitLine(IMAGE, "p")).rejects.toThrow(/OPENROUTER_API_KEY/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("an image submit no longer needs OPENAI_API_KEY at all", async () => {
+    // The behaviour change worth its own test: the image plane is no longer hostage to a credential
+    // it does not use, on the account that is out of credit.
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const result = await submitLine(IMAGE, "p");
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("the submitted body is the priced one, with the route prefix intact", async () => {
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    await submitLine(IMAGE, "a baobab at dawn");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toEqual({
+      model: "openai/gpt-image-2",
+      prompt: "a baobab at dawn",
+      n: 1,
+      // `size` and NOT `aspect_ratio`, and never both — measured 2026-08-30: they are not
+      // interchangeable (9:16 returns 864x1536 at $0.003735, size returns 1024x1536 at $0.004875).
+      // Keeping `size` preserves today's exact geometry; the cheaper 9:16 option is a deliberate
+      // deferral because it changes what every still looks like.
+      size: "1024x1536",
+      quality: "low",
+      output_format: "png",
+    });
+    expect(Object.keys(JSON.parse(String(init.body)))).not.toContain("aspect_ratio");
+  });
+
+  test("GPT Image 2 decodes the returned PNG and keeps it off the job payload", async () => {
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const result = await submitLine(IMAGE, "a baobab at dawn");
     expect(result).toMatchObject({ ok: true, requestId: "image_req_1" });
     if (!result.ok) return;
     expect([...((result.asset?.bytes ?? new Uint8Array()) as Uint8Array)]).toEqual([
       137, 80, 78, 71,
     ]);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/images/generations");
+  });
+
+  test("the requestId fallback does not claim a vendor this arm no longer talks to", async () => {
+    // 33.1-PRICE-EVIDENCE.md does NOT record whether OpenRouter returns `x-request-id`, so this
+    // fallback is load-bearing rather than decorative — and it must not say `openai-`.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ b64_json: btoa("x"), media_type: "image/png" }] }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const result = await submitLine(IMAGE, "p");
+    expect(result.ok && result.requestId).toMatch(/^openrouter-/);
   });
 });
 
