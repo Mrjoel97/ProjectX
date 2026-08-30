@@ -106,8 +106,8 @@ no code change. **Add the seed to the deploy runbook.**
 | **Synthesizer** against a real model | **MET 2026-08-30.** A document ingested through the real `vault.vaultIngestText` pipeline and embedded by `vaultRag:embedDoc` produced a cited claim and a `knowledge.synthesize` ledger row (`knowledge:synth:4dd6bdf6…`, `phase: "actual"`, 1¢). Driven through `knowledgeSearch:search` with an identity — the browser half was blocked by a transient `auth:store` 1s-timeout under embedding load, not by the feature. |
 | Planner plans the VAULT for an ordinary pricing question | **MET 2026-08-30**, after being found NOT MET the same day. `knowledge-query-planner@2` rebalances the include/omit guidance; on the failing question the vault went from **1 of 3 runs to 3 of 3**, with `crm-facts` still planned (and honestly reported `not_connected`) rather than displaced. Non-vacuity control: a public-fact question still leaves all four tenant sources `unplanned`. |
 | `oauth-expiry-reauth` / `dst-boundary` / `provider-read` **live** evidence | **ABSENT.** This is the basis of `decision: defer` and must NOT be marked green. |
-| Save **completion signal** on the customizer | **MISSING.** No toast, no `role="status"`, no `role="alert"`; navigating after Save aborts the write. |
-| 29-13 Task 3 **owner review** | **OPEN.** A human act; no document can close it. |
+| Save **completion signal** on the customizer | **MET 2026-08-30**, after being found MISSING. The `saved` outcome state already existed and only the render branch was absent; it is now a `role="status"` line naming the version, with the container test asserting the line is ABSENT before the save and a refused save rendering no success line. It deliberately does not repeat `ACTIVATION_NOTE` — "no workflow you start uses them yet" is already on screen above the form. |
+| 29-13 Task 3 **owner review** | **APPROVED 2026-08-30** by the owner, after checking the running app. It covers the surfaces reviewed and closes nothing else on this list. |
 
 ---
 
