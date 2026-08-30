@@ -24,6 +24,7 @@ import {
 } from "@pikar/cost/media";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import mediaFixtures from "../../cost/src/media.fixtures.json";
 // The reserve drives the REAL rate-limiter component (relative import — the packages block deep
 // specifiers). guardrails.test.ts carries the same line for the same reason.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -1144,25 +1145,32 @@ afterEach(async () => {
 });
 
 describe("buildSubmitBody: the body is a function of the PRICED spec, and nothing else", () => {
-  test("the video body pins every priced Sora field", () => {
+  test("the video body pins every priced OpenRouter field", () => {
+    // 33.1-05 moved these names off Sora's: `duration` (a NUMBER) and `resolution` (the tier), not
+    // `seconds` (a string) and `size` (WxH). Measured against a live 202 on 2026-08-30.
     expect(buildSubmitBody(VIDEO, "a lighthouse at dusk")).toEqual({
       model: MEDIA_DEFAULT_VIDEO.model,
       prompt: "a lighthouse at dusk",
-      seconds: String(MEDIA_DEFAULT_VIDEO.seconds),
-      size: "720x1280",
+      duration: MEDIA_DEFAULT_VIDEO.seconds,
+      resolution: MEDIA_DEFAULT_VIDEO.resolution,
+      aspect_ratio: "9:16",
     });
   });
 
-  test("duration remains the submitted OpenAI string enum", () => {
-    const body = buildSubmitBody({ ...VIDEO, seconds: 8 }, "p");
-    expect(body.seconds).toBe("8");
+  test("duration is a NUMBER, and off the old 4/8/12 grid", () => {
+    // Sora took `String(seconds)` off a three-member enum. Grok takes any integer 1..15, which is
+    // the single fact ADR-027 accepted a new counterparty for — so the type matters as much as the
+    // value: `"7"` would be a different wire contract than the one that was measured.
+    const body = buildSubmitBody({ ...VIDEO, seconds: 7 }, "p");
+    expect(body.duration).toBe(7);
+    expect(typeof body.duration).toBe("number");
   });
 
-  test("a DIFFERENT priced tier travels through unchanged — the field is not a hardcoded 480p", () => {
+  test("a DIFFERENT priced tier travels through unchanged — the field is not a hardcoded 720p", () => {
     // Not vacuous: were `resolution` dropped from the arm, the test above would still see the key
     // absent, but THIS one proves the value tracks the spec rather than a constant.
-    expect(buildSubmitBody({ ...VIDEO, resolution: "1080p" }, "p").size).toBe("1080x1920");
-    expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").size).toBe("720x1280");
+    expect(buildSubmitBody({ ...VIDEO, resolution: "480p" }, "p").resolution).toBe("480p");
+    expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").resolution).toBe("720p");
   });
 
   test("NO audio field is sent, on any video submit", () => {
@@ -1249,26 +1257,125 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
   });
 });
 
-describe("OpenAI Sora submit contract", () => {
-  test("missing visual key refuses before fetch", async () => {
+// ── 33.1-05: the VIDEO plane on OpenRouter ────────────────────────────────────────────
+//
+// The same discipline as the image block below: every assertion reads the RESOLVED first argument
+// handed to the fetch mock. `api.openai.com` legitimately survives in media.ts for TTS, STT and the
+// RETAINED Sora poller, so a source scan proves spelling and not routing (VALIDATION.md trap 3).
+describe("OpenRouter video submit contract", () => {
+  /** The 202 shape measured on 2026-08-30 (33.1-PRICE-EVIDENCE.md). `polling_url` is present in the
+   *  real response and is deliberately IGNORED by the adapter — see the trust-boundary test. */
+  const videoAccepted = () =>
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "vid_abc",
+          polling_url: "https://openrouter.ai/api/v1/videos/vid_abc",
+          status: "pending",
+        }),
+        { status: 202 },
+      ),
+    );
+
+  test("missing OpenRouter key refuses before fetch — the credential moved with the vendor", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubEnv("OPENAI_API_KEY", "");
-    await expect(submitLine(VIDEO, "p")).rejects.toThrow(/OPENAI_API_KEY/);
+    stubMediaEnv();
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    await expect(submitLine(VIDEO, "p")).rejects.toThrow(/OPENROUTER_API_KEY/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("submits an asynchronous Sora task with bearer auth and the priced body", async () => {
-    const fetchMock = acceptFetch();
+  test("a video submit RESOLVES to openrouter.ai, as JSON, on the OpenRouter key", async () => {
+    const fetchMock = videoAccepted();
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv();
-    expect(await submitLine(VIDEO, "a lighthouse")).toEqual({ ok: true, requestId: "req_1" });
+    expect(await submitLine(VIDEO, "a lighthouse")).toEqual({ ok: true, requestId: "vid_abc" });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("https://api.openai.com/v1/videos");
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer openai-test-key");
-    expect(Object.fromEntries((init.body as FormData).entries())).toEqual(
-      buildSubmitBody(VIDEO, "a lighthouse"),
+    expect(new URL(url).hostname).toBe("openrouter.ai");
+    expect(new URL(url).pathname).toBe("/api/v1/videos");
+    expect(init.method).toBe("POST");
+    // The OPENROUTER sentinel in stubMediaEnv is deliberately different from the OpenAI one, so an
+    // arm reading the wrong variable cannot pass by coincidence.
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer openrouter-test-key");
+    expect(headers["Content-Type"]).toBe("application/json");
+    // JSON, not the FormData the withdrawn OpenAI Videos API required.
+    expect(init.body).not.toBeInstanceOf(FormData);
+    expect(JSON.parse(init.body as string)).toEqual(buildSubmitBody(VIDEO, "a lighthouse"));
+  });
+
+  test("all three PRICED dimensions travel from a NON-DEFAULT spec — a hardcoded default cannot pass", async () => {
+    // 480p and 7s are both away from MEDIA_DEFAULT_VIDEO, and 7 is not on the old 4/8/12 grid.
+    // Were the arm to emit constants, every assertion here would fail.
+    const fetchMock = videoAccepted();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const spec: SubmittableSpec = { ...VIDEO, resolution: "480p", seconds: 7 };
+    await submitLine(spec, "p");
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.model).toBe(MEDIA_DEFAULT_VIDEO.model);
+    expect(body.resolution).toBe("480p");
+    expect(body.duration).toBe(7);
+  });
+
+  test("A5 submit leg: a 7-second spec reaches a provider carrying 7", async () => {
+    // The seconds 33.1-04 made parseable (GENERATED_CLIP_SECONDS = 1..15) now leave the building.
+    // `duration` as a NUMBER and not Sora's `String(seconds)` — the 202 measured on 2026-08-30
+    // accepted `duration: 7`, which is the single fact ADR-027 accepted a new counterparty for.
+    const fetchMock = videoAccepted();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    await submitLine({ ...VIDEO, seconds: 7 }, "p");
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.duration).toBe(7);
+    expect(typeof body.duration).toBe("number");
+  });
+
+  test("no unpriced dimension is sent — not generate_audio, not Sora's size", () => {
+    // Grok has no native audio and this pipeline muxes TTS separately in assemble_final.sh.
+    // The price table keys on model/resolution/seconds; a fourth priced-looking dimension the table
+    // cannot see is exactly the money bug buildSubmitBody's doc comment exists to prevent.
+    expect(buildSubmitBody(VIDEO, "p")).not.toHaveProperty("generate_audio");
+    expect(buildSubmitBody(VIDEO, "p")).not.toHaveProperty("size");
+  });
+
+  test("400 and 422 are blocked; other non-OK statuses are not, and the code is never prose", async () => {
+    for (const [status, blocked] of [
+      [400, true],
+      [422, true],
+      [500, false],
+    ] as const) {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            new Response(JSON.stringify({ error: { code: "moderation_blocked" } }), { status }),
+          ),
+      );
+      stubMediaEnv();
+      expect(await submitLine(VIDEO, "p")).toEqual({
+        ok: false,
+        code: "moderation_blocked",
+        blocked,
+      });
+    }
+  });
+
+  test("a 202 with no id is no_request_id, not a silent success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ status: "pending" }), { status: 202 })),
     );
+    stubMediaEnv();
+    expect(await submitLine(VIDEO, "p")).toEqual({
+      ok: false,
+      code: "no_request_id",
+      blocked: false,
+    });
   });
 
   test("fixture mode remains free but still requires configured credentials", async () => {
@@ -1282,17 +1389,52 @@ describe("OpenAI Sora submit contract", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+});
 
-  test("the VIDEO arm still submits to OpenAI on the OpenAI key — 33.1-05 owns that move", async () => {
-    // Pins the boundary of this plan. The image plane moved; the video plane did not, and a change
-    // that quietly took it along would be a migration nobody decided.
-    const fetchMock = acceptFetch();
-    vi.stubGlobal("fetch", fetchMock);
-    stubMediaEnv();
-    await submitLine(VIDEO, "p");
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("https://api.openai.com/v1/videos");
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer openai-test-key");
+// ── 33.1-05 / A8: the ROUTING assertion, over BOTH visual kinds ────────────────────────
+//
+// Written as a loop over the kinds rather than as two tests, so that adding a third visual kind
+// without a routing assertion is VISIBLY missing rather than quietly absent.
+describe("A8 — every visual submit resolves to OpenRouter, and none to OpenAI", () => {
+  const SPECS: Array<[string, Parameters<typeof submitLine>[0]]> = [
+    ["video", VIDEO],
+    ["image", IMAGE],
+  ];
+
+  /** Satisfies BOTH arms at once: `id` for the async video ticket, `data[0].b64_json` for the
+   *  synchronous image bytes. One mock, so the loop body stays the same for every kind. */
+  const anyVisualOk = () =>
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "x", status: "pending", data: [{ b64_json: "AAAA" }] }), {
+        status: 200,
+      }),
+    );
+
+  test("both kinds resolve to openrouter.ai", async () => {
+    for (const [name, spec] of SPECS) {
+      const fetchMock = anyVisualOk();
+      vi.stubGlobal("fetch", fetchMock);
+      stubMediaEnv();
+      await submitLine(spec, "p");
+      const url = (fetchMock.mock.calls[0] as [string, RequestInit])[0];
+      expect(new URL(url).hostname, `${name} must resolve to OpenRouter`).toBe("openrouter.ai");
+    }
+  });
+
+  test("neither kind resolves to api.openai.com", async () => {
+    // The RUNTIME version of the source scan. Unlike a grep this stays true while TTS, STT and the
+    // retained Sora poller keep that hostname in the file — which they legitimately do.
+    for (const [name, spec] of SPECS) {
+      const fetchMock = anyVisualOk();
+      vi.stubGlobal("fetch", fetchMock);
+      stubMediaEnv();
+      await submitLine(spec, "p");
+      for (const call of fetchMock.mock.calls) {
+        expect(new URL(call[0] as string).hostname, `${name} must not reach OpenAI`).not.toBe(
+          "api.openai.com",
+        );
+      }
+    }
   });
 });
 
@@ -1526,6 +1668,353 @@ describe("OpenAI Sora task landing", () => {
       "https://api.openai.com/v1/videos/video_1",
       "https://api.openai.com/v1/videos/video_1/content",
     ]);
+  });
+});
+
+// ── 33.1-05: the OpenRouter video POLLER ──────────────────────────────────────────────
+//
+// The Sora poller above is RETAINED and its tests stay green; this describes the sibling that new
+// submissions actually reach.
+describe("OpenRouter video task landing", () => {
+  /** One `submitted` video row, ready for the poller's CAS. */
+  // `seconds: number`, NOT inferred from the default: MEDIA_DEFAULT_VIDEO is `as const`, so an
+  // inferred default would narrow the parameter to the literal `4` and reject the 7 the A5 leg
+  // needs — the constant would silently become the only legal argument.
+  async function seedSubmittedVideo(t: T, seconds: number = MEDIA_DEFAULT_VIDEO.seconds) {
+    const planId = await seedPlan(t);
+    return await t.run((ctx) =>
+      ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "grok-video",
+        blockIndex: 0,
+        provider: "openai",
+        kind: "video",
+        model: MEDIA_DEFAULT_VIDEO.model,
+        spec: { kind: "video", resolution: MEDIA_DEFAULT_VIDEO.resolution, seconds },
+        promptHash: "0".repeat(64),
+        status: "submitted",
+        providerRequestId: "vid_abc",
+        estUsd: 0.28,
+        createdAt: T0,
+        updatedAt: T0,
+      }),
+    );
+  }
+
+  test("a completed video is downloaded from OpenRouter and stored in the workspace", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "vid_abc",
+            status: "completed",
+            unsigned_urls: ["https://openrouter.ai/api/v1/videos/vid_abc/content?sig=whatever"],
+            usage: { cost: 0.28 },
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(new Uint8Array([0, 0, 0, 24]), {
+          status: 200,
+          headers: { "content-type": "video/mp4" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "succeeded",
+      mimeType: "video/mp4",
+      bytes: 4,
+    });
+    // BOTH URLs are ours, constructed from the id. The response's `unsigned_urls[0]` above is a
+    // DIFFERENT string (it carries a query) and is deliberately not among these — see the next test.
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      "https://openrouter.ai/api/v1/videos/vid_abc",
+      "https://openrouter.ai/api/v1/videos/vid_abc/content?index=0",
+    ]);
+  });
+
+  test("TRUST BOUNDARY: a provider-supplied URL is never fetched, whatever host it names", async () => {
+    // Measured 2026-08-30: `unsigned_urls[0]` is NOT a pre-signed link — it 401s without our bearer,
+    // so following it would mean sending our credential to a host a provider response chose. The
+    // adapter constructs every URL from the id instead, which is strictly stronger than a host
+    // check because no foreign value is accepted at all. This fixture names a hostile host so the
+    // assertion is falsifiable: a `fetch(body.unsigned_urls[0])` implementation reddens here.
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "vid_abc",
+            status: "completed",
+            unsigned_urls: ["https://evil.example.com/v1/videos/vid_abc/content"],
+            polling_url: "https://evil.example.com/v1/videos/vid_abc",
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(new Uint8Array([0, 0, 0, 24]), {
+          status: 200,
+          headers: { "content-type": "video/mp4" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    for (const call of fetchMock.mock.calls) {
+      expect(new URL(call[0] as string).hostname).toBe("openrouter.ai");
+    }
+  });
+
+  test("`pending` is NOT terminal — it reschedules rather than landing a failure", async () => {
+    // The trap a branch-for-branch copy of the Sora poller walks into. Sora emits
+    // `queued | in_progress`; the 2026-08-30 probe showed OpenRouter emits `pending`, which is on
+    // NEITHER list. A poller that enumerates in-progress states would land `provider_failed` on the
+    // very first poll of every job — a green suite over a pipeline that never delivers a video.
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "vid_abc", status: "pending" }))),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({ status: "submitted" });
+  });
+
+  test("an UNKNOWN non-terminal status also reschedules — the default is retry, not fail", async () => {
+    // Fail-open toward retrying, bounded by the 180-attempt ceiling below, so an unlisted future
+    // state costs a delay and never a spuriously failed job that was about to succeed.
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ id: "vid_abc", status: "warming_up" }))),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({ status: "submitted" });
+  });
+
+  test("at attempt 180 a still-pending job lands poll_timeout — the retry loop is bounded", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "vid_abc", status: "pending" }))),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 180,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "poll_timeout",
+    });
+  });
+
+  test("`failed` lands the provider's error CODE through SAFE_CODE, never its prose", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "vid_abc",
+            status: "failed",
+            error: { code: "content_policy", message: "a sentence that must never be stored" },
+          }),
+        ),
+      ),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "content_policy",
+    });
+  });
+
+  test("a prose-shaped error code is replaced, not stored (CLAUDE.md §4)", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "vid_abc",
+            status: "failed",
+            error: { code: "the model refused: a prompt about a real named person" },
+          }),
+        ),
+      ),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "provider_failed",
+    });
+  });
+
+  test("a non-OK content fetch lands asset_http_N and stores no bytes", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: "vid_abc", status: "completed", unsigned_urls: [] })),
+        )
+        .mockResolvedValueOnce(new Response("", { status: 404 })),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "asset_http_404",
+    });
+  });
+
+  test("the CAS: a row that is not `submitted` is a no-op, so a duplicate schedule is free", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    await t.run((ctx) => ctx.db.patch(jobId, { status: "succeeded" }));
+    stubMediaEnv();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("the seconds on the ROW reach the REPRICE — a 7-second clip reconciles at 49 cents", async () => {
+    // A5's landing leg, asserted on the money rather than on a column. `storeAndLand`'s `actual`
+    // is not stored verbatim; it feeds `repriceUsd`, so the seconds only "arrive" if the reconciled
+    // charge moves. 7 x $0.07 = $0.49, and $0.49 is EXACTLY what the live 2026-08-30 probe was
+    // invoiced for a 7-second 720p clip — so this number ties the landing path to a real receipt.
+    // Were the poller to pass a default 4 instead of the row's 7, this would read 28.
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t, 7);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: "vid_abc", status: "completed", unsigned_urls: [] })),
+        )
+        .mockResolvedValueOnce(
+          new Response(new Uint8Array([0, 0, 0, 24]), {
+            status: 200,
+            headers: { "content-type": "video/mp4" },
+          }),
+        ),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({ status: "succeeded", actualCents: 49 });
+  });
+});
+
+// ── 33.1-05 / A7: the flag, and a test that does not believe it ────────────────────────
+//
+// VALIDATION.md trap 2, and the single most likely way this phase ships a lie. Setting
+// `replacementWiredUp` greens the runway tripwire in packages/cost whether or not anything was
+// wired — the exact failure `7012068` re-keyed that tripwire to close.
+//
+// So the flag is never asserted alone. It is asserted in the SAME test body as the routing, which
+// means the only way to green this test is to have actually moved the submit. Reverting the
+// submitLine video arm to api.openai.com reddens it while packages/cost stays green; that asymmetry
+// is the whole reason the pairing exists and it was mutation-checked before the flag was flipped.
+describe("A7 — the succession flag is only true beside a submit that resolves to OpenRouter", () => {
+  test("replacementWiredUp is true AND the video submit resolves to openrouter.ai", async () => {
+    const sora = mediaFixtures.entries.find((row: { id: string }) => row.id === "sora-2");
+    expect(sora, "the sora-2 succession record must still exist").toBeDefined();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: "vid_abc", status: "pending" }), { status: 202 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    await submitLine(VIDEO, "p");
+    const url = (fetchMock.mock.calls[0] as [string, RequestInit])[0];
+
+    // The two assertions live in one body deliberately: the flag cannot be green while the routing
+    // is not. Splitting them into two tests would restore exactly the failure mode this closes.
+    expect(new URL(url).hostname).toBe("openrouter.ai");
+    expect(sora?.succession?.replacementWiredUp).toBe(true);
+    expect(sora?.succession?.replacement).toBe(MEDIA_DEFAULT_VIDEO.model);
   });
 });
 

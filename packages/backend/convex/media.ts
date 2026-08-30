@@ -906,19 +906,29 @@ export const listJobs = internalQuery({
 
 // ── Media provider adapters ────────────────────────────────────────────────────────────
 //
-// Submit new visual and audio lines. TWO vendors live here as of 33.1-03, and which one an arm
-// talks to decides which credential it reads:
+// Submit new visual and audio lines. TWO vendors live here as of 33.1-05, split by MEDIA KIND and
+// not by model, and which one an arm talks to decides which credential it reads:
 //   - image  -> OPENROUTER, `openrouter.ai/api/v1/images`, on OPENROUTER_API_KEY. Bytes come back
 //               synchronously in `data[0].b64_json`, byte-identically to the OpenAI shape it
 //               replaced (measured 2026-08-30, see 33.1-PRICE-EVIDENCE.md).
-//   - video  -> still OpenAI's Videos API on OPENAI_API_KEY. That endpoint is WITHDRAWN 2026-09-24
-//               and plan 33.1-05 moves it; it is deliberately untouched here.
-//   - tts/stt-> still OpenAI, on OPENAI_API_KEY. Not part of this migration.
-// The legacy Wan poller remains only for tasks submitted before the provider cutover.
+//   - video  -> OPENROUTER, `openrouter.ai/api/v1/videos`, on OPENROUTER_API_KEY. Asynchronous:
+//               a 202 hands back an id, and `pollOpenRouterVideoTask` owns everything after it.
+//               Moved here by 33.1-05 because OpenAI WITHDRAWS its Videos API on 2026-09-24 — an
+//               ENDPOINT withdrawal, so there was no same-vendor row to move to (ADR-027).
+//   - tts/stt-> still OpenAI, on OPENAI_API_KEY. Not part of this migration; those endpoints live.
+// So `api.openai.com` still appears in this file — legitimately, for TTS, STT and the RETAINED Sora
+// poller. Its presence proves nothing about where a VISUAL request goes, which is why the routing
+// tests assert the RESOLVED url handed to `fetch` rather than grepping this source.
 //
-// ponytail: two vendors, two hardcoded hosts, selected by `spec.kind` — not a provider registry.
-// `pollWanTask` beside `pollOpenAiVideoTask` is this file's own precedent for a retained sibling
-// adapter. Upgrade path: a THIRD vendor is a third branch; only a fourth earns a table.
+// TWO pollers are retained beside the live one, and they are retained for the SAME reason:
+// `pollWanTask` (pre-Sora cutover) and `pollOpenAiVideoTask` (pre-OpenRouter cutover) each let a
+// job submitted before a cutover still land. Neither is a fallback and no submit path reaches them.
+//
+// ponytail: three near-identical pollers, one per vendor generation — not a provider registry.
+// Upgrade path: extract a shared poller only when a FOURTH arrives AND all four still agree branch
+// for branch. They do not today: OpenRouter's status vocabulary is `pending -> completed|failed`
+// where Sora's is `queued|in_progress -> completed`, and a premature generalisation over that
+// difference is exactly how a poller lands `provider_failed` on a job that was merely pending.
 
 /** The `gmailAuth.requireEnv` idiom with a media-worded message. Provider credentials are Convex
  *  deployment env vars (`npx convex env set`), never client-visible variables. */
@@ -957,11 +967,25 @@ export type SubmittableSpec =
 export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<string, unknown> {
   switch (spec.kind) {
     case "video":
+      // OpenRouter's field names, MEASURED on 2026-08-30 (33.1-PRICE-EVIDENCE.md), not Sora's:
+      // `duration` (a NUMBER, not `String(seconds)`) and `resolution` (the tier, not a WxH `size`).
+      // All three priced dimensions — model, resolution, seconds — are here, per this function's
+      // contract above.
+      //
+      // `aspect_ratio` is a PINNED WIRE FIELD, the video twin of `voice` on the tts arm: the price
+      // table has no opinion about it, but the reel is 1080x1920 and a clip composed for any other
+      // ratio gets reshaped by the assembler. "9:16" reproduces exactly the geometry Sora's
+      // `720x1280` requested, so the migration changes the transport and not the picture.
+      //
+      // NOT sent: `generate_audio`. Grok has no native audio, narration is generated separately as
+      // TTS and muxed in `assemble_final.sh` — and a dimension the price table cannot see is the
+      // money bug this doc comment exists to prevent.
       return {
         model: spec.model,
         prompt: text,
-        seconds: String(spec.seconds),
-        size: { "480p": "480x854", "720p": "720x1280", "1080p": "1080x1920" }[spec.resolution],
+        duration: spec.seconds,
+        resolution: spec.resolution,
+        aspect_ratio: "9:16",
       };
     case "image":
       // NO `.replace(/^openai\//, "")` here, and that asymmetry with the `tts` arm below is the
@@ -1042,15 +1066,20 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-/** Submit one new visual line. IMAGES go to OpenRouter and return their bytes synchronously;
- *  VIDEO still goes to OpenAI and returns an asynchronous video id which `pollOpenAiVideoTask`
- *  owns. The credential follows the vendor, not the function. */
+/** Submit one new visual line. BOTH kinds go to OpenRouter as of 33.1-05: images return their bytes
+ *  synchronously in the same response, video returns an asynchronous id which
+ *  `pollOpenRouterVideoTask` owns. The credential follows the vendor, not the function — and with
+ *  one vendor for both visual kinds there is now one credential. */
 export async function submitLine(spec: VisualSpec, text: string): Promise<SubmitResult> {
-  // ONE read, keyed on the vendor the branch below actually posts to. Deliberately still ABOVE the
-  // fixture short-circuit: "fixture mode is free but still requires configured credentials" is an
-  // existing invariant with its own test, and an offline run that stops proving the credential
-  // exists is an offline run that stops catching the misconfiguration it was there to catch.
-  const key = requireEnvMedia(spec.kind === "image" ? "OPENROUTER_API_KEY" : "OPENAI_API_KEY");
+  // Deliberately still ABOVE the fixture short-circuit: "fixture mode is free but still requires
+  // configured credentials" is an existing invariant with its own test, and an offline run that
+  // stops proving the credential exists is an offline run that stops catching the misconfiguration
+  // it was there to catch.
+  //
+  // 33.1-03 keyed this on `spec.kind` because the two visual kinds then had two vendors. 33.1-05
+  // moved the second one, so the ternary would now select the same value on both arms — a branch
+  // that cannot differ is a branch that hides the fact. One read, one vendor.
+  const key = requireEnvMedia("OPENROUTER_API_KEY");
 
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
     return spec.kind === "image"
@@ -1065,21 +1094,18 @@ export async function submitLine(spec: VisualSpec, text: string): Promise<Submit
   let response: Response;
   try {
     const body = buildSubmitBody(spec, text);
-    if (spec.kind === "video") {
-      const form = new FormData();
-      for (const [name, value] of Object.entries(body)) form.append(name, String(value));
-      response = await fetch("https://api.openai.com/v1/videos", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}` },
-        body: form,
-      });
-    } else {
-      response = await fetch("https://openrouter.ai/api/v1/images", {
+    // One host, two paths, both JSON. The `FormData` the video arm used to build is gone with the
+    // endpoint that wanted it: OpenAI's Videos API was multipart, OpenRouter's is not.
+    response = await fetch(
+      spec.kind === "video"
+        ? "https://openrouter.ai/api/v1/videos"
+        : "https://openrouter.ai/api/v1/images",
+      {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      });
-    }
+      },
+    );
   } catch {
     // The thrown error's message can carry the request URL and its auth context. A code only; the
     // exception itself is dropped on the floor.
@@ -1115,7 +1141,7 @@ export async function submitLine(spec: VisualSpec, text: string): Promise<Submit
   if (typeof requestId !== "string" || requestId.length === 0) {
     return { ok: false, code: "no_request_id", blocked: false };
   }
-  // Returns holding a queue ticket; `pollOpenAiVideoTask` owns the later status requests.
+  // Returns holding a queue ticket; `pollOpenRouterVideoTask` owns the later status requests.
   return { ok: true, requestId };
 }
 
@@ -1418,9 +1444,7 @@ async function fetchStock(
   let assetId: string;
   try {
     const body = (await search.json()) as Record<string, unknown>;
-    const picked = isVideo
-      ? pickStockVideo(body, spec.seconds)
-      : pickStockPhoto(body);
+    const picked = isVideo ? pickStockVideo(body, spec.seconds) : pickStockPhoto(body);
     if (picked === null) return { ok: false, code: "stock_no_match", blocked: false };
     ({ link, assetId } = picked);
   } catch {
@@ -1660,9 +1684,18 @@ export const pollWanTask = internalAction({
   },
 });
 
-/** Poll one OpenAI Sora job and copy the completed MP4 into tenant storage. The content endpoint
- *  is called immediately after completion because provider-side job assets are not our durable
- *  workspace artifact. */
+/**
+ * RETAINED, NOT LIVE. Poll one OpenAI Sora job and copy the completed MP4 into tenant storage.
+ *
+ * **No submit path reaches this function.** 33.1-05 moved the video submit to OpenRouter and this
+ * is kept for exactly one reason: a job submitted BEFORE that deploy and still `submitted` has a
+ * scheduled continuation that already names this function, and deleting it would strand that job.
+ * `pollWanTask` below was retained on identical grounds at the previous cutover.
+ *
+ * **It is not a fallback and must never be used as one** — the endpoint it polls is WITHDRAWN on
+ * 2026-09-24, so switching back is not a thing anyone can do. That is also its expiry: after
+ * 2026-09-24 there is no in-flight job it could serve and this function may simply be deleted.
+ */
 export const pollOpenAiVideoTask = internalAction({
   args: { jobId: v.id("mediaJobs"), videoId: v.string(), attempt: v.number() },
   handler: async (ctx, a): Promise<null> => {
@@ -1732,6 +1765,127 @@ export const pollOpenAiVideoTask = internalAction({
         `https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}/content`,
         { headers: { Authorization: `Bearer ${key}` } },
       );
+    } catch {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "asset_transport_error" },
+      });
+      return null;
+    }
+    if (!asset.ok) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: `asset_http_${asset.status}` },
+      });
+      return null;
+    }
+    await storeAndLand(
+      ctx,
+      a.jobId,
+      new Uint8Array(await asset.arrayBuffer()),
+      asset.headers.get("content-type") ?? "video/mp4",
+      { resolution: row.spec.resolution, seconds: row.spec.seconds },
+    );
+    return null;
+  },
+});
+
+/**
+ * THE LIVE VIDEO POLLER. Poll one OpenRouter video job and copy the completed MP4 into tenant
+ * storage. The content endpoint is called immediately after completion because provider-side job
+ * assets are not our durable workspace artifact.
+ *
+ * **Every URL here is CONSTRUCTED from the id we hold, and no URL from the provider's response is
+ * ever fetched.** The 2026-08-30 probe settled why that is the right call rather than a paranoid
+ * one: the response's `unsigned_urls[0]` is, despite the name, an ordinary authenticated endpoint —
+ * fetching it without our bearer returns 401 — so following it would mean sending our credential to
+ * whatever host a provider response named. `GET /videos/{id}/content?index=0`, which we build, was
+ * measured returning the same 4 471 786 bytes of `ftypisom` MP4. Not accepting a foreign value is
+ * strictly stronger than host-checking one, and here it costs nothing. `polling_url` is likewise
+ * absent from this function's args on purpose.
+ *
+ * **This is NOT a branch-for-branch copy of `pollOpenAiVideoTask`, and the difference is the whole
+ * reason it is a separate function.** Sora emits `queued | in_progress | completed | failed`;
+ * OpenRouter emitted only `pending` then `completed` across nine measured polls — `pending` is on
+ * NEITHER of Sora's in-progress names. So this poller inverts the test: it treats `completed` and
+ * `failed` as the only terminal states and reschedules on ANYTHING else. Enumerating an
+ * in-progress allow-list, as the Sora poller does, would land `provider_failed` on the very first
+ * poll of every job — a fully green suite over a pipeline that never delivers a single video.
+ * Fail-open toward retrying is safe here only because the 180-attempt ceiling below bounds it: an
+ * unrecognised state costs a delay and then `poll_timeout`, never an unbounded loop.
+ */
+export const pollOpenRouterVideoTask = internalAction({
+  args: { jobId: v.id("mediaJobs"), videoId: v.string(), attempt: v.number() },
+  handler: async (ctx, a): Promise<null> => {
+    const key = requireEnvMedia("OPENROUTER_API_KEY");
+    const row = await ctx.runQuery(internal.media.jobForPoll, { jobId: a.jobId });
+    // The CAS that makes a duplicate schedule free: only a still-`submitted` video row is polled.
+    if (!row || row.status !== "submitted" || row.spec.kind !== "video") return null;
+
+    const base = `https://openrouter.ai/api/v1/videos/${encodeURIComponent(a.videoId)}`;
+
+    let response: Response;
+    try {
+      response = await fetch(base, { headers: { Authorization: `Bearer ${key}` } });
+    } catch {
+      if (a.attempt < 180) {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenRouterVideoTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+        return null;
+      }
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: "poll_transport_error" },
+      });
+      return null;
+    }
+    if (!response.ok) {
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code: await providerReasonCode(response) },
+      });
+      return null;
+    }
+    const body = (await response.json().catch(() => null)) as {
+      status?: unknown;
+      error?: { code?: unknown };
+    } | null;
+    const status = body?.status;
+
+    if (status === "failed") {
+      const candidate = body?.error?.code;
+      const code =
+        typeof candidate === "string" && SAFE_CODE.test(candidate) ? candidate : "provider_failed";
+      await ctx.runMutation(internal.mediaComplete.landResult, {
+        jobId: a.jobId,
+        outcome: { ok: false, code },
+      });
+      return null;
+    }
+    // NOT `completed` and NOT `failed` — including `pending`, an unparseable body, and any status
+    // this vendor adds later. Reschedule; the ceiling is what keeps that safe.
+    if (status !== "completed") {
+      if (a.attempt >= 180) {
+        await ctx.runMutation(internal.mediaComplete.landResult, {
+          jobId: a.jobId,
+          outcome: { ok: false, code: "poll_timeout" },
+        });
+      } else {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenRouterVideoTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+      }
+      return null;
+    }
+
+    let asset: Response;
+    try {
+      asset = await fetch(`${base}/content?index=0`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
     } catch {
       await ctx.runMutation(internal.mediaComplete.landResult, {
         jobId: a.jobId,
@@ -1899,7 +2053,7 @@ export const submitBatch = internalAction({
           height: spec.height,
         });
       } else {
-        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenRouterVideoTask, {
           jobId: line.jobId,
           videoId: res.requestId,
           attempt: 0,

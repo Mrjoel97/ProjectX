@@ -1,5 +1,78 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-08-30 (33.1-05 — **THE VIDEO SUBMIT IS ON OPENROUTER AND
+> `succession.replacementWiredUp` IS FINALLY `true`.** The migration ADR-026 decided on 2026-08-27
+> and ADR-027 re-decided on 2026-08-30 is now WIRED, 25 days before OpenAI withdraws `/v1/videos`
+> on 2026-09-24 and 11 days before the runway tripwire would have reddened the cost suite.
+>
+> **The contract, as MEASURED and not as read from a docs page.** One live submit, nine polls and
+> one content fetch on 2026-08-30 (`33.1-PRICE-EVIDENCE.md` carries the transcript):
+> `POST openrouter.ai/api/v1/videos` with `{model, prompt, duration, resolution, aspect_ratio}` →
+> `202 {id, polling_url, status}` → `GET /videos/{id}` → `GET /videos/{id}/content?index=0`. JSON,
+> not the multipart FormData OpenAI's Videos API required. **`duration` is a NUMBER and
+> `resolution` is the tier** — Sora's `seconds: "4"` and `size: "720x1280"` are both gone.
+>
+> **`duration: 7` SUCCEEDED, and that is the whole reason a new counterparty was accepted.** Until
+> that call, the `1..15` grid was an unverified reading of a table. It now has a finished 7-second
+> MP4 behind it.
+>
+> **`usage.cost` came back `$0.49` against `7 × $0.07 = $0.49` predicted — exact to the cent.** The
+> price row plan 33.1-04 landed is confirmed against an invoice rather than a docs page, so the
+> reservation does not sit below the charge on a no-refunds rail. That is the condition the plan set
+> for flipping the flag, and it is why the flag moved.
+>
+> **THREE POLLERS NOW LIVE IN `media.ts`, AND ONLY ONE IS LIVE.** Read this before touching any of
+> them: `pollOpenRouterVideoTask` is the live one — `submitBatch` schedules it and nothing else.
+> `pollOpenAiVideoTask` and `pollWanTask` are RETAINED, not fallbacks, each kept so a job submitted
+> before its cutover can still land on a scheduled continuation that already names it. The Sora one
+> has an expiry: after **2026-09-24** the endpoint it polls does not exist, no in-flight job can
+> need it, and it may simply be deleted.
+>
+> **The new poller is NOT a branch-for-branch copy, and copying it would have shipped a dead
+> pipeline.** Sora emits `queued | in_progress | completed | failed`; OpenRouter emitted only
+> `pending` then `completed` across nine measured polls — and `pending` is on NEITHER of Sora's
+> in-progress names. A faithful copy would therefore have landed `provider_failed` on the *first*
+> poll of *every* job, with a fully green suite over a pipeline that never delivers a video. So the
+> live poller inverts the test: `completed` and `failed` are the only terminal states and
+> **anything else reschedules**, including an unparseable body and any status this vendor adds
+> later. Fail-open toward retrying is safe only because the 180-attempt ceiling bounds it — an
+> unrecognised state costs a delay and then `poll_timeout`, never an unbounded loop.
+>
+> **TRUST BOUNDARY: no provider-supplied URL is ever fetched.** Both the poll URL and the content
+> URL are built from the id we already hold. This is stronger than the host check the plan
+> anticipated, and the measurement is why it was available: the response's `unsigned_urls[0]` is,
+> despite its name, an ordinary authenticated endpoint — fetching it **without** our bearer returns
+> **401** — so following it would have meant sending our credential to whatever host a provider
+> response named. `polling_url` is deliberately absent from the poller's scheduler args. A test
+> feeds a response naming `evil.example.com` in both fields and asserts every resolved fetch host is
+> `openrouter.ai`, so the decision is falsifiable rather than merely commented.
+>
+> **THE FLAG AND THE ROUTING ARE ASSERTED IN ONE TEST BODY, ON PURPOSE — and here is the number
+> that proves why.** With `replacementWiredUp: true` and `submitLine`'s video arm reverted to
+> `api.openai.com`, **`packages/cost` reports 92/92 GREEN** while four backend tests go red. The
+> runway tripwire cannot see routing and never could; it stands down on a flag alone. Splitting the
+> A7 assertion into two tests would let the flag half pass over a dead endpoint — which is exactly
+> the failure `7012068` re-keyed that tripwire to close, reappearing one level up. That mutation was
+> run and restored before the flag was committed.
+>
+> **A8 is asserted on RESOLVED urls, never by grepping the source.** `api.openai.com` still appears
+> five times in `media.ts` and every one is legitimate: TTS (`/v1/audio/speech`), STT
+> (`/v1/audio/transcriptions`), and two in the retained Sora poller. A source scan proves spelling,
+> not routing. The runtime assertion loops over BOTH visual kinds so a third kind added without a
+> routing assertion is visibly missing.
+>
+> **The credential collapsed to one, and that is a deletion rather than a change.** 33.1-03 keyed
+> `submitLine`'s env read on `spec.kind` because the two visual kinds then had two vendors. Both are
+> now OpenRouter, so a ternary would select the same value on both arms — a branch that cannot
+> differ hides the fact that it cannot. `OPENROUTER_API_KEY` is read once, still ABOVE the fixture
+> short-circuit so offline runs keep catching a missing credential.
+>
+> **STILL UNVERIFIED, and stated plainly: A3 and A6.** Nothing here ran against a live stack. No
+> storyboard has become a rendered reel through this path, because that needs the seeded local
+> Convex DB in the main tree — plan 33.1-06, after an owner-timed merge. What is proven is the wire
+> contract against the real provider and the adapter against the measured shapes. What is not proven
+> is the end-to-end run.)
+
 > Last verified: 2026-08-30 (33.1-04 — **THE DURATION GRID IS `1..15, ANY INTEGER`, AND
 > `illegal_generated_duration` IS RETIRED FOR EVERY LENGTH BELOW 16.** Constants and arithmetic
 > only; the submit path is still 33.1-05's, and `succession.replacementWiredUp` is still `false`.
@@ -4519,11 +4592,16 @@ A gap means the table is wrong, not that the meter is wrong — the meter record
 reported.
 
 **WHICH billing page is now a per-kind question, and the text above is stale where it says "fal".**
-fal has not billed this product since the 20-series cutover. As of 33.1-03: **images** reconcile
-against **openrouter.ai -> Activity** (each row carries the same `usage.cost` the price row was
-measured from, so this comparison is exact rather than approximate); **video, voiceover and
-captions** reconcile against the **OpenAI** usage page until 33.1-05 moves video to OpenRouter too.
-Stock lines reserve $0 and appear on no bill at all.
+fal has not billed this product since the 20-series cutover. As of 33.1-05: **images AND video**
+reconcile against **openrouter.ai -> Activity** (each row carries the same `usage.cost` the price
+row was measured from, so this comparison is exact rather than approximate — the 7-second probe
+billed `$0.49` against `7 × $0.07` predicted); **voiceover and captions** reconcile against the
+**OpenAI** usage page, and those endpoints are not being withdrawn. Stock lines reserve $0 and
+appear on no bill at all.
+
+**A period spanning the 2026-08-30 cutover is split across TWO bills**, and no single page shows the
+whole of it: video jobs submitted before it were charged by OpenAI, after it by OpenRouter. Compare
+such a window against both, or pick window boundaries that do not straddle the cutover.
 
 **THREE CAVEATS TRAVEL WITH THAT NUMBER, and `spendForPeriod` puts each one in its own payload
 rather than relying on you to remember this page:**
