@@ -259,6 +259,43 @@ could not change any of that: PayPal states sandbox calls work *before* approval
 
 ---
 
+## Wave-7 owner judgment — **PARK**, 2026-08-31
+
+The owner chose **park PayPal** at plan 28-25's blocking checkpoint. This is the final wave-7
+judgment for the current review window: PayPal stays invisible and does not block the code-only
+remainder of Phase 28. The decision is reversible only through a later evidence-backed review.
+
+The repository-owned seal resolver was run offline:
+
+```text
+node scripts/check-provider-lane.mjs --provider paypal --seal-decision from-owner
+RESOLVED: park — the record says approved_production; an admission is permission to start, never a passed lane
+lane: parked
+evidenceRef: docs/connectors/paypal-suitability.md#decision
+reviewBy: 2026-11-27
+clearedConditions: []
+```
+
+**No deployment mutation was made and no provider endpoint was called.** The generated payload was
+deliberately not applied under the local-proof-only execution constraint, so this record does not
+claim a newly observed deployment revision. The runtime rule is nevertheless proven offline:
+`availableProviders` returns only `passed` lanes, the provider-gate suite proves a parked lane is
+absent from that projection, and the PayPal connector suite proves a parked tenant read refuses
+before any request leaves.
+
+### Why the answer is park
+
+- No controlled production read has established a delegated merchant surface.
+- The published `partner-transactions` operation remains absent.
+- `no-documented-revoke-endpoint` remains unresolved and **no condition was cleared**.
+- Sandbox evidence would remain non-probative about production enablement.
+
+Re-open only with a production delegated-merchant grant, a controlled read proving the returned
+merchant is the intended tenant, and an evidence-backed revocation story agreed with PayPal. Until
+then, the connector remains built but unavailable.
+
+---
+
 ## Evidence URLs
 
 - https://developer.paypal.com/api/transaction-search/v1/
