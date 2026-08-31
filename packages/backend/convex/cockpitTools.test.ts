@@ -2982,6 +2982,20 @@ test("revenue read tools are structurally absent unless the code-owned grant is 
   expect(keys(true)).toEqual(expect.arrayContaining([...SPECIALISTS.revenue.tools]));
 });
 
+test("invoice reminder staging is executive-only and absent from the revenue specialist grant", () => {
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const keys = (agentContext?: Parameters<typeof buildCockpitTools>[6]) =>
+    Object.keys(
+      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, agentContext),
+    );
+
+  expect(keys()).not.toContain("stageInvoiceReminder");
+  expect(keys({ grantRevenueReads: true })).not.toContain("stageInvoiceReminder");
+  expect(keys({ grantInvoiceReminderStage: true })).toContain("stageInvoiceReminder");
+  expect(SPECIALISTS.revenue.tools).not.toContain("stageInvoiceReminder");
+});
+
 test("authorSkillCandidate exposes EXACTLY {name, authoredBody} over the closed agent set", () => {
   const tools = buildCockpitTools(
     {} as Parameters<typeof buildCockpitTools>[0],

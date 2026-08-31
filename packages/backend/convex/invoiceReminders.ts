@@ -13,8 +13,10 @@ import {
   type SourceRef,
   selectInvoiceReminderInput,
 } from "@pikar/revenue";
+import { jsonSchema, tool, type ToolSet } from "ai";
+import { makeFunctionReference, type GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { DataModel, Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 
 type ReminderProvider = "quickbooks" | "stripe";
@@ -102,6 +104,97 @@ const invoiceRefArg = v.object({
   kind: v.literal("invoice"),
   id: v.string(),
 });
+
+const quickbooksInvoices = makeFunctionReference<
+  "action",
+  { environment: ConnectorEnvironment; entity: "Invoice"; windowDays?: number },
+  Projection<Invoice>
+>("quickbooks:readEntity");
+const stripeInvoices = makeFunctionReference<
+  "action",
+  { environment: ConnectorEnvironment; entity: "invoices"; windowDays?: number },
+  Projection<Invoice>
+>("stripeConnector:readEntity");
+const stageProposedRef = makeFunctionReference<
+  "mutation",
+  {
+    tenantId: string;
+    planId: Id<"plans">;
+    invoiceRef: SourceRef;
+    subject: string;
+    body: string;
+  },
+  ProposedStageResult
+>("invoiceReminders:stageProposed");
+
+/**
+ * Executive-only model surface. Construction is gated by `runAgentLoop` from
+ * `toolNames === undefined`; it is never part of the revenue specialist tuple.
+ */
+export function buildInvoiceReminderTool(
+  ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
+  planId: Id<"plans">,
+): ToolSet {
+  return {
+    stageInvoiceReminder: tool({
+      description:
+        "Stage one explicitly requested unpaid-invoice reminder on the existing plan card. " +
+        "This creates no send or workflow; the user must review and Approve through the normal email gate.",
+      inputSchema: jsonSchema<{
+        intent: "explicit_user_request";
+        provider: ReminderProvider;
+        invoiceRef: string;
+        environment: ConnectorEnvironment;
+      }>({
+        type: "object",
+        properties: {
+          intent: { type: "string", enum: ["explicit_user_request"] },
+          provider: { type: "string", enum: ["quickbooks", "stripe"] },
+          invoiceRef: { type: "string", minLength: 1, maxLength: 256 },
+          environment: { type: "string", enum: ["sandbox", "production"] },
+        },
+        required: ["intent", "provider", "invoiceRef", "environment"],
+        additionalProperties: false,
+      }),
+      execute: async ({ intent, provider, invoiceRef, environment }): Promise<string> => {
+        const result = await stageInvoiceReminderFromSource(
+          {
+            readInvoices: async ({ provider: requestedProvider, environment: requestedEnvironment }) =>
+              requestedProvider === "quickbooks"
+                ? await ctx.runAction(quickbooksInvoices, {
+                    environment: requestedEnvironment,
+                    entity: "Invoice",
+                    windowDays: 90,
+                  })
+                : await ctx.runAction(stripeInvoices, {
+                    environment: requestedEnvironment,
+                    entity: "invoices",
+                    windowDays: 90,
+                  }),
+            stageProposed: async (draft) =>
+              await ctx.runMutation(stageProposedRef, {
+                ...draft,
+                planId,
+              }),
+          },
+          {
+            tenantId,
+            planId,
+            intent,
+            invoiceRef: { provider, kind: "invoice", id: invoiceRef },
+            environment,
+            now: Date.now(),
+          },
+        );
+        if (!result.ok) return `Invoice reminder was not staged: ${result.reason}.`;
+        return result.staged
+          ? "Invoice reminder staged as a proposed email plan. Nothing was sent; review and Approve it on the plan card."
+          : "That exact invoice reminder is already staged. Nothing was sent.";
+      },
+    }),
+  };
+}
 
 /**
  * The only persistence this module owns: collecting email plan -> proposed email plan.

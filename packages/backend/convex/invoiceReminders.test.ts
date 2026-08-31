@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
+  buildInvoiceReminderTool,
   stageInvoiceReminderFromSource,
   type InvoiceReminderStageDeps,
 } from "./invoiceReminders";
@@ -47,6 +48,32 @@ function deps(read: () => Promise<Projection<Invoice>>): {
 }
 
 describe("invoice reminder source-to-plan staging", () => {
+  test("the executive staging schema is closed, capped, and names no delivery choice", () => {
+    const tools = buildInvoiceReminderTool({} as never, "tenant_a", "plan_1" as Id<"plans">);
+    expect(Object.keys(tools)).toEqual(["stageInvoiceReminder"]);
+    const schema = tools.stageInvoiceReminder.inputSchema as unknown as {
+      jsonSchema: {
+        properties: Record<string, { enum?: string[]; maxLength?: number }>;
+        required: string[];
+        additionalProperties: boolean;
+      };
+    };
+    expect(schema.jsonSchema.properties.intent?.enum).toEqual(["explicit_user_request"]);
+    expect(schema.jsonSchema.properties.provider?.enum).toEqual(["quickbooks", "stripe"]);
+    expect(schema.jsonSchema.properties.environment?.enum).toEqual(["sandbox", "production"]);
+    expect(schema.jsonSchema.properties.invoiceRef?.maxLength).toBe(256);
+    expect(schema.jsonSchema.required.sort()).toEqual([
+      "environment",
+      "intent",
+      "invoiceRef",
+      "provider",
+    ]);
+    expect(schema.jsonSchema.additionalProperties).toBe(false);
+    expect(schema.jsonSchema.properties).not.toHaveProperty("recipients");
+    expect(schema.jsonSchema.properties).not.toHaveProperty("sendAt");
+    expect(schema.jsonSchema.properties).not.toHaveProperty("gmail");
+  });
+
   test("requires an explicit user request and refetches the exact opaque invoice ref", async () => {
     const readInvoices = vi.fn(async () => source());
     const seam = deps(readInvoices);
@@ -190,4 +217,3 @@ describe("existing proposed-plan persistence", () => {
     ).toEqual({ ok: false, reason: "plan_in_progress" });
   });
 });
-

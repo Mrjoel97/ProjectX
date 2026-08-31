@@ -114,6 +114,7 @@ import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-l
 import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import { buildInvoiceReminderTool } from "./invoiceReminders";
 import { buildRevenueTools, isRevenueToolGrant } from "./revenueTools";
 import {
   applyGmailCapability,
@@ -1821,6 +1822,8 @@ export function buildCockpitTools(
     grantSkillAuthoring?: boolean;
     /** Phase 28: the exact revenue specialist tuple opens only the two bounded read tools. */
     grantRevenueReads?: boolean;
+    /** REVN-06: executive-only staging; never derived from a specialist allow-list. */
+    grantInvoiceReminderStage?: boolean;
     /**
      * 27-10. True only for a workflow pack whose `output` contract IS a saved document, derived in
      * `runSpecialistTurn` from the SKILL NAME (`packOutputIsDocument`). It BUILDS `saveAsDocument`
@@ -2463,6 +2466,9 @@ export function buildCockpitTools(
     ...(agentContext?.grantRevenueReads
       ? buildRevenueTools(ctx, tenantId, planId)
       : ({} as ReturnType<typeof buildRevenueTools>)),
+    ...(agentContext?.grantInvoiceReminderStage
+      ? buildInvoiceReminderTool(ctx, tenantId, planId)
+      : ({} as ReturnType<typeof buildInvoiceReminderTool>)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -4646,6 +4652,7 @@ async function runAgentLoop(
       // REVN-04/05: identity-check the immutable code-owned tuple. A copied or model-authored list
       // with the same strings is still not the grant.
       grantRevenueReads: isRevenueToolGrant(toolNames),
+      grantInvoiceReminderStage: toolNames === undefined,
       // 27-10: passed through, NEVER derived here. `toolNames.includes("createDocument")` would let
       // any specialist granted the tool relax its own trigger rule by holding it.
       documentIsDeliverable,
