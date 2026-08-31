@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
@@ -38,6 +39,95 @@ import { swotSkillBody } from "./swot";
 // ships, generated FROM the .md; drift means a stale prompt. Mirrors the
 // skills.test.ts "no drift" precedent, scoped to the Phase 12 (BEVL-01) skill bodies.
 const lf = (s: string) => s.replace(/\r\n/g, "\n");
+
+const revenueBodies = {
+  "revenue-specialist": {
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    required: ["lead triage", "call list", "pipeline review", "customer pulse", "cash flow", "payroll confidence", "invoice reminder"],
+  },
+  "revenue-lead-triage": {
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    required: ["source-provided", "suppressed", "unknown", "stable order"],
+  },
+  "revenue-call-list": {
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    required: ["source-provided", "do not contact", "unknown", "stable order"],
+  },
+  "revenue-pipeline-review": {
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    required: ["local follow-up", "provider-owned", "unavailable", "fictional opportunity"],
+  },
+  "revenue-customer-pulse": {
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    required: ["bounded typed signals", "free text", "partial", "unknown"],
+  },
+  "revenue-cash-flow": {
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    required: ["precomputed", "separate currencies", "coverage", "qualified professional"],
+  },
+  "revenue-payroll-confidence": {
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    required: ["precomputed", "confirmed obligation", "unavailable", "qualified professional"],
+  },
+  "revenue-invoice-reminder": {
+    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    required: ["explicit user intent", "proposed", "human approval", "nothing has been sent", "suppression"],
+  },
+} as const;
+
+const readRevenueBody = (base: keyof typeof revenueBodies) =>
+  lf(readFileSync(fileURLToPath(new URL(`../../skills/${base}.md`, import.meta.url)), "utf8"));
+
+describe("Phase 28 provider-neutral revenue bodies (REVN-04..06)", () => {
+  test.each(Object.entries(revenueBodies))(
+    "%s has reviewed byte pins and the Phase 27 provenance notice",
+    (base, contract) => {
+      const body = readRevenueBody(base as keyof typeof revenueBodies);
+
+      expect(createHash("sha256").update(body).digest("hex")).toBe(contract.sha256);
+      expect(Buffer.byteLength(body, "utf8")).toBeGreaterThan(0);
+      expect(body).toContain("## Provenance and modification notice");
+      expect(body).toContain("provider-neutral");
+      expect(body).toContain("modified");
+      expect(body).toContain("Attribution");
+      expect(body).toContain("Apache-2.0");
+      expect(body).toContain("5267cf7bff3031921d4474b8e8f86ad02d2b8f6d");
+      expect(body).toContain("This body describes behavior only; it does not grant tools, scopes, or write authority.");
+
+      for (const phrase of contract.required) {
+        expect(body.toLowerCase()).toContain(phrase.toLowerCase());
+      }
+    },
+  );
+
+  test.each(Object.keys(revenueBodies))("%s stays provider-neutral and contains no authority-bearing configuration", (base) => {
+    const body = readRevenueBody(base as keyof typeof revenueBodies);
+
+    expect(body).not.toMatch(/HubSpot|QuickBooks|Stripe|PayPal/iu);
+    expect(body).not.toMatch(/https?:\/\//iu);
+    expect(body).not.toMatch(/\b(?:OAuth|access token|refresh token|client secret|API key|endpoint|executePlan|generic HTTP|MCP)\b/iu);
+    expect(body).not.toMatch(/\b(?:refund|credit|dispute|CRM|accounting) (?:write|update|mutation|send|issue)\b/iu);
+    expect(body).not.toMatch(/(?:\$|£|€)\s*\d|\b\d+(?:\.\d+)?\s*(?:USD|GBP|EUR)\b/iu);
+    expect(body).not.toMatch(/(?:opening cash|closing cash|coverage ratio|payroll gap)\s*[=+\-*/]/iu);
+  });
+
+  test("finance bodies explain immutable deterministic results instead of asking the model to calculate", () => {
+    for (const base of ["revenue-cash-flow", "revenue-payroll-confidence"] as const) {
+      const body = readRevenueBody(base);
+      expect(body).toContain("Do not calculate, total, age, forecast, repair, reconcile, or convert");
+      expect(body).toContain("Missing history and missing sources are unknown, never zero.");
+      expect(body).toContain("decision support, not accounting or tax advice");
+    }
+  });
+
+  test("the reminder body terminates at an ordinary proposed draft", () => {
+    const body = readRevenueBody("revenue-invoice-reminder");
+    expect(body).toContain("ordinary email plan");
+    expect(body).toContain("remains `proposed`");
+    expect(body).toContain("Only the existing human approval path may move it onward");
+    expect(body).toContain("Re-check consent and suppression at the existing delivery terminal");
+  });
+});
 
 // [canonical .md basename, derived constant]
 const bodies: [string, string][] = [
