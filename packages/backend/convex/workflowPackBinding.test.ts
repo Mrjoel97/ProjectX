@@ -903,4 +903,85 @@ describe("a tenant pack candidate can be RUN before it is activated (29-05)", ()
     });
     expect(own.ok && own.skillVersion).toBe(7);
   });
+
+  // ── THE SANDBOX EXCEPTION (2026-08-31) ────────────────────────────────────────────────────
+  //
+  // WHY IT EXISTS. `assertTenantPackActivationEvidence` demands an eval plane, and an eval plane
+  // means somebody has to EXECUTE the candidate to score it. The harness runs each case in a
+  // throwaway `packeval-*` tenant, so a strictly same-tenant rule made that plane unearnable by
+  // construction — an open gate with no key, the shape this phase kept shipping.
+  //
+  // WHAT IS AND IS NOT WEAKENED. The property is "no REAL tenant ever runs a foreign body", and
+  // these two tests are the pair that pins it: a sandbox tenant may, a real one still may not. A
+  // tenant id in this product is a Convex user id (`requireTenant` returns the JWT subject before
+  // '|'), which cannot begin with `packeval-`, so no product path can reach the exception.
+  test("a foreign pin IS accepted into a pack-eval SANDBOX tenant — the eval plane is earnable", async () => {
+    const { t, planId } = await setup();
+    const candidateId = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: TENANT,
+        name: "pack-business-pulse",
+        version: 7,
+        body: `${packBusinessPulseSkillBody}\n\nTENANT A BODY ZQ9SANDBOX77`,
+        authoredBody: "### Tone of the result\n\nwarm",
+        status: "candidate" as const,
+        author: "user" as const,
+        basedOnScope: "global" as const,
+        basedOnName: "pack-business-pulse",
+        basedOnVersion: 1,
+        rollbackEligible: false,
+        createdAt: Date.now(),
+      }),
+    );
+
+    const res = await t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
+      ...runArgs(planId, "business-pulse"),
+      // The shape `run-workflow-pack-evals.mjs` actually generates: `packeval-<runId8>-c<n>`.
+      tenantId: "packeval-deadbeef-c0",
+      runId: "run-tenant-sandbox",
+      tenantSkillIds: { "pack-business-pulse": candidateId },
+      primary: [textStep(REPLY)],
+      fallback: [textStep(REPLY)],
+    });
+    // The BODY reached the loop, not merely the call. Without this the test would pass on a run
+    // that accepted the pin and then silently executed the active template instead.
+    expect(res.ok && res.skillVersion, "the pinned tenant body did not reach the loop").toBe(7);
+  });
+
+  test("a tenant that merely LOOKS sandbox-ish is still refused — the shape is exact", async () => {
+    const { t, planId } = await setup();
+    const candidateId = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: TENANT,
+        name: "pack-business-pulse",
+        version: 7,
+        body: `${packBusinessPulseSkillBody}\n\nTENANT A BODY ZQ9NEARMISS88`,
+        authoredBody: "### Tone of the result\n\nwarm",
+        status: "candidate" as const,
+        author: "user" as const,
+        basedOnScope: "global" as const,
+        basedOnName: "pack-business-pulse",
+        basedOnVersion: 1,
+        rollbackEligible: false,
+        createdAt: Date.now(),
+      }),
+    );
+
+    // A PREFIX TEST WOULD PASS ALL THREE OF THESE. `packeval-` alone, a wrong-length hex block, and
+    // the marker buried mid-string are the three ways an attacker-or-accident-shaped tenant id gets
+    // treated as a sandbox — and the third is the one a `.includes()` would wave through.
+    for (const tenantId of ["packeval-", "packeval-dead-c0", "kn7real-packeval-deadbeef-c0"]) {
+      await expect(
+        t.action(internal.workflowPackBinding.__runWorkflowPackWithScript, {
+          ...runArgs(planId, "business-pulse"),
+          tenantId,
+          runId: `run-nearmiss-${tenantId.length}`,
+          tenantSkillIds: { "pack-business-pulse": candidateId },
+          primary: [textStep(REPLY)],
+          fallback: [textStep(REPLY)],
+        }),
+        `${tenantId} was accepted as a sandbox tenant`,
+      ).rejects.toThrow(/TENANT_SKILL_PIN_FOREIGN/);
+    }
+  });
 });

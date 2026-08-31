@@ -1,5 +1,41 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-08-31 (**THE TENANT PACK LANE HAS NOW BEEN EARNED, NOT MERELY MADE EARNABLE.**
+> Yesterday's entry said the three planes existed and that "nothing PRODUCES tenant pack evidence".
+> Both producers now exist and both have run against a real candidate row on a live deployment:
+> `packGateMissing: []` on `pack-brand-review v8`.
+>
+> THE EVAL PRODUCER: `run-workflow-pack-evals.mjs --tenant-skill <rowId>`. It runs the pack's own
+> fixtures with the row PINNED BY ID, then refuses to write unless the audit plane says that row
+> loaded. Measured 5/5 at $0.0125.
+>
+> THE SANDBOX EXCEPTION, and why it is not a hole. `runPackTurn` refused every foreign pin, which
+> made the eval plane unearnable BY CONSTRUCTION — the harness runs each case in a throwaway
+> `packeval-*` tenant, and a candidate belongs to the tenant who authored it. A foreign pin is now
+> allowed into a PACK EVAL SANDBOX TENANT and nowhere else. The property that matters is intact: a
+> tenant id is a Convex user id (`requireTenant` returns the JWT subject before '|'), which cannot
+> begin with `packeval-`, so no product path can reach it. `isPackEvalSandboxTenant` lives in
+> `@pikar/core` and is imported by BOTH the execution guard and `smoke.seedPackEvalTenant`, because
+> a seeding guard that drifted from the execution guard would disagree about what a sandbox is.
+> Proven by mutation in both directions: removing the exception reddens the sandbox test, loosening
+> it to `startsWith("packeval-")` reddens the near-miss test. One test each, no overlap.
+>
+> ⚠ THE BUG THIS FOUND, AND THE REASON THE CHECK EXISTS. The first live run scored 5/5 and was
+> REFUSED at the write: `assertPinWasLoaded` found the pinned row in 0 of 5 case tenants. It was
+> right. `dispatch.ts` writes skill identity onto its `subagent.completed` row, so RESEARCH runs
+> were always observable — but nothing wrote one for the pack path, which reaches `runSpecialistTurn`
+> through `workflowPackBinding`. A pack run left no record of which body it loaded. Fixed in
+> `runSpecialistTurn` itself (pinned runs only — an unconditional audit write there is what reddened
+> six `runCockpitAgent` tests in `7a58a3a`), so every caller of the specialist path is covered rather
+> than the one that happened to be under test. **Without that check this run would have written
+> evidence certifying a body no reader could confirm ran.**
+>
+> `tenantPackPlanesMissing` is now the single source for the verdict, and `inspectTenantSkill`
+> reports it as `packGateMissing` / `packGatePassed`. The gate throws through it rather than
+> duplicating it: an operator must never be told a row is ready by a query the mutation then
+> refuses. NOTE that the pre-existing `gatePassed` on that same row is the EVAL PLANE ALONE — one
+> third of the answer for a pack.)
+
 > Last verified: 2026-08-31 (**THE TENANT PACK LANE EXISTS AND IS EARNABLE.** `planTenantActivation`
 > refused every `pack-*` tenant row unconditionally; `assertTenantPackActivationEvidence` now demands
 > the SAME THREE PLANES a global pack body clears, keyed to the row id. `PACK_GATE_ERROR` is still

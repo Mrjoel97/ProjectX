@@ -323,6 +323,26 @@ async function assertTenantPackActivationEvidence(
   ctx: MutationCtx,
   row: Doc<"tenantSkills">,
 ): Promise<void> {
+  const missing = await tenantPackPlanesMissing(ctx, row);
+  if (missing.length > 0) {
+    throw new Error(
+      `${PACK_GATE_ERROR}: tenant pack candidate ${String(row._id)} lacks ${missing.join(", ")} evidence`,
+    );
+  }
+}
+
+/**
+ * WHICH OF THE THREE PLANES ARE MISSING — the gate's whole judgement, as data.
+ *
+ * IT IS SEPARATE FROM THE THROW SO THAT NOTHING ELSE HAS TO RE-IMPLEMENT IT. `inspectTenantSkill`
+ * reports this verdict, and if it computed its own the two would drift and an operator would be
+ * told a row was ready by the query that the mutation then refuses. This repo has already paid for
+ * that shape more than once: "a repair reaching two of three copies".
+ *
+ * It takes a QUERY ctx (a mutation ctx is one), because answering "is this row activatable" must
+ * never require the right to activate it.
+ */
+async function tenantPackPlanesMissing(ctx: QueryCtx, row: Doc<"tenantSkills">): Promise<string[]> {
   const missing: string[] = [];
 
   // ── PLANE 1: provenance, recomputed ─────────────────────────────────────────────────────────
@@ -376,11 +396,7 @@ async function assertTenantPackActivationEvidence(
     missing.push("browser");
   }
 
-  if (missing.length > 0) {
-    throw new Error(
-      `${PACK_GATE_ERROR}: tenant pack candidate ${String(row._id)} lacks ${missing.join(", ")} evidence`,
-    );
-  }
+  return missing;
 }
 
 async function planTenantActivation(
@@ -1226,6 +1242,45 @@ export const recordPackBrowserEvidence = internalMutation({
       .unique();
     if (row === null) throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: ${name} v${version}`);
     await ctx.db.patch(row._id, { browserEvidence });
+  },
+});
+
+/**
+ * The TENANT twin of the above, and the third of the three producers the tenant pack lane needed.
+ *
+ * WHY IT TAKES A ROW ID AND NOT `(name, version)`. At global scope a name and a version identify a
+ * body. At tenant scope they do not: two tenants can each own version 2 of `pack-business-pulse`,
+ * so writing by name would let a browser run against one tenant's candidate land on another's row.
+ * The row id is the only identity here, which is the same reason `WorkflowPin` carries it and the
+ * same reason `hasPassingTenantPackBrowserEvidence` pins it.
+ *
+ * IT REFUSES TO WRITE EVIDENCE THAT COULD NOT CERTIFY THE ROW IT IS BEING WRITTEN TO. The predicate
+ * that the gate will later apply is applied HERE too, against this row's own id/name/version — so a
+ * spec that records an artifact naming a different candidate fails at the write instead of leaving
+ * a row that looks evidenced and refuses at activation for reasons nobody can see from the outside.
+ * Fail at the door, not three steps later.
+ */
+export const recordTenantPackBrowserEvidence = internalMutation({
+  args: { candidateId: v.id("tenantSkills"), browserEvidence: v.string() },
+  handler: async (ctx, { candidateId, browserEvidence }) => {
+    const row = await ctx.db.get(candidateId);
+    if (row === null)
+      throw new Error(`${NO_SUCH_SKILL_VERSION_ERROR}: tenantSkills ${candidateId}`);
+    if (!isWorkflowPackSkill(row.name)) {
+      throw new Error(`${NOT_A_PACK_ERROR}: ${row.name} is not a workflow pack`);
+    }
+    if (
+      !hasPassingTenantPackBrowserEvidence(browserEvidence, {
+        candidateId: String(candidateId),
+        name: row.name,
+        version: row.version,
+      })
+    ) {
+      throw new Error(
+        `browser evidence does not name this row: expected a passing, authenticated, multi-viewport artifact pinned to ${String(candidateId)} (${row.name} v${row.version})`,
+      );
+    }
+    await ctx.db.patch(candidateId, { browserEvidence });
   },
 });
 
@@ -2158,6 +2213,15 @@ export const inspectTenantSkill = internalQuery({
       row.author === "agent"
         ? hasPassingAgentTenantEvidence(row.evidence, target)
         : hasPassingTenantEvidence(row.evidence, target);
+    // `gatePassed` ABOVE IS THE EVAL PLANE AND NOTHING ELSE, which for a WORKFLOW PACK row is one
+    // third of what activation asks for. Reporting only that would tell an operator a pack
+    // candidate is ready while `activateTenantCandidate` still refuses it for provenance or
+    // browser — the gap that made the tenant pack lane feel arbitrary from the outside.
+    //
+    // `null` for a non-pack row, so "not applicable" is distinguishable from "nothing missing".
+    const packGateMissing = isWorkflowPackSkill(row.name)
+      ? await tenantPackPlanesMissing(ctx, row)
+      : null;
     const refs = evidenceRefs(row.evidence);
     const baseline = await rollbackBaselineOf(ctx, row);
 
@@ -2197,6 +2261,9 @@ export const inspectTenantSkill = internalQuery({
         // none", and collapsing them hides a stale pin.
         evidenceState: row.evidence === undefined ? "absent" : gatePassed ? "passing" : "failing",
         gatePassed,
+        /** Workflow packs only. `null` elsewhere; `[]` means all three planes stand. */
+        packGateMissing,
+        packGatePassed: packGateMissing === null ? null : packGateMissing.length === 0,
         // The identity the evidence CLAIMS, echoed verbatim so a mismatch is visible rather than
         // merely booleaned away by `gatePassed`.
         evidenceTarget: refs?.tenantTarget ?? null,
@@ -2507,6 +2574,10 @@ export const newestTenantCustomization = internalQuery({
     ctx,
     { tenantId, name },
   ): Promise<{
+    // The ROW ID. Added 2026-08-31 for the browser-evidence producer, which has to name the exact
+    // candidate it exercised — at tenant scope `name@version` is not an identity, because two
+    // tenants can each own version 2 of one pack. Refs-only, like everything else returned here.
+    id: string;
     customizationValues: string;
     templateVersion: number;
     version: number;
@@ -2528,6 +2599,7 @@ export const newestTenantCustomization = internalQuery({
       return null;
     }
     return {
+      id: String(newest._id),
       customizationValues: newest.customizationValues,
       templateVersion: newest.templateVersion,
       version: newest.version,

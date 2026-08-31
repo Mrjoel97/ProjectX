@@ -671,10 +671,34 @@ function replyToMessageBlock(): string {
   const start = full.indexOf("replyToMessage: tool(");
   expect(start, "replyToMessage tool not found — did it get renamed?").toBeGreaterThanOrEqual(0);
   const rest = full.slice(start);
-  const closeAt = rest.indexOf("\n  };\n}");
+  // THE END ANCHOR, CORRECTED 2026-08-31 — it had silently slid roughly 800 lines.
+  //
+  // It was `\n  };\n}`, described in the docstring above as "the buildCockpitTools close". That was
+  // true when written. `buildCockpitTools` then grew a trailing `return applyGmailCapability(...)`,
+  // so its close stopped being `};` immediately followed by a top-level `}` — and `indexOf` walked
+  // on to the NEXT such shape, which is the end of `runSpecialistTurn`. The scan has since covered
+  // ~900 lines and several unrelated functions while claiming, in its own name, to cover one tool.
+  //
+  // Nobody noticed because no audit write happened to live in the extra span. One did on
+  // 2026-08-31 — in `runSpecialistTurn`, recording which body a PINNED run loaded — and this test
+  // went red for a write that has nothing to do with `replyToMessage`. An over-broad scan is not a
+  // safer scan: it fails on innocent code, and the pressure that creates is to delete it.
+  const closeAt = rest.indexOf("\n  };\n  return applyGmailCapability(");
   expect(closeAt, "buildCockpitTools close not found after replyToMessage").toBeGreaterThan(0);
+  const block = rest.slice(0, closeAt).replace(/\/\/[^\n]*/g, "");
+  // BOTH ENDS PINNED, so the boundary cannot slide silently again. The span must still reach the
+  // END of the tool object (a tool declared after `replyToMessage`), and must NOT reach past
+  // `buildCockpitTools` into the loop below it. A drifted anchor now fails HERE, naming itself,
+  // rather than turning some unrelated future assertion red.
+  // `replyToMessage` is the LAST tool in the object, so a correct span ends on its own close.
+  // Truncating early would silently shrink every scan below to the tool's first few lines.
+  expect(block.trimEnd().endsWith("}),"), "the span does not end on the tool's close").toBe(true);
+  expect(block, "the span truncated before the tool body").toMatch(/execute:/);
+  expect(block, "the span has slid past buildCockpitTools again").not.toMatch(
+    /export async function runSpecialistTurn/,
+  );
   // Strip line comments — the invariant is about the CODE surface (comments name the fields by design).
-  return rest.slice(0, closeAt).replace(/\/\/[^\n]*/g, "");
+  return block;
 }
 
 test("replyToMessage: the original body flows ONLY into draftReply — never a return, never an audit (SC-2)", () => {

@@ -29,6 +29,7 @@
 import {
   customizationRunBlock,
   customizationSchemaFor,
+  isPackEvalSandboxTenant,
   MISSING_SOURCE_UNLOCK,
   PACK_SOURCE_LABEL,
   type PackOutcome,
@@ -230,9 +231,25 @@ async function runPackTurn(
   // required `tenantId` arg on it — that also changes the pin resolution in `runSpecialistTurn`
   // (llm.ts), which this wave does not own. Named as a follow-up in the 29-05 FIX summary; this
   // closes the caller surface 29-05 added.
+  //
+  // THE ONE EXCEPTION, ADDED 2026-08-31, AND WHY IT IS NOT A HOLE. The eval harness has to execute
+  // row R's body to certify it, and R belongs to the tenant who authored it — so a same-tenant-only
+  // rule makes the eval plane of `assertTenantPackActivationEvidence` unearnable by construction,
+  // which is precisely the "open gate with no key" this phase kept shipping. A foreign pin is
+  // therefore allowed into a PACK EVAL SANDBOX TENANT and nowhere else.
+  //
+  // The property that matters survives intact: **no real tenant can ever run a foreign body.** A
+  // tenant id here is a Convex user id (`requireTenant` returns the JWT subject before '|'), which
+  // cannot begin with `packeval-`, so the escape hatch is unreachable from every product path.
+  // `isPackEvalSandboxTenant` is imported rather than re-typed because `smoke.seedPackEvalTenant`
+  // enforces the same shape, and two copies of one guard is how a repair reaches only one of them.
+  //
+  // This is still STRICTER than the cockpit pin path, which performs no tenant check at all — the
+  // unscoped-read gap named above and in `skill-registry.md`. Widening to match it was never the
+  // option; narrowing that one to match this remains the follow-up.
   for (const candidateId of Object.values(args.tenantSkillIds ?? {})) {
     const row = await ctx.runQuery(internal.skills.getTenantSkillVersion, { candidateId });
-    if (row.tenantId !== tenantId) {
+    if (row.tenantId !== tenantId && !isPackEvalSandboxTenant(tenantId)) {
       throw new Error(`TENANT_SKILL_PIN_FOREIGN: pinned candidate belongs to another tenant`);
     }
   }

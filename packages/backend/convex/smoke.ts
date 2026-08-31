@@ -7,7 +7,12 @@
 //
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import type { WorkflowId } from "@convex-dev/workflow";
-import { type BusinessBlueprint, type EvidenceVerdict, serializeBlueprint } from "@pikar/core";
+import {
+  type BusinessBlueprint,
+  type EvidenceVerdict,
+  isPackEvalSandboxTenant,
+  serializeBlueprint,
+} from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
 import {
   DOC_GAP_PLAYBOOK,
@@ -1780,8 +1785,15 @@ export const insertShelfFixtures = internalMutation({
 // mints a GMAIL-ONLY scope: inbox is reachable through the offline fixture the read tools already
 // ride, and `drive` stays honestly unavailable for every eval case.
 
-/** Only ever a throwaway pack-eval tenant. The `seedGoldenEvalBlueprint` posture, one lane over. */
-const PACK_EVAL_TENANT = /^packeval-[0-9a-f]{8}-[a-z0-9-]+$/;
+/**
+ * Only ever a throwaway pack-eval tenant. The `seedGoldenEvalBlueprint` posture, one lane over.
+ *
+ * 2026-08-31: the shape moved to `@pikar/core` and is IMPORTED here rather than kept as a second
+ * copy. `runPackTurn` now decides on the same predicate whether a foreign candidate pin is safe, and
+ * a seeding guard that drifted from the execution guard would mean fixture data and foreign bodies
+ * disagreeing about what "a sandbox tenant" is.
+ */
+const PACK_EVAL_TENANT = { test: isPackEvalSandboxTenant };
 /** Gmail read + send, and NOTHING else — no Drive scope, deliberately (see above). */
 const PACK_EVAL_GMAIL_SCOPE =
   "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send";

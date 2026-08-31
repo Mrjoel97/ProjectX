@@ -870,3 +870,19 @@ export function hasValidPackProvenance(
     return false; // unparseable → fail closed
   }
 }
+
+/**
+ * THE EVAL SANDBOX TENANT SHAPE — one definition, two enforcement sites.
+ *
+ * `run-workflow-pack-evals.mjs` runs each case in a throwaway tenant named `packeval-<runId8>-c<n>`,
+ * and `smoke.seedPackEvalTenant` refuses to seed anything else, so fixture data can never land in a
+ * real account. This predicate is the SAME fact, and it is exported rather than re-written because
+ * a second copy of a guard is how a repair reaches two of three sites.
+ *
+ * It is deliberately a LITERAL PREFIX plus a fixed hex/segment shape. A tenant id in this product is
+ * a Convex user id (`requireTenant` returns the JWT subject before '|'), which cannot begin with
+ * `packeval-`, so no real tenant can ever satisfy this — which is what lets the pack pin treat a
+ * sandbox tenant as a place where a foreign candidate body is safe to execute.
+ */
+export const isPackEvalSandboxTenant = (tenantId: string): boolean =>
+  /^packeval-[0-9a-f]{8}-[a-z0-9-]+$/.test(tenantId);
