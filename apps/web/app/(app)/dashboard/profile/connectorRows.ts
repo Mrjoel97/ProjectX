@@ -29,7 +29,14 @@ export type ConnectorRow = {
  * that is already connected — the false-negative class this surface has been bitten by twice
  * (see the Google and Microsoft rows). `undefined` from `useQuery` means "we do not know yet".
  */
-export type ConnectorState = "checking" | "connect" | "ready" | "reauth" | "failed";
+export type ConnectorState =
+  | "checking"
+  | "connect"
+  | "disconnected"
+  | "revoke_partial"
+  | "ready"
+  | "reauth"
+  | "failed";
 
 export type ConnectorRowView = {
   provider: string;
@@ -51,6 +58,28 @@ export type ConnectorRowView = {
   /** Shown after a disconnect that could not revoke — the sentence the tenant is owed. */
   residualNotice: string | null;
 };
+
+/**
+ * The list query has a lifecycle of its own. `undefined` is checking; an empty server answer is
+ * hidden because the server has already omitted every parked/failed/expired lane. Keeping this
+ * tiny derivation pure makes the false-negative loading branch executable in the plan's focused
+ * test instead of leaving it as a comment in JSX.
+ */
+export function connectorListView(rows: readonly ConnectorRow[] | undefined): {
+  state: "checking" | "hidden" | "ready";
+  rows: readonly ConnectorRow[];
+} {
+  if (rows === undefined) return { state: "checking", rows: [] };
+  if (rows.length === 0) return { state: "hidden", rows };
+  return { state: "ready", rows };
+}
+
+/** Closed operation copy shared by the live region and the button label. */
+export function connectorBusyLabel(
+  busy: "connecting" | "disconnecting" | null,
+): "Connecting…" | "Disconnecting…" | null {
+  return busy === null ? null : busy === "connecting" ? "Connecting…" : "Disconnecting…";
+}
 
 const TITLES: Record<ConnectorRow["provider"], string> = {
   hubspot: "HubSpot — contacts, companies & deals",
@@ -82,17 +111,31 @@ export function connectorRowView(row: ConnectorRow): ConnectorRowView {
   const sandbox = row.environment === "sandbox" ? " (sandbox)" : "";
   const base = { provider: row.provider, title: `${title}${sandbox}` };
 
-  if (!row.connected) {
+  if (row.status === "connecting") {
     return {
       ...base,
-      state: "connect",
-      detail: READ_ONLY,
+      state: "checking",
+      detail: "Checking this connection…",
+      action: null,
+      canDisconnect: false,
+      disconnectNote: null,
+      residualNotice: null,
+    };
+  }
+
+  if (!row.connected) {
+    const partialRevoke = row.grantRemainsLiveUpstream;
+    const disconnected = row.status === "revoked";
+    return {
+      ...base,
+      state: partialRevoke ? "revoke_partial" : disconnected ? "disconnected" : "connect",
+      detail: disconnected ? `Disconnected here. ${READ_ONLY}` : READ_ONLY,
       action: "connect",
       canDisconnect: false,
       disconnectNote: null,
       // A row that was disconnected without an upstream revoke keeps saying so, because the
       // account is still granting access and only the user can end that.
-      residualNotice: row.grantRemainsLiveUpstream
+      residualNotice: partialRevoke
         ? "Pikar's copy is deleted. The grant is still active in your provider account until you " +
           "remove it there."
         : null,

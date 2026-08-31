@@ -22,11 +22,11 @@ export const BLOCKED: readonly BlockedConnection[] = [
   },
   {
     id: "databases",
-    // ponytail: clears when an encrypted secret store exists. Today the stored Google refresh token
-    // is a plaintext string column; adding pasted API keys would multiply that risk class.
-    label: "Databases & CRMs",
+    // ponytail: connector storage now exists, but capability is still adapter- and gate-owned.
+    // Generic pasted URLs/keys would bypass the per-provider review, isolation and revoke contract.
+    label: "Other databases & CRMs",
     blocker:
-      "Blocked on encrypted credential storage. API keys and database URLs cannot be scoped or revoked per-integration the way an OAuth grant can.",
+      "Each connection needs a reviewed adapter with tenant isolation, bounded reads and an evidence-backed provider gate. Generic API keys and database URLs are not accepted.",
   },
   {
     id: "apps",

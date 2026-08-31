@@ -6,7 +6,12 @@ import { useState } from "react";
 import { DisconnectGoogle } from "../../_components/DisconnectGoogle";
 import { DisconnectMicrosoft } from "../../_components/DisconnectMicrosoft";
 import { BLOCKED } from "./connections";
-import { type ConnectorRow, connectorRowView } from "./connectorRows";
+import {
+  type ConnectorRow,
+  connectorBusyLabel,
+  connectorListView,
+  connectorRowView,
+} from "./connectorRows";
 import { card, label } from "./styles";
 
 // The connections surface. There are now TWO connectable providers (17-06 added Microsoft), and
@@ -185,12 +190,18 @@ function MicrosoftRow() {
  */
 function ConnectorRows() {
   const rows = useQuery(api.connectorConnections.connections);
-  // `undefined` = still loading. Same rule as every other row here: never render an absence we do
-  // not know about yet.
-  if (rows === undefined || rows.length === 0) return null;
+  const list = connectorListView(rows);
+  if (list.state === "checking") {
+    return (
+      <p role="status" aria-live="polite" style={{ margin: 0, color: "var(--ink-soft)" }}>
+        Checking connector availability…
+      </p>
+    );
+  }
+  if (list.state === "hidden") return null;
   return (
     <>
-      {rows.map((r) => (
+      {list.rows.map((r) => (
         <ConnectorRowCard key={`${r.provider}:${r.environment}`} row={r} />
       ))}
     </>
@@ -201,7 +212,8 @@ function ConnectorRowCard({ row }: { row: ConnectorRow }) {
   const view = connectorRowView(row);
   const connect = useAction(api.connectorConnections.startConnect);
   const disconnect = useAction(api.connectorConnections.disconnectProvider);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"connecting" | "disconnecting" | null>(null);
+  const busyLabel = connectorBusyLabel(busy);
 
   return (
     <div style={rowStyle} data-testid={`connections-${view.provider}`}>
@@ -218,15 +230,24 @@ function ConnectorRowCard({ row }: { row: ConnectorRow }) {
             {view.disconnectNote}
           </span>
         )}
+        {busyLabel && (
+          <span
+            role="status"
+            aria-live="polite"
+            style={{ fontSize: "0.85rem", color: "var(--ink)" }}
+          >
+            {busyLabel}
+          </span>
+        )}
       </div>
       <div style={{ display: "grid", gap: "0.4rem", justifyItems: "end" }}>
         {view.action && (
           <button
             type="button"
-            disabled={busy}
+            disabled={busy !== null}
             style={connectButton}
             onClick={async () => {
-              setBusy(true);
+              setBusy("connecting");
               try {
                 const started = await connect({
                   provider: row.provider,
@@ -237,28 +258,32 @@ function ConnectorRowCard({ row }: { row: ConnectorRow }) {
                 // all). Navigating to a null URL would look like a dead button.
                 if (started.url) window.location.href = started.url;
               } finally {
-                setBusy(false);
+                setBusy(null);
               }
             }}
           >
-            {view.action === "connect" ? "Connect" : "Reconnect"}
+            {busy === "connecting"
+              ? busyLabel
+              : view.action === "connect"
+                ? "Connect"
+                : "Reconnect"}
           </button>
         )}
         {view.canDisconnect && (
           <button
             type="button"
-            disabled={busy}
+            disabled={busy !== null}
             style={disconnectButton}
             onClick={async () => {
-              setBusy(true);
+              setBusy("disconnecting");
               try {
                 await disconnect({ provider: row.provider, environment: row.environment });
               } finally {
-                setBusy(false);
+                setBusy(null);
               }
             }}
           >
-            Disconnect
+            {busy === "disconnecting" ? busyLabel : "Disconnect"}
           </button>
         )}
       </div>

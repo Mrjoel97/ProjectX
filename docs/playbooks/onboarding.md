@@ -26,7 +26,16 @@
 > button — not behind a confirm dialog, because a warning a user sees only after deciding arrived
 > too late. The three classes produce three DIFFERENT sentences and a test pins that, since one
 > shared string would re-collapse the distinction `RevocationUpstream` exists to keep.
-> `connectorRows.test.ts` 15/15, `connectionsSurface.test.ts` 30/30, web `tsc` 0.
+> `connectorRows.test.ts` 17/17, plan-filtered `connections.test.ts` 4/4,
+> `connectionsSurface.test.ts` 30/30, web `tsc` 0.
+>
+> **Lifecycle follow-through (same plan):** query loading now renders a neutral live-region
+> "Checking connector availability…" rather than pretending the passed-provider projection is
+> empty. A server row in `connecting` stays `checking`; clean local disconnect and partial upstream
+> revoke are distinct `disconnected` / `revoke_partial` states. Button work is also named as
+> "Connecting…" or "Disconnecting…" while in flight, so a disabled control never looks inert.
+> The legacy "Databases & CRMs" blocked row is now "Other databases & CRMs": encrypted connector
+> storage exists, and the real boundary is a reviewed adapter plus an evidence-backed passed gate.
 >
 > Prior (28-09 — **THE PHASE 28 CONNECTOR ROWS ARRIVE ON THIS SURFACE AS A PURE
 > DERIVATION, AND THEY ARE NOT ON SCREEN YET.** `connectorRows.ts` + `connectorRows.test.ts` under

@@ -4,9 +4,8 @@
 // plan's `connections` name so the plan-mandated `vitest ... connections` command cannot succeed
 // without exercising the actual Phase 28 surface.
 import { describe, expect, test } from "vitest";
-import panelSource from "./ConnectionsPanel.tsx?raw";
 import { BLOCKED } from "./connections";
-import { connectorListView } from "./connectorRows";
+import { connectorBusyLabel, connectorListView } from "./connectorRows";
 
 describe("connector list loading and omission", () => {
   test("query loading is checking, never an empty or disconnected provider card", () => {
@@ -20,9 +19,9 @@ describe("connector list loading and omission", () => {
 
 describe("interactive lifecycle copy", () => {
   test("connect and disconnect in flight are named and announced", () => {
-    expect(panelSource).toContain("Connecting…");
-    expect(panelSource).toContain("Disconnecting…");
-    expect(panelSource).toContain('aria-live="polite"');
+    expect(connectorBusyLabel("connecting")).toBe("Connecting…");
+    expect(connectorBusyLabel("disconnecting")).toBe("Disconnecting…");
+    expect(connectorBusyLabel(null)).toBeNull();
   });
 
   test("the legacy blocked list no longer claims encrypted connector storage is missing", () => {

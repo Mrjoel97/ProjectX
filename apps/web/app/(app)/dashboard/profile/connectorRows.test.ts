@@ -126,9 +126,8 @@ describe("lifecycle states are distinguishable and none of them lies", () => {
     const states = [
       connectorRowView(row({ connected: false, status: null })).state,
       connectorRowView(row({ connected: false, status: "revoked" })).state,
-      connectorRowView(
-        row({ connected: false, status: "revoked", grantRemainsLiveUpstream: true }),
-      ).state,
+      connectorRowView(row({ connected: false, status: "revoked", grantRemainsLiveUpstream: true }))
+        .state,
       connectorRowView(row({ status: "connecting" })).state,
       connectorRowView(row()).state,
       connectorRowView(row({ status: "reauth_required" })).state,
