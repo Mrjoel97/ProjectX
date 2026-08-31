@@ -10,8 +10,14 @@ import {
 } from "@pikar/revenue";
 import type { PayPalBalances } from "@pikar/revenue/providers/paypal";
 import type { StripeBalance } from "@pikar/revenue/providers/stripe";
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { composeBusinessFinance, type FinanceSourceReads } from "./revenueFinance";
+import type { ActionCtx } from "./_generated/server";
+import {
+  composeBusinessFinance,
+  type FinanceSourceReads,
+  readPassedFinanceSources,
+} from "./revenueFinance";
 
 const DAY = 86_400_000;
 const NOW = Date.UTC(2026, 7, 31);
@@ -131,6 +137,29 @@ const paypal = (currency = "USD"): FinanceSourceReads["paypal"] => ({
 const compose = (sources: FinanceSourceReads) =>
   composeBusinessFinance({ sources, asOfMs: NOW, horizonDays: 30 });
 
+const passed = { state: "passed", reasons: [], unresolvedConditions: [] } as const;
+const parked = {
+  state: "parked",
+  reasons: ["lane_not_passed"],
+  unresolvedConditions: [],
+} as const;
+
+const readsForTenant = async (fixture: ReturnType<typeof qbo>) => {
+  const ctx = {
+    runQuery: async (_reference: unknown, args: { provider: Provider }) =>
+      args.provider === "quickbooks" ? passed : parked,
+    runAction: async (_reference: unknown, args: { entity: string }) => {
+      if (args.entity === "Invoice") return fixture.invoices;
+      if (args.entity === "Payment") return fixture.payments;
+      if (args.entity === "Bill") return fixture.obligations;
+      if (args.entity === "Account") return fixture.accounts;
+      throw new Error(`unexpected entity ${args.entity}`);
+    },
+  } as unknown as Pick<ActionCtx, "runAction" | "runQuery">;
+
+  return readPassedFinanceSources(ctx, "sandbox", 30);
+};
+
 describe("business-finance source orchestration", () => {
   test("no rails is useful but honestly unavailable, never a zero", () => {
     const result = compose({});
@@ -232,5 +261,143 @@ describe("business-finance source orchestration", () => {
     expect(failed.receivables.confidence).toBe("unavailable");
     expect(failed.receivables.value).toBeNull();
     expect(failed.sources[0]).toMatchObject({ state: "unavailable" });
+  });
+});
+
+describe("business-finance provenance boundary", () => {
+  test("two tenant contexts retrieve only their own distinct amount and currency sentinels", async () => {
+    const tenantA = qbo({
+      invoices: ready("quickbooks", "accounting_authority", [
+        invoice("quickbooks", "tenant-a-invoice", money(11_111, "USD")),
+      ]),
+      payments: ready("quickbooks", "accounting_authority", [
+        payment("quickbooks", "tenant-a-payment", money(2_222, "USD")),
+      ]),
+      obligations: ready("quickbooks", "accounting_authority", [
+        obligation("tenant-a-payroll", money(3_333, "USD"), "payroll"),
+      ]),
+      accounts: ready("quickbooks", "accounting_authority", [
+        {
+          ref: { provider: "quickbooks", kind: "account", id: "tenant-a-cash" },
+          balance: money(44_444, "USD"),
+        },
+      ]),
+    });
+    const tenantB = qbo({
+      invoices: ready("quickbooks", "accounting_authority", [
+        invoice("quickbooks", "tenant-b-invoice", money(77_777, "TZS")),
+      ]),
+      payments: ready("quickbooks", "accounting_authority", [
+        payment("quickbooks", "tenant-b-payment", money(8_888, "TZS")),
+      ]),
+      obligations: ready("quickbooks", "accounting_authority", [
+        obligation("tenant-b-payroll", money(9_999, "TZS"), "payroll"),
+      ]),
+      accounts: ready("quickbooks", "accounting_authority", [
+        {
+          ref: { provider: "quickbooks", kind: "account", id: "tenant-b-cash" },
+          balance: money(66_666, "TZS"),
+        },
+      ]),
+    });
+
+    const [sourcesA, sourcesB] = await Promise.all([
+      readsForTenant(tenantA),
+      readsForTenant(tenantB),
+    ]);
+    const resultA = compose(sourcesA);
+    const resultB = compose(sourcesB);
+
+    expect(resultA.receivables.value?.[0]).toMatchObject({
+      currency: "USD",
+      outstanding: money(11_111, "USD"),
+    });
+    expect(resultA.cash.value[0]).toMatchObject({
+      currency: "USD",
+      timeline: { state: "known", value: { closing: money(52_222, "USD") } },
+    });
+    expect(JSON.stringify(resultA)).not.toContain("tenant-b");
+    expect(JSON.stringify(resultA)).not.toContain("77777");
+
+    // Anti-vacuity: B's fixture must be retrievable and numerically distinct, or A's absence
+    // assertions could pass against an orchestration path that returned no provider data at all.
+    expect(resultB.receivables.value?.[0]).toMatchObject({
+      currency: "TZS",
+      outstanding: money(77_777, "TZS"),
+    });
+    expect(resultB.cash.value[0]).toMatchObject({
+      currency: "TZS",
+      timeline: { state: "known", value: { closing: money(134_444, "TZS") } },
+    });
+  });
+
+  test("the orchestration boundary has no tenant argument, model import or repair prompt", () => {
+    const source = readFileSync(new URL("./revenueFinance.ts", import.meta.url), "utf8");
+    const tenantActionArgs = source.match(
+      /export const businessFinance = tenantAction\(\{[\s\S]*?args:\s*\{([\s\S]*?)\},\s*handler:/,
+    )?.[1];
+
+    expect(tenantActionArgs).toBeDefined();
+    expect(tenantActionArgs).not.toMatch(/tenantId/);
+    expect(source).not.toMatch(/from\s+["'][^"']*(?:llm|agent|skills)[^"']*["']/i);
+    expect(source).not.toMatch(/(?:prompt|repair|generateText|chatCompletion)\s*\(/i);
+    expect(source).toMatch(/agingReport\(/);
+    expect(source).toMatch(/cashTimeline\(/);
+    expect(source).toMatch(/payrollGap\(/);
+    expect(source).toMatch(/receiptsTotal\(/);
+  });
+
+  test("malformed provider numbers stop at pure validation and never become displayed figures", () => {
+    const malformed = money(Number.NaN);
+    const result = compose({
+      quickbooks: qbo({
+        invoices: ready("quickbooks", "accounting_authority", [
+          invoice("quickbooks", "malformed-invoice", malformed),
+        ]),
+        payments: ready("quickbooks", "accounting_authority", [
+          payment("quickbooks", "malformed-payment", malformed),
+        ]),
+        obligations: ready("quickbooks", "accounting_authority", [
+          obligation("malformed-payroll", malformed, "payroll"),
+        ]),
+        accounts: ready("quickbooks", "accounting_authority", [
+          {
+            ref: { provider: "quickbooks", kind: "account", id: "malformed-cash" },
+            balance: malformed,
+          },
+        ]),
+      }),
+    });
+
+    expect(result.receivables.value).toBeNull();
+    expect(result.receipts.value).toBeNull();
+    expect(result.cash.value[0]?.timeline.state).not.toBe("known");
+    expect(result.payroll.value[0]?.outlook.state).not.toBe("known");
+  });
+
+  test("every finance result carries review semantics and each unavailable input names its exclusion", () => {
+    const result = compose({
+      quickbooks: qbo({ invoices: unavailable("quickbooks", "invoice refresh failed") }),
+    });
+
+    for (const output of [result.receivables, result.receipts, result.cash, result.payroll]) {
+      expect(output.notice).toBe(DECISION_SUPPORT_NOTICE);
+      expect(output.coverage).toMatchObject({
+        providers: expect.any(Array),
+        authorities: expect.any(Array),
+        missing: expect.any(Array),
+      });
+    }
+    expect(result.notice).toBe(DECISION_SUPPORT_NOTICE);
+    expect(result.exclusions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: "quickbooks",
+          scope: "receivables",
+          because: expect.stringMatching(/unavailable/i),
+        }),
+      ]),
+    );
+    expect(result.exclusions.every((row) => row.because.trim().length > 0)).toBe(true);
   });
 });
