@@ -115,12 +115,12 @@ describe("invoice reminder source guards", () => {
   test("rejects stale source data at the exact freshness boundary", () => {
     expect(selectInvoiceReminderInput({
       requestedRef: REF,
-      source: projection([], { retrievedAt: NOW - REMINDER_SOURCE_MAX_AGE_MS }),
+      source: projection([invoice()], { retrievedAt: NOW - REMINDER_SOURCE_MAX_AGE_MS }),
       now: NOW,
     }).ok).toBe(true);
     expect(reason(selectInvoiceReminderInput({
       requestedRef: REF,
-      source: projection([], { retrievedAt: NOW - REMINDER_SOURCE_MAX_AGE_MS - 1 }),
+      source: projection([invoice()], { retrievedAt: NOW - REMINDER_SOURCE_MAX_AGE_MS - 1 }),
       now: NOW,
     }))).toContain("stale");
   });
