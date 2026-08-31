@@ -144,7 +144,7 @@ Plans:
   3. Cash-flow and payroll-confidence calculations are deterministic pure-TypeScript domain logic with fixtures, normalized-input validation, provenance, coverage/confidence semantics and no LLM arithmetic.
   4. Invoice reminders stage drafts into the existing plan gate; no revenue specialist can send, refund, credit or mutate CRM/accounting state directly.
   5. Authenticated two-tenant tests, provider replay/rate-limit tests and live read-only smoke gates pass before each connector-backed workflow is exposed; outcome telemetry can measure follow-up completion, overdue-item recovery and handling time without raw content.
-**Plans:** 20/29 plans executed
+**Plans:** 22/29 plans executed
 
 Plans:
 - [x] 28-17-PLAN.md — Hard Phase 19/25/27 readiness gate before connector work (Wave 1) — **`passed` 2026-08-27** (`fe73938`); 15/16 rows machine-verified, `p25-production-posture` green on OWNER ATTESTATION only. Recheck: `node scripts/check-phase28-readiness.mjs`
