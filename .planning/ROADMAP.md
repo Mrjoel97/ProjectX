@@ -168,7 +168,7 @@ Plans:
 - [x] 28-12-PLAN.md — Minimal read-only revenue specialist grant (Wave 10) — **complete 2026-08-31** (`5d41e8d`, `cc973ee`); immutable three-tool grant, typed evidence fence and refs/counts/status-only audits, with no generic/provider-write/delivery authority
 - [x] 28-13-PLAN.md — Invoice reminders behind existing approval and suppression (Wave 11) — **complete 2026-08-31** (`fc31c54`, `8ad2e78`, `0bfdb22`); explicit-intent refetch and idempotent proposed-plan staging add no send path, while all terminals retain shared suppression/footer enforcement
 - [x] 28-14-PLAN.md — Provider-neutral revenue body authoring (Wave 12) — **complete 2026-08-31** (`29199b1`); eight provider-neutral bodies adopted with exact LF-normalized byte/SHA-256 pins, pinned Apache-2.0 upstream attribution and modification notices. Finance remains explain-only, invoice reminders remain proposed-plan-only, and no publication/discovery/eval/activation path was added
-- [ ] 28-28-PLAN.md — Reviewed-body publication as byte-pinned dark candidates (Wave 13)
+- [x] 28-28-PLAN.md — Reviewed-body publication as byte-pinned dark candidates (Wave 13) — **complete 2026-09-01** (`2fc8420`, `89b4776`); eight exact v1 lock pins publish only as immutable candidates, remain outside seeds/discovery, and now share the existing exact-version eval activation gate. No live mutation, eval, or activation ran
 - [ ] 28-19-PLAN.md — State-based golden outcome and adversarial eval suite (Wave 14)
 - [ ] 28-20-PLAN.md — Version-specific activation after evidence and owner judgment (Wave 15)
 - [ ] 28-15-PLAN.md — Privacy-safe revenue outcome measurement (Wave 16)
