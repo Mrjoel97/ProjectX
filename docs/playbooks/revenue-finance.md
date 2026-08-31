@@ -1,12 +1,13 @@
 # Playbook: Deterministic business finance (REVN-05)
 
-> Last verified: 2026-08-31 (28-14 — **THE MULTI-RAIL ORCHESTRATION RULES, PINNED AS TESTS BEFORE
-> THE CODE.** `packages/backend/convex/revenueFinance.test.ts`, read by the 33.1 lane, which does
-> not own this subsystem; recorded because §9 asks a change to travel with its playbook.
+> Last verified: 2026-08-31 against 3d76cb3 (28-11 orchestration and provenance tests)
+> Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-02, 28-11) · Related ADRs: none yet
 >
-> **NOT LANDED — a TDD cycle is in flight and this file is UNTRACKED.** The suite is deliberately
-> RED and the orchestrator it describes is not written. Everything below is the contract, not
-> shipped behaviour. The contract is the durable half: it was authored first.
+> **Status: LANDED.** `revenueFinance.ts` resolves the deployment-global provider gate before it
+> calls any optional adapter, validates every normalized projection, composes whichever independent
+> rails passed, and returns immutable per-result coverage, exclusions and review semantics. A
+> parked, expired or failed lane is absent; a read that fails after a lane passed becomes an
+> unavailable projection and can only lower confidence.
 >
 > **The six rules, and every one of them is a refusal to invent a number:**
 >
@@ -29,16 +30,6 @@
 > and a gap stays a gap. The failure this forbids is a plausible total assembled from rails that
 > each saw part of the picture — which reads as authoritative and is not.)
 
-> Last verified: 2026-08-27 against eaea00c (28-02 landed the pure money and finance core)
-> Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-02, 28-11) · Related ADRs: none yet
-
-> **Status: THE PURE CORE HAS LANDED.** At the `Last verified` sha `packages/revenue/src/money.ts`
-> and `finance.ts` exist with 79 passing tests (28-02, `d963bf3` + `eaea00c`). Invariants 2, 3, 4, 5,
-> 6 and 7 are enforced by code and by tests you can run today. **Only the Convex orchestration
-> (`revenueFinance.ts`, 28-11) and the import guard are still [PLANNED]** — invariants 1, 8 and 9
-> hold by construction inside the pure package but have no adapter-level enforcement yet. Connector
-> lifecycle, credentials and release semantics live in `revenue-connectors.md`.
-
 > **Naming:** "Business Finance" means the *tenant's own* cash, receivables and payroll. It is a
 > different subsystem from Pikar's usage/spend reporting (`dashboard-pages.md`, Phase 26 Finance).
 > The two must stay separately named in code and in copy, or a user will read one as the other.
@@ -52,7 +43,7 @@ financial figure.**
 
 ## Key files
 
-**Landed (28-02, `eaea00c`)**
+**Pure package (28-02, `eaea00c`)**
 
 - `packages/revenue/src/money.ts` (+ `.test.ts`) — `normalizeCurrency`, `minorDigits`, `parseMoney`,
   `moneyFromMinor`, `moneyFromNumber`, `formatMoneyAmount`, `addMoney`, `subMoney`, `negateMoney`,
@@ -66,11 +57,15 @@ financial figure.**
   `buildCashTimeline`, `classifyCoverage`, `classifyConfidence` and `composeFinanceResult` as
   [PLANNED] names; none of those exist. Use the landed names.
 
-**[PLANNED]**
+**Convex orchestration (28-11)**
 
-- `packages/backend/convex/revenueFinance.ts` (+ `.test.ts`) — thin orchestration: call adapters,
-  choose source authority, call the pure functions, hand the immutable result to an
-  explanation-only skill.
+- `packages/backend/convex/revenueFinance.ts` — `readPassedFinanceSources` gates QuickBooks,
+  Stripe and PayPal independently; `composeBusinessFinance` validates normalized projections,
+  selects authority and delegates every calculation to `@pikar/revenue`; `businessFinance` is the
+  tenant-scoped action whose arguments deliberately contain no `tenantId`.
+- `packages/backend/convex/revenueFinance.test.ts` — independent-rail combinations, accounting
+  reconciliation, refreshed failure, two-tenant sentinels, malformed-number refusal, no-model
+  arithmetic boundary, coverage, exclusions and accountant-review notice.
 
 `packages/revenue/src/contracts.ts`, `credential.ts`, `reminders.ts` and the package manifest belong
 to `revenue-connectors.md`. `packages/revenue/src/crm.ts` belongs to `revenue-crm.md`.
@@ -89,15 +84,25 @@ to `revenue-connectors.md`. `packages/revenue/src/crm.ts` belongs to `revenue-cr
 
 ## Data flow
 
-1. `revenueFinance.ts` fetches bounded projections from the connected providers.
-2. Each normalized source is tagged with a **role**: `accounting_authority` (normally QuickBooks),
-   `payment_rail` (Stripe/PayPal settlement detail), `user_confirmed_obligation` (e.g. next payroll
-   amount and date), or `supplemental` (visible, excluded from totals).
-3. Source authority is resolved. Only one authority contributes a given cash movement.
-4. Pure functions compute aging, payment lag, the cash timeline and the payroll gap.
-5. `classifyCoverage` / `classifyConfidence` produce labels from a **closed rules table**.
-6. `composeFinanceResult` retains source refs and the reason each excluded source was excluded.
-7. The immutable result goes to an explanation-only skill. Nothing recomputes downstream.
+1. `businessFinance` authenticates with `tenantAction`; callers choose only environment and a
+   bounded horizon, never a tenant id.
+2. `readPassedFinanceSources` resolves `providerGates:gateEligibility` for each rail. Only a current
+   `passed` result may call the corresponding normalized read action. Each provider is independent,
+   so one unavailable lane never blocks the others.
+3. `composeBusinessFinance` validates every projection with `validateProjection`. Malformed values
+   become unavailable before any calculation boundary; there is no repair prompt or model import.
+4. QuickBooks is `accounting_authority`; Stripe and PayPal are `payment_rail`. The accounting
+   authority owns receivables, opening cash and receipts in every currency its window covers.
+   `reconcilePayments` excludes overlapping rail activity and records why; it never attempts fuzzy
+   cross-provider matching beyond the normalized invoice id and accounting coverage window.
+5. Currencies stay in separate buckets. No FX rate is inferred, and the output returns one aging,
+   cash and payroll result per currency where data exists.
+6. `agingReport`, `receiptsTotal`, `cashTimeline` and `payrollGap` compute the figures in the pure
+   package. Payroll stays unknown unless the normalized obligations contain an explicit
+   `kind: "payroll"` item in the window.
+7. `coverageOf`, `confidenceFor` and `financeResult` attach coverage, a monotone confidence label and
+   `DECISION_SUPPORT_NOTICE`. The orchestrator adds result-scoped exclusions for unavailable inputs.
+   Downstream skills may explain this immutable result and may not recompute it.
 
 ## Invariants — what must never break
 
@@ -172,10 +177,11 @@ to `revenue-connectors.md`. `packages/revenue/src/crm.ts` belongs to `revenue-cr
 
 | Command | Proves | Needs |
 |---|---|---|
-| `cd packages/revenue && npx vitest run` | Unit, boundary, invariant and permutation tests for contracts, money and finance. **79 passing at the `Last verified` sha.** | offline |
+| `pnpm --filter @pikar/revenue test` | Unit, boundary, invariant and permutation tests for contracts, money and finance. **337 passing (38 finance) at the `Last verified` sha.** | offline |
 | `cd packages/revenue && npx tsc --noEmit` | Types. Vitest transpiles WITHOUT typechecking — 28-02 had 78 green tests sitting over two real `tsc` errors. Run both, always. | offline |
-| `cd packages/backend && pnpm vitest run revenueFinance` [PLANNED] | Orchestration, source-authority selection, coverage propagation. | offline |
-| grep for a formula in `packages/contracts/skills/revenue-*.md` [PLANNED] | No arithmetic delegated to a skill body. | offline |
+| `pnpm --filter @pikar/backend test -- revenueFinance` | Gate-first adapter reads, independent rails, authority selection, two-tenant isolation, malformed-number refusal, no-model arithmetic and review semantics. | offline |
+| `pnpm --filter @pikar/backend typecheck` | Convex reference and result types, including the tenant-scoped public action. | generated Convex types |
+| `node scripts/check-playbooks.mjs` | Watched finance files remain paired with this operational contract. | offline |
 
 Run vitest from **inside** the package. `vitest --root <pkg>` from the repo root breaks convex-test's
 `_generated` glob and fakes mass failures.
@@ -185,13 +191,23 @@ Run vitest from **inside** the package. `vitest --root <pkg>` from the repo root
 - Confidence labels are user-visible strings. Changing one is a copy change *and* a contract change.
 - Insufficient-sample states (`paymentLag` with too few paid invoices) are first-class results, not
   errors to swallow.
+- **Coverage/staleness diagnosis:** inspect `sources[].state`, each coverage window and `capped`,
+  then `coverage.missing` and `exclusions`. An expired/parked/failed provider is source-level
+  unavailable; a passed lane whose adapter refresh fails also has result-level exclusions naming
+  receivables, receipts, opening cash or payroll. Never translate either condition to zero.
+- **Standing review rule:** every result carries: “Decision support, not financial, tax or
+  accounting advice. Have a qualified professional review before acting.” Do not shorten or hide it
+  on a workflow that presents a computed figure.
+- **Rollback:** remove/hide the tenant workflow or tool that invokes `businessFinance`, or park the
+  affected provider gate. Do not delete normalized connector data and do not edit the Phase 26
+  product-spend Finance routes, components or `packages/backend/convex/finance.ts`; that subsystem
+  reports Pikar usage/spend and is deliberately separate from tenant Business Finance.
 
 ## Known gaps & deferred work
 
-- Invariants 2-7 are enforced by landed code and tests. Invariant 1 (no Convex import) holds by
-  construction — `packages/revenue` has exactly one dependency, `@pikar/core` — but has no
-  import-guard test yet. Invariants 8 and 9 hold inside the pure package (`financeResult` always
-  attaches `DECISION_SUPPORT_NOTICE`) and are unenforced at the adapter/skill layer until 28-11.
+- Invariant 1 holds by package construction and the adapter boundary scan, but the pure package has
+  no dedicated dependency import-guard test. Invariants 8 and 9 are enforced at the adapter boundary
+  by `revenueFinance.test.ts`; a future renderer still needs its own visible-copy assertion.
 - **A `days` unit does not exist in `@pikar/core`'s `CashUnit`.** `DayFigure = Figure<number>` in
   `contracts.ts` carries payment-lag days instead. If a renderer needs the core vocabulary, add
   `"days"` to `CashUnit` rather than stringifying here.
