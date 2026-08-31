@@ -144,7 +144,7 @@ Plans:
   3. Cash-flow and payroll-confidence calculations are deterministic pure-TypeScript domain logic with fixtures, normalized-input validation, provenance, coverage/confidence semantics and no LLM arithmetic.
   4. Invoice reminders stage drafts into the existing plan gate; no revenue specialist can send, refund, credit or mutate CRM/accounting state directly.
   5. Authenticated two-tenant tests, provider replay/rate-limit tests and live read-only smoke gates pass before each connector-backed workflow is exposed; outcome telemetry can measure follow-up completion, overdue-item recovery and handling time without raw content.
-**Plans:** 12/29 plans executed
+**Plans:** 15/29 plans executed
 
 Plans:
 - [x] 28-17-PLAN.md — Hard Phase 19/25/27 readiness gate before connector work (Wave 1) — **`passed` 2026-08-27** (`fe73938`); 15/16 rows machine-verified, `p25-production-posture` green on OWNER ATTESTATION only. Recheck: `node scripts/check-phase28-readiness.mjs`
@@ -1466,7 +1466,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
 | 25. Private Beta Productionization | 0/14 | Planned — execution blocked on 25-00 prerequisite evidence; two lanes (19, 31) run ahead of it | - |
 | 26. Connected Product Pages | 21/21 | **Complete — deployed to production** (`8f76aac`; CI green, `deploy-production` succeeded, www.pikar-ai.com 200) | 2026-08-23 |
-| 28. Connector-Backed Revenue Pack | 11/29 | In progress — the four read-only rails are BUILT and NONE has spoken to its provider; `check-provider-lane` reads `consistent` for all four, which is NOT `passed`. Waves 7+ need live credentials | - |
+| 28. Connector-Backed Revenue Pack | 15/29 | In progress — the four read-only rails are BUILT and NONE has spoken to its provider; `check-provider-lane` reads `consistent` for all four, which is NOT `passed`. Waves 7+ need live credentials | - |
 | 28.1 Stripe Billing, Invoicing and Tax for Pikar's OWN merchant account (INSERTED) | 11/11 | **Code complete and SEALED 2026-08-30** — every plan landed, a 15-defect adversarial audit fixed, the rollup has a producer and the erasure arm cancels before the walk. **NOTHING IN IT HAS EVER SPOKEN TO STRIPE**: `requirements-completed: []`, BILL-01..06 all PENDING | 2026-08-30 |
 | **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
 | 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |
