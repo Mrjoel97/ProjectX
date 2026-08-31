@@ -42,35 +42,51 @@ const lf = (s: string) => s.replace(/\r\n/g, "\n");
 
 const revenueBodies = {
   "revenue-specialist": {
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    bytes: 2192,
+    sha256: "558cca103e7c298472a7d9f1ff4cd48651c4b08388f4ebadb2dd0ff63c082b24",
+    sources: ["small-business/skills/business-pulse", "sales/skills/call-prep"],
     required: ["lead triage", "call list", "pipeline review", "customer pulse", "cash flow", "payroll confidence", "invoice reminder"],
   },
   "revenue-lead-triage": {
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    bytes: 1658,
+    sha256: "640c210f6fff276a32dbcdfd0093e984452b2264b09db1e7683547823734c9f8",
+    sources: ["sales/skills/call-prep"],
     required: ["source-provided", "suppressed", "unknown", "stable order"],
   },
   "revenue-call-list": {
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    bytes: 1468,
+    sha256: "36e760292676ad2a8881cf9d712e78ea595d7f1d9150bbe8a58576d648346c3d",
+    sources: ["sales/skills/call-prep"],
     required: ["source-provided", "do not contact", "unknown", "stable order"],
   },
   "revenue-pipeline-review": {
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    bytes: 1535,
+    sha256: "a64656d37a59c49f3dae91a2b31281673c509249e0ad467f7569766d08920ece",
+    sources: ["sales/skills/call-prep"],
     required: ["local follow-up", "provider-owned", "unavailable", "fictional opportunity"],
   },
   "revenue-customer-pulse": {
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    bytes: 1586,
+    sha256: "258145d3f7a377d3a605524428b6771c5712eb0d9a55112a312abcdc89732300",
+    sources: ["small-business/skills/business-pulse"],
     required: ["bounded typed signals", "free text", "partial", "unknown"],
   },
   "revenue-cash-flow": {
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    bytes: 1680,
+    sha256: "327b4fbfb72e07ddea5765d9e8d6a3ae5bebafd10e29735ea4228a6942829ae9",
+    sources: ["small-business/skills/business-pulse"],
     required: ["precomputed", "separate currencies", "coverage", "qualified professional"],
   },
   "revenue-payroll-confidence": {
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    bytes: 1740,
+    sha256: "f5dcd1736b4b4014b328d58fc77aaa1d9359c9e351e2898bf940687e4d98e80c",
+    sources: ["small-business/skills/business-pulse"],
     required: ["precomputed", "confirmed obligation", "unavailable", "qualified professional"],
   },
   "revenue-invoice-reminder": {
-    sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+    bytes: 1771,
+    sha256: "2541cadb10404c34b0f08ca85fb17f43a810fe8dab86d5ee43d3582ae6b91899",
+    sources: ["small-business/skills/business-pulse", "small-business/skills/ticket-deflector"],
     required: ["explicit user intent", "proposed", "human approval", "nothing has been sent", "suppression"],
   },
 } as const;
@@ -85,7 +101,7 @@ describe("Phase 28 provider-neutral revenue bodies (REVN-04..06)", () => {
       const body = readRevenueBody(base as keyof typeof revenueBodies);
 
       expect(createHash("sha256").update(body).digest("hex")).toBe(contract.sha256);
-      expect(Buffer.byteLength(body, "utf8")).toBeGreaterThan(0);
+      expect(Buffer.byteLength(body, "utf8")).toBe(contract.bytes);
       expect(body).toContain("## Provenance and modification notice");
       expect(body).toContain("provider-neutral");
       expect(body).toContain("modified");
@@ -94,6 +110,7 @@ describe("Phase 28 provider-neutral revenue bodies (REVN-04..06)", () => {
       expect(body).toContain("5267cf7bff3031921d4474b8e8f86ad02d2b8f6d");
       expect(body).toContain("This body describes behavior only; it does not grant tools, scopes, or write authority.");
 
+      for (const source of contract.sources) expect(body).toContain(source);
       for (const phrase of contract.required) {
         expect(body.toLowerCase()).toContain(phrase.toLowerCase());
       }
@@ -107,8 +124,12 @@ describe("Phase 28 provider-neutral revenue bodies (REVN-04..06)", () => {
     expect(body).not.toMatch(/https?:\/\//iu);
     expect(body).not.toMatch(/\b(?:OAuth|access token|refresh token|client secret|API key|endpoint|executePlan|generic HTTP|MCP)\b/iu);
     expect(body).not.toMatch(/\b(?:refund|credit|dispute|CRM|accounting) (?:write|update|mutation|send|issue)\b/iu);
+    expect(body).not.toMatch(/\b(?:use|call|invoke|access) (?:the )?(?:tool|API|endpoint|connector)\b/iu);
+    expect(body).not.toMatch(/\b(?:tools?|scopes?|capabilities?|credentials?)\s*:/iu);
+    expect(body).not.toMatch(/\b(?:publish|activate|discover|register|seed)\b/iu);
     expect(body).not.toMatch(/(?:\$|£|€)\s*\d|\b\d+(?:\.\d+)?\s*(?:USD|GBP|EUR)\b/iu);
     expect(body).not.toMatch(/(?:opening cash|closing cash|coverage ratio|payroll gap)\s*[=+\-*/]/iu);
+    expect(body).not.toMatch(/\b(?:threshold|timeout|retry|lookback)\s*(?:=|:)\s*\d/iu);
   });
 
   test("finance bodies explain immutable deterministic results instead of asking the model to calculate", () => {
