@@ -48,6 +48,14 @@ describe("a connectable-but-unconnected row offers Connect and nothing else", ()
       row({ connected: false, status: "revoked", grantRemainsLiveUpstream: false }),
     );
     expect(v.residualNotice).toBeNull();
+    expect(v.state).toBe("disconnected");
+  });
+
+  test("an upstream grant that remains live is a partial revoke, not a clean connect state", () => {
+    const v = connectorRowView(
+      row({ connected: false, status: "revoked", grantRemainsLiveUpstream: true }),
+    );
+    expect(v.state).toBe("revoke_partial");
   });
 });
 
@@ -81,6 +89,13 @@ describe("the disconnect control tells the truth before it is pressed", () => {
 });
 
 describe("lifecycle states are distinguishable and none of them lies", () => {
+  test("a server-returned connecting row stays checking rather than appearing ready", () => {
+    const v = connectorRowView(row({ status: "connecting" }));
+    expect(v.state).toBe("checking");
+    expect(v.action).toBeNull();
+    expect(v.detail).toMatch(/checking/i);
+  });
+
   test("a healthy connection offers no Connect button", () => {
     const v = connectorRowView(row({ lastReadAt: null }));
     expect(v.state).toBe("ready");
@@ -110,11 +125,16 @@ describe("lifecycle states are distinguishable and none of them lies", () => {
   test("every state is reachable and they are all distinct", () => {
     const states = [
       connectorRowView(row({ connected: false, status: null })).state,
+      connectorRowView(row({ connected: false, status: "revoked" })).state,
+      connectorRowView(
+        row({ connected: false, status: "revoked", grantRemainsLiveUpstream: true }),
+      ).state,
+      connectorRowView(row({ status: "connecting" })).state,
       connectorRowView(row()).state,
       connectorRowView(row({ status: "reauth_required" })).state,
       connectorRowView(row({ status: "failed" })).state,
     ];
-    expect(new Set(states).size).toBe(4);
+    expect(new Set(states).size).toBe(7);
   });
 });
 
