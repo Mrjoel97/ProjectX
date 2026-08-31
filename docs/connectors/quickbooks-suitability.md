@@ -222,6 +222,28 @@ Consequently:
   documented ceiling for **one** tier, not this app's entitlement.
 - **REVN-02 and REVN-05 stay PENDING.** 28-23 owns the live seal.
 
+### Wave-7 owner judgment — `PARK`, 2026-08-31 (28-23)
+
+The owner chose **park** because no controlled live QuickBooks read/revoke observation exists and
+the App Partner Program tier/poll budget is still unknown. Structural consistency and offline tests
+are not provider evidence, so neither was promoted into a pass.
+
+The repository seal resolved deterministically through:
+
+```text
+node scripts/check-provider-lane.mjs --provider quickbooks --seal-decision from-owner
+```
+
+Its production payload remains `lane: "parked"`, carries
+`evidenceRef: "docs/connectors/quickbooks-suitability.md#decision"`, retains
+`reviewBy: 2026-11-27`, and clears **no** conditions. The existing parked gate therefore stays
+invisible through the passed-only `availableProviders` projection, while
+`partner-tier-and-poll-budget` remains explicitly uncleared. The gate behavior suite passed 25/25
+offline checks; no QuickBooks smoke, read, revoke, OAuth, or other Intuit endpoint was invoked.
+
+This decision is reversible. A later review may pass QuickBooks only after controlled live evidence
+exists and every open condition is named and cleared; until then REVN-02 and REVN-05 remain pending.
+
 ### What the owner must set before the gate can run
 
 All on the **deployment**, not `.env.local` (`cd packages/backend`):

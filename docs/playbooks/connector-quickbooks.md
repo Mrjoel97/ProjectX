@@ -71,10 +71,16 @@
 > and on 2026-08-28 no Intuit credential was loaded in this deployment,** so 28-06 could not run
 > the live report/revoke gate it was asked for. The `providerGates` lane row stays `parked`, the
 > open condition `partner-tier-and-poll-budget` stays UNCLEARED, REVN-02/05 stay PENDING, and
-> 28-23 owns the live seal. The env names a live run needs are in
+> **28-23 closed the wave-7 judgment as PARK on 2026-08-31.** A later evidence-backed review may
+> reopen it. The env names a live run needs are in
 > `docs/connectors/quickbooks-suitability.md`.
 > Shared credential, OAuth-state, fetch, telemetry and release rules live in
 > `revenue-connectors.md` and are not repeated here.
+
+> **28-23 park verification:** `--seal-decision from-owner` resolved only to a production
+> `parked` payload with `clearedConditions: []`; `--verify-gate` passed all 25 offline behavior
+> tests. No live smoke/read/revoke ran, and no Intuit endpoint was called. Parked remains absent from
+> the passed-only provider projection and is reversible only through a later live-evidence seal.
 
 ## Purpose
 
@@ -235,7 +241,7 @@ Two things the approval did **not** dissolve:
 
 ## Known gaps & deferred work
 
-- The broad-scope acceptance and the production self-assessment are both unresolved. Either one
-  unresolved keeps the lane `parked`.
+- Controlled live read/revoke evidence and the partner tier/poll budget are unresolved. Either one
+  unresolved keeps the lane `parked`; the owner explicitly chose that outcome in 28-23.
 - Everything [PLANNED] is unbuilt; invariants 1-3 have no enforcement yet.
 - Webhooks and any accounting write (journal entries, invoice creation) are out of phase scope.
