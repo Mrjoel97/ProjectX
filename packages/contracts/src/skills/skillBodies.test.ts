@@ -33,6 +33,8 @@ import { styleCoachingSkillBody } from "./styleCoaching";
 import { styleConciseSkillBody } from "./styleConcise";
 import { styleDirectSkillBody } from "./styleDirect";
 import { swotSkillBody } from "./swot";
+import { revenueSkillBodies } from "./revenueBodies";
+import skillsLock from "../../../backend/skills-lock.json";
 
 // Every derived .ts body MUST stay byte-identical (LF-normalized) to its canonical
 // .md source — the derived constant is the bundler-safe artifact the Convex runtime
@@ -95,6 +97,34 @@ const readRevenueBody = (base: keyof typeof revenueBodies) =>
   lf(readFileSync(fileURLToPath(new URL(`../../skills/${base}.md`, import.meta.url)), "utf8"));
 
 describe("Phase 28 provider-neutral revenue bodies (REVN-04..06)", () => {
+  test("the candidate lock pins every reviewed body at immutable v1", () => {
+    const candidates = skillsLock.revenueCandidates.candidates;
+    expect(candidates.map((candidate) => candidate.name)).toEqual(Object.keys(revenueBodies));
+
+    for (const candidate of candidates) {
+      const contract = revenueBodies[candidate.name as keyof typeof revenueBodies];
+      const body = readRevenueBody(candidate.name as keyof typeof revenueBodies);
+      expect(candidate).toMatchObject({
+        version: 1,
+        status: "candidate",
+        bodyPath: `packages/contracts/skills/${candidate.name}.md`,
+        bodyBytes: contract.bytes,
+        bodySha256: contract.sha256,
+        sourceRepo: "https://github.com/anthropics/knowledge-work-plugins",
+        sourceCommit: "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
+        license: "Apache-2.0",
+      });
+      expect(createHash("sha256").update(body).digest("hex")).toBe(candidate.bodySha256);
+      expect(Buffer.byteLength(body, "utf8")).toBe(candidate.bodyBytes);
+      expect(lf(revenueSkillBodies[candidate.name] ?? "")).toBe(body);
+      expect(candidate.sourcePaths.length).toBeGreaterThan(0);
+      expect(candidate.modificationNotice.trim()).not.toBe("");
+      expect(candidate).not.toHaveProperty("tools");
+      expect(candidate).not.toHaveProperty("grants");
+      expect(candidate).not.toHaveProperty("discoverable");
+    }
+  });
+
   test.each(Object.entries(revenueBodies))(
     "%s has reviewed byte pins and the Phase 27 provenance notice",
     (base, contract) => {
