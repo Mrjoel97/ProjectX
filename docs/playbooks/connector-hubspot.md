@@ -1,6 +1,11 @@
 # Playbook: HubSpot connector (REVN-01)
 
-> Last verified: 2026-08-31 (28-09 connect-start gate — `hubspotConnectUrl` now mints its state
+> Last verified: 2026-08-31 (28-22 owner judgment — **PARK**. The offline seal resolved
+> `hubspot/production` to `parked`, with no cleared conditions and evidence ref
+> `docs/connectors/hubspot-suitability.md#wave-7-park-2026-08-31`. No deployment mutation or
+> inspection was authorized, so no revision is claimed. Offline gate and connector-surface tests
+> prove that no row or a parked row is absent. No request was sent to HubSpot. Prior: 2026-08-31 (28-09
+> connect-start gate — `hubspotConnectUrl` now mints its state
 > BEFORE reading `requireHubSpotConfig()`, so an unauthorized caller is refused by the gate rather
 > than learning from a config error whether HubSpot is configured on this deployment. The gate
 > itself lives once, in `connectorOAuth.mintConnectState`. `ponytail:` an unconfigured deployment
@@ -19,13 +24,15 @@
 > the revocation-cascade probe and the lane smoke)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-05, 28-22) · Related ADRs: none yet
 
-> **Status: BUILT, LANE NOT PASSED.** The adapter, the parsers, the auth lifecycle and the smoke
-> exist and are offline-tested at the `Last verified` sha. **Nothing has ever spoken to HubSpot.**
-> `node scripts/check-provider-lane.mjs --provider hubspot` reads `consistent`, which is NOT
-> `passed`: no live read, no live revoke, and the open condition below is still open. The
-> **[PENDING LIVE]** marks below are exactly that distinction. Shared credential, OAuth-state,
-> fetch, token-POST, telemetry and release rules live in `revenue-connectors.md` and are not
-> repeated here.
+> **Status: BUILT, LANE PARKED.** The adapter, the parsers, the auth lifecycle and the smoke exist
+> and are offline-tested at the `Last verified` sha. **Nothing has ever spoken to HubSpot.** The
+> 28-22 owner judgment therefore parks the lane in the durable repository record; the offline seal
+> resolved to `parked` without a Convex call. Tenant discovery and the connections UI receive no
+> HubSpot row for either an absent gate or a parked gate. `node scripts/check-provider-lane.mjs --provider hubspot`
+> still reads `consistent`, which describes the code and does NOT promote the parked server gate:
+> no live read, no live revoke, and the open condition below is still open. The **[PENDING LIVE]**
+> marks below are exactly that distinction. Shared credential, OAuth-state, fetch, token-POST,
+> telemetry and release rules live in `revenue-connectors.md` and are not repeated here.
 
 ## Purpose
 
@@ -64,10 +71,11 @@ lane's.
 
 > **`approved_production`, on the evidence.** Owner judgment recorded in
 > [`docs/connectors/hubspot-suitability.md`](../connectors/hubspot-suitability.md); that marker block
-> is the authority, not this paragraph. The lane is **unparked**. The install cap (25 marketplace-
-> distribution / 10 private / 100 Solution Partner) is **accepted** and a Marketplace listing is
-> **deferred** — which is precisely what keeps the rule below from ever being triggered. Expires
-> `review_by: 2026-11-27`.
+> is the authority, not this paragraph. That admission lets an owner collect evidence; it does not
+> make the feature tenant-visible. The wave-7 lane judgment is **parked**. The install cap (25
+> marketplace-distribution / 10 private / 100 Solution Partner) is **accepted** and a Marketplace
+> listing is **deferred** — which is precisely what keeps the rule below from ever being triggered.
+> Expires `review_by: 2026-11-27`.
 >
 > **STILL OPEN — a 28-05 deliverable, not a settled point:** whether
 > `POST /oauth/2026-03/token/revoke` invalidates already-issued **access** tokens is **UNPROVEN**
@@ -147,7 +155,9 @@ that way and whether private/public direct OAuth distribution is permitted for t
 | `cd packages/backend && npx tsc --noEmit` | The suite is not a typecheck. Run it separately, always. | offline |
 | `node scripts/smoke-hubspot-read.mjs --self-test` | The evidence validator refuses 19 kinds of bad evidence. | offline |
 | `node scripts/smoke-hubspot-read.mjs --tenant <id> [--revoke]` **[PENDING LIVE]** | Controlled live read, and the revoke-cascade observation. | live creds + a disposable portal |
-| `node scripts/check-provider-lane.mjs --provider hubspot` | `consistent` today. `passed` is 28-22's. | offline |
+| `node scripts/check-provider-lane.mjs --provider hubspot --seal-decision from-owner` | Resolves deterministically to `park` without touching a deployment unless `--apply` is present. | offline |
+| `node scripts/check-provider-lane.mjs --provider hubspot --verify-gate` | Provider-gate tests prove parked/failed/expired lanes cannot enter the passed projection. | offline |
+| `cd packages/backend && npx vitest run convex/connectorConnections.test.ts` | A parked HubSpot gate remains absent even when a tenant connection row exists. | offline |
 
 ## Operational notes
 
@@ -158,7 +168,7 @@ that way and whether private/public direct OAuth distribution is permitted for t
 ## Known gaps & deferred work
 
 - **THE LANE HAS NEVER RUN LIVE.** Every test is offline against a stubbed provider. `consistent` is
-  not `passed`, and 28-22 owns the seal.
+  not `passed`; 28-22 closed by parking the lane rather than inventing the missing evidence.
 - **The open condition is untouched.** `revoke-cascades-to-access-tokens` is still unresolved:
   `probeRevocationCascade` and the smoke exist to answer it and have not been pointed at a real
   grant. Until they are, disconnect must be described to the user as "we revoked the grant and

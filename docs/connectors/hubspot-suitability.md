@@ -3,6 +3,10 @@
 > **Decision recorded: `approved_production` — 2026-08-27, evidence-consistent.** The one
 > machine-readable marker below is the authority; the prose is the evidence it was decided
 > against. Register and vocabulary: [`README.md`](./README.md).
+>
+> **Wave-7 lane judgment: `parked` — 2026-08-31.** The admission above remains permission for an
+> owner to gather evidence; it is not product visibility. HubSpot stays absent until a later live,
+> evidence-backed seal clears the open condition below.
 
 <!-- phase28-provider-decision
 provider: hubspot
@@ -21,7 +25,34 @@ review_by: 2026-11-27
 | **Evidence first gathered** | 2026-08-05 (`28-RESEARCH.md` lines 172-290) |
 | **Evidence re-verified** | 2026-08-27, independent primary-source pass |
 | **Re-review by** | 2026-11-27 (90-day evidence life) |
-| **Downstream lane** | plan **28-05** (adapter), wave-7 seal **28-22** |
+| **Downstream lane** | plan **28-05** (adapter), wave-7 plan **28-22** recorded the lane **`parked`** on 2026-08-31 |
+
+---
+
+<a id="wave-7-park-2026-08-31"></a>
+
+## Wave-7 owner judgment — `parked`, 2026-08-31
+
+The owner chose **park HubSpot** after the four independent provider reviews converged on the same
+result: the lane is structurally consistent but has no controlled live read and no observed
+revoke-cascade result. Passing it would fabricate evidence.
+
+The offline seal resolution for `hubspot/production` produced this payload:
+
+- `lane: parked`
+- `admission: approved_production` (unchanged; permission to gather evidence, never a live pass)
+- `evidenceRef: docs/connectors/hubspot-suitability.md#wave-7-park-2026-08-31`
+- `reviewBy: 2026-11-27`
+- `clearedConditions: []`
+- `revision: not observed` — the owner authorized local park/absence proof only, so no Convex
+  deployment mutation or inspection was performed
+
+The park judgment is durably recorded in this repository. The offline gate and connector-surface
+tests prove that either no gate row or a `parked` row keeps HubSpot absent from tenant discovery and
+the connections UI. No deployment row was invented or claimed. REVN-01 remains **incomplete**, and
+no request was made to HubSpot. The judgment is reversible only through a later
+`--seal-decision pass` carrying controlled live evidence and explicitly clearing
+`revoke-cascades-to-access-tokens`; structural consistency alone is not enough.
 
 ---
 
