@@ -23,7 +23,7 @@ const ready = <T>(
   provider: Provider,
   authority: SourceAuthority,
   items: readonly T[],
-): Projection<T> => ({
+): Extract<Projection<T>, { state: "ready" }> => ({
   state: "ready",
   meta: {
     provider,
