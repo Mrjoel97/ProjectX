@@ -1,6 +1,6 @@
 # Playbook: Revenue CRM workflows (REVN-04)
 
-> Last verified: 2026-08-31 against 28-10 (the pure ranking, the adapter and its tests)
+> Last verified: 2026-09-01 against 28-10 (the pure ranking, the local-only adapter and its tests)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-10) · Related ADRs: none yet
 
 > **Status: BUILT AND LOCAL-ONLY.** `packages/revenue/src/crm.ts` (30 tests) and
@@ -58,12 +58,11 @@ stage and no deal value.
 
 ## Key files
 
-**[PLANNED]**
-
 - `packages/revenue/src/crm.ts` (+ `.test.ts`) — pure ranking/triage rules over source facts. No
   Convex import, no model call.
-- `packages/backend/convex/revenueCrm.ts` (+ `.test.ts`) — thin orchestration: read Phase 19 people
-  and follow-ups, read bounded HubSpot projections, join by provider reference, call the pure rules.
+- `packages/backend/convex/revenueCrm.ts` (+ `.test.ts`) — thin local-only orchestration: read Phase
+  19 people, follow-ups, suppressions and narrow provider references, then call the pure rules.
+  Bounded HubSpot enrichment remains planned until that lane passes.
 
 `packages/revenue/src/finance.ts` and `money.ts` belong to `revenue-finance.md`.
 `packages/revenue/src/contracts.ts` and `reminders.ts` belong to `revenue-connectors.md`.
@@ -92,7 +91,8 @@ stage and no deal value.
 ## Invariants — what must never break
 
 1. **No second person or pipeline store.** No local opportunity/stage/deal-value table is created.
-   *Enforced by:* [PLANNED] schema + integration tests against the landed Phase 19 API (28-10, 28-21).
+   *Enforced by:* the 28-10 integration suite's closed-output and no-write scans against the landed
+   Phase 19 API; terminal provider/workflow integration remains 28-21.
 2. **Never substitute an unmatched name.** Contact resolution matches by provider reference or
    returns unmatched. Guessing a person is how the wrong customer gets contacted. *Enforced by:*
    [PLANNED] resolution tests, mirroring the Phase 3.3 contact-resolution invariant.
@@ -127,8 +127,8 @@ stage and no deal value.
 
 | Command | Proves | Needs |
 |---|---|---|
-| `cd packages/revenue && pnpm vitest run src/crm` [PLANNED] | Ranking rules, unmatched handling, empty-provider behaviour. | offline |
-| `cd packages/backend && pnpm vitest run revenueCrm` [PLANNED] | Phase 19 join, suppression visibility, no local pipeline writes. | offline |
+| `pnpm --filter @pikar/revenue test -- crm` | Ranking rules, absent-fact handling, stable ordering and pulse coverage. | offline |
+| `pnpm --filter @pikar/backend test -- revenueCrm contacts pipeline` | Phase 19 join, suppression visibility, tenant isolation and no local pipeline writes. | offline |
 | `cd packages/backend && pnpm vitest run revenueTelemetry.integration` [PLANNED, 28-21] | End-to-end lane behaviour with providers parked and passed. | offline |
 
 Run vitest from **inside** the package; `vitest --root <pkg>` from the repo root fakes mass failures.
@@ -142,7 +142,9 @@ Run vitest from **inside** the package; `vitest --root <pkg>` from the repo root
 
 ## Known gaps & deferred work
 
-- Everything [PLANNED] is unbuilt. Invariants 1, 2 and 5 have no enforcement yet.
+- Passed-lane HubSpot enrichment, unmatched provider-row resolution and the 28-21 terminal
+  integration suite remain [PLANNED]. The local-only fallback and invariants 1 and 5 are enforced by
+  28-10; invariant 2 becomes executable only when a provider lane passes.
 - CRM writes, cleanup and any provider mutation are out of phase scope.
 - Free-text ingestion (notes, transcripts, invoice descriptions) is deferred pending the toolless
   summarization path.
