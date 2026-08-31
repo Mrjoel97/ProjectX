@@ -253,6 +253,31 @@ export function composeBusinessFinance(args: {
       because: "the provider did not supply a passed, readable projection",
     }));
 
+  const unavailableInputs: readonly [
+    Projection<unknown> | undefined,
+    FinanceProvider,
+    Exclude<FinanceExclusion["scope"], "source">,
+  ][] = [
+    [sources.quickbooks?.invoices, "quickbooks", "receivables"],
+    [sources.quickbooks?.payments, "quickbooks", "receipts"],
+    [sources.quickbooks?.accounts, "quickbooks", "opening_cash"],
+    [sources.quickbooks?.obligations, "quickbooks", "payroll"],
+    [sources.stripe?.invoices, "stripe", "receivables"],
+    [sources.stripe?.charges, "stripe", "receipts"],
+    [sources.stripe?.balance, "stripe", "opening_cash"],
+    [sources.paypal?.transactions, "paypal", "receipts"],
+    [sources.paypal?.balances, "paypal", "opening_cash"],
+  ];
+  for (const [projection, provider, scope] of unavailableInputs) {
+    if (projection?.state === "unavailable") {
+      exclusions.push({
+        provider,
+        scope,
+        because: `the normalized ${scope} input was unavailable`,
+      });
+    }
+  }
+
   // Accounting owns receivables in every currency it reports. A rail may supply AR only where the
   // books supplied no ledger; that keeps Stripe useful alone without counting one invoice twice.
   const qboInvoices = availableItems(sources.quickbooks?.invoices);
