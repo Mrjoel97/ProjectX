@@ -1,5 +1,34 @@
 # Playbook: Deterministic business finance (REVN-05)
 
+> Last verified: 2026-08-31 (28-14 — **THE MULTI-RAIL ORCHESTRATION RULES, PINNED AS TESTS BEFORE
+> THE CODE.** `packages/backend/convex/revenueFinance.test.ts`, read by the 33.1 lane, which does
+> not own this subsystem; recorded because §9 asks a change to travel with its playbook.
+>
+> **NOT LANDED — a TDD cycle is in flight and this file is UNTRACKED.** The suite is deliberately
+> RED and the orchestrator it describes is not written. Everything below is the contract, not
+> shipped behaviour. The contract is the durable half: it was authored first.
+>
+> **The six rules, and every one of them is a refusal to invent a number:**
+>
+> 1. **No rails connected is "honestly unavailable", NEVER a zero.** This is the same rule the cash
+>    surface already carries, arriving one layer down. A zero total is a claim about the business; an
+>    absent one is a claim about our knowledge, and only the second is true here.
+> 2. **QuickBooks alone owns opening cash, receivables and booked receipts.** The accounting rail is
+>    the only source for a figure that is an accounting concept.
+> 3. **Stripe alone stays useful AND KEEPS ITS OWN CURRENCY.** No FX conversion is invented to make
+>    rails add up — a converted figure would be a rate we do not have.
+> 4. **PayPal alone reports rail receipts and available balance WITHOUT INVENTING AR.** A payment
+>    rail cannot see receivables, so it does not report them.
+> 5. **The accounting window excludes overlapping Stripe and PayPal receipts** — the double-count
+>    rule. Two rails that both saw the same money must not both be summed into it.
+> 6. **Partial and refreshed-failed reads can only LOWER coverage.** Coverage is monotonic
+>    downward: a failed refresh must never raise confidence in a figure, which is what makes
+>    coverage a safe thing to render.
+>
+> **Read 2–4 together as one principle:** each rail answers only for what it can actually observe,
+> and a gap stays a gap. The failure this forbids is a plausible total assembled from rails that
+> each saw part of the picture — which reads as authoritative and is not.)
+
 > Last verified: 2026-08-27 against eaea00c (28-02 landed the pure money and finance core)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-02, 28-11) · Related ADRs: none yet
 
