@@ -1,6 +1,10 @@
 # Playbook: Stripe connector (REVN-03)
 
-> Last verified: 2026-08-31 (28-09 connect-start gate — `stripeAuth.beginConnect` mints before
+> Last verified: 2026-08-31 (28-24 wave-7 owner decision — **PARK**. The offline seal payload keeps
+> `admission: approved_production` separate from `lane: parked`, clears no conditions, and was not
+> applied to a deployment. `providerGates.test.ts` passed 25/25 and proves a parked row is absent
+> from the tenant projection; no Stripe or Convex deployment call is part of this evidence. Prior:
+> 2026-08-31 (28-09 connect-start gate — `stripeAuth.beginConnect` mints before
 > reading `requireStripeApp()`, for the same reason as the HubSpot lane: authorization refuses
 > first, and a config error must not tell a stranger what this deployment has configured.
 > `stripeConnector.test.ts` seeds passed gate rows in its harness and `sealLane` PATCHES rather
@@ -18,10 +22,11 @@
 > the lane gate script)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-07, 28-24) · Related ADRs: none yet
 
-> **Status: BUILT, LANE PARKED, NEVER RUN LIVE.** The code below is on disk at the `Last verified`
+> **Status: BUILT, OWNER DECISION PARK, NEVER RUN LIVE.** The code below is on disk at the `Last verified`
 > sha and proven offline. **No Stripe App credential exists in this deployment and nothing here has
-> ever spoken to Stripe.** The `providerGates` lane row is `parked`, the open condition
-> `platform-initiated-revocation` is UNCLEARED, and 28-24 owns the seal. Shared credential,
+> ever spoken to Stripe.** Plan 28-24 records the local owner decision as `parked`; it deliberately
+> does not assert deployment state. The open condition `platform-initiated-revocation` is UNCLEARED.
+> Shared credential,
 > OAuth-state, fetch, telemetry and release rules live in `revenue-connectors.md`.
 
 > **Naming:** this is the *tenant's own* Stripe account, read for their business finance. It is
@@ -151,6 +156,8 @@ Extension path; it is stale, do not follow it.
 | `node scripts/smoke-stripe-read.mjs` | Exits **2** with `LIVE_EVIDENCE_NOT_PRODUCED`. | offline |
 | `node scripts/smoke-stripe-read.mjs --tenant <id>` | Controlled live read. Lane evidence. | live creds |
 | `node scripts/check-provider-lane.mjs --provider stripe --stage engineering` | `consistent`, 1 row pending. Consistent is NOT passed. | offline |
+| `node scripts/check-provider-lane.mjs --provider stripe --seal-decision park --evidence docs/connectors/stripe-suitability.md#wave-7-owner-park` | Rebuilds the owner-approved local park payload; without `--apply` it changes no deployment. | offline |
+| `node scripts/check-provider-lane.mjs --verify-gate` | Runs the real gate behavior suite; a parked row is absent from tenant visibility. | offline |
 
 ## Operational notes
 
@@ -167,8 +174,9 @@ Extension path; it is stale, do not follow it.
 
 ## Known gaps & deferred work
 
-- **THE LANE HAS NEVER RUN LIVE.** No Stripe App credential exists in this deployment. The lane row
-  is `parked`, the open condition is UNCLEARED, and REVN-03 stays incomplete.
+- **THE LANE HAS NEVER RUN LIVE.** No Stripe App credential exists in this deployment. The wave-7
+  owner decision is PARK; deployment state was not inspected or changed in the local-only 28-24
+  execution. The open condition is UNCLEARED, and REVN-03 stays incomplete.
 - **`handleCallback` has NO CALLER.** The `/stripe/callback` HTTP route and the connections UI are
   28-09's, so a live run cannot complete a consent yet.
 - **The Stripe App itself is not registered.** The manifest declaring `stripe_api_access_type:
