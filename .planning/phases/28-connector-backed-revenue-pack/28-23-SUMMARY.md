@@ -58,6 +58,8 @@ completed: 2026-08-31
 1. **Task 1: Judge QuickBooks** — owner checkpoint decision, no file commit (`park`)
 2. **Task 2: Seal QuickBooks gate** — `aa3aad3` (`docs`)
 
+**Plan metadata:** `686ec67` (`docs`)
+
 ## Files Created/Modified
 
 - `docs/connectors/quickbooks-suitability.md` — records the owner park judgment, exact offline seal
@@ -99,6 +101,10 @@ instruction to avoid deployment/provider calls.
 - The first commit attempt could not create `.git/index.lock` under the restricted filesystem.
   Retrying the same two-file staged commit with repository-write approval succeeded; unrelated
   HubSpot, graphify and schema worktree changes remained unstaged.
+- The shared index already contained the concurrent 28-24 Stripe documentation when the metadata
+  commit ran, so `686ec67` also contains that lane's intended two-file Task 2 diff. The 28-24 owner
+  verified the bytes and adopted the commit; no shared work was reverted or history rewritten.
+  QuickBooks Task 2 remains isolated in `aa3aad3`.
 
 ## Authentication Gates
 
