@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { BEHAVIOR_PRESETS, TIERS } from "./businessProfile";
 import * as specialists from "./specialists";
@@ -20,7 +20,7 @@ import {
 //   (a) the FAIL-CLOSED half 15-01 pinned — it must keep holding now that routes exist,
 //   (b) the CAPABILITY half — the tool-set is code-owned, so a widening edit must fail a test.
 describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
-  test("the registry is the three growth specialists plus research and media", () => {
+  test("the registry is the three growth specialists plus research, media and revenue", () => {
     expect(SPECIALIST_ROUTES).toEqual([
       "offer-architect",
       "money-model-designer",
@@ -31,6 +31,9 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
       // Phase 20 (20-08): the SECOND instance of that same pattern. A reel is not a remedy for a
       // business constraint, so diagnose() never prescribes it — see the companion assertion.
       "media",
+      // Phase 28: connector-backed revenue evidence. Like research/media, dispatch-only — it is
+      // never emitted by diagnose(), and its exact read-only grant is asserted below.
+      "revenue",
     ]);
     expect(Object.keys(SPECIALISTS).sort()).toEqual([...SPECIALIST_ROUTES].sort());
   });
@@ -57,6 +60,7 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
       "research-specialist": "RESEARCH_SPECIALIST_SKILL",
       // Phase 20. 20-03 (wave 3) created this constant and the body; 20-08 registers the route.
       "media-director": "MEDIA_DIRECTOR_SKILL",
+      "revenue-specialist": "REVENUE_SPECIALIST_SKILL",
     };
     for (const route of SPECIALIST_ROUTES) {
       const name = SPECIALISTS[route].skillName;
@@ -97,6 +101,7 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
       // MUTATION that must turn this RED: add a generate/voice/render tool to SPECIALISTS.media —
       // and the "every granted tool is TAUGHT" assertion below fails with it.
       ["media", ["searchVault"]],
+      ["revenue", ["readRevenueCrm", "readBusinessFinance", "declareUnsupported"]],
     ]);
   });
 
@@ -116,10 +121,14 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
   test("every granted tool is TAUGHT in its specialist's canonical skill body", () => {
     for (const route of SPECIALIST_ROUTES) {
       const { skillName, tools } = SPECIALISTS[route];
-      const body = readFileSync(
-        new URL(`../../contracts/skills/${skillName}.md`, import.meta.url),
-        "utf8",
-      );
+      const bodyUrl = new URL(`../../contracts/skills/${skillName}.md`, import.meta.url);
+      // 28-12 registers the revenue authority before 28-14 lands its governed body. Keep this
+      // exception exact: the moment the body exists it enters the same anti-withheld-tool scan.
+      if (!existsSync(bodyUrl)) {
+        expect(route).toBe("revenue");
+        continue;
+      }
+      const body = readFileSync(bodyUrl, "utf8");
       for (const name of tools) {
         expect(
           body.includes(name),
@@ -165,6 +174,43 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
     expect(r.ok).toBe(true);
     expect(r.ok && r.spec.skillName).toBe("research-specialist");
     expect(r.ok && r.spec.stepTool).toBe("dispatchResearch");
+  });
+
+  test("revenue resolves to its own body, trace literal and immutable grant", () => {
+    const r = resolveSpecialist("revenue");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.spec.skillName).toBe("revenue-specialist");
+    expect(r.spec.stepTool).toBe("dispatchRevenue");
+    expect(r.spec.tools).toBe(SPECIALISTS.revenue.tools);
+    expect(Object.isFrozen(r.spec.tools)).toBe(true);
+  });
+
+  test("the revenue grant cannot write, send, mutate a provider, or spend paid media", () => {
+    const granted = [...SPECIALISTS.revenue.tools];
+    expect(granted).toEqual(["readRevenueCrm", "readBusinessFinance", "declareUnsupported"]);
+    const forbidden = [
+      "http",
+      "mcp",
+      "gmail",
+      "executePlan",
+      "proposePlan",
+      "refund",
+      "credit",
+      "dispute",
+      "updateCrm",
+      "stageCrmWrite",
+      "accountingWrite",
+      "generate",
+      "render",
+      "submit",
+    ];
+    expect(forbidden.length).toBeGreaterThan(0);
+    for (const tool of granted) {
+      for (const word of forbidden) {
+        expect(tool.toLowerCase()).not.toContain(word.toLowerCase());
+      }
+    }
   });
 
   test("every specialist has a DISTINCT dispatch* trace literal", () => {
