@@ -2965,6 +2965,22 @@ test("the authoring grant is SEPARATE from the dispatch grant in both directions
   expect(authoringOnly).not.toContain("dispatchResearch");
 });
 
+test("revenue read tools are structurally absent unless the code-owned grant is resolved", () => {
+  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const planId = "plan-stub" as Id<"plans">;
+  const keys = (grantRevenueReads?: boolean) =>
+    Object.keys(
+      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, {
+        grantRevenueReads,
+      }),
+    );
+
+  expect(keys()).not.toContain("readRevenueCrm");
+  expect(keys()).not.toContain("readBusinessFinance");
+  expect(keys(false)).not.toContain("readRevenueCrm");
+  expect(keys(true)).toEqual(expect.arrayContaining([...SPECIALISTS.revenue.tools.slice(0, 2)]));
+});
+
 test("authorSkillCandidate exposes EXACTLY {name, authoredBody} over the closed agent set", () => {
   const tools = buildCockpitTools(
     {} as Parameters<typeof buildCockpitTools>[0],

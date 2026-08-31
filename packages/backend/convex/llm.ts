@@ -114,6 +114,7 @@ import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-l
 import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import { buildRevenueTools, isRevenueToolGrant } from "./revenueTools";
 import {
   applyGmailCapability,
   GMAIL_CONNECTION_REQUIRED_REPLY,
@@ -1818,6 +1819,8 @@ export function buildCockpitTools(
      * a future context that legitimately needs one silently receives both.
      */
     grantSkillAuthoring?: boolean;
+    /** Phase 28: the exact revenue specialist tuple opens only the two bounded read tools. */
+    grantRevenueReads?: boolean;
     /**
      * 27-10. True only for a workflow pack whose `output` contract IS a saved document, derived in
      * `runSpecialistTurn` from the SKILL NAME (`packOutputIsDocument`). It BUILDS `saveAsDocument`
@@ -2457,6 +2460,9 @@ export function buildCockpitTools(
     ...(agentContext?.grantSkillAuthoring && agentContext.threadId && agentContext.rootRequestId
       ? skillAuthoringTool
       : ({} as typeof skillAuthoringTool)),
+    ...(agentContext?.grantRevenueReads
+      ? buildRevenueTools(ctx, tenantId, planId)
+      : ({} as ReturnType<typeof buildRevenueTools>)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -4637,6 +4643,9 @@ async function runAgentLoop(
       // `toolNames.includes("authorSkillCandidate")`. An allow-list is a REQUEST from the caller;
       // reading one here would let a specialist ask for the capability by name and receive it.
       grantSkillAuthoring: toolNames === undefined,
+      // REVN-04/05: identity-check the immutable code-owned tuple. A copied or model-authored list
+      // with the same strings is still not the grant.
+      grantRevenueReads: isRevenueToolGrant(toolNames),
       // 27-10: passed through, NEVER derived here. `toolNames.includes("createDocument")` would let
       // any specialist granted the tool relax its own trigger rule by holding it.
       documentIsDeliverable,
