@@ -27,6 +27,13 @@
 //                    <path> as JSON, one write per case so an abort still leaves what ran. The
 //                    scorer says `citations: expected >= 1, got 0`; only this says WHERE the prose
 //                    went. It holds model output, so it is a local file and never part of a gate.
+//   --tenant-skill <tenantSkillsId>
+//                    LIVE, PAID, with --candidate. Certifies a TENANT pack candidate row instead
+//                    of the global one: the SAME fixtures, pinned by ROW ID rather than version,
+//                    with evidence written to that row through `skills:recordTenantEvalEvidence`.
+//                    This is the EVAL PRODUCER the tenant pack lane had no key for — until
+//                    2026-08-31 `assertTenantPackActivationEvidence` demanded three planes and
+//                    nothing on earth could produce two of them.
 //   --packs          restrict to a comma-separated list of pack ids. A filter that matches NO
 //                    fixture is an ERROR, never an empty green run — a typo'd filter silently
 //                    shrinking a gate to zero cases and then reporting "all green" is the exact
@@ -167,8 +174,9 @@ const KNOWN_FLAGS = new Set([
   "--candidate",
   "--repeat",
   "--dump",
+  "--tenant-skill",
 ]);
-const VALUED_FLAGS = new Set(["--packs", "--repeat", "--dump"]);
+const VALUED_FLAGS = new Set(["--packs", "--repeat", "--dump", "--tenant-skill"]);
 
 /** `process.argv` really does contain a bare `--` under pnpm. Strip it once, at the entry. */
 const stripSeparator = (argv) => argv.filter((a) => a !== "--");
@@ -1134,10 +1142,93 @@ function selfTest(packs) {
 
   // Counted, never hardcoded: a self-test that reports a number it does not derive is the first
   // step to a self-test that reports a number it no longer earns.
+  // ── THE TENANT PIN OBSERVATION CHECK (2026-08-31) ─────────────────────────────────────────
+  //
+  // `assertPinWasLoaded` is the difference between certifying what RAN and certifying what the
+  // caller ASKED FOR, so it gets the positive witness first: without a case that PASSES, every
+  // refusal below is satisfied by a function that throws unconditionally.
+  const pin = {
+    candidateId: "kn7row",
+    registryTenantId: "t1",
+    name: "pack-brand-review",
+    version: 2,
+  };
+  const loadedBy = (rows) => () => ({ loaded: rows });
+  const tenantRow = { scope: "tenant", skillId: "kn7row", name: "pack-brand-review", version: 2 };
+
+  assert.doesNotThrow(
+    () => assertPinWasLoaded(["packeval-aaaaaaaa-c0"], pin, loadedBy([tenantRow])),
+    "a tenant that DID load the pinned row is accepted — the gate can say yes",
+  );
+  assert.throws(
+    () => assertPinWasLoaded(["packeval-aaaaaaaa-c0"], pin, loadedBy([])),
+    /NOT observed loading/,
+    "a tenant that loaded nothing cannot certify a body",
+  );
+  // THE ONE THAT MATTERS. A GLOBAL load of the same name and version is exactly what a run would
+  // show if the pin silently failed and the active template ran instead — the harness doing the
+  // opposite of what it claimed, with a green score to show for it.
+  assert.throws(
+    () =>
+      assertPinWasLoaded(
+        ["packeval-aaaaaaaa-c0"],
+        pin,
+        loadedBy([{ scope: "global", skillId: null, name: "pack-brand-review", version: 2 }]),
+      ),
+    /NOT observed loading/,
+    "a GLOBAL load of the same name@version is not evidence for a tenant row",
+  );
+  // SCOPE IS CHECKED INDEPENDENTLY OF THE ROW ID, and this fixture is the only one that proves it:
+  // the id MATCHES and scope is the sole disqualifier. It is not a hypothetical shape —
+  // `observedSkillLoads` falls back to `"unknown"` for an audit row that carries no `skillScope`,
+  // so this is what an older or partially-written row reads as, and "we could not tell what scope
+  // this load was" must fail closed rather than count.
+  //
+  // The first draft of this block used a `scope: "global"` row with `skillId: null`, which the ID
+  // check alone rejected — so deleting the scope test left the self-test green. Caught by mutation,
+  // not by review.
+  assert.throws(
+    () =>
+      assertPinWasLoaded(
+        ["packeval-aaaaaaaa-c0"],
+        pin,
+        loadedBy([{ ...tenantRow, scope: "unknown" }]),
+      ),
+    /NOT observed loading/,
+    "a load whose SCOPE could not be determined is not a tenant load, even at the right row id",
+  );
+  // Two tenants can each own version 2 of one pack; the row id is the only thing that separates
+  // them, and this is the case a name@version check would wave straight through.
+  assert.throws(
+    () =>
+      assertPinWasLoaded(
+        ["packeval-aaaaaaaa-c0"],
+        pin,
+        loadedBy([{ ...tenantRow, skillId: "kn7SOMEOTHERROW" }]),
+      ),
+    /NOT observed loading/,
+    "another tenant's row at the same name AND version is not this row",
+  );
+  // Per CASE, not per run: one green case cannot vouch for a sibling the pin never reached.
+  assert.throws(
+    () =>
+      assertPinWasLoaded(["packeval-aaaaaaaa-c0", "packeval-aaaaaaaa-c1"], pin, (tenant) => ({
+        loaded: tenant.endsWith("c0") ? [tenantRow] : [],
+      })),
+    /1 of 2 case tenant\(s\)/,
+    "one case missing the pin fails the whole run, and the message says which",
+  );
+  assert.throws(
+    () => assertPinWasLoaded([], pin, loadedBy([tenantRow])),
+    /observed nothing/,
+    "ZERO tenants is a vacuous green, not a pass",
+  );
+  rejections += 6;
+
   // A TRIPWIRE, like the table count in tenantData.test.ts: the floor equals what the self-test
   // exercises today, so DELETING a case fails here and forces the deleter to say why. Adding one is
   // free. Without it, `rejections` is only a number printed to a log nobody diffs.
-  assert.ok(rejections >= 42, `self-test only exercised ${rejections} rejections, expected >= 42`);
+  assert.ok(rejections >= 48, `self-test only exercised ${rejections} rejections, expected >= 48`);
   console.log(
     `self-test: ${rejections} validator/scorer rejections and the live-path invariants verified`,
   );
@@ -1222,6 +1313,82 @@ function thresholdsFor(packId) {
  */
 const PROVIDER_ABORT =
   /insufficient_quota|credit_balance_exhausted|billing|rate.?limit|429|ECONNRESET|ETIMEDOUT|keep-alive|socket hang up|fetch failed/i;
+
+/**
+ * Resolve and VALIDATE the tenant candidate this run is being asked to certify.
+ *
+ * Every refusal here is at $0, before a single turn. The checks mirror `assertEvaluableCandidate`
+ * in `run-eval-golden.mjs` — with the pack refusal INVERTED, because here a pack row is the whole
+ * point and anything else is the mistake.
+ */
+function resolveTenantPin(candidateId, name) {
+  const snap = parse(must("skills:inspectTenantSkill", { candidateId }, RETRY_READ));
+  const c = snap?.candidate;
+  if (!c) throw new EnvironmentAbort(`--tenant-skill ${candidateId}: no such row on ${TARGET}`);
+  // A `system` row is the ROLLBACK BASELINE — the code's own copy of its own body. Certifying it
+  // would record evidence against a body nobody authored and hand a tenant's recovery target a
+  // gate status it never needed. Same rule, same reason, as the golden runner's.
+  if (c.author !== "user" && c.author !== "agent")
+    throw new EnvironmentAbort(
+      `--tenant-skill ${candidateId} is a "${c.author}" row — only user- or agent-authored candidates are evaluable`,
+    );
+  if (c.status !== "candidate")
+    throw new EnvironmentAbort(
+      `--tenant-skill ${candidateId} has status "${c.status}", not a candidate`,
+    );
+  // THE PACK MUST BE THE PACK. `--packs brand-review --tenant-skill <a business-pulse row>` would
+  // otherwise run one pack's fixtures and write the score onto another pack's row.
+  if (c.name !== name)
+    throw new EnvironmentAbort(
+      `--tenant-skill ${candidateId} is "${c.name}" but --packs selected "${name}" — a run cannot certify a row it did not exercise`,
+    );
+  return { candidateId: c.id, registryTenantId: c.tenantId, name: c.name, version: c.version };
+}
+
+/**
+ * DID THE PINNED ROW ACTUALLY RUN? Read back from the audit plane, per case, never assumed.
+ *
+ * This is the same question — and the same answer — as `shouldRecordEvidence` in
+ * `run-eval-golden.mjs`, and it exists for the same reason that one does: a pin is an INSTRUCTION,
+ * and evidence recorded on the strength of an instruction certifies what the caller asked for
+ * rather than what happened. `subagent.completed` carries `skillScope`/`skillId` for every
+ * specialist turn, and a pack run IS a specialist turn, so the fact is already on the plane.
+ *
+ * A case whose tenant shows no load of this row is not a soft warning. It means the harness did not
+ * do what it said, which says nothing at all about the body — hence an ENV abort (exit 2) rather
+ * than a pack failure that would send someone editing a prompt that is fine.
+ */
+function assertPinWasLoaded(
+  tenants,
+  pin,
+  // Injectable ONLY so the self-test can drive it offline. The default is the real read; a test
+  // that had to reach a deployment would not be run, and a check that is not run is not a check.
+  readLoads = (tenant) => parse(must("smokeAssert:observedSkillLoads", { tenant }, RETRY_READ)),
+) {
+  // ZERO TENANTS IS NOT SUCCESS. An empty list would sail through the loop below and report
+  // "verified in all 0 case tenants" — the vacuous green this whole phase kept finding.
+  if (tenants.length === 0)
+    throw new EnvironmentAbort(
+      "no case tenants to verify the pin against — a run that observed nothing cannot certify anything",
+    );
+  const missed = [];
+  for (const tenant of tenants) {
+    const observed = readLoads(tenant);
+    const hit = (observed?.loaded ?? []).some(
+      (o) => o.scope === "tenant" && o.skillId === pin.candidateId,
+    );
+    if (!hit) missed.push(tenant);
+  }
+  if (missed.length > 0)
+    throw new EnvironmentAbort(
+      `the pinned row ${pin.candidateId} was NOT observed loading in ${missed.length} of ` +
+        `${tenants.length} case tenant(s) (${missed.slice(0, 3).join(", ")}) — recording evidence ` +
+        "would certify a body these runs did not execute",
+    );
+  console.log(
+    `[eval:pack] pin verified: ${pin.candidateId} observed loading in all ${tenants.length} case tenant(s)`,
+  );
+}
 
 /** Run a paid turn, classifying a provider/network failure as an ENV abort rather than a verdict. */
 function paidTurn(args) {
@@ -1467,7 +1634,7 @@ export function scoreCase({ fx, pack, packId, transcript, facts, calls, threshol
 }
 
 /** Drive ONE case end to end. Returns { pass, failures, cost, durationMs, version }. */
-function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) {
+function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds, tenantPin }) {
   const tenant = tenantFor(runnerRunId, index);
   // EXIT 2, NOT 1. A tenant that could not be seeded says nothing about the pack body, and the
   // plan this runner was written for names exactly this mis-signal: an env problem reported as case
@@ -1504,7 +1671,14 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
       runId: lastRunId,
       // THE POINT OF THE WHOLE RUN: the exact candidate, not the active row. Without this the
       // evidence would name a version the turn never executed.
-      skillVersions: { [`pack-${packId}`]: version },
+      //
+      // ONE PIN, NEVER BOTH. At tenant scope the row id IS the identity — `pack-x@2` names a
+      // different body in every tenant that owns a version 2 — so passing `skillVersions` beside it
+      // would express a second, weaker claim about the same turn and leave which one won to the
+      // resolution order in `runSpecialistTurn`.
+      ...(tenantPin === null || tenantPin === undefined
+        ? { skillVersions: { [`pack-${packId}`]: version } }
+        : { tenantSkillIds: { [tenantPin.name]: tenantPin.candidateId } }),
     });
     if (res.ok !== true)
       return { pass: false, failures: [{ key: "run", expected: "ok", actual: res.reason }], cost };
@@ -1568,6 +1742,9 @@ function runCase(fx, index, { packId, pack, version, runnerRunId, thresholds }) 
     cost,
     durationMs: started && ended ? ended.createdAt - started.createdAt : null,
     version: ended?.skillVersion ?? null,
+    // The throwaway tenant this case ran in — the address `assertPinWasLoaded` reads the audit
+    // plane at. Returned rather than recomputed so the check can never drift from the run.
+    tenant,
     // Surfaced per case so the all-green check can refuse a mismatch before writing evidence.
     ranModels: ran.models ?? [],
     spendRows: ran.rowCount ?? 0,
@@ -1620,15 +1797,27 @@ async function runCandidate(argv, packs) {
     );
 
   // 2. THE EXACT CANDIDATE. Never the active row, never a guessed version.
-  const rows = parse(must("skills:inspectPackCandidates", {}, RETRY_READ));
-  const row = rows.find((r) => r.name === name);
-  if (row === undefined || row.present !== true)
-    throw new EnvironmentAbort(
-      `${name} has no row on this deployment — run skills:seedPackCandidates`,
-    );
-  if (row.status !== "candidate")
-    throw new EnvironmentAbort(`${name} v${row.version} is "${row.status}", not a candidate`);
-  const version = row.version;
+  //
+  // TWO SCOPES, ONE SUITE. `--tenant-skill` certifies a `tenantSkills` row; without it the global
+  // `skills` candidate is the target, exactly as before. The fixtures, the scoring and the
+  // all-green rule are identical — a tenant body is not held to an easier bar than a global one,
+  // because if it were, authoring as a tenant row would be the cheap way around the pack gate.
+  const tenantSkillId = valueFlag(argv, "--tenant-skill");
+  const tenantPin = tenantSkillId === null ? null : resolveTenantPin(tenantSkillId, name);
+  let version;
+  if (tenantPin === null) {
+    const rows = parse(must("skills:inspectPackCandidates", {}, RETRY_READ));
+    const row = rows.find((r) => r.name === name);
+    if (row === undefined || row.present !== true)
+      throw new EnvironmentAbort(
+        `${name} has no row on this deployment — run skills:seedPackCandidates`,
+      );
+    if (row.status !== "candidate")
+      throw new EnvironmentAbort(`${name} v${row.version} is "${row.status}", not a candidate`);
+    version = row.version;
+  } else {
+    version = tenantPin.version;
+  }
 
   const thresholds = thresholdsFor(packId);
   const cases = readFixtures(packId, packs).map(({ file, fx }) => validateFixture(fx, file, packs));
@@ -1725,7 +1914,7 @@ async function runCandidate(argv, packs) {
     const results = [];
     let total = 0;
     for (const [index, fx] of cases.entries()) {
-      const out = runCase(fx, index, { packId, pack, version, runnerRunId, thresholds });
+      const out = runCase(fx, index, { packId, pack, version, runnerRunId, thresholds, tenantPin });
       total += out.cost;
       results.push({ id: fx.id, ...out });
       console.log(
@@ -1769,6 +1958,16 @@ async function runCandidate(argv, packs) {
     );
   }
 
+  // AT TENANT SCOPE THE VERSION CHECK ABOVE IS NOT ENOUGH, and this is the entire reason the tenant
+  // lane keys on row ids. `ranVersions` proves a body numbered v2 ran; it cannot distinguish THIS
+  // tenant's v2 from another tenant's v2 of the same pack. The audit plane can, so it is asked.
+  if (tenantPin !== null) {
+    assertPinWasLoaded(
+      [...new Set(results.map((r) => r.tenant).filter((t) => typeof t === "string"))],
+      tenantPin,
+    );
+  }
+
   assertRanModel(results, EVAL_MODEL);
 
   // Suite-bound evidence: refs and counts only (CLAUDE.md §4). The `suite` block is what lets the
@@ -1783,14 +1982,35 @@ async function runCandidate(argv, packs) {
     costUsd: total,
     model: EVAL_MODEL,
     skillVersions: { [name]: version },
+    // `hasPassingTenantEvidence` reads this block and NOTHING else for identity; all four fields
+    // must match the row, so a blob written against one candidate cannot certify a sibling.
+    ...(tenantPin === null
+      ? {}
+      : {
+          tenantTarget: {
+            candidateId: tenantPin.candidateId,
+            registryTenantId: tenantPin.registryTenantId,
+            name: tenantPin.name,
+            version: tenantPin.version,
+          },
+        }),
     suite: { revision: declared.revision, casesHash: mine.casesHash, caseCount: mine.caseCount },
     ts: Date.now(),
   });
   // No `retryOnEmpty` on the WRITE, exactly as in run-eval-golden.mjs: a retry writes a duplicate.
-  must("skills:recordEvalEvidence", { name, version, evidence });
-  console.log(
-    `[eval:pack] evidence recorded on ${name} v${version} (${TARGET}). Still a candidate.`,
-  );
+  if (tenantPin === null) {
+    must("skills:recordEvalEvidence", { name, version, evidence });
+    console.log(
+      `[eval:pack] evidence recorded on ${name} v${version} (${TARGET}). Still a candidate.`,
+    );
+  } else {
+    must("skills:recordTenantEvalEvidence", { candidateId: tenantPin.candidateId, evidence });
+    console.log(
+      `[eval:pack] evidence recorded on tenantSkills ${tenantPin.candidateId} ` +
+        `(${name} v${version}, tenant ${tenantPin.registryTenantId}, ${TARGET}). Still a candidate — ` +
+        "activation needs the browser plane too, and is a separate owner act.",
+    );
+  }
   return 0;
 }
 
@@ -1806,6 +2026,13 @@ async function main() {
     selfTest(packs);
     if (!argv.includes("--fixtures-only") && !argv.includes("--candidate")) return;
   }
+
+  // A `--tenant-skill` that lands in a mode which cannot spend is a SILENT NO-OP, and the operator
+  // is left believing a row was certified. Refuse it here rather than ignore it — the same reason a
+  // `--packs` filter matching nothing is an error instead of an empty green run.
+  if (argv.some((a) => a === "--tenant-skill" || a.startsWith("--tenant-skill=")))
+    if (!argv.includes("--candidate"))
+      throw new EnvironmentAbort("--tenant-skill certifies a row, so it needs --candidate");
 
   if (argv.includes("--candidate")) {
     if (argv.includes("--fixtures-only"))

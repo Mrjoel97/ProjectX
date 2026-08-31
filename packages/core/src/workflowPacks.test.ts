@@ -4,6 +4,7 @@ import { KNOWLEDGE_SOURCES, renderSourceGap } from "./knowledgeSearch";
 import {
   hasPassingPackBrowserEvidence,
   hasValidPackProvenance,
+  isPackEvalSandboxTenant,
   isWorkflowPackSkill,
   LEAF_FORBIDDEN_OPERATIONS,
   MISSING_PACK_SOURCES,
@@ -780,4 +781,39 @@ test("every pack id has a workflowPackEvents.packId literal (the swallowed-event
   const literals = [...packIdUnion.matchAll(/v\.literal\("([^"]+)"\)/g)].map((m) => m[1] as string);
   // Equality both ways: a literal for a pack that does not exist is as wrong as a missing one.
   expect(literals.sort()).toEqual([...WORKFLOW_PACK_IDS].sort());
+});
+
+/**
+ * THE SANDBOX TENANT SHAPE. Two enforcement sites depend on this exact predicate —
+ * `smoke.seedPackEvalTenant` (what may be seeded with fixture data) and `runPackTurn`'s pin check
+ * (where a foreign candidate body may execute). The second is the load-bearing one: it is what
+ * lets the tenant pack eval plane be earnable at all, and its safety rests entirely on no REAL
+ * tenant id ever satisfying this.
+ */
+describe("isPackEvalSandboxTenant", () => {
+  test("accepts exactly what the runner generates", () => {
+    // `packeval-${runId.slice(0, 8)}-c${index}` — the literal shape in run-workflow-pack-evals.mjs.
+    expect(isPackEvalSandboxTenant("packeval-deadbeef-c0")).toBe(true);
+    expect(isPackEvalSandboxTenant("packeval-0123abcd-c11")).toBe(true);
+  });
+
+  test("a REAL tenant id can never satisfy it — the whole safety argument", () => {
+    // A tenant id here is a Convex user id: `requireTenant` returns the JWT subject before '|'.
+    expect(isPackEvalSandboxTenant("kn73kmcdzqxem7mkq4n5b9x2b18abrnq")).toBe(false);
+    expect(isPackEvalSandboxTenant("")).toBe(false);
+  });
+
+  test("near misses are refused — this is a SHAPE, not a prefix", () => {
+    for (const near of [
+      "packeval-", // the marker alone
+      "packeval-dead-c0", // hex block too short
+      "packeval-deadbeefc-c0", // hex block too long
+      "packeval-DEADBEEF-c0", // uppercase hex
+      "kn7real-packeval-deadbeef-c0", // marker buried mid-string — what `.includes()` would pass
+      "packeval-deadbeef-c0 ", // trailing space
+      "packeval-deadbeef-c0\npackeval-deadbeef-c1", // a second line, which `$` alone would allow
+    ]) {
+      expect(isPackEvalSandboxTenant(near), near).toBe(false);
+    }
+  });
 });

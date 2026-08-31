@@ -1,3 +1,10 @@
+> Last verified: 2026-08-31 (`smoke.seedPackEvalTenant` no longer owns its own copy of the
+> pack-eval tenant shape. It imports `isPackEvalSandboxTenant` from `@pikar/core`, which
+> `runPackTurn` now also uses to decide whether a foreign candidate pin may execute. Two guards,
+> one definition — a seeding guard that drifted from the execution guard would disagree about what
+> a sandbox tenant is, and the execution side is where a foreign body runs. Behaviour unchanged:
+> the regex is identical, and `workflowPacks.test.ts` pins it against seven near misses.)
+
 # Playbook: Agent Runtime (the Executive Agent platform)
 
 > Last verified: 2026-08-29 (29-W3-TAIL — **`run-eval-golden.mjs` AND `planTenantActivation` DO NOT

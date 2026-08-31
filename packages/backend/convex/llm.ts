@@ -5098,13 +5098,56 @@ export async function runSpecialistTurn(
   // the FULL identity — scope + row id + name + body hash — because a version alone stopped being
   // an identity once two tenants could each own version 2. Hashed from `skill.body`, the exact
   // string handed to the provider above, so the attribution cannot describe a body that never ran.
+  const skillBodyHash = await contentHash(skill.body);
+
+  // ── THE OBSERVATION ROW FOR A PINNED SPECIALIST RUN (2026-08-31) ────────────────────────────
+  //
+  // WHY IT IS HERE AND NOT IN A CALLER. `dispatch.ts` writes the full identity onto its
+  // `subagent.completed` row, so a RESEARCH run has always been observable. Nothing wrote one for
+  // the WORKFLOW PACK path, which reaches this same function through `workflowPackBinding` — so a
+  // pack run left no record of which body it loaded, and `smokeAssert:observedSkillLoads` returned
+  // an empty list over audit rows that genuinely existed.
+  //
+  // MEASURED, NOT ANTICIPATED. The first tenant pack eval scored 5/5 at $0.0122 and was REFUSED at
+  // the write by `assertPinWasLoaded`, because the plane it reads had nothing to say. That refusal
+  // was correct and is the reason this row exists: the alternative was evidence certifying a body
+  // no reader could confirm ran. Fixed once, in the shared function, so every caller of the
+  // specialist path is covered rather than the one that happened to be under test.
+  //
+  // PINNED RUNS ONLY. An unconditional write here would put an audit row on every specialist turn
+  // in the product, and the `auditCounts` component is not mounted in every test harness — six
+  // `runCockpitAgent` tests went red on exactly that mistake in `7a58a3a`. A pin is also the only
+  // case anything asks this question about: an unpinned run has nothing to certify.
+  //
+  // REFS ONLY (§4): a name, a number, a scope enum, a row id and a SHA-256. Never the body.
+  if (tenantPin !== undefined || pin !== undefined) {
+    await ctx.runMutation(internal.audit.log, {
+      tenantId,
+      // `turnId` IS the runId for a pack turn and the join key for its spend rows; `threadId` is
+      // the fallback, and `planId` the last resort. All three can be absent in principle, and a
+      // row with no correlation is still a true observation of a load — `observedSkillLoads` scans
+      // by TENANT, not by correlation, so an unjoinable row still answers "did this body run".
+      correlationId: turnId ?? threadId ?? String(planId),
+      eventType: "agent.skill_loaded",
+      actor: "system",
+      payload: {
+        skillName,
+        skillVersion: skill.version,
+        skillScope: skill.scope,
+        skillId: skill.id,
+        skillBodyHash,
+        pinned: true,
+      },
+    });
+  }
+
   return {
     ...res,
     skillVersion: skill.version,
     skillScope: skill.scope,
     skillId: skill.id,
     skillName,
-    skillBodyHash: await contentHash(skill.body),
+    skillBodyHash,
   };
 }
 

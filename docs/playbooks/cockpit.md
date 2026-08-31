@@ -1,3 +1,31 @@
+> Last verified: 2026-08-31 (**`runSpecialistTurn` NOW RECORDS WHICH BODY A PINNED RUN LOADED.**
+>
+> `dispatch.ts` has written the full registry attribution onto `subagent.completed` since 21-03, so a
+> research run was observable. Nothing wrote one for the WORKFLOW PACK path, which reaches this same
+> function through `workflowPackBinding` — so `smokeAssert:observedSkillLoads` returned an EMPTY list
+> for a pack run over audit rows that genuinely existed, and the pack lane's evidence check had
+> nothing to read.
+>
+> FOUND BY A REFUSAL, NOT BY REVIEW. The first live tenant pack eval scored 5/5 and was refused at
+> the evidence write because the pinned row was observed loading in 0 of 5 case tenants. The check
+> was right and the plane was empty.
+>
+> PINNED RUNS ONLY, deliberately. An unconditional `internal.audit.log` here would fire on every
+> specialist turn in the product, and `auditCounts` is not mounted in every harness — that exact
+> mistake reddened six `runCockpitAgent` tests in `7a58a3a`. An unpinned run also has nothing to
+> certify. Payload is refs only (§4): name, version, scope, row id, SHA-256 of the body.
+>
+> Also here: `workflow-packs.spec.ts` grew an `@evidence` block (the browser plane producer) and a
+> `@viewports` block that records WHICH widths actually rendered the tenant's saved settings —
+> `VIEWPORTS_SEEN.size`, never a hardcoded 2. Measured 3 of 3 widths (1280/900/390).
+>
+> ⚠ OPEN, AND NOT PAPERED OVER: run the whole file in order and `@viewports` hangs for its full
+> timeout on a pack button that keeps detaching from the DOM, after the persistence test's save. It
+> passes ALONE in 6.4s and passes with `@evidence`. Reproduced three times; not diagnosed. Some of
+> the earlier instances were the local backend dying underneath the run (two `convex dev` watchers
+> were fighting over one deployment), so the residue may be the same cause — but it was still
+> reproducing after that was fixed, so it is recorded as open rather than explained away.)
+
 > Last verified: 2026-08-30 (**TWO REFS-ONLY PROBE SURFACES ON THE GMAIL RAIL, for the ROUT-02
 > recurrence evidence collector. No cockpit behaviour changed and no existing function was touched.**
 >

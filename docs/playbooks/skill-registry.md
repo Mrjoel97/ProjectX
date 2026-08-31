@@ -1,5 +1,25 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-08-31 (**`recordTenantPackBrowserEvidence` — the browser plane for a tenant
+> pack candidate, and the last of the three producers.**
+>
+> IT TAKES A ROW ID, NOT `(name, version)`. At global scope a name and a version identify a body; at
+> tenant scope they do not, because two tenants can each own version 2 of one pack. Same reason
+> `WorkflowPin` carries a row id and `hasPassingTenantPackBrowserEvidence` pins one.
+>
+> IT APPLIES THE GATE'S OWN PREDICATE AT THE WRITE, so an artifact aimed at another candidate fails
+> where someone is watching rather than three steps later at an activation whose refusal names a
+> plane the operator believes they filled in. A refused write also leaves the field UNCHANGED — a
+> typo in a spec must not silently de-certify a row that was fine.
+>
+> `newestTenantCustomization` now returns the row `id` (refs-only) because the browser producer has
+> to name the exact candidate it exercised.
+>
+> `assertTenantPackActivationEvidence` was split: `tenantPackPlanesMissing` computes the verdict and
+> the assert is a thin thrower over it, so `inspectTenantSkill` can report the same judgement without
+> the right to activate. See `workflow-packs.md` for the live result and for the observation bug the
+> eval plane's read-back caught.)
+
 > Last verified: 2026-08-31 (**THE TENANT PACK LANE EXISTS AND IS EARNABLE.** `planTenantActivation`
 > refused every `pack-*` tenant row unconditionally; `assertTenantPackActivationEvidence` now demands
 > the SAME THREE PLANES a global pack body clears, keyed to the row id. `PACK_GATE_ERROR` is still

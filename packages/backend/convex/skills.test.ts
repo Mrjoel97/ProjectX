@@ -4901,6 +4901,67 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
     ).rejects.toThrow(/PACK_GATE.*browser/);
   });
 
+  // ── THE BROWSER-PLANE PRODUCER (2026-08-31) ──────────────────────────────────────────────────
+  //
+  // The gate above could refuse for want of browser evidence but nothing could ever supply it —
+  // `recordPackBrowserEvidence` writes by (name, version) into the GLOBAL `skills` table and there
+  // was no tenant equivalent. This is that door, and it applies the gate's OWN predicate at the
+  // write so a mis-aimed artifact fails where someone is watching, not three steps later at an
+  // activation whose refusal names a plane the operator believes they filled in.
+  test("THE POSITIVE WITNESS: an artifact naming this row is written to it", async () => {
+    const { t, id, row } = await fullyEvidenced();
+    await t.run((ctx) => ctx.db.patch(id, { browserEvidence: undefined }));
+    await t.mutation(internal.skills.recordTenantPackBrowserEvidence, {
+      candidateId: id,
+      browserEvidence: browserFor(String(id), row.version),
+    });
+    // And the row it wrote is now activatable — the write and the gate agree about what counts.
+    const ownerId = await ownerOf(t);
+    await t
+      .withIdentity({ subject: `${ownerId}|session_o` })
+      .mutation(api.skills.activateTenantCandidate, { candidateId: id });
+    expect((await t.run((ctx) => ctx.db.get(id)))!.status).toBe("active");
+  });
+
+  test("an artifact naming ANOTHER candidate is refused AT THE WRITE, not silently stored", async () => {
+    const { t, id, row } = await fullyEvidenced();
+    await expect(
+      t.mutation(internal.skills.recordTenantPackBrowserEvidence, {
+        candidateId: id,
+        browserEvidence: browserFor("kn7otherrowidnotthisone000000000", row.version),
+      }),
+    ).rejects.toThrow(/does not name this row/);
+    // The row still holds the evidence it had. A refused write must not blank the field — that
+    // would turn a typo in a spec into a silent de-certification of a row that was fine.
+    expect((await t.run((ctx) => ctx.db.get(id)))!.browserEvidence).toBe(
+      browserFor(String(id), row.version),
+    );
+  });
+
+  test("a FAILING, single-viewport or unauthenticated artifact is refused", async () => {
+    const { t, id, row } = await fullyEvidenced();
+    const base = { pass: true, authenticated: true, viewports: 2 };
+    const target = { candidateId: String(id), name: "pack-business-pulse", version: row.version };
+    // Each mutation is applied ALONE, so no one of them can hide behind another.
+    for (const [label, over] of [
+      ["a failing run", { pass: false }],
+      ["one viewport", { viewports: 1 }],
+      ["signed out", { authenticated: false }],
+      ["not JSON at all", null],
+    ] as [string, Record<string, unknown> | null][]) {
+      await expect(
+        t.mutation(internal.skills.recordTenantPackBrowserEvidence, {
+          candidateId: id,
+          browserEvidence:
+            over === null
+              ? "{not json"
+              : JSON.stringify({ ...base, ...over, tenantTarget: target }),
+        }),
+        label,
+      ).rejects.toThrow(/does not name this row/);
+    }
+  });
+
   test("the audit row is refs, ids, counts and hashes ONLY — the tenant's words never reach it", async () => {
     const { t, asA } = await harness();
     const res = await publish(asA);
