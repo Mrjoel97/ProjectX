@@ -144,7 +144,7 @@ Plans:
   3. Cash-flow and payroll-confidence calculations are deterministic pure-TypeScript domain logic with fixtures, normalized-input validation, provenance, coverage/confidence semantics and no LLM arithmetic.
   4. Invoice reminders stage drafts into the existing plan gate; no revenue specialist can send, refund, credit or mutate CRM/accounting state directly.
   5. Authenticated two-tenant tests, provider replay/rate-limit tests and live read-only smoke gates pass before each connector-backed workflow is exposed; outcome telemetry can measure follow-up completion, overdue-item recovery and handling time without raw content.
-**Plans:** 11/29 plans executed
+**Plans:** 12/29 plans executed
 
 Plans:
 - [x] 28-17-PLAN.md — Hard Phase 19/25/27 readiness gate before connector work (Wave 1) — **`passed` 2026-08-27** (`fe73938`); 15/16 rows machine-verified, `p25-production-posture` green on OWNER ATTESTATION only. Recheck: `node scripts/check-phase28-readiness.mjs`
@@ -167,7 +167,7 @@ Plans:
 - [ ] 28-11-PLAN.md — Available-rail cash-flow and payroll-confidence composition (Wave 9)
 - [ ] 28-12-PLAN.md — Minimal read-only revenue specialist grant (Wave 10)
 - [ ] 28-13-PLAN.md — Invoice reminders behind existing approval and suppression (Wave 11)
-- [ ] 28-14-PLAN.md — Provider-neutral revenue body authoring (Wave 12)
+- [x] 28-14-PLAN.md — Provider-neutral revenue body authoring (Wave 12) — **complete 2026-08-31** (`29199b1`); eight provider-neutral bodies adopted with exact LF-normalized byte/SHA-256 pins, pinned Apache-2.0 upstream attribution and modification notices. Finance remains explain-only, invoice reminders remain proposed-plan-only, and no publication/discovery/eval/activation path was added
 - [ ] 28-28-PLAN.md — Reviewed-body publication as byte-pinned dark candidates (Wave 13)
 - [ ] 28-19-PLAN.md — State-based golden outcome and adversarial eval suite (Wave 14)
 - [ ] 28-20-PLAN.md — Version-specific activation after evidence and owner judgment (Wave 15)
