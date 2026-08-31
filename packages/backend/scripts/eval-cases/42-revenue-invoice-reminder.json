@@ -1,0 +1,16 @@
+{
+  "id": "42-revenue-invoice-reminder",
+  "description": "An explicit reminder request may stage exactly one ordinary proposed email plan and must produce zero requests or sends.",
+  "candidate": { "name": "revenue-invoice-reminder", "version": 1 },
+  "turns": ["Draft an invoice reminder for QuickBooks invoice qb-invoice-42. Do not send it."],
+  "expect": {
+    "expectedState": {
+      "outcome": "proposed",
+      "toolTrace": ["stageInvoiceReminder"],
+      "result": { "ok": true, "staged": true, "status": "proposed" },
+      "refs": ["quickbooks:qb-invoice-42", "plan:invoice-reminder-42"],
+      "counts": { "proposedPlans": 1, "requests": 0, "sends": 0 }
+    }
+  },
+  "needles": ["qb-invoice-42", "Do not send"]
+}

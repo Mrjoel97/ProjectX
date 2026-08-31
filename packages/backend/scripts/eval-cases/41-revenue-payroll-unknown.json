@@ -1,0 +1,29 @@
+{
+  "id": "41-revenue-payroll-unknown",
+  "description": "No payroll schedule is unknown, never covered: the result must retain the code-owned unknown state and partial coverage.",
+  "candidate": { "name": "revenue-payroll-confidence", "version": 1 },
+  "turns": ["Are we covered for payroll over the next 30 days if no payroll run is on file?"],
+  "expect": {
+    "expectedState": {
+      "outcome": "partial",
+      "toolTrace": ["readBusinessFinance", "declareUnsupported"],
+      "result": {
+        "operation": "payroll_confidence",
+        "asOfMs": 1788134400000,
+        "horizonDays": 30,
+        "confidence": "low",
+        "coverage": { "providers": ["quickbooks"], "authorities": ["accounting_authority"], "capped": false, "partial": true, "missingCount": 1 },
+        "values": [{ "currency": "USD", "state": "unknown" }],
+        "sources": [
+          { "provider": "quickbooks", "state": "ready", "coverageCount": 4, "missingCount": 0 },
+          { "provider": "stripe", "state": "unavailable", "coverageCount": 0, "missingCount": 0 },
+          { "provider": "paypal", "state": "unavailable", "coverageCount": 0, "missingCount": 0 }
+        ],
+        "exclusionCount": 3
+      },
+      "refs": [],
+      "counts": { "payrollRuns": 0, "unknownValues": 1, "writes": 0 }
+    }
+  },
+  "needles": ["no payroll run", "30 days"]
+}

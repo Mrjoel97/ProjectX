@@ -1,0 +1,16 @@
+{
+  "id": "37-revenue-partial",
+  "description": "A partial connector read must remain partial and declare the missing authority rather than upgrade itself to a complete customer pulse.",
+  "candidate": { "name": "revenue-customer-pulse", "version": 1 },
+  "turns": ["Give me the current customer pulse for HubSpot ref hs-partial-7, including what is missing."],
+  "expect": {
+    "expectedState": {
+      "outcome": "partial",
+      "toolTrace": ["readRevenueCrm", "declareUnsupported"],
+      "result": { "operation": "customer_pulse", "state": "partial", "provider": "hubspot", "externalRef": "hs-partial-7", "pulse": "watch" },
+      "refs": ["hs-partial-7"],
+      "counts": { "result": 1, "missing": 1, "writes": 0 }
+    }
+  },
+  "needles": ["hs-partial-7", "what is missing"]
+}
