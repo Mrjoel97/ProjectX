@@ -130,14 +130,14 @@ describe("code-owned revenue grant", () => {
       "readBusinessFinance",
       "readRevenueCrm",
     ]);
-    const crm = tools.readRevenueCrm.inputSchema as unknown as {
+    const crm = tools.readRevenueCrm!.inputSchema as unknown as {
       jsonSchema: { properties: Record<string, { enum?: string[] }>; additionalProperties: boolean };
     };
     expect(crm.jsonSchema.properties.operation?.enum).toEqual(["attention", "customer_pulse"]);
     expect(crm.jsonSchema.properties.provider?.enum).toEqual(["hubspot"]);
     expect(crm.jsonSchema.additionalProperties).toBe(false);
 
-    const finance = tools.readBusinessFinance.inputSchema as unknown as {
+    const finance = tools.readBusinessFinance!.inputSchema as unknown as {
       jsonSchema: { properties: Record<string, { enum?: string[] }>; additionalProperties: boolean };
     };
     expect(finance.jsonSchema.properties.operation?.enum).toEqual([
@@ -147,7 +147,7 @@ describe("code-owned revenue grant", () => {
     expect(finance.jsonSchema.properties.environment?.enum).toEqual(["sandbox", "production"]);
     expect(finance.jsonSchema.properties).not.toHaveProperty("horizonDays");
     expect(finance.jsonSchema.additionalProperties).toBe(false);
-    const refusal = tools.declareUnsupported.inputSchema as unknown as {
+    const refusal = tools.declareUnsupported!.inputSchema as unknown as {
       jsonSchema: { properties: Record<string, { enum?: string[] }>; additionalProperties: boolean };
     };
     expect(refusal.jsonSchema.properties.reason?.enum).toEqual([

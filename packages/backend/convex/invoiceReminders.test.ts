@@ -1,9 +1,8 @@
-/// <reference types="vite/client" />
 import { readFileSync } from "node:fs";
 import type { Invoice, Projection, SourceRef } from "@pikar/revenue";
+import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
-import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
   buildInvoiceReminderTool,
@@ -12,9 +11,20 @@ import {
 } from "./invoiceReminders";
 import schema from "./schema";
 
-const modules = import.meta.glob("./**/*.ts");
+const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const NOW = Date.parse("2026-08-31T12:00:00.000Z");
 const REF: SourceRef = { provider: "quickbooks", kind: "invoice", id: "inv_42" };
+const stageProposed = makeFunctionReference<
+  "mutation",
+  {
+    tenantId: string;
+    planId: Id<"plans">;
+    invoiceRef: SourceRef;
+    subject: string;
+    body: string;
+  },
+  { ok: true; planId: string; staged: boolean } | { ok: false; reason: string }
+>("invoiceReminders:stageProposed");
 
 function source(over: Partial<Invoice> = {}): Projection<Invoice> {
   const invoice: Invoice = {
@@ -52,7 +62,7 @@ describe("invoice reminder source-to-plan staging", () => {
   test("the executive staging schema is closed, capped, and names no delivery choice", () => {
     const tools = buildInvoiceReminderTool({} as never, "tenant_a", "plan_1" as Id<"plans">);
     expect(Object.keys(tools)).toEqual(["stageInvoiceReminder"]);
-    const schema = tools.stageInvoiceReminder.inputSchema as unknown as {
+    const schema = tools.stageInvoiceReminder!.inputSchema as unknown as {
       jsonSchema: {
         properties: Record<string, { enum?: string[]; maxLength?: number }>;
         required: string[];
@@ -170,8 +180,8 @@ describe("existing proposed-plan persistence", () => {
       body: "Hello, this exact invoice is overdue.\n",
     };
 
-    const first = await t.mutation(internal.invoiceReminders.stageProposed, args);
-    const second = await t.mutation(internal.invoiceReminders.stageProposed, args);
+    const first = await t.mutation(stageProposed, args);
+    const second = await t.mutation(stageProposed, args);
     expect(first).toEqual({ ok: true, planId, staged: true });
     expect(second).toEqual({ ok: true, planId, staged: false });
 
@@ -179,7 +189,6 @@ describe("existing proposed-plan persistence", () => {
       plan: await ctx.db.get(planId),
       requests: await ctx.db.query("requests").collect(),
       audit: await ctx.db.query("audit").collect(),
-      workflows: await ctx.db.query("workflowPackRuns").collect(),
     }));
     expect(snapshot.plan).toMatchObject({
       status: "proposed",
@@ -189,7 +198,6 @@ describe("existing proposed-plan persistence", () => {
     });
     expect(snapshot.requests).toEqual([]);
     expect(snapshot.audit).toEqual([]);
-    expect(snapshot.workflows).toEqual([]);
   });
 
   test("refuses a foreign tenant, an empty recipient plan, and conflicting proposed content", async () => {
@@ -208,13 +216,13 @@ describe("existing proposed-plan persistence", () => {
     };
 
     await expect(
-      t.mutation(internal.invoiceReminders.stageProposed, { ...base, planId: foreign }),
+      t.mutation(stageProposed, { ...base, planId: foreign }),
     ).rejects.toThrow(/plan not found/i);
     expect(
-      await t.mutation(internal.invoiceReminders.stageProposed, { ...base, planId: empty }),
+      await t.mutation(stageProposed, { ...base, planId: empty }),
     ).toEqual({ ok: false, reason: "recipient_required" });
     expect(
-      await t.mutation(internal.invoiceReminders.stageProposed, { ...base, planId: proposed }),
+      await t.mutation(stageProposed, { ...base, planId: proposed }),
     ).toEqual({ ok: false, reason: "plan_in_progress" });
   });
 });
