@@ -125,7 +125,11 @@ describe("code-owned revenue grant", () => {
 
   test("both tool schemas are closed and code-capped", () => {
     const tools = buildRevenueTools({} as never, "tenant-a", "plan-a");
-    expect(Object.keys(tools).sort()).toEqual(["readBusinessFinance", "readRevenueCrm"]);
+    expect(Object.keys(tools).sort()).toEqual([
+      "declareUnsupported",
+      "readBusinessFinance",
+      "readRevenueCrm",
+    ]);
     const crm = tools.readRevenueCrm.inputSchema as unknown as {
       jsonSchema: { properties: Record<string, { enum?: string[] }>; additionalProperties: boolean };
     };
@@ -143,6 +147,15 @@ describe("code-owned revenue grant", () => {
     expect(finance.jsonSchema.properties.environment?.enum).toEqual(["sandbox", "production"]);
     expect(finance.jsonSchema.properties).not.toHaveProperty("horizonDays");
     expect(finance.jsonSchema.additionalProperties).toBe(false);
+    const refusal = tools.declareUnsupported.inputSchema as unknown as {
+      jsonSchema: { properties: Record<string, { enum?: string[] }>; additionalProperties: boolean };
+    };
+    expect(refusal.jsonSchema.properties.reason?.enum).toEqual([
+      "unavailable",
+      "partial",
+      "unsupported_operation",
+    ]);
+    expect(refusal.jsonSchema.additionalProperties).toBe(false);
   });
 });
 

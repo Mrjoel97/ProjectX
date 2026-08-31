@@ -272,5 +272,33 @@ export function buildRevenueTools(
         return formatFinanceEvidence(operation, result);
       },
     }),
+    declareUnsupported: tool({
+      description:
+        "Record a closed reason why the requested revenue answer cannot be supported. " +
+        "This writes, sends, approves, and changes nothing; continue with the supported evidence.",
+      inputSchema: jsonSchema<{
+        reason: "unavailable" | "partial" | "unsupported_operation";
+      }>({
+        type: "object",
+        properties: {
+          reason: {
+            type: "string",
+            enum: ["unavailable", "partial", "unsupported_operation"],
+          },
+        },
+        required: ["reason"],
+        additionalProperties: false,
+      }),
+      execute: async ({ reason }): Promise<string> => {
+        await ctx.runMutation(auditLog, {
+          tenantId,
+          correlationId: String(planId),
+          eventType: "revenue.unsupported_declared",
+          actor: "agent",
+          payload: { reason },
+        });
+        return "Recorded the unsupported revenue boundary. Continue with only the evidence the tools returned.";
+      },
+    }),
   };
 }

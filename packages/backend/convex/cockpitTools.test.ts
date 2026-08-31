@@ -2977,8 +2977,9 @@ test("revenue read tools are structurally absent unless the code-owned grant is 
 
   expect(keys()).not.toContain("readRevenueCrm");
   expect(keys()).not.toContain("readBusinessFinance");
+  expect(keys()).not.toContain("declareUnsupported");
   expect(keys(false)).not.toContain("readRevenueCrm");
-  expect(keys(true)).toEqual(expect.arrayContaining([...SPECIALISTS.revenue.tools.slice(0, 2)]));
+  expect(keys(true)).toEqual(expect.arrayContaining([...SPECIALISTS.revenue.tools]));
 });
 
 test("authorSkillCandidate exposes EXACTLY {name, authoredBody} over the closed agent set", () => {
