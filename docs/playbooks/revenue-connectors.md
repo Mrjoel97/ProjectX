@@ -229,13 +229,16 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
   `connectorOAuthStates` are `tenant_credential`, `contactProviderRefs` is `tenant_owned`,
   `providerGates` is `global`. Bumped `audit-dead-letter.md` in the same commit.
 
-**[PLANNED] — Convex adapters (thin, per CLAUDE.md §1)**
+**Convex adapters (thin, per CLAUDE.md §1)**
 
 - `connectorOAuth.ts` — one-time `connectorOAuthStates` nonce, consumed atomically.
 - `connectorFetch.ts` — bounded outbound fetch: allow-listed host and path, timeout, page cap.
 - `connectorConnections.ts` — sanitized `ConnectionStatus` projection for the UI.
 - `providerGates.ts` — per-provider `passed` / `parked` lane status read by tools and UI.
-- `revenueTools.ts` — the read-only revenue tool surface exposed to the Executive Agent.
+- `revenueTools.ts` (+ `.test.ts`) — LANDED in 28-12: the bounded revenue specialist surface. The
+  exact immutable grant is `readRevenueCrm`, `readBusinessFinance`, `declareUnsupported`; the
+  runtime identity-checks that tuple before constructing the keys. Evidence contains closed enums,
+  opaque refs, counts and code-calculated numbers only, never provider free text.
 - `revenueTelemetry.ts` — refs, counts and status outcomes only.
 - `invoiceReminders.ts` — stages an ordinary plan. No provider write, no send.
 
@@ -302,6 +305,26 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
 8. Disconnect: provider revoke/deauthorize **first**, local encrypted row delete **second**. A
    network or 5xx failure yields an honest partial-revoke state and a retry path, never a silent
    success.
+
+### Governed revenue-tool boundary (28-12)
+
+- The `revenue` specialist receives exactly three local tools: `readRevenueCrm`,
+  `readBusinessFinance`, and `declareUnsupported`. Skill rows and provider responses cannot add a
+  fourth tool; value-equal copied arrays do not satisfy the grant identity check.
+- `readRevenueCrm` has closed `attention | customer_pulse` operations. It returns Phase 19 contact
+  ids, opaque HubSpot refs, code-owned priority/reason enums, counts and coverage only. Unknown and
+  cross-tenant refs return `unavailable`; no name, address, note, company or stage label crosses the
+  tool boundary.
+- `readBusinessFinance` has closed `cash_flow | payroll_confidence` operations and a code-owned
+  horizon. It explains the immutable 28-11 result without recalculating it. Amounts are copied from
+  typed pure results; currencies remain separate; missing free-text reasons are represented by
+  counts. `partial` never upgrades to `ready` in prose.
+- Every result is wrapped in `<revenue_evidence>` with the explicit rule that evidence values are
+  never instructions, tool calls or parameters. The structured refusal accepts only the closed
+  reasons `unavailable | partial | unsupported_operation`.
+- The grant structurally excludes generic HTTP/MCP, Gmail, `executePlan`, plan approval, provider
+  mutations, CRM/accounting writes, refund/credit/dispute operations, and paid generation. Tool
+  audits contain refs, counts, environments and closed statuses only.
 
 ## Invariants — what must never break
 
@@ -853,6 +876,7 @@ implying it happened.
 | `cd packages/revenue && pnpm vitest run` | Contract, money, finance AND credential-envelope logic. 104 tests. | offline |
 | `cd packages/revenue && npx tsc --noEmit` | **Run this SEPARATELY.** Vitest transpiles without typechecking; 104 green tests sat over 4 real `ArrayBuffer`-generic errors here. | offline |
 | `cd packages/backend && pnpm vitest run connectorCredentials` | Two-tenant isolation, plaintext-sentinel scan, lease/CAS, revocation honesty. 30 tests. | offline |
+| `pnpm --filter @pikar/backend test -- revenueTools cockpitTools dispatch` | Exact grant identity, closed schemas, provider-text fence, partial semantics, cross-tenant refusal and governed-loop registration. | offline |
 | `cd packages/backend && npx vitest run convex/connectorOAuth.test.ts` | Replay, expiry, wrong-tenant, wrong-provider and wrong-environment states each perform zero exchange and zero store, observed refusing alone. 30 tests. | offline |
 | `cd packages/backend && npx vitest run convex/connectorFetch.test.ts` | The allow-list refuses relocation, each cap fires on its own, a later failure keeps earlier pages, and no token or vendor body escapes. 38 tests. | offline |
 | `cd packages/backend && pnpm vitest run isolation traceParity tenantDelete tenantExport` | The four derived gates a new table or a new tool literal must satisfy. | offline |

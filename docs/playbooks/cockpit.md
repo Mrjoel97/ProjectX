@@ -1,3 +1,13 @@
+> Last verified: 2026-08-31 (28-12 — **THE REVENUE SPECIALIST GRANT IS NOW LIVE AND READ-ONLY.**
+> The code-owned tuple is exactly `readRevenueCrm`, `readBusinessFinance`, and
+> `declareUnsupported`. `buildCockpitTools` constructs those keys only after identity-checking the
+> immutable `SPECIALISTS.revenue.tools` tuple; a copied list with the same strings does not open the
+> grant. CRM/provider text is never returned as instructions: `revenueTools.ts` emits a
+> `<revenue_evidence>` fence containing only closed enums, opaque refs, counts, and code-calculated
+> numbers. Partial coverage remains `partial`, unavailable stays `unavailable`, and every retained
+> provider label is evidence only. Generic HTTP/MCP, Gmail, `executePlan`, provider/CRM/accounting
+> writes, refunds, credits, dispute updates, and paid media remain structurally absent.)
+>
 > Last verified: 2026-08-30 (33.1-04 — **THE CANVAS STOPPED RESTATING TWO NUMBERS IT SHOULD HAVE
 > BEEN COMPUTING.** Three sentences in `mediaCanvasView.ts` typed out the clip-vs-still cost ratio
 > ("about a fortieth", "costs about 40×") and two typed out the generator's legal clip lengths
