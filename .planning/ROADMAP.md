@@ -1466,7 +1466,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
 | 25. Private Beta Productionization | 0/14 | Planned — execution blocked on 25-00 prerequisite evidence; two lanes (19, 31) run ahead of it | - |
 | 26. Connected Product Pages | 21/21 | **Complete — deployed to production** (`8f76aac`; CI green, `deploy-production` succeeded, www.pikar-ai.com 200) | 2026-08-23 |
-| 28. Connector-Backed Revenue Pack | 21/29 | In progress — 28-10's Phase 19-native CRM attention/pulse surface is complete and honestly local-only; all four read-only rails still lack live provider proof, and the owner chose PARK for all four wave-7 lanes | - |
+| 28. Connector-Backed Revenue Pack | 22/29 | In progress — 28-10's Phase 19-native CRM attention/pulse surface is complete and honestly local-only; 28-28 published eight exact v1 revenue bodies as byte-pinned dark candidates outside seeds/discovery and behind the existing eval activation gate; all four read-only rails still lack live provider proof, and the owner chose PARK for all four wave-7 lanes | - |
 | 28.1 Stripe Billing, Invoicing and Tax for Pikar's OWN merchant account (INSERTED) | 11/11 | **Code complete and SEALED 2026-08-30** — every plan landed, a 15-defect adversarial audit fixed, the rollup has a producer and the erasure arm cancels before the walk. **NOTHING IN IT HAS EVER SPOKEN TO STRIPE**: `requirements-completed: []`, BILL-01..06 all PENDING | 2026-08-30 |
 | **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
 | 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |
