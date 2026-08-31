@@ -1,3 +1,17 @@
+> Last verified: 2026-08-31 (28-13 — **INVOICE REMINDERS STOP AT THE EXISTING HUMAN APPROVE
+> GATE.** The executive-only `stageInvoiceReminder` tool accepts an explicit user request plus a
+> bounded QuickBooks or Stripe invoice ref, re-fetches the source, refuses paid/void/unknown or
+> changed invoices, and writes code-owned subject/body text onto an existing collecting email plan
+> as `status: "proposed"`. Exact retries are idempotent. It creates no request, workflow, audit,
+> scheduler, provider write, or mail call; the revenue specialist grant does not receive this tool.
+> After approval, immediate and scheduled cockpit delivery share the single `startFanout` workflow
+> call site, while the legacy pipeline reaches the same `internal.delivery.send` dispatcher. Gmail
+> and Microsoft therefore both pass through `prepareGovernedMessage`: current suppression and the
+> required postal footer are checked at the terminal, including every member of a comma-joined
+> recipient row. One suppressed member refuses the whole terminal send. Phase 28 owns selection and
+> staging only; Phase 19 continues to own contacts, approval, fan-out, delivery, suppression, and
+> footer enforcement.)
+>
 > Last verified: 2026-08-31 (28-12 — **THE REVENUE SPECIALIST GRANT IS NOW LIVE AND READ-ONLY.**
 > The code-owned tuple is exactly `readRevenueCrm`, `readBusinessFinance`, and
 > `declareUnsupported`. `buildCockpitTools` constructs those keys only after identity-checking the

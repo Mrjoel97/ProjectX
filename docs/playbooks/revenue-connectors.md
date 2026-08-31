@@ -326,6 +326,28 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
   mutations, CRM/accounting writes, refund/credit/dispute operations, and paid generation. Tool
   audits contain refs, counts, environments and closed statuses only.
 
+### Invoice-reminder containment (28-13)
+
+- `stageInvoiceReminder` is available to the executive tool set only. The `revenue` specialist's
+  exact grant remains the three read/refusal tools above and cannot stage a reminder.
+- Staging requires the closed intent `explicit_user_request`, a QuickBooks or Stripe invoice ref,
+  and an existing tenant-owned email plan with at least one recipient. The implementation re-fetches
+  the provider projection immediately before staging and refuses invoices that are missing, paid,
+  void, not outstanding, or changed since an earlier attempt.
+- The draft is code-owned and deterministic. The only persistence operation patches that existing
+  collecting plan to `proposed`; an exact retry is idempotent and conflicting proposed content is
+  never overwritten. No request, workflow, scheduler, provider mutation, audit event, or send is
+  created by the reminder module.
+- Ownership splits at the proposal boundary: Phase 28 chooses and stages the reminder; Phase 19's
+  plan, contact, approval, and delivery rails remain authoritative afterward. Immediate and
+  scheduled cockpit sends converge on `startFanout`; the legacy pipeline and that workflow both
+  reach `internal.delivery.send`, which routes Gmail or Microsoft through the shared
+  `prepareGovernedMessage` terminal.
+- Suppression and the required postal footer are re-checked at that terminal, so approval cannot
+  freeze stale consent. A comma-joined recipient row is split and normalized; if any member is
+  suppressed, the entire terminal send is refused. The approve-time per-address filter remains an
+  earlier defense, not a substitute for this send-time backstop.
+
 ## Invariants — what must never break
 
 1. **Read-only.** No write, refund, credit, dispute, journal-entry or CRM-mutation endpoint is

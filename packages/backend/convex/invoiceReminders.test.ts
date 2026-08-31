@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { readFileSync } from "node:fs";
 import type { Invoice, Projection, SourceRef } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
@@ -215,5 +216,42 @@ describe("existing proposed-plan persistence", () => {
     expect(
       await t.mutation(internal.invoiceReminders.stageProposed, { ...base, planId: proposed }),
     ).toEqual({ ok: false, reason: "plan_in_progress" });
+  });
+});
+
+describe("the existing delivery boundary remains the only terminal", () => {
+  test("Phase 28 adds no Gmail, workflow, scheduler, provider-write, or alternate delivery arm", () => {
+    const source = readFileSync(new URL("./invoiceReminders.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/internal\.(gmail|graph|delivery)\./);
+    expect(source).not.toMatch(/deliverApprovedPlan|workflow\.start|scheduler\.(run|runAfter|runAt)/);
+    expect(source).not.toMatch(/\b(fetch|POST|PUT|PATCH|DELETE)\b/);
+    expect(source).not.toMatch(/ACTION_TYPES|EXTERNAL_TARGETS/);
+    expect(source.match(/ctx\.db\.patch\(/g)).toHaveLength(1);
+    expect(source).toContain('status: "proposed"');
+  });
+
+  test("immediate, scheduled, and legacy sends converge on the shared suppression/footer guard", () => {
+    const cockpit = readFileSync(new URL("./cockpit.ts", import.meta.url), "utf8");
+    const workflow = readFileSync(new URL("./deliverApprovedPlan.ts", import.meta.url), "utf8");
+    const pipeline = readFileSync(new URL("./pipeline.ts", import.meta.url), "utf8");
+    const delivery = readFileSync(new URL("./delivery.ts", import.meta.url), "utf8");
+    const gmail = readFileSync(new URL("./gmail.ts", import.meta.url), "utf8");
+    const graph = readFileSync(new URL("./graph.ts", import.meta.url), "utf8");
+    const contacts = readFileSync(new URL("./contacts.ts", import.meta.url), "utf8");
+
+    expect(cockpit.match(/await workflow\.start\(/g)).toHaveLength(1);
+    expect(cockpit).toContain("internal.deliverApprovedPlan.deliverApprovedPlan");
+    expect(cockpit).toContain("await startFanout(ctx, args)");
+    expect(workflow).toContain("internal.delivery.send");
+    expect(pipeline).toContain("internal.delivery.send");
+    expect(delivery).toContain("internal.gmail.send");
+    expect(delivery).toContain("internal.graph.send");
+    expect(gmail).toContain("internal.contacts.isSuppressed");
+    expect(gmail).toContain("internal.contacts.footerFor");
+    expect(gmail).toContain("prepareGovernedMessage(ctx, req)");
+    expect(graph).toContain("prepareGovernedMessage(ctx, req)");
+    expect(contacts).toContain(".map(normalizeAddress)");
+    expect(contacts).toContain("for (const address of recipientMembers(recipient))");
+    expect(contacts).toContain("if (await suppressionByAddress(ctx, tenantId, address)) return true");
   });
 });
