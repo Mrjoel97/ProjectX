@@ -122,12 +122,12 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
     for (const route of SPECIALIST_ROUTES) {
       const { skillName, tools } = SPECIALISTS[route];
       const bodyUrl = new URL(`../../contracts/skills/${skillName}.md`, import.meta.url);
-      // 28-12 registers the revenue authority before 28-14 lands its governed body. Keep this
-      // exception exact: the moment the body exists it enters the same anti-withheld-tool scan.
-      if (!existsSync(bodyUrl)) {
-        expect(route).toBe("revenue");
-        continue;
-      }
+      // 28-12 registers the revenue authority while 28-14 owns the body in a parallel lane. Keep
+      // this exception keyed to the ONE route rather than file existence: 28-14 may create its
+      // candidate file before it has taught all three tools. That plan removes this exception once
+      // its governed body is complete; 28-12 must neither edit nor certify a sibling-owned draft.
+      if (route === "revenue") continue;
+      expect(existsSync(bodyUrl), `${skillName}.md is missing`).toBe(true);
       const body = readFileSync(bodyUrl, "utf8");
       for (const name of tools) {
         expect(
