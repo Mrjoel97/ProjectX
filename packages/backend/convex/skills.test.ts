@@ -110,8 +110,11 @@ describe("Phase 28 revenue candidate publication", () => {
     const pin = manifest[0];
     if (pin === undefined) throw new Error("revenue candidate manifest is empty");
     await t.run(async (ctx) => {
-      const row = (await rowsFor(t, pin.name))[0];
-      if (row === undefined) throw new Error("candidate missing");
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", pin.name).eq("version", pin.version))
+        .unique();
+      if (row === null) throw new Error("candidate missing");
       await ctx.db.patch(row._id, { body: `${row.body}\ndrift` });
     });
     await expect(t.mutation(internal.skills.seedRevenueCandidates, {})).rejects.toThrow(

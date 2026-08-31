@@ -1,5 +1,19 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-01 (28-28 — **EIGHT REVENUE BODIES ARE BYTE-PINNED DARK CANDIDATES,
+> NOT ACTIVE SKILLS.** `packages/backend/skills-lock.json` is the code-owned manifest: every entry
+> fixes `name@1`, `status: candidate`, LF UTF-8 byte count, SHA-256, exact upstream commit/path,
+> Apache-2.0 attribution, and modification notice. `seedRevenueCandidates` re-hashes the derived
+> runtime body before any insert, accepts only the one exact v1 duplicate, and refuses every
+> pre-existing or drifted row with `REVENUE_PIN_CONFLICT`; it never allocates a later version.
+>
+> Revenue names remain outside `SEEDS`, so ordinary dev boot cannot publish or activate them.
+> `loadSkill` continues to discover only `active`, while `inspectRevenueCandidates` returns only
+> ids, pins, status, bytes/hash, and provenance validity—never body or provenance text. The existing
+> global activation choke point now treats every lock-listed revenue name as eval-gated; Plan 28-19
+> owns evidence and Plan 28-20 owns any owner judgment/activation. This plan ran only in-memory
+> tests: no live Convex mutation, provider action, paid eval, or activation occurred.)
+>
 > Last verified: 2026-08-31 (33.1-06 — **THE `media-director` BODY NOW TEACHES THE GRID AND THE CAP
 > THE CODE ACTUALLY ENFORCES, AND THE ONE COST FIGURE LEFT IN IT IS GUARDED BY A DERIVED TEST.**
 > AUTHORED, NOT LIVE: nothing below reaches a model until `seedSkills` runs in the main tree, which
