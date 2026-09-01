@@ -3,6 +3,23 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
+current_plan: 23 of 29 executed; next 28-20, wave 15
+status: in_progress
+stopped_at: "28-19 IS COMPLETE (`acd13f0`). The repaired live diagnostic attempted all 11 direct revenue fixtures against all eight exact v1 candidates. Three pins passed (`revenue-call-list@1`, `revenue-lead-triage@1`, `revenue-specialist@1`) and five failed closed. Exact model-reported cost for the repaired run was $0.00322245; its guarded ledger debit was 11 cents. An earlier eight-turn artifact-discovery run debited 8 cents, so cumulative guarded debit was 19 cents; all earlier preflight/deployment attempts cost $0. The diagnostic and refs-only activation-evidence artifacts are schema v1 and hashed in 28-19-SUMMARY.md. All eight registry rows read back as candidate v1 with exact body hash and valid provenance; NOTHING ACTIVATED. A live-discovered serializer contradiction was fixed in `8b1945a`: red pins now run their complete fixture set and retain complete refs instead of discarding the artifact as partial. NEXT: 28-20 must make explicit owner judgments, may consider only the three green pins, and must park all five red pins. The finance failures also expose a fixture/runtime date-anchor mismatch; no rerun is implied. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
+last_updated: "2026-09-01T05:20:56.7312090+03:00"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 348
+  percent: 83
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
 current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE, a GAP AUDIT, and the TENANTDELETE CONNECTOR ARM
 status: in_progress
 stopped_at: "THE LAST UNOWNED PHASE-28 GAP IS CLOSED (`abba1a2`). `tenantDelete.ts` deleted the four
