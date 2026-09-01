@@ -70,6 +70,7 @@ import { requireCredentialKey } from "./connectorCredentials";
 import { readPages } from "./connectorFetch";
 import { tenantAction } from "./lib/functions";
 import { ACCESS_REFRESH_SKEW_MS, parseQbCredential } from "./quickbooksAuth";
+import { emitConnectorReadEvent } from "./revenueTelemetry";
 
 const environmentArg = v.union(v.literal("sandbox"), v.literal("production"));
 
@@ -366,6 +367,7 @@ export const readEntity = tenantAction({
       entity,
       windowDays: clampWindow(windowDays),
     });
+    await emitConnectorReadEvent(ctx, ctx.tenantId, "quickbooks", outcome.projection);
     return outcome.projection;
   },
 });

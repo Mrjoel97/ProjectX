@@ -79,6 +79,7 @@ import { type ActionCtx, internalAction } from "./_generated/server";
 import { requireCredentialKey } from "./connectorCredentials";
 import { readPages } from "./connectorFetch";
 import { tenantAction } from "./lib/functions";
+import { emitConnectorReadEvent } from "./revenueTelemetry";
 import { ACCESS_REFRESH_SKEW_MS, parseStripeCredential, stripeApp } from "./stripeAuth";
 
 const environmentArg = v.union(v.literal("sandbox"), v.literal("production"));
@@ -392,6 +393,7 @@ export const readEntity = tenantAction({
       entity,
       windowDays: clampWindow(windowDays),
     });
+    await emitConnectorReadEvent(ctx, ctx.tenantId, "stripe", outcome.projection);
     return outcome.projection;
   },
 });

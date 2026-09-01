@@ -75,6 +75,7 @@ import { type ActionCtx, internalAction } from "./_generated/server";
 import { requireCredentialKey } from "./connectorCredentials";
 import { readPages } from "./connectorFetch";
 import { tenantAction } from "./lib/functions";
+import { emitConnectorReadEvent } from "./revenueTelemetry";
 import {
   classifyGrantSubject,
   parsePayPalCredential,
@@ -361,6 +362,7 @@ export const readEntity = tenantAction({
       entity,
       windowDays: clampWindow(windowDays),
     });
+    await emitConnectorReadEvent(ctx, ctx.tenantId, "paypal", outcome.projection);
     return outcome.projection;
   },
 });

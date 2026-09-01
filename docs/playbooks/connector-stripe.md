@@ -1,6 +1,9 @@
 # Playbook: Stripe connector (REVN-03)
 
-> Last verified: 2026-08-31 (28-24 wave-7 owner decision — **PARK**. The offline seal payload keeps
+> Last verified: 2026-09-01 (28-21 terminal telemetry — the tenant-facing bounded read now reduces
+> its projection to provider, state and bounded counts and emits exactly one content-free event on
+> the shared Phase 27 plane; lifecycle events remain centralized at the credential mutation seam).
+> Prior: 2026-08-31 (28-24 wave-7 owner decision — **PARK**. The offline seal payload keeps
 > `admission: approved_production` separate from `lane: parked`, clears no conditions, and was not
 > applied to a deployment. `providerGates.test.ts` passed 25/25 and proves a parked row is absent
 > from the tenant projection; no Stripe or Convex deployment call is part of this evidence. Prior:

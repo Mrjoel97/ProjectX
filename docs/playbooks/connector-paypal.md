@@ -1,6 +1,9 @@
 # Playbook: PayPal connector (REVN-03)
 
-> Last verified: 2026-08-31 (28-25 owner judgment: PARK; offline absence and gate behavior re-verified)
+> Last verified: 2026-09-01 (28-21 terminal telemetry — the tenant-facing bounded read now reduces
+> its unavailable/ready/partial projection to provider, state and bounded counts and emits exactly
+> one content-free event on the shared Phase 27 plane). Prior: 2026-08-31 (28-25 owner judgment:
+> PARK; offline absence and gate behavior re-verified)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-08, 28-25) · Related ADRs: none yet
 
 > **Status: BUILT, PARKED, AND UNABLE TO CONNECT — deliberately.** The normalizer, the bounded read

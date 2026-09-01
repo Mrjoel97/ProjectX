@@ -26,6 +26,7 @@ import {
   composeBusinessFinance,
   type FinanceSourceReads,
 } from "./revenueFinance";
+import { emitRevenueEvent } from "./revenueTelemetry";
 
 type RevenueCrmOperation = "attention" | "customer_pulse";
 type RevenueFinanceOperation = "cash_flow" | "payroll_confidence";
@@ -320,6 +321,17 @@ export function buildRevenueTools(
               capped: view.capped,
             },
           });
+          await emitRevenueEvent(ctx, {
+            tenantId,
+            runId: `rev:crm:attention:${String(planId)}`,
+            event: "workflow_completed",
+            workflow: "revenue-call-list",
+            outcome:
+              view.rows.length === 0 ? "no_findings" : view.coverage === "partial" ? "partial" : "useful",
+            itemCount: view.rows.length,
+            partial: view.coverage === "partial",
+            capped: view.capped,
+          });
           return formatAttentionEvidence(view);
         }
         if (provider !== "hubspot" || !externalRef?.trim()) {
@@ -336,6 +348,15 @@ export function buildRevenueTools(
           eventType: "revenue.crm_read",
           actor: "agent",
           payload: { operation, provider, externalRef, status: pulse.state, count: 1 },
+        });
+        await emitRevenueEvent(ctx, {
+          tenantId,
+          runId: `rev:crm:pulse:${String(planId)}`,
+          event: "workflow_completed",
+          workflow: "revenue-customer-pulse",
+          outcome: pulse.state === "unavailable" ? "blocked" : "partial",
+          itemCount: pulse.state === "unavailable" ? 0 : 1,
+          partial: pulse.state === "partial",
         });
         return fence(pulse.state, pulse);
       },
@@ -374,6 +395,25 @@ export function buildRevenueTools(
             valueCount: selected.value.length,
             missingCount: selected.coverage.missing.length,
           },
+        });
+        const degraded =
+          state !== "ready" ||
+          selected.coverage.capped ||
+          selected.coverage.partial ||
+          selected.coverage.missing.length > 0;
+        await emitRevenueEvent(ctx, {
+          tenantId,
+          runId: `rev:finance:${operation}:${String(planId)}`,
+          event: "finance_computed",
+          workflow:
+            operation === "cash_flow" ? "revenue-cash-flow" : "revenue-payroll-confidence",
+          coverage: state === "unavailable" ? "unknown" : degraded ? "partial" : "complete",
+          confidence: selected.confidence === "unavailable" ? "unknown" : selected.confidence,
+          itemCount: selected.value.length,
+          unknownCount: selected.coverage.missing.length,
+          capped: selected.coverage.capped,
+          partial: degraded,
+          hasGap: degraded,
         });
         return formatFinanceEvidence(operation, result);
       },

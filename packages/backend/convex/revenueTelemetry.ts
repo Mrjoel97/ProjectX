@@ -8,7 +8,12 @@
 // Cost and latency are deliberately absent. `spendEvents` and `agentSteps` own those facts and the
 // operational projection joins them by the same `runId`.
 
-import { REVENUE_COUNT_MAX, type RevenueEventKind } from "@pikar/core";
+import {
+  REVENUE_COUNT_MAX,
+  type RevenueEventKind,
+  type RevenueProvider,
+} from "@pikar/core";
+import type { Projection } from "@pikar/revenue";
 import { internal } from "./_generated/api";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
 import {
@@ -38,5 +43,28 @@ export async function emitRevenueEvent(
   return await ctx.runMutation(internal.workflowPackEventLog.record, {
     ...args,
     packId: "revenue",
+  });
+}
+
+/** Reduce a bounded provider projection to counts and closed labels before it reaches storage. */
+export async function emitConnectorReadEvent(
+  ctx: Pick<ActionCtx, "runMutation">,
+  tenantId: string,
+  provider: RevenueProvider,
+  projection: Projection<unknown>,
+) {
+  const available = projection.state === "unavailable" ? undefined : projection;
+  return await emitRevenueEvent(ctx, {
+    tenantId,
+    runId: `rev:read:${provider}:${crypto.randomUUID()}`,
+    event: "connector_read",
+    provider,
+    status: projection.state,
+    itemCount: available === undefined ? 0 : Math.min(available.items.length, REVENUE_COUNT_MAX),
+    sourceAvailableCount:
+      available === undefined
+        ? 0
+        : Math.min(available.meta.sources.length, REVENUE_COUNT_MAX),
+    partial: projection.state === "partial",
   });
 }

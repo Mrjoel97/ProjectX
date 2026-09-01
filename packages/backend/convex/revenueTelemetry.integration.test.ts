@@ -186,7 +186,7 @@ describe("real provider terminals reach the shared revenue event plane", () => {
     expect(JSON.stringify(rows)).not.toContain(ACCESS);
   });
 
-  test("connect, reauth and disconnect lifecycle transitions are observed once from real actions", async () => {
+  test("duplicate and reordered lifecycle calls preserve one event per real transition", async () => {
     const h = await harness(true);
     await connectHubSpot(h);
 
@@ -200,6 +200,14 @@ describe("real provider terminals reach the shared revenue event plane", () => {
     await h.asA.action(api.connectorConnections.disconnectProvider, {
       provider: "hubspot",
       environment: "production",
+    });
+    await h.asA.action(api.connectorConnections.disconnectProvider, {
+      provider: "hubspot",
+      environment: "production",
+    });
+    await h.asA.action(api.hubspot.hubspotRead, {
+      environment: "production",
+      dataset: "contacts",
     });
 
     const lifecycle = (await events(h)).filter((row) => row.event === "connector_lifecycle");
@@ -219,9 +227,18 @@ describe("real workflow terminals emit bounded completions", () => {
   test("CRM and finance tool executions record one closed completion each", async () => {
     const h = await harness();
     const bridge = {
-      runQuery: (ref: never, args: never) => h.asA.query(ref, args),
-      runMutation: (ref: never, args: never) => h.asA.mutation(ref, args),
-      runAction: (ref: never, args: never) => h.asA.action(ref, args),
+      runQuery: (ref: unknown, args: unknown) =>
+        (
+          h.asA.query as unknown as (reference: unknown, arguments_: unknown) => Promise<unknown>
+        )(ref, args),
+      runMutation: (ref: unknown, args: unknown) =>
+        (
+          h.asA.mutation as unknown as (reference: unknown, arguments_: unknown) => Promise<unknown>
+        )(ref, args),
+      runAction: (ref: unknown, args: unknown) =>
+        (
+          h.asA.action as unknown as (reference: unknown, arguments_: unknown) => Promise<unknown>
+        )(ref, args),
     };
     const tools = buildRevenueTools(bridge as never, h.tenantA, "plan-a");
 

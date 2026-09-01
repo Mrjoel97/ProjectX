@@ -1,6 +1,9 @@
 # Playbook: HubSpot connector (REVN-01)
 
-> Last verified: 2026-08-31 (28-22 owner judgment — **PARK**. The offline seal resolved
+> Last verified: 2026-09-01 (28-21 terminal telemetry — the tenant-facing bounded read now reduces
+> its projection to provider, state and bounded counts and emits exactly one content-free event on
+> the shared Phase 27 plane; lifecycle events remain centralized at the credential mutation seam).
+> Prior: 2026-08-31 (28-22 owner judgment — **PARK**. The offline seal resolved
 > `hubspot/production` to `parked`, with no cleared conditions and evidence ref
 > `docs/connectors/hubspot-suitability.md#wave-7-park-2026-08-31`. No deployment mutation or
 > inspection was authorized, so no revision is claimed. Offline gate and connector-surface tests
