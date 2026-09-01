@@ -11,3 +11,13 @@
   disagreement about a `test.each` call (~line 408). PRE-EXISTING from 28-06 and NOT touched by
   28-07 — `git diff --stat` against that file is empty for this plan. Out of scope; noted so the
   next lane that runs a repo-wide biome check knows it is not theirs either.
+
+## 28-16 (2026-09-02)
+
+- The authenticated 390×844 Connections artifact shows the existing profile shell clipping long
+  tab/descriptive copy at the right edge even though `html.scrollWidth === clientWidth` (the shell
+  hides overflow rather than exposing a horizontal scrollbar). Revenue-provider absence and the
+  honest Google/Microsoft states remain visible and the plan-owned gate passes. This predates the
+  28-16 files and is outside the connector-exposure slice; a profile/responsive owner should add a
+  viewport-containment assertion and repair the shell without folding in the concurrently edited
+  workspace-header overflow change.
