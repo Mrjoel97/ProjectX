@@ -21,6 +21,12 @@
 //     a provider that may read nothing can never be eligible, whatever the owner approved.
 //  5. NO TENANT CAN WIDEN IT. The table is deployment-global with no `tenantId`: two tenants see
 //     the identical projection and neither can write.
+
+import {
+  REVENUE_CASH_FLOW_SKILL,
+  REVENUE_LEAD_TRIAGE_SKILL,
+  REVENUE_SPECIALIST_SKILL,
+} from "@pikar/contracts/skill";
 import {
   ADMISSIONS,
   LANES,
@@ -351,6 +357,64 @@ describe("providerGates — no tenant can widen its own provider access", () => 
   });
 });
 
+describe("providerGates.revenueDiscovery — passed lanes plus active exact pins", () => {
+  const activate = async (t: Awaited<ReturnType<typeof harness>>["t"], name: string, version = 1) =>
+    t.run((ctx) =>
+      ctx.db.insert("skills", {
+        name,
+        version,
+        body: `${name}@${version}`,
+        status: "active",
+        createdAt: Date.now(),
+      }),
+    );
+
+  test("requires the passed provider, the workflow pin and the runtime pin", async () => {
+    const { t, asOwner, asTenantA } = await harness();
+    await asOwner.mutation(api.providerGates.sealGate, sealArgs());
+
+    expect(await asTenantA.query(api.providerGates.revenueDiscovery, {})).toEqual([]);
+    await activate(t, REVENUE_SPECIALIST_SKILL);
+    expect(await asTenantA.query(api.providerGates.revenueDiscovery, {})).toEqual([]);
+    await activate(t, REVENUE_LEAD_TRIAGE_SKILL);
+
+    expect(await asTenantA.query(api.providerGates.revenueDiscovery, {})).toMatchObject([
+      {
+        id: "lead-triage",
+        provider: "hubspot",
+        skill: { name: REVENUE_LEAD_TRIAGE_SKILL, version: 1 },
+        runtimeSkill: { name: REVENUE_SPECIALIST_SKILL, version: 1 },
+      },
+    ]);
+  });
+
+  test("one passed provider appears independently and a refreshed failure removes it", async () => {
+    const { t, asOwner, asTenantA } = await harness();
+    await activate(t, REVENUE_SPECIALIST_SKILL);
+    await activate(t, REVENUE_CASH_FLOW_SKILL);
+    await asOwner.mutation(
+      api.providerGates.sealGate,
+      sealArgs({
+        provider: "quickbooks",
+        clearedConditions: [...openConditionIdsFor("quickbooks")],
+      }),
+    );
+
+    const [offer] = await asTenantA.query(api.providerGates.revenueDiscovery, {});
+    expect(offer).toMatchObject({ provider: "quickbooks", id: "cash-flow-quickbooks" });
+    expect(await asTenantA.query(api.providerGates.availableProviders, {})).toEqual([
+      { provider: "quickbooks", environment: "production" },
+    ]);
+
+    await t.mutation(internal.providerGates.recordLaneFailure, {
+      provider: "quickbooks",
+      environment: "production",
+      evidenceRef: "refresh#failed",
+    });
+    expect(await asTenantA.query(api.providerGates.revenueDiscovery, {})).toEqual([]);
+  });
+});
+
 // ── Structural scans: the module cannot grow a public write ───────────────────────────────
 
 describe("providerGates — structural guarantees", () => {
@@ -395,7 +459,7 @@ describe("providerGates — structural guarantees", () => {
     // open conditions all at once, and would still look right.
     const at = source.indexOf("export const availableProviders");
     expect(at).toBeGreaterThan(0);
-    const projection = source.slice(at, source.indexOf("export const inspectGate"));
+    const projection = source.slice(at, source.indexOf("type RevenueDiscoverySpec"));
     expect(projection).toContain("resolve(");
     expect(projection).not.toContain("lane");
   });

@@ -1,5 +1,13 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
+> Last verified: 2026-09-01 — Plan 28-16 added the server-owned revenue discovery projection.
+> `providerGates.revenueDiscovery` intersects current production `passedProviderGates` with the
+> exact active workflow row and active `revenue-specialist` row. The workspace renders only that
+> projection; it never infers readiness from a module, playbook or credential row. A parked,
+> failed, expired or missing provider, an inactive workflow pin, or an inactive runtime pin removes
+> only the affected offer. A later `recordLaneFailure` removes a formerly visible offer on the next
+> reactive read. No provider or deployment operation is part of discovery.
+>
 > Last verified: 2026-09-01 — Plan 28-29 grounded the reserved decision and recovery events at real
 > terminals. Reminder staging now records a provider-scoped one-way invoice ref; only later
 > normalized reads from passed QuickBooks, Stripe or PayPal lanes can match that tenant-owned ref

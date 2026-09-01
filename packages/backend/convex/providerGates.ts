@@ -22,6 +22,17 @@
 // DEPLOYMENT-GLOBAL. `providerGates` has no `tenantId` (classified `global` in
 // `@pikar/core/tenantData`), which is what stops a tenant from ever widening its own provider
 // access. Every tenant reads the identical projection and none of them can write one.
+
+import {
+  REVENUE_CALL_LIST_SKILL,
+  REVENUE_CASH_FLOW_SKILL,
+  REVENUE_CUSTOMER_PULSE_SKILL,
+  REVENUE_INVOICE_REMINDER_SKILL,
+  REVENUE_LEAD_TRIAGE_SKILL,
+  REVENUE_PAYROLL_CONFIDENCE_SKILL,
+  REVENUE_PIPELINE_REVIEW_SKILL,
+  REVENUE_SPECIALIST_SKILL,
+} from "@pikar/contracts/skill";
 import {
   type Admission,
   admissionPermits,
@@ -167,6 +178,156 @@ export const availableProviders = tenantQuery({
     return rows
       .filter((row) => resolve(asRecord(row), row.provider, now).state === "passed")
       .map((row) => ({ provider: row.provider, environment: row.environment }));
+  },
+});
+
+type RevenueDiscoverySpec = {
+  id: string;
+  provider: Provider;
+  providerLabel: string;
+  title: string;
+  summary: string;
+  opener: string;
+  skillName:
+    | typeof REVENUE_LEAD_TRIAGE_SKILL
+    | typeof REVENUE_CALL_LIST_SKILL
+    | typeof REVENUE_PIPELINE_REVIEW_SKILL
+    | typeof REVENUE_CUSTOMER_PULSE_SKILL
+    | typeof REVENUE_CASH_FLOW_SKILL
+    | typeof REVENUE_PAYROLL_CONFIDENCE_SKILL
+    | typeof REVENUE_INVOICE_REMINDER_SKILL;
+};
+
+/**
+ * Code-owned workflow suitability. Provider rows decide whether a lane may be used; active skill
+ * rows decide whether this exact workflow and its runtime specialist may be offered. The browser
+ * receives only their intersection and cannot reconstruct a parked lane from module or docs presence.
+ */
+const REVENUE_DISCOVERY: readonly RevenueDiscoverySpec[] = [
+  {
+    id: "lead-triage",
+    provider: "hubspot",
+    providerLabel: "HubSpot",
+    title: "Lead triage",
+    summary: "Rank the people who need attention from current CRM facts.",
+    opener: "Review my HubSpot leads and rank who needs attention.",
+    skillName: REVENUE_LEAD_TRIAGE_SKILL,
+  },
+  {
+    id: "call-list",
+    provider: "hubspot",
+    providerLabel: "HubSpot",
+    title: "Call list",
+    summary: "Build a review list from current follow-ups and CRM coverage.",
+    opener: "Build my HubSpot call list from current follow-ups.",
+    skillName: REVENUE_CALL_LIST_SKILL,
+  },
+  {
+    id: "pipeline-review",
+    provider: "hubspot",
+    providerLabel: "HubSpot",
+    title: "Pipeline review",
+    summary: "Review source-owned deals beside local follow-up state.",
+    opener: "Review my HubSpot pipeline and name any missing coverage.",
+    skillName: REVENUE_PIPELINE_REVIEW_SKILL,
+  },
+  {
+    id: "customer-pulse-hubspot",
+    provider: "hubspot",
+    providerLabel: "HubSpot",
+    title: "Customer pulse",
+    summary: "Review bounded CRM signals without inventing missing history.",
+    opener: "Give me a customer pulse from HubSpot and name any missing coverage.",
+    skillName: REVENUE_CUSTOMER_PULSE_SKILL,
+  },
+  {
+    id: "cash-flow-quickbooks",
+    provider: "quickbooks",
+    providerLabel: "QuickBooks",
+    title: "Cash flow",
+    summary: "Explain the deterministic cash view with coverage and confidence.",
+    opener: "Review my QuickBooks cash flow and explain its coverage and confidence.",
+    skillName: REVENUE_CASH_FLOW_SKILL,
+  },
+  {
+    id: "payroll-confidence",
+    provider: "quickbooks",
+    providerLabel: "QuickBooks",
+    title: "Payroll confidence",
+    summary: "Explain the computed payroll view without treating unknowns as zero.",
+    opener: "Review my QuickBooks payroll confidence and name every unknown.",
+    skillName: REVENUE_PAYROLL_CONFIDENCE_SKILL,
+  },
+  ...(["quickbooks", "stripe", "paypal"] as const).map((provider) => ({
+    id: `invoice-reminder-${provider}`,
+    provider,
+    providerLabel:
+      provider === "quickbooks" ? "QuickBooks" : provider === "stripe" ? "Stripe" : "PayPal",
+    title: "Invoice reminder",
+    summary: "Prepare a reminder draft for human approval. Nothing is sent.",
+    opener: `Prepare an invoice reminder from ${provider === "quickbooks" ? "QuickBooks" : provider === "stripe" ? "Stripe" : "PayPal"}. Keep it as a draft for my approval.`,
+    skillName: REVENUE_INVOICE_REMINDER_SKILL,
+  })),
+  ...(["stripe", "paypal"] as const).flatMap((provider) => {
+    const providerLabel = provider === "stripe" ? "Stripe" : "PayPal";
+    return [
+      {
+        id: `cash-flow-${provider}`,
+        provider,
+        providerLabel,
+        title: "Cash flow",
+        summary: "Explain the deterministic payment-rail view with honest coverage.",
+        opener: `Review my ${providerLabel} cash flow and name any missing coverage.`,
+        skillName: REVENUE_CASH_FLOW_SKILL,
+      },
+      {
+        id: `customer-pulse-${provider}`,
+        provider,
+        providerLabel,
+        title: "Customer pulse",
+        summary: "Review bounded payment signals without inventing missing history.",
+        opener: `Give me a customer pulse from ${providerLabel} and name any missing coverage.`,
+        skillName: REVENUE_CUSTOMER_PULSE_SKILL,
+      },
+    ];
+  }),
+];
+
+/** PASSED provider state plus exact active workflow/runtime pins, composed on the server. */
+export const revenueDiscovery = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const passed = new Set(
+      (await passedProviderGates(ctx, Date.now()))
+        .filter(({ environment }) => environment === "production")
+        .map(({ provider }) => provider),
+    );
+    if (passed.size === 0) return [];
+
+    const runtime = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) =>
+        q.eq("name", REVENUE_SPECIALIST_SKILL).eq("status", "active"),
+      )
+      .unique();
+    if (runtime === null) return [];
+
+    const out = [];
+    for (const spec of REVENUE_DISCOVERY) {
+      if (!passed.has(spec.provider)) continue;
+      const skill = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", spec.skillName).eq("status", "active"))
+        .unique();
+      if (skill === null) continue;
+      const { skillName, ...view } = spec;
+      out.push({
+        ...view,
+        skill: { name: skillName, version: skill.version },
+        runtimeSkill: { name: REVENUE_SPECIALIST_SKILL, version: runtime.version },
+      });
+    }
+    return out;
   },
 });
 

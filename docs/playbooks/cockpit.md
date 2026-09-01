@@ -1,3 +1,10 @@
+> Last verified: 2026-09-01 (28-16 — **REVENUE WORKFLOWS APPEAR ONLY FROM SERVER-OWNED PASSED
+> EVIDENCE PLUS ACTIVE PINS.** `RevenuePackPanel` is a dumb responsive renderer over
+> `providerGates.revenueDiscovery`; it cannot derive a workflow from client files or connector
+> presence. Each offer names its read-only provider and passed-evidence status in text, and starts
+> through the existing trusted-clock cockpit send hook only inside an existing conversation.
+> Parked, failed, expired and inactive lanes render nothing.)
+>
 > Last verified: 2026-09-01 (28-29 — **REVENUE DECISIONS EMIT ONLY AFTER THE REAL TERMINAL.** A
 > reminder-staged plan records `plan_decided` after a successful re-propose, after the approve CAS
 > and every governed refusal, or after the proposed-to-canceled discard transition. Drafting,
