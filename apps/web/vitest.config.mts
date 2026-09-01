@@ -26,8 +26,8 @@ export default defineConfig({
   esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
-    // `.ts` only — a `.tsx` file here would silently need a DOM and fail confusingly.
-    include: ["app/**/*.test.ts", "lib/**/*.test.ts"],
+    // Component tests may use TSX but stay in the Node environment via server rendering.
+    include: ["app/**/*.test.ts", "app/**/*.test.tsx", "lib/**/*.test.ts"],
     // FALSE ON PURPOSE. If this workspace ever has no test files, that is the exact condition this
     // config was created to make visible — a silent green run is how the last gap survived.
     passWithNoTests: false,
