@@ -1,3 +1,10 @@
+> Last verified: 2026-09-01 (28-29 — **REVENUE DECISIONS EMIT ONLY AFTER THE REAL TERMINAL.** A
+> reminder-staged plan records `plan_decided` after a successful re-propose, after the approve CAS
+> and every governed refusal, or after the proposed-to-canceled discard transition. Drafting,
+> refused approval, duplicate approval and delivery-terminal writes cannot manufacture a decision
+> or recovery event; stored telemetry is plan refs plus the closed `edited|approved|rejected`
+> status only.)
+>
 > Last verified: 2026-09-01 (28-19 — **THE REVENUE GOLDEN GATE NOW EXECUTES THE CANDIDATE BODY,
 > NOT THE COCKPIT BODY.** `llm:runRevenueCandidateEval` is an internal, eval-only door beside the
 > governed specialist loop. It accepts only `eval-<8hex>` tenants, the closed 11-case revenue

@@ -20,7 +20,7 @@ import { type GenericActionCtx, makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { recordRevenueEvent } from "./revenueTelemetry";
+import { recordRevenueEvent, revenueSubjectRef } from "./revenueTelemetry";
 
 type ReminderProvider = "quickbooks" | "stripe";
 type ConnectorEnvironment = "sandbox" | "production";
@@ -303,6 +303,7 @@ export const stageProposed = internalMutation({
     if (draftInProgress) return { ok: false, reason: "plan_in_progress" };
 
     await ctx.db.patch(planId, { subject, body, status: "proposed" });
+    const subjectRef = await revenueSubjectRef(invoiceRef.provider, "invoice", invoiceRef.id);
     await recordRevenueEvent(ctx, {
       tenantId,
       runId: `rev:reminder:${String(planId)}`,
@@ -310,6 +311,7 @@ export const stageProposed = internalMutation({
       workflow: "revenue-invoice-reminder",
       itemCount: 1,
       planId,
+      subjectRef,
     });
     return { ok: true, planId, staged: true };
   },

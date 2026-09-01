@@ -1,8 +1,12 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-09-01 — Plan 28-15 extended the Phase 27 `workflowPackEvents` plane with one
-> measurement-only `revenue` stream, a closed content-free vocabulary, idempotent terminal writes,
-> and bounded tenant projections. Cost and latency remain owned by `spendEvents` and `agentSteps`.
+> Last verified: 2026-09-01 — Plan 28-29 grounded the reserved decision and recovery events at real
+> terminals. Reminder staging now records a provider-scoped one-way invoice ref; only later
+> normalized reads from passed QuickBooks, Stripe or PayPal lanes can match that tenant-owned ref
+> and emit one `recovery_observed`. Approve/edit/reject emit `plan_decided` only after their durable
+> transitions; drafting, refused approval, delivery and unavailable reads emit no recovery. Plan
+> 28-15 established the shared measurement-only `revenue` stream and bounded tenant projections.
+> Cost and latency remain owned by `spendEvents` and `agentSteps`.
 >
 > Last verified: 2026-09-01 — Plan 28-20 approved exactly `revenue-call-list@1`,
 > `revenue-lead-triage@1`, and `revenue-specialist@1` after their complete exact-pin runs passed.

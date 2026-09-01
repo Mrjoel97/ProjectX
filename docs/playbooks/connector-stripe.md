@@ -1,8 +1,11 @@
 # Playbook: Stripe connector (REVN-03)
 
-> Last verified: 2026-09-01 (28-21 terminal telemetry — the tenant-facing bounded read now reduces
-> its projection to provider, state and bounded counts and emits exactly one content-free event on
-> the shared Phase 27 plane; lifecycle events remain centralized at the credential mutation seam).
+> Last verified: 2026-09-01 (28-29 recovery telemetry — after the passed-only tenant read returns a
+> normalized zero-balance invoice or linked successful charge, it can match a provider-scoped
+> one-way ref from an earlier tenant-owned reminder and emit one idempotent `recovery_observed`.
+> Unavailable reads, another tenant and another provider cannot match). Prior: 28-21 terminal
+> telemetry — the bounded read reduces its projection to provider, state and counts on the shared
+> Phase 27 plane; lifecycle events remain centralized at the credential mutation seam.
 > Prior: 2026-08-31 (28-24 wave-7 owner decision — **PARK**. The offline seal payload keeps
 > `admission: approved_production` separate from `lane: parked`, clears no conditions, and was not
 > applied to a deployment. `providerGates.test.ts` passed 25/25 and proves a parked row is absent

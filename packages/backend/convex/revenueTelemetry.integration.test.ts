@@ -1,12 +1,12 @@
-import { buildRevenueTools } from "./revenueTools";
-import { importCredentialKey, sealCredential, type SourceRef } from "@pikar/revenue";
+import { importCredentialKey, sealCredential } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { allPassedGates } from "../__fixtures__/providerGates";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
-import schema from "./schema";
 import { QB_SCOPE } from "./quickbooksAuth";
+import { buildRevenueTools } from "./revenueTools";
+import schema from "./schema";
 import { STRIPE_GRANT_SCOPE } from "./stripeAuth";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -123,7 +123,7 @@ async function seedProviderConnection(
   const key = await importCredentialKey(keyB64(), "v1");
   const credential =
     provider === "quickbooks"
-      ? { accessToken: ACCESS, refreshToken: REFRESH, realmId: "realm-42", scope: QB_SCOPE }
+      ? { accessToken: ACCESS, refreshToken: REFRESH, realmId: "4242", scope: QB_SCOPE }
       : provider === "stripe"
         ? {
             accessToken: ACCESS,
@@ -159,7 +159,7 @@ async function seedProviderConnection(
 async function stageReminder(
   h: Harness,
   tenantId: string,
-  ref: SourceRef,
+  ref: { provider: "quickbooks" | "stripe"; kind: "invoice"; id: string },
   over: { sendAt?: number } = {},
 ) {
   const planId = await h.t.run((ctx) =>
@@ -245,12 +245,12 @@ describe("real provider terminals reach the shared revenue event plane", () => {
     const rows = (await events(h)).filter((row) => row.event === "connector_read");
     expect(rows.filter((row) => row.tenantId === h.tenantA)).toHaveLength(4);
     expect(rows.filter((row) => row.tenantId === h.tenantB)).toHaveLength(1);
-    expect(rows.filter((row) => row.tenantId === h.tenantA).map((row) => row.provider).sort()).toEqual([
-      "hubspot",
-      "paypal",
-      "quickbooks",
-      "stripe",
-    ]);
+    expect(
+      rows
+        .filter((row) => row.tenantId === h.tenantA)
+        .map((row) => row.provider)
+        .sort(),
+    ).toEqual(["hubspot", "paypal", "quickbooks", "stripe"]);
     expect(rows.every((row) => row.status === "unavailable")).toBe(true);
   });
 
@@ -305,11 +305,7 @@ describe("real provider terminals reach the shared revenue event plane", () => {
     });
 
     const lifecycle = (await events(h)).filter((row) => row.event === "connector_lifecycle");
-    expect(lifecycle.map((row) => row.status)).toEqual([
-      "connected",
-      "reauth_required",
-      "revoked",
-    ]);
+    expect(lifecycle.map((row) => row.status)).toEqual(["connected", "reauth_required", "revoked"]);
     expect(new Set(lifecycle.map((row) => row.runId)).size).toBe(3);
     expect(lifecycle.every((row) => row.tenantId === h.tenantA && row.provider === "hubspot")).toBe(
       true,
@@ -322,17 +318,19 @@ describe("real workflow terminals emit bounded completions", () => {
     const h = await harness();
     const bridge = {
       runQuery: (ref: unknown, args: unknown) =>
-        (
-          h.asA.query as unknown as (reference: unknown, arguments_: unknown) => Promise<unknown>
-        )(ref, args),
+        (h.asA.query as unknown as (reference: unknown, arguments_: unknown) => Promise<unknown>)(
+          ref,
+          args,
+        ),
       runMutation: (ref: unknown, args: unknown) =>
         (
           h.asA.mutation as unknown as (reference: unknown, arguments_: unknown) => Promise<unknown>
         )(ref, args),
       runAction: (ref: unknown, args: unknown) =>
-        (
-          h.asA.action as unknown as (reference: unknown, arguments_: unknown) => Promise<unknown>
-        )(ref, args),
+        (h.asA.action as unknown as (reference: unknown, arguments_: unknown) => Promise<unknown>)(
+          ref,
+          args,
+        ),
     };
     const tools = buildRevenueTools(bridge as never, h.tenantA, "plan-a");
 
@@ -447,9 +445,10 @@ describe("plan decisions and provider-observed recovery are distinct terminals",
         .unique(),
     );
     expect(request).not.toBeNull();
+    if (request === null) throw new Error("expected a staged delivery request");
     await h.t.mutation(internal.plans.recordDeliveryTerminal, {
       planId: approvePlan,
-      requestId: request!._id,
+      requestId: request._id,
       outcome: "sent",
     });
 
@@ -461,9 +460,9 @@ describe("plan decisions and provider-observed recovery are distinct terminals",
     expect(await h.asA.mutation(api.cockpit.discardPlan, { planId: rejectPlan })).toMatchObject({
       discarded: true,
     });
-    await expect(
-      h.asB.mutation(api.cockpit.discardPlan, { planId: editPlan }),
-    ).rejects.toThrow("plan not found");
+    await expect(h.asB.mutation(api.cockpit.discardPlan, { planId: editPlan })).rejects.toThrow(
+      "plan not found",
+    );
 
     const rows = await events(h);
     expect(rows.filter((row) => row.event === "plan_decided")).toEqual([
@@ -499,7 +498,14 @@ describe("plan decisions and provider-observed recovery are distinct terminals",
       },
     }));
 
-    await h.asA.action(api.quickbooks.readEntity, { environment: "sandbox", entity: "Payment" });
+    const projection = await h.asA.action(api.quickbooks.readEntity, {
+      environment: "sandbox",
+      entity: "Payment",
+    });
+    expect(projection).toMatchObject({
+      state: "ready",
+      items: [expect.objectContaining({ invoiceId: ref.id })],
+    });
     await h.asA.action(api.quickbooks.readEntity, { environment: "sandbox", entity: "Payment" });
 
     const staged = (await events(h)).find(
@@ -579,7 +585,12 @@ describe("plan decisions and provider-observed recovery are distinct terminals",
 
 describe("terminal coverage cannot be satisfied by an unused emitter helper", () => {
   test("every required production terminal module registers the shared emitter", () => {
-    for (const name of ["hubspot.ts", "quickbooks.ts", "stripeConnector.ts", "paypalConnector.ts"]) {
+    for (const name of [
+      "hubspot.ts",
+      "quickbooks.ts",
+      "stripeConnector.ts",
+      "paypalConnector.ts",
+    ]) {
       const source = Object.entries(rawSources).find(([path]) => path.endsWith(`/${name}`))?.[1];
       expect(source, `${name} missing from raw-source registry`).toBeDefined();
       expect(source, `${name} has no production read emission`).toContain("emitConnectorReadEvent");
@@ -601,7 +612,9 @@ describe("terminal coverage cannot be satisfied by an unused emitter helper", ()
       path.endsWith("/cockpit.ts"),
     )?.[1];
     expect(cockpitSource).toContain("recordRevenueEvent");
-    const plansSource = Object.entries(rawSources).find(([path]) => path.endsWith("/plans.ts"))?.[1];
+    const plansSource = Object.entries(rawSources).find(([path]) =>
+      path.endsWith("/plans.ts"),
+    )?.[1];
     expect(plansSource).toContain("matchingStagedRevenueRecoveries");
     for (const name of ["quickbooks.ts", "stripeConnector.ts", "paypalConnector.ts"]) {
       const source = Object.entries(rawSources).find(([path]) => path.endsWith(`/${name}`))?.[1];
@@ -616,7 +629,8 @@ describe("terminal coverage cannot be satisfied by an unused emitter helper", ()
       dataset: "deals",
     });
     const rows = await events(h);
-    const forbidden = /name|email|message|body|subject|description|amount|currency|token|credential|payload|raw|cost|latency|duration/i;
+    const forbidden =
+      /name|email|message|body|subject|description|amount|currency|token|credential|payload|raw|cost|latency|duration/i;
     for (const row of rows) {
       for (const key of Object.keys(row)) expect(key).not.toMatch(forbidden);
     }

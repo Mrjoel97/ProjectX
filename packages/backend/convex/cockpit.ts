@@ -55,6 +55,7 @@ import {
   reserveSceneJobInner,
   sceneDeckOf,
 } from "./media";
+import { recordRevenueEvent } from "./revenueTelemetry";
 
 // No hardcoded `instructions` prompt (CLAUDE.md §5): the reasoning prompt is the cockpit-agent
 // skill body, loaded inside runCockpitAgent. The Agent here is a pure message store — it never
@@ -148,12 +149,31 @@ async function recordPackPlanDecision(
   // A first propose belongs to the run that is executing RIGHT NOW; every later decision belongs to
   // the run that staged the row, which may be several turns behind.
   const owner = event === "plan_proposed" ? runs.live : runs.staged;
-  if (!owner) return;
-  await ctx.runMutation(internal.workflowPackEventLog.record, {
+  if (owner) {
+    await ctx.runMutation(internal.workflowPackEventLog.record, {
+      tenantId,
+      packId: owner.packId,
+      runId: owner.runId,
+      event,
+      planId,
+    });
+  }
+
+  if (event === "plan_proposed") return;
+  const reminder = await ctx.db
+    .query("workflowPackEvents")
+    .withIndex("by_tenant_plan", (q) => q.eq("tenantId", tenantId).eq("planId", planId))
+    .order("desc")
+    .filter((q) => q.eq(q.field("event"), "reminder_staged"))
+    .first();
+  if (reminder?.packId !== "revenue") return;
+  const status =
+    event === "plan_edited" ? "edited" : event === "plan_approved" ? "approved" : "rejected";
+  await recordRevenueEvent(ctx, {
     tenantId,
-    packId: owner.packId,
-    runId: owner.runId,
-    event,
+    runId: `rev:decision:${status}:${String(planId)}`,
+    event: "plan_decided",
+    status,
     planId,
   });
 }

@@ -79,7 +79,7 @@ import { type ActionCtx, internalAction } from "./_generated/server";
 import { requireCredentialKey } from "./connectorCredentials";
 import { readPages } from "./connectorFetch";
 import { tenantAction } from "./lib/functions";
-import { emitConnectorReadEvent } from "./revenueTelemetry";
+import { emitConnectorReadEvent, emitObservedRecoveryEvents } from "./revenueTelemetry";
 import { ACCESS_REFRESH_SKEW_MS, parseStripeCredential, stripeApp } from "./stripeAuth";
 
 const environmentArg = v.union(v.literal("sandbox"), v.literal("production"));
@@ -394,6 +394,28 @@ export const readEntity = tenantAction({
       windowDays: clampWindow(windowDays),
     });
     await emitConnectorReadEvent(ctx, ctx.tenantId, "stripe", outcome.projection);
+    if (outcome.projection.state !== "unavailable") {
+      const observations =
+        entity === "invoices"
+          ? (outcome.projection.items as readonly Invoice[])
+              .filter((invoice) => invoice.outstanding.minor === 0)
+              .map((invoice) => ({ externalRef: invoice.ref.id, status: "paid" as const }))
+          : entity === "charges"
+            ? (outcome.projection.items as readonly Payment[])
+                .filter((payment) => payment.invoiceId !== null)
+                .map((payment) => ({
+                  externalRef: payment.invoiceId as string,
+                  status: "paid" as const,
+                }))
+            : [];
+      await emitObservedRecoveryEvents(
+        ctx,
+        ctx.tenantId,
+        "stripe",
+        outcome.projection.meta.retrievedAt,
+        observations,
+      );
+    }
     return outcome.projection;
   },
 });

@@ -1,8 +1,11 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
-> Last verified: 2026-09-01 (28-21 terminal telemetry — the tenant-facing bounded read now reduces
-> its projection to provider, state and bounded counts and emits exactly one content-free event on
-> the shared Phase 27 plane; lifecycle events remain centralized at the credential mutation seam).
+> Last verified: 2026-09-01 (28-29 recovery telemetry — after the passed-only tenant read returns a
+> normalized zero-balance invoice or linked payment, it can match a provider-scoped one-way ref
+> from an earlier tenant-owned reminder and emit one idempotent `recovery_observed`. Unavailable
+> reads, another tenant and another provider cannot match). Prior: 28-21 terminal telemetry — the
+> bounded read reduces its projection to provider, state and counts on the shared Phase 27 plane;
+> lifecycle events remain centralized at the credential mutation seam.
 > Prior: 2026-08-31 against the 28-09 connect-start gate — **THE CONNECT FLOW IS NOW GATED,
 > AND `beginConnect` CHECKS THE GATE BEFORE IT READS THE DEPLOYMENT CONFIG.** Read from the working
 > diff by the 33.1 lane, which does not own this subsystem; recorded here because §9 asks the change

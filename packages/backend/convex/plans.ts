@@ -29,6 +29,47 @@ const PLAN_STATUS = v.union(
   v.literal("canceled"),
 );
 
+const recoveryCandidateArg = v.object({
+  subjectRef: v.string(),
+  status: v.union(v.literal("paid"), v.literal("resolved")),
+});
+
+/**
+ * Match only later observations against a bounded tenant-owned reminder history.
+ * The action caller supplies hashed provider-scoped refs; raw invoice ids never cross this seam.
+ */
+export const matchingStagedRevenueRecoveries = internalQuery({
+  args: {
+    tenantId: v.string(),
+    observedAt: v.number(),
+    candidates: v.array(recoveryCandidateArg),
+  },
+  handler: async (ctx, { tenantId, observedAt, candidates }) => {
+    if (candidates.length === 0) return [];
+    const wanted = new Set(candidates.map((candidate) => candidate.subjectRef));
+    const staged = new Set(
+      (
+        await ctx.db
+          .query("workflowPackEvents")
+          .withIndex("by_tenant_pack_createdAt", (q) =>
+            q.eq("tenantId", tenantId).eq("packId", "revenue"),
+          )
+          .order("desc")
+          .take(500)
+      )
+        .filter(
+          (row) =>
+            row.event === "reminder_staged" &&
+            row.subjectRef !== undefined &&
+            row.createdAt < observedAt &&
+            wanted.has(row.subjectRef),
+        )
+        .map((row) => row.subjectRef as string),
+    );
+    return candidates.filter((candidate) => staged.has(candidate.subjectRef));
+  },
+});
+
 // Mirrors plans.candidates in schema.ts (mirrors @pikar/core ContactMatch/NameCandidates, Plan 01).
 const CANDIDATES = v.array(
   v.object({

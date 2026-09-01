@@ -75,12 +75,12 @@ import { type ActionCtx, internalAction } from "./_generated/server";
 import { requireCredentialKey } from "./connectorCredentials";
 import { readPages } from "./connectorFetch";
 import { tenantAction } from "./lib/functions";
-import { emitConnectorReadEvent } from "./revenueTelemetry";
 import {
   classifyGrantSubject,
   parsePayPalCredential,
   requirePartnerMerchantId,
 } from "./paypalAuth";
+import { emitConnectorReadEvent, emitObservedRecoveryEvents } from "./revenueTelemetry";
 
 const environmentArg = v.union(v.literal("sandbox"), v.literal("production"));
 
@@ -363,6 +363,20 @@ export const readEntity = tenantAction({
       windowDays: clampWindow(windowDays),
     });
     await emitConnectorReadEvent(ctx, ctx.tenantId, "paypal", outcome.projection);
+    if (outcome.projection.state !== "unavailable" && entity === "transactions") {
+      await emitObservedRecoveryEvents(
+        ctx,
+        ctx.tenantId,
+        "paypal",
+        outcome.projection.meta.retrievedAt,
+        (outcome.projection.items as readonly Payment[])
+          .filter((payment) => payment.invoiceId !== null)
+          .map((payment) => ({
+            externalRef: payment.invoiceId as string,
+            status: "paid" as const,
+          })),
+      );
+    }
     return outcome.projection;
   },
 });
