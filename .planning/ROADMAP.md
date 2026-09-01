@@ -144,7 +144,7 @@ Plans:
   3. Cash-flow and payroll-confidence calculations are deterministic pure-TypeScript domain logic with fixtures, normalized-input validation, provenance, coverage/confidence semantics and no LLM arithmetic.
   4. Invoice reminders stage drafts into the existing plan gate; no revenue specialist can send, refund, credit or mutate CRM/accounting state directly.
   5. Authenticated two-tenant tests, provider replay/rate-limit tests and live read-only smoke gates pass before each connector-backed workflow is exposed; outcome telemetry can measure follow-up completion, overdue-item recovery and handling time without raw content.
-**Plans:** 22/29 plans executed
+**Plans:** 24/29 plans executed
 
 Plans:
 - [x] 28-17-PLAN.md — Hard Phase 19/25/27 readiness gate before connector work (Wave 1) — **`passed` 2026-08-27** (`fe73938`); 15/16 rows machine-verified, `p25-production-posture` green on OWNER ATTESTATION only. Recheck: `node scripts/check-phase28-readiness.mjs`
@@ -170,7 +170,7 @@ Plans:
 - [x] 28-14-PLAN.md — Provider-neutral revenue body authoring (Wave 12) — **complete 2026-08-31** (`29199b1`); eight provider-neutral bodies adopted with exact LF-normalized byte/SHA-256 pins, pinned Apache-2.0 upstream attribution and modification notices. Finance remains explain-only, invoice reminders remain proposed-plan-only, and no publication/discovery/eval/activation path was added
 - [x] 28-28-PLAN.md — Reviewed-body publication as byte-pinned dark candidates (Wave 13) — **complete 2026-09-01** (`2fc8420`, `89b4776`); eight exact v1 lock pins publish only as immutable candidates, remain outside seeds/discovery, and now share the existing exact-version eval activation gate. No live mutation, eval, or activation ran
 - [x] 28-19-PLAN.md — State-based golden outcome and adversarial eval suite (Wave 14) — **complete 2026-09-01** (`6cdb5c6`, `5489abd`, `b44bdfc`, `cf8cff5`, `4e744f4`, `8b1945a`); 57-fixture self-check and both dry 8/8 modes passed, then the explicitly approved live run attempted all 11 direct fixtures. Three exact pins passed and five failed closed at exact model cost `$0.00322245`; refs-only activation evidence was written and all eight rows remain dark candidates. Plan 28-20 must not activate the five red pins
-- [ ] 28-20-PLAN.md — Version-specific activation after evidence and owner judgment (Wave 15)
+- [x] 28-20-PLAN.md — Version-specific activation after evidence and owner judgment (Wave 15) — **complete 2026-09-01** (`cd6901d`, `f74e14e`); the owner APPROVED exactly `revenue-call-list@1`, `revenue-lead-triage@1`, and `revenue-specialist@1`, while all five failed exact pins were durably PARKED. Every decision binds the immutable activation-evidence SHA-256. Offline real-transition tests prove only the approved three activate with byte-identical bodies and every parked pin refuses activation and active discovery. No deployment, provider, or paid-evaluation call ran; REVN-04/05/06 remain pending because parked workflow pins still block those capabilities.
 - [ ] 28-15-PLAN.md — Privacy-safe revenue outcome measurement (Wave 16)
 - [ ] 28-21-PLAN.md — Provider/workflow terminal telemetry wiring (Wave 17)
 - [ ] 28-29-PLAN.md — Plan-decision and observed-recovery telemetry wiring (Wave 18)
