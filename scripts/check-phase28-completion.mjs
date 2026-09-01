@@ -11,26 +11,28 @@
  * passed, its workflows shipped) is genuine value and is NOT completion; conflating the two is how
  * a phase gets closed on three quarters of its promise.
  *
- * IT IS OFFLINE AND SOURCE-DERIVED, exactly like `check-provider-lane.mjs`. Every fact is read out
- * of a file in this repository:
+ * IT IS OFFLINE AND SOURCE-DERIVED, exactly like `check-provider-lane.mjs`. The resolver consumes
+ * the same closed provider-gate states the server owns (`passed`, `parked`, `expired`, `failed`),
+ * while the current-tree projection is read out of repository evidence:
  *   • the six REVN statements, from `.planning/REQUIREMENTS.md`
  *   • which providers each of REVN-01..03 names, from those statements' own words
  *   • each lane's decision marker and open conditions, via `check-provider-lane.mjs`
  *   • which lanes have ever passed live, which — offline — is NONE, and it says so
  *
- * IT CANNOT SEE A DEPLOYMENT, AND THAT IS DELIBERATE. `providerGates` rows live in a Convex
- * deployment; a script that phoned one would report a different answer per environment and could
- * be made green by sealing a row on a laptop. The live half is `--verify-current`, which requires
- * an operator to paste what `check-provider-lane.mjs --provider <p>` actually reported.
+ * IT DOES NOT MUTATE OR CONTACT A DEPLOYMENT. `providerGates` rows live in Convex; this repository
+ * close consumes the checked-in lane evidence through `check-provider-lane.mjs`. The server-owned
+ * query remains the exposure authority, and this script is the independent completion authority.
  *
  * MODES
- *   (no flags)        the honest current picture. Exit 0 — reporting is not asserting.
+ *   (no flags)        alias for --report, retained for compatibility.
+ *   --report          the honest current exposure/completion matrix. Exit 0.
  *   --strict          exit 1 unless EVERY named lane has passed. This is the completion gate.
- *   --verify-current  same, plus require the lane rows to be consistent right now.
- *   --self-test       OFFLINE. Mutates its own inputs and requires every guard to fire.
+ *   --verify-current  require every current lane projection to be reachable and non-red.
+ *   --self-test       OFFLINE. Exhausts all 16 pass/park combinations and refusal states.
  *
  * Usage:
- *   node scripts/check-phase28-completion.mjs
+ *   node scripts/check-phase28-completion.mjs --report
+ *   node scripts/check-phase28-completion.mjs --verify-current
  *   node scripts/check-phase28-completion.mjs --strict
  *   node scripts/check-phase28-completion.mjs --self-test
  */
@@ -44,6 +46,8 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** The four lanes, in register order. */
 const PROVIDERS = ["hubspot", "quickbooks", "stripe", "paypal"];
+
+const MODES = new Set(["--report", "--verify-current", "--strict", "--self-test"]);
 
 /**
  * Which providers each requirement NAMES. Derived by reading the requirement's own words rather
@@ -85,11 +89,31 @@ function laneStatus(provider) {
     const consistent = /RESULT:\s*consistent/.test(out);
     const pending = (out.match(/^\s*PEND\s/gm) ?? []).length;
     const red = (out.match(/^\s*RED\s/gm) ?? []).length;
-    return { provider, passed, consistent, pending, red, reachable: true };
+    return {
+      provider,
+      state: passed ? "passed" : consistent ? "parked" : "failed",
+      passed,
+      consistent,
+      pending,
+      red,
+      reachable: true,
+    };
   } catch {
     // A lane gate that cannot run is NOT a pass. Failing open here would be the whole defect.
-    return { provider, passed: false, consistent: false, pending: 0, red: 0, reachable: false };
+    return {
+      provider,
+      state: "unreachable",
+      passed: false,
+      consistent: false,
+      pending: 0,
+      red: 0,
+      reachable: false,
+    };
   }
+}
+
+function lanePassed(lane) {
+  return lane?.state === "passed" && lane?.reachable !== false && (lane?.red ?? 0) === 0;
 }
 
 /**
@@ -102,34 +126,29 @@ function laneStatus(provider) {
 export function resolveCompletion(requirements, lanes) {
   const byProvider = new Map(lanes.map((l) => [l.provider, l]));
   const rows = requirements.map((req) => {
-    const missing = req.providers.filter((p) => byProvider.get(p)?.passed !== true);
+    const missing = req.providers.filter((p) => !lanePassed(byProvider.get(p)));
     return { ...req, complete: missing.length === 0, missing };
   });
   return {
     rows,
     complete: rows.every((r) => r.complete),
-    passedLanes: lanes.filter((l) => l.passed).map((l) => l.provider),
+    passedLanes: lanes.filter(lanePassed).map((l) => l.provider),
     // A subset release is real and must be nameable, or the only two words available are
     // "complete" and "nothing", and the first one starts getting used loosely.
-    subset: lanes.some((l) => l.passed) && !rows.every((r) => r.complete),
+    subset: lanes.some(lanePassed) && !rows.every((r) => r.complete),
   };
 }
 
 const fsReal = { read: (rel) => readFileSync(join(repoRoot, rel), "utf8") };
 
 function render(result, lanes, stdout) {
-  stdout.write("\nPhase 28 completion\n\n");
+  stdout.write("\nPhase 28 server-gate exposure / completion matrix\n\n");
   for (const lane of lanes) {
-    const state = !lane.reachable
-      ? "UNREACHABLE"
-      : lane.passed
-        ? "passed"
-        : lane.consistent
-          ? "consistent"
-          : "red";
-    const mark = lane.passed ? "OK  " : "PEND";
+    const state = lane.state ?? (!lane.reachable ? "unreachable" : lane.passed ? "passed" : "failed");
+    const mark = lanePassed(lane) ? "OK  " : "PEND";
+    const exposure = lanePassed(lane) ? "eligible" : "hidden";
     stdout.write(
-      `  ${mark}  ${lane.provider.padEnd(11)} ${state}${lane.pending ? ` (${lane.pending} pending row(s))` : ""}\n`,
+      `  ${mark}  ${lane.provider.padEnd(11)} gate=${state.padEnd(11)} exposure=${exposure}${lane.pending ? ` (${lane.pending} pending row(s))` : ""}\n`,
     );
   }
   stdout.write("\n");
@@ -163,44 +182,61 @@ function render(result, lanes, stdout) {
 function selfTest(stdout) {
   const reqs = [
     { id: "REVN-01", statement: "a HubSpot adapter", providers: ["hubspot"] },
+    { id: "REVN-02", statement: "a QuickBooks adapter", providers: ["quickbooks"] },
     { id: "REVN-03", statement: "Stripe and PayPal adapters", providers: ["stripe", "paypal"] },
+    { id: "REVN-04", statement: "composed CRM workflows", providers: PROVIDERS },
+    { id: "REVN-05", statement: "composed finance workflows", providers: PROVIDERS },
+    { id: "REVN-06", statement: "composed reminder workflows", providers: PROVIDERS },
   ];
-  const lane = (provider, passed) => ({ provider, passed, consistent: true, reachable: true });
-  const cases = [
-    {
-      why: "no lane passed is INCOMPLETE, not subset",
-      lanes: PROVIDERS.map((p) => lane(p, false)),
-      expect: (r) => !r.complete && !r.subset,
-    },
-    {
-      why: "one lane passed is SUBSET, never complete",
-      lanes: PROVIDERS.map((p) => lane(p, p === "hubspot")),
-      expect: (r) => !r.complete && r.subset,
-    },
-    {
-      why: "REVN-03 needs BOTH Stripe and PayPal — one of them is not enough",
-      lanes: PROVIDERS.map((p) => lane(p, p !== "paypal")),
-      expect: (r) => !r.complete && r.rows.some((x) => x.id === "REVN-03" && !x.complete),
-    },
-    {
-      why: "every lane passed is COMPLETE",
-      lanes: PROVIDERS.map((p) => lane(p, true)),
-      expect: (r) => r.complete && !r.subset,
-    },
-    {
-      why: "an UNREACHABLE lane gate is not a pass",
-      lanes: PROVIDERS.map((p) => ({ ...lane(p, true), reachable: false, passed: false })),
-      expect: (r) => !r.complete,
-    },
-  ];
+  const lane = (provider, state) => ({
+    provider,
+    state,
+    passed: state === "passed",
+    consistent: state === "passed" || state === "parked",
+    reachable: state !== "unreachable",
+    red: state === "failed" ? 1 : 0,
+  });
 
   stdout.write("\ncheck-phase28-completion --self-test (offline, no deployment)\n\n");
   let failed = 0;
-  for (const c of cases) {
-    const ok = c.expect(resolveCompletion(reqs, c.lanes));
-    stdout.write(`  ${ok ? "OK  " : "FAIL"}  ${c.why}\n`);
+  for (let mask = 0; mask < 2 ** PROVIDERS.length; mask += 1) {
+    const passed = new Set(PROVIDERS.filter((_, index) => (mask & (1 << index)) !== 0));
+    const result = resolveCompletion(
+      reqs,
+      PROVIDERS.map((provider) => lane(provider, passed.has(provider) ? "passed" : "parked")),
+    );
+    const row = (id) => result.rows.find((candidate) => candidate.id === id);
+    const expectedComplete = mask === 2 ** PROVIDERS.length - 1;
+    const ok =
+      result.complete === expectedComplete &&
+      result.subset === (mask > 0 && !expectedComplete) &&
+      row("REVN-01")?.complete === passed.has("hubspot") &&
+      row("REVN-02")?.complete === passed.has("quickbooks") &&
+      row("REVN-03")?.complete === (passed.has("stripe") && passed.has("paypal"));
+    const bits = PROVIDERS.map((provider) => `${provider}=${passed.has(provider) ? "pass" : "park"}`).join(", ");
+    stdout.write(`  ${ok ? "OK  " : "FAIL"}  combination ${String(mask + 1).padStart(2, "0")}/16: ${bits}\n`);
     if (!ok) failed += 1;
   }
+
+  for (const provider of PROVIDERS) {
+    for (const state of ["parked", "expired", "failed"]) {
+      const result = resolveCompletion(
+        reqs,
+        PROVIDERS.map((candidate) => lane(candidate, candidate === provider ? state : "passed")),
+      );
+      const ok = !result.complete && result.rows.some((row) => row.missing.includes(provider));
+      stdout.write(`  ${ok ? "OK  " : "FAIL"}  ${provider}=${state} keeps its named requirement and Phase 28 incomplete\n`);
+      if (!ok) failed += 1;
+    }
+  }
+
+  const unreachable = resolveCompletion(
+    reqs,
+    PROVIDERS.map((provider) => lane(provider, "unreachable")),
+  );
+  const unreachableRefused = !unreachable.complete && unreachable.passedLanes.length === 0;
+  stdout.write(`  ${unreachableRefused ? "OK  " : "FAIL"}  an unreachable gate is never a pass\n`);
+  if (!unreachableRefused) failed += 1;
 
   // The derivation itself, which is the part a reworded requirement would silently break.
   const derived = providersNamedBy("Server-side Stripe and PayPal adapters provide read-only");
@@ -217,7 +253,7 @@ function selfTest(stdout) {
 
   stdout.write(
     failed === 0
-      ? "\nSELF-TEST PASSED. This proves the RESOLVER. It proves nothing about any lane.\n"
+      ? "\nSELF-TEST PASSED: 16/16 pass/park combinations plus parked/expired/failed refusals.\nThis proves the RESOLVER. It proves nothing about any live lane.\n"
       : `\nSELF-TEST FAILED: ${failed} case(s).\n`,
   );
   return failed === 0 ? 0 : 1;
@@ -226,6 +262,15 @@ function selfTest(stdout) {
 // ── Entry ─────────────────────────────────────────────────────────────────────────────────
 
 export function main(argv, stdout) {
+  const unknown = argv.filter((arg) => !MODES.has(arg));
+  if (unknown.length > 0) {
+    stdout.write(`Unknown mode(s): ${unknown.join(", ")}\n`);
+    return 1;
+  }
+  if (argv.includes("--self-test") && argv.length > 1) {
+    stdout.write("--self-test cannot be combined with a current-state mode.\n");
+    return 1;
+  }
   if (argv.includes("--self-test")) return selfTest(stdout);
 
   const requirements = requirementsFrom(fsReal);
@@ -237,13 +282,11 @@ export function main(argv, stdout) {
   const result = resolveCompletion(requirements, lanes);
   render(result, lanes, stdout);
 
-  const strict = argv.includes("--strict") || argv.includes("--verify-current");
-  if (!strict) return 0;
   if (argv.includes("--verify-current") && lanes.some((l) => !l.reachable || l.red > 0)) {
     stdout.write("\n--verify-current: a lane gate is unreachable or red.\n");
     return 1;
   }
-  if (!result.complete) {
+  if (argv.includes("--strict") && !result.complete) {
     stdout.write("\n--strict: Phase 28 may NOT be marked complete.\n");
     return 1;
   }

@@ -1,5 +1,23 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
+> Last verified: 2026-09-02 — Plan 28-16's authenticated parked-lane gate is green on the local
+> stack with one real signed-in context across desktop (1440×960), tablet (820×1180), and mobile
+> (390×844). The spec waits for a positive server settle marker before asserting absence, then
+> proves HubSpot, QuickBooks, Stripe, and PayPal cards remain omitted from Connections and that no
+> PLAN/REPORT revenue offer is reconstructed in the workspace. Artifacts:
+> `output/playwright/revenue-pack/{desktop,tablet,mobile}-parked.png`. The single-context shape is
+> mandatory because Convex Auth rotates refresh tokens; parallel contexts restored from one
+> storageState race that token and turn a responsive gate into a sign-out test.
+>
+> Last verified: 2026-09-01 — Plan 28-16 made Phase 28 completion a strict, mechanically
+> derived matrix. `check-phase28-completion.mjs --self-test` exhausts all 16 pass/park
+> combinations and separately proves that parked, expired, failed and unreachable named lanes
+> cannot complete the phase. `--report` prints the current gate/exposure and REVN matrix without
+> changing exposure; `--verify-current` checks that every repository lane projection is reachable
+> and non-red; only `--strict` requires all four provider lanes to be passed. HubSpot controls
+> REVN-01, QuickBooks controls REVN-02, Stripe plus PayPal jointly control REVN-03, and the
+> provider-composed REVN-04..06 inherit all four. A subset remains useful and incomplete.
+>
 > Last verified: 2026-09-01 — Plan 28-16 added the server-owned revenue discovery projection.
 > `providerGates.revenueDiscovery` intersects current production `passedProviderGates` with the
 > exact active workflow row and active `revenue-specialist` row. The workspace renders only that
@@ -37,7 +55,8 @@
 > **A requirement is complete only when every provider it names has a PASSED lane** — not
 > `consistent`, not `approved_production`, not "built and tested". It names `subset` as a first-class
 > outcome so partial value can ship without the word "complete" being used loosely, and an
-> UNREACHABLE lane gate is never a pass. `--self-test` is 7 cases, every guard observed refusing.
+> UNREACHABLE lane gate is never a pass. `--self-test` now exhausts all 16 pass/park combinations,
+> then separately checks parked, expired, failed and unreachable refusals for every named lane.
 > Run against the tree today: **incomplete, all six REVN pending, `--strict` exits 1.**
 > A defect found in its own first draft, worth the line: the Windows entry-point comparison
 > (`file://` + a backslash path vs the real `file:///C:/…`) never matched, so the script exited 0
@@ -976,7 +995,7 @@ implying it happened.
 | `node scripts/check-provider-lane.mjs --all` | No lane contradicts its record. Exit 0 today with 13 pending rows. **Consistent is not passed.** | offline |
 | `node scripts/check-provider-lane.mjs --self-test` | Every row observed going RED under a rename/substitution mutation, the real tree clean, and every seal combination — including the one that must resolve to `pass`. | offline |
 | `node scripts/check-provider-lane.mjs --verify-gate` | Runs the gate behaviour tests directly, rather than grepping for the branch. | offline |
-| `node scripts/check-phase28-completion.mjs` (add `--strict` for the gate, `--self-test` for its 7 guards) | All lanes `passed` — the only proof of phase completion. | offline |
+| `node scripts/check-phase28-completion.mjs --report` (`--verify-current` checks the projection, `--strict` is the completion gate, `--self-test` exhausts all 16 pass/park combinations) | All lanes `passed` — the only proof of phase completion. | offline |
 
 ## Operational notes
 

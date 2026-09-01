@@ -1,3 +1,11 @@
+> Last verified: 2026-09-01 (28-16 — **DISCOVERY AND PHASE COMPLETION ARE TWO INDEPENDENT
+> FAIL-CLOSED VIEWS OF THE SAME FOUR PROVIDER LANES.** The server query alone controls exposure;
+> `check-phase28-completion.mjs --report` independently derives the provider/REVN close matrix.
+> Its self-test exhausts all 16 pass/park combinations, and parked, expired, failed or unreachable
+> named lanes remain hidden and keep Phase 28 incomplete. `--verify-current` validates the current
+> repository projection without claiming completion; `--strict` is the all-four-passed close gate.
+> A useful subset is explicitly named `subset`, never `complete`.)
+>
 > Last verified: 2026-09-01 (28-16 — **REVENUE WORKFLOWS APPEAR ONLY FROM SERVER-OWNED PASSED
 > EVIDENCE PLUS ACTIVE PINS.** `RevenuePackPanel` is a dumb responsive renderer over
 > `providerGates.revenueDiscovery`; it cannot derive a workflow from client files or connector
