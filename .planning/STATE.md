@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 27 of 29 executed; next 28-16, wave 19
+current_plan: 27 of 29 executed; 28-16 in progress, wave 19
 status: in_progress
-stopped_at: "28-29 IS COMPLETE (`82c321b`, `6124a2f`). Revenue reminder plans emit refs/status-only decisions only after real edit, approve and reject transitions. Recovery requires a later normalized observation from a passed provider matching the same tenant and provider-scoped one-way reminder ref; unavailable reads, duplicate reads, another tenant and another provider cannot manufacture it. Targeted backend tests 558/558, final integration 10/10, backend typecheck, scoped Biome and playbook gate pass. No deployment/provider/paid operation ran. REVN-05/06 remain pending because telemetry does not activate parked capabilities. NEXT: 28-16, wave 19, for automated live/browser/repository exposure evidence. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
-last_updated: "2026-09-01T18:40:43+03:00"
+stopped_at: "28-16 PAUSED AT AUTHENTICATED BROWSER GATE. Task 1 discovery is committed (`1be383c`); Task 3 completion matrix and repository gates are green, including 16/16 combinations, revenue 337/337, web 657/657 plus typecheck/build, backend sharded 3378/3378, and playbook/current-state verification. Strict completion correctly exits 1 because all four repository lanes are parked/hidden. Verification defects fixed in `040b1f9`. Task 2's authored desktop/tablet/mobile spec compiles but cannot execute: E2E credentials and alternate storage state are unset, the saved JWT expired 2026-08-26, and local ports 3111/3210 are down. Resume after the owner supplies a seeded/onboarded test-user credential pair or valid captured storage state; then start Convex and Next and run the focused spec. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
+last_updated: "2026-09-01T20:10:00+03:00"
 progress:
   total_phases: 53
   completed_phases: 36
