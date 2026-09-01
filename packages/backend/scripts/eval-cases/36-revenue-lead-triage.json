@@ -13,13 +13,23 @@
         "scanned": 3,
         "capped": false,
         "rows": [
-          { "contactId": "contact-overdue", "priority": 100, "reasons": ["follow_up_overdue"], "provenance": { "pikar": true, "provider": false } },
-          { "contactId": "contact-closing", "priority": 40, "reasons": ["deal_closing"], "provenance": { "pikar": false, "provider": true } }
+          {
+            "contactId": "contact-overdue",
+            "priority": 100,
+            "reasons": ["follow_up_overdue"],
+            "provenance": { "pikar": true, "provider": false }
+          },
+          {
+            "contactId": "contact-due",
+            "priority": 20,
+            "reasons": ["follow_up_due"],
+            "provenance": { "pikar": true, "provider": true }
+          }
         ]
       },
-      "refs": ["contact-overdue", "contact-closing"],
+      "refs": ["contact-overdue", "contact-due"],
       "counts": { "scanned": 3, "ranked": 2, "suppressed": 1 }
     }
   },
-  "needles": ["contact-overdue", "contact-closing"]
+  "needles": ["contact-overdue", "contact-due"]
 }

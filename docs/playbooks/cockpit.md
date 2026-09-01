@@ -1,3 +1,14 @@
+> Last verified: 2026-09-01 (28-19 — **THE REVENUE GOLDEN GATE NOW EXECUTES THE CANDIDATE BODY,
+> NOT THE COCKPIT BODY.** `llm:runRevenueCandidateEval` is an internal, eval-only door beside the
+> governed specialist loop. It accepts only `eval-<8hex>` tenants, the closed 11-case revenue
+> corpus, the case's exact skill name, and an explicit global version; a mismatched case/name,
+> non-eval tenant, missing plan, or governed stop fails before `generateText`. The action reuses
+> `runSpecialistTurn`, returns the SHA-256 of the exact registry body passed to the provider, and
+> exposes the SDK-attested ordered tool trace/results to the local runner. Production dispatch and
+> cockpit callers never supply the eval selector, so their tool construction and runtime semantics
+> are unchanged. Invoice fixtures use the same inert `stageProposed` boundary; the suppressed case
+> stops before staging and still creates zero requests or sends.)
+>
 > Last verified: 2026-08-31 (28-13 — **INVOICE REMINDERS STOP AT THE EXISTING HUMAN APPROVE
 > GATE.** The executive-only `stageInvoiceReminder` tool accepts an explicit user request plus a
 > bounded QuickBooks or Stripe invoice ref, re-fetches the source, refuses paid/void/unknown or

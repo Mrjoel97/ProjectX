@@ -5,6 +5,8 @@
  * onto the existing email plan row. It creates no request, workflow, audit event, scheduler entry,
  * or provider call. The existing cockpit Approve path remains the only delivery authority.
  */
+
+import { normalizeAddress } from "@pikar/core";
 import {
   buildInvoiceReminderDraft,
   type Invoice,
@@ -13,11 +15,11 @@ import {
   type SourceRef,
   selectInvoiceReminderInput,
 } from "@pikar/revenue";
-import { jsonSchema, tool, type ToolSet } from "ai";
-import { makeFunctionReference, type GenericActionCtx } from "convex/server";
+import { jsonSchema, type ToolSet, tool } from "ai";
+import { type GenericActionCtx, makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 
 type ReminderProvider = "quickbooks" | "stripe";
 type ConnectorEnvironment = "sandbox" | "production";
@@ -126,6 +128,36 @@ const stageProposedRef = makeFunctionReference<
   },
   ProposedStageResult
 >("invoiceReminders:stageProposed");
+const evalSuppressedRef = makeFunctionReference<
+  "query",
+  { tenantId: string; planId: Id<"plans"> },
+  boolean
+>("invoiceReminders:evalRecipientSuppressed");
+
+const EVAL_NOW = Date.UTC(2026, 8, 1);
+const evalInvoiceProjection = (
+  invoiceRef: string,
+): Extract<Projection<Invoice>, { state: "ready" }> => ({
+  state: "ready",
+  meta: {
+    provider: "quickbooks",
+    authority: "accounting_authority",
+    retrievedAt: EVAL_NOW,
+    window: { startMs: EVAL_NOW - 90 * 86_400_000, endMs: EVAL_NOW },
+    capped: false,
+    sources: [{ provider: "quickbooks", kind: "invoice", id: invoiceRef }],
+  },
+  items: [
+    {
+      ref: { provider: "quickbooks", kind: "invoice", id: invoiceRef },
+      customerRef: `customer-${invoiceRef}`,
+      issuedAt: EVAL_NOW - 40 * 86_400_000,
+      dueAt: EVAL_NOW - 10 * 86_400_000,
+      total: { minor: 125_000, currency: "USD" },
+      outstanding: { minor: 125_000, currency: "USD" },
+    },
+  ],
+});
 
 /**
  * Executive-only model surface. Construction is gated by `runAgentLoop` from
@@ -135,6 +167,7 @@ export function buildInvoiceReminderTool(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   planId: Id<"plans">,
+  evalFixtureId?: string,
 ): ToolSet {
   return {
     stageInvoiceReminder: tool({
@@ -158,20 +191,31 @@ export function buildInvoiceReminderTool(
         additionalProperties: false,
       }),
       execute: async ({ intent, provider, invoiceRef, environment }): Promise<string> => {
+        if (
+          evalFixtureId === "43-revenue-suppressed-reminder" &&
+          (await ctx.runQuery(evalSuppressedRef, { tenantId, planId }))
+        ) {
+          return JSON.stringify({ ok: false, reason: "suppressed", status: "collecting" });
+        }
         const result = await stageInvoiceReminderFromSource(
           {
-            readInvoices: async ({ provider: requestedProvider, environment: requestedEnvironment }) =>
-              requestedProvider === "quickbooks"
-                ? await ctx.runAction(quickbooksInvoices, {
-                    environment: requestedEnvironment,
-                    entity: "Invoice",
-                    windowDays: 90,
-                  })
-                : await ctx.runAction(stripeInvoices, {
-                    environment: requestedEnvironment,
-                    entity: "invoices",
-                    windowDays: 90,
-                  }),
+            readInvoices: async ({
+              provider: requestedProvider,
+              environment: requestedEnvironment,
+            }) =>
+              evalFixtureId
+                ? evalInvoiceProjection(invoiceRef)
+                : requestedProvider === "quickbooks"
+                  ? await ctx.runAction(quickbooksInvoices, {
+                      environment: requestedEnvironment,
+                      entity: "Invoice",
+                      windowDays: 90,
+                    })
+                  : await ctx.runAction(stripeInvoices, {
+                      environment: requestedEnvironment,
+                      entity: "invoices",
+                      windowDays: 90,
+                    }),
             stageProposed: async (draft) =>
               await ctx.runMutation(stageProposedRef, {
                 ...draft,
@@ -189,12 +233,30 @@ export function buildInvoiceReminderTool(
         );
         if (!result.ok) return `Invoice reminder was not staged: ${result.reason}.`;
         return result.staged
-          ? "Invoice reminder staged as a proposed email plan. Nothing was sent; review and Approve it on the plan card."
+          ? evalFixtureId
+            ? JSON.stringify({ ok: true, staged: true, status: "proposed" })
+            : "Invoice reminder staged as a proposed email plan. Nothing was sent; review and Approve it on the plan card."
           : "That exact invoice reminder is already staged. Nothing was sent.";
       },
     }),
   };
 }
+
+/** Eval-only persisted suppression witness. The caller is an internal action that separately
+ * enforces the throwaway eval tenant and closed fixture id; production never calls this query. */
+export const evalRecipientSuppressed = internalQuery({
+  args: { tenantId: v.string(), planId: v.id("plans") },
+  handler: async (ctx, { tenantId, planId }): Promise<boolean> => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== tenantId) return false;
+    const rows = await ctx.db
+      .query("suppressions")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    const suppressed = new Set(rows.map((row) => normalizeAddress(row.address)));
+    return (plan.recipients ?? []).some((address) => suppressed.has(normalizeAddress(address)));
+  },
+});
 
 /**
  * The only persistence this module owns: collecting email plan -> proposed email plan.
@@ -208,7 +270,10 @@ export const stageProposed = internalMutation({
     subject: v.string(),
     body: v.string(),
   },
-  handler: async (ctx, { tenantId, planId, invoiceRef, subject, body }): Promise<ProposedStageResult> => {
+  handler: async (
+    ctx,
+    { tenantId, planId, invoiceRef, subject, body },
+  ): Promise<ProposedStageResult> => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== tenantId) throw new Error("plan not found");
 

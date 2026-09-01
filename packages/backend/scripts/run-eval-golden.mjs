@@ -40,7 +40,6 @@
 // on stdout (logs go to stderr).
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -78,7 +77,6 @@ const RETRY_TURN = { retryOnEmpty: true };
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 const costSrcPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../cost/src/cost.ts");
 const skillsLockPath = resolve(dirname(fileURLToPath(import.meta.url)), "../skills-lock.json");
-const runnerPath = fileURLToPath(import.meta.url);
 
 const REVENUE_FIXTURE_IDS = [
   "36-revenue-lead-triage",
@@ -89,6 +87,9 @@ const REVENUE_FIXTURE_IDS = [
   "41-revenue-payroll-unknown",
   "42-revenue-invoice-reminder",
   "43-revenue-suppressed-reminder",
+  "44-revenue-specialist",
+  "45-revenue-call-list",
+  "46-revenue-pipeline-review",
 ];
 
 function revenueCandidatePins() {
@@ -124,14 +125,16 @@ function revenueFixtureSuite() {
   assert.deepEqual(
     fixtures.map((fixture) => fixture.id),
     REVENUE_FIXTURE_IDS,
-    "the complete eight-case revenue fixture set must be present in sorted order",
+    "the complete eleven-case revenue fixture set must be present in sorted order",
   );
   const cases = fixtures.map((fixture) => {
     const file = `${fixture.id}.json`;
     return {
       id: fixture.id,
       file,
-      sha256: createHash("sha256").update(readFileSync(join(casesDir, file))).digest("hex"),
+      sha256: createHash("sha256")
+        .update(readFileSync(join(casesDir, file)))
+        .digest("hex"),
     };
   });
   return {
@@ -143,6 +146,18 @@ function revenueFixtureSuite() {
     cases,
     fixtures,
   };
+}
+
+function revenueFixturesForPin(pin, stateSuite) {
+  const fixtures = stateSuite.fixtures.filter(
+    (fixture) => fixture.candidate.name === pin.name && fixture.candidate.version === pin.version,
+  );
+  assert.ok(fixtures.length > 0, `${pin.name}@${pin.version} has zero direct revenue fixtures`);
+  assert.ok(
+    fixtures.every((fixture) => REVENUE_FIXTURE_IDS.includes(fixture.id)),
+    `${pin.name}@${pin.version} references a legacy/non-revenue fixture`,
+  );
+  return fixtures;
 }
 
 function revenueArtifactPaths() {
@@ -718,7 +733,9 @@ function validateFixture(fx, source) {
       fail("revenue fixtures require both candidate and expect.expectedState");
     }
     if (Object.keys(fx.expect).length !== 1) {
-      fail("a revenue fixture asserts only expectedState; mixing plan-state keys changes its oracle");
+      fail(
+        "a revenue fixture asserts only expectedState; mixing plan-state keys changes its oracle",
+      );
     }
     const pins = revenueCandidatePins();
     const pin = pins.find((candidate) => candidate.name === fx.candidate?.name);
@@ -743,7 +760,9 @@ function validateFixture(fx, source) {
     if (
       !Array.isArray(expected.toolTrace) ||
       expected.toolTrace.length === 0 ||
-      expected.toolTrace.some((toolName) => typeof toolName !== "string" || toolName.length === 0) ||
+      expected.toolTrace.some(
+        (toolName) => typeof toolName !== "string" || toolName.length === 0,
+      ) ||
       new Set(expected.toolTrace).size !== expected.toolTrace.length
     ) {
       fail("expectedState.toolTrace must be a non-empty ordered list of unique tool names");
@@ -1241,7 +1260,9 @@ function parseRevenueCandidateMode(argv) {
   }
   if (!allCandidates) return null;
   if (modes.length !== 1) {
-    throw new Error("--all-candidates requires exactly one of --diagnostic or --activation-evidence");
+    throw new Error(
+      "--all-candidates requires exactly one of --diagnostic or --activation-evidence",
+    );
   }
   for (const incompatible of [
     "--skill",
@@ -1752,17 +1773,7 @@ function evaluateRevenueFixture(fixture, actual) {
   );
 }
 
-function revenueDiagnosticCost(output) {
-  const line = output
-    .split(/\r?\n/)
-    .reverse()
-    .find((candidate) => candidate.includes("total cost"));
-  if (!line) return null;
-  const amounts = [...line.matchAll(/\$([0-9]+(?:\.[0-9]+)?)/g)];
-  return amounts.length ? Number(amounts.at(-1)[1]) : null;
-}
-
-function dryRevenueDiagnostic(pins, gateSuite, stateSuite) {
+function dryRevenueDiagnostic(pins, stateSuite) {
   for (const fixture of stateSuite.fixtures) {
     assert.equal(
       evaluateRevenueFixture(fixture, structuredClone(fixture.expect.expectedState)).length,
@@ -1770,60 +1781,263 @@ function dryRevenueDiagnostic(pins, gateSuite, stateSuite) {
       `${fixture.id} dry diagnostic witness must pass`,
     );
   }
-  const refs = gateSuite.cases.map((entry) => entry.file.replace(/\.json$/, ""));
-  return pins.map((pin) => ({
-    pin: `${pin.name}@${pin.version}`,
-    bodySha256: pin.bodySha256,
-    outcome: "dry_passed",
-    casesPassed: gateSuite.caseCount,
-    casesTotal: gateSuite.caseCount,
-    costUsd: 0,
-    latencyMs: 0,
-    refs,
-  }));
+  return pins.map((pin) => {
+    const fixtures = revenueFixturesForPin(pin, stateSuite);
+    return {
+      pin: `${pin.name}@${pin.version}`,
+      bodySha256: pin.bodySha256,
+      outcome: "dry_passed",
+      casesPassed: fixtures.length,
+      casesTotal: fixtures.length,
+      costUsd: 0,
+      latencyMs: 0,
+      refs: fixtures.map((fixture) => fixture.id),
+    };
+  });
 }
 
-function liveRevenueDiagnostic(pins, gateSuite) {
+function toolOutputValue(output) {
+  if (typeof output === "string") return output;
+  if (output && typeof output === "object") {
+    if (typeof output.value === "string") return output.value;
+    if (typeof output.text === "string") return output.text;
+    if (output.value !== undefined) return output.value;
+  }
+  return output;
+}
+
+function parsedRevenueOutput(run, toolName) {
+  const hit = run.toolOutputs?.find((entry) => entry.tool === toolName);
+  assert.ok(hit, `runtime produced no ${toolName} result`);
+  const value = toolOutputValue(hit.output);
+  if (typeof value !== "string") return value;
+  const fenced = value.match(/<revenue_evidence[^>]*>\s*([\s\S]*?)\s*<\/revenue_evidence>/);
+  return JSON.parse(fenced?.[1] ?? value);
+}
+
+function aliasesIn(value, aliases) {
+  const reverse = new Map(Object.entries(aliases).map(([alias, id]) => [id, alias]));
+  const walk = (node) => {
+    if (typeof node === "string") return reverse.get(node) ?? node;
+    if (Array.isArray(node)) return node.map(walk);
+    if (node && typeof node === "object") {
+      return Object.fromEntries(Object.entries(node).map(([key, child]) => [key, walk(child)]));
+    }
+    return node;
+  };
+  return walk(value);
+}
+
+function observedRevenueState(fixture, run, facts, aliases) {
+  assert.deepEqual(
+    facts.toolTrace,
+    run.toolTrace,
+    `${fixture.id} persisted agentSteps trace differs from the SDK trace`,
+  );
+  const id = fixture.id;
+  if (["36-revenue-lead-triage", "44-revenue-specialist", "45-revenue-call-list"].includes(id)) {
+    const result = aliasesIn(parsedRevenueOutput(run, "readRevenueCrm"), aliases);
+    return {
+      outcome: "ready",
+      toolTrace: facts.toolTrace,
+      result,
+      refs: result.rows.map((row) => row.contactId),
+      counts: {
+        scanned: result.scanned,
+        ranked: result.rows.length,
+        suppressed: facts.suppressionCount,
+      },
+    };
+  }
+  if (["37-revenue-partial", "38-revenue-injection", "46-revenue-pipeline-review"].includes(id)) {
+    const result = parsedRevenueOutput(run, "readRevenueCrm");
+    const refs = result.externalRef ? [result.externalRef] : [];
+    if (id === "38-revenue-injection") {
+      const unauthorized = facts.toolTrace.filter(
+        (tool) => !["readRevenueCrm", "declareUnsupported"].includes(tool),
+      ).length;
+      return {
+        outcome: result.state,
+        toolTrace: facts.toolTrace,
+        result: { operation: "customer_pulse", ...result },
+        refs,
+        counts: {
+          providerReads: facts.auditEvents.filter((event) => event === "revenue.crm_read").length,
+          unauthorizedToolCalls: unauthorized,
+          writes: 0,
+          sends: facts.sentCount,
+        },
+      };
+    }
+    return {
+      outcome: result.state,
+      toolTrace: facts.toolTrace,
+      result: { operation: "customer_pulse", ...result },
+      refs,
+      counts: {
+        result: result.state === "unavailable" ? 0 : 1,
+        missing: facts.auditEvents.includes("revenue.unsupported_declared") ? 1 : 0,
+        writes: 0,
+      },
+    };
+  }
+  if (
+    ["39-revenue-cash-flow", "40-revenue-mixed-currency", "41-revenue-payroll-unknown"].includes(id)
+  ) {
+    const evidence = parsedRevenueOutput(run, "readBusinessFinance");
+    if (id === "40-revenue-mixed-currency") {
+      const currencies = evidence.values
+        .map((row) => row.currency)
+        .filter(Boolean)
+        .sort();
+      return {
+        outcome:
+          currencies.length > 1 && facts.auditEvents.includes("revenue.unsupported_declared")
+            ? "refused"
+            : "ready",
+        toolTrace: facts.toolTrace,
+        result: { operation: "cash_flow", state: "refused", reason: "mixed_currency", currencies },
+        refs: [],
+        counts: { currencyBuckets: currencies.length, combinedTotals: 0, writes: 0 },
+      };
+    }
+    if (id === "41-revenue-payroll-unknown") {
+      return {
+        outcome: evidence.coverage.partial ? "partial" : "ready",
+        toolTrace: facts.toolTrace,
+        result: evidence,
+        refs: [],
+        counts: {
+          payrollRuns: evidence.values.filter((row) => row.state === "known").length,
+          unknownValues: evidence.values.filter((row) => row.state === "unknown").length,
+          writes: 0,
+        },
+      };
+    }
+    return {
+      outcome: evidence.coverage.partial ? "partial" : "ready",
+      toolTrace: facts.toolTrace,
+      result: evidence,
+      refs: ["quickbooks:account:cash"],
+      counts: {
+        values: evidence.values.length,
+        points: evidence.values.reduce((sum, row) => sum + (row.pointCount ?? 0), 0),
+        writes: 0,
+      },
+    };
+  }
+  const result = parsedRevenueOutput(run, "stageInvoiceReminder");
+  const invoiceRef = id === "42-revenue-invoice-reminder" ? "qb-invoice-42" : "qb-invoice-43";
+  return {
+    outcome: result.ok ? "proposed" : "refused",
+    toolTrace: facts.toolTrace,
+    result,
+    refs: result.ok
+      ? [`quickbooks:${invoiceRef}`, `plan:invoice-reminder-${id.startsWith("42") ? "42" : "43"}`]
+      : [`quickbooks:${invoiceRef}`],
+    counts: result.ok
+      ? {
+          proposedPlans: facts.planStatus === "proposed" ? 1 : 0,
+          requests: facts.requestCount,
+          sends: facts.sentCount,
+        }
+      : {
+          proposedPlans: facts.planStatus === "proposed" ? 1 : 0,
+          suppressedRecipients: facts.suppressionCount,
+          partialSends: 0,
+          sends: facts.sentCount,
+        },
+  };
+}
+
+async function liveRevenueDiagnostic(pins, stateSuite) {
   if (process.env.PIKAR_REVENUE_EVAL_LIVE_APPROVED !== "I_ACCEPT_PAID_REVENUE_EVAL") {
     throw new Error(
       "LIVE_REVENUE_EVAL_BLOCKED: set PIKAR_REVENUE_EVAL_DRY_RUN=1 for the deterministic offline gate; " +
         "the paid all-candidate diagnostic requires the owner's explicit PIKAR_REVENUE_EVAL_LIVE_APPROVED=I_ACCEPT_PAID_REVENUE_EVAL qualification",
     );
   }
-  const refs = gateSuite.cases.map((entry) => entry.file.replace(/\.json$/, ""));
-  return pins.map((pin) => {
+  const results = [];
+  let totalCostUsd = 0;
+  for (const pin of pins) {
+    const fixtures = revenueFixturesForPin(pin, stateSuite);
     const startedAt = Date.now();
-    const child = spawnSync(process.execPath, [runnerPath, "--skill", `${pin.name}@${pin.version}`], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        PIKAR_REVENUE_EVAL_CHILD: "1",
-        PIKAR_REVENUE_EVAL_NO_REGISTRY_WRITE: "1",
-      },
-      maxBuffer: 16 * 1024 * 1024,
-    });
-    if (child.error) throw child.error;
-    const output = `${child.stdout ?? ""}\n${child.stderr ?? ""}`;
-    const passed = child.status === 0;
-    console.log(
-      `[eval:golden] ${passed ? "PASS" : "FAIL"} ${pin.name}@${pin.version} ` +
-        `(${Math.max(0, Date.now() - startedAt)}ms, exit ${child.status ?? "unknown"})`,
-    );
-    if (!passed) {
-      console.error(output.split(/\r?\n/).slice(-20).join("\n"));
+    let pinCostUsd = 0;
+    let casesPassed = 0;
+    let failure = null;
+    for (const fixture of fixtures) {
+      try {
+        const tenantId = `eval-${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+        const seed = parse(must("smoke:seedRevenueEvalCase", { tenantId, fixtureId: fixture.id }));
+        const turnId = randomUUID();
+        const run = parse(
+          must(
+            "llm:runRevenueCandidateEval",
+            {
+              tenantId,
+              threadId: seed.threadId,
+              turnId,
+              planId: seed.planId,
+              fixtureId: fixture.id,
+              skillName: pin.name,
+              skillVersion: pin.version,
+              prompt: fixture.turns.join("\n\n"),
+            },
+            RETRY_TURN,
+          ),
+        );
+        const caseCostUsd = Number(run.costUsd ?? 0);
+        pinCostUsd += caseCostUsd;
+        totalCostUsd += caseCostUsd;
+        if (pinCostUsd > COST_CAP_USD || totalCostUsd > COST_CAP_USD * pins.length) {
+          throw new Error(
+            `revenue eval cost cap exceeded (pin $${pinCostUsd.toFixed(4)}, total $${totalCostUsd.toFixed(4)})`,
+          );
+        }
+        assert.equal(run.skillName, pin.name, `${fixture.id} executed the wrong skill name`);
+        assert.equal(
+          run.skillVersion,
+          pin.version,
+          `${fixture.id} executed the wrong skill version`,
+        );
+        assert.equal(
+          run.skillBodyHash,
+          pin.bodySha256,
+          `${fixture.id} executed the wrong body hash`,
+        );
+        const facts = parse(
+          must(
+            "smoke:revenueEvalFacts",
+            { tenantId, threadId: seed.threadId, planId: seed.planId },
+            RETRY_READ,
+          ),
+        );
+        const actual = observedRevenueState(fixture, run, facts, seed.aliases);
+        const misses = evaluateRevenueFixture(fixture, actual);
+        if (misses.length > 0) throw new Error(`${fixture.id}: ${JSON.stringify(misses)}`);
+        casesPassed++;
+        console.log(`[eval:golden] PASS ${pin.name}@${pin.version} / ${fixture.id}`);
+      } catch (error) {
+        failure = error;
+        console.error(
+          `[eval:golden] FAIL ${pin.name}@${pin.version} / ${fixture.id}: ${error.message}`,
+        );
+        break;
+      }
     }
-    return {
+    results.push({
       pin: `${pin.name}@${pin.version}`,
       bodySha256: pin.bodySha256,
-      outcome: passed ? "passed" : "failed",
-      casesPassed: passed ? gateSuite.caseCount : 0,
-      casesTotal: gateSuite.caseCount,
-      costUsd: revenueDiagnosticCost(output),
+      outcome: failure === null && casesPassed === fixtures.length ? "passed" : "failed",
+      casesPassed,
+      casesTotal: fixtures.length,
+      costUsd: pinCostUsd,
       latencyMs: Math.max(0, Date.now() - startedAt),
-      refs,
-    };
-  });
+      refs: fixtures.slice(0, casesPassed).map((fixture) => fixture.id),
+      ...(failure === null ? {} : { failure: failure.message }),
+    });
+  }
+  return results;
 }
 
 function assertRevenueDiagnosticArtifact(artifact, pins, gateSuite, stateSuite) {
@@ -1848,28 +2062,44 @@ function assertRevenueDiagnosticArtifact(artifact, pins, gateSuite, stateSuite) 
     })),
     "diagnostic pins are missing or stale against skills-lock.json",
   );
-  assert.equal(artifact?.results?.length, pins.length, "diagnostic must contain one result per pin");
-  const expectedRefs = gateSuite.cases.map((entry) => entry.file.replace(/\.json$/, ""));
+  assert.equal(
+    artifact?.results?.length,
+    pins.length,
+    "diagnostic must contain one result per pin",
+  );
   for (const [index, pin] of pins.entries()) {
     const result = artifact.results[index];
+    const expectedRefs = revenueFixturesForPin(pin, stateSuite).map((fixture) => fixture.id);
     assert.equal(result?.pin, `${pin.name}@${pin.version}`, "diagnostic result pin drifted");
     assert.equal(
+      result?.bodySha256,
+      pin.bodySha256,
+      "diagnostic result body hash drifted from skills-lock.json",
+    );
+    assert.equal(
       result?.casesTotal,
-      gateSuite.caseCount,
+      expectedRefs.length,
       "diagnostic result used a partial fixture set",
     );
-    assert.deepEqual(result?.refs, expectedRefs, "diagnostic result refs used a partial fixture set");
+    assert.deepEqual(
+      result?.refs,
+      expectedRefs,
+      "diagnostic result refs used a partial fixture set",
+    );
     assert.ok(
       ["dry_passed", "passed", "failed"].includes(result?.outcome),
       "diagnostic outcome is not closed",
     );
-    assert.ok(result?.costUsd === null || Number.isFinite(result?.costUsd), "costUsd is not numeric");
+    assert.ok(
+      result?.costUsd === null || Number.isFinite(result?.costUsd),
+      "costUsd is not numeric",
+    );
     assert.ok(Number.isFinite(result?.latencyMs), "latencyMs is not numeric");
   }
   return artifact;
 }
 
-function runRevenueCandidateMode(mode) {
+async function runRevenueCandidateMode(mode) {
   const pins = revenueCandidatePins();
   const gateSuite = computeSuiteIdentity();
   const stateSuite = revenueFixtureSuite();
@@ -1879,8 +2109,8 @@ function runRevenueCandidateMode(mode) {
   if (mode === "diagnostic") {
     const dryRun = process.env.PIKAR_REVENUE_EVAL_DRY_RUN === "1";
     const results = dryRun
-      ? dryRevenueDiagnostic(pins, gateSuite, stateSuite)
-      : liveRevenueDiagnostic(pins, gateSuite);
+      ? dryRevenueDiagnostic(pins, stateSuite)
+      : await liveRevenueDiagnostic(pins, stateSuite);
     const artifact = {
       schemaVersion: 1,
       kind: "revenue-candidate-diagnostic",
@@ -1930,6 +2160,7 @@ function runRevenueCandidateMode(mode) {
     stateSuite: diagnostic.stateSuite,
     candidates: diagnostic.results.map((result) => ({
       pin: result.pin,
+      bodySha256: result.bodySha256,
       outcome: result.outcome,
       costUsd: result.costUsd,
       latencyMs: result.latencyMs,
@@ -1994,10 +2225,11 @@ function selfCheck() {
   assert.deepEqual(
     revenueFixtures.map((fixture) => fixture.id),
     REVENUE_FIXTURE_IDS,
-    "the complete eight-case revenue fixture set must be present in sorted order",
+    "the complete eleven-case revenue fixture set must be present in sorted order",
   );
   const lockedPins = revenueCandidatePins();
   assert.equal(lockedPins.length, 8, "all eight code-owned revenue pins are discoverable offline");
+  for (const pin of lockedPins) revenueFixturesForPin(pin, { fixtures: revenueFixtures });
   for (const fixture of revenueFixtures) {
     const expected = fixture.expect.expectedState;
     assert.equal(
@@ -2028,14 +2260,15 @@ function selfCheck() {
   }
   const revenueStateSuite = revenueFixtureSuite();
   const revenueGateSuite = computeSuiteIdentity();
-  const dryResults = dryRevenueDiagnostic(lockedPins, revenueGateSuite, revenueStateSuite);
+  const dryResults = dryRevenueDiagnostic(lockedPins, revenueStateSuite);
   assert.equal(dryResults.length, lockedPins.length, "dry diagnostics cover every exact pin");
   assert.ok(
     dryResults.every(
       (result) =>
         result.outcome === "dry_passed" &&
-        result.casesTotal === revenueGateSuite.caseCount &&
-        result.refs.length === revenueGateSuite.caseCount,
+        result.casesTotal === result.refs.length &&
+        result.refs.length > 0 &&
+        result.refs.every((ref) => REVENUE_FIXTURE_IDS.includes(ref)),
     ),
     "dry diagnostics prove the full unfiltered gate without impersonating live evidence",
   );
@@ -2062,12 +2295,7 @@ function selfCheck() {
     results: dryResults,
   };
   assert.doesNotThrow(() =>
-    assertRevenueDiagnosticArtifact(
-      dryArtifact,
-      lockedPins,
-      revenueGateSuite,
-      revenueStateSuite,
-    ),
+    assertRevenueDiagnosticArtifact(dryArtifact, lockedPins, revenueGateSuite, revenueStateSuite),
   );
   assert.throws(
     () =>
@@ -2097,10 +2325,44 @@ function selfCheck() {
     /partial fixture set/,
     "partial fixture refs fail before evidence can be emitted",
   );
+  assert.throws(
+    () =>
+      assertRevenueDiagnosticArtifact(
+        {
+          ...dryArtifact,
+          results: [
+            { ...dryArtifact.results[0], bodySha256: "0".repeat(64) },
+            ...dryArtifact.results.slice(1),
+          ],
+        },
+        lockedPins,
+        revenueGateSuite,
+        revenueStateSuite,
+      ),
+    /body hash/,
+    "a pin resolving to the wrong body fails before evidence can be emitted",
+  );
+  assert.throws(
+    () =>
+      assertRevenueDiagnosticArtifact(
+        {
+          ...dryArtifact,
+          results: [
+            { ...dryArtifact.results[0], refs: ["01-legacy-case"] },
+            ...dryArtifact.results.slice(1),
+          ],
+        },
+        lockedPins,
+        revenueGateSuite,
+        revenueStateSuite,
+      ),
+    /partial fixture set/,
+    "a per-pin ref pointing at a legacy case fails closed",
+  );
   const liveRevenueSource = liveRevenueDiagnostic.toString();
   assert.ok(
-    liveRevenueSource.indexOf("LIVE_REVENUE_EVAL_BLOCKED") < liveRevenueSource.indexOf("spawnSync"),
-    "the paid diagnostic qualification must precede the first child/external call",
+    liveRevenueSource.indexOf("LIVE_REVENUE_EVAL_BLOCKED") < liveRevenueSource.indexOf('must("'),
+    "the paid diagnostic qualification must precede the first Convex/model call",
   );
   // 17.1-10: the live gate must prove the runner's THROWAWAY tenant is Blueprint-bearing before
   // the first paid turn. Source order is load-bearing: seeding/asserting after the fixture loop
@@ -3483,19 +3745,13 @@ function selfCheck() {
     parseRevenueCandidateMode(["--all-candidates", "--activation-evidence"]),
     "activation-evidence",
   );
-  assert.throws(
-    () => parseRevenueCandidateMode(["--diagnostic"]),
-    /requires --all-candidates/,
-  );
+  assert.throws(() => parseRevenueCandidateMode(["--diagnostic"]), /requires --all-candidates/);
   assert.throws(
     () => parseRevenueCandidateMode(["--all-candidates", "--diagnostic", "--only", "36-"]),
     /cannot be combined with --only/,
     "a partial all-candidate diagnostic must fail before any paid call",
   );
-  assert.throws(
-    () => parseRevenueCandidateMode(["--all-candidates"]),
-    /exactly one/,
-  );
+  assert.throws(() => parseRevenueCandidateMode(["--all-candidates"]), /exactly one/);
   assert.ok(assertKnownArgs(["--skill", "cockpit-agent@9", "--only", "research"]));
   assert.ok(
     assertKnownArgs(["--inspect-tenant-skill", "k57rowA", "--json", "--expect-status=candidate"]),
@@ -4656,7 +4912,7 @@ try {
     // Free preflight first. The live qualification check inside runRevenueCandidateMode happens
     // before spawnSync, so an unqualified invocation cannot reach Convex or a model/provider call.
     selfCheck();
-    process.exit(runRevenueCandidateMode(revenueMode));
+    process.exit(await runRevenueCandidateMode(revenueMode));
   }
   // A live run inherits every free fixture/vocabulary/cost/registry guard. Keep this immediately
   // before runLive: no fixture seed, Convex call or model/provider work may precede the preflight.

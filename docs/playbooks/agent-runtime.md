@@ -1,5 +1,17 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-09-01 (28-19 — **EIGHT REVENUE PINS NOW HAVE NON-VACUOUS DIRECT COVERAGE.**
+> The state suite contains 11 cases: every locked candidate has at least one case and the umbrella,
+> call-list, and pipeline-review bodies have dedicated fixtures. The runner groups cases by exact
+> `name@version`, verifies the executed body hash against `skills-lock.json`, compares the SDK trace
+> with persisted `agentSteps`, then judges exact tool output plus persisted plan/audit/request/
+> suppression facts. Each artifact result lists only the revenue cases actually executed for that
+> pin; the global suite hash is context, not proof. The free self-check rejects a missing revenue
+> case, zero-case pin, wrong body hash, legacy per-pin ref, partial ref set, or filtered
+> all-candidate invocation. Finance fixtures supply deterministic normalized projections but still
+> cross `composeBusinessFinance`; no provider call, registry activation, request, or send is hidden
+> in the fixture seam.)
+>
 > Last verified: 2026-08-27 (**FIXTURE 33 AND THE HONESTY GUARD CONTRADICT EACH OTHER, THE FIXTURE
 > IS THE STALE HALF, AND THE TEMPTING FIX IS A GOVERNANCE REGRESSION. DO NOT MAKE IT.**
 >

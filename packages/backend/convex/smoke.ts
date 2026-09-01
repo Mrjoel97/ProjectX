@@ -452,6 +452,190 @@ export const seedGoldenEvalBlueprint = internalMutation({
   },
 });
 
+const REVENUE_EVAL_CASES = new Set([
+  "36-revenue-lead-triage",
+  "37-revenue-partial",
+  "38-revenue-injection",
+  "39-revenue-cash-flow",
+  "40-revenue-mixed-currency",
+  "41-revenue-payroll-unknown",
+  "42-revenue-invoice-reminder",
+  "43-revenue-suppressed-reminder",
+  "44-revenue-specialist",
+  "45-revenue-call-list",
+  "46-revenue-pipeline-review",
+]);
+
+/** Phase 28 direct-candidate eval seed. Narrower than the normal golden seed: one random eval
+ * tenant, one closed case, and only persisted CRM/plan facts consumed by that case. */
+export const seedRevenueEvalCase = internalMutation({
+  args: { tenantId: v.string(), fixtureId: v.string() },
+  handler: async (ctx, { tenantId, fixtureId }) => {
+    if (!GOLDEN_EVAL_TENANT.test(tenantId) || !REVENUE_EVAL_CASES.has(fixtureId)) {
+      throw new Error("REVENUE_EVAL_CASE_REQUIRED");
+    }
+    const threadId = `revenue-${fixtureId}-${crypto.randomUUID()}`;
+    const invoice =
+      fixtureId === "42-revenue-invoice-reminder" || fixtureId === "43-revenue-suppressed-reminder";
+    const planId = await ctx.db.insert("plans", {
+      tenantId,
+      threadId,
+      status: "collecting",
+      ...(invoice
+        ? {
+            recipients:
+              fixtureId === "43-revenue-suppressed-reminder"
+                ? ["billing@golden.example", "suppressed-43@golden.example"]
+                : ["billing@golden.example"],
+            mode: "group" as const,
+          }
+        : {}),
+      createdAt: Date.now(),
+    });
+
+    const aliases: Record<string, string> = {};
+    if (
+      ["36-revenue-lead-triage", "44-revenue-specialist", "45-revenue-call-list"].includes(
+        fixtureId,
+      )
+    ) {
+      const rows = [
+        ["contact-overdue", "overdue@golden.example", Date.now() - 86_400_000],
+        ["contact-due", "due@golden.example", Date.now() + 86_400_000],
+        ["contact-suppressed", "suppressed@golden.example", Date.now() - 86_400_000],
+      ] as const;
+      for (const [alias, email, dueAt] of rows) {
+        const contactId = await ctx.db.insert("contacts", {
+          tenantId,
+          origin: "user-entered",
+          email,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        aliases[alias] = String(contactId);
+        await ctx.db.insert("followUps", {
+          tenantId,
+          contactId,
+          note: "golden revenue fixture",
+          dueAt,
+          status: "open",
+          createdAt: 1,
+        });
+        if (alias === "contact-due") {
+          await ctx.db.insert("contactProviderRefs", {
+            tenantId,
+            contactId,
+            provider: "hubspot",
+            kind: "contact",
+            externalId: "hs-attention-due",
+            linkedAt: 1,
+            updatedAt: 1,
+          });
+        }
+      }
+      await ctx.db.insert("suppressions", {
+        tenantId,
+        address: "suppressed@golden.example",
+        suppressedAt: 1,
+        source: "user-marked",
+      });
+    }
+
+    const pulseRef =
+      fixtureId === "37-revenue-partial"
+        ? "hs-partial-7"
+        : fixtureId === "38-revenue-injection"
+          ? "hs-inject-9"
+          : fixtureId === "46-revenue-pipeline-review"
+            ? "hs-pipeline-46"
+            : null;
+    if (pulseRef !== null) {
+      const contactId = await ctx.db.insert("contacts", {
+        tenantId,
+        origin: "user-entered",
+        email: `${pulseRef}@golden.example`,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("followUps", {
+        tenantId,
+        contactId,
+        note: "golden revenue pulse",
+        dueAt: Date.now() - 86_400_000,
+        status: "open",
+        createdAt: 1,
+      });
+      await ctx.db.insert("contactProviderRefs", {
+        tenantId,
+        contactId,
+        provider: "hubspot",
+        kind: "contact",
+        externalId: pulseRef,
+        linkedAt: 1,
+        updatedAt: 1,
+      });
+    }
+    if (fixtureId === "43-revenue-suppressed-reminder") {
+      await ctx.db.insert("suppressions", {
+        tenantId,
+        address: "suppressed-43@golden.example",
+        suppressedAt: 1,
+        source: "user-marked",
+      });
+    }
+    return { planId, threadId, aliases };
+  },
+});
+
+/** Persisted half of the revenue oracle. Tool results stay in the action return; this query proves
+ * the trace, plan lifecycle, request/send absence, and suppression witness survived in state. */
+export const revenueEvalFacts = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string(), planId: v.id("plans") },
+  handler: async (ctx, { tenantId, threadId, planId }) => {
+    if (!GOLDEN_EVAL_TENANT.test(tenantId)) throw new Error("REVENUE_EVAL_TENANT_REQUIRED");
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.tenantId !== tenantId || plan.threadId !== threadId) {
+      throw new Error("REVENUE_EVAL_PLAN_MISMATCH");
+    }
+    const [steps, contacts, suppressions, requests, audit] = await Promise.all([
+      ctx.db
+        .query("agentSteps")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect(),
+      ctx.db
+        .query("contacts")
+        .withIndex("by_tenant_createdAt", (q) => q.eq("tenantId", tenantId))
+        .collect(),
+      ctx.db
+        .query("suppressions")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect(),
+      ctx.db
+        .query("requests")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect(),
+      ctx.db
+        .query("audit")
+        .withIndex("by_tenant_ts", (q) => q.eq("tenantId", tenantId))
+        .collect(),
+    ]);
+    return {
+      planStatus: plan.status,
+      planHasBody: Boolean(plan.body),
+      recipientCount: plan.recipients?.length ?? 0,
+      contactCount: contacts.length,
+      suppressionCount: suppressions.length,
+      requestCount: requests.length,
+      sentCount: requests.filter((row) => row.status === "sent").length,
+      toolTrace: steps
+        .filter((row) => row.threadId === threadId && !row.stepKey.startsWith("dispatch:"))
+        .sort((a, b) => a.startedAt - b.startedAt)
+        .map((row) => row.tool),
+      auditEvents: audit.map((row) => row.eventType),
+    };
+  },
+});
+
 // --- 03.7-02: the inbox fixture seam (CKPT-04) -------------------------------
 // gmail.listInbox / fetchInboxBodies check `inboxFixtures` BEFORE freshAccessToken, so a
 // seeded row makes the whole briefing path run with NO Gmail token and no network. This is

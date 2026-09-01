@@ -36,6 +36,8 @@ import {
   INBOX_DIGEST_SKILL,
   REPLY_DRAFTER_SKILL,
   RESEARCH_SPECIALIST_SKILL,
+  REVENUE_SPECIALIST_SKILL,
+  REVENUE_WORKFLOW_SKILLS,
   VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
@@ -79,6 +81,7 @@ import {
   type RecipientEdit,
   rankCandidates,
   renderHtmlDocument,
+  SPECIALISTS,
   selectForDigest,
   tokenizeMarkdown,
   toWinAnsi,
@@ -114,17 +117,17 @@ import { type Color, PDFDocument, type PDFFont, rgb, StandardFonts } from "pdf-l
 import { api, components, internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
-import { buildInvoiceReminderTool } from "./invoiceReminders";
-import { buildRevenueTools, isRevenueToolGrant } from "./revenueTools";
 import {
   applyGmailCapability,
   GMAIL_CONNECTION_REQUIRED_REPLY,
   isHarnessDrivenEvaluation,
   shouldUseGmailCapability,
 } from "./cockpitCapabilities";
+import { buildInvoiceReminderTool } from "./invoiceReminders";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
+import { buildRevenueTools, isRevenueToolGrant } from "./revenueTools";
 
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
 // primary + one CHEAP_MODEL fallback (the pipeline runs these steps with retry:false).
@@ -1824,6 +1827,9 @@ export function buildCockpitTools(
     grantRevenueReads?: boolean;
     /** REVN-06: executive-only staging; never derived from a specialist allow-list. */
     grantInvoiceReminderStage?: boolean;
+    /** Phase 28 eval-only fixture selector. Set only by runRevenueCandidateEval after its
+     * throwaway-tenant and closed-corpus checks; absent keeps production construction unchanged. */
+    evalRevenueFixtureId?: string;
     /**
      * 27-10. True only for a workflow pack whose `output` contract IS a saved document, derived in
      * `runSpecialistTurn` from the SKILL NAME (`packOutputIsDocument`). It BUILDS `saveAsDocument`
@@ -2464,10 +2470,10 @@ export function buildCockpitTools(
       ? skillAuthoringTool
       : ({} as typeof skillAuthoringTool)),
     ...(agentContext?.grantRevenueReads
-      ? buildRevenueTools(ctx, tenantId, planId)
+      ? buildRevenueTools(ctx, tenantId, planId, agentContext.evalRevenueFixtureId)
       : ({} as ReturnType<typeof buildRevenueTools>)),
     ...(agentContext?.grantInvoiceReminderStage
-      ? buildInvoiceReminderTool(ctx, tenantId, planId)
+      ? buildInvoiceReminderTool(ctx, tenantId, planId, agentContext.evalRevenueFixtureId)
       : ({} as ReturnType<typeof buildInvoiceReminderTool>)),
     setSubject: tool({
       description: "Set the email subject line.",
@@ -4573,6 +4579,7 @@ async function runAgentLoop(
     // every existing caller keeps working. A specialist is a swapped (system, tools) pair through
     // THIS function; there is no second loop.
     toolNames?: readonly string[];
+    evalRevenueFixtureId?: string;
     // 27-10. Append-only optional. A property of WHICH SPECIALIST is running, so it is derived
     // from `skillName` at the `runSpecialistTurn` seam (the `maxSteps`/`timeoutMs` precedent) and
     // simply travels through here to `buildCockpitTools`. Absent => today, byte-identical.
@@ -4595,6 +4602,10 @@ async function runAgentLoop(
   reply: string;
   costUsd: number;
   webSearchCalls: number;
+  /** Eval observer: ordered SDK-attested tool calls and their structured outputs. Internal only;
+   * ordinary callers ignore these additive fields. */
+  toolTrace: readonly string[];
+  toolOutputs: readonly { tool: string; output: unknown }[];
   /** 22.1b: did the specialist CALL `declareUnsupported`? One bit, monotone downward — it can only
    *  move `evidenceVerdict` from `sourced` to `insufficient_evidence`, never the other way. */
   declaredUnsupported: boolean;
@@ -4622,6 +4633,7 @@ async function runAgentLoop(
     omitRecipientEdits,
     gmailEnabled,
     toolNames,
+    evalRevenueFixtureId,
     documentIsDeliverable,
     maxSteps,
     timeoutMs,
@@ -4651,8 +4663,9 @@ async function runAgentLoop(
       grantSkillAuthoring: toolNames === undefined,
       // REVN-04/05: identity-check the immutable code-owned tuple. A copied or model-authored list
       // with the same strings is still not the grant.
-      grantRevenueReads: isRevenueToolGrant(toolNames),
-      grantInvoiceReminderStage: toolNames === undefined,
+      grantRevenueReads: isRevenueToolGrant(toolNames) || evalRevenueFixtureId !== undefined,
+      grantInvoiceReminderStage: toolNames === undefined || evalRevenueFixtureId !== undefined,
+      evalRevenueFixtureId,
       // 27-10: passed through, NEVER derived here. `toolNames.includes("createDocument")` would let
       // any specialist granted the tool relax its own trigger rule by holding it.
       documentIsDeliverable,
@@ -4712,6 +4725,8 @@ async function runAgentLoop(
     reply: string;
     costUsd: number;
     webSearchCalls: number;
+    toolTrace: readonly string[];
+    toolOutputs: readonly { tool: string; output: unknown }[];
     declaredUnsupported: boolean;
     saveRequest?: { title: string };
     truncated: boolean;
@@ -4794,6 +4809,14 @@ async function runAgentLoop(
     // loop declares exactly ONE provider-executed tool, so the flag is one source of truth and
     // cannot drift when the provider renames anything.
     const toolCalls = res.steps.flatMap((st) => st.content).filter((p) => p.type === "tool-call");
+    const toolTrace = toolCalls.map((part) => part.toolName);
+    const toolOutputs = res.steps
+      .flatMap((step) => step.content)
+      .filter((part) => part.type === "tool-result")
+      .map((part) => ({
+        tool: part.toolName,
+        output: (part as { output?: unknown }).output,
+      }));
     // COUNTED BY NAME, not by `providerExecuted` (changed 2026-08-07 with the move to Tavily).
     // The old comment above was right FOR A HOSTED TOOL: the provider chose the emitted name
     // (`web_search`, not our key `webResearch`) and could rename it, so the flag was the stable
@@ -4929,6 +4952,8 @@ async function runAgentLoop(
       reply: res.text,
       costUsd,
       webSearchCalls,
+      toolTrace,
+      toolOutputs,
       declaredUnsupported,
       saveRequest,
       sources,
@@ -4994,6 +5019,8 @@ export async function runSpecialistTurn(
      *  once two tenants each own version 2 (21-02's two-tenant test builds that collision). Trusted
      *  server state — an `internalAction` carries it, so no model-supplied id reaches here. */
     tenantSkillIds?: Record<string, Id<"tenantSkills">>;
+    /** Phase 28: closed eval-only case selector. Never set by dispatch or production cockpit. */
+    evalRevenueFixtureId?: string;
     /** test-support: a MockLanguageModelV4 doGenerate script (the __runCockpitAgentWithScript
      *  shim's mechanism). Absent ⇒ the real gateway models.
      *  `softCutoffMs` drives ONLY the soft wall-clock stop (D11). It is deliberately NOT a hard-
@@ -5029,6 +5056,8 @@ export async function runSpecialistTurn(
   skillName: string;
   skillBodyHash: string;
   webSearchCalls: number;
+  toolTrace: readonly string[];
+  toolOutputs: readonly { tool: string; output: unknown }[];
   /** 22.1b: the SAME `truncatedReason` seam — the `{ ...res, skillVersion }` spread below ALREADY
    *  forwards the value, so only this type widens. Without the widening `governedDispatch` cannot
    *  see the declaration and the whole channel dead-ends one function short of the verdict, which
@@ -5045,7 +5074,17 @@ export async function runSpecialistTurn(
   modelId: string;
   fallbackModelId: string;
 }> {
-  const { tenantId, planId, skillName, toolNames, prompt, turnId, threadId, skillVersions } = args;
+  const {
+    tenantId,
+    planId,
+    skillName,
+    toolNames,
+    prompt,
+    turnId,
+    threadId,
+    skillVersions,
+    evalRevenueFixtureId,
+  } = args;
   const tenantSkillIds = args.tenantSkillIds;
   // The §5 loader, fail-closed on both branches (a missing pin throws NO_SUCH_SKILL_VERSION, a
   // never-seeded skill throws NO_ACTIVE_SKILL) — a specialist NEVER runs on a hardcoded prompt.
@@ -5148,6 +5187,7 @@ export async function runSpecialistTurn(
     turnId,
     threadId,
     toolNames,
+    evalRevenueFixtureId,
     // 27-10: derived HERE from the skill name, beside the model pin and the step budget, for the
     // reason stated above — it is a property of WHICH SPECIALIST is running, not a request the
     // caller can make. `packOutputIsDocument` is false for every non-pack name, so every other
@@ -5175,6 +5215,80 @@ export async function runSpecialistTurn(
     skillBodyHash: await contentHash(skill.body),
   };
 }
+
+const REVENUE_EVAL_CASE_SKILL = {
+  "36-revenue-lead-triage": "revenue-lead-triage",
+  "37-revenue-partial": "revenue-customer-pulse",
+  "38-revenue-injection": "revenue-customer-pulse",
+  "39-revenue-cash-flow": "revenue-cash-flow",
+  "40-revenue-mixed-currency": "revenue-cash-flow",
+  "41-revenue-payroll-unknown": "revenue-payroll-confidence",
+  "42-revenue-invoice-reminder": "revenue-invoice-reminder",
+  "43-revenue-suppressed-reminder": "revenue-invoice-reminder",
+  "44-revenue-specialist": "revenue-specialist",
+  "45-revenue-call-list": "revenue-call-list",
+  "46-revenue-pipeline-review": "revenue-pipeline-review",
+} as const;
+const REVENUE_EVAL_TENANT = /^eval-[0-9a-f]{8}$/;
+const REVENUE_EVAL_SKILLS = new Set<string>([REVENUE_SPECIALIST_SKILL, ...REVENUE_WORKFLOW_SKILLS]);
+type RevenueEvalResult = Awaited<ReturnType<typeof runSpecialistTurn>>;
+
+/**
+ * Phase 28's direct-candidate eval seam. It is intentionally an internalAction beside the loop it
+ * reuses: production dispatch never supplies an eval fixture id, and this door accepts only a
+ * random throwaway eval tenant, a closed case→skill pair, and an exact global version pin.
+ */
+export const runRevenueCandidateEval = internalAction({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    turnId: v.string(),
+    planId: v.id("plans"),
+    fixtureId: v.string(),
+    skillName: v.string(),
+    skillVersion: v.number(),
+    prompt: v.string(),
+  },
+  handler: async (
+    ctx,
+    { tenantId, threadId, turnId, planId, fixtureId, skillName, skillVersion, prompt },
+  ): Promise<RevenueEvalResult> => {
+    if (!REVENUE_EVAL_TENANT.test(tenantId)) throw new Error("REVENUE_EVAL_TENANT_REQUIRED");
+    const expectedSkill =
+      REVENUE_EVAL_CASE_SKILL[fixtureId as keyof typeof REVENUE_EVAL_CASE_SKILL];
+    if (
+      expectedSkill === undefined ||
+      expectedSkill !== skillName ||
+      !REVENUE_EVAL_SKILLS.has(skillName)
+    ) {
+      throw new Error("REVENUE_EVAL_CASE_SKILL_MISMATCH");
+    }
+    if (!Number.isSafeInteger(skillVersion) || skillVersion < 1) {
+      throw new Error("REVENUE_EVAL_VERSION_REQUIRED");
+    }
+    const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
+    if (!plan || plan.tenantId !== tenantId || plan.threadId !== threadId) {
+      throw new Error("REVENUE_EVAL_PLAN_MISMATCH");
+    }
+    const pre = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    if (!pre.ok) throw new Error(`REVENUE_EVAL_GOVERNED_STOP:${pre.reason}`);
+    const toolNames =
+      skillName === "revenue-invoice-reminder"
+        ? (["stageInvoiceReminder"] as const)
+        : SPECIALISTS.revenue.tools;
+    return await runSpecialistTurn(ctx, {
+      tenantId,
+      planId,
+      skillName,
+      toolNames,
+      prompt,
+      threadId,
+      turnId,
+      skillVersions: { [skillName]: skillVersion },
+      evalRevenueFixtureId: fixtureId,
+    });
+  },
+});
 
 // ── SMOKE:: agent sentinel (the Plan 05 offline E2E path) ────────────────────
 // The E2E has no gateway, so it drives the loop turn-by-turn: ONE sentinel op per user message

@@ -5,25 +5,35 @@
  * counts, and numbers produced by the pure revenue package. The surrounding evidence fence tells
  * the model explicitly that the payload is evidence, never an instruction or a tool request.
  */
-import { customerPulse } from "@pikar/revenue";
+
 import { SPECIALISTS } from "@pikar/core";
-import { jsonSchema, tool, type ToolSet } from "ai";
-import { makeFunctionReference, type GenericActionCtx } from "convex/server";
+import {
+  customerPulse,
+  type Invoice,
+  type Money,
+  type Obligation,
+  type Payment,
+  type Projection,
+} from "@pikar/revenue";
+import { jsonSchema, type ToolSet, tool } from "ai";
+import { type GenericActionCtx, makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalQuery } from "./_generated/server";
 import type { AttentionView } from "./revenueCrm";
-import type { BusinessFinanceResult } from "./revenueFinance";
+import {
+  type BusinessFinanceResult,
+  composeBusinessFinance,
+  type FinanceSourceReads,
+} from "./revenueFinance";
 
 type RevenueCrmOperation = "attention" | "customer_pulse";
 type RevenueFinanceOperation = "cash_flow" | "payroll_confidence";
 type ConnectorEnvironment = "sandbox" | "production";
 
-const attentionForTenant = makeFunctionReference<
-  "query",
-  { tenantId: string },
-  AttentionView
->("revenueCrm:attentionForTenant");
+const attentionForTenant = makeFunctionReference<"query", { tenantId: string }, AttentionView>(
+  "revenueCrm:attentionForTenant",
+);
 
 const contactPulseForTenantRef = makeFunctionReference<
   "query",
@@ -69,6 +79,95 @@ const financeState = (
     ? "partial"
     : "ready";
 };
+
+const EVAL_NOW = Date.UTC(2026, 8, 1);
+const EVAL_DAY = 86_400_000;
+const money = (minor: number, currency = "USD"): Money => ({ minor, currency });
+const ready = <T>(items: readonly T[]): Extract<Projection<T>, { state: "ready" }> => ({
+  state: "ready",
+  meta: {
+    provider: "quickbooks",
+    authority: "accounting_authority",
+    retrievedAt: EVAL_NOW,
+    window: { startMs: EVAL_NOW - 30 * EVAL_DAY, endMs: EVAL_NOW },
+    capped: false,
+    sources: items.flatMap((item) => {
+      const ref = (item as { ref?: Invoice["ref"] }).ref;
+      return ref === undefined ? [] : [ref];
+    }),
+  },
+  items,
+});
+
+/** Deterministic provider substitute reachable only through the eval-only action in llm.ts.
+ * Calculations still cross composeBusinessFinance; this supplies normalized inputs, not answers. */
+function evalFinance(fixtureId: string): BusinessFinanceResult {
+  const mixed = fixtureId === "40-revenue-mixed-currency";
+  const payrollUnknown = fixtureId === "41-revenue-payroll-unknown";
+  const invoices: Invoice[] = [
+    {
+      ref: { provider: "quickbooks", kind: "invoice", id: "cash-inflow" },
+      customerRef: "customer-cash-inflow",
+      issuedAt: EVAL_NOW - 10 * EVAL_DAY,
+      dueAt: EVAL_NOW + 5 * EVAL_DAY,
+      total: money(500_000),
+      outstanding: money(500_000),
+    },
+  ];
+  const payments: Payment[] = [];
+  const obligations: Obligation[] = [
+    {
+      ref: { provider: "quickbooks", kind: "bill", id: "cash-outflow" },
+      kind: payrollUnknown ? "other" : "payroll",
+      dueAt: EVAL_NOW + 10 * EVAL_DAY,
+      amount: money(250_000),
+    },
+  ];
+  const sources: FinanceSourceReads = {
+    quickbooks: {
+      invoices: ready(invoices),
+      payments: ready(payments),
+      obligations: ready(obligations),
+      accounts: ready([
+        {
+          ref: { provider: "quickbooks", kind: "account", id: "cash" },
+          balance: money(1_000_000),
+        },
+      ]),
+    },
+    ...(mixed
+      ? {
+          stripe: {
+            charges: {
+              ...ready<Payment>([]),
+              meta: {
+                ...ready<Payment>([]).meta,
+                provider: "stripe" as const,
+                authority: "payment_rail" as const,
+              },
+            },
+            invoices: {
+              ...ready<Invoice>([]),
+              meta: {
+                ...ready<Invoice>([]).meta,
+                provider: "stripe" as const,
+                authority: "payment_rail" as const,
+              },
+            },
+            balance: {
+              ...ready([{ available: [money(2_000_000, "EUR")], pending: [] }]),
+              meta: {
+                ...ready<unknown>([]).meta,
+                provider: "stripe" as const,
+                authority: "payment_rail" as const,
+              },
+            },
+          },
+        }
+      : {}),
+  };
+  return composeBusinessFinance({ sources, asOfMs: EVAL_NOW, horizonDays: 30 });
+}
 
 /** Keep only code-owned numeric/enum output. In particular, omit every `because`, `from`, and
  * `missing` string even when a malicious provider managed to place text there. */
@@ -162,7 +261,9 @@ export const contactPulseForTenant = internalQuery({
     }
     const followUps = await ctx.db
       .query("followUps")
-      .withIndex("by_tenant_contact", (q) => q.eq("tenantId", tenantId).eq("contactId", ref.contactId))
+      .withIndex("by_tenant_contact", (q) =>
+        q.eq("tenantId", tenantId).eq("contactId", ref.contactId),
+      )
       .collect();
     const now = Date.now();
     const pulse = customerPulse(
@@ -183,10 +284,12 @@ export function buildRevenueTools(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   planId: Id<"plans"> | string,
+  evalFixtureId?: string,
 ): ToolSet {
   return {
     readRevenueCrm: tool({
-      description: "Read a bounded revenue attention list or one customer pulse. Never writes CRM data.",
+      description:
+        "Read a bounded revenue attention list or one customer pulse. Never writes CRM data.",
       inputSchema: jsonSchema<{
         operation: RevenueCrmOperation;
         provider?: "hubspot";
@@ -238,7 +341,8 @@ export function buildRevenueTools(
       },
     }),
     readBusinessFinance: tool({
-      description: "Read a code-calculated cash-flow or payroll-confidence result. Never writes books.",
+      description:
+        "Read a code-calculated cash-flow or payroll-confidence result. Never writes books.",
       inputSchema: jsonSchema<{
         operation: RevenueFinanceOperation;
         environment: ConnectorEnvironment;
@@ -252,7 +356,9 @@ export function buildRevenueTools(
         additionalProperties: false,
       }),
       execute: async ({ operation, environment }): Promise<string> => {
-        const result = await ctx.runAction(businessFinance, { environment });
+        const result = evalFixtureId
+          ? evalFinance(evalFixtureId)
+          : await ctx.runAction(businessFinance, { environment });
         const state = financeState(result, operation);
         const selected = operation === "cash_flow" ? result.cash : result.payroll;
         await ctx.runMutation(auditLog, {
