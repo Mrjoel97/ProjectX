@@ -232,3 +232,279 @@ describe("opsSignals.evalSignals (EVAL-02 read side)", () => {
     }
   });
 });
+
+type RevenueSeed = {
+  tenantId?: string;
+  runId: string;
+  event:
+    | "connector_lifecycle"
+    | "connector_read"
+    | "workflow_completed"
+    | "finance_computed"
+    | "reminder_staged"
+    | "plan_decided"
+    | "recovery_observed";
+  createdAt: number;
+} & Record<string, unknown>;
+
+async function seedRevenueEvent(t: T, seed: RevenueSeed) {
+  await t.run(async (ctx) => {
+    await ctx.db.insert("workflowPackEvents", {
+      tenantId: seed.tenantId ?? TENANT,
+      packId: "revenue",
+      ...seed,
+    });
+  });
+}
+
+async function seedRevenueDerivedFacts(t: T) {
+  await t.run(async (ctx) => {
+    for (const [runId, amountCents] of [
+      ["rev:wf-1", 15],
+      ["rev:wf-2", 5],
+    ] as const) {
+      await ctx.db.insert("spendEvents", {
+        tenantId: TENANT,
+        rail: "reasoning",
+        phase: "actual",
+        amountCents,
+        correlationId: `agentloop:${runId}:a0`,
+        createdAt: NOW - 1_000,
+      });
+    }
+    await ctx.db.insert("spendEvents", {
+      tenantId: OTHER,
+      rail: "reasoning",
+      phase: "actual",
+      amountCents: 999,
+      correlationId: "agentloop:rev:wf-1:a0",
+      createdAt: NOW - 1_000,
+    });
+    await ctx.db.insert("agentSteps", {
+      tenantId: TENANT,
+      threadId: "rev:thread",
+      turnId: "rev:wf-1",
+      stepKey: "finance",
+      tool: "readBusinessFinance",
+      phase: "done",
+      startedAt: NOW - 2_000,
+      endedAt: NOW - 1_900,
+      durationMs: 100,
+    });
+    await ctx.db.insert("agentSteps", {
+      tenantId: TENANT,
+      threadId: "rev:thread",
+      turnId: "rev:wf-2",
+      stepKey: "open",
+      tool: "dispatchRevenue",
+      phase: "running",
+      startedAt: NOW - 1_000,
+    });
+  });
+}
+
+async function seedRevenueSignalFixture(t: T) {
+  const events: RevenueSeed[] = [
+    {
+      runId: "rev:life-hubspot",
+      event: "connector_lifecycle",
+      provider: "hubspot",
+      status: "connected",
+      createdAt: NOW - 10_000,
+    },
+    {
+      runId: "rev:life-qb",
+      event: "connector_lifecycle",
+      provider: "quickbooks",
+      status: "reauth_required",
+      createdAt: NOW - 9_000,
+    },
+    ...(["ready", "partial", "unavailable"] as const).map((status, index) => ({
+      runId: `rev:read-${index}`,
+      event: "connector_read" as const,
+      provider: "quickbooks",
+      status,
+      createdAt: NOW - 8_000 + index,
+    })),
+    {
+      runId: "rev:wf-1",
+      event: "workflow_completed",
+      workflow: "revenue-specialist",
+      outcome: "useful",
+      createdAt: NOW - 7_000,
+    },
+    // Raw duplicate proves the projection is independently idempotent.
+    {
+      runId: "rev:wf-1",
+      event: "workflow_completed",
+      workflow: "revenue-specialist",
+      outcome: "useful",
+      createdAt: NOW - 6_999,
+    },
+    {
+      runId: "rev:wf-2",
+      event: "workflow_completed",
+      workflow: "revenue-specialist",
+      outcome: "failed",
+      createdAt: NOW - 6_000,
+    },
+    {
+      runId: "rev:follow-up",
+      event: "reminder_staged",
+      workflow: "revenue-invoice-reminder",
+      itemCount: 2,
+      createdAt: NOW - 5_000,
+    },
+    {
+      runId: "rev:follow-up",
+      event: "plan_decided",
+      status: "approved",
+      createdAt: NOW - 3_000,
+    },
+    {
+      runId: "rev:recovery-1",
+      event: "recovery_observed",
+      provider: "stripe",
+      status: "paid",
+      subjectRef: "rev:item-1",
+      observedAt: NOW - 1_000,
+      createdAt: NOW - 900,
+    },
+    // Same item, different read: must not inflate recovery.
+    {
+      runId: "rev:recovery-duplicate",
+      event: "recovery_observed",
+      provider: "stripe",
+      status: "paid",
+      subjectRef: "rev:item-1",
+      observedAt: NOW - 800,
+      createdAt: NOW - 700,
+    },
+    // Inserted later but observed before staging: reordered history is not recovery.
+    {
+      runId: "rev:recovery-reordered",
+      event: "recovery_observed",
+      provider: "stripe",
+      status: "resolved",
+      subjectRef: "rev:item-2",
+      observedAt: NOW - 6_000,
+      createdAt: NOW - 600,
+    },
+    {
+      runId: "rev:finance-1",
+      event: "finance_computed",
+      workflow: "revenue-cash-flow",
+      coverage: "complete",
+      confidence: "high",
+      hasGap: false,
+      unknownCount: 0,
+      createdAt: NOW - 500,
+    },
+    {
+      runId: "rev:finance-2",
+      event: "finance_computed",
+      workflow: "revenue-payroll-confidence",
+      coverage: "partial",
+      confidence: "low",
+      hasGap: true,
+      unknownCount: 3,
+      createdAt: NOW - 400,
+    },
+  ];
+  for (const event of events) await seedRevenueEvent(t, event);
+  await seedRevenueDerivedFacts(t);
+}
+
+describe("opsSignals.revenueSignals (Phase 28 bounded projection)", () => {
+  test("projects usefulness, recovery, response, finance and canonical cost/latency", async () => {
+    const t = convexTest(schema, modules);
+    await seedRevenueSignalFixture(t);
+
+    const report = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.opsSignals.revenueSignals, { sinceMs: SINCE, untilMs: NOW });
+
+    expect(report.connectorAvailability).toMatchObject({ numerator: 1, denominator: 2, value: 0.5 });
+    expect(report.connectorReadCompletion).toMatchObject({
+      numerator: 2,
+      denominator: 3,
+      value: 2 / 3,
+    });
+    expect(report.followUpCompletion).toMatchObject({ numerator: 1, denominator: 2, value: 0.5 });
+    expect(report.overdueRecovery).toMatchObject({ numerator: 1, denominator: 2, value: 0.5 });
+    expect(report.responseHandling).toEqual({ eligible: 1, measured: 1, medianMs: 2_000, maxMs: 2_000 });
+    expect(report.finance).toEqual({
+      computations: 2,
+      coverage: { complete: 1, partial: 1, unknown: 0 },
+      confidence: { high: 1, medium: 0, low: 1, unknown: 0 },
+      hasGap: 1,
+      unknownTotal: 3,
+    });
+    expect(report.workflowCost).toEqual({ totalCents: 20, runsPriced: 2, runsJoined: 2 });
+    expect(report.workflowLatency).toEqual({ runsMeasured: 1, medianMs: 100, maxMs: 100, runsJoined: 2 });
+    expect(report.window.complete).toBe(true);
+  });
+
+  test("is tenant-isolated across events, spend and step facts", async () => {
+    const t = convexTest(schema, modules);
+    await seedRevenueSignalFixture(t);
+
+    const mine = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.opsSignals.revenueSignals, { sinceMs: SINCE, untilMs: NOW });
+    const other = await t
+      .withIdentity({ subject: OTHER })
+      .query(api.opsSignals.revenueSignals, { sinceMs: SINCE, untilMs: NOW });
+
+    expect(mine.window.eventCount).toBeGreaterThan(0);
+    expect(other.window.eventCount).toBe(0);
+    expect(other.workflowCost.totalCents).toBe(0);
+    expect(other.workflowLatency.runsMeasured).toBe(0);
+    expect(other.connectorAvailability).toEqual({ kind: "not_applicable", reason: "no_data" });
+  });
+
+  test("clamps retention and labels the resulting partial window honestly", async () => {
+    const t = convexTest(schema, modules);
+    await seedRevenueEvent(t, {
+      runId: "rev:too-old",
+      event: "connector_read",
+      provider: "hubspot",
+      status: "ready",
+      createdAt: NOW - 100 * 24 * 60 * 60 * 1_000,
+    });
+    await seedRevenueEvent(t, {
+      runId: "rev:recent",
+      event: "connector_read",
+      provider: "hubspot",
+      status: "ready",
+      createdAt: NOW - 1_000,
+    });
+
+    const report = await t.withIdentity({ subject: TENANT }).query(api.opsSignals.revenueSignals, {
+      sinceMs: NOW - 180 * 24 * 60 * 60 * 1_000,
+      untilMs: NOW,
+    });
+
+    expect(report.window).toMatchObject({
+      requestedSinceMs: NOW - 180 * 24 * 60 * 60 * 1_000,
+      sinceMs: NOW - 90 * 24 * 60 * 60 * 1_000,
+      untilMs: NOW,
+      eventCount: 1,
+      complete: false,
+      reasons: ["retention_boundary"],
+    });
+  });
+
+  test("reports no-data denominators and unknown performance for an empty window", async () => {
+    const t = convexTest(schema, modules);
+    const report = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.opsSignals.revenueSignals, { sinceMs: SINCE, untilMs: NOW });
+
+    expect(report.followUpCompletion).toEqual({ kind: "not_applicable", reason: "no_data" });
+    expect(report.overdueRecovery).toEqual({ kind: "not_applicable", reason: "no_data" });
+    expect(report.responseHandling).toEqual({ eligible: 0, measured: 0, medianMs: null, maxMs: null });
+    expect(report.workflowCost).toEqual({ totalCents: 0, runsPriced: 0, runsJoined: 0 });
+    expect(report.workflowLatency).toEqual({ runsMeasured: 0, medianMs: null, maxMs: null, runsJoined: 0 });
+  });
+});
