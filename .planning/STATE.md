@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 26 of 29 executed; next 28-29, wave 18
+current_plan: 27 of 29 executed; next 28-16, wave 19
 status: in_progress
-stopped_at: "28-21 IS COMPLETE (`2883ec4`, `83c67c0`). Real credential lifecycle, public bounded-read, CRM, deterministic-finance, and first-success reminder terminals now emit tenant-scoped content-free events through the 28-15 shared plane. Duplicate disconnects are inert, reordered reads cannot resurrect lifecycle state, and exact reminder retries do not duplicate events. Targeted backend tests 64/64, integration+credential tests 37/37, backend typecheck and playbook gate pass. No deployment/provider/paid operation ran. REVN-04/05/06 remain pending because telemetry does not activate parked capabilities. NEXT: 28-29, wave 18, for plan decisions and later provider-observed recovery. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
-last_updated: "2026-09-01T14:49:28+03:00"
+stopped_at: "28-29 IS COMPLETE (`82c321b`, `6124a2f`). Revenue reminder plans emit refs/status-only decisions only after real edit, approve and reject transitions. Recovery requires a later normalized observation from a passed provider matching the same tenant and provider-scoped one-way reminder ref; unavailable reads, duplicate reads, another tenant and another provider cannot manufacture it. Targeted backend tests 558/558, final integration 10/10, backend typecheck, scoped Biome and playbook gate pass. No deployment/provider/paid operation ran. REVN-05/06 remain pending because telemetry does not activate parked capabilities. NEXT: 28-16, wave 19, for automated live/browser/repository exposure evidence. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
+last_updated: "2026-09-01T18:40:43+03:00"
 progress:
   total_phases: 53
   completed_phases: 36
   total_plans: 421
-  completed_plans: 351
+  completed_plans: 352
   percent: 83
 ---
 
