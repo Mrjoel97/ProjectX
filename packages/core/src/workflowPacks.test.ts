@@ -20,6 +20,7 @@ import {
   WORKFLOW_PACKS,
   type WorkflowPackId,
 } from "./workflowPacks";
+import { WORKFLOW_EVENT_STREAM_IDS } from "./workflowPackMetrics";
 
 // 27-02 Task 1 (PACK-02/PACK-03). The pack registry is the CAPABILITY half of ADR-007: the skill
 // body is a DB row a candidate can change, the tool grant is code. Everything asserted here is
@@ -760,6 +761,6 @@ test("every pack id has a workflowPackEvents.packId literal (the swallowed-event
   expect(table.length, "workflowPackEvents not found in schema.ts").toBeGreaterThan(0);
   const packIdUnion = table.slice(table.indexOf("packId: v.union("), table.indexOf("runId:"));
   const literals = [...packIdUnion.matchAll(/v\.literal\("([^"]+)"\)/g)].map((m) => m[1] as string);
-  // Equality both ways: a literal for a pack that does not exist is as wrong as a missing one.
-  expect(literals.sort()).toEqual([...WORKFLOW_PACK_IDS].sort());
+  // Equality both ways: the six discoverable packs plus the measurement-only revenue stream.
+  expect(literals.sort()).toEqual([...WORKFLOW_EVENT_STREAM_IDS].sort());
 });

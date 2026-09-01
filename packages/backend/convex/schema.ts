@@ -2480,6 +2480,8 @@ export default defineSchema({
       v.literal("sales-call-prep"),
       v.literal("process-sop"),
       v.literal("brand-review"),
+      // Measurement-only Phase 28 stream; not a discoverable Phase 27 workflow pack.
+      v.literal("revenue"),
     ),
     /** Server-minted per pack run — the join key across every event of one run. */
     runId: v.string(),
@@ -2498,6 +2500,13 @@ export default defineSchema({
       v.literal("artifact_created"),
       v.literal("run_completed"),
       v.literal("run_failed"),
+      v.literal("connector_lifecycle"),
+      v.literal("connector_read"),
+      v.literal("workflow_completed"),
+      v.literal("finance_computed"),
+      v.literal("reminder_staged"),
+      v.literal("plan_decided"),
+      v.literal("recovery_observed"),
     ),
     /** Terminal outcome, closed so a model can never relabel a refusal as success. */
     outcome: v.optional(
@@ -2524,6 +2533,67 @@ export default defineSchema({
     claimCount: v.optional(v.number()),
     citedClaimCount: v.optional(v.number()),
     unsupportedClaimCount: v.optional(v.number()),
+    // Phase 28's bounded, content-free extension. Cost and latency remain structurally absent.
+    provider: v.optional(
+      v.union(
+        v.literal("hubspot"),
+        v.literal("quickbooks"),
+        v.literal("stripe"),
+        v.literal("paypal"),
+      ),
+    ),
+    workflow: v.optional(
+      v.union(
+        v.literal("revenue-call-list"),
+        v.literal("revenue-lead-triage"),
+        v.literal("revenue-specialist"),
+        v.literal("revenue-cash-flow"),
+        v.literal("revenue-customer-pulse"),
+        v.literal("revenue-invoice-reminder"),
+        v.literal("revenue-payroll-confidence"),
+        v.literal("revenue-pipeline-review"),
+      ),
+    ),
+    status: v.optional(
+      v.union(
+        v.literal("connected"),
+        v.literal("reauth_required"),
+        v.literal("revoked"),
+        v.literal("revoke_partial"),
+        v.literal("ready"),
+        v.literal("partial"),
+        v.literal("unavailable"),
+        v.literal("staged"),
+        v.literal("approved"),
+        v.literal("edited"),
+        v.literal("rejected"),
+        v.literal("paid"),
+        v.literal("resolved"),
+      ),
+    ),
+    subjectRef: v.optional(v.string()),
+    itemCount: v.optional(v.number()),
+    pageCount: v.optional(v.number()),
+    retryCount: v.optional(v.number()),
+    evidenceCount: v.optional(v.number()),
+    unknownCount: v.optional(v.number()),
+    suppressedCount: v.optional(v.number()),
+    capped: v.optional(v.boolean()),
+    partial: v.optional(v.boolean()),
+    coverage: v.optional(
+      v.union(v.literal("complete"), v.literal("partial"), v.literal("unknown")),
+    ),
+    confidence: v.optional(
+      v.union(
+        v.literal("high"),
+        v.literal("medium"),
+        v.literal("low"),
+        v.literal("unknown"),
+      ),
+    ),
+    hasGap: v.optional(v.boolean()),
+    /** Provider-reported observation time, not draft/approval/send time. */
+    observedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
