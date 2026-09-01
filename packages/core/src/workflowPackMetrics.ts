@@ -353,3 +353,134 @@ export function followUpRecovery(events: readonly PackMetricEvent[]): MetricRati
   }
   return ratio(recovered, bad.length, bad.length > 0);
 }
+
+export type RevenueResponseHandling = {
+  readonly eligible: number;
+  readonly measured: number;
+  readonly medianMs: number | null;
+  readonly maxMs: number | null;
+};
+
+export type RevenueFinanceSignals = {
+  readonly computations: number;
+  readonly coverage: Readonly<Record<RevenueCoverage, number>>;
+  readonly confidence: Readonly<Record<RevenueConfidence, number>>;
+  readonly hasGap: number;
+  readonly unknownTotal: number;
+};
+
+export type RevenueSignalProjection = {
+  readonly connectorAvailability: MetricRatio;
+  readonly connectorReadCompletion: MetricRatio;
+  readonly followUpCompletion: MetricRatio;
+  readonly overdueRecovery: MetricRatio;
+  readonly responseHandling: RevenueResponseHandling;
+  readonly finance: RevenueFinanceSignals;
+};
+
+/**
+ * Pure Phase 28 outcome fold. Input ordering is irrelevant and duplicate terminal rows are ignored
+ * by `(runId,event)` before any denominator is built.
+ */
+export function projectRevenueSignals(
+  events: readonly PackMetricEvent[],
+): RevenueSignalProjection {
+  const chronological = [...events].sort((a, b) => a.createdAt - b.createdAt);
+  const seen = new Set<string>();
+  const unique = chronological.filter((event) => {
+    const key = `${event.runId}:${event.event}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const lifecycleByProvider = new Map<RevenueProvider, PackMetricEvent>();
+  for (const event of unique) {
+    if (event.event === "connector_lifecycle" && event.provider !== null)
+      lifecycleByProvider.set(event.provider, event);
+  }
+  const lifecycle = [...lifecycleByProvider.values()];
+  const connected = lifecycle.filter((event) => event.status === "connected").length;
+
+  const reads = unique.filter((event) => event.event === "connector_read");
+  const completedReads = reads.filter(
+    (event) => event.status === "ready" || event.status === "partial",
+  ).length;
+
+  const workflows = unique.filter((event) => event.event === "workflow_completed");
+  const completedWorkflows = workflows.filter(
+    (event) => event.outcome === "useful" || event.outcome === "partial",
+  ).length;
+
+  const reminders = unique.filter((event) => event.event === "reminder_staged");
+  const reminderItems = reminders.reduce((sum, event) => sum + (event.itemCount ?? 0), 0);
+  const firstReminderAt = reminders.reduce<number | null>(
+    (earliest, event) => (earliest === null || event.createdAt < earliest ? event.createdAt : earliest),
+    null,
+  );
+  const recoveredRefs = new Set(
+    unique
+      .filter(
+        (event) =>
+          event.event === "recovery_observed" &&
+          event.subjectRef !== null &&
+          event.observedAt !== null &&
+          firstReminderAt !== null &&
+          event.observedAt > firstReminderAt &&
+          (event.status === "paid" || event.status === "resolved"),
+      )
+      .map((event) => event.subjectRef as string),
+  );
+
+  const stagedByRun = new Map<string, PackMetricEvent>();
+  for (const event of reminders) stagedByRun.set(event.runId, event);
+  const responseMs: number[] = [];
+  for (const decision of unique.filter((event) => event.event === "plan_decided")) {
+    const staged = stagedByRun.get(decision.runId);
+    if (staged && decision.createdAt >= staged.createdAt)
+      responseMs.push(decision.createdAt - staged.createdAt);
+  }
+  responseMs.sort((a, b) => a - b);
+
+  const financeEvents = unique.filter((event) => event.event === "finance_computed");
+  const coverage = Object.fromEntries(REVENUE_COVERAGE.map((value) => [value, 0])) as Record<
+    RevenueCoverage,
+    number
+  >;
+  const confidence = Object.fromEntries(REVENUE_CONFIDENCE.map((value) => [value, 0])) as Record<
+    RevenueConfidence,
+    number
+  >;
+  let hasGap = 0;
+  let unknownTotal = 0;
+  for (const event of financeEvents) {
+    if (event.coverage !== null) coverage[event.coverage]++;
+    if (event.confidence !== null) confidence[event.confidence]++;
+    if (event.hasGap === true) hasGap++;
+    unknownTotal += event.unknownCount ?? 0;
+  }
+
+  return {
+    connectorAvailability: ratio(connected, lifecycle.length, lifecycle.length > 0),
+    connectorReadCompletion: ratio(completedReads, reads.length, reads.length > 0),
+    followUpCompletion: ratio(completedWorkflows, workflows.length, workflows.length > 0),
+    overdueRecovery: ratio(
+      Math.min(recoveredRefs.size, reminderItems),
+      reminderItems,
+      reminderItems > 0,
+    ),
+    responseHandling: {
+      eligible: reminders.length,
+      measured: responseMs.length,
+      medianMs: responseMs.length === 0 ? null : (responseMs[responseMs.length >> 1] ?? null),
+      maxMs: responseMs.length === 0 ? null : (responseMs[responseMs.length - 1] ?? null),
+    },
+    finance: {
+      computations: financeEvents.length,
+      coverage,
+      confidence,
+      hasGap,
+      unknownTotal,
+    },
+  };
+}
