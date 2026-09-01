@@ -2,6 +2,8 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+import { PACK_EVENT_PAGE_MAX } from "./workflowPackEventLog";
+import { PACK_RUN_JOIN_MAX } from "./workflowPackOutcomes";
 
 // convex-test discovers Convex function modules via import.meta.glob. Exclude
 // *.test.ts so the harness does not try to load the test files themselves.
@@ -506,5 +508,95 @@ describe("opsSignals.revenueSignals (Phase 28 bounded projection)", () => {
     expect(report.responseHandling).toEqual({ eligible: 0, measured: 0, medianMs: null, maxMs: null });
     expect(report.workflowCost).toEqual({ totalCents: 0, runsPriced: 0, runsJoined: 0 });
     expect(report.workflowLatency).toEqual({ runsMeasured: 0, medianMs: null, maxMs: null, runsJoined: 0 });
+  });
+
+  test("caps event cardinality and labels the partial projection", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      for (let index = 0; index < PACK_EVENT_PAGE_MAX + 1; index++) {
+        await ctx.db.insert("workflowPackEvents", {
+          tenantId: TENANT,
+          packId: "revenue",
+          runId: `rev:cap-${index}`,
+          event: "connector_read",
+          provider: "hubspot",
+          status: "ready",
+          createdAt: SINCE + index,
+        });
+      }
+    });
+
+    const report = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.opsSignals.revenueSignals, { sinceMs: SINCE, untilMs: NOW });
+    expect(report.window).toMatchObject({
+      eventCount: PACK_EVENT_PAGE_MAX,
+      complete: false,
+      reasons: ["event_cap"],
+    });
+    expect(report.connectorReadCompletion).toMatchObject({
+      numerator: PACK_EVENT_PAGE_MAX,
+      denominator: PACK_EVENT_PAGE_MAX,
+      value: 1,
+    });
+  });
+
+  test("caps canonical joins and exposes that incompleteness", async () => {
+    const t = convexTest(schema, modules);
+    for (let index = 0; index < PACK_RUN_JOIN_MAX + 1; index++) {
+      await seedRevenueEvent(t, {
+        runId: `rev:join-${index}`,
+        event: "workflow_completed",
+        workflow: "revenue-specialist",
+        outcome: "useful",
+        createdAt: SINCE + index,
+      });
+    }
+
+    const report = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.opsSignals.revenueSignals, { sinceMs: SINCE, untilMs: NOW });
+    expect(report.window).toMatchObject({ complete: false, reasons: ["join_cap"] });
+    expect(report.workflowCost.runsJoined).toBe(PACK_RUN_JOIN_MAX);
+    expect(report.workflowLatency.runsJoined).toBe(PACK_RUN_JOIN_MAX);
+    expect(report.followUpCompletion).toMatchObject({
+      numerator: PACK_RUN_JOIN_MAX + 1,
+      denominator: PACK_RUN_JOIN_MAX + 1,
+    });
+  });
+
+  test("recursively exposes only counts, timestamps and closed labels", async () => {
+    const t = convexTest(schema, modules);
+    await seedRevenueSignalFixture(t);
+    const report = await t
+      .withIdentity({ subject: TENANT })
+      .query(api.opsSignals.revenueSignals, { sinceMs: SINCE, untilMs: NOW });
+
+    const visit = (value: unknown, path = "$):"): void => {
+      if (value === null || typeof value !== "object") {
+        if (typeof value === "string")
+          expect(
+            [
+              "ratio",
+              "not_applicable",
+              "no_data",
+              "zero_denominator",
+              "retention_boundary",
+              "event_cap",
+              "join_cap",
+            ],
+            `unbounded label at ${path}`,
+          ).toContain(value);
+        return;
+      }
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        expect(
+          key,
+          `content-shaped field at ${path}.${key}`,
+        ).not.toMatch(/name|email|message|body|subject|description|currency|token|credential|payload|raw/i);
+        visit(nested, `${path}.${key}`);
+      }
+    };
+    visit(report);
   });
 });

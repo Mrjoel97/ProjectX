@@ -1,5 +1,9 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
+> Last verified: 2026-09-01 — Plan 28-15 extended the Phase 27 `workflowPackEvents` plane with one
+> measurement-only `revenue` stream, a closed content-free vocabulary, idempotent terminal writes,
+> and bounded tenant projections. Cost and latency remain owned by `spendEvents` and `agentSteps`.
+>
 > Last verified: 2026-09-01 — Plan 28-20 approved exactly `revenue-call-list@1`,
 > `revenue-lead-triage@1`, and `revenue-specialist@1` after their complete exact-pin runs passed.
 > The five failed exact pins (`revenue-cash-flow@1`, `revenue-customer-pulse@1`,
@@ -314,6 +318,49 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
 8. Disconnect: provider revoke/deauthorize **first**, local encrypted row delete **second**. A
    network or 5xx failure yields an honest partial-revoke state and a retry path, never a silent
    success.
+
+### Revenue outcome measurement (28-15)
+
+Revenue outcomes use the existing append-only `workflowPackEvents` table and its sole insert
+primitive. `revenueTelemetry.ts` is an adapter to that primitive, not another analytics plane.
+The measurement-only stream id is `revenue`; it does not add a discoverable Phase 27 pack.
+
+The event vocabulary is closed:
+
+| Event | Required meaning | Required bounded fields |
+|---|---|---|
+| `connector_lifecycle` | A provider connection reached a lifecycle terminal. | `provider`; lifecycle `status`. |
+| `connector_read` | A bounded normalized read ended. | `provider`; `ready\|partial\|unavailable`; optional counts/coverage flags. |
+| `workflow_completed` | A revenue workflow reached a terminal. | closed `workflow`; closed `outcome`; optional evidence/source counts. |
+| `finance_computed` | Deterministic finance math completed. | closed `workflow`, `coverage`, `confidence`; counts and `hasGap` only. |
+| `reminder_staged` | An ordinary invoice-reminder plan was staged. | `revenue-invoice-reminder`; invoice-ref count only. |
+| `plan_decided` | A staged plan was approved, edited or rejected. | closed decision `status`; opaque plan/run refs. |
+| `recovery_observed` | A later normalized provider read observed an overdue item paid/resolved. | `provider`; opaque item ref; `paid\|resolved`; provider `observedAt`. |
+
+Allowed columns are tenant id; the measurement stream id; server/code-shaped opaque run, subject,
+plan, thread, artifact and recommendation refs; provider/workflow/status/outcome/coverage/confidence
+enums; skill version; non-negative integer counts capped at 10,000; booleans; and timestamps.
+Customer names, email/message text, subjects, descriptions, invoice amounts/currencies, credentials,
+tokens and raw provider payloads are refused by both the function and table validators. Event rows
+also structurally forbid cost and latency. The projection joins reasoning cost from `spendEvents`
+and wall-clock latency from complete `agentSteps`, always tenant-checking the joined rows.
+
+Recovery is an observation metric, not a causal claim. Drafting, approval and sending never emit
+`recovery_observed`; only a later provider read that reports `paid` or `resolved` may do so. The
+projection deduplicates `(runId,event)` and recovered opaque item refs, rejects backwards observation
+time for the recovery denominator, and never aggregates invoice value.
+
+The tenant report defaults to 30 days, clamps to 90-day retention, reads at most 500 events and
+joins at most 25 workflow runs. Every ratio includes its denominator. `no_data` means no measurable
+denominator; `retention_boundary`, `event_cap` and `join_cap` make an incomplete window explicit.
+An unmeasured run is unknown, never a zero-cost or zero-latency run. These measures indicate
+availability, completion and observed state change; they do not prove the workflow caused revenue.
+
+**Disable/rollback:** remove or feature-gate the production terminal calls that invoke
+`revenueTelemetry`; do not add a delete/patch path and do not rewrite old events. Existing immutable
+rows remain queryable until they age outside the 90-day projection. Do not narrow the schema/event
+union while such rows exist. Provider rollback remains the separate revoke-first procedure below;
+turning off telemetry neither revokes a grant nor proves one was revoked.
 
 ### Governed revenue-tool boundary (28-12)
 
