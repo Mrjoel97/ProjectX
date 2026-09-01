@@ -217,6 +217,26 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   ],
   "request.redacted": ["requestId", "safeTextHash"],
   "request.rejected": ["reason", "retryAfterMs", "goalHash", "attachmentCount"],
+  // 28-12 revenue reads. These rows expose only the closed operation/provider/status labels,
+  // bounded refs that still pass SAFE_REF, and aggregate counts — never CRM or finance content.
+  "revenue.crm_read": [
+    "operation",
+    "provider",
+    "externalRef",
+    "status",
+    "scanned",
+    "count",
+    "capped",
+  ],
+  "revenue.finance_read": [
+    "operation",
+    "environment",
+    "status",
+    "providerCount",
+    "valueCount",
+    "missingCount",
+  ],
+  "revenue.unsupported_declared": ["reason"],
   "research.persist_failed": [...LINEAGE, "reason"],
   "research.persist_skipped": [...LINEAGE, "reason", "webSearchCalls"],
   "research.persisted": [

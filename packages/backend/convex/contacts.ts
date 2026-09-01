@@ -531,7 +531,9 @@ export const setFollowUpStatus = tenantMutation({
 /** The signing secret. A link that lives forever in a recipient's inbox must NOT share the OAuth
  *  signing key, so this is its own deployment env var. Absent ⇒ null ⇒ every path fails CLOSED. */
 function unsubscribeSecret(): string | null {
-  return process.env.UNSUBSCRIBE_SECRET || null;
+  // Keep the literal read: env.test.ts inventories deployment variables from source. The runtime
+  // guard makes an incompatible/torn-down runtime behave like an absent variable, not an exception.
+  return typeof process === "undefined" ? null : process.env.UNSUBSCRIBE_SECRET || null;
 }
 
 function base64urlEncode(s: string): string {
@@ -679,7 +681,10 @@ export const footerFor = internalQuery({
 
     // The CONVEX SITE origin, the same origin `http.ts` serves — NOT `SITE_URL`, which is the Next
     // app and cannot serve this route (19-04 mounts it here).
-    const siteUrl = process.env.CONVEX_SITE_URL?.replace(/\/+$/, "") ?? "";
+    const siteUrl =
+      typeof process === "undefined"
+        ? ""
+        : (process.env.CONVEX_SITE_URL?.replace(/\/+$/, "") ?? "");
     if (siteUrl === "") return null;
 
     const token = await mintUnsubToken(tenantId, recipient);

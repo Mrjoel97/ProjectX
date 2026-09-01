@@ -1086,6 +1086,13 @@ describe("contacts: footerFor fails CLOSED on every missing piece of configurati
   const footer = (h: Harness) =>
     h.t.query(internal.contacts.footerFor, { tenantId: h.tenantA, recipient: "a@x.com" });
 
+  test("a runtime with no process cannot bypass the fail-closed environment boundary", () => {
+    const src = stripComments(rawSources["./contacts.ts"] ?? "");
+    expect(src.match(/typeof process === "undefined"/g)).toHaveLength(2);
+    expect(src.match(/process\.env\.UNSUBSCRIBE_SECRET/g)).toHaveLength(1);
+    expect(src.match(/process\.env\.CONVEX_SITE_URL/g)).toHaveLength(1);
+  });
+
   test("no tenantProfiles row at all ⇒ null", async () => {
     vi.stubEnv("UNSUBSCRIBE_SECRET", SECRET);
     vi.stubEnv("CONVEX_SITE_URL", SITE);

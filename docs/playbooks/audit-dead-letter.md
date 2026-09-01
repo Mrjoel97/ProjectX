@@ -1,5 +1,12 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-01 (28-16 verification — the governance forward scan caught three
+> Phase 28 production audit events that were written but absent from `AUDIT_VIEWER_EVENTS`:
+> `revenue.crm_read`, `revenue.finance_read`, and `revenue.unsupported_declared`. The projection now
+> admits only their closed operation/provider/status labels, bounded refs, reason codes, and
+> aggregate counts. Raw CRM and finance content remains structurally absent; every string still
+> passes the viewer's `SAFE_REF` boundary before rendering.)
+>
 > Last verified: 2026-08-31 (Phase 28 gap audit — **THE ERASURE SEQUENCE NOW HAS A CONNECTOR ARM,
 > AND IT IS THE FIRST ONE THAT IS HONEST ABOUT NOT REVOKING.** `tenantDelete.ts` deleted the four
 > Phase 28 connector rows and never asked any provider to revoke, leaving up to four live grants

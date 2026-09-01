@@ -16,7 +16,7 @@ import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { SEND_TIME_HORIZON_MS, withheldNote } from "@pikar/core";
 import { maxCharsFor } from "@pikar/core/storyboard";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 // cancelScheduledPlan writes a refs-only plan.canceled audit; the SOLE audit-insert surface counts
 // the auditCounts aggregate, so register the component (relative import — the package blocks the
 // deep specifier), same pattern as cockpitTools.test.ts.
@@ -47,6 +47,36 @@ const rateLimiterModules = import.meta.glob(
 );
 
 const TENANT = "tenant_a";
+type DeliveryHarness = ReturnType<typeof convexTest>;
+const deliveryHarnesses = new Set<DeliveryHarness>();
+
+/** Stop zero-delay workflow/workpool callbacks from crossing the test boundary. A mutation can
+ * return after arming a workflow but before its first scheduler tick; without this cleanup, that
+ * callback runs under the next test (or after Vitest tears down the edge-runtime `process`). */
+async function quiesceDeliveryHarness(t: DeliveryHarness): Promise<void> {
+  for (let pass = 0; pass < 20; pass += 1) {
+    await t.run(async (ctx) => {
+      const scheduled = await ctx.db.system.query("_scheduled_functions").collect();
+      for (const row of scheduled) {
+        if (row.state.kind === "pending") await ctx.scheduler.cancel(row._id);
+      }
+    });
+    await t.finishInProgressScheduledFunctions();
+    const remaining = await t.run(async (ctx) =>
+      (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+        (row) => row.state.kind === "pending" || row.state.kind === "inProgress",
+      ),
+    );
+    if (remaining.length === 0) return;
+  }
+  throw new Error("cockpit test left scheduled delivery work after cleanup");
+}
+
+afterEach(async () => {
+  const harnesses = [...deliveryHarnesses];
+  deliveryHarnesses.clear();
+  await Promise.all(harnesses.map(quiesceDeliveryHarness));
+});
 
 /** A convex-test instance wired for both executePlan delivery arms. */
 function withDelivery() {
@@ -55,6 +85,7 @@ function withDelivery() {
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   retrierTest.register(t);
+  deliveryHarnesses.add(t);
   return t;
 }
 
