@@ -44,6 +44,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { must } from "./smokeRun.mjs";
 
 const parse = (out) => JSON.parse(out);
@@ -74,6 +75,46 @@ const RETRY_READ = { retryOnEmpty: true };
 const RETRY_TURN = { retryOnEmpty: true };
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 const costSrcPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../cost/src/cost.ts");
+const skillsLockPath = resolve(dirname(fileURLToPath(import.meta.url)), "../skills-lock.json");
+
+const REVENUE_FIXTURE_IDS = [
+  "36-revenue-lead-triage",
+  "37-revenue-partial",
+  "38-revenue-injection",
+  "39-revenue-cash-flow",
+  "40-revenue-mixed-currency",
+  "41-revenue-payroll-unknown",
+  "42-revenue-invoice-reminder",
+  "43-revenue-suppressed-reminder",
+];
+
+function revenueCandidatePins() {
+  const lock = JSON.parse(readFileSync(skillsLockPath, "utf8"));
+  const block = lock?.revenueCandidates;
+  if (block?.schemaVersion !== 1 || !Array.isArray(block.candidates)) {
+    throw new Error(`revenueCandidates schemaVersion 1 not found in ${skillsLockPath}`);
+  }
+  const pins = block.candidates.map((candidate) => {
+    if (
+      typeof candidate?.name !== "string" ||
+      !Number.isInteger(candidate.version) ||
+      candidate.version < 1 ||
+      candidate.status !== "candidate" ||
+      !/^[0-9a-f]{64}$/.test(candidate.bodySha256 ?? "")
+    ) {
+      throw new Error(`malformed revenue candidate pin ${JSON.stringify(candidate?.name)}`);
+    }
+    return {
+      name: candidate.name,
+      version: candidate.version,
+      bodySha256: candidate.bodySha256,
+    };
+  });
+  if (pins.length !== 8 || new Set(pins.map((pin) => pin.name)).size !== pins.length) {
+    throw new Error(`expected exactly 8 unique revenue candidate pins, found ${pins.length}`);
+  }
+  return pins.sort((a, b) => a.name.localeCompare(b.name));
+}
 
 // Hard per-run cost cap (discretion default; expected actuals $0.05–0.15 at
 // gpt-4o-mini). Cumulative costUsd beyond this ABORTS the run (exit 2).
@@ -208,12 +249,15 @@ function computeSuiteIdentity() {
   const files = readdirSync(casesDir)
     .filter((f) => f.endsWith(".json"))
     .sort();
-  const cases = files.map((file) => ({
-    file,
-    sha256: createHash("sha256")
-      .update(readFileSync(join(casesDir, file)))
-      .digest("hex"),
-  }));
+  // Revenue candidates have their own eight-case suite and activation evidence. Keeping those
+  // files out of AGENT_EVAL_SUITE prevents an offline corpus addition from invalidating evidence
+  // for the unrelated executive/authoring gate.
+  const cases = files.flatMap((file) => {
+    const bytes = readFileSync(join(casesDir, file));
+    return JSON.parse(bytes.toString("utf8")).candidate === undefined
+      ? [{ file, sha256: createHash("sha256").update(bytes).digest("hex") }]
+      : [];
+  });
   // Hash of the LISTING, not of concatenated bodies: a rename with identical bytes must still move
   // the hash, because id drift is exactly as dangerous to a `--only`-shaped claim as a content edit.
   const casesHash = createHash("sha256")
@@ -583,6 +627,10 @@ const EXPECT_KEYS = new Set([
   // from success. And a staged event is never evidence anything reached a calendar: the create
   // happens behind a human Approve this harness never clicks, same as every other staging tool.
   "calendarEventPresent",
+  // Phase 28 revenue candidates: one exact persisted snapshot. The value contains an outcome,
+  // ordered tool trace, exact code-owned result, refs and counts. Deep equality is deliberate:
+  // an extra tool, omitted ref, rounded result or widened status must all fail the case.
+  "expectedState",
 ]);
 
 // The pinned plans lifecycle order (schema.ts) — statusAtMost compares indices.
@@ -623,6 +671,70 @@ function validateFixture(fx, source) {
   if (!fx.expect || typeof fx.expect !== "object") fail("missing expect block");
   for (const key of Object.keys(fx.expect)) {
     if (!EXPECT_KEYS.has(key)) fail(`unknown expect key "${key}" (closed vocabulary)`);
+  }
+  const isRevenue = fx.candidate !== undefined || fx.expect.expectedState !== undefined;
+  if (isRevenue) {
+    if (fx.candidate === undefined || fx.expect.expectedState === undefined) {
+      fail("revenue fixtures require both candidate and expect.expectedState");
+    }
+    if (Object.keys(fx.expect).length !== 1) {
+      fail("a revenue fixture asserts only expectedState; mixing plan-state keys changes its oracle");
+    }
+    const pins = revenueCandidatePins();
+    const pin = pins.find((candidate) => candidate.name === fx.candidate?.name);
+    if (!pin || fx.candidate?.version !== pin.version) {
+      fail(
+        `candidate pin ${JSON.stringify(fx.candidate)} is missing or stale against skills-lock.json`,
+      );
+    }
+    const expected = fx.expect.expectedState;
+    if (!expected || typeof expected !== "object" || Array.isArray(expected)) {
+      fail("expect.expectedState must be an object");
+    }
+    const stateKeys = Object.keys(expected).sort();
+    assert.deepEqual(
+      stateKeys,
+      ["counts", "outcome", "refs", "result", "toolTrace"],
+      `bad fixture ${source}: expectedState has a closed shape`,
+    );
+    if (!["ready", "partial", "refused", "proposed"].includes(expected.outcome)) {
+      fail(`unknown expectedState.outcome ${JSON.stringify(expected.outcome)}`);
+    }
+    if (
+      !Array.isArray(expected.toolTrace) ||
+      expected.toolTrace.length === 0 ||
+      expected.toolTrace.some((toolName) => typeof toolName !== "string" || toolName.length === 0) ||
+      new Set(expected.toolTrace).size !== expected.toolTrace.length
+    ) {
+      fail("expectedState.toolTrace must be a non-empty ordered list of unique tool names");
+    }
+    if (
+      !expected.result ||
+      typeof expected.result !== "object" ||
+      Array.isArray(expected.result) ||
+      Object.keys(expected.result).length === 0
+    ) {
+      fail("expectedState.result must be a non-empty exact result object");
+    }
+    if (
+      !Array.isArray(expected.refs) ||
+      expected.refs.some((ref) => typeof ref !== "string" || ref.length === 0) ||
+      new Set(expected.refs).size !== expected.refs.length
+    ) {
+      fail("expectedState.refs must be a unique string list");
+    }
+    if (
+      !expected.counts ||
+      typeof expected.counts !== "object" ||
+      Array.isArray(expected.counts) ||
+      Object.keys(expected.counts).length === 0 ||
+      Object.values(expected.counts).some((count) => !Number.isInteger(count) || count < 0) ||
+      !Object.values(expected.counts).some((count) => count > 0)
+    ) {
+      fail("expectedState.counts must contain non-negative integers and one positive witness");
+    }
+  } else if (fx.candidate !== undefined || fx.expect.expectedState !== undefined) {
+    fail("candidate and expectedState are revenue-only fields");
   }
   if ((fx.expect.status ?? fx.expect.statusAtMost) !== undefined) {
     const s = fx.expect.status ?? fx.expect.statusAtMost;
@@ -1341,6 +1453,9 @@ function evaluateExpect(
    * @param authoring {{before: {activeIds: string[]}, after: object} | null}
    */
   authoring = null,
+  /** Phase 28: the persisted revenue snapshot assembled after the candidate workflow. Null is
+   * fail-closed; exact deep equality makes every extra/missing tool, ref, count and result bite. */
+  revenueState = null,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -1514,6 +1629,11 @@ function evaluateExpect(
         if (staged !== expected) miss(key, expected, staged);
         break;
       }
+      case "expectedState":
+        if (!isDeepStrictEqual(revenueState, expected)) {
+          miss("expectedState", expected, revenueState ?? "no revenue state snapshot");
+        }
+        break;
       case "attributionRoute": {
         // specialistMemoBody puts this FIRST, so match the prefix — a fallback memo (refusal,
         // throw, empty reply) starts with "# Next step" and fails here.
@@ -1572,6 +1692,62 @@ function selfCheck() {
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
+  // 28-19: eight revenue fixtures, exact locked pins, and a falsifiable state oracle. A passing
+  // synthetic snapshot proves the fixture is representable; one mutation per required dimension
+  // proves outcome/tool/result/ref/count assertions all have teeth.
+  const revenueFixtures = fixtures.filter((fixture) => fixture.candidate !== undefined);
+  assert.deepEqual(
+    revenueFixtures.map((fixture) => fixture.id),
+    REVENUE_FIXTURE_IDS,
+    "the complete eight-case revenue fixture set must be present in sorted order",
+  );
+  const lockedPins = revenueCandidatePins();
+  assert.equal(lockedPins.length, 8, "all eight code-owned revenue pins are discoverable offline");
+  for (const fixture of revenueFixtures) {
+    const expected = fixture.expect.expectedState;
+    const evaluateRevenue = (actual) =>
+      evaluateExpect(
+        fixture.expect,
+        { status: "collecting" },
+        0,
+        false,
+        0,
+        0,
+        0,
+        "",
+        0,
+        false,
+        0,
+        false,
+        0,
+        0,
+        0,
+        0,
+        null,
+        actual,
+      );
+    assert.equal(evaluateRevenue(structuredClone(expected)).length, 0, `${fixture.id} witness passes`);
+    const mutations = [
+      { ...structuredClone(expected), outcome: expected.outcome === "ready" ? "partial" : "ready" },
+      { ...structuredClone(expected), toolTrace: [...expected.toolTrace, "unauthorizedTool"] },
+      { ...structuredClone(expected), result: { ...expected.result, fabricated: true } },
+      { ...structuredClone(expected), refs: [...expected.refs, "fabricated-ref"] },
+      {
+        ...structuredClone(expected),
+        counts: {
+          ...expected.counts,
+          [Object.keys(expected.counts)[0]]: expected.counts[Object.keys(expected.counts)[0]] + 1,
+        },
+      },
+    ];
+    for (const [index, mutation] of mutations.entries()) {
+      assert.equal(
+        evaluateRevenue(mutation).length,
+        1,
+        `${fixture.id} mutation ${index + 1} must fail the exact-state oracle`,
+      );
+    }
+  }
   // 17.1-10: the live gate must prove the runner's THROWAWAY tenant is Blueprint-bearing before
   // the first paid turn. Source order is load-bearing: seeding/asserting after the fixture loop
   // would let a fully green run measure the old no-spine prompt.
@@ -2428,7 +2604,7 @@ function selfCheck() {
     // the whole `--self-check` gate has been red on main ever since — invisibly, because `runLive`
     // never calls `selfCheck()`, so the one check that stops a bad fixture BEFORE it costs a cent
     // was itself unrunnable. Re-snapshot here when a route is added; that is the drift signal.
-    ["offer-architect", "money-model-designer", "lead-engine", "research", "media"],
+    ["offer-architect", "money-model-designer", "lead-engine", "research", "media", "revenue"],
     "all dispatchable routes, including research, are read off the core registry",
   );
   for (const route of SPECIALIST_ROUTES) {
@@ -2449,8 +2625,10 @@ function selfCheck() {
     // activates with no eval evidence. What is NOT tolerated is silence — a dispatchable route
     // whose skill is neither gated nor justified fails right here.
     assert.ok(
-      SKILL_NAMES.includes(skillName) || UNGATED_SKILL_NAMES.includes(skillName),
-      `${skillName} (route "${route}") must either be in GATED_SKILLS — a body edit rides the gate —` +
+      SKILL_NAMES.includes(skillName) ||
+        UNGATED_SKILL_NAMES.includes(skillName) ||
+        revenueCandidatePins().some((pin) => pin.name === skillName),
+      `${skillName} (route "${route}") must be GATED_SKILLS, an exact revenue candidate pin,` +
         ` or carry a written DELIBERATELY UNGATED justification in packages/contracts/src/skill.ts`,
     );
   }
@@ -3027,7 +3205,11 @@ function selfCheck() {
   // 1. The suite really is what the manifest AND contracts both say it is. This is the assertion
   //    that makes a fixture edit cost a deliberate revision bump; everything else here is detail.
   const suite = assertSuiteIdentity();
-  assert.ok(suite.caseCount === fixtures.length, "suite identity disagrees with the loaded set");
+  const legacyFixtures = fixtures.filter((fixture) => fixture.candidate === undefined);
+  assert.ok(
+    suite.caseCount === legacyFixtures.length,
+    "AGENT_EVAL_SUITE identity disagrees with the non-revenue fixture set",
+  );
   assert.ok(/^[0-9a-f]{64}$/.test(suite.casesHash), "casesHash must be a sha256 hex digest");
 
   // 2. …and the recomputation is genuinely sensitive: one changed byte in one fixture moves it.
@@ -3743,7 +3925,9 @@ function suiteIdentityFor() {
 }
 
 async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
-  const allFixtures = loadFixtures(); // fail fast BEFORE the first spawn
+  // Revenue fixtures run only through the explicit all-candidates path. Feeding them into this
+  // legacy cockpit gate would bill the wrong body and produce an `expectedState` with no oracle.
+  const allFixtures = loadFixtures().filter((fixture) => fixture.candidate === undefined);
   const fixtures = applyOnly(allFixtures, filters); // ditto — a bad --only must not cost a seed
   const runId = randomUUID().slice(0, 8);
   const tenant = `eval-${runId}`; // throwaway — isolates every tenant-scoped table
