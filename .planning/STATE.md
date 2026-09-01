@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 24 of 29 executed; next 28-15, wave 16
+current_plan: 25 of 29 executed; next 28-21, wave 17
 status: in_progress
-stopped_at: "28-20 IS COMPLETE (`cd6901d`, `f74e14e`). Owner APPROVED exactly `revenue-call-list@1`, `revenue-lead-triage@1`, and `revenue-specialist@1`; the five failed exact pins are PARKED. All decisions bind activation-evidence SHA-256 `16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec`. Offline real-transition tests prove only the approved three become active with byte-identical bodies and every parked pin refuses activation/discovery. Backend skills 144/144, contracts skillBodies 48/48, playbook gate passed. No deployment/provider/paid-eval call ran. REVN-04/05/06 remain pending because parked workflow pins still block those capabilities. NEXT: 28-15, wave 16. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
-last_updated: "2026-09-01T13:19:10+03:00"
+stopped_at: "28-15 IS COMPLETE (`4f28d3b`, `ce17383`, `affbd22`, `6501b88`, `452cfb9`). The closed content-free `revenue` stream reuses the Phase 27 `workflowPackEvents` plane; event rows contain tenant-scoped opaque refs, enums, bounded counts and timestamps only, while cost/latency stay in canonical `spendEvents`/`agentSteps` owners. Tenant isolation, duplicate/reordered recovery, recursive privacy, 90-day retention, 500-event and 25-run partial-window guards pass. Backend targeted tests 31/31; playbook gate silent. No deployment/provider/paid operation ran. REVN-04/05/06 remain pending because measurement does not activate parked capabilities. NEXT: 28-21, wave 17. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
+last_updated: "2026-09-01T14:21:10+03:00"
 progress:
   total_phases: 53
   completed_phases: 36
   total_plans: 421
-  completed_plans: 349
+  completed_plans: 350
   percent: 83
 ---
 
