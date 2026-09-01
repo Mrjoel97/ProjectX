@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 28
-current_plan: 25 of 29 executed; next 28-21, wave 17
+current_plan: 26 of 29 executed; next 28-29, wave 18
 status: in_progress
-stopped_at: "28-15 IS COMPLETE (`4f28d3b`, `ce17383`, `affbd22`, `6501b88`, `452cfb9`). The closed content-free `revenue` stream reuses the Phase 27 `workflowPackEvents` plane; event rows contain tenant-scoped opaque refs, enums, bounded counts and timestamps only, while cost/latency stay in canonical `spendEvents`/`agentSteps` owners. Tenant isolation, duplicate/reordered recovery, recursive privacy, 90-day retention, 500-event and 25-run partial-window guards pass. Backend targeted tests 31/31; playbook gate silent. No deployment/provider/paid operation ran. REVN-04/05/06 remain pending because measurement does not activate parked capabilities. NEXT: 28-21, wave 17. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
-last_updated: "2026-09-01T14:21:10+03:00"
+stopped_at: "28-21 IS COMPLETE (`2883ec4`, `83c67c0`). Real credential lifecycle, public bounded-read, CRM, deterministic-finance, and first-success reminder terminals now emit tenant-scoped content-free events through the 28-15 shared plane. Duplicate disconnects are inert, reordered reads cannot resurrect lifecycle state, and exact reminder retries do not duplicate events. Targeted backend tests 64/64, integration+credential tests 37/37, backend typecheck and playbook gate pass. No deployment/provider/paid operation ran. REVN-04/05/06 remain pending because telemetry does not activate parked capabilities. NEXT: 28-29, wave 18, for plan decisions and later provider-observed recovery. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
+last_updated: "2026-09-01T14:49:28+03:00"
 progress:
   total_phases: 53
   completed_phases: 36
   total_plans: 421
-  completed_plans: 350
+  completed_plans: 351
   percent: 83
 ---
 
