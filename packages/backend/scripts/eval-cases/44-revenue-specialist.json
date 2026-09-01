@@ -1,0 +1,25 @@
+{
+  "id": "44-revenue-specialist",
+  "description": "The umbrella revenue specialist must execute its own locked body and use only the bounded CRM read for a supported attention request.",
+  "candidate": { "name": "revenue-specialist", "version": 1 },
+  "turns": ["Use the bounded revenue workflow to rank the contacts that need attention. Do not write or contact anyone."],
+  "expect": {
+    "expectedState": {
+      "outcome": "ready",
+      "toolTrace": ["readRevenueCrm"],
+      "result": {
+        "operation": "attention",
+        "coverage": "local",
+        "scanned": 3,
+        "capped": false,
+        "rows": [
+          { "contactId": "contact-overdue", "priority": 100, "reasons": ["follow_up_overdue"], "provenance": { "pikar": true, "provider": false } },
+          { "contactId": "contact-closing", "priority": 40, "reasons": ["deal_closing"], "provenance": { "pikar": false, "provider": true } }
+        ]
+      },
+      "refs": ["contact-overdue", "contact-closing"],
+      "counts": { "scanned": 3, "ranked": 2, "suppressed": 1 }
+    }
+  },
+  "needles": ["bounded revenue workflow", "Do not write"]
+}
