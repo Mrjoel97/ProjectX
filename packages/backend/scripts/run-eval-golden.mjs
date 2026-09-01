@@ -1964,7 +1964,7 @@ async function liveRevenueDiagnostic(pins, stateSuite) {
     const startedAt = Date.now();
     let pinCostUsd = 0;
     let casesPassed = 0;
-    let failure = null;
+    const failures = [];
     for (const fixture of fixtures) {
       try {
         const tenantId = `eval-${randomUUID().replaceAll("-", "").slice(0, 8)}`;
@@ -2018,23 +2018,26 @@ async function liveRevenueDiagnostic(pins, stateSuite) {
         casesPassed++;
         console.log(`[eval:golden] PASS ${pin.name}@${pin.version} / ${fixture.id}`);
       } catch (error) {
-        failure = error;
+        failures.push(`${fixture.id}: ${error.message}`);
         console.error(
           `[eval:golden] FAIL ${pin.name}@${pin.version} / ${fixture.id}: ${error.message}`,
         );
-        break;
       }
     }
     results.push({
       pin: `${pin.name}@${pin.version}`,
       bodySha256: pin.bodySha256,
-      outcome: failure === null && casesPassed === fixtures.length ? "passed" : "failed",
+      outcome: failures.length === 0 && casesPassed === fixtures.length ? "passed" : "failed",
       casesPassed,
       casesTotal: fixtures.length,
       costUsd: pinCostUsd,
       latencyMs: Math.max(0, Date.now() - startedAt),
-      refs: fixtures.slice(0, casesPassed).map((fixture) => fixture.id),
-      ...(failure === null ? {} : { failure: failure.message }),
+      // Refs identify the complete fixture set RUN for this exact pin, not only the passing
+      // prefix. A failed diagnostic is still evidence, and `assertRevenueDiagnosticArtifact`
+      // deliberately rejects partial refs. Stopping at the first failure made those two rules
+      // contradict each other and discarded every honest red live artifact.
+      refs: fixtures.map((fixture) => fixture.id),
+      ...(failures.length === 0 ? {} : { failure: failures.join(" | ") }),
     });
   }
   return results;
@@ -2297,6 +2300,29 @@ function selfCheck() {
   assert.doesNotThrow(() =>
     assertRevenueDiagnosticArtifact(dryArtifact, lockedPins, revenueGateSuite, revenueStateSuite),
   );
+  const redArtifact = {
+    ...structuredClone(dryArtifact),
+    runMode: "live",
+    generatedAt: "2026-09-01T00:00:00.000Z",
+  };
+  redArtifact.results[0] = {
+    ...redArtifact.results[0],
+    outcome: "failed",
+    casesPassed: 0,
+    costUsd: 0.01,
+    latencyMs: 123,
+    failure: `${redArtifact.results[0].refs[0]}: synthetic live failure`,
+  };
+  assert.doesNotThrow(
+    () =>
+      assertRevenueDiagnosticArtifact(
+        redArtifact,
+        lockedPins,
+        revenueGateSuite,
+        revenueStateSuite,
+      ),
+    "a red live result with the complete per-pin fixture refs is valid diagnostic evidence",
+  );
   assert.throws(
     () =>
       assertRevenueDiagnosticArtifact(
@@ -2363,6 +2389,14 @@ function selfCheck() {
   assert.ok(
     liveRevenueSource.indexOf("LIVE_REVENUE_EVAL_BLOCKED") < liveRevenueSource.indexOf('must("'),
     "the paid diagnostic qualification must precede the first Convex/model call",
+  );
+  assert.ok(
+    !liveRevenueSource.includes("break;"),
+    "one failed revenue fixture must not skip the rest of that candidate's complete suite",
+  );
+  assert.ok(
+    liveRevenueSource.includes("refs: fixtures.map"),
+    "red diagnostics must retain the complete candidate-specific fixture refs",
   );
   // 17.1-10: the live gate must prove the runner's THROWAWAY tenant is Blueprint-bearing before
   // the first paid turn. Source order is load-bearing: seeding/asserting after the fixture loop
