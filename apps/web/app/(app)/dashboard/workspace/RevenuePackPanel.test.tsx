@@ -24,7 +24,9 @@ describe("RevenuePackPanelView", () => {
     expect(
       renderToStaticMarkup(<RevenuePackPanelView offers={undefined} onStart={() => {}} />),
     ).toContain("Checking revenue workflow availability");
-    expect(renderToStaticMarkup(<RevenuePackPanelView offers={[]} onStart={() => {}} />)).toBe("");
+    const settled = renderToStaticMarkup(<RevenuePackPanelView offers={[]} onStart={() => {}} />);
+    expect(settled).toContain('data-testid="revenue-pack-settled"');
+    expect(settled).not.toContain("Revenue workflows");
   });
 
   test("renders one independently passed provider while absent providers stay absent", () => {

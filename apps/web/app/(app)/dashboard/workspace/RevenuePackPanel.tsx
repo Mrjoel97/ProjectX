@@ -34,7 +34,9 @@ export function RevenuePackPanelView({
       </p>
     );
   }
-  if (offers.length === 0) return null;
+  // A positive settle marker makes authenticated absence checks non-vacuous without rendering an
+  // empty feature promise. Playwright waits for this before asserting every parked lane is absent.
+  if (offers.length === 0) return <span hidden data-testid="revenue-pack-settled" />;
 
   return (
     <section aria-labelledby="revenue-pack-label" style={{ display: "grid", gap: "0.65rem" }}>
