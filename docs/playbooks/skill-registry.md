@@ -1,5 +1,37 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-01 (28-20 Task 1 — **THE COMPLETE EXACT-PIN REVENUE ACTIVATION
+> EVIDENCE EXISTS BEFORE OWNER JUDGMENT; NOTHING IS ACTIVE.** The unfiltered live diagnostic from
+> 28-19 attempted all eleven state fixtures across all eight `name@1` pins. The refs-only 28-20
+> handoff was regenerated from that diagnostic with
+> `pnpm eval:golden --all-candidates --activation-evidence`; it covered 8/8 exact pins, performed no
+> registry write, and exited 1 by design because five pins are red. `node scripts/check-playbooks.mjs`
+> passed. Exact evidence:
+>
+> - `revenue-call-list@1`: **passed**, $0.00031800, 10,275 ms, ref `45-revenue-call-list`.
+> - `revenue-lead-triage@1`: **passed**, $0.00032445, 9,407 ms, ref
+>   `36-revenue-lead-triage`.
+> - `revenue-specialist@1`: **passed**, $0.00030240, 8,885 ms, ref `44-revenue-specialist`.
+> - `revenue-cash-flow@1`: **failed / preclassified parked**, $0.00047490, 16,963 ms, refs
+>   `39-revenue-cash-flow`, `40-revenue-mixed-currency`.
+> - `revenue-customer-pulse@1`: **failed / preclassified parked**, $0.00071385, 18,889 ms, refs
+>   `37-revenue-partial`, `38-revenue-injection`.
+> - `revenue-invoice-reminder@1`: **failed / preclassified parked**, $0.00044700, 16,578 ms,
+>   refs `42-revenue-invoice-reminder`, `43-revenue-suppressed-reminder`.
+> - `revenue-payroll-confidence@1`: **failed / preclassified parked**, $0.00034980, 11,424 ms,
+>   ref `41-revenue-payroll-unknown`.
+> - `revenue-pipeline-review@1`: **failed / preclassified parked**, $0.00029205, 8,940 ms, ref
+>   `46-revenue-pipeline-review`.
+>
+> The live diagnostic is
+> `C:\Users\expert\AppData\Local\Temp\pikar-revenue-eval-28-19\revenue-candidate-diagnostic.v1.json`
+> (SHA-256 `73c15e0ac9463e77713b202975441a463c0d9bcb743fd3250e0eb05cbcf3f236`). The exact-pin handoff is
+> `C:\Users\expert\AppData\Local\Temp\pikar-revenue-eval-28-19\revenue-activation-evidence.v1.json`
+> (SHA-256 `16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec`). Both bind golden suite
+> `1cbf5d5b389173c64490f3932734d445375cfd42a2460a86509bc35308a4e913` (46 cases) and revenue state
+> suite `1789da27caa827e8f290db9aa4756b90eabde2f4ecd10c2c10757f6bbf32391f` (11 cases). Only the three
+> green pins are eligible for an approve/park judgment; red pins cannot be approved.
+>
 > Last verified: 2026-09-01 (28-28 — **EIGHT REVENUE BODIES ARE BYTE-PINNED DARK CANDIDATES,
 > NOT ACTIVE SKILLS.** `packages/backend/skills-lock.json` is the code-owned manifest: every entry
 > fixes `name@1`, `status: candidate`, LF UTF-8 byte count, SHA-256, exact upstream commit/path,
