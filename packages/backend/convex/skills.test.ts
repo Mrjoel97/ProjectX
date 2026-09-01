@@ -163,6 +163,70 @@ describe("Phase 28 revenue candidate publication", () => {
       expect(ref).not.toHaveProperty("provenance");
     }
   });
+
+  test("applies only approved exact-pin decisions and keeps every parked body undiscoverable", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedRevenueCandidates, {});
+
+    const approved = manifest.filter(
+      (pin) => pin.activationDecision.decision === "approve",
+    );
+    const parked = manifest.filter((pin) => pin.activationDecision.decision === "park");
+    expect(approved.map((pin) => pin.name).sort()).toEqual([
+      "revenue-call-list",
+      "revenue-lead-triage",
+      "revenue-specialist",
+    ]);
+    expect(parked).toHaveLength(5);
+
+    for (const pin of approved) {
+      const evidence = JSON.stringify({
+        runner: "eval:golden:revenue-candidate",
+        runId: "revenue-diagnostic",
+        pass: true,
+        casesPassed: 1,
+        casesTotal: 1,
+        retriedCases: [],
+        costUsd: 0,
+        model: "test-model",
+        skillVersions: { [pin.name]: pin.version },
+        ts: 1,
+      });
+      await t.mutation(internal.skills.recordEvalEvidence, {
+        name: pin.name,
+        version: pin.version,
+        evidence,
+      });
+      await t.mutation(internal.skills.activateSkill, {
+        name: pin.name,
+        version: pin.version,
+      });
+    }
+
+    for (const pin of approved) {
+      const loaded = await t.run((ctx) => loadSkill(ctx, pin.name));
+      expect(loaded.version).toBe(pin.version);
+      expect(await contentHash(loaded.body)).toBe(pin.bodySha256);
+    }
+    for (const pin of parked) {
+      await expect(
+        t.mutation(internal.skills.activateSkill, {
+          name: pin.name,
+          version: pin.version,
+        }),
+      ).rejects.toThrow(/EVAL_GATE/);
+      await expect(t.run((ctx) => loadSkill(ctx, pin.name))).rejects.toThrow(/NO_ACTIVE_SKILL/);
+    }
+
+    const refs = await t.query(internal.skills.inspectRevenueCandidates, {});
+    for (const ref of refs) {
+      const pin = manifest.find((candidate) => candidate.name === ref.name);
+      expect(ref.status).toBe(pin?.activationDecision.decision === "approve" ? "active" : "candidate");
+      expect(ref.bodyHash).toBe(pin?.bodySha256);
+      expect(ref.bodyBytes).toBe(pin?.bodyBytes);
+      expect(ref.provenanceValid).toBe(true);
+    }
+  });
 });
 
 describe("skills registry loader + activation", () => {

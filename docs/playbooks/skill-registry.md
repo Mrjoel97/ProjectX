@@ -1,5 +1,24 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-01 (28-20 Task 3 — **THE OWNER JUDGMENT IS EXACT-PINNED AND CLOSED.**
+> APPROVE exactly `revenue-call-list@1`, `revenue-lead-triage@1`, and
+> `revenue-specialist@1`. PARK exactly `revenue-cash-flow@1`, `revenue-customer-pulse@1`,
+> `revenue-invoice-reminder@1`, `revenue-payroll-confidence@1`, and
+> `revenue-pipeline-review@1`; each mandatory park is bound to its failed complete run. The durable
+> `activationDecision` rows in `packages/backend/skills-lock.json` all name activation-evidence
+> SHA-256 `16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec` and record the
+> exact reason. The publication pin remains `status: candidate` by design: a fresh deployment may
+> not turn an owner judgment into implicit activation, and `activateSkill` remains the sole status
+> writer.
+>
+> The automated activation diff was exercised offline through the real registry transition: the
+> three approved rows received exact-version passing evidence, transitioned to `active`, loaded via
+> `loadSkill`, and preserved their locked body SHA-256; all five parked rows remained candidates,
+> refused activation with `EVAL_GATE`, and were undiscoverable through `loadSkill` with
+> `NO_ACTIVE_SKILL`. No deployment, provider, or paid-evaluation call was made. Verification:
+> backend `skills` **144/144 passed**, contracts `skillBodies` **48/48 passed**, and
+> `node scripts/check-playbooks.mjs` passed after this record was added.
+>
 > Last verified: 2026-09-01 (28-20 Task 1 — **THE COMPLETE EXACT-PIN REVENUE ACTIVATION
 > EVIDENCE EXISTS BEFORE OWNER JUDGMENT; NOTHING IS ACTIVE.** The unfiltered live diagnostic from
 > 28-19 attempted all eleven state fixtures across all eight `name@1` pins. The refs-only 28-20

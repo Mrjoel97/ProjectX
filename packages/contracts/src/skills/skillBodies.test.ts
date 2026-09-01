@@ -125,6 +125,37 @@ describe("Phase 28 provider-neutral revenue bodies (REVN-04..06)", () => {
     }
   });
 
+  test("the owner judgment approves only the three green exact pins and parks every red pin", () => {
+    const candidates = skillsLock.revenueCandidates.candidates;
+    const approved = candidates
+      .filter((candidate) => candidate.activationDecision.decision === "approve")
+      .map((candidate) => `${candidate.name}@${candidate.version}`)
+      .sort();
+    const parked = candidates
+      .filter((candidate) => candidate.activationDecision.decision === "park")
+      .map((candidate) => `${candidate.name}@${candidate.version}`)
+      .sort();
+
+    expect(approved).toEqual([
+      "revenue-call-list@1",
+      "revenue-lead-triage@1",
+      "revenue-specialist@1",
+    ]);
+    expect(parked).toEqual([
+      "revenue-cash-flow@1",
+      "revenue-customer-pulse@1",
+      "revenue-invoice-reminder@1",
+      "revenue-payroll-confidence@1",
+      "revenue-pipeline-review@1",
+    ]);
+    for (const candidate of candidates) {
+      expect(candidate.activationDecision.evidenceSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(candidate.activationDecision.reason.trim()).not.toBe("");
+      // Publication stays candidate-only. A decision must never make a fresh deployment auto-live.
+      expect(candidate.status).toBe("candidate");
+    }
+  });
+
   test.each(Object.entries(revenueBodies))(
     "%s has reviewed byte pins and the Phase 27 provenance notice",
     (base, contract) => {

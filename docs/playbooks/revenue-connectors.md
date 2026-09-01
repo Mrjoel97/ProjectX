@@ -1,5 +1,14 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
+> Last verified: 2026-09-01 — Plan 28-20 approved exactly `revenue-call-list@1`,
+> `revenue-lead-triage@1`, and `revenue-specialist@1` after their complete exact-pin runs passed.
+> The five failed exact pins (`revenue-cash-flow@1`, `revenue-customer-pulse@1`,
+> `revenue-invoice-reminder@1`, `revenue-payroll-confidence@1`, and
+> `revenue-pipeline-review@1`) are durably parked and remain undiscoverable. Offline registry tests
+> applied only the three approved transitions, proved their active bodies stayed byte-identical to
+> the lock, and proved every parked pin refused activation and active discovery. No deployment,
+> provider, or paid-evaluation call was made.
+>
 > Last verified: 2026-08-31 — `@pikar/revenue` now also exports `./crm` (28-10's pure ranking and
 > pulse); the package index is the only file of this playbook's that changed, and the rules live in
 > `revenue-crm.md`. Prior: **THE COMPLETION GATE EXISTS NOW.**

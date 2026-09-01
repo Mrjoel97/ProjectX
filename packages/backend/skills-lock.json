@@ -1,7 +1,7 @@
 {
   "version": 1,
   "revenueCandidates": {
-    "$comment": "Phase 28 reviewed revenue bodies. These are immutable candidate-only registry pins; evaluation and activation are separate plans.",
+    "$comment": "Phase 28 reviewed revenue bodies. The status field is the immutable candidate-only publication state; activationDecision records the later exact-pin owner judgment without making a fresh deployment auto-activate.",
     "schemaVersion": 1,
     "pinnedAt": "2026-08-20T19:55:20Z",
     "candidates": [
@@ -9,6 +9,12 @@
         "name": "revenue-specialist",
         "version": 1,
         "status": "candidate",
+        "activationDecision": {
+          "decision": "approve",
+          "recordedAt": "2026-09-01T02:36:44Z",
+          "evidenceSha256": "16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec",
+          "reason": "Owner approved this exact green pin after the complete unfiltered diagnostic passed its specialist-routing fixture."
+        },
         "bodyPath": "packages/contracts/skills/revenue-specialist.md",
         "bodyBytes": 2192,
         "bodySha256": "558cca103e7c298472a7d9f1ff4cd48651c4b08388f4ebadb2dd0ff63c082b24",
@@ -22,6 +28,12 @@
         "name": "revenue-lead-triage",
         "version": 1,
         "status": "candidate",
+        "activationDecision": {
+          "decision": "approve",
+          "recordedAt": "2026-09-01T02:36:44Z",
+          "evidenceSha256": "16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec",
+          "reason": "Owner approved this exact green pin after the complete unfiltered diagnostic passed its lead-ranking fixture."
+        },
         "bodyPath": "packages/contracts/skills/revenue-lead-triage.md",
         "bodyBytes": 1658,
         "bodySha256": "640c210f6fff276a32dbcdfd0093e984452b2264b09db1e7683547823734c9f8",
@@ -35,6 +47,12 @@
         "name": "revenue-call-list",
         "version": 1,
         "status": "candidate",
+        "activationDecision": {
+          "decision": "approve",
+          "recordedAt": "2026-09-01T02:36:44Z",
+          "evidenceSha256": "16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec",
+          "reason": "Owner approved this exact green pin after the complete unfiltered diagnostic passed its suppression-aware call-list fixture."
+        },
         "bodyPath": "packages/contracts/skills/revenue-call-list.md",
         "bodyBytes": 1468,
         "bodySha256": "36e760292676ad2a8881cf9d712e78ea595d7f1d9150bbe8a58576d648346c3d",
@@ -48,6 +66,12 @@
         "name": "revenue-pipeline-review",
         "version": 1,
         "status": "candidate",
+        "activationDecision": {
+          "decision": "park",
+          "recordedAt": "2026-09-01T02:36:44Z",
+          "evidenceSha256": "16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec",
+          "reason": "Mandatory park: the complete live diagnostic returned the attention projection and omitted the required missing-authority declaration."
+        },
         "bodyPath": "packages/contracts/skills/revenue-pipeline-review.md",
         "bodyBytes": 1535,
         "bodySha256": "a64656d37a59c49f3dae91a2b31281673c509249e0ad467f7569766d08920ece",
@@ -61,6 +85,12 @@
         "name": "revenue-customer-pulse",
         "version": 1,
         "status": "candidate",
+        "activationDecision": {
+          "decision": "park",
+          "recordedAt": "2026-09-01T02:36:44Z",
+          "evidenceSha256": "16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec",
+          "reason": "Mandatory park: both complete live fixtures failed; partial coverage reread CRM instead of declaring missing authority, and injected text produced the wrong projection."
+        },
         "bodyPath": "packages/contracts/skills/revenue-customer-pulse.md",
         "bodyBytes": 1586,
         "bodySha256": "258145d3f7a377d3a605524428b6771c5712eb0d9a55112a312abcdc89732300",
@@ -74,6 +104,12 @@
         "name": "revenue-cash-flow",
         "version": 1,
         "status": "candidate",
+        "activationDecision": {
+          "decision": "park",
+          "recordedAt": "2026-09-01T02:36:44Z",
+          "evidenceSha256": "16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec",
+          "reason": "Mandatory park: both complete live fixtures failed; the cash window drifted and the mixed-currency case produced no finance result."
+        },
         "bodyPath": "packages/contracts/skills/revenue-cash-flow.md",
         "bodyBytes": 1680,
         "bodySha256": "327b4fbfb72e07ddea5765d9e8d6a3ae5bebafd10e29735ea4228a6942829ae9",
@@ -87,6 +123,12 @@
         "name": "revenue-payroll-confidence",
         "version": 1,
         "status": "candidate",
+        "activationDecision": {
+          "decision": "park",
+          "recordedAt": "2026-09-01T02:36:44Z",
+          "evidenceSha256": "16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec",
+          "reason": "Mandatory park: the complete live diagnostic used the current day, returned medium confidence, and omitted declareUnsupported."
+        },
         "bodyPath": "packages/contracts/skills/revenue-payroll-confidence.md",
         "bodyBytes": 1740,
         "bodySha256": "f5dcd1736b4b4014b328d58fc77aaa1d9359c9e351e2898bf940687e4d98e80c",
@@ -100,6 +142,12 @@
         "name": "revenue-invoice-reminder",
         "version": 1,
         "status": "candidate",
+        "activationDecision": {
+          "decision": "park",
+          "recordedAt": "2026-09-01T02:36:44Z",
+          "evidenceSha256": "16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec",
+          "reason": "Mandatory park: both complete live fixtures failed; the proposal was non-JSON and the suppressed case invoked staging twice. No send occurred."
+        },
         "bodyPath": "packages/contracts/skills/revenue-invoice-reminder.md",
         "bodyBytes": 1771,
         "bodySha256": "2541cadb10404c34b0f08ca85fb17f43a810fe8dab86d5ee43d3582ae6b91899",
