@@ -143,10 +143,23 @@ describe("authorize URL", () => {
     expect(url.searchParams.get("optional_scope")).toBeNull();
   });
 
-  it("refuses a non-https redirect and an empty state", () => {
+  it("allows HubSpot's documented http://localhost development redirect", () => {
+    const redirectUri = "http://localhost:3211/connectors/hubspot/callback/production";
+    const url = new URL(buildHubSpotAuthorizeUrl({ ...input, redirectUri }));
+    expect(url.searchParams.get("redirect_uri")).toBe(redirectUri);
+  });
+
+  it("refuses cleartext non-localhost redirects, lookalikes, invalid URLs and an empty state", () => {
     expect(() =>
       buildHubSpotAuthorizeUrl({ ...input, redirectUri: "http://evil.test/cb" }),
     ).toThrow();
+    expect(() =>
+      buildHubSpotAuthorizeUrl({ ...input, redirectUri: "http://localhost.evil.test/cb" }),
+    ).toThrow();
+    expect(() =>
+      buildHubSpotAuthorizeUrl({ ...input, redirectUri: "http://127.0.0.1:3211/cb" }),
+    ).toThrow();
+    expect(() => buildHubSpotAuthorizeUrl({ ...input, redirectUri: "not a URL" })).toThrow();
     expect(() => buildHubSpotAuthorizeUrl({ ...input, state: "" })).toThrow();
   });
 });
