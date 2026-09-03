@@ -351,6 +351,25 @@ export default defineSchema({
     rollbackEligible: v.boolean(),
     evidence: v.optional(v.string()),
     createdAt: v.number(),
+    // ---- TOLERATED, NOT OWNED. Remove when the tenant-pack lane lands or is abandoned.
+    //
+    // These four are `feat/29-unified-knowledge`'s fields. NOTHING on this branch writes them and
+    // nothing reads them — they are here ONLY so this schema can deploy against a local database
+    // that the pack lane has already written rows into. Convex rejects a row carrying a field the
+    // validator does not name, so a lane that widens a shared table locks every other lane out of
+    // the one local deployment the project has (there is exactly one, on fixed ports 3210/3211).
+    // Naming them costs nothing at runtime and unblocks that; deleting the rows instead would be
+    // undone by the pack lane's next test run.
+    //
+    // Types match that lane's own declaration exactly, so this cannot drift into a SECOND opinion
+    // about their shape: when their schema lands, these lines are superseded, not merged with.
+    templateId: v.optional(v.string()),
+    templateVersion: v.optional(v.number()),
+    customizationValues: v.optional(v.string()),
+    customizationHash: v.optional(v.string()),
+    // Same lane, same reason. `skills.browserEvidence` already exists on this branch; the pack lane
+    // added the twin on THIS table and rows now carry it. Identical shape to that one.
+    browserEvidence: v.optional(v.string()),
   })
     // Effective-load and per-tenant status reads.
     .index("by_tenant", ["tenantId"])
