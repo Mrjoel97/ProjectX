@@ -1,5 +1,27 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-03 (formatter sweep — **NO REGISTRY BEHAVIOUR CHANGED.**)
+>
+> Reformatted under this playbook's watch: `convex/skills.ts`, `convex/skills.test.ts`,
+> `contracts/src/skills/revenueBodies.ts`, `contracts/src/skills/skillBodies.test.ts`.
+>
+> **The one thing that would have mattered here, and did not happen:** a skill body is content that
+> gets hashed and version-pinned, so reformatting a body string would silently invalidate pins.
+> `skills-lock.json` was reformatted too, and its parsed content is byte-for-byte identical in
+> structure — the body hashes live INSIDE the JSON, not over its bytes, so `run-eval-golden.mjs`'s
+> pin comparison and `skills.ts`'s import both read exactly what they read before. `skills.test.ts`
+> passed in the green backend shard, which is the check that would fail first if a pin had drifted.
+>
+> **This is a `Last verified` bump ONLY, and deliberately not a re-verification of the sections
+> below.** The change was `pnpm format` (commit 6335831): Biome's formatter and organizeImports,
+> applied repo-wide to clear a Lint gate that had been exiting 1 with 45 diagnostics — all from
+> files this branch touched, none on main. `ci.yml` runs Lint BEFORE Test and Build, so a red Lint
+> was stopping the pipeline rather than reporting anything about whether the code works.
+>
+> Mechanical only, and checked rather than assumed: every changed `.json` parses to a structure
+> identical to its previous content, and the full suites re-ran green afterwards (web 670, backend
+> 3378 across both shards, core 1239, contracts 113, revenue 340).
+
 > Last verified: 2026-09-01 (28-20 Task 3 — **THE OWNER JUDGMENT IS EXACT-PINNED AND CLOSED.**
 > APPROVE exactly `revenue-call-list@1`, `revenue-lead-triage@1`, and
 > `revenue-specialist@1`. PARK exactly `revenue-cash-flow@1`, `revenue-customer-pulse@1`,

@@ -1,5 +1,29 @@
 # Playbook: Deterministic business finance (REVN-05)
 
+> Last verified: 2026-09-03 (formatter sweep — **NO FINANCE BEHAVIOUR CHANGED.**)
+>
+> Reformatted under this playbook's watch: `convex/revenueFinance.ts` and
+> `convex/revenueFinance.test.ts`. Whitespace and import order only; no rounding rule, currency
+> handling, projection state or provenance field was altered, and the file's tests passed in the
+> green backend shard after the sweep.
+>
+> Unrelated but adjacent, recorded so it is not rediscovered as a formatting side effect:
+> `packages/revenue/src/reminders.test.ts` fails `pnpm typecheck` (spreading `projection()` then
+> overriding `state: "partial"` yields a union member missing `meta`/`items`). That error predates
+> this sweep — it is present at HEAD before it, at the pre-reflow line number — and arrived with
+> `2b1e9ed`. The tests pass at runtime; the defect is type-level only. Typecheck is the step BEFORE
+> Lint in `ci.yml`, so it still gates the pipeline.
+>
+> **This is a `Last verified` bump ONLY, and deliberately not a re-verification of the sections
+> below.** The change was `pnpm format` (commit 6335831): Biome's formatter and organizeImports,
+> applied repo-wide to clear a Lint gate that had been exiting 1 with 45 diagnostics — all from
+> files this branch touched, none on main. `ci.yml` runs Lint BEFORE Test and Build, so a red Lint
+> was stopping the pipeline rather than reporting anything about whether the code works.
+>
+> Mechanical only, and checked rather than assumed: every changed `.json` parses to a structure
+> identical to its previous content, and the full suites re-ran green afterwards (web 670, backend
+> 3378 across both shards, core 1239, contracts 113, revenue 340).
+
 > Last verified: 2026-08-31 against 3d76cb3 (28-11 orchestration and provenance tests)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-02, 28-11) · Related ADRs: none yet
 >
