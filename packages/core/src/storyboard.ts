@@ -1200,9 +1200,19 @@ const restartScenes = (scenes: readonly Scene[], seconds: readonly number[]): Sc
  *  1. **Seconds, never words.** No narration cell is read except for its LENGTH. Rewriting a line
  *     to fit would put words in the user's mouth — the provenance rule, and the reason this
  *     function moves time instead of text.
- *  2. **Never a `generated_video`, at either end.** Resizing one puts it off the provider's
- *     4/8/12 grid — the exact defect `repairGeneratedGrid` exists to prevent, and it would be
- *     absurd to reintroduce it here.
+ *  2. **A `generated_video` may DONATE but never RECEIVE, and that asymmetry is 33.1's.** The rule
+ *     used to be "never, at either end", because resizing a clip put it off the provider's 4/8/12
+ *     grid. 33.1 widened `GENERATED_CLIP_SECONDS` to every integer 1..15, so that reason is gone —
+ *     and leaving the ban in place cost real decks: a 15-second reel whose clip takes 7 seconds
+ *     leaves four scenes sharing 8, every one of them at `MIN_DONOR_SECONDS`, so the donor pool was
+ *     empty and the deck refused with `narration_too_long` while five spare seconds sat in the clip.
+ *     Shrinking one is safe on both counts that matter: it lands at or above `MIN_DONOR_SECONDS`,
+ *     which is inside the grid, and it only ever LOWERS the deck's generated total and its cost.
+ *     GROWING one is still refused — that spends money the user has not approved yet and could
+ *     breach `MEDIA_GENERATED_SECONDS_CAP`, which this package cannot see.
+ *  2b. **A still is preferred as donor over a clip.** Shrinking a still costs the reel nothing;
+ *     shrinking a clip takes motion out of it. Only when no still can cover the deficit is a clip
+ *     asked, which is why the search runs twice rather than taking the longest scene outright.
  *  3. **The total never moves.** Donor and receiver trade the same whole number of seconds, so
  *     the exact-length rule still holds and the generated clips are still priced at what the user
  *     approved.
@@ -1227,20 +1237,30 @@ function widenNarrationWindow(
   const spanEnd = next === -1 ? scenes.length : next;
   const inSpan = (j: number) => j >= i && j < spanEnd;
 
+  // A clip may not GROW — see limit 2. Growing one spends money the user has not approved and
+  // could push the deck past the generated-seconds cap, which lives in `@pikar/cost` and is not
+  // visible from here. A still or a card growing is free.
   const receiver = scenes.findIndex((s, j) => inSpan(j) && s.visual !== "generated_video");
   if (receiver === -1) return null; // a span of nothing but generated clips cannot grow
 
-  // The donor with the most to give, so one trade covers as much as any single trade can.
-  let donor = -1;
-  let most = 0;
-  for (const [j, s] of scenes.entries()) {
-    if (inSpan(j) || s.visual === "generated_video") continue;
-    const slack = s.durationMs / 1000 - MIN_DONOR_SECONDS;
-    if (slack >= deficit && slack > most) {
-      donor = j;
-      most = slack;
+  // The donor with the most to give, so one trade covers as much as any single trade can. Stills
+  // first, clips only if no still can cover the deficit (limit 2b).
+  const bestDonor = (wantClip: boolean): number => {
+    let at = -1;
+    let most = 0;
+    for (const [j, s] of scenes.entries()) {
+      if (inSpan(j) || (s.visual === "generated_video") !== wantClip) continue;
+      // MIN_DONOR_SECONDS is also what keeps a shrunk clip on the 1..15 grid: the floor is 2.
+      const slack = s.durationMs / 1000 - MIN_DONOR_SECONDS;
+      if (slack >= deficit && slack > most) {
+        at = j;
+        most = slack;
+      }
     }
-  }
+    return at;
+  };
+  let donor = bestDonor(false);
+  if (donor === -1) donor = bestDonor(true);
   if (donor === -1) return null;
 
   const seconds = scenes.map((s) => s.durationMs / 1000);

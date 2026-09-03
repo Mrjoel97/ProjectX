@@ -1,5 +1,92 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-03 (33.1-06 — **A3 IS OBSERVED IN A BROWSER AND IN THE LEDGER. A6 IS NOT,
+> AND ONE LIVE DEFECT WAS FOUND AND FIXED ON THE WAY TO IT: A GENERATED CLIP MAY NOW DONATE
+> SECONDS TO AN OVERLONG NARRATION LINE.**
+>
+> **The seeded body: `media-director` version 5, read back rather than guessed** (the phase-10
+> lesson — a plan-authored version pin is not evidence). `skillId
+> kh7bg9chdc60njw0afj6pt0zs98defj9`, body byte-identical to `packages/contracts/skills/`'s source
+> at 26,881 bytes, carrying the 12-second generated cap and the `1..15` grid, with the old
+> "three or four generated scenes" rule absent and exactly ONE `N times` ratio figure. Note the
+> body's own heading reads `v6` while the row is `5` — two different counters, and the ROW is the
+> one that selects at runtime.
+>
+> **A3 — OBSERVED.** The owner asked for a standalone image and it appeared on the canvas. The
+> ledger is the stronger record and it is unambiguous about which vendor served it:
+>
+> - `media.landed` — `model: "openai/gpt-image-2"` (the OpenRouter-qualified id, NOT lane 29's bare
+>   `gpt-image-2` pin), `providerRequestId: "openrouter-4b2ff192-…"`, `estCents 1 / actualCents 1`,
+>   `reconciled: "repriced"`, `verdict: "none_reported"`.
+> - `media.image_saved` — docId + jobId + planId.
+>
+> An `openrouter-` request id cannot come from `api.openai.com`. **The four surviving
+> `api.openai.com` references in `media.ts` are TTS (`:1348`), STT (`:2206`) and the retained Sora
+> poller (`:1708`, `:1765`) — never the image or video submit path.**
+>
+> **THE A/B THE PLAN ASKED FOR IS UNFALSIFIABLE FOR THIS SKILL, AND WAS SKIPPED FOR THAT REASON
+> RATHER THAN FOR COST.** 33.1-06 step 2 wanted one fixture run against the previous body and the
+> new one, "comparing the tool arguments", guarding the repo memory where a body edit made a model
+> start passing an optional enum it had never passed. `media-director` is granted exactly ONE tool
+> and its schema is `{ query: string }`, `required: ["query"]`, `additionalProperties: false`
+> (`llm.ts:3862`). There is no optional field to newly populate and an invented one is rejected
+> before it reaches the loop, so that comparison could not have come out red. A green result there
+> would have been this repo's own "a check that cannot fail". The behavioural test of the new body
+> is A6 itself.
+>
+> **THE DEFECT, AND IT COST THE OWNER TWO LIVE DEAD-ENDS: `widenNarrationWindow` REFUSED TO RESIZE
+> A GENERATED CLIP BECAUSE OF THE 4/8/12 GRID THAT 33.1 HAD ALREADY DELETED.** A `narration_too_long`
+> refusal is repaired by trading seconds — lengthen a scene inside the offending line's window,
+> shrink one outside it. Both ends excluded `generated_video`, and the stated reason was that
+> resizing one puts it off the provider's 4/8/12 grid. 33.1-04 widened `GENERATED_CLIP_SECONDS` to
+> every integer `1..15`, which retired that reason — but only `repairGeneratedGrid` was updated.
+> **The sibling function kept the assumption in code**, which is this playbook's recurring shape:
+> the migration reached one gate and not the next.
+>
+> The cost was not theoretical. A 15-second reel whose clip takes 7 seconds leaves four scenes to
+> share 8 — every one of them ON `MIN_DONOR_SECONDS = 2`, so `slack` is 0 across the entire donor
+> pool while **five spare seconds sit in the clip, unreachable**. The deck refused whole. The owner
+> hit it twice and asked for the constraint to be removed; removing it would have been strictly
+> worse, because the check is what stops the pictures being BOUGHT and the render then hard-erroring
+> in `assemble_final.sh` — a free pre-spend refusal traded for a paid post-spend failure.
+>
+> **The fix is an asymmetry, and each half is forced:**
+> - **A clip may DONATE.** Safe on both counts that matter: `MIN_DONOR_SECONDS = 2` is itself inside
+>   `1..15`, so a shrunk clip always lands on a length the provider can make, and donating only ever
+>   LOWERS the deck's generated total and its price. That is why this needs no sight of
+>   `MEDIA_GENERATED_SECONDS_CAP`, which lives in `@pikar/cost` and is invisible from `@pikar/core`.
+> - **A clip may never RECEIVE.** Growing one spends money the owner has not approved yet and could
+>   breach that cap. Unchanged.
+> - **A still is asked BEFORE a clip**, which is why the donor search runs twice instead of taking
+>   the longest scene outright. Shrinking a still costs the reel nothing; shrinking a clip takes
+>   motion out of it. A single "most to give" pass would have preferred the clip in almost every
+>   deck, since the clip is usually the longest scene — the opposite of the intent.
+>
+> **Two existing tests went red, and both deserved to** — each parked untouchable clips outside the
+> window to manufacture "no slack". They were passing for the wrong reason: the slack was there all
+> along and only the ban hid it. Both were rewritten to say "no slack" honestly, with the outside
+> scenes on the floor. **Both new tests are mutation-proven:** restoring the clip ban kills
+> `takes the seconds from a generated CLIP …`; inverting the still-first preference kills
+> `leaves the clip alone when a still can cover the deficit` plus two older ones. `packages/core`
+> 1241/1241, `dispatch.test.ts` + `media.test.ts` green, `tsc --noEmit` clean.
+>
+> **A6 IS STILL OPEN and one thing about it is already proven:** the owner's deck carried a
+> **7-second** `generated_video`, which the pre-33.1 code could not have produced — it would have
+> been snapped to 4. What has NOT been seen is that reel rendering end to end, the clip surviving at
+> 7 seconds, and a `media.deck_persisted` audit row existing (`dispatch.ts:916` / `:1103`). The
+> 2026-08-30 signature to look for is the ABSENCE of any `media.deck_*` terminal, not an error.
+>
+> **AN OPEN FINDING, NOT FIXED HERE: every media job is still stamped `provider: "openai"`, and
+> that value becomes the AUDIT ACTOR of an insert-only table.** `mediaComplete.ts:425` writes
+> `actor: row.provider`; `schema.ts:2207` closes the union at `"fal" | "wan" | "openai" | "stock"`;
+> `media.ts` pins `"openai"` at seven submit sites. So A3's own row says the actor was `openai`
+> three fields away from an `openrouter-` request id that contradicts it. **No behavioural risk —
+> all four readers (`media.ts:1169`, `:1239`, `:1935`, `mediaComplete.ts:425`) only ever test
+> `=== "stock"`, and the field never reaches `MediaCanvas.tsx`.** But §3 makes the log
+> uncorrectable, so every landing from here records the wrong counterparty. Adding `"openrouter"`
+> to a closed union over existing rows is widen-migrate-narrow and was left for the owner to
+> schedule rather than smuggled into a verification task.)
+
 > Last verified: 2026-08-30 (33.1-05 — **THE VIDEO SUBMIT IS ON OPENROUTER AND
 > `succession.replacementWiredUp` IS FINALLY `true`.** The migration ADR-026 decided on 2026-08-27
 > and ADR-027 re-decided on 2026-08-30 is now WIRED, 25 days before OpenAI withdraws `/v1/videos`

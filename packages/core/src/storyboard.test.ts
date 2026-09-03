@@ -992,19 +992,23 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
   });
 
   it("refuses when the only slack is INSIDE the window — moving it would change nothing", () => {
-    // Scene 2 is silent and sits inside scene 1's window, so its 6 seconds are ALREADY counted in
-    // the 10-second ceiling. Spending them would shorten a scene and buy zero characters. Every
-    // scene outside the span is a generated clip, which may never be resized.
+    // Scene 2 is silent and sits inside scene 1's window, so its 7 seconds are ALREADY counted in
+    // the 11-second ceiling. Spending them would shorten a scene and buy zero characters. Every
+    // scene OUTSIDE the span sits on `MIN_DONOR_SECONDS`, so nothing out there can give either.
+    //
+    // 33.1: this used to park two untouchable generated clips outside the span instead. That made
+    // the test pass for the WRONG reason once clips became donatable — there was slack out there
+    // all along, and only the old ban hid it. The floor is the honest way to say "no slack".
     const rows = [
       `| 1 | animated_image | 4 | Founder at a desk | ${long} | | |`,
-      "| 2 | animated_image | 6 | Mail icons | | | |",
-      `| 3 | generated_video | 8 | The cockpit | ${S3} | | |`,
-      "| 4 | generated_video | 12 | The trail | | | |",
+      "| 2 | animated_image | 7 | Mail icons | | | |",
+      `| 3 | generated_video | 2 | The cockpit | ${S3} | | |`,
+      "| 4 | animated_image | 2 | One line of type | | | |",
     ];
-    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
+    expect(parseSceneDeck(sceneDeck(rows, "Target duration: 15"))).toMatchObject({
       reason: "narration_too_long",
       sceneIndex: 0,
-      availableSeconds: 10,
+      availableSeconds: 11,
     });
   });
 
@@ -1031,19 +1035,68 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
   });
 
   it("refuses rather than cut a donor below the floor", () => {
-    // Scene 1 needs 7 more seconds. Scene 3 has 8 and scene 4 has 2 — donating 7 would leave a
-    // 1-second flash, so neither donor can cover it and the deck refuses as it did before.
+    // Scene 1 needs 7 more seconds. Every scene outside its window holds at most 6 above the floor
+    // — the clip included, now that clips can donate — so donating 7 would leave a 1-second flash
+    // and no donor can cover it. The deck refuses exactly as it did before.
     const rows = [
       `| 1 | animated_image | 8 | Founder at a desk | ${long} | | |`,
-      `| 2 | generated_video | 12 | The cockpit | ${S4} | | |`,
+      `| 2 | generated_video | 8 | The cockpit | ${S4} | | |`,
       "| 3 | animated_image | 8 | Mail icons | | | |",
-      "| 4 | animated_image | 2 | One line of type | | | |",
+      "| 4 | animated_image | 6 | One line of type | | | |",
     ];
     expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
       reason: "narration_too_long",
       sceneIndex: 0,
       availableSeconds: 8,
     });
+  });
+
+  // ── 33.1: A CLIP MAY DONATE SECONDS. The shape below is the one that sent the owner back with
+  // `narration_too_long` on a live reel, twice: a 15-second deck whose generated clip takes 7 of
+  // the 15, leaving four scenes to share 8 — every one of them ON `MIN_DONOR_SECONDS`. The donor
+  // pool was empty while five spare seconds sat in the clip, unreachable because resizing one used
+  // to put it off the old 4/8/12 grid. `GENERATED_CLIP_SECONDS` is 1..15 now, so it does not.
+  it("takes the seconds from a generated CLIP when every still is already on the floor", () => {
+    const rows = [
+      `| 1 | animated_image | 2 | Founder at a desk | ${S1} | | |`,
+      `| 2 | generated_video | 7 | The cockpit | ${S3} | | |`,
+      "| 3 | animated_image | 2 | Mail icons | | | |",
+      "| 4 | animated_image | 2 | One line of type | | | |",
+      "| 5 | animated_image | 2 | The trail | | | |",
+    ];
+    expect(S1.length).toBe(53); // ceil(53/14) = 4s needed against a 2s window: a deficit of 2
+    const r = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([4, 5, 2, 2, 2]);
+    // The clip lands on 5 — inside 1..15, so it is still a length the provider can make — and the
+    // deck's generated total FELL from 7 to 5. A donating clip can only ever lower it, which is
+    // why it needs no sight of `MEDIA_GENERATED_SECONDS_CAP` over in @pikar/cost.
+    expect(r.scenes[1]?.visual).toBe("generated_video");
+    expect(GENERATED_CLIP_SECONDS).toContain(5);
+    expect(r.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 2, toSeconds: 4, why: "narration" },
+      { sceneIndex: 1, fromSeconds: 7, toSeconds: 5, why: "narration" },
+    ]);
+  });
+
+  it("leaves the clip alone when a still can cover the deficit", () => {
+    // Same deficit of 2, but scene 3 now has 2 seconds above the floor. A still costs the reel
+    // nothing to shrink; a clip costs it motion. The still is asked first and the clip is untouched.
+    const rows = [
+      `| 1 | animated_image | 2 | Founder at a desk | ${S1} | | |`,
+      `| 2 | generated_video | 7 | The cockpit | ${S3} | | |`,
+      "| 3 | animated_image | 4 | Mail icons | | | |",
+      "| 4 | animated_image | 2 | One line of type | | | |",
+    ];
+    const r = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([4, 7, 2, 2]);
+    expect(r.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 2, toSeconds: 4, why: "narration" },
+      { sceneIndex: 2, fromSeconds: 4, toSeconds: 2, why: "narration" },
+    ]);
   });
 
   it("leaves a deck that already fits completely alone", () => {
