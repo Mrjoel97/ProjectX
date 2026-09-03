@@ -43,7 +43,15 @@
 > the lock, and proved every parked pin refused activation and active discovery. No deployment,
 > provider, or paid-evaluation call was made.
 >
-> Last verified: 2026-08-31 — `@pikar/revenue` now also exports `./crm` (28-10's pure ranking and
+> Last verified: 2026-08-31 — Plan 28-09 is operationally closed across the serialized callback,
+> passed-only status surface, connect-start choke point and Connections UI. The four owner-judged
+> lanes remain parked in repository evidence and no deployment gate mutation was claimed by that
+> judgment wave. A missing deployment row and a parked/failed/expired row all project the same
+> tenant-safe result: absent. The callback remains admission-gated for owner evidence collection;
+> ordinary tenant connect-start, discovery and use require a passed lane. See “Callback, status and
+> UI operations” below for exact rollback and partial-revoke handling.
+>
+> Prior: `@pikar/revenue` now also exports `./crm` (28-10's pure ranking and
 > pulse); the package index is the only file of this playbook's that changed, and the rules live in
 > `revenue-crm.md`. Prior: **THE COMPLETION GATE EXISTS NOW.**
 > `scripts/check-phase28-completion.mjs` was cited by the release table and by 28-27 and had never
@@ -591,6 +599,54 @@ provider and echoed back verbatim, so a query parameter would have to survive th
 trip and could be edited by whoever opens the link. `pathPrefix`, not a glob — Convex's router has
 no `*` syntax.
 
+### Callback, status and UI operations
+
+There are three different gates because they answer three different questions. Do not replace them
+with one aggregate provider flag:
+
+| Operation | Gate | Result when the lane is parked/failed/expired |
+|---|---|---|
+| Start consent as an ordinary tenant | `connectorOAuth.mintConnectState` -> `connectStartAllowed` | Refused as `PROVIDER_NOT_CONNECTABLE`; no state minted. |
+| Start/complete controlled owner evidence | admission + current review, owner-only until passed; callback uses `connectPermitted` | May proceed for an admitted parked lane so a future live proof is possible. The provider remains tenant-invisible. |
+| Discover, render or use a provider | `passedProviderGates` / `availableProviders` | Omitted entirely. Existing tenant credential rows do not make it visible. |
+
+**State cleanup after a callback:** successful, denied QuickBooks/Stripe, and terminally invalid
+provider handlers consume the one-time state. A wrong-provider/wrong-environment/gate refusal does
+not burn a legitimate in-flight consent. HubSpot denial has no code to give its code-required
+handler, so that state is left inert and expires at the ten-minute TTL. Never delete states in a
+separate preflight query: consume is the atomic replay boundary.
+
+The Connections panel renders only rows returned by `connectorConnections.connections`; it has no
+provider/admission filter of its own. Its user-visible meanings are closed and non-color-only:
+
+| Surface state | Meaning / control |
+|---|---|
+| Query loading | “Checking connector availability…” in a polite live region; no disconnected card is guessed. |
+| `connecting` row | “Checking this connection…”; no connect/disconnect race is offered. |
+| No sealed credential | Connect. A clean `revoked` row says “Disconnected here.” |
+| Sealed `connected` row | Ready/read-only; “Not read yet” is not rendered as zero history. |
+| `reauth_required` or failed read | Reconnect, while retaining an honest closed failure class and disconnect control. |
+| Revoked locally, upstream not confirmed | `revoke_partial`: say that Pikar's copy is deleted and the provider grant remains until the user removes it. |
+| Action in flight | Disable both controls and announce “Connecting…” or “Disconnecting…”. |
+
+**Per-provider disable/rollback procedure:**
+
+1. Record the provider lane as `failed` for an observed incident, or owner-seal it `parked` for a
+   reversible judgment. This immediately removes only that provider from passed discovery, tools,
+   workflows and tenant connect-start; other passed providers remain available.
+2. Inventory every live credential for that provider and run its own disconnect path. Revoke at
+   the provider first, then clear the local ciphertext and record the observed `upstream` enum.
+   Parking is not revocation. A hidden card must never be used as evidence that a grant died.
+3. For `attempted_failed`, retry the provider operation where the provider supports it. For
+   `unsupported`/`unproven`, direct the tenant to remove the grant in the provider account and keep
+   the residual notice until that is confirmed. Do not relabel either outcome `confirmed`.
+4. Leave terminal contact suppression and delivery history intact. Connector rollback removes read
+   capability; it does not re-authorize a suppressed recipient or erase the record that prevents a
+   later send.
+
+Re-enable only by a new evidence-backed owner seal with a current `reviewBy` and every open
+condition cleared. Admission alone is never a release signal.
+
 **The composite rule** (`resolveProviderEligibility`, and nothing else may re-derive it) — a provider
 is available only when EVERY one of these holds, and a refusal names each axis that refused:
 
@@ -945,9 +1001,9 @@ implying it happened.
 
 ## Rollback
 
-- **Per provider (fast, no deploy):** park the lane — set that provider's suitability decision to
-  `blocked` or `deferred`. `providerGates` hides the provider, its tools drop out of the grant, and
-  dependent workflows report unknown coverage. Other lanes are unaffected.
+- **Per provider (fast):** follow “Callback, status and UI operations” above. Park/fail the lane to
+  hide discovery and stop ordinary tenant connect-start, then separately revoke every live grant
+  before clearing local ciphertext. Parking is reversible feature gating; it is not revocation.
 - **Per tenant:** disconnect (provider revoke first, local clear second). A partial-revoke state is
   an honest terminal with a retry, not a retryable no-op — and for PayPal and Stripe Apps the
   honest terminal is `unsupported`, meaning the grant stays live at the provider. See
@@ -1067,14 +1123,11 @@ implying it happened.
   `tenant.deleted` audit payload matters because the walk then deletes the row carrying
   `revocation.upstream` — the audit row is the only place the truth survives an erasure.
   `tenantDelete.ts` is owned by `audit-dead-letter.md`; the details are there.
-- **The connect-START is not yet gated, and 28-09 Task 2 owns closing it.** `hubspotAuth.hubspotConnectUrl`,
-  `quickbooksAuth.beginConnect` and `stripeAuth.beginConnect` are `tenantAction`s that mint a state
-  for any provider. Now that the callbacks exist, a tenant who called one directly could complete a
-  grant against a provider whose lane is `parked`. The window is bounded and owner-controlled: it
-  opens only once the owner has BOTH configured that provider's deployment credentials AND sealed a
-  gate row, which is exactly the evidence-gathering window — and the credential is inert, because
-  every reader gates on `availableProviders`. It is still a stored credential nobody uses. 28-09
-  Task 2 renders only passed providers; the connect projection it adds must refuse the same way.
+- **CLOSED 2026-08-31 (28-09): connect-START is gated once at the shared mint choke point.**
+  `connectorOAuth.mintConnectState` calls `connectStartAllowed` before writing state. A passed lane
+  is open to tenants; an admitted but unpassed lane is owner-only for evidence collection; absent,
+  failed, expired or admission-incompatible rows refuse everyone. The three provider entry points
+  read configuration only after this gate, so a refused caller cannot probe deployment setup.
 - **No route exists for PayPal and none should be added** without first closing
   `no-documented-revoke-endpoint` (28-25). `beginConnect` refusing is the tested branch.
 - Deferred by phase boundary: refunds, credits, PayPal invoice sends, CRM cleanup, journal entries,

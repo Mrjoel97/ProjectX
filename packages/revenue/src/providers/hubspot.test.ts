@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { validateProjection, validateSourceRef } from "../contracts";
 import {
   buildHubSpotAuthorizeUrl,
+  HUBSPOT_AUTHORIZE_SCOPES,
   HUBSPOT_AUTHORIZE_URL,
   HUBSPOT_COMPANY_PROPERTIES,
   HUBSPOT_CONTACT_PROPERTIES,
@@ -59,6 +60,11 @@ describe("scopes — the exact evidenced read set, pinned to literals", () => {
     // Deal pipelines/stages come from these two together, which is the trap the register records.
     expect(HUBSPOT_READ_SCOPES).toContain("crm.objects.deals.read");
     expect(HUBSPOT_READ_SCOPES).toContain("crm.schemas.deals.read");
+  });
+
+  it("adds HubSpot's mandatory oauth scope only to the installation scope set", () => {
+    expect([...HUBSPOT_AUTHORIZE_SCOPES]).toEqual(["oauth", ...HUBSPOT_READ_SCOPES]);
+    expect(HUBSPOT_READ_SCOPES).not.toContain("oauth");
   });
 });
 
@@ -133,13 +139,13 @@ describe("authorize URL", () => {
     state: "st-abc",
   };
 
-  it("carries client id, redirect, state and the space-joined read scope set", () => {
+  it("carries client id, redirect, state and the complete required installation scope set", () => {
     const url = new URL(buildHubSpotAuthorizeUrl(input));
     expect(`${url.origin}${url.pathname}`).toBe(HUBSPOT_AUTHORIZE_URL);
     expect(url.searchParams.get("client_id")).toBe("cid-1");
     expect(url.searchParams.get("redirect_uri")).toBe(input.redirectUri);
     expect(url.searchParams.get("state")).toBe("st-abc");
-    expect(url.searchParams.get("scope")).toBe(HUBSPOT_READ_SCOPES.join(" "));
+    expect(url.searchParams.get("scope")).toBe(HUBSPOT_AUTHORIZE_SCOPES.join(" "));
     expect(url.searchParams.get("optional_scope")).toBeNull();
   });
 

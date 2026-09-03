@@ -23,6 +23,7 @@ import {
 import {
   HUBSPOT_DATASET_PATHS,
   HUBSPOT_DATASET_PROPERTIES,
+  HUBSPOT_AUTHORIZE_SCOPES,
   HUBSPOT_DATASETS,
   HUBSPOT_READ_PATHS,
   HUBSPOT_READ_SCOPES,
@@ -261,13 +262,13 @@ describe("deployment configuration fails closed", () => {
 // ── Connect ───────────────────────────────────────────────────────────────────────────────
 
 describe("consent", () => {
-  test("the authorize URL carries the one-time state and exactly the read scopes", async () => {
+  test("the authorize URL carries the one-time state and every required installation scope", async () => {
     const h = await harness();
     const { url } = await h.asA.action(api.hubspotAuth.hubspotConnectUrl, {
       environment: "production",
     });
     const parsed = new URL(url);
-    expect(parsed.searchParams.get("scope")).toBe(HUBSPOT_READ_SCOPES.join(" "));
+    expect(parsed.searchParams.get("scope")).toBe(HUBSPOT_AUTHORIZE_SCOPES.join(" "));
     expect(parsed.searchParams.get("state")).toBeTruthy();
 
     const states = await h.t.run((ctx) => ctx.db.query("connectorOAuthStates").collect());

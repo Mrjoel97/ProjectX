@@ -1,5 +1,28 @@
 # Playbook: HubSpot connector (REVN-01)
 
+> Last verified: 2026-09-03 (working tree, uncommitted - **THE INSTALL URL NOW CARRIES HubSpot's
+> MANDATORY `oauth` SCOPE.** 339 `packages/revenue` tests green. Not verified against live HubSpot.)
+>
+> New export `HUBSPOT_AUTHORIZE_SCOPES = ["oauth", ...HUBSPOT_READ_SCOPES]`, and
+> `buildHubSpotAuthorizeUrl` sends that instead of `HUBSPOT_READ_SCOPES`. HubSpot's project-based
+> OAuth apps reject an install URL that omits the base `oauth` scope.
+>
+> **The two sets are deliberately separate and must stay separate.** `oauth` authorizes the grant
+> ceremony; it is not a CRM read. `HUBSPOT_READ_SCOPES` remains the evidenced read set that the
+> fetch allow-list and `PROVIDER_READ_PATHS` are reasoned about against, and a test now pins
+> `HUBSPOT_READ_SCOPES` NOT to contain `oauth` as well as pinning the concatenation order. Adding
+> `oauth` to the read set instead would have widened the thing the read allow-list is derived from,
+> for no read.
+>
+> Both call sites that assert the authorize URL's `scope` param moved to the new constant:
+> `packages/revenue/src/providers/hubspot.test.ts` and `packages/backend/convex/hubspot.test.ts`.
+>
+> **Untracked and unreviewed:** `apps/hubspot/` (an `hsproject.json` HubSpot project scaffold with
+> its own AGENTS.md/CLAUDE.md) exists in the working tree and is NOT in git. It is presumably the
+> project-based app this scope change exists to serve. Decide whether it is committed or removed
+> before this lane closes - a scope fix whose reason lives only in an untracked directory is a fact
+> the next session cannot recover.
+
 > Last verified: 2026-09-01 (28-21 terminal telemetry — the tenant-facing bounded read now reduces
 > its projection to provider, state and bounded counts and emits exactly one content-free event on
 > the shared Phase 27 plane; lifecycle events remain centralized at the credential mutation seam).

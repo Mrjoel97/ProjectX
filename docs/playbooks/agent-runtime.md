@@ -1,5 +1,9 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-09-01 (28-15 — `opsSignals.revenueSignals` reads the shared content-free
+> event plane and joins workflow cost/latency from canonical `spendEvents`/`agentSteps`; bounded,
+> tenant-isolated, retention and incomplete-window tests pass. No agent runtime write path changed.)
+>
 > Last verified: 2026-09-01 (28-19 — **EIGHT REVENUE PINS NOW HAVE NON-VACUOUS DIRECT COVERAGE.**
 > The state suite contains 11 cases: every locked candidate has at least one case and the umbrella,
 > call-list, and pipeline-review bodies have dedicated fixtures. The runner groups cases by exact
