@@ -1,5 +1,60 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-03 (33.1-06 — **THE RENDER STEP CAN NOW RUN ON A DEVELOPER'S MACHINE.
+> A SECOND `SandboxLike`, DEV-ONLY, BEHIND TWO GUARDS.**
+>
+> **The wall this removes.** `renderReel` hands the assembler to a Vercel Sandbox, whose
+> credentials come from OIDC — automatic on Vercel, unavailable anywhere else. So locally the reel
+> died at the LAST step with `Media env not configured: MEDIA_RENDER_SECRET`, having successfully
+> bought every picture and every voice take. Every other plane could be exercised locally; the one
+> criterion no offline test can reach could not. The alternative was a Vercel account whose
+> Active-CPU quota, per this file's own warning, PAUSES sandbox creation for 30 days when exhausted
+> on Hobby — an outage, not a bill — to verify one reel.
+>
+> **`SandboxLike` was already an interface with a swappable implementation**, five methods wide, so
+> this is a second implementation of an existing seam rather than a new seam. `apps/web/app/api/
+> media/render/localSandbox.ts` backs it with `node:child_process` and a temp dir.
+>
+> **IT IS NOT A SANDBOX, AND THE MODULE SAYS SO IN ITS OWN HEADER.** The real one is isolation:
+> `networkPolicy: "deny-all"`, `persistent: false`, a fresh VM, tenant bytes that never outlive it.
+> None of that holds here — it runs ffmpeg as the developer, on the developer's disk, on the
+> developer's network. It is acceptable ONLY because operator and tenant are the same person on a
+> local deployment.
+>
+> **TWO GUARDS, AND THE SECOND IS THE ONE THAT MATTERS.** `MEDIA_RENDER_LOCAL=1` is the opt-in —
+> but an env var is precisely the thing that gets copied between environments by accident, so an
+> opt-in alone is not a safety property. The route ALSO refuses when `VERCEL` is set, which the
+> platform sets on every deployment and nobody can forget. A stray `MEDIA_RENDER_LOCAL` in a
+> production project therefore downgrades nothing; it is ignored and logged.
+>
+> **What it still holds, because dropping these would make it a bad template to copy:**
+> - **Path containment.** Every path resolves under one temp root or throws — checked with
+>   `relative()`, not a `startsWith` on the joined string, which mis-answers for a sibling
+>   directory whose name merely begins with the root's. Core already guards filenames from a
+>   request body; this is the second enforcement, at the boundary where a traversal would reach a
+>   real disk.
+> - **NO SHELL.** `spawn` with an argv array. Tenant scene text reaches these scripts as file
+>   CONTENT and a card's words are drawn by ffmpeg, so a shell here would make a semicolon a
+>   command. A test hands `"; touch pwned.txt"` as an argument and asserts it comes back as one
+>   literal string with no file created.
+> - **Missing is `null`, never a throw** — the real sandbox's contract. A throw would surface as an
+>   unhandled route error with NO reason code on the plan row instead of the governed
+>   `mp4_missing` / `sidecar_missing`.
+> - **`stop()` deletes the root**, so tenant media does not accumulate in temp after the reel is
+>   stored.
+>
+> **CONFIGURATION on the local deployment** (none of it existed before, which is why this step had
+> never been reached): `MEDIA_RENDER_SECRET` — minted here, 32 random bytes, and it must MATCH on
+> both sides, Convex env and `apps/web/.env.local`; `MEDIA_RENDER_URL` =
+> `http://127.0.0.1:3111/api/media/render`; `MEDIA_RENDER_LOCAL=1` in the web env only.
+> **`next build` + a RESTART is required** — the route reads `process.env` at request time but the
+> web app bundles at build time, and a stale `next start` is the silent version of the clock-plane
+> defect. Verified after restart: the route answers **401** to an unauthenticated POST, so the
+> shared secret is genuinely enforced and not merely configured.
+>
+> web 686/686 including 8 new tests for the runner, typecheck and biome clean.)
+
+
 > Last verified: 2026-09-03 (33.1-06 — **"RUNS INTO THE NEXT LINE" IS NO LONGER A REFUSAL. THE
 > ASSEMBLER MOVES THE TAKE. The owner asked for this constraint removed twice; it was removed by
 > making the renderer stop needing it, not by deleting the guard in front of it.**
