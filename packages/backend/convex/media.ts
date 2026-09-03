@@ -2040,21 +2040,95 @@ export const submitBatch = internalAction({
     const tally = { submitted: 0, blocked: 0, failed: 0, skipped: 0 };
 
     for (const line of lines) {
-      // ── STOCK, ROUTED BY PROVIDER AND ROUTED FIRST ────────────────────────────────────────
+      // ── ONE TRY AROUND THE WHOLE LINE, AND IT IS NOT DEFENSIVE PADDING ────────────────────
       //
-      // Before `toSubmittable`, which deliberately refuses a stock line: reaching it would leave
-      // the row `queued` forever and the reel would never render. Kept as its own arm rather than
-      // threaded through the paid path below — six duplicated lines, against nullable narrowing
-      // running through twenty lines of code that spends real money. The paid path is untouched.
-      if (line.provider === "stock" && line.spec.kind === "stock") {
-        const stock = line.spec;
-        if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
+      // Observed live 2026-09-03: a deck with free stock scenes on a deployment with no
+      // `PEXELS_API_KEY` reached `fetchStock`, which calls `requireEnvMedia` and THROWS — after
+      // `claimLine` had already moved the row out of `queued`. The action died, no
+      // `recordSubmission` ran, and the reel sat at "Waiting" forever with no failure anywhere on
+      // screen or in the ledger. **A silent stall is strictly worse than a failure**, and it is
+      // worse than the throw was meant to be: `requireEnvMedia` throws to fail CLOSED before a cent
+      // moves, which it still does — the throw simply must not also strand the row it claimed.
+      //
+      // Caught HERE rather than converted inside each adapter, because every adapter has the same
+      // shape (claim, then a call that may throw) and a fix applied adapter-by-adapter is the
+      // repair that reaches two sites of three. `submitLine` and `generateOpenRouterVoice` still
+      // throw on a missing credential, and their tests still assert it.
+      try {
+        // ── STOCK, ROUTED BY PROVIDER AND ROUTED FIRST ──────────────────────────────────────
+        //
+        // Before `toSubmittable`, which deliberately refuses a stock line: reaching it would leave
+        // the row `queued` forever and the reel would never render. Kept as its own arm rather than
+        // threaded through the paid path below — six duplicated lines, against nullable narrowing
+        // running through twenty lines of code that spends real money. The paid path is untouched.
+        if (line.provider === "stock" && line.spec.kind === "stock") {
+          const stock = line.spec;
+          if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
+            tally.skipped += 1;
+            continue;
+          }
+          const stockShot = shots.find((s) => s.index === line.blockIndex);
+          const query = stockShot && SUBMIT_TEXT.stock?.(stockShot);
+          if (query === undefined) {
+            await ctx.runMutation(internal.media.recordSubmission, {
+              jobId: line.jobId,
+              result: { ok: false, blocked: false, code: "missing_shot" },
+            });
+            tally.failed += 1;
+            continue;
+          }
+          const found = await fetchStock(stock, query);
+          if (!found.ok) {
+            await ctx.runMutation(internal.media.recordSubmission, {
+              jobId: line.jobId,
+              result: { ok: false, blocked: found.blocked, code: found.code },
+            });
+            if (found.blocked) tally.blocked += 1;
+            else tally.failed += 1;
+            continue;
+          }
+          await ctx.runMutation(internal.media.recordSubmission, {
+            jobId: line.jobId,
+            result: { ok: true, providerRequestId: found.requestId },
+          });
+          if (!found.asset) {
+            // Structurally unreachable — `fetchStock` never returns ok without bytes — but the
+            // landing plane treats "succeeded with no asset" as an impossible state that refuses the
+            // render, so it is named here rather than left to become one.
+            await ctx.runMutation(internal.mediaComplete.landResult, {
+              jobId: line.jobId,
+              outcome: { ok: false, code: "asset_missing" },
+            });
+            tally.failed += 1;
+            continue;
+          }
+          await storeAndLand(ctx, line.jobId, found.asset.bytes, found.asset.mimeType);
+          tally.submitted += 1;
+          continue;
+        }
+
+        // A kind this plan does not wire is left AT `queued` and never claimed, so 20-14 and 20-17
+        // pick their rows up untouched. Checking BEFORE the claim is what keeps that true.
+        const spec = toSubmittable(line);
+        if (!spec) {
           tally.skipped += 1;
           continue;
         }
-        const stockShot = shots.find((s) => s.index === line.blockIndex);
-        const query = stockShot && SUBMIT_TEXT.stock?.(stockShot);
-        if (query === undefined) {
+
+        if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
+          tally.skipped += 1; // already submitted/succeeded/failed/blocked — a retry costs nothing
+          continue;
+        }
+
+        // The content plane, by kind: a video/image line submits the block's PROMPT, a `tts` line its
+        // NARRATION. The text goes to its provider and to nothing else — never an audit row, never a
+        // log, never onto the job row (only its `promptHash` lives there).
+        const shot = shots.find((s) => s.index === line.blockIndex);
+        const text =
+          spec.kind === "image" && imagePrompt
+            ? imagePrompt
+            : shot && SUBMIT_TEXT[spec.kind]?.(shot);
+        if (text === undefined) {
           await ctx.runMutation(internal.media.recordSubmission, {
             jobId: line.jobId,
             result: { ok: false, blocked: false, code: "missing_shot" },
@@ -2062,118 +2136,83 @@ export const submitBatch = internalAction({
           tally.failed += 1;
           continue;
         }
-        const found = await fetchStock(stock, query);
-        if (!found.ok) {
+
+        if (spec.kind === "tts") {
+          const voice = await generateOpenRouterVoice(text, spec);
+          if (!voice.ok) {
+            await ctx.runMutation(internal.media.recordSubmission, {
+              jobId: line.jobId,
+              result: { ok: false, blocked: voice.blocked, code: voice.code },
+            });
+            if (voice.blocked) tally.blocked += 1;
+            else tally.failed += 1;
+            continue;
+          }
           await ctx.runMutation(internal.media.recordSubmission, {
             jobId: line.jobId,
-            result: { ok: false, blocked: found.blocked, code: found.code },
+            result: { ok: true, providerRequestId: voice.requestId },
           });
-          if (found.blocked) tally.blocked += 1;
+          await storeAndLand(ctx, line.jobId, voice.bytes, "audio/wav");
+          tally.submitted += 1;
+          continue;
+        }
+        const res = await submitLine(spec, text);
+        if (!res.ok) {
+          await ctx.runMutation(internal.media.recordSubmission, {
+            jobId: line.jobId,
+            result: { ok: false, blocked: res.blocked, code: res.code },
+          });
+          if (res.blocked) tally.blocked += 1;
           else tally.failed += 1;
           continue;
         }
         await ctx.runMutation(internal.media.recordSubmission, {
           jobId: line.jobId,
-          result: { ok: true, providerRequestId: found.requestId },
+          result: { ok: true, providerRequestId: res.requestId },
         });
-        if (!found.asset) {
-          // Structurally unreachable — `fetchStock` never returns ok without bytes — but the
-          // landing plane treats "succeeded with no asset" as an impossible state that refuses the
-          // render, so it is named here rather than left to become one.
-          await ctx.runMutation(internal.mediaComplete.landResult, {
-            jobId: line.jobId,
-            outcome: { ok: false, code: "asset_missing" },
+        if (spec.kind === "image") {
+          if (!res.asset) {
+            await ctx.runMutation(internal.mediaComplete.landResult, {
+              jobId: line.jobId,
+              outcome: { ok: false, code: "asset_missing" },
+            });
+            tally.failed += 1;
+            continue;
+          }
+          await storeAndLand(ctx, line.jobId, res.asset.bytes, res.asset.mimeType, {
+            width: spec.width,
+            height: spec.height,
           });
-          tally.failed += 1;
-          continue;
-        }
-        await storeAndLand(ctx, line.jobId, found.asset.bytes, found.asset.mimeType);
-        tally.submitted += 1;
-        continue;
-      }
-
-      // A kind this plan does not wire is left AT `queued` and never claimed, so 20-14 and 20-17
-      // pick their rows up untouched. Checking BEFORE the claim is what keeps that true.
-      const spec = toSubmittable(line);
-      if (!spec) {
-        tally.skipped += 1;
-        continue;
-      }
-
-      if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
-        tally.skipped += 1; // already submitted/succeeded/failed/blocked — a retry costs nothing
-        continue;
-      }
-
-      // The content plane, by kind: a video/image line submits the block's PROMPT, a `tts` line its
-      // NARRATION. The text goes to its provider and to nothing else — never an audit row, never a
-      // log, never onto the job row (only its `promptHash` lives there).
-      const shot = shots.find((s) => s.index === line.blockIndex);
-      const text =
-        spec.kind === "image" && imagePrompt ? imagePrompt : shot && SUBMIT_TEXT[spec.kind]?.(shot);
-      if (text === undefined) {
-        await ctx.runMutation(internal.media.recordSubmission, {
-          jobId: line.jobId,
-          result: { ok: false, blocked: false, code: "missing_shot" },
-        });
-        tally.failed += 1;
-        continue;
-      }
-
-      if (spec.kind === "tts") {
-        const voice = await generateOpenRouterVoice(text, spec);
-        if (!voice.ok) {
-          await ctx.runMutation(internal.media.recordSubmission, {
+        } else {
+          await ctx.scheduler.runAfter(10_000, internal.media.pollOpenRouterVideoTask, {
             jobId: line.jobId,
-            result: { ok: false, blocked: voice.blocked, code: voice.code },
+            videoId: res.requestId,
+            attempt: 0,
           });
-          if (voice.blocked) tally.blocked += 1;
-          else tally.failed += 1;
-          continue;
         }
-        await ctx.runMutation(internal.media.recordSubmission, {
-          jobId: line.jobId,
-          result: { ok: true, providerRequestId: voice.requestId },
-        });
-        await storeAndLand(ctx, line.jobId, voice.bytes, "audio/wav");
         tally.submitted += 1;
-        continue;
-      }
-      const res = await submitLine(spec, text);
-      if (!res.ok) {
+      } catch (err) {
+        // The row is CLAIMED by the time anything in here can throw — both arms claim before they
+        // call an adapter — so it must be given a terminal state or it is stranded: `claimLine`
+        // will not re-claim it and no retry can reach it again.
+        //
+        // §4: the CODE only, never the provider's or the runtime's prose. A thrown message can
+        // carry a url, a request body, or a fragment of the narration it was submitting.
+        // `media_not_configured` is the one case worth naming precisely, because it is an
+        // OPERATOR fault with an operator fix and it reads very differently from a provider
+        // outage. `blocked: true` on it: retrying an unset deployment variable cannot help.
+        const missingEnv = err instanceof Error && /Media env not configured/.test(err.message);
         await ctx.runMutation(internal.media.recordSubmission, {
           jobId: line.jobId,
-          result: { ok: false, blocked: res.blocked, code: res.code },
+          result: {
+            ok: false,
+            blocked: missingEnv,
+            code: missingEnv ? "media_not_configured" : "submit_threw",
+          },
         });
-        if (res.blocked) tally.blocked += 1;
+        if (missingEnv) tally.blocked += 1;
         else tally.failed += 1;
-        continue;
       }
-      await ctx.runMutation(internal.media.recordSubmission, {
-        jobId: line.jobId,
-        result: { ok: true, providerRequestId: res.requestId },
-      });
-      if (spec.kind === "image") {
-        if (!res.asset) {
-          await ctx.runMutation(internal.mediaComplete.landResult, {
-            jobId: line.jobId,
-            outcome: { ok: false, code: "asset_missing" },
-          });
-          tally.failed += 1;
-          continue;
-        }
-        await storeAndLand(ctx, line.jobId, res.asset.bytes, res.asset.mimeType, {
-          width: spec.width,
-          height: spec.height,
-        });
-      } else {
-        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenRouterVideoTask, {
-          jobId: line.jobId,
-          videoId: res.requestId,
-          attempt: 0,
-        });
-      }
-      tally.submitted += 1;
     }
     return tally;
   },

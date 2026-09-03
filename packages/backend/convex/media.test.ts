@@ -7556,6 +7556,71 @@ describe("stock scenes: free, and still a LINE on the same rail", () => {
     expect(await rows(t)).toHaveLength(0);
   });
 
+  // ── 33.1-06: A MISSING CREDENTIAL FAILS THE LINE, IT DOES NOT STRAND IT ─────────────────────
+  //
+  // Observed live 2026-09-03. A deck with free stock scenes on a deployment with no
+  // `PEXELS_API_KEY` reached `fetchStock`, which calls `requireEnvMedia` and throws — AFTER
+  // `claimLine` had moved the row out of `queued`. The action died, no `recordSubmission` ran, and
+  // the reel sat at "Waiting" forever: no error on screen, none in the ledger, and no retry
+  // possible because `claimLine` will not re-claim a claimed row. A silent stall is strictly worse
+  // than a failure, and this is the test that says so.
+  //
+  // NOT VACUOUS: `MEDIA_PROVIDER_FIXTURE` is deliberately NOT set here. Every other stock test
+  // sets it, which short-circuits `fetchStock` before the env read — so the whole suite could pass
+  // with this defect live, which is exactly what happened.
+  test("a stock line with NO Pexels key ends BLOCKED with a code, never stuck at queued", async () => {
+    vi.stubEnv("PEXELS_API_KEY", "");
+    vi.stubEnv("OPENROUTER_API_KEY", "openrouter-test-key");
+    const t = harness();
+    const scene = sc({
+      index: 0,
+      startMs: 0,
+      durationMs: 30_000,
+      visual: "stock_video",
+      prompt: "city street dawn",
+      narration: "",
+    });
+    const res = await t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: A,
+        threadId: "thread_stock_noenv",
+        status: "proposed",
+        createdAt: Date.now(),
+        shots: [
+          {
+            index: 0,
+            visual: "stock_video",
+            seconds: 30,
+            windowStartMs: 0,
+            description: "d",
+            narration: "",
+            prompt: "city street dawn",
+          },
+        ],
+      });
+      return await reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: [scene],
+        targetDurationSeconds: 30,
+        withCaptions: false,
+      });
+    });
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    if (!res.ok) return;
+
+    // THE POINT: the action RESOLVES. Before the fix this rejected and the row stayed claimed.
+    const tally = await t.action(internal.media.submitBatch, { tenantId: A, batchId: res.batchId });
+    expect(tally).toMatchObject({ blocked: 1, submitted: 0 });
+
+    const [row] = await rows(t);
+    expect(row?.status).toBe("blocked");
+    expect(row?.failureReason).toBe("media_not_configured");
+    // §4: the CODE, and nothing the throw was carrying. A thrown message can hold a url, a request
+    // body, or a fragment of the narration the line was submitting.
+    expect(row?.failureReason).not.toMatch(/PEXELS|api\.pexels|Error|http/i);
+  });
+
   test("submitBatch ROUTES ON PROVIDER: a stock row is fetched, never POSTed as a generation", async () => {
     vi.stubEnv("MEDIA_PROVIDER_FIXTURE", "1");
     vi.stubEnv("PEXELS_API_KEY", "test-key");

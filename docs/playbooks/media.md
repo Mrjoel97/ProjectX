@@ -1,5 +1,47 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-03 (33.1-06 — **A MISSING CREDENTIAL USED TO STRAND THE REEL SILENTLY.
+> IT NOW FAILS THE LINE. Found by a live reel that hung, not by a test.**
+>
+> **The symptom the owner reported was "the reel is taking too long".** There was no error on the
+> canvas, none in the ledger, and none on the job row. The backend log had it:
+>
+> ```
+> [CONVEX A(media:submitBatch)] Uncaught Error: Media env not configured: PEXELS_API_KEY
+> ```
+>
+> **The mechanism, and it is general — it was never about Pexels.** Both arms of `submitBatch`
+> claim the row and THEN call an adapter: stock claims at `claimLine` and calls `fetchStock`; the
+> paid path claims and calls `submitLine` / `generateOpenRouterVoice`. Every one of those adapters
+> opens with `requireEnvMedia`, which THROWS. So an unset variable killed the whole action after
+> the row had already left `queued` — no `recordSubmission` ran, and **`claimLine` will not
+> re-claim a claimed row, so no retry could ever reach it again.** The reel waits forever. The same
+> hole was one unset variable away on the image, video, voice and caption planes.
+>
+> **The fix is ONE try around the line body, not a repair per adapter.** Every adapter has the
+> identical shape, and a fix applied adapter-by-adapter is the repair that reaches two sites of
+> three — this playbook has that scar already. `requireEnvMedia` still throws, and the tests that
+> assert it still pass: throwing is how a paid plane fails CLOSED before a cent moves. What changed
+> is that the throw no longer strands the row it claimed. A missing variable is recorded as
+> `media_not_configured` with `blocked: true` (retrying an unset deployment variable cannot help);
+> anything else is `submit_threw`.
+>
+> **§4 on a thrown message.** The CODE is recorded, never the error text. A throw can carry a url,
+> a request body, or a fragment of the narration the line was submitting, and `failureReason` is
+> rendered on the canvas.
+>
+> **WHY THE WHOLE SUITE PASSED OVER THIS.** Every existing stock test sets `MEDIA_PROVIDER_FIXTURE`,
+> which short-circuits `fetchStock` **before the env read**. The one line that would have caught it
+> was unreachable in every test that touched it. The new test deliberately does NOT set the fixture
+> flag, and is mutation-proven: restoring the rethrow kills it and nothing else.
+>
+> **Operationally: `PEXELS_API_KEY` is not set on the local deployment**, so any deck containing a
+> `stock_video` or `stock_image` scene blocks until it is. It is a free key. The media planes now
+> need: `OPENROUTER_API_KEY` (images, video, voice, captions) and `PEXELS_API_KEY` (stock).
+>
+> backend media 286/286, typecheck and biome clean.)
+
+
 > Last verified: 2026-09-03 (33.1-06 — **CAPTIONS MOVED TOO. EVERY PAID MEDIA PLANE IS NOW ON ONE
 > CREDENTIAL, AND THE ENTRY BELOW THIS ONE IS WRONG ABOUT THAT. ADR-029 supersedes ADR-028's STT
 > half.**
