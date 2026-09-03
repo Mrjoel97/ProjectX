@@ -1,5 +1,80 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-03 (33.1-06 — **THE VOICE PLANE IS ON OPENROUTER TOO, AND IT IS A CHAT
+> MODEL THAT IS CHECKED RATHER THAN TRUSTED. ADR-028.**
+>
+> **Why this happened at all, because it was not a deprecation.** A3 landed on OpenRouter, the reel
+> then reached the voice step, and three attempts failed identically with
+> `credit_balance_exhausted` on `openai/tts-1` — an unfunded OpenAI account, on the one plane
+> ADR-027 deliberately left behind. The owner's instruction was to move it.
+>
+> **THERE IS NO LIKE-FOR-LIKE SWAP, and a reader who assumes one will waste an afternoon.**
+> `POST openrouter.ai/api/v1/audio/speech` is a REAL route — it answers 400 with a model-validation
+> error, not 404 — and it accepts **no model at all**. `openai/tts-1`, `openai/tts-1-hd`,
+> `openai/gpt-4o-mini-tts` and `openai/gpt-audio` were each probed on 2026-09-03 and each came back
+> `"Model … does not exist"`, the last of them **despite being in OpenRouter's own `/models`
+> catalogue**. The voice plane therefore rides `/chat/completions` with an audio modality.
+>
+> **Three wire facts, all measured:**
+> - **`stream: true` is MANDATORY** — without it the API answers `400 "Audio output requires
+>   stream: true"`. Audio arrives as base64 across SSE `data:` frames and is reassembled in
+>   `generateOpenRouterVoice`. That reader is not defensive coding; drop it and there is no voice.
+> - **The samples are headerless `pcm16`** (`wav` is not offered). `pcm16ToWav` in
+>   `packages/core/src/captions.ts` adds the 44-byte RIFF header at the arrival edge, using the
+>   byte layout `concatWavTakes` already writes. **Two RIFF writers in one file that disagree by a
+>   field produce silence nobody finds** — change one, change both.
+> - **24 kHz mono**, exactly `MEDIA_DEFAULT_VOICE.sampleRateHertz`, so nothing resamples. `nova`
+>   survives the move, probed 3/3.
+>
+> **THE DEFECT THIS PREVENTS, AND IT WAS OBSERVED, NOT FEARED.** Under a SHORTER system line,
+> `openai/gpt-audio-mini` was given the narration line "Nothing sends until you approve it." and
+> **answered it** — *"Understood. Just let me know what you are trying to send…"* — twice out of
+> two, in a synthetic voice, in a take that would have been mixed into the owner's reel as the
+> owner's own script and then transcribed back out by captions as if they had written it. That is
+> the **provenance** failure class, arriving through audio. The stronger system line took the same
+> input verbatim 3/3.
+>
+> So the prompt is load-bearing AND insufficient, and the code does not rely on it: the stream
+> returns what was actually SPOKEN, `generateOpenRouterVoice` compares it word-normalised against
+> what was SUBMITTED, and a mismatch fails the take as `tts_not_verbatim` with `blocked: true` —
+> no retry, no stored bytes. **A guarantee we cannot get from the model is taken from outside it.**
+> The comparison drops case and punctuation on purpose: a speech engine legitimately says "ninety
+> percent" for `90%`, and refusing that would refuse every good take.
+>
+> **CAPTIONS DID NOT MOVE AND CANNOT TODAY — the honest cost of this decision.** `whisper-1` is
+> asked for `verbose_json` + `timestamp_granularities[]=word` and the pipeline hard-fails
+> `transcript_words_missing` without per-word times. OpenRouter has no Whisper and nothing that
+> returns word timestamps (`gpt-audio` takes audio IN, it cannot emit timings). **With the OpenAI
+> account unfunded a reel now renders WITH ITS VOICE and fails at the caption burn**, which
+> degrades rather than blocks — a failed burn leaves the uncaptioned reel published.
+>
+> **Price, and it moved DOWN.** `gpt-audio-mini` bills per audio output TOKEN, but a reservation
+> exists before any token does, so the row is still priced per submitted character. Two probes:
+> 47 chars → $0.0002496 ($0.0053/1k), 104 chars → $0.0004344 ($0.0042/1k). The table carries
+> **$0.006/1k**, above both with ~13% headroom — the direction a reservation must err, since an
+> over-estimate refunds at landing and an under-estimate overspends the tenant's cap. 2.5x under
+> `tts-1`'s $0.015. The §4.1 reference reel is now **$1.7404** (was $1.762 after 33.1-04, $2.482 on
+> sora-2). **Do not re-attribute that whole drop to grok** — two rates moved.
+>
+> **`speed` is gone and that is a STRENGTHENING.** The old arm sent `speed: 1` to hold D8's
+> no-time-stretch rule. This route has no such field, so the rule is enforced by ABSENCE and the
+> test asserts no key matches `/tempo|setpts|stretch|pace|speed/`.
+>
+> **THREE TESTS WERE FIXED BY MAKING THEM READ THE PRICE TABLE, and that is the durable lesson.**
+> `media.test.ts`'s reference-job arithmetic called itself "derived from the price table" while
+> typing `0.015` as a literal; `media.test.ts` (cost) asserted `$0.018` and `$0.000015` for rules
+> that are about ROUNDING and about the CENTS FLOOR, not about any price. A rate move turned three
+> statements-of-principle into arithmetic failures that said nothing about their principle. They
+> now read `MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model]` and assert the PROPERTY — 1,200 chars
+> bills 1.2 rates and never 2. **A rate a test reads cannot rot; a rate it types always can.**
+> A duplicate `describe("OpenAI audio request bodies")` was DELETED rather than updated: it
+> asserted the submit body a second time, more weakly, and two copies of one assertion is how a
+> repair reaches one site and not the other.
+>
+> Suites: backend media 285/285, cost 94/94, core 1244/1244, contracts 113/113, typecheck and
+> biome clean on every changed file.)
+
+
 > Last verified: 2026-09-03 (33.1-06 — **A3 IS OBSERVED IN A BROWSER AND IN THE LEDGER. A6 IS NOT,
 > AND ONE LIVE DEFECT WAS FOUND AND FIXED ON THE WAY TO IT: A GENERATED CLIP MAY NOW DONATE
 > SECONDS TO AN OVERLONG NARRATION LINE.**

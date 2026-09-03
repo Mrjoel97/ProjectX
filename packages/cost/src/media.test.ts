@@ -53,6 +53,12 @@ const voice = (characters: number): MediaSpec => ({
   model: MEDIA_DEFAULT_VOICE.model,
   characters,
 });
+/** The voice rate, READ from the table rather than typed. Several tests below used to assert
+ *  `openai/tts-1`'s $0.015/1k as a literal, so 33.1-06's move to `openai/gpt-audio-mini` at
+ *  $0.006/1k turned rules about ROUNDING and about the CENTS FLOOR into arithmetic failures that
+ *  said nothing about either. A rate a test reads cannot rot; a rate it types always can. */
+const ttsRate = MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model] as number;
+
 const usd = (spec: MediaSpec) => {
   const r = estimateMediaUsd(spec);
   if (!r.ok) throw new Error(`expected ok, got ${r.error.code}`);
@@ -116,11 +122,14 @@ describe("estimateMediaUsd — the billing units differ, and the tests sit side 
     // …and it is strictly above the measured floor. This is what "rounded up" MEANS, asserted.
     expect(usd({ kind: "image", model, width, height })).toBeGreaterThan(0.004875);
   });
-  it("TTS does NOT round its thousands: 1,200 chars → $0.018 exactly", () => {
-    expect(usd(voice(1200))).toBeCloseTo(0.018, 10);
+  // 33.1-06 restated these two AS THE PROPERTY they were always about — see `ttsRate` above.
+  it("TTS does NOT round its thousands: 1,200 chars bills 1.2 rates, never 2", () => {
+    expect(usd(voice(1200))).toBeCloseTo(ttsRate * 1.2, 10);
+    expect(usd(voice(1200))).toBeLessThan(ttsRate * 2); // the rounding this forbids, named
   });
   it("…and 1 char is a fraction of a cent, not a whole thousand", () => {
-    expect(usd(voice(1))).toBeCloseTo(0.000015, 12);
+    expect(usd(voice(1))).toBeCloseTo(ttsRate / 1000, 12);
+    expect(usd(voice(1))).toBeLessThan(0.00001); // still a fraction of a cent at the new rate
   });
   it("STT bills whole INPUT audio minutes: 1 min → $0.006, 30 s still buys one", () => {
     const stt = (audioMinutes: number): MediaSpec => ({
@@ -148,19 +157,23 @@ describe("estimateMediaUsd — the billing units differ, and the tests sit side 
 // The §4.1 job, as data. This is the reel the phase was budgeted around.
 const JOB_4_1: MediaSpec[] = [
   ...Array.from({ length: 6 }, () => clip()), // 6 x 720p x 4 s = $1.680 (was $2.400 on sora-2)
-  voice(1200), //                                voice            = $0.018
-  voice(1200), //                                retry allowance  = $0.018
+  voice(1200), //                                voice            = $0.0072 (was $0.018)
+  voice(1200), //                                retry allowance  = $0.0072
   { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 }, // captions = $0.006
   { kind: "render" }, //     render, incl. the one auto-retry sandbox (33-04)  = $0.040
 ];
 
 describe("estimateBatchUsd + the job cap", () => {
-  it("the six-block job PRICES at $1.762 — grok made the §4.1 reel 29% cheaper", () => {
-    // Was $2.482 at sora-2's $0.10/s. The successor is cheaper than the model it replaces, which
-    // is the test ADR-026 sets for a migration and the reason MEDIA_JOB_CAP_USD does not move.
+  it("the six-block job PRICES at $1.7404 — 30% under sora-2, on TWO rate moves", () => {
+    // Was $2.482 when the clips were sora-2's $0.10/s and the voice was tts-1's $0.015/1k. Both
+    // moved to OpenRouter in this phase and both moved DOWN: $1.762 after the clips (33.1-04),
+    // $1.7404 after the voice (33.1-06). Attributing the whole 30% to grok would now be wrong by
+    // 2.2 cents, which is exactly the kind of stale sentence the playbook rule exists to stop.
+    // A successor cheaper than what it replaces is the test ADR-026 sets for a migration, and the
+    // reason MEDIA_JOB_CAP_USD does not move.
     const total = estimateBatchUsd(JOB_4_1);
     expect(total.ok).toBe(true);
-    if (total.ok) expect(total.value).toBeCloseTo(1.762, 10);
+    if (total.ok) expect(total.value).toBeCloseTo(1.7404, 10);
   });
   it("...and the SAME six-block job is now REFUSED — 24 generated seconds is over the ceiling", () => {
     // The §4.1 reel was six four-second clips, which is 24 s of generated video: double the cap.
@@ -249,16 +262,17 @@ describe("estimateBatchUsd + the job cap", () => {
 // D12(a) — THE reason this module exists. The cents floor is a fail-closed bias that is correct
 // ONCE and catastrophic per line item.
 describe("chooseMediaBatch — the cents floor is applied ONCE, on the total", () => {
-  it("6 lines of $0.003 reserve 2 cents ($0.018 → ceil 1.8), NOT 6", () => {
-    // NB: the plan wrote "1 cent, not 6". $0.012 is 1.2 cents, so the fail-closed ceiling is 2.
-    // The number that matters is the CONTRAST: per-line flooring reserves 6 — 3x this, 5x the
-    // true cost. Corrected here rather than asserted wrong.
+  it("6 lines of $0.0012 reserve 1 cent ($0.0072 → ceil 0.72), NOT 6", () => {
+    // The plan wrote "1 cent, not 6"; at tts-1's rate the honest answer was 2 and this test said
+    // so. 33.1-06's cheaper voice rate brings it back to 1 — the plan's number, arrived at by
+    // arithmetic rather than by restoring it. The number that matters is unchanged and is now
+    // starker: per-line flooring reserves 6, which is 6x this and 8x the true cost.
     const six = Array.from({ length: 6 }, () => voice(200));
     const r = chooseMediaBatch(six, MEDIA_JOB_CAP_USD);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.value.estUsd).toBeCloseTo(0.018, 10);
-    expect(r.value.estCents).toBe(2);
+    expect(r.value.estUsd).toBeCloseTo(6 * 200 * (ttsRate / 1000), 10);
+    expect(r.value.estCents).toBe(1);
     // what per-line flooring would have reserved, spelled out so the regression is legible:
     expect(six.reduce((c, s) => c + Math.max(1, Math.ceil(usd(s) * 100)), 0)).toBe(6);
   });
@@ -271,7 +285,7 @@ describe("chooseMediaBatch — the cents floor is applied ONCE, on the total", (
   it("estUsd stays FRACTIONAL — the row stores USD, only the reservation is cents", () => {
     const r = chooseMediaBatch([voice(1200)], MEDIA_JOB_CAP_USD);
     if (!r.ok) throw new Error("expected ok");
-    expect(r.value.estUsd).toBeCloseTo(0.018, 10);
+    expect(r.value.estUsd).toBeCloseTo(1200 * (ttsRate / 1000), 10);
     expect(Number.isInteger(r.value.estUsd)).toBe(false);
   });
 });

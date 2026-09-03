@@ -88,6 +88,13 @@ export const MEDIA_IMAGE_PRICING: Record<string, number> = {
  *  OpenAI's legacy TTS tier is billed on submitted characters and is therefore pre-computable. */
 export const MEDIA_TTS_PRICING: Record<string, number> = {
   "openai/tts-1": 0.015,
+  // 33.1. MEASURED, not read off a page, because this model is NOT billed per character — it is
+  // billed per audio output TOKEN, and the reservation happens before any tokens exist. Two probes
+  // on 2026-09-03 (`33.1-PRICE-EVIDENCE.md`): 47 chars -> $0.0002496 ($0.0053/1k), 104 chars ->
+  // $0.0004344 ($0.0042/1k). 0.006 sits above BOTH with ~13% headroom, which is the direction a
+  // reservation must err: a `reconciled: "repriced"` landing settles the real number afterwards,
+  // and an over-estimate refunds while an under-estimate overspends the tenant's cap.
+  "openai/gpt-audio-mini": 0.006,
 };
 
 /** USD per INPUT audio MINUTE — estimable pre-flight because WE generated the audio and know its
@@ -235,7 +242,14 @@ export const MEDIA_DEFAULT_IMAGE = {
 /** Voice and sample size are PINNED here, never left to a provider default: the vendor default is
  *  24000 Hz keeps render inputs deterministic. No pace/stretch parameter is submitted, ever. */
 export const MEDIA_DEFAULT_VOICE = {
-  model: "openai/tts-1",
+  // 33.1: OpenRouter serves NO model on `/audio/speech` — probed 2026-09-03, every candidate
+  // including `openai/gpt-audio` came back "does not exist" — so the voice plane moved to the
+  // chat-audio route instead of a like-for-like endpoint swap. Fully QUALIFIED, like
+  // `MEDIA_DEFAULT_IMAGE.model`: OpenRouter routes on the vendor prefix and the tts arm of
+  // `buildSubmitBody` no longer strips it.
+  model: "openai/gpt-audio-mini",
+  // `nova` survives the move — probed 3/3 on the chat-audio route. Pinned, never a provider
+  // default, and 24000 Hz is exactly what that route's `pcm16` stream emits, so nothing resamples.
   voice: "nova",
   sampleRateHertz: 24000,
 } as const;

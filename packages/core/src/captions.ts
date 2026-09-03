@@ -241,6 +241,43 @@ function parseWav(bytes: Uint8Array): WavParts | null {
  * The returned `offsetsS` is the key the rebase is partitioned on — it is how a word at t=4.5s in
  * the concatenated stream is known to belong to take 1 rather than take 0.
  */
+/**
+ * Wrap HEADERLESS little-endian PCM16 in a 44-byte RIFF header.
+ *
+ * 33.1 needs exactly one bridge and no more. OpenRouter's chat-audio stream returns `pcm16` —
+ * raw samples, no container — while everything downstream reads WAV: `concatWavTakes` below,
+ * `readWav`, and the assembler's own ffmpeg inputs. Rather than teach three readers a second
+ * dialect, the bytes are given the header they are missing at the edge where they arrive.
+ *
+ * The byte layout is deliberately the SAME one `concatWavTakes` writes below, field for field.
+ * Two RIFF writers in one file that disagree by a field is a defect nobody finds until a render
+ * produces silence, so if you change one, change both — `readWav` parses what both emit.
+ */
+export function pcm16ToWav(pcm: Uint8Array, sampleRate: number, channels = 1): Uint8Array {
+  const bits = 16;
+  const bytesPerSecond = sampleRate * channels * (bits / 8);
+  const out = new Uint8Array(44 + pcm.byteLength);
+  const view = new DataView(out.buffer);
+  const write = (at: number, s: string) => {
+    for (let i = 0; i < s.length; i++) out[at + i] = s.charCodeAt(i);
+  };
+  write(0, "RIFF");
+  view.setUint32(4, 36 + pcm.byteLength, true);
+  write(8, "WAVE");
+  write(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, bytesPerSecond, true);
+  view.setUint16(32, channels * (bits / 8), true);
+  view.setUint16(34, bits, true);
+  write(36, "data");
+  view.setUint32(40, pcm.byteLength, true);
+  out.set(pcm, 44);
+  return out;
+}
+
 export function concatWavTakes(
   takes: readonly Uint8Array[],
 ): Result<{ wav: Uint8Array; offsetsS: number[]; durationS: number }, WavError> {

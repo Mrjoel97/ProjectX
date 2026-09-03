@@ -18,6 +18,7 @@ import {
   MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_JOB_CAP_USD,
   MEDIA_SANDBOX_USD_PER_RENDER,
+  MEDIA_TTS_PRICING,
   MEDIA_VIDEO_PRICING,
   MEDIA_VIDEO_SECONDS,
   type MediaSpec,
@@ -148,12 +149,16 @@ const llmLeft = (t: T, tenantId = A) =>
  * section it no longer matches is the same defect as a sentence restating a stale price.
  */
 const REF_JOB = () => deck(3);
-// 3 x $0.28 clips + 3 voice lines at 2 x 56 chars ($0.00504) + one rounded-up STT minute
+// 3 x $0.28 clips + 3 voice lines at 2 x 56 chars ($0.002016) + one rounded-up STT minute
 // ($0.006) + the flat render, DOUBLED at its source to cover the one automatic retry sandbox
 // (33-04: $0.02 -> $0.04 — a deliberate money change, noted in the playbook).
 // 33.1-04: the clip rate moved from sora-2's $0.10/s to grok's $0.07/s at the same time.
-const REF_JOB_USD = 0.89104;
-const REF_JOB_CENTS = 90;
+// 33.1-06: the voice lines fell from $0.00504 to $0.002016 when the tts plane moved to
+// `openai/gpt-audio-mini` on OpenRouter — $0.015 -> $0.006 per 1000 chars, so 3 x 112 chars is
+// 0.336 of a thousand at the new rate. The $0.003024 delta is the whole change to this total, and
+// 88.8016 cents CEILINGS to 89 rather than 90.
+const REF_JOB_USD = 0.888016;
+const REF_JOB_CENTS = 89;
 const REF_JOB_LINES = 7; // 3 video + 3 tts + 1 stt — the render line gets NO row
 
 // ── the two kill switches ──────────────────────────────────────────────────────────
@@ -273,7 +278,14 @@ describe("the reference job: the WHOLE reel is ONE reserved unit", () => {
       3 *
       MEDIA_DEFAULT_VIDEO.seconds *
       (MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.[MEDIA_DEFAULT_VIDEO.resolution] ?? 0);
-    const voice = 3 * ((2 * maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds)) / 1000) * 0.015; // 2x — rewrite allowance
+    // 2x — rewrite allowance. 33.1-06: the rate is READ from the table now, like the clip line
+    // above. It was the literal `0.015`, which made a test whose own name says "derived from the
+    // price table" go red on a price move it should have absorbed — and would have gone SILENTLY
+    // stale had the constant moved the other way.
+    const voice =
+      3 *
+      ((2 * maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds)) / 1000) *
+      (MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model] ?? 0);
     const stt = 1 * 0.006; // the sub-minute input is billed as one minute
     expect(clips + voice + stt + MEDIA_SANDBOX_USD_PER_RENDER).toBeCloseTo(REF_JOB_USD, 6);
     expect(REF_JOB_USD).toBeLessThan(MEDIA_JOB_CAP_USD); // 75% headroom — the test is not vacuous
@@ -406,7 +418,12 @@ describe("the reference job: the WHOLE reel is ONE reserved unit", () => {
     const raw = chooseMediaBatch(onceOver, MEDIA_JOB_CAP_USD);
     expect(raw.ok).toBe(true);
     if (!raw.ok) return;
-    const oneVoicePass = (3 * maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) * 0.015) / 1000;
+    // 33.1-06: reads the table, for the reason spelled out on the reference-job arithmetic above.
+    const oneVoicePass =
+      (3 *
+        maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) *
+        (MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model] ?? 0)) /
+      1000;
     expect(res.estUsd - raw.value.estUsd).toBeCloseTo(oneVoicePass, 6);
   });
 });
@@ -1207,8 +1224,9 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
     // does not know a route prefix. The image arm posts to OpenRouter, which DOES — stripping here
     // would send `gpt-image-2` to a gateway that has never heard of that id.
     expect(buildSubmitBody(IMAGE, "a poster").model).toBe("openai/gpt-image-2");
-    // …and the tts arm still strips, so this is a statement about WHICH arm, not about neither.
-    expect(buildSubmitBody(TTS, "n").model).toBe("tts-1");
+    // 33.1: the tts arm no longer strips either, because the voice plane moved to OpenRouter too.
+    // Both arms now post to a gateway that routes ON the vendor prefix, so BOTH keep it.
+    expect(buildSubmitBody(TTS, "n").model).toBe("openai/gpt-audio-mini");
   });
 
   test("the switch ends in a `never` binding, and no `default` returns a body", () => {
@@ -1218,42 +1236,78 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
 
   // ── 20-14: the voiceover arm ──────────────────────────────────────────────────
 
-  test("the OpenAI TTS body pins model, WAV, voice, and neutral speed", () => {
-    // Exact equality, not a property spot-check: this single assertion is what makes the two
-    // mutation checks below fire, and it is the only thing standing between D8 and a `speed` knob.
+  test("the TTS body is the OpenRouter CHAT-AUDIO shape, streamed, with no speed knob", () => {
+    // Exact equality, not a property spot-check: this single assertion is what makes the mutation
+    // checks below fire, and it is the only thing standing between D8 and a `speed` knob.
+    //
+    // 33.1 replaced the `/audio/speech` shape wholesale. OpenRouter serves NO model on that
+    // endpoint (every candidate probed 2026-09-03 answered "does not exist"), so the voice plane
+    // rides `/chat/completions` with an audio modality instead.
     expect(buildSubmitBody(TTS, "Six weeks, start to finish.")).toEqual({
-      model: "tts-1",
-      input: "Six weeks, start to finish.",
-      voice: MEDIA_DEFAULT_VOICE.voice,
-      response_format: "wav",
-      speed: 1,
+      model: "openai/gpt-audio-mini",
+      stream: true,
+      modalities: ["text", "audio"],
+      audio: { voice: MEDIA_DEFAULT_VOICE.voice, format: "pcm16" },
+      messages: [
+        { role: "system", content: expect.stringContaining("VERBATIM") },
+        { role: "user", content: "Six weeks, start to finish." },
+      ],
     });
   });
 
+  test("`stream: true` is sent — without it OpenRouter refuses audio output outright", () => {
+    // Not a style choice and not defensive: the API answers 400 "Audio output requires stream:
+    // true". Dropping this field does not degrade the take, it removes the voice plane entirely.
+    expect(buildSubmitBody(TTS, "p").stream).toBe(true);
+  });
+
   test("NO time-stretch knob is submitted, under any name — delta pitfall 15's tripwire", () => {
-    // `fal-ai/inworld-tts` has no `speed`/`rate` field at all, so D8's no-time-stretch rule is
-    // enforced by the PROVIDER rather than by our discipline. This asserts we never start sending
-    // one anyway — e.g. after a swap to `fal-ai/kokoro/*`, which exposes `speed: 0.1-5.0`.
+    // The old arm sent `speed: 1` to hold this line. The chat-audio route has no such field, so
+    // the rule is now enforced by ABSENCE — which is the stronger form, and the reason this test
+    // asserts no key matches rather than asserting a neutral value.
     const body = buildSubmitBody(TTS, "p");
-    expect(body.speed).toBe(1);
-    expect(Object.keys(body).filter((k) => /tempo|setpts|stretch|pace/i.test(k))).toEqual([]);
+    expect(body.speed).toBeUndefined();
+    expect(Object.keys(body).filter((k) => /tempo|setpts|stretch|pace|speed/i.test(k))).toEqual([]);
   });
 
   test("the narration is submitted VERBATIM — never truncated, never re-wrapped", () => {
     // A silent truncation ships a voiceover missing its last words, with no error anywhere and a
     // clip that still renders. The submitted text is the text that was priced.
+    const userMsg = (body: Record<string, unknown>) =>
+      (body.messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")
+        ?.content;
     const long = `${"y".repeat(139)}.`;
-    expect(buildSubmitBody(TTS, long).input).toBe(long);
+    expect(userMsg(buildSubmitBody(TTS, long))).toBe(long);
     const wrapped = "one.\n  two.\ttrailing space ";
-    expect(buildSubmitBody(TTS, wrapped).input).toBe(wrapped);
+    expect(userMsg(buildSubmitBody(TTS, wrapped))).toBe(wrapped);
+  });
+
+  test("the SCRIPT rides as the user turn and the engine instruction as the system turn", () => {
+    // The ordering is load-bearing, and it is the whole reason this model reads instead of
+    // answering. Measured 2026-09-03: under a WEAKER system line, `openai/gpt-audio-mini` was
+    // given "Nothing sends until you approve it." and REPLIED to it — twice out of two — in a
+    // voice that would have been rendered into the reel as the owner's own script. The line below
+    // took the same input verbatim 3/3. A refactor that folds the script into the system turn, or
+    // drops the system turn, reintroduces exactly that.
+    const msgs = buildSubmitBody(TTS, "Nothing sends until you approve it.").messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    expect(msgs.map((m) => m.role)).toEqual(["system", "user"]);
+    expect(msgs[1]?.content).toBe("Nothing sends until you approve it.");
+    expect(msgs[0]?.content).toMatch(/text-to-speech engine/i);
+    expect(msgs[0]?.content).toMatch(/answer nothing/i);
+    // Each literal chunk stays under the §5 scan ceiling, the `searchVault` convention.
+    for (const chunk of (msgs[0]?.content ?? "").split(". "))
+      expect(chunk.length).toBeLessThan(200);
   });
 
   test("the pinned fields track the SPEC, not a constant — a re-voiced row travels", () => {
-    // Not vacuous: were `voice`/`sample_rate_hertz` read from MEDIA_DEFAULT_VOICE at the arm, the
-    // assertions above would still pass and a row reserved under one voice could submit under
-    // another after a constant bump. The row is the record of what was priced.
+    // Not vacuous: were `voice` read from MEDIA_DEFAULT_VOICE at the arm, the assertions above
+    // would still pass and a row reserved under one voice could submit under another after a
+    // constant bump. The row is the record of what was priced.
     const body = buildSubmitBody({ ...TTS, voice: "alloy", sampleRateHertz: 48000 }, "p");
-    expect(body.voice).toBe("alloy");
+    expect((body.audio as { voice: string }).voice).toBe("alloy");
   });
 });
 
@@ -1552,17 +1606,10 @@ describe("OpenRouter image submit contract", () => {
   });
 });
 
-describe("OpenAI audio request bodies", () => {
-  test("TTS pins neutral speed and WAV output", () => {
-    expect(buildSubmitBody(TTS, "Narration")).toEqual({
-      model: "tts-1",
-      input: "Narration",
-      voice: MEDIA_DEFAULT_VOICE.voice,
-      response_format: "wav",
-      speed: 1,
-    });
-  });
-});
+// 33.1 removed `describe("OpenAI audio request bodies")` from here. It asserted the tts submit
+// body a SECOND time, more weakly than the voiceover-arm block above, and under a name that is now
+// simply wrong — the voice plane is not on OpenAI any more. Two copies of one assertion is how a
+// repair reaches one site and not the other; the surviving copy is the richer one.
 
 describe("WAN task landing", () => {
   test("a successful image task is copied into owned storage and lands the row", async () => {

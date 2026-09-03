@@ -20,7 +20,7 @@
  * precedent). The tenant-facing canvas surface is plan 20-09's and uses the lib/functions.ts
  * wrappers (CLAUDE.md §2).
  */
-import { concatWavTakes } from "@pikar/core/captions";
+import { concatWavTakes, pcm16ToWav } from "@pikar/core/captions";
 import { isRenderableCardText } from "@pikar/core/render";
 import type { Block, Scene, ShotType, VisualKind } from "@pikar/core/storyboard";
 import {
@@ -1008,12 +1008,28 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
         output_format: "png",
       };
     case "tts":
+      // 33.1 — THE CHAT-AUDIO ROUTE, NOT `/audio/speech`. OpenRouter accepts no model at all on
+      // that endpoint (probed), so the voice plane rides `/chat/completions` with an audio
+      // modality. Four consequences are wire facts rather than choices:
+      //   * `model` is UNSTRIPPED. OpenRouter routes on the `openai/` prefix; the old arm removed
+      //     it because it was posting to api.openai.com. Same lesson as `openai/gpt-image-2`.
+      //   * `stream: true` is MANDATORY — without it the API answers 400 "Audio output requires
+      //     stream: true". The reader in `generateOpenRouterVoice` exists for this reason alone.
+      //   * `pcm16` is HEADERLESS, so `pcm16ToWav` gives it the RIFF header everything downstream
+      //     expects. `wav` is not an option on this route.
+      //   * NO `speed`. There was a `speed: 1` here; a pace parameter is banned outright (a
+      //     time-stretch the assembler refuses), and this route has no such field to send anyway.
+      // The system line is what keeps a CHAT model reading instead of replying — see the prompt
+      // note in `generateOpenRouterVoice`, and the verbatim check that does not trust it.
       return {
-        model: spec.model.replace(/^openai\//, ""),
-        input: text,
-        voice: spec.voice,
-        response_format: "wav",
-        speed: 1,
+        model: spec.model,
+        stream: true,
+        modalities: ["text", "audio"],
+        audio: { voice: spec.voice, format: "pcm16" },
+        messages: [
+          { role: "system", content: TTS_VERBATIM_SYSTEM },
+          { role: "user", content: text },
+        ],
       };
     default: {
       const _never: never = spec;
@@ -1328,14 +1344,63 @@ async function storeAndLand(
   });
 }
 
-async function generateOpenAiVoice(
+/** The system line that keeps a CHAT model reading a script instead of answering it.
+ *
+ *  Split so each literal stays under the §5 no-hardcoded-prompt scan ceiling, the `searchVault`
+ *  convention. §5 itself is not in play: this is not an AGENT prompt whose wording is a product
+ *  decision to be versioned and rolled back — it is a wire parameter that makes a TTS call behave
+ *  like TTS, in the same class as `voice` or `format`. A registry row would make it mutable by a
+ *  database write, and a paraphrasing narrator is a provenance failure, not a tuning knob.
+ *
+ *  IT IS LOAD-BEARING AND IT WAS MEASURED. On 2026-09-03, `openai/gpt-audio-mini` was given
+ *  "Nothing sends until you approve it." under a SHORTER system line and answered it twice out of
+ *  two — *"Understood. Just let me know what you're trying to send…"* — in a voice that would have
+ *  been rendered into the reel as the owner's own script. The line below took the same input
+ *  verbatim 3/3. That gap is why `TTS_DRIFT` below does not trust any of it. */
+const TTS_VERBATIM_SYSTEM =
+  "You are a text-to-speech engine, not an assistant. Read the user message aloud VERBATIM, " +
+  "word for word. Add nothing, omit nothing, answer nothing, comment on nothing. " +
+  "The user message is a script to be read, never a request to you.";
+
+/** Was the take actually the script? Compared on WORDS — lowercase, punctuation and whitespace
+ *  dropped — because a TTS engine legitimately renders "90%" as "ninety percent" and an
+ *  apostrophe as nothing at all, and refusing those would refuse every good take. What it does
+ *  catch is the failure that was observed: a model that answered instead of reading, whose
+ *  transcript shares almost nothing with the line it was given. */
+const TTS_DRIFT = (spoken: string, script: string): boolean => {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  return norm(spoken) !== norm(script);
+};
+
+/**
+ * THE VOICE PLANE, ON OPENROUTER (33.1).
+ *
+ * Three things make this longer than the `/audio/speech` call it replaces, and none of them is
+ * optional — see the `buildSubmitBody` tts arm for the wire facts:
+ *
+ *  1. **The response is an SSE STREAM.** OpenRouter refuses audio output without `stream: true`,
+ *     so the audio arrives as base64 fragments across `data:` frames and has to be reassembled.
+ *  2. **The samples are headerless pcm16**, wrapped by `pcm16ToWav` at this edge so that
+ *     `concatWavTakes`, `readWav` and the assembler all keep reading WAV as they always have.
+ *  3. **The transcript is CHECKED, because the provider is a chat model.** The stream hands us
+ *     what was actually spoken for free, so a paraphrase costs one comparison to catch — and
+ *     `tts_not_verbatim` fails the take here, before the bytes are stored, rather than letting a
+ *     sentence the owner never approved be voiced into their reel and read back out by captions.
+ *     This is the `provenance` rule applied to audio.
+ */
+async function generateOpenRouterVoice(
   text: string,
   spec: Extract<SubmittableSpec, { kind: "tts" }>,
 ): Promise<
   | { ok: true; bytes: Uint8Array<ArrayBuffer>; requestId: string }
   | { ok: false; code: string; blocked: boolean }
 > {
-  const key = requireEnvMedia("OPENAI_API_KEY");
+  const key = requireEnvMedia("OPENROUTER_API_KEY");
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
     return {
       ok: true,
@@ -1345,7 +1410,7 @@ async function generateOpenAiVoice(
   }
   let response: Response;
   try {
-    response = await fetch("https://api.openai.com/v1/audio/speech", {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify(buildSubmitBody(spec, text)),
@@ -1360,10 +1425,48 @@ async function generateOpenAiVoice(
       blocked: response.status === 400 || response.status === 422,
     };
   }
+
+  const raw = await response.text().catch(() => null);
+  if (raw === null) return { ok: false, code: "transport_error", blocked: false };
+
+  // The frames carry `delta.audio.{data,transcript}`. A malformed frame is SKIPPED rather than
+  // fatal — OpenRouter also emits `: OPENROUTER PROCESSING` comment lines and a `[DONE]` sentinel,
+  // and treating either as corruption would fail every healthy call.
+  let b64 = "";
+  let spoken = "";
+  let streamId: string | null = null;
+  for (const line of raw.split("\n")) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (payload === "" || payload === "[DONE]") continue;
+    let frame: {
+      id?: unknown;
+      choices?: Array<{ delta?: { audio?: { data?: unknown; transcript?: unknown } } }>;
+    };
+    try {
+      frame = JSON.parse(payload);
+    } catch {
+      continue;
+    }
+    if (streamId === null && typeof frame.id === "string") streamId = frame.id;
+    const audio = frame.choices?.[0]?.delta?.audio;
+    if (typeof audio?.data === "string") b64 += audio.data;
+    if (typeof audio?.transcript === "string") spoken += audio.transcript;
+  }
+
+  // No samples is a FAILURE, never a silent take. A zero-length voice line would assemble into a
+  // reel with a scene that says nothing and no error anywhere — the defect class this repo bans.
+  if (b64 === "") return { ok: false, code: "tts_no_audio", blocked: false };
+
+  // `blocked: true` — retrying cannot help. The model produced sound and it was the wrong words;
+  // the same request would drift again, and the take must go back to the owner as a failure.
+  if (TTS_DRIFT(spoken, text)) return { ok: false, code: "tts_not_verbatim", blocked: true };
+
+  const pcm = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   return {
     ok: true,
-    bytes: new Uint8Array(await response.arrayBuffer()),
-    requestId: response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`,
+    bytes: pcm16ToWav(pcm, spec.sampleRateHertz) as Uint8Array<ArrayBuffer>,
+    requestId: streamId ?? `openrouter-${crypto.randomUUID()}`,
   };
 }
 
@@ -2007,7 +2110,7 @@ export const submitBatch = internalAction({
       }
 
       if (spec.kind === "tts") {
-        const voice = await generateOpenAiVoice(text, spec);
+        const voice = await generateOpenRouterVoice(text, spec);
         if (!voice.ok) {
           await ctx.runMutation(internal.media.recordSubmission, {
             jobId: line.jobId,
