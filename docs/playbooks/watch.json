@@ -350,6 +350,7 @@
     "packages/backend/__fixtures__/providerGates.ts"
   ],
   "connector-hubspot.md": [
+    "apps/hubspot/",
     "packages/revenue/src/providers/hubspot",
     "packages/backend/convex/hubspot",
     "scripts/smoke-hubspot-read.mjs",

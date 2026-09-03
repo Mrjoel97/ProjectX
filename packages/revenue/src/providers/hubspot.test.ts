@@ -5,6 +5,8 @@
 // substring match, and this repo has already shipped a rename through a fully green symbol gate.
 // Renaming `crm.objects.deals.read` to `crm.objects.deal.read`, or `2026-03` to `v3`, must turn
 // this file red.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { validateProjection, validateSourceRef } from "../contracts";
 import {
@@ -65,6 +67,24 @@ describe("scopes — the exact evidenced read set, pinned to literals", () => {
   it("adds HubSpot's mandatory oauth scope only to the installation scope set", () => {
     expect([...HUBSPOT_AUTHORIZE_SCOPES]).toEqual(["oauth", ...HUBSPOT_READ_SCOPES]);
     expect(HUBSPOT_READ_SCOPES).not.toContain("oauth");
+  });
+
+  // HubSpot enforces the scope set declared in the APP MANIFEST, not the one we send: an install
+  // URL asking for a scope the app does not declare is rejected outright, and a scope the app
+  // declares but we never request silently yields a token that cannot read what the rails expect.
+  // `apps/hubspot/src/app/app-hsmeta.json` is that declaration and it lives in this repo, so the
+  // two can drift in a single commit. They are the same list by construction, asserted as a set
+  // equality in both directions so neither file can quietly gain or lose one.
+  it("matches the scope set declared in the HubSpot app manifest", () => {
+    const manifest = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../../../../apps/hubspot/src/app/app-hsmeta.json", import.meta.url)),
+        "utf8",
+      ),
+    );
+    const declared: string[] = manifest.config.auth.requiredScopes;
+    expect([...declared].sort()).toEqual([...HUBSPOT_AUTHORIZE_SCOPES].sort());
+    expect(manifest.config.auth.optionalScopes).toEqual([]);
   });
 });
 

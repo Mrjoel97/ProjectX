@@ -1,0 +1,33 @@
+{
+  "uid": "pikar_ai_hubspot_app",
+  "type": "app",
+  "config": {
+    "description": "Connect Pikar AI to HubSpot using a read-only CRM integration.",
+    "name": "Pikar AI",
+    "distribution": "private",
+    "auth": {
+      "type": "oauth",
+      "redirectUrls": ["http://localhost:3211/connectors/hubspot/callback/production"],
+      "requiredScopes": [
+        "oauth",
+        "crm.objects.contacts.read",
+        "crm.objects.companies.read",
+        "crm.objects.deals.read",
+        "crm.objects.owners.read",
+        "crm.schemas.deals.read"
+      ],
+      "optionalScopes": [],
+      "conditionallyRequiredScopes": []
+    },
+    "permittedUrls": {
+      "fetch": ["https://api.hubapi.com"],
+      "iframe": [],
+      "img": []
+    },
+    "support": {
+      "supportEmail": "support@pikar-ai.com",
+      "documentationUrl": "https://www.pikar-ai.com",
+      "supportUrl": "https://www.pikar-ai.com"
+    }
+  }
+}

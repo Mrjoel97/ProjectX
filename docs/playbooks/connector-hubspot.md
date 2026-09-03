@@ -17,11 +17,29 @@
 > Both call sites that assert the authorize URL's `scope` param moved to the new constant:
 > `packages/revenue/src/providers/hubspot.test.ts` and `packages/backend/convex/hubspot.test.ts`.
 >
-> **Untracked and unreviewed:** `apps/hubspot/` (an `hsproject.json` HubSpot project scaffold with
-> its own AGENTS.md/CLAUDE.md) exists in the working tree and is NOT in git. It is presumably the
-> project-based app this scope change exists to serve. Decide whether it is committed or removed
-> before this lane closes - a scope fix whose reason lives only in an untracked directory is a fact
-> the next session cannot recover.
+> **`apps/hubspot/` IS THE SCOPE DECLARATION, AND IT IS NOW TRACKED.** HubSpot enforces the scope
+> set declared in the app manifest, not the one the install URL asks for. `src/app/app-hsmeta.json`
+> is that manifest — a private, read-only app whose `requiredScopes` is exactly
+> `["oauth", ...HUBSPOT_READ_SCOPES]`, i.e. `HUBSPOT_AUTHORIZE_SCOPES`. Committing it is what makes
+> the `oauth` scope fix checkable instead of merely asserted; it holds no account id, no client
+> secret and no token (`hsprofile.*.json`, which carries the target account id, is NOT present and
+> must never be committed).
+>
+> **The two lists can drift in a single commit, so a test pins them.** `hubspot.test.ts` reads the
+> manifest and asserts set equality against `HUBSPOT_AUTHORIZE_SCOPES` in both directions, plus an
+> empty `optionalScopes`. Change a scope in one file and that test fails — which is the point,
+> because the failure modes are silent in opposite directions: asking for a scope the app does not
+> declare is rejected at install, while declaring one we never request yields a token that cannot
+> read what the rails expect.
+>
+> **`redirectUrls` currently lists ONLY `http://localhost:3211/connectors/hubspot/callback/production`.**
+> That is the localhost callback from 2cb0d11 and it is enough for local install. A production
+> install will fail until the deployed callback URL is added to the manifest AND the project is
+> re-uploaded with `hs project upload` — the manifest in git is not live until it is uploaded.
+>
+> `AGENTS.md`/`CLAUDE.md`/`HUBSPOT_PROJECTS.md` in that directory are HubSpot CLI scaffold, kept as
+> generated. The nested `CLAUDE.md` applies only within `apps/hubspot/` and does not modify the
+> repo-root conventions.
 
 > Last verified: 2026-09-01 (28-21 terminal telemetry — the tenant-facing bounded read now reduces
 > its projection to provider, state and bounded counts and emits exactly one content-free event on
