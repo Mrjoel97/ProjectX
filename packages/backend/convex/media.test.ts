@@ -5013,7 +5013,7 @@ async function seedCaptionable(
   return { planId, batchId, jobIds, sttJobId };
 }
 
-describe("OpenAI caption submission", () => {
+describe("caption submission — OpenRouter, with the route prefix kept", () => {
   test("clean voice audio is sent as multipart and word timestamps land in owned storage", async () => {
     const t = harness();
     const { batchId, planId, sttJobId } = await seedCaptionable(t, {
@@ -5035,12 +5035,21 @@ describe("OpenAI caption submission", () => {
     });
 
     const firstCall = fetchMock.mock.calls[0];
-    if (!firstCall) throw new Error("OpenAI transcription was not called");
-    const [, init] = firstCall;
-    if (!init) throw new Error("OpenAI transcription request options were missing");
+    if (!firstCall) throw new Error("transcription was not called");
+    const [url, init] = firstCall;
+    if (!init) throw new Error("transcription request options were missing");
+    // 33.1-06: assert the RESOLVED url, the discipline the image and video arms already use.
+    // `api.openai.com` still appears in media.ts for the retained Sora poller, so a source scan
+    // proves spelling and not routing — this test previously asserted neither.
+    expect(new URL(url as string).hostname).toBe("openrouter.ai");
+    expect(new URL(url as string).pathname).toBe("/api/v1/audio/transcriptions");
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer openrouter-test-key",
+    );
     expect(init.body).toBeInstanceOf(FormData);
     const form = init.body as FormData;
-    expect(form.get("model")).toBe("whisper-1");
+    // UNSTRIPPED — OpenRouter rejects a bare `whisper-1`, and accepts `openai/whisper-1`.
+    expect(form.get("model")).toBe("openai/whisper-1");
     expect(form.get("timestamp_granularities[]")).toBe("word");
     expect(form.get("file")).toBeInstanceOf(Blob);
     expect((await planRow(t, planId))?.captionOffsetsS).toEqual([0, 1]);

@@ -1,5 +1,62 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-03 (33.1-06 — **CAPTIONS MOVED TOO. EVERY PAID MEDIA PLANE IS NOW ON ONE
+> CREDENTIAL, AND THE ENTRY BELOW THIS ONE IS WRONG ABOUT THAT. ADR-029 supersedes ADR-028's STT
+> half.**
+>
+> **The correction, first, because the stale claim is one entry down and a reader will hit it.**
+> The 2026-09-03 voice-plane record below says captions cannot leave OpenAI. They can:
+>
+> ```
+> POST openrouter.ai/api/v1/audio/transcriptions
+>   model=openai/whisper-1  response_format=verbose_json  timestamp_granularities[]=word
+> -> 200  {"duration":3.5,"usage":{"seconds":4,"cost":0.0004},
+>          "words":[{"word":"Founders","start":0,"end":0.6}, … 9 words, 0 malformed]}
+> ```
+>
+> Complete per-word `start`/`end`, in exactly the shape `submitCaptions` already parses, at
+> **$0.0060/minute** — computed as `usage.cost / usage.seconds x 60` and identical to OpenAI's
+> rate, so `MEDIA_STT_PRICING` does not move. That equality was CHECKED, not assumed: a migration
+> that changes a price quietly is what the media price table exists to prevent.
+>
+> **THE MISTAKE, NAMED, BECAUSE IT WILL BE MADE AGAIN: a `/models` catalogue is not an API
+> surface.** The "captions cannot move" claim came from filtering OpenRouter's 424-entry `/models`
+> list for anything audio-shaped and finding no Whisper. That list describes what the CHAT endpoint
+> routes to. The audio routes keep their own registries, and they are **uncorrelated** with it in
+> BOTH directions:
+>
+> - `openai/gpt-audio` **is** in the catalogue and is **refused** by `/audio/speech`.
+> - `openai/whisper-1` is **absent** from the catalogue and is **served** by `/audio/transcriptions`.
+>
+> So any claim of the form "OpenRouter cannot do X, X is not in `/models`" is unsound. **Probe the
+> endpoint.** A route answering `400` with a model-validation error EXISTS; one answering `404`
+> does not. The aggravating detail is that the same error had already been caught once that day —
+> `/audio/speech` was found by probing after the catalogue implied it was unusable — and the
+> catalogue was then consulted and believed a second time, an hour later, for a sibling route.
+>
+> **What changed in code, and it is small:** the STT fetch host, the credential
+> (`OPENROUTER_API_KEY`), and the model id is sent **UNSTRIPPED** — `openai/whisper-1`, not
+> `whisper-1`. That is the THIRD arm to learn the same prefix rule after image and tts; OpenRouter
+> routes on the vendor prefix and OpenAI's own API rejects it. Everything else — the multipart
+> form, `verbose_json`, the word granularity, the `transcript_words_missing` fail-closed — is
+> untouched.
+>
+> **`api.openai.com` now survives in `media.ts` for the RETAINED SORA POLLER ALONE**, which no
+> submit path reaches and which may be deleted after 2026-09-24. `requireEnvMedia("OPENAI_API_KEY")`
+> has exactly one caller. The adapter header used to say "tts/stt -> still OpenAI"; that sentence
+> was true when written and false twice over inside a day, and it has been replaced with the
+> catalogue warning above.
+>
+> **THE CAPTION ROUTING TEST NEVER ASSERTED WHERE THE REQUEST WENT.** It checked the multipart
+> fields and the stored transcript and nothing else, so it would have passed unchanged had the host
+> stayed on OpenAI — on a file whose OWN header warns that `api.openai.com` legitimately appears
+> here and that a source scan therefore proves spelling, not routing. It now asserts the resolved
+> hostname, the pathname and the Authorization header, the same discipline the image and video arms
+> already had. Renamed off "OpenAI caption submission" too.
+>
+> Suites after the move: backend media 285/285, typecheck and biome clean on both changed files.)
+
+
 > Last verified: 2026-09-03 (33.1-06 — **THE VOICE PLANE IS ON OPENROUTER TOO, AND IT IS A CHAT
 > MODEL THAT IS CHECKED RATHER THAN TRUSTED. ADR-028.**
 >

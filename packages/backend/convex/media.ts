@@ -906,8 +906,9 @@ export const listJobs = internalQuery({
 
 // ── Media provider adapters ────────────────────────────────────────────────────────────
 //
-// Submit new visual and audio lines. TWO vendors live here as of 33.1-05, split by MEDIA KIND and
-// not by model, and which one an arm talks to decides which credential it reads:
+// Submit new visual and audio lines. As of 33.1-06 EVERY PAID PLANE IS ON OPENROUTER and reads
+// OPENROUTER_API_KEY. `OPENAI_API_KEY` survives for exactly one thing, named at the bottom of this
+// note, and nothing that submits work reads it:
 //   - image  -> OPENROUTER, `openrouter.ai/api/v1/images`, on OPENROUTER_API_KEY. Bytes come back
 //               synchronously in `data[0].b64_json`, byte-identically to the OpenAI shape it
 //               replaced (measured 2026-08-30, see 33.1-PRICE-EVIDENCE.md).
@@ -915,10 +916,20 @@ export const listJobs = internalQuery({
 //               a 202 hands back an id, and `pollOpenRouterVideoTask` owns everything after it.
 //               Moved here by 33.1-05 because OpenAI WITHDRAWS its Videos API on 2026-09-24 — an
 //               ENDPOINT withdrawal, so there was no same-vendor row to move to (ADR-027).
-//   - tts/stt-> still OpenAI, on OPENAI_API_KEY. Not part of this migration; those endpoints live.
-// So `api.openai.com` still appears in this file — legitimately, for TTS, STT and the RETAINED Sora
-// poller. Its presence proves nothing about where a VISUAL request goes, which is why the routing
-// tests assert the RESOLVED url handed to `fetch` rather than grepping this source.
+//   - tts    -> OPENROUTER, `openrouter.ai/api/v1/chat/completions`. NOT `/audio/speech`: that
+//               route exists on OpenRouter and accepts NO model at all (four probed 2026-09-03,
+//               including `openai/gpt-audio`, which IS in the catalogue). So the voice plane rides
+//               a chat model with an audio modality, `stream: true` is mandatory, and the take is
+//               refused unless the transcript matches the script — ADR-028.
+//   - stt    -> OPENROUTER, `openrouter.ai/api/v1/audio/transcriptions`, with full per-word
+//               timestamps at the same $0.0060/minute OpenAI charges. ADR-028 stated the OPPOSITE
+//               and ADR-029 corrects it: the `/models` catalogue lists CHAT models only, so a
+//               transcription model is absent from it while being perfectly serviceable at the
+//               endpoint. **Do not conclude from that catalogue that an audio route is missing.**
+// So `api.openai.com` still appears in this file — for the RETAINED Sora poller ALONE, which no
+// submit path reaches and which may be deleted after 2026-09-24. Its presence proves nothing about
+// where any request goes, which is why the routing tests assert the RESOLVED url handed to `fetch`
+// rather than grepping this source.
 //
 // TWO pollers are retained beside the live one, and they are retained for the SAME reason:
 // `pollWanTask` (pre-Sora cutover) and `pollOpenAiVideoTask` (pre-OpenRouter cutover) each let a
@@ -2259,7 +2270,9 @@ export const submitCaptions = internalAction({
   args: { tenantId: v.string(), batchId: v.string() },
   handler: async (ctx, a): Promise<{ ok: boolean; code?: string }> => {
     // Refuse before reading tenant audio when the existing OpenAI credential is absent.
-    const key = requireEnvMedia("OPENAI_API_KEY");
+    // 33.1-06: OpenRouter, like every other paid plane. It DOES serve whisper-1 with word
+    // timestamps — see the note on the fetch below for why that took a second look.
+    const key = requireEnvMedia("OPENROUTER_API_KEY");
 
     const job = await ctx.runQuery(internal.media.captionsToSubmit, a);
     if (!job) return { ok: false, code: "no_captions_line" };
@@ -2301,12 +2314,21 @@ export const submitCaptions = internalAction({
     const wav = new Uint8Array(joined.value.wav.byteLength);
     wav.set(joined.value.wav);
     form.append("file", new Blob([wav], { type: "audio/wav" }), "reel-voice.wav");
-    form.append("model", job.model.replace(/^openai\//, ""));
+    // UNSTRIPPED. The strip existed because this posted to OpenAI's own API, which does not know
+    // a route prefix. OpenRouter DOES route on it — `whisper-1` bare is rejected there, and
+    // `openai/whisper-1` is accepted. Third arm to learn this, after image and tts.
+    form.append("model", job.model);
     form.append("response_format", "verbose_json");
     form.append("timestamp_granularities[]", "word");
     let response: Response;
     try {
-      response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      // WHY THIS IS NOT ON api.openai.com ANY MORE, and why the first look said it had to be:
+      // OpenRouter's `/models` catalogue lists CHAT models only, so grepping it for a Whisper
+      // turns up nothing and invites the conclusion that transcription cannot move. It can. The
+      // catalogue is not the API surface — probed 2026-09-03, `openai/whisper-1` here returns
+      // `verbose_json` with complete per-word `start`/`end`, 9/9 well-formed, at $0.0060/minute,
+      // which is the SAME rate as OpenAI's, hence no change to MEDIA_STT_PRICING.
+      response = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}` },
         body: form,
@@ -2327,7 +2349,7 @@ export const submitCaptions = internalAction({
         : [],
     );
     if (words.length === 0) return await fail("transcript_words_missing");
-    const requestId = response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`;
+    const requestId = response.headers.get("x-request-id") ?? `openrouter-${crypto.randomUUID()}`;
     await ctx.runMutation(internal.media.recordCaptionSubmission, {
       planId: job.planId,
       jobId: job.sttJobId,
