@@ -1,5 +1,32 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
+> Last verified: 2026-09-03 (**THE TYPECHECK GATE IS GREEN AGAIN — `reminders.test.ts` TYPE ONLY,
+> NO GUARD CHANGED.**)
+>
+> `pnpm typecheck` had been failing on `packages/revenue/src/reminders.test.ts` since `2b1e9ed`,
+> which meant CI stopped at its FIRST step and never reached Lint, Test or Build. The tests
+> themselves passed the whole time — the defect was purely at the type level, which is exactly why
+> it survived: a green suite says nothing about a red `tsc`.
+>
+> **Root cause, worth knowing because the shape recurs.** The `projection()` test helper was
+> annotated as returning `Projection<ReminderInvoice>` — the full three-variant union — while its
+> body only ever builds the `ready` variant. Tests reach the other states by spreading it and
+> overriding, e.g. `{ ...projection(), state: "partial", missing: "next page" }`. Spreading a UNION
+> distributes over every member, so that expression also produced an `unavailable`-shaped object
+> (`provider`/`because`, no `meta`/`items`) with `state: "partial"` stamped on it — assignable to no
+> variant at all. The fix narrows the helper's return type to `ReadyProjection =
+> Extract<Projection<ReminderInvoice>, { state: "ready" }>`, which is what it actually returns.
+> Narrowing a return type never breaks callers, and every call site passes it where the wide union
+> is accepted.
+>
+> **No runtime behaviour changed and none was allowed to.** `reminders.ts` is untouched. The
+> `partial` guard at `reminders.ts:67` was mutation-checked after the fix — deleting it turns
+> "rejects unavailable and partial reads" red — so the case this type error sat on top of is still
+> a live assertion and not a vacuous one.
+>
+> Verified: `tsc --noEmit` clean in `packages/revenue` (uncached), `pnpm typecheck` 12/12, 340
+> revenue tests, and `biome ci .` exits 0.
+
 > Last verified: 2026-09-02 — Plan 28-16's authenticated parked-lane gate is green on the local
 > stack with one real signed-in context across desktop (1440×960), tablet (820×1180), and mobile
 > (390×844). The spec waits for a positive server settle marker before asserting absence, then

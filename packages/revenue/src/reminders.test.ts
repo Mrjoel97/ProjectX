@@ -22,10 +22,19 @@ function invoice(over: Partial<ReminderInvoice> = {}): ReminderInvoice {
   return { ...base, paymentState: "open", ...over };
 }
 
+/**
+ * The `ready` variant specifically, NOT `Projection<ReminderInvoice>`. This helper only ever builds
+ * a ready projection, and tests below spread it and override `state` to reach the other variants
+ * (see the `partial` case). Annotated as the full union, that spread distributes over every member
+ * — including `unavailable`, which carries no `meta`/`items` — and the result is assignable to no
+ * variant at all. Narrow here so the spread starts from a shape that actually has those fields.
+ */
+type ReadyProjection = Extract<Projection<ReminderInvoice>, { state: "ready" }>;
+
 function projection(
   items: readonly ReminderInvoice[] = [invoice()],
-  over: Partial<Extract<Projection<ReminderInvoice>, { state: "ready" }>["meta"]> = {},
-): Projection<ReminderInvoice> {
+  over: Partial<ReadyProjection["meta"]> = {},
+): ReadyProjection {
   return {
     state: "ready",
     meta: {
