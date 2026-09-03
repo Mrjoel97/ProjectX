@@ -148,13 +148,15 @@ What rev 5 changes and why:
 
 **Freeze until a paying user asks:** Phase 30 vertical packs, Phase 24 ISO map, Phase 23 agent-authored skills, Outlook parity (25-08/09), the remaining three connectors.
 
-## 6. Owner decisions this revision needs
+## 6. Owner decisions — DECIDED 2026-09-03
 
-1. Start the legal entity, with a date.
-2. A price and a plan shape (core monthly + metered media/ingest, or credit packs).
-3. Invite-only or open signup for the beta (code and memory disagree).
-4. Authorise the ~$2 live spend for 33.1-06 and the pack/revenue/cockpit gates, then the `[deploy]` merge.
-5. Confirm the freeze list in §5.
+| # | Decision | Owner's call | Consequence to design around |
+|---|---|---|---|
+| 1 | Legal entity start | **After first beta evidence** (not within the month; recommendation was two weeks) | Gmail refresh tokens keep dying every 7 days through the whole beta; every beta user reconnects weekly (the reconnect banner and `awaiting_reauth` path are the product's beta-critical surfaces). No custom domain, no CASA, no billing tax country until then. `SEND_TIME_HORIZON_MS` stays 7 days. |
+| 2 | Price and plan shape | **Free beta, price later** | Phase 28.1 stays parked and sealed. Cost control for the beta is invite-only admission plus the per-tenant daily rails; the deployment-wide caps (G17) become the real spend ceiling and must be read from env before the first invite. No "Validated" line can come from revenue; it must come from behaviour (telemetry, DLQ, interviews). |
+| 3 | Signup posture | **Invite-only** | Matches code. G16 narrows to copy: say invite-only on the home page and replace the mailto with the existing waitlist form. |
+| 4 | Live spend + `[deploy]` merge | Owner action, sequenced by the 09-24 date: 33.1-06 first, then pack / revenue / cockpit-agent gates, then the promotion merge. Convex runs come from the owner's terminal. | — |
+| 5 | Freeze list | **Nothing frozen** (recommendation was to freeze Phase 30, 24, 23, Outlook parity, remaining connectors) | The §5 tracks are an ORDER, not a gate: Phase 30 / 24 / 23 / Outlook / connectors remain schedulable but sit after Tracks A and B. The corpus keeps building ahead of validation by owner choice, as with ADR-015. |
 
 ## 7. Verdicts carried in one place
 
