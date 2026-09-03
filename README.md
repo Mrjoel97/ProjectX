@@ -49,6 +49,14 @@ echo "NEXT_PUBLIC_CONVEX_URL=$(grep '^CONVEX_URL=' ../../packages/backend/.env.l
 pnpm dev
 ```
 
+Once per clone, opt in to the tracked git hooks (they keep `graphify-out/` current and
+re-apply the graph fixup that a rebuild would otherwise drop):
+
+```bash
+git config core.hooksPath .githooks    # see .githooks/README.md for the one-line
+                                       # graphify-out/.graphify_python it also needs
+```
+
 > **Codegen ordering (important).** `convex/_generated/` is produced by Convex codegen and
 > is **git-ignored** — it does not exist in a fresh clone. `pnpm typecheck` (and any import of
 > `./_generated/*`) **fails until step 2 has run at least once**. Always run `npx convex dev`
