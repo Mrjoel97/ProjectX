@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { WORKFLOW_EVENT_STREAM_IDS } from "./workflowPackMetrics";
 import {
   hasPassingPackBrowserEvidence,
   hasValidPackProvenance,
@@ -20,7 +21,6 @@ import {
   WORKFLOW_PACKS,
   type WorkflowPackId,
 } from "./workflowPacks";
-import { WORKFLOW_EVENT_STREAM_IDS } from "./workflowPackMetrics";
 
 // 27-02 Task 1 (PACK-02/PACK-03). The pack registry is the CAPABILITY half of ADR-007: the skill
 // body is a DB row a candidate can change, the tool grant is code. Everything asserted here is

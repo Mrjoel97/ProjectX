@@ -13,7 +13,10 @@ const names = [
 ];
 
 const rows = names.map((name) => {
-  const body = readFileSync(resolve(`packages/contracts/skills/${name}.md`), "utf8").replace(/\r\n/g, "\n");
+  const body = readFileSync(resolve(`packages/contracts/skills/${name}.md`), "utf8").replace(
+    /\r\n/g,
+    "\n",
+  );
   return `  ${JSON.stringify(name)}: ${JSON.stringify(body)},`;
 });
 

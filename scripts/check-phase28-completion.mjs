@@ -144,7 +144,8 @@ const fsReal = { read: (rel) => readFileSync(join(repoRoot, rel), "utf8") };
 function render(result, lanes, stdout) {
   stdout.write("\nPhase 28 server-gate exposure / completion matrix\n\n");
   for (const lane of lanes) {
-    const state = lane.state ?? (!lane.reachable ? "unreachable" : lane.passed ? "passed" : "failed");
+    const state =
+      lane.state ?? (!lane.reachable ? "unreachable" : lane.passed ? "passed" : "failed");
     const mark = lanePassed(lane) ? "OK  " : "PEND";
     const exposure = lanePassed(lane) ? "eligible" : "hidden";
     stdout.write(
@@ -213,8 +214,12 @@ function selfTest(stdout) {
       row("REVN-01")?.complete === passed.has("hubspot") &&
       row("REVN-02")?.complete === passed.has("quickbooks") &&
       row("REVN-03")?.complete === (passed.has("stripe") && passed.has("paypal"));
-    const bits = PROVIDERS.map((provider) => `${provider}=${passed.has(provider) ? "pass" : "park"}`).join(", ");
-    stdout.write(`  ${ok ? "OK  " : "FAIL"}  combination ${String(mask + 1).padStart(2, "0")}/16: ${bits}\n`);
+    const bits = PROVIDERS.map(
+      (provider) => `${provider}=${passed.has(provider) ? "pass" : "park"}`,
+    ).join(", ");
+    stdout.write(
+      `  ${ok ? "OK  " : "FAIL"}  combination ${String(mask + 1).padStart(2, "0")}/16: ${bits}\n`,
+    );
     if (!ok) failed += 1;
   }
 
@@ -225,7 +230,9 @@ function selfTest(stdout) {
         PROVIDERS.map((candidate) => lane(candidate, candidate === provider ? state : "passed")),
       );
       const ok = !result.complete && result.rows.some((row) => row.missing.includes(provider));
-      stdout.write(`  ${ok ? "OK  " : "FAIL"}  ${provider}=${state} keeps its named requirement and Phase 28 incomplete\n`);
+      stdout.write(
+        `  ${ok ? "OK  " : "FAIL"}  ${provider}=${state} keeps its named requirement and Phase 28 incomplete\n`,
+      );
       if (!ok) failed += 1;
     }
   }

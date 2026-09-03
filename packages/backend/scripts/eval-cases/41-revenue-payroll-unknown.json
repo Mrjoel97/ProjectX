@@ -12,7 +12,13 @@
         "asOfMs": 1788134400000,
         "horizonDays": 30,
         "confidence": "low",
-        "coverage": { "providers": ["quickbooks"], "authorities": ["accounting_authority"], "capped": false, "partial": true, "missingCount": 1 },
+        "coverage": {
+          "providers": ["quickbooks"],
+          "authorities": ["accounting_authority"],
+          "capped": false,
+          "partial": true,
+          "missingCount": 1
+        },
         "values": [{ "currency": "USD", "state": "unknown" }],
         "sources": [
           { "provider": "quickbooks", "state": "ready", "coverageCount": 4, "missingCount": 0 },

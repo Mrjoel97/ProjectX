@@ -9,24 +9,24 @@
 import {
   type Aging,
   agingReport,
-  cashTimeline,
+  type CashTimeline,
   type ConnectorEnvironment,
+  cashTimeline,
   coverageOf,
   DECISION_SUPPORT_NOTICE,
   type Eligibility,
-  type FinanceResult,
   type Figure,
+  type FinanceResult,
   financeResult,
   groupByCurrency,
   type Invoice,
   type Money,
   type Obligation,
-  payrollGap,
   type Payment,
-  type CashTimeline,
   type PayrollOutlook,
   type Projection,
   type Provider,
+  payrollGap,
   receiptsTotal,
   reconcilePayments,
   sumMoney,
@@ -325,7 +325,8 @@ export function composeBusinessFinance(args: {
       }
       reports.push(report.value);
     }
-    if (reports.length > 0) receivablesValue = reports.sort((a, b) => a.currency.localeCompare(b.currency));
+    if (reports.length > 0)
+      receivablesValue = reports.sort((a, b) => a.currency.localeCompare(b.currency));
   }
   const receivables = financeResult(receivablesValue, receivablesCoverage);
 
@@ -439,7 +440,8 @@ export function composeBusinessFinance(args: {
   let payrollCoverage = cashCoverage;
 
   for (const currency of timelineCurrencies) {
-    const openingCash = currency === "" || openingInvalid ? null : (openingTotals.get(currency) ?? null);
+    const openingCash =
+      currency === "" || openingInvalid ? null : (openingTotals.get(currency) ?? null);
     const inflows = selectedInvoices
       .filter((invoice) => invoice.outstanding.currency === currency && invoice.dueAt !== null)
       .map((invoice) => ({ atMs: invoice.dueAt as number, amount: invoice.outstanding }));
@@ -537,7 +539,10 @@ const safeAction = async <T>(
   try {
     return accepted(provider, await read());
   } catch {
-    return unavailable(provider, "the provider read failed before a normalized result was returned");
+    return unavailable(
+      provider,
+      "the provider read failed before a normalized result was returned",
+    );
   }
 };
 

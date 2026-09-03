@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import skillsLock from "../../../backend/skills-lock.json";
 import {
   BUSINESS_BLUEPRINT_SKILL,
   DOCUMENT_CLASSIFIER_SKILL,
@@ -29,12 +30,11 @@ import { packCustomerComplaintSkillBody } from "./packCustomerComplaint";
 import { packProcessSopSkillBody } from "./packProcessSop";
 import { packSalesCallPrepSkillBody } from "./packSalesCallPrep";
 import { researchSpecialistSkillBody } from "./researchSpecialist";
+import { revenueSkillBodies } from "./revenueBodies";
 import { styleCoachingSkillBody } from "./styleCoaching";
 import { styleConciseSkillBody } from "./styleConcise";
 import { styleDirectSkillBody } from "./styleDirect";
 import { swotSkillBody } from "./swot";
-import { revenueSkillBodies } from "./revenueBodies";
-import skillsLock from "../../../backend/skills-lock.json";
 
 // Every derived .ts body MUST stay byte-identical (LF-normalized) to its canonical
 // .md source — the derived constant is the bundler-safe artifact the Convex runtime
@@ -47,7 +47,15 @@ const revenueBodies = {
     bytes: 2192,
     sha256: "558cca103e7c298472a7d9f1ff4cd48651c4b08388f4ebadb2dd0ff63c082b24",
     sources: ["small-business/skills/business-pulse", "sales/skills/call-prep"],
-    required: ["lead triage", "call list", "pipeline review", "customer pulse", "cash flow", "payroll confidence", "invoice reminder"],
+    required: [
+      "lead triage",
+      "call list",
+      "pipeline review",
+      "customer pulse",
+      "cash flow",
+      "payroll confidence",
+      "invoice reminder",
+    ],
   },
   "revenue-lead-triage": {
     bytes: 1658,
@@ -89,7 +97,13 @@ const revenueBodies = {
     bytes: 1771,
     sha256: "2541cadb10404c34b0f08ca85fb17f43a810fe8dab86d5ee43d3582ae6b91899",
     sources: ["small-business/skills/business-pulse", "small-business/skills/ticket-deflector"],
-    required: ["explicit user intent", "proposed", "human approval", "nothing has been sent", "suppression"],
+    required: [
+      "explicit user intent",
+      "proposed",
+      "human approval",
+      "nothing has been sent",
+      "suppression",
+    ],
   },
 } as const;
 
@@ -156,47 +170,60 @@ describe("Phase 28 provider-neutral revenue bodies (REVN-04..06)", () => {
     }
   });
 
-  test.each(Object.entries(revenueBodies))(
-    "%s has reviewed byte pins and the Phase 27 provenance notice",
-    (base, contract) => {
-      const body = readRevenueBody(base as keyof typeof revenueBodies);
+  test.each(
+    Object.entries(revenueBodies),
+  )("%s has reviewed byte pins and the Phase 27 provenance notice", (base, contract) => {
+    const body = readRevenueBody(base as keyof typeof revenueBodies);
 
-      expect(createHash("sha256").update(body).digest("hex")).toBe(contract.sha256);
-      expect(Buffer.byteLength(body, "utf8")).toBe(contract.bytes);
-      expect(body).toContain("## Provenance and modification notice");
-      expect(body).toContain("provider-neutral");
-      expect(body).toContain("modified");
-      expect(body).toContain("Attribution");
-      expect(body).toContain("Apache-2.0");
-      expect(body).toContain("5267cf7bff3031921d4474b8e8f86ad02d2b8f6d");
-      expect(body).toContain("This body describes behavior only; it does not grant tools, scopes, or write authority.");
+    expect(createHash("sha256").update(body).digest("hex")).toBe(contract.sha256);
+    expect(Buffer.byteLength(body, "utf8")).toBe(contract.bytes);
+    expect(body).toContain("## Provenance and modification notice");
+    expect(body).toContain("provider-neutral");
+    expect(body).toContain("modified");
+    expect(body).toContain("Attribution");
+    expect(body).toContain("Apache-2.0");
+    expect(body).toContain("5267cf7bff3031921d4474b8e8f86ad02d2b8f6d");
+    expect(body).toContain(
+      "This body describes behavior only; it does not grant tools, scopes, or write authority.",
+    );
 
-      for (const source of contract.sources) expect(body).toContain(source);
-      for (const phrase of contract.required) {
-        expect(body.toLowerCase()).toContain(phrase.toLowerCase());
-      }
-    },
-  );
+    for (const source of contract.sources) expect(body).toContain(source);
+    for (const phrase of contract.required) {
+      expect(body.toLowerCase()).toContain(phrase.toLowerCase());
+    }
+  });
 
-  test.each(Object.keys(revenueBodies))("%s stays provider-neutral and contains no authority-bearing configuration", (base) => {
+  test.each(
+    Object.keys(revenueBodies),
+  )("%s stays provider-neutral and contains no authority-bearing configuration", (base) => {
     const body = readRevenueBody(base as keyof typeof revenueBodies);
 
     expect(body).not.toMatch(/HubSpot|QuickBooks|Stripe|PayPal/iu);
     expect(body).not.toMatch(/https?:\/\//iu);
-    expect(body).not.toMatch(/\b(?:OAuth|access token|refresh token|client secret|API key|endpoint|executePlan|generic HTTP|MCP)\b/iu);
-    expect(body).not.toMatch(/\b(?:refund|credit|dispute|CRM|accounting) (?:write|update|mutation|send|issue)\b/iu);
-    expect(body).not.toMatch(/\b(?:use|call|invoke|access) (?:the )?(?:tool|API|endpoint|connector)\b/iu);
+    expect(body).not.toMatch(
+      /\b(?:OAuth|access token|refresh token|client secret|API key|endpoint|executePlan|generic HTTP|MCP)\b/iu,
+    );
+    expect(body).not.toMatch(
+      /\b(?:refund|credit|dispute|CRM|accounting) (?:write|update|mutation|send|issue)\b/iu,
+    );
+    expect(body).not.toMatch(
+      /\b(?:use|call|invoke|access) (?:the )?(?:tool|API|endpoint|connector)\b/iu,
+    );
     expect(body).not.toMatch(/\b(?:tools?|scopes?|capabilities?|credentials?)\s*:/iu);
     expect(body).not.toMatch(/\b(?:publish|activate|discover|register|seed)\b/iu);
     expect(body).not.toMatch(/(?:\$|£|€)\s*\d|\b\d+(?:\.\d+)?\s*(?:USD|GBP|EUR)\b/iu);
-    expect(body).not.toMatch(/(?:opening cash|closing cash|coverage ratio|payroll gap)\s*[=+\-*/]/iu);
+    expect(body).not.toMatch(
+      /(?:opening cash|closing cash|coverage ratio|payroll gap)\s*[=+\-*/]/iu,
+    );
     expect(body).not.toMatch(/\b(?:threshold|timeout|retry|lookback)\s*(?:=|:)\s*\d/iu);
   });
 
   test("finance bodies explain immutable deterministic results instead of asking the model to calculate", () => {
     for (const base of ["revenue-cash-flow", "revenue-payroll-confidence"] as const) {
       const body = readRevenueBody(base);
-      expect(body).toContain("Do not calculate, total, age, forecast, repair, reconcile, or convert");
+      expect(body).toContain(
+        "Do not calculate, total, age, forecast, repair, reconcile, or convert",
+      );
       expect(body).toContain("Missing history and missing sources are unknown, never zero.");
       expect(body).toContain("decision support, not accounting or tax advice");
     }

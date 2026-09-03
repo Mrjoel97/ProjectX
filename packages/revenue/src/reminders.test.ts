@@ -3,8 +3,8 @@ import type { Invoice, Projection, SourceRef } from "./contracts";
 import {
   buildInvoiceReminderDraft,
   REMINDER_SOURCE_MAX_AGE_MS,
-  selectInvoiceReminderInput,
   type ReminderInvoice,
+  selectInvoiceReminderInput,
 } from "./reminders";
 
 const NOW = Date.parse("2026-08-31T12:00:00.000Z");
@@ -75,65 +75,127 @@ describe("invoice reminder source guards", () => {
     ["void", "void"],
     ["disputed", "disputed"],
   ] as const)("rejects a %s invoice", (paymentState, expected) => {
-    expect(reason(selectInvoiceReminderInput({ requestedRef: REF, source: projection([invoice({ paymentState })]), now: NOW }))).toContain(expected);
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: REF,
+          source: projection([invoice({ paymentState })]),
+          now: NOW,
+        }),
+      ),
+    ).toContain(expected);
   });
 
   test("rejects a missing exact external ref instead of picking another invoice", () => {
     const another = invoice({ ref: { ...REF, id: "inv_other" } });
-    expect(reason(selectInvoiceReminderInput({ requestedRef: REF, source: projection([another]), now: NOW }))).toContain("not found");
+    expect(
+      reason(
+        selectInvoiceReminderInput({ requestedRef: REF, source: projection([another]), now: NOW }),
+      ),
+    ).toContain("not found");
   });
 
   test("rejects source-provider disagreement", () => {
-    expect(reason(selectInvoiceReminderInput({
-      requestedRef: REF,
-      source: projection([], { provider: "stripe" }),
-      now: NOW,
-    }))).toContain("provider");
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: REF,
+          source: projection([], { provider: "stripe" }),
+          now: NOW,
+        }),
+      ),
+    ).toContain("provider");
   });
 
   test("rejects an invalid or non-invoice source ref", () => {
-    expect(reason(selectInvoiceReminderInput({
-      requestedRef: { ...REF, kind: "payment" },
-      source: projection(),
-      now: NOW,
-    }))).toContain("invoice ref");
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: { ...REF, kind: "payment" },
+          source: projection(),
+          now: NOW,
+        }),
+      ),
+    ).toContain("invoice ref");
   });
 
   test("rejects unavailable and partial reads", () => {
-    expect(reason(selectInvoiceReminderInput({
-      requestedRef: REF,
-      source: { state: "unavailable", provider: "quickbooks", because: "lane parked" },
-      now: NOW,
-    }))).toContain("unavailable");
-    expect(reason(selectInvoiceReminderInput({
-      requestedRef: REF,
-      source: { ...projection(), state: "partial", missing: "next page" },
-      now: NOW,
-    }))).toContain("partial");
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: REF,
+          source: { state: "unavailable", provider: "quickbooks", because: "lane parked" },
+          now: NOW,
+        }),
+      ),
+    ).toContain("unavailable");
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: REF,
+          source: { ...projection(), state: "partial", missing: "next page" },
+          now: NOW,
+        }),
+      ),
+    ).toContain("partial");
   });
 
   test("rejects stale source data at the exact freshness boundary", () => {
-    expect(selectInvoiceReminderInput({
-      requestedRef: REF,
-      source: projection([invoice()], { retrievedAt: NOW - REMINDER_SOURCE_MAX_AGE_MS }),
-      now: NOW,
-    }).ok).toBe(true);
-    expect(reason(selectInvoiceReminderInput({
-      requestedRef: REF,
-      source: projection([invoice()], { retrievedAt: NOW - REMINDER_SOURCE_MAX_AGE_MS - 1 }),
-      now: NOW,
-    }))).toContain("stale");
+    expect(
+      selectInvoiceReminderInput({
+        requestedRef: REF,
+        source: projection([invoice()], { retrievedAt: NOW - REMINDER_SOURCE_MAX_AGE_MS }),
+        now: NOW,
+      }).ok,
+    ).toBe(true);
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: REF,
+          source: projection([invoice()], { retrievedAt: NOW - REMINDER_SOURCE_MAX_AGE_MS - 1 }),
+          now: NOW,
+        }),
+      ),
+    ).toContain("stale");
   });
 
   test("rejects missing due date, zero balance and cross-currency facts", () => {
-    expect(reason(selectInvoiceReminderInput({ requestedRef: REF, source: projection([invoice({ dueAt: null })]), now: NOW }))).toContain("due date");
-    expect(reason(selectInvoiceReminderInput({ requestedRef: REF, source: projection([invoice({ outstanding: { minor: 0, currency: "USD" } })]), now: NOW }))).toContain("unpaid balance");
-    expect(reason(selectInvoiceReminderInput({ requestedRef: REF, source: projection([invoice({ outstanding: { minor: 25_050, currency: "EUR" } })]), now: NOW }))).toContain("currency");
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: REF,
+          source: projection([invoice({ dueAt: null })]),
+          now: NOW,
+        }),
+      ),
+    ).toContain("due date");
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: REF,
+          source: projection([invoice({ outstanding: { minor: 0, currency: "USD" } })]),
+          now: NOW,
+        }),
+      ),
+    ).toContain("unpaid balance");
+    expect(
+      reason(
+        selectInvoiceReminderInput({
+          requestedRef: REF,
+          source: projection([invoice({ outstanding: { minor: 25_050, currency: "EUR" } })]),
+          now: NOW,
+        }),
+      ),
+    ).toContain("currency");
   });
 });
 
 test("the code-owned draft renders exact amount, due date and lateness without an LLM", () => {
-  const selected = selectInvoiceReminderInput({ requestedRef: REF, source: projection(), now: NOW });
+  const selected = selectInvoiceReminderInput({
+    requestedRef: REF,
+    source: projection(),
+    now: NOW,
+  });
   expect(selected.ok).toBe(true);
   if (!selected.ok) return;
 

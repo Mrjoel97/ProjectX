@@ -71,10 +71,7 @@ export function selectInvoiceReminderInput({
   if (source.meta.provider !== requestedRef.provider) {
     return err("The invoice ref and source provider do not match.");
   }
-  if (
-    source.meta.retrievedAt > now ||
-    now - source.meta.retrievedAt > REMINDER_SOURCE_MAX_AGE_MS
-  ) {
+  if (source.meta.retrievedAt > now || now - source.meta.retrievedAt > REMINDER_SOURCE_MAX_AGE_MS) {
     return err("The invoice source is stale; refetch it before staging a reminder.");
   }
 

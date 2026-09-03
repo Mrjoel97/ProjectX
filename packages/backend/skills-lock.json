@@ -20,7 +20,10 @@
         "bodySha256": "558cca103e7c298472a7d9f1ff4cd48651c4b08388f4ebadb2dd0ff63c082b24",
         "sourceRepo": "https://github.com/anthropics/knowledge-work-plugins",
         "sourceCommit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
-        "sourcePaths": ["small-business/skills/business-pulse/SKILL.md", "sales/skills/call-prep/SKILL.md"],
+        "sourcePaths": [
+          "small-business/skills/business-pulse/SKILL.md",
+          "sales/skills/call-prep/SKILL.md"
+        ],
         "license": "Apache-2.0",
         "modificationNotice": "Combined the provider-neutral business-pulse and call-prep workflow boundaries into a read-only revenue router with no provider or delivery authority."
       },
@@ -153,7 +156,10 @@
         "bodySha256": "2541cadb10404c34b0f08ca85fb17f43a810fe8dab86d5ee43d3582ae6b91899",
         "sourceRepo": "https://github.com/anthropics/knowledge-work-plugins",
         "sourceCommit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
-        "sourcePaths": ["small-business/skills/business-pulse/SKILL.md", "small-business/skills/ticket-deflector/SKILL.md"],
+        "sourcePaths": [
+          "small-business/skills/business-pulse/SKILL.md",
+          "small-business/skills/ticket-deflector/SKILL.md"
+        ],
         "license": "Apache-2.0",
         "modificationNotice": "Removed connector-specific collection actions and constrained output to an unsent proposed email plan behind existing approval and suppression terminals."
       }

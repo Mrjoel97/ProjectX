@@ -382,9 +382,7 @@ export type RevenueSignalProjection = {
  * Pure Phase 28 outcome fold. Input ordering is irrelevant and duplicate terminal rows are ignored
  * by `(runId,event)` before any denominator is built.
  */
-export function projectRevenueSignals(
-  events: readonly PackMetricEvent[],
-): RevenueSignalProjection {
+export function projectRevenueSignals(events: readonly PackMetricEvent[]): RevenueSignalProjection {
   const chronological = [...events].sort((a, b) => a.createdAt - b.createdAt);
   const seen = new Set<string>();
   const unique = chronological.filter((event) => {
@@ -415,7 +413,8 @@ export function projectRevenueSignals(
   const reminders = unique.filter((event) => event.event === "reminder_staged");
   const reminderItems = reminders.reduce((sum, event) => sum + (event.itemCount ?? 0), 0);
   const firstReminderAt = reminders.reduce<number | null>(
-    (earliest, event) => (earliest === null || event.createdAt < earliest ? event.createdAt : earliest),
+    (earliest, event) =>
+      earliest === null || event.createdAt < earliest ? event.createdAt : earliest,
     null,
   );
   const recoveredRefs = new Set(

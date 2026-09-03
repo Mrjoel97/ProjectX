@@ -22,6 +22,7 @@
 import {
   PACK_EVENTS,
   PACK_OUTCOMES,
+  type PackMetricEvent,
   REVENUE_CONFIDENCE,
   REVENUE_COUNT_MAX,
   REVENUE_COVERAGE,
@@ -29,7 +30,6 @@ import {
   REVENUE_PROVIDERS,
   REVENUE_STATUSES,
   REVENUE_WORKFLOWS,
-  type PackMetricEvent,
   WORKFLOW_EVENT_STREAM_IDS,
 } from "@pikar/core";
 import { v } from "convex/values";
@@ -98,7 +98,9 @@ function assertRevenueEvent(args: WorkflowPackEventInput): void {
 
   if (
     args.event === "connector_lifecycle" &&
-    (args.provider === undefined || args.status === undefined || !CONNECTOR_LIFECYCLE.has(args.status))
+    (args.provider === undefined ||
+      args.status === undefined ||
+      !CONNECTOR_LIFECYCLE.has(args.status))
   )
     throw new Error("REVENUE_LIFECYCLE_FIELDS");
   if (
@@ -106,7 +108,10 @@ function assertRevenueEvent(args: WorkflowPackEventInput): void {
     (args.provider === undefined || args.status === undefined || !CONNECTOR_READ.has(args.status))
   )
     throw new Error("REVENUE_READ_FIELDS");
-  if (args.event === "workflow_completed" && (args.workflow === undefined || args.outcome === undefined))
+  if (
+    args.event === "workflow_completed" &&
+    (args.workflow === undefined || args.outcome === undefined)
+  )
     throw new Error("REVENUE_WORKFLOW_FIELDS");
   if (
     args.event === "finance_computed" &&
@@ -118,7 +123,10 @@ function assertRevenueEvent(args: WorkflowPackEventInput): void {
     (args.workflow !== "revenue-invoice-reminder" || args.itemCount === undefined)
   )
     throw new Error("REVENUE_REMINDER_FIELDS");
-  if (args.event === "plan_decided" && (args.status === undefined || !PLAN_DECISION.has(args.status)))
+  if (
+    args.event === "plan_decided" &&
+    (args.status === undefined || !PLAN_DECISION.has(args.status))
+  )
     throw new Error("REVENUE_DECISION_FIELDS");
   if (
     args.event === "recovery_observed" &&

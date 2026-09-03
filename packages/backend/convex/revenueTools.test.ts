@@ -1,14 +1,10 @@
-import type { BusinessFinanceResult } from "./revenueFinance";
+import { SPECIALISTS } from "@pikar/core";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { SPECIALISTS } from "@pikar/core";
+import type { BusinessFinanceResult } from "./revenueFinance";
+import { buildRevenueTools, formatFinanceEvidence, isRevenueToolGrant } from "./revenueTools";
 import schema from "./schema";
-import {
-  buildRevenueTools,
-  formatFinanceEvidence,
-  isRevenueToolGrant,
-} from "./revenueTools";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const NOW = Date.UTC(2026, 7, 31);
@@ -131,14 +127,20 @@ describe("code-owned revenue grant", () => {
       "readRevenueCrm",
     ]);
     const crm = tools.readRevenueCrm!.inputSchema as unknown as {
-      jsonSchema: { properties: Record<string, { enum?: string[] }>; additionalProperties: boolean };
+      jsonSchema: {
+        properties: Record<string, { enum?: string[] }>;
+        additionalProperties: boolean;
+      };
     };
     expect(crm.jsonSchema.properties.operation?.enum).toEqual(["attention", "customer_pulse"]);
     expect(crm.jsonSchema.properties.provider?.enum).toEqual(["hubspot"]);
     expect(crm.jsonSchema.additionalProperties).toBe(false);
 
     const finance = tools.readBusinessFinance!.inputSchema as unknown as {
-      jsonSchema: { properties: Record<string, { enum?: string[] }>; additionalProperties: boolean };
+      jsonSchema: {
+        properties: Record<string, { enum?: string[] }>;
+        additionalProperties: boolean;
+      };
     };
     expect(finance.jsonSchema.properties.operation?.enum).toEqual([
       "cash_flow",
@@ -148,7 +150,10 @@ describe("code-owned revenue grant", () => {
     expect(finance.jsonSchema.properties).not.toHaveProperty("horizonDays");
     expect(finance.jsonSchema.additionalProperties).toBe(false);
     const refusal = tools.declareUnsupported!.inputSchema as unknown as {
-      jsonSchema: { properties: Record<string, { enum?: string[] }>; additionalProperties: boolean };
+      jsonSchema: {
+        properties: Record<string, { enum?: string[] }>;
+        additionalProperties: boolean;
+      };
     };
     expect(refusal.jsonSchema.properties.reason?.enum).toEqual([
       "unavailable",

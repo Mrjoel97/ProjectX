@@ -2315,12 +2315,7 @@ function selfCheck() {
   };
   assert.doesNotThrow(
     () =>
-      assertRevenueDiagnosticArtifact(
-        redArtifact,
-        lockedPins,
-        revenueGateSuite,
-        revenueStateSuite,
-      ),
+      assertRevenueDiagnosticArtifact(redArtifact, lockedPins, revenueGateSuite, revenueStateSuite),
     "a red live result with the complete per-pin fixture refs is valid diagnostic evidence",
   );
   assert.throws(

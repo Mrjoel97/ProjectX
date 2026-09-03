@@ -12,8 +12,22 @@
         "asOfMs": 1788134400000,
         "horizonDays": 30,
         "confidence": "high",
-        "coverage": { "providers": ["quickbooks"], "authorities": ["accounting_authority"], "capped": false, "partial": false, "missingCount": 0 },
-        "values": [{ "currency": "USD", "state": "known", "pointCount": 3, "closingMinor": 1250000, "closingCurrency": "USD" }],
+        "coverage": {
+          "providers": ["quickbooks"],
+          "authorities": ["accounting_authority"],
+          "capped": false,
+          "partial": false,
+          "missingCount": 0
+        },
+        "values": [
+          {
+            "currency": "USD",
+            "state": "known",
+            "pointCount": 3,
+            "closingMinor": 1250000,
+            "closingCurrency": "USD"
+          }
+        ],
         "sources": [
           { "provider": "quickbooks", "state": "ready", "coverageCount": 4, "missingCount": 0 },
           { "provider": "stripe", "state": "unavailable", "coverageCount": 0, "missingCount": 0 },

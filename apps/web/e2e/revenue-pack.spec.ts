@@ -59,9 +59,9 @@ test("parked revenue lanes stay absent across authenticated responsive views", a
       await expect(connections.getByTestId(`connections-${provider}`)).toHaveCount(0);
     }
 
-    const pageOverflow = await page.locator("html").evaluate(
-      (element) => element.scrollWidth - element.clientWidth,
-    );
+    const pageOverflow = await page
+      .locator("html")
+      .evaluate((element) => element.scrollWidth - element.clientWidth);
     expect(pageOverflow).toBeLessThanOrEqual(1);
 
     mkdirSync(artifacts, { recursive: true });

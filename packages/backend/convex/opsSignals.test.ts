@@ -426,7 +426,11 @@ describe("opsSignals.revenueSignals (Phase 28 bounded projection)", () => {
       .withIdentity({ subject: TENANT })
       .query(api.opsSignals.revenueSignals, { sinceMs: SINCE, untilMs: NOW });
 
-    expect(report.connectorAvailability).toMatchObject({ numerator: 1, denominator: 2, value: 0.5 });
+    expect(report.connectorAvailability).toMatchObject({
+      numerator: 1,
+      denominator: 2,
+      value: 0.5,
+    });
     expect(report.connectorReadCompletion).toMatchObject({
       numerator: 2,
       denominator: 3,
@@ -434,7 +438,12 @@ describe("opsSignals.revenueSignals (Phase 28 bounded projection)", () => {
     });
     expect(report.followUpCompletion).toMatchObject({ numerator: 1, denominator: 2, value: 0.5 });
     expect(report.overdueRecovery).toMatchObject({ numerator: 1, denominator: 2, value: 0.5 });
-    expect(report.responseHandling).toEqual({ eligible: 1, measured: 1, medianMs: 2_000, maxMs: 2_000 });
+    expect(report.responseHandling).toEqual({
+      eligible: 1,
+      measured: 1,
+      medianMs: 2_000,
+      maxMs: 2_000,
+    });
     expect(report.finance).toEqual({
       computations: 2,
       coverage: { complete: 1, partial: 1, unknown: 0 },
@@ -443,7 +452,12 @@ describe("opsSignals.revenueSignals (Phase 28 bounded projection)", () => {
       unknownTotal: 3,
     });
     expect(report.workflowCost).toEqual({ totalCents: 20, runsPriced: 2, runsJoined: 2 });
-    expect(report.workflowLatency).toEqual({ runsMeasured: 1, medianMs: 100, maxMs: 100, runsJoined: 2 });
+    expect(report.workflowLatency).toEqual({
+      runsMeasured: 1,
+      medianMs: 100,
+      maxMs: 100,
+      runsJoined: 2,
+    });
     expect(report.window.complete).toBe(true);
   });
 
@@ -505,9 +519,19 @@ describe("opsSignals.revenueSignals (Phase 28 bounded projection)", () => {
 
     expect(report.followUpCompletion).toEqual({ kind: "not_applicable", reason: "no_data" });
     expect(report.overdueRecovery).toEqual({ kind: "not_applicable", reason: "no_data" });
-    expect(report.responseHandling).toEqual({ eligible: 0, measured: 0, medianMs: null, maxMs: null });
+    expect(report.responseHandling).toEqual({
+      eligible: 0,
+      measured: 0,
+      medianMs: null,
+      maxMs: null,
+    });
     expect(report.workflowCost).toEqual({ totalCents: 0, runsPriced: 0, runsJoined: 0 });
-    expect(report.workflowLatency).toEqual({ runsMeasured: 0, medianMs: null, maxMs: null, runsJoined: 0 });
+    expect(report.workflowLatency).toEqual({
+      runsMeasured: 0,
+      medianMs: null,
+      maxMs: null,
+      runsJoined: 0,
+    });
   });
 
   test("caps event cardinality and labels the partial projection", async () => {
@@ -590,10 +614,9 @@ describe("opsSignals.revenueSignals (Phase 28 bounded projection)", () => {
         return;
       }
       for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-        expect(
-          key,
-          `content-shaped field at ${path}.${key}`,
-        ).not.toMatch(/name|email|message|body|subject|description|currency|token|credential|payload|raw/i);
+        expect(key, `content-shaped field at ${path}.${key}`).not.toMatch(
+          /name|email|message|body|subject|description|currency|token|credential|payload|raw/i,
+        );
         visit(nested, `${path}.${key}`);
       }
     };

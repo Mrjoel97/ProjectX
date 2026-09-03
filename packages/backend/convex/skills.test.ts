@@ -48,12 +48,12 @@ import { describe, expect, test } from "vitest";
 // package blocks the deep specifier) so the REAL audit path runs instead of throwing
 // "component not registered". The dispatch.test.ts / contacts.test.ts idiom, verbatim.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import skillsLock from "../skills-lock.json";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
 import schema from "./schema";
 import { loadEffectiveSkill, loadSkill } from "./skills";
-import skillsLock from "../skills-lock.json";
 
 // Register every convex module so internal.* function references resolve.
 // `import.meta.glob` is a Vite feature; its type is not in the Convex tsconfig
@@ -138,7 +138,10 @@ describe("Phase 28 revenue candidate publication", () => {
     const source = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
     const start = source.indexOf("export const seedRevenueCandidates");
     expect(start).toBeGreaterThan(-1);
-    const region = source.slice(start, source.indexOf("export const inspectRevenueCandidates", start));
+    const region = source.slice(
+      start,
+      source.indexOf("export const inspectRevenueCandidates", start),
+    );
     expect(region).not.toMatch(/tools?|grant|discover/i);
     expect(region).not.toContain('status: "active"');
     expect(region).not.toContain("activateSkill");
@@ -168,9 +171,7 @@ describe("Phase 28 revenue candidate publication", () => {
     const t = convexTest(schema, modules);
     await t.mutation(internal.skills.seedRevenueCandidates, {});
 
-    const approved = manifest.filter(
-      (pin) => pin.activationDecision.decision === "approve",
-    );
+    const approved = manifest.filter((pin) => pin.activationDecision.decision === "approve");
     const parked = manifest.filter((pin) => pin.activationDecision.decision === "park");
     expect(approved.map((pin) => pin.name).sort()).toEqual([
       "revenue-call-list",
@@ -221,7 +222,9 @@ describe("Phase 28 revenue candidate publication", () => {
     const refs = await t.query(internal.skills.inspectRevenueCandidates, {});
     for (const ref of refs) {
       const pin = manifest.find((candidate) => candidate.name === ref.name);
-      expect(ref.status).toBe(pin?.activationDecision.decision === "approve" ? "active" : "candidate");
+      expect(ref.status).toBe(
+        pin?.activationDecision.decision === "approve" ? "active" : "candidate",
+      );
       expect(ref.bodyHash).toBe(pin?.bodySha256);
       expect(ref.bodyBytes).toBe(pin?.bodyBytes);
       expect(ref.provenanceValid).toBe(true);

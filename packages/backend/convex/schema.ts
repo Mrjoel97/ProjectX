@@ -2603,12 +2603,7 @@ export default defineSchema({
       v.union(v.literal("complete"), v.literal("partial"), v.literal("unknown")),
     ),
     confidence: v.optional(
-      v.union(
-        v.literal("high"),
-        v.literal("medium"),
-        v.literal("low"),
-        v.literal("unknown"),
-      ),
+      v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.literal("unknown")),
     ),
     hasGap: v.optional(v.boolean()),
     /** Provider-reported observation time, not draft/approval/send time. */

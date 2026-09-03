@@ -13,7 +13,7 @@
 //   distribution covers BOTH lanes and is the approve-proxy for cockpit sends.
 // - `costPerDeliveredUsd` is pipeline LLM cost per delivered send.
 // The ops card labels each metric against these realities (Pitfall 6).
-import { projectRevenueSignals, type PackMetricEvent } from "@pikar/core";
+import { type PackMetricEvent, projectRevenueSignals } from "@pikar/core";
 import { v } from "convex/values";
 import { tenantQuery } from "./lib/functions";
 import { REVIEW_DECISIONS } from "./review";
@@ -125,7 +125,11 @@ export const revenueSignals = tenantQuery({
   handler: async (ctx, { sinceMs, untilMs }) => {
     const until = untilMs ?? Date.now();
     const requestedSince = sinceMs ?? until - REVENUE_SIGNAL_DEFAULT_WINDOW_MS;
-    if (!Number.isSafeInteger(until) || !Number.isSafeInteger(requestedSince) || requestedSince > until)
+    if (
+      !Number.isSafeInteger(until) ||
+      !Number.isSafeInteger(requestedSince) ||
+      requestedSince > until
+    )
       throw new Error("INVALID_REVENUE_SIGNAL_WINDOW");
     const retentionSince = until - REVENUE_SIGNAL_MAX_WINDOW_MS;
     const since = Math.max(requestedSince, retentionSince);
@@ -146,9 +150,7 @@ export const revenueSignals = tenantQuery({
 
     const workflowRunIds = [
       ...new Set(
-        events
-          .filter((event) => event.event === "workflow_completed")
-          .map((event) => event.runId),
+        events.filter((event) => event.event === "workflow_completed").map((event) => event.runId),
       ),
     ];
     if (workflowRunIds.length > PACK_RUN_JOIN_MAX) reasons.push("join_cap");

@@ -85,8 +85,8 @@ import { packCustomerComplaintSkillBody } from "@pikar/contracts/skills/packCust
 import { packProcessSopSkillBody } from "@pikar/contracts/skills/packProcessSop";
 import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCallPrep";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
-import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
 import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
+import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
 import { styleCoachingSkillBody } from "@pikar/contracts/skills/styleCoaching";
 import { styleConciseSkillBody } from "@pikar/contracts/skills/styleConcise";
 import { styleDirectSkillBody } from "@pikar/contracts/skills/styleDirect";
@@ -100,6 +100,7 @@ import {
   WORKFLOW_PACK_SKILL_NAMES,
 } from "@pikar/core";
 import { v } from "convex/values";
+import skillsLock from "../skills-lock.json";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -110,7 +111,6 @@ import {
 } from "./_generated/server";
 import { ownerMutation, ownerQuery, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
-import skillsLock from "../skills-lock.json";
 
 /**
  * Load the currently active skill by name. Reads the single status==="active"

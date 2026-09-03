@@ -4,8 +4,8 @@ import { REVENUE_EVENT_KINDS } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "./_generated/api";
-import schema from "./schema";
 import { REVENUE_COUNT_MAX } from "./revenueTelemetry";
+import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 

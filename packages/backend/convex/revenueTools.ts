@@ -327,7 +327,11 @@ export function buildRevenueTools(
             event: "workflow_completed",
             workflow: "revenue-call-list",
             outcome:
-              view.rows.length === 0 ? "no_findings" : view.coverage === "partial" ? "partial" : "useful",
+              view.rows.length === 0
+                ? "no_findings"
+                : view.coverage === "partial"
+                  ? "partial"
+                  : "useful",
             itemCount: view.rows.length,
             partial: view.coverage === "partial",
             capped: view.capped,
@@ -405,8 +409,7 @@ export function buildRevenueTools(
           tenantId,
           runId: `rev:finance:${operation}:${String(planId)}`,
           event: "finance_computed",
-          workflow:
-            operation === "cash_flow" ? "revenue-cash-flow" : "revenue-payroll-confidence",
+          workflow: operation === "cash_flow" ? "revenue-cash-flow" : "revenue-payroll-confidence",
           coverage: state === "unavailable" ? "unknown" : degraded ? "partial" : "complete",
           confidence: selected.confidence === "unavailable" ? "unknown" : selected.confidence,
           itemCount: selected.value.length,

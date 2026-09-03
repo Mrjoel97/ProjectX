@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   DECISION_SUPPORT_NOTICE,
   type Invoice,
@@ -10,7 +11,6 @@ import {
 } from "@pikar/revenue";
 import type { PayPalBalances } from "@pikar/revenue/providers/paypal";
 import type { StripeBalance } from "@pikar/revenue/providers/stripe";
-import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import type { ActionCtx } from "./_generated/server";
 import {
@@ -56,8 +56,10 @@ const partial = <T>(
   missing,
 });
 
-const unavailable = <T>(provider: Provider, because = "the source is unavailable"): Projection<T> =>
-  ({ state: "unavailable", provider, because });
+const unavailable = <T>(
+  provider: Provider,
+  because = "the source is unavailable",
+): Projection<T> => ({ state: "unavailable", provider, because });
 
 const invoice = (
   provider: Provider,

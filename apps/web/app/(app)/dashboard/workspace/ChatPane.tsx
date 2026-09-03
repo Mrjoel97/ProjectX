@@ -4,13 +4,7 @@ import { useThreadMessages } from "@convex-dev/agent/react";
 import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import { useRef, useState } from "react";
-import {
-  BoltIcon,
-  BrainIcon,
-  ChevronDownIcon,
-  SendIcon,
-  UserIcon,
-} from "../../../(auth)/icons";
+import { BoltIcon, BrainIcon, ChevronDownIcon, SendIcon, UserIcon } from "../../../(auth)/icons";
 import { MarkdownDocument } from "../MarkdownDocument";
 // The verb map lives in exactly ONE module (cards.tsx) and both surfaces read it through
 // stepText — a second copy WILL drift, and a drifted verb is a surface disagreeing with itself.

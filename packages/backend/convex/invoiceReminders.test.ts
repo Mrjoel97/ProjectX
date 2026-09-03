@@ -6,8 +6,8 @@ import { describe, expect, test, vi } from "vitest";
 import type { Id } from "./_generated/dataModel";
 import {
   buildInvoiceReminderTool,
-  stageInvoiceReminderFromSource,
   type InvoiceReminderStageDeps,
+  stageInvoiceReminderFromSource,
 } from "./invoiceReminders";
 import schema from "./schema";
 
@@ -215,15 +215,17 @@ describe("existing proposed-plan persistence", () => {
       body: "Reminder body",
     };
 
-    await expect(
-      t.mutation(stageProposed, { ...base, planId: foreign }),
-    ).rejects.toThrow(/plan not found/i);
-    expect(
-      await t.mutation(stageProposed, { ...base, planId: empty }),
-    ).toEqual({ ok: false, reason: "recipient_required" });
-    expect(
-      await t.mutation(stageProposed, { ...base, planId: proposed }),
-    ).toEqual({ ok: false, reason: "plan_in_progress" });
+    await expect(t.mutation(stageProposed, { ...base, planId: foreign })).rejects.toThrow(
+      /plan not found/i,
+    );
+    expect(await t.mutation(stageProposed, { ...base, planId: empty })).toEqual({
+      ok: false,
+      reason: "recipient_required",
+    });
+    expect(await t.mutation(stageProposed, { ...base, planId: proposed })).toEqual({
+      ok: false,
+      reason: "plan_in_progress",
+    });
   });
 });
 
@@ -231,7 +233,9 @@ describe("the existing delivery boundary remains the only terminal", () => {
   test("Phase 28 adds no Gmail, workflow, scheduler, provider-write, or alternate delivery arm", () => {
     const source = readFileSync(new URL("./invoiceReminders.ts", import.meta.url), "utf8");
     expect(source).not.toMatch(/internal\.(gmail|graph|delivery)\./);
-    expect(source).not.toMatch(/deliverApprovedPlan|workflow\.start|scheduler\.(run|runAfter|runAt)/);
+    expect(source).not.toMatch(
+      /deliverApprovedPlan|workflow\.start|scheduler\.(run|runAfter|runAt)/,
+    );
     expect(source).not.toMatch(/\b(fetch|POST|PUT|PATCH|DELETE)\b/);
     expect(source).not.toMatch(/ACTION_TYPES|EXTERNAL_TARGETS/);
     expect(source.match(/ctx\.db\.patch\(/g)).toHaveLength(1);
@@ -260,6 +264,8 @@ describe("the existing delivery boundary remains the only terminal", () => {
     expect(graph).toContain("prepareGovernedMessage(ctx, req)");
     expect(contacts).toContain(".map(normalizeAddress)");
     expect(contacts).toContain("for (const address of recipientMembers(recipient))");
-    expect(contacts).toContain("if (await suppressionByAddress(ctx, tenantId, address)) return true");
+    expect(contacts).toContain(
+      "if (await suppressionByAddress(ctx, tenantId, address)) return true",
+    );
   });
 });
