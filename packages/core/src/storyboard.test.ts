@@ -916,18 +916,53 @@ describe("parseSceneDeck — narration has a ceiling and NO floor", () => {
     expect(parseSceneDeck(sceneDeck(rows)).ok).toBe(true);
   });
 
-  it("refuses a line that would run into the NEXT line, naming its window", () => {
-    const tooLong = `${S4} ${S4} ${S4}`; // 200+ chars against an 8-second, 112-character window
+  // ── 33.1-06: RUNNING INTO THE NEXT LINE IS NO LONGER A REFUSAL ────────────────────────────
+  //
+  // `assemble_final.sh` used to hard-error on it; it now DELAYS the later take by `TAKE_GAP_S`
+  // and keeps only one fatal case. Refusing a deck for a failure the renderer no longer has is a
+  // free refusal of a reel that would have rendered — which is what the owner kept hitting. The
+  // pair below is the whole contract: the first accepts, the second still refuses.
+  it("ACCEPTS a line that runs into the next line — the assembler pushes that take", () => {
+    const tooLong = `${S4} ${S4} ${S4}`; // 200+ chars against an 8-second scene
     const rows = [
       `| 1 | generated_video | 8 | Founder at a desk | ${tooLong} | | |`,
       `| 2 | animated_image | 22 | Mail icons | ${S2} | | |`,
     ];
+    // Scene 1 speaks for ~14.6s from 0; scene 2's line is displaced to ~14.7s and needs ~3.2s,
+    // ending well inside 30. Nothing overruns the REEL, so nothing is refused.
+    expect(parseSceneDeck(sceneDeck(rows)).ok).toBe(true);
+  });
+
+  it("STILL refuses a line that would still be speaking when the REEL ends", () => {
+    // The surviving fatal case, and the reason the check was narrowed rather than deleted: a take
+    // can be delayed, but there is nowhere to delay it TO once the picture track has ended. The
+    // renderer exits with "would be cut mid-word", and by then every picture has been bought.
+    const rows = [
+      `| 1 | animated_image | 4 | Mail icons | ${S2} | | |`,
+      `| 2 | animated_image | 26 | Founder at a desk | ${"y".repeat(600)}. | | |`,
+    ];
     expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
       reason: "narration_too_long",
-      sceneIndex: 0,
-      chars: tooLong.length,
-      availableSeconds: 8,
+      sceneIndex: 1,
     });
+  });
+
+  it("refuses on the CASCADE, not on any single line — three lines that each look fine", () => {
+    // NOT VACUOUS, and it is the reason `narrationOverrunsReel` carries a cursor instead of
+    // testing each line against its own window. Every line here fits its own scene comfortably;
+    // it is only the accumulated displacement of three of them that runs off the end. A per-line
+    // check — the shape this replaced — passes this deck and lets the renderer eat it.
+    const line = "y".repeat(150); // ~10.7s of speech in a 4-second scene
+    const rows = [
+      `| 1 | animated_image | 4 | one | ${line} | | |`,
+      `| 2 | animated_image | 4 | two | ${line} | | |`,
+      `| 3 | animated_image | 4 | three | ${line} | | |`,
+      `| 4 | animated_image | 3 | four | | | |`,
+    ];
+    const r = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe("narration_too_long");
   });
 
   it("lets a SILENT scene lend its whole duration to the line before it", () => {
@@ -1005,10 +1040,15 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
       `| 3 | generated_video | 2 | The cockpit | ${S3} | | |`,
       "| 4 | animated_image | 2 | One line of type | | | |",
     ];
+    // 33.1-06: the TRADE still cannot happen — that is what this test is about, and it is
+    // unchanged. The deck ALSO still refuses, but the reason moved and it is worth being exact
+    // about, because it is no longer "line 1 runs into line 3": scene 1 speaks for ~14.4s of a
+    // 15-second reel and scene 3's line needs ~2.3s more, so the LAST line is still talking after
+    // the picture has ended. Delaying a take cannot cure that; only a shorter line or a longer
+    // reel can. It is the surviving fatal case, arrived at through the cascade.
     expect(parseSceneDeck(sceneDeck(rows, "Target duration: 15"))).toMatchObject({
       reason: "narration_too_long",
-      sceneIndex: 0,
-      availableSeconds: 11,
+      sceneIndex: 2,
     });
   });
 
@@ -1044,11 +1084,13 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
       "| 3 | animated_image | 8 | Mail icons | | | |",
       "| 4 | animated_image | 6 | One line of type | | | |",
     ];
-    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
-      reason: "narration_too_long",
-      sceneIndex: 0,
-      availableSeconds: 8,
-    });
+    // Same 33.1-06 change as above: the donor floor still refuses the TRADE, and the deck now
+    // survives it. The floor is the assertion; the refusal was never this function's to make.
+    const r = parseSceneDeck(sceneDeck(rows));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.adjustments).toEqual([]);
+    expect(r.scenes.map((x) => x.durationMs / 1000)).toEqual([8, 8, 8, 6]);
   });
 
   // ── 33.1: A CLIP MAY DONATE SECONDS. The shape below is the one that sent the owner back with

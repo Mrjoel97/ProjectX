@@ -516,18 +516,48 @@ for ((i=0;i<SCENES;i++)); do
 done
 
 # ── THE TIMELINE CHECKS, in place of the per-cell band ────────────────────────────────────────
-# These are the two ways speech can still be WRONG once a line is free to cross a scene boundary.
-# Both are hard errors for the same reason the band was: the fix is to rewrite the line upstream,
-# never to stretch, trim or pad audio here. 0.05s of slack absorbs silencedetect's own resolution.
+# ONE of the two ways speech can be wrong is still a hard error. The OTHER is now resolved here
+# instead, and the difference between them is who can still fix it:
+#
+#   * PAST THE END OF THE REEL — still fatal. There is nowhere to put those seconds. The reel has a
+#     fixed length that the picture track already is, and the only cures are a shorter line or a
+#     longer reel, both of them upstream. Never atempo, never a trim.
+#   * INTO THE NEXT LINE — no longer fatal. The later take is DELAYED until the earlier one has
+#     finished, plus TAKE_GAP_S. Two narrators at once is what had to be prevented; refusing the
+#     whole reel was one way to prevent it and moving a take is a cheaper one. A take was always
+#     free to run past its own scene (that is the master timeline's whole point), so a line that
+#     starts a fraction late is the same class of drift the design already accepts.
+#
+# WHY THIS CHANGED (2026-09-03): the deck-level `narration_too_long` refusal upstream is an
+# ESTIMATE at 14 chars/second, made before any audio exists; this is the MEASURED truth. The
+# estimate refused decks the measurement would have accepted, and the owner was hitting it
+# repeatedly on decks that were fine. With collisions resolved here, that refusal was removed —
+# see `storyboard.ts`. **If you restore the hard error, restore the refusal too, or a deck that
+# cannot render will be sold to a tenant before it fails.**
+#
+# 0.05s of slack absorbs silencedetect's own resolution.
+TAKE_GAP_S=0.12
 NTAKE=${#TAKE_FILE[@]}
 TAKE_END=()
 for ((k=0;k<NTAKE;k++)); do
+  # A take may have been pushed by the PREVIOUS iteration, so its end is computed from the
+  # possibly-updated TAKE_ABS rather than from the placement loop's original value.
   TAKE_END[k]="$(awk -v a="${TAKE_ABS[k]}" -v s="${TAKE_SPEECH[k]}" 'BEGIN{printf "%.3f", a+s}')"
   awk -v e="${TAKE_END[k]}" -v t="$TOT" 'BEGIN{exit (e > t+0.05) ? 0 : 1}' && {
     echo "ERROR: voice ${TAKE_SCENE[k]} is still speaking at ${TAKE_END[k]}s but the reel ends at ${TOT}s — the line would be cut mid-word. REWRITE it shorter or give the deck more seconds (never pad, atempo, or trim speech)." >&2; exit 1; }
   if [[ $((k+1)) -lt "$NTAKE" ]]; then
-    awk -v e="${TAKE_END[k]}" -v nx="${TAKE_ABS[k+1]}" 'BEGIN{exit (e > nx+0.05) ? 0 : 1}' && {
-      echo "ERROR: voice ${TAKE_SCENE[k]} runs to ${TAKE_END[k]}s but voice ${TAKE_SCENE[k+1]} starts at ${TAKE_ABS[k+1]}s — two narrators would speak at once. REWRITE one of the two lines shorter." >&2; exit 1; }
+    if awk -v e="${TAKE_END[k]}" -v nx="${TAKE_ABS[k+1]}" 'BEGIN{exit (e > nx+0.05) ? 0 : 1}'; then
+      # PUSH, do not abort. The delay is recomputed from the same PAD_MS/SPEECH_ABS identity the
+      # placement loop uses, so the captions sidecar keeps agreeing with the mix — `speech_abs_s`
+      # is what `rebaseWords` shifts by, and a mix that moved without it would caption the reel
+      # against timings that no longer exist.
+      NEWABS="$(awk -v e="${TAKE_END[k]}" -v g="$TAKE_GAP_S" 'BEGIN{printf "%.3f", e+g}')"
+      NEWPAD="$(awk -v na="$NEWABS" -v a="${TAKE_ABS[k+1]}" -v p="${TAKE_PAD[k+1]}" 'BEGIN{printf "%d", p + (na-a)*1000}')"
+      echo "  note: voice ${TAKE_SCENE[k+1]} pushed ${TAKE_ABS[k+1]}s -> ${NEWABS}s so it does not overlap voice ${TAKE_SCENE[k]}" >&2
+      TAKE_ABS[k+1]="$NEWABS"
+      TAKE_PAD[k+1]="$NEWPAD"
+      PUSHED=$((${PUSHED:-0}+1))
+    fi
   fi
 done
 

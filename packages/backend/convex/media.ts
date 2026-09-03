@@ -30,6 +30,7 @@ import {
   maxCharsFor,
   minCharsFor,
   narrationCeilingSeconds,
+  narrationOverrunsReel,
   SHOT_TYPES,
   TARGET_DURATIONS,
   VISUAL_KINDS,
@@ -492,6 +493,14 @@ export async function reserveSceneJobInner(
   );
   if (claim) return { ok: false, reason: "unconfirmed_claims" };
 
+  // THE ONE NARRATION GATE ON THE MONEY PATH, over the WHOLE deck rather than scene by scene.
+  // The only overrun the assembler still cannot resolve is speech that is still running when the
+  // reel ends, and reaching it requires a cascade of displaced takes — so it is a property of the
+  // deck, not of any one line. Same function the parser uses, deliberately: two gates with two
+  // models of the same renderer is how a deck gets accepted by one and refused by the other.
+  const overrun = narrationOverrunsReel(a.scenes, a.targetDurationSeconds);
+  if (overrun) return { ok: false, reason: overrun.reason };
+
   const now = Date.now();
   const batchId = crypto.randomUUID();
   const base = { tenantId: a.tenantId, planId: a.planId, batchId };
@@ -555,14 +564,19 @@ export async function reserveSceneJobInner(
     // the tenant's (resolved from the vault at render time) and a `text_card` is drawn by ffmpeg
     // inside a sandbox the flat render line already pays for.
 
-    // THE VOICE TAKE, only where there is a line. The ceiling runs to the next NARRATED scene, so
-    // a silent scene lends its window to the line before it — checked here, upstream of payment,
-    // because an overrun is otherwise only provable inside a sandbox that has already been bought.
+    // THE VOICE TAKE, only where there is a line.
+    //
+    // 33.1-06 moved this check OUT of the per-scene loop and up to `narrationOverrunsReel`, run
+    // once over the whole deck below-of-here in this same function. Two reasons, and the first is
+    // correctness rather than tidiness: the surviving failure — speech still running when the reel
+    // ends — is reachable only through a CASCADE of displaced takes, so it cannot be decided one
+    // scene at a time. The second is that this gate and `parseSceneDeck`'s now share ONE model of
+    // what the assembler does, and a reservation that refuses what the parser accepted would
+    // strand a deck between two gates that disagree.
+    //
+    // It stays upstream of payment for the reason it always was: an overrun is otherwise only
+    // provable inside a sandbox that has already been bought.
     if (scene.narration !== "") {
-      const availableSeconds = narrationCeilingSeconds(a.scenes, i);
-      if (scene.narration.length > maxCharsFor(availableSeconds)) {
-        return { ok: false, reason: "narration_too_long" };
-      }
       // Doubled for the same reason the block path doubles: ONE rewrite round is pre-paid, because
       // the provider returns no duration and a job that cannot afford its own cure strands a paid
       // deck. At $0.012 the doubling is free and the fail-closed direction is over-reserving.

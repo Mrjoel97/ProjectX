@@ -1069,22 +1069,9 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   const finalScenes = repaired?.scenes ?? scenes;
   const finalAdjustments = repaired ? [...adjustments, ...repaired.adjustments] : adjustments;
 
-  // The ONE narration rule left: a line must not run into the next line. No floor — see the
-  // header note. Still the LAST word: a repair that could not fix every window leaves the deck
-  // exactly as it was, and this loop refuses it on the same terms as before.
-  for (const [index, scene] of finalScenes.entries()) {
-    if (scene.narration === "") continue;
-    const availableSeconds = narrationCeilingSeconds(finalScenes, index);
-    if (scene.narration.length > availableSeconds * MAX_CHARS_PER_SECOND) {
-      return {
-        ok: false,
-        reason: "narration_too_long",
-        sceneIndex: index,
-        chars: scene.narration.length,
-        availableSeconds,
-      };
-    }
-  }
+  // The ONE narration rule left, and 33.1-06 NARROWED it to exactly what can still fail.
+  const overrun = narrationOverrunsReel(finalScenes, targetDurationSeconds);
+  if (overrun) return { ok: false, ...overrun };
 
   return {
     ok: true,
@@ -1092,6 +1079,69 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
     scenes: finalScenes,
     adjustments: finalAdjustments,
   };
+}
+
+/** The gap the assembler leaves between two takes it had to separate. Mirrors `TAKE_GAP_S` in
+ *  `assemble_final.sh`; if you change one, change both — this constant exists to PREDICT that
+ *  script, and a prediction that disagrees with it is worse than no prediction. */
+export const TAKE_GAP_S = 0.12;
+
+/**
+ * WILL ANY SPOKEN LINE STILL BE TALKING WHEN THE REEL ENDS?
+ *
+ * **This replaced "does a line run into the next line", and the reason is that the assembler no
+ * longer minds.** `assemble_final.sh` used to hard-error on BOTH overruns; since 33.1-06 it
+ * resolves a collision by DELAYING the later take (`TAKE_GAP_S`) and keeps only one fatal case —
+ * speech still running at the end of the reel, which cannot be delayed anywhere because the
+ * picture track is a fixed length. Predicting a failure the renderer no longer has is how a deck
+ * gets refused for free that would have rendered perfectly, which is what the owner hit
+ * repeatedly.
+ *
+ * So this SIMULATES the assembler rather than approximating it, and the fidelity is the point:
+ *
+ *  * A take that fits inside its own scene is CENTRED there, so it ends at
+ *    `sceneStart + (sceneDur + speech)/2` — later than a left-aligned end, and modelling it as
+ *    left-aligned would under-predict the push handed to the line after it.
+ *  * A take longer than its scene ANCHORS at the scene start and carries over the cut.
+ *  * A take that would begin before the previous one finished starts at `previousEnd + gap`
+ *    instead, and that displacement CASCADES — which is the only way the surviving fatal case can
+ *    still be reached, and precisely why this is a running cursor and not a per-line test.
+ *
+ * `MAX_CHARS_PER_SECOND` is an estimate of a thing the renderer measures exactly, so this stays
+ * fail-closed: it refuses a deck it predicts will overrun, and the renderer refuses again on the
+ * real audio if the estimate was generous.
+ */
+export function narrationOverrunsReel(
+  scenes: readonly Scene[],
+  targetDurationSeconds: number,
+): {
+  reason: "narration_too_long";
+  sceneIndex: number;
+  chars: number;
+  availableSeconds: number;
+} | null {
+  let cursor = 0;
+  for (const [index, scene] of scenes.entries()) {
+    if (scene.narration === "") continue;
+    const sceneStart = scene.durationMs === 0 ? 0 : scene.startMs / 1000;
+    const sceneSeconds = scene.durationMs / 1000;
+    const speech = scene.narration.length / MAX_CHARS_PER_SECOND;
+    const pushed = cursor > sceneStart;
+    const end =
+      !pushed && speech <= sceneSeconds
+        ? sceneStart + (sceneSeconds + speech) / 2 // centred in its own scene
+        : Math.max(sceneStart, cursor) + speech; // anchored, or displaced by the line before it
+    if (end > targetDurationSeconds) {
+      return {
+        reason: "narration_too_long",
+        sceneIndex: index,
+        chars: scene.narration.length,
+        availableSeconds: narrationCeilingSeconds(scenes, index),
+      };
+    }
+    cursor = end + TAKE_GAP_S;
+  }
+  return null;
 }
 
 /**

@@ -1,5 +1,66 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-03 (33.1-06 — **"RUNS INTO THE NEXT LINE" IS NO LONGER A REFUSAL. THE
+> ASSEMBLER MOVES THE TAKE. The owner asked for this constraint removed twice; it was removed by
+> making the renderer stop needing it, not by deleting the guard in front of it.**
+>
+> **Why the obvious version was refused first, and why that was right.** `assemble_final.sh` had
+> TWO hard errors — speech past the end of the reel, and speech running into the next line — and
+> both `exit 1`. Deleting the parse-time check alone would have converted a FREE refusal into a
+> PAID one: every picture and voice take bought, then an ffmpeg abort. So the renderer changed
+> first.
+>
+> **THE ASSEMBLER NOW PUSHES.** A colliding take is delayed to `previousEnd + TAKE_GAP_S` (0.12s)
+> and the run continues. The property that mattered — never two narrators over each other — is
+> unchanged; only the remedy moved, from refusing a reel to moving a take. `TAKE_PAD` and
+> `TAKE_ABS` are both rewritten so the captions sidecar keeps agreeing with the mix: `speech_abs_s`
+> is what `rebaseWords` shifts by, and a mix that moved without it would caption the reel against
+> timings that no longer exist. **No atempo, no trim, no pad — the push is an OFFSET change and
+> nothing else**, which is why the no-time-stretch tripwire still passes untouched.
+>
+> **ONE hard error survives, and the distinction is the whole design: speech still running when
+> the reel ENDS.** There is nowhere to delay it to — the picture track is a fixed length. Only a
+> shorter line or a longer reel cures it, both upstream.
+>
+> **So the parse gate was NARROWED, not deleted, and it now SIMULATES the renderer.**
+> `narrationOverrunsReel` walks the deck with a cursor, reproducing all three placement rules:
+> a take that fits its scene is CENTRED (ending later than a left-aligned one, which a naive model
+> under-predicts), a take longer than its scene ANCHORS at the scene start, and a take that would
+> begin before the previous finished starts at `previousEnd + gap` **and that displacement
+> CASCADES**. The cascade is the only route to the surviving fatal case, which is exactly why a
+> per-line window test cannot decide it and a running cursor can.
+>
+> **IT WAS VALIDATED AGAINST REAL FFMPEG, NOT A SOURCE SCAN** — the standing lesson on this
+> subsystem, and it paid: the harness rendered a genuinely colliding deck, printed
+> `note: voice 4 pushed 18.200s -> 20.520s`, and then failed with *"still speaking at 32.120s but
+> the reel ends at 30s"*. `narrationOverrunsReel` predicts **32.12s** for that same deck. The model
+> agrees with the renderer to the millisecond. A second run with a shorter final take rendered end
+> to end: 30.016s, decode-validated, sidecar written, `no_overlapping_lines` still a declared gate
+> and still true.
+>
+> **THE SECOND GATE HAD TO MOVE TOO, and finding it is the "fixing one gate reveals the next"
+> pattern.** `reserveSceneJobInner` re-checked the identical rule per scene on the money path.
+> Narrowing only the parser would have left a deck accepted by one gate and refused by the other.
+> It now calls the SAME function, once, over the whole deck — a per-scene call could not see the
+> cascade anyway. A third site (`media.ts:~2600`) is the canvas character counter: display-only,
+> left alone, and now slightly conservative — it may show a line as over-long that will render.
+>
+> **THE TESTS THAT WENT RED DESERVED TO, AND TWO OF THEM TAUGHT SOMETHING.** Three storyboard
+> tests asserted the old refusal. One of them — "the only slack is INSIDE the window" — STILL
+> refuses, and the reason moved: 14.4s of speech plus a 2.3s line cannot fit a 15-second reel, so
+> it is the surviving end-of-reel case reached through the cascade, not a collision. The first
+> rewrite of that test asserted acceptance and was wrong; the renderer's own arithmetic settled it.
+> A new test pins the cascade specifically — three lines that each fit their own scene and only
+> overrun in aggregate — which is the case a per-line check passes and the renderer eats.
+>
+> The assembler tripwire was REPLACED, not deleted: it now asserts the push happens, that the gap
+> is non-zero, that the displacement is an offset change, and that the old abort sentence is GONE —
+> so a well-meaning revert cannot restore an abort the parse gate no longer backstops.
+>
+> core 1246/1246, backend media+render 337/337, dispatch+plans 141/141, cockpit 77/77, web 678/678,
+> typecheck and biome clean.)
+
+
 > Last verified: 2026-09-03 (33.1-06 — **A MISSING CREDENTIAL USED TO STRAND THE REEL SILENTLY.
 > IT NOW FAILS THE LINE. Found by a live reel that hung, not by a test.**
 >

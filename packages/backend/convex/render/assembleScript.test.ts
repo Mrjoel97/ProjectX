@@ -167,12 +167,27 @@ test("a missing track DEGRADES and says so; a malformed slug REFUSES", () => {
 test("the harvested contract's five properties are all still present", () => {
   expect(SH, "fixed-length windows").toContain("--clip-seconds");
   expect(SH, "clip must cover its window").toMatch(/REGENERATE the block/);
-  // Wave 4 moved this from the CELL to the TIMELINE. The property is unchanged — an overrunning
-  // line is rewritten upstream, never stretched — so it is still asserted here, on the two ways
-  // speech can overrun once it is free to cross a scene boundary.
-  expect(SH, "a line past the end of the reel is a hard error").toMatch(/would be cut mid-word/);
-  expect(SH, "two lines at once is a hard error").toMatch(/two narrators would speak at once/);
-  expect(SH, "and the fix is upstream, never a stretch").toMatch(/REWRITE it shorter/);
+  // Wave 4 moved this from the CELL to the TIMELINE, and 33.1-06 SPLIT the two cases apart. The
+  // invariant that never moves is the one below it: speech is never stretched, trimmed or padded.
+  // What changed is the remedy when two lines collide.
+  expect(SH, "a line past the end of the reel is STILL a hard error").toMatch(
+    /would be cut mid-word/,
+  );
+  expect(SH, "and the fix for that one is upstream, never a stretch").toMatch(/REWRITE it shorter/);
+  // TWO NARRATORS AT ONCE IS NOW PREVENTED BY MOVING A TAKE, NOT BY REFUSING THE REEL. The old
+  // assertion here demanded the hard-error sentence. It is replaced rather than deleted, because
+  // the PROPERTY it protected — never two voices over each other — is unchanged and still needs a
+  // guard; only the remedy moved. Asserting the push keeps that guard, and asserting the absence
+  // of the old sentence stops a well-meaning revert from silently restoring an abort that the
+  // upstream deck check no longer backstops (`storyboard.ts` no longer refuses these decks).
+  expect(SH, "a collision PUSHES the later take").toMatch(/pushed .* so it does not overlap/);
+  expect(SH, "the push is a real gap, not zero").toMatch(/TAKE_GAP_S=0\.\d+/);
+  expect(SH, "the abort is GONE, not merely unreachable").not.toMatch(
+    /two narrators would speak at once/,
+  );
+  // The push must not become a stretch by another name: it moves WHEN a take starts and never
+  // touches its samples. `adelay` is the only mechanism, and the no-atempo test above still runs.
+  expect(SH, "the push is an offset change only").toMatch(/TAKE_PAD\[k\+1\]="\$NEWPAD"/);
   expect(SH, "speech-centred via silencedetect").toContain("silencedetect=noise=-45dB");
   expect(SH, "narration assert over the narrated spans").toMatch(/is NOT in the mix/);
   expect(SH, "the sidecar is written").toContain('"gates":[');
