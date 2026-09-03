@@ -375,8 +375,8 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1787300802.7160442,
-    "ast_hash": "e478006350ce31e85171f40bb031dc57",
+    "mtime": 1788431744.431836,
+    "ast_hash": "5ce0043a85e2390de32ff003ae4a1bfd",
     "semantic_hash": ""
   },
   "packages/contracts/skills/executive-agent.classifier.md": {
@@ -22782,6 +22782,21 @@
   "apps/web/e2e/.auth/chrome-profile/Default/Extensions/jelniggicmclhfgnlapbkgfibmgelfnp/0.1.6_0/static/media/know_know.7425021031697d62d483.mp3": {
     "mtime": 1781752252.0,
     "ast_hash": "e26b3213368afb768cad99004357c079",
+    "semantic_hash": ""
+  },
+  ".githooks/post-checkout": {
+    "mtime": 1788431693.139524,
+    "ast_hash": "b3b44062f29cf2338ee0755c66b1c3a4",
+    "semantic_hash": ""
+  },
+  ".githooks/post-commit": {
+    "mtime": 1788431693.126834,
+    "ast_hash": "b0fb56c95a3b3b1423f9c66bd075e697",
+    "semantic_hash": ""
+  },
+  ".githooks/README.md": {
+    "mtime": 1788431735.2675016,
+    "ast_hash": "77c328eea521c5f48510ce381729791d",
     "semantic_hash": ""
   }
 }
