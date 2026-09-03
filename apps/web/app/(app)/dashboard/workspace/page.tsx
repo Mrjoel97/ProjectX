@@ -752,8 +752,18 @@ export default function WorkspacePage() {
             className="pane-canvas"
             style={{ ...panel, padding: "1.25rem 1.6rem" }}
           >
-            <header style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
+            <header
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                flexWrap: "wrap",
+                gap: "1rem",
+              }}
+            >
+              {/* A non-zero basis keeps this copy from sharing a narrow flex line with an action.
+                  `flex: 1` uses a zero basis, which let the title collapse to ~15px at the
+                  divider's 20% clamp even after the header itself was allowed to wrap. */}
+              <div style={{ flex: "1 1 20rem", minWidth: 0 }}>
                 <p style={capsTeal}>Operating workspace</p>
                 <h2
                   style={{
@@ -798,6 +808,7 @@ export default function WorkspacePage() {
                   cursor: "pointer",
                   fontFamily: "inherit",
                   fontWeight: 600,
+                  maxWidth: "100%",
                 }}
                 title={
                   view === "canvas"
@@ -818,6 +829,7 @@ export default function WorkspacePage() {
                   border: "none",
                   cursor: "pointer",
                   fontFamily: "inherit",
+                  maxWidth: "100%",
                 }}
                 title="Clears this canvas by starting a new chat"
                 onClick={clearWorkspace}

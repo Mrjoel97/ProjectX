@@ -1,3 +1,37 @@
+> Last verified: 2026-09-03 (working tree, uncommitted - **INTAKE NOW STAGES BEFORE A THREAD
+> EXISTS, AND GAINED FOLDER ATTACH.** Reviewed, typechecks clean. Not verified live.)
+>
+> `IntakeControls` is now a `forwardRef` component with an optional `threadId`. Behaviour splits on
+> that prop and nothing else:
+>
+> - **`threadId` present** - unchanged. `acceptFiles` runs `runAttach` per file immediately; a
+>   finished recording goes straight to `runDictate`. This is the path `intake.spec.ts` drives (it
+>   sends a message first), which is why that spec still passes.
+> - **`threadId` absent** - files land in `pendingFiles`, a recording lands in `pendingDictation`,
+>   and NOTHING is uploaded or processed. `hasPending` is reported upward via `onPendingChange`.
+>   `flushToThread(id)` (exposed through `useImperativeHandle`) replays each staged item through the
+>   SAME `runAttach`/`runDictate` - i.e. the same governed `intake.ts` actions - and removes only
+>   what the backend accepted, so a failure keeps the item staged for retry.
+>
+> `runAttach`/`runDictate` gained a `destinationThreadId` parameter (defaulting to the prop) and now
+> RETURN `boolean` instead of `void`; the return value is what drives that selective unstaging.
+> **`if (busy || !destinationThreadId) return false` is now a real guard, not a formality** - it is
+> the single place that makes "staged but never sent" impossible to confuse with "sent".
+>
+> **Folder attach is the risky new surface.** A second hidden input carries `webkitdirectory` /
+> `directory` behind a "Folder" pill. Two things to know before extending it:
+>
+> 1. **`accept` is NOT enforced for directory pickers** in the browsers that implement this. The
+>    `ATTACH_ACCEPT` list on that input is decorative. Every file in the chosen directory reaches
+>    `acceptFiles`, whatever its type.
+> 2. **There is no file-COUNT cap and no extension filter** - only the existing per-file
+>    `INTAKE_UPLOAD_CAP_BYTES`. A user who picks a 500-file folder queues 500 sequential uploads and
+>    500 `attachToThread` actions, each of which is real money at the extract/transcribe seam (see
+>    the spend-ledger entry below). **A count cap, an extension filter against `ATTACH_ACCEPT`, and a
+>    confirm step above some threshold are all still owed.** Filenames use
+>    `file.webkitRelativePath || file.name`, so the stored filename can now contain path separators -
+>    anything that treats an intake filename as a flat token needs to expect that.
+
 > Last verified: 2026-08-22 (Foglamp tracing — **NO INTAKE BEHAVIOUR CHANGED.** The vision-OCR
 > `generateText` in `extractVisual` is now bound to the `attachment-extractor` agent. The
 > `transcribe()` call is NOT traced and CANNOT be: on `ai@7.0.20` transcribe takes no `telemetry`

@@ -1,3 +1,34 @@
+> Last verified: 2026-09-03 (working tree, uncommitted - **THE COMPOSER'S ATTACH AND MIC ARE LIVE
+> BEFORE A THREAD EXISTS.** Reviewed, typechecks clean. Not verified live.)
+>
+> `ChatPane` used to render two DISABLED placeholder buttons ("Send a message first - then attach
+> files") until `threadId` was truthy, and mounted `IntakeControls` only after. It now mounts
+> `IntakeControls` unconditionally, passing `threadId` as OPTIONAL plus an `onPendingChange`
+> callback, and holds an `IntakeControlsHandle` ref.
+>
+> **The governance ordering is preserved and is the whole design.** Selecting a file on a fresh chat
+> uploads NOTHING. The `File`/`Blob` stays in the browser. The first ordinary send mints the
+> plan-backed thread, and only then does `onSend` call `intakeRef.current.flushToThread(res.threadId)`,
+> which replays the staged items through the SAME `intake.ts` actions an existing thread uses. There
+> is no second intake path and there must never be one - see `docs/playbooks/intake.md` for the
+> staging mechanics.
+>
+> **Known wart, deliberately recorded rather than fixed here:** the `flushToThread` await sits INSIDE
+> `onSend`'s `try`, whose `catch` does `setText(t)` and rethrows. A send that succeeds followed by a
+> staged-file failure therefore refills the composer with text that was already sent, reading as a
+> failed send. The message did go. Fix by awaiting the flush outside that try, or by having the
+> catch distinguish the two phases.
+>
+> Layout, same pass: the composer is now `position: sticky; bottom: 0` with an explicit `--card`
+> background (it must stay opaque or messages scroll under it), and the workspace header's title
+> block moved from `flex: 1` to `flex: "1 1 20rem"` - a zero basis let the title collapse to ~15px
+> against the divider's 20% clamp once the header was allowed to wrap.
+>
+> **`apps/web/e2e/approvals.spec.ts` changed under this playbook's `apps/web/e2e/` watch, for a
+> reason that is not cockpit-shaped:** its "Review in Compliance" assertion pinned `href="/ops"`,
+> and that link now targets `/dashboard/approvals?tab=compliance`. Nothing about the cockpit specs
+> moved. See `docs/playbooks/dashboard-pages.md` for the navigation consolidation that caused it.
+
 > Last verified: 2026-09-01 (28-16 — **DISCOVERY AND PHASE COMPLETION ARE TWO INDEPENDENT
 > FAIL-CLOSED VIEWS OF THE SAME FOUR PROVIDER LANES.** The server query alone controls exposure;
 > `check-phase28-completion.mjs --report` independently derives the provider/REVN close matrix.

@@ -3,7 +3,13 @@
 import { api } from "@pikar/backend/api";
 import { useAction, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
-import { useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { MicIcon, PaperclipIcon } from "../../../(auth)/icons";
 
 // The intake-specific composer controls (INTK-02 attach / INTK-03 one-shot dictate). Fully
@@ -39,7 +45,24 @@ type StorageId = FunctionArgs<typeof api.intake.attachToThread>["storageId"];
  * chat turn, same lift ChatPane already does) and renders no conversation output itself — the
  * merge happens server-side and the existing chat/card views pick it up reactively.
  */
-export function IntakeControls({ threadId }: { threadId: string }) {
+export type IntakeControlsHandle = {
+  /** Process everything the user staged on a fresh chat against its newly-created thread. */
+  flushToThread: (threadId: string) => Promise<void>;
+};
+
+type IntakeControlsProps = {
+  threadId?: string;
+  onPendingChange?: (hasPending: boolean) => void;
+};
+
+/**
+ * Existing chats keep the original immediate upload/dictation behaviour. A fresh chat stages the
+ * exact same File/Blob objects locally until ChatPane's first ordinary send mints a governed
+ * thread, then `flushToThread` feeds them through the existing intake actions. Nothing is uploaded
+ * or processed merely because it was selected.
+ */
+export const IntakeControls = forwardRef<IntakeControlsHandle, IntakeControlsProps>(
+  function IntakeControls({ threadId, onPendingChange }, ref) {
   const generateUploadUrl = useMutation(api.intakeDb.generateUploadUrl);
   const attachToThread = useAction(api.intake.attachToThread);
   const dictateToThread = useAction(api.intake.dictateToThread);
@@ -47,8 +70,11 @@ export function IntakeControls({ threadId }: { threadId: string }) {
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingDictation, setPendingDictation] = useState<Blob | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const dictationTestInputRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -65,11 +91,11 @@ export function IntakeControls({ threadId }: { threadId: string }) {
     return storageId;
   }
 
-  async function runAttach(file: File) {
-    if (busy) return;
+  async function runAttach(file: File, destinationThreadId = threadId): Promise<boolean> {
+    if (busy || !destinationThreadId) return false;
     if (file.size > INTAKE_UPLOAD_CAP_BYTES) {
       setError(`${file.name}: over ${CAP_LABEL}.`);
-      return;
+      return false;
     }
     setBusy(true);
     setError(null);
@@ -78,21 +104,29 @@ export function IntakeControls({ threadId }: { threadId: string }) {
       const storageId = await upload(file, mimeType);
       if (!storageId) {
         setError(`${file.name}: upload failed.`);
-        return;
+        return false;
       }
-      await attachToThread({ threadId, storageId, filename: file.name, mimeType, size: file.size });
+      await attachToThread({
+        threadId: destinationThreadId,
+        storageId,
+        filename: file.webkitRelativePath || file.name,
+        mimeType,
+        size: file.size,
+      });
+      return true;
     } catch {
       setError(`${file.name}: couldn't process that file. Please try again.`);
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  async function runDictate(blob: Blob) {
-    if (busy) return;
+  async function runDictate(blob: Blob, destinationThreadId = threadId): Promise<boolean> {
+    if (busy || !destinationThreadId) return false;
     if (blob.size > INTAKE_UPLOAD_CAP_BYTES) {
       setError(`Recording: over ${CAP_LABEL}.`);
-      return;
+      return false;
     }
     setBusy(true);
     setError(null);
@@ -100,20 +134,40 @@ export function IntakeControls({ threadId }: { threadId: string }) {
       const storageId = await upload(blob, blob.type || "audio/webm");
       if (!storageId) {
         setError("Dictation upload failed.");
-        return;
+        return false;
       }
-      await dictateToThread({ threadId, storageId });
+      await dictateToThread({ threadId: destinationThreadId, storageId });
+      return true;
     } catch {
       setError("Couldn't process the dictation. Please try again.");
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
+  function acceptFiles(files: File[]) {
+    if (files.length === 0) return;
+    setError(null);
+    if (threadId) {
+      void (async () => {
+        for (const file of files) await runAttach(file, threadId);
+      })();
+      return;
+    }
+    setPendingFiles((current) => [...current, ...files]);
+  }
+
   function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    if (file) void runAttach(file);
+    acceptFiles(files);
+  }
+
+  function onPickFolder(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (folderInputRef.current) folderInputRef.current.value = "";
+    acceptFiles(files);
   }
 
   // Headless-safe dictation seam: a headless Playwright run can't grant a real microphone, so
@@ -143,7 +197,8 @@ export function IntakeControls({ threadId }: { threadId: string }) {
         for (const track of stream.getTracks()) track.stop();
         setRecording(false);
         const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
-        void runDictate(blob);
+        if (threadId) void runDictate(blob, threadId);
+        else setPendingDictation(blob);
       };
       recorderRef.current = rec;
       rec.start();
@@ -154,6 +209,28 @@ export function IntakeControls({ threadId }: { threadId: string }) {
   }
 
   const locked = busy || recording;
+  const hasPending = pendingFiles.length > 0 || pendingDictation !== null;
+
+  useEffect(() => onPendingChange?.(hasPending), [hasPending, onPendingChange]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flushToThread: async (destinationThreadId: string) => {
+        // Each action is the established governed intake path. Keep failed items staged so the
+        // user can retry; remove only work the backend accepted.
+        for (const file of pendingFiles) {
+          if (await runAttach(file, destinationThreadId)) {
+            setPendingFiles((current) => current.filter((candidate) => candidate !== file));
+          }
+        }
+        if (pendingDictation && (await runDictate(pendingDictation, destinationThreadId))) {
+          setPendingDictation(null);
+        }
+      },
+    }),
+    [pendingDictation, pendingFiles],
+  );
 
   // display:contents — the paperclip/mic triggers sit inline in the composer's icon row
   // (BRAND.md §5, same idiom as AttachmentPicker) while the error line wraps full-width below.
@@ -169,6 +246,17 @@ export function IntakeControls({ threadId }: { threadId: string }) {
         onChange={onPickFile}
         style={{ display: "none" }}
       />
+      <input
+        ref={folderInputRef}
+        type="file"
+        accept={ATTACH_ACCEPT}
+        aria-label="Attach a folder"
+        data-testid="attach-folder-input"
+        disabled={locked}
+        onChange={onPickFolder}
+        style={{ display: "none" }}
+        {...({ directory: "", webkitdirectory: "" } as Record<string, string>)}
+      />
       <button
         type="button"
         className="icon-btn"
@@ -178,6 +266,17 @@ export function IntakeControls({ threadId }: { threadId: string }) {
         onClick={() => fileInputRef.current?.click()}
       >
         <PaperclipIcon size={17} />
+      </button>
+      <button
+        type="button"
+        className="composer-pill"
+        aria-label="Attach a folder"
+        title="Attach a folder — supported files join the conversation"
+        disabled={locked}
+        onClick={() => folderInputRef.current?.click()}
+        style={{ paddingInline: "0.55rem" }}
+      >
+        Folder
       </button>
       <button
         type="button"
@@ -196,6 +295,45 @@ export function IntakeControls({ threadId }: { threadId: string }) {
       )}
       {busy && !recording && (
         <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Extracting…</span>
+      )}
+      {!threadId && hasPending && (
+        <div
+          data-testid="pending-intake"
+          role="status"
+          style={{ flexBasis: "100%", display: "grid", gap: "0.25rem" }}
+        >
+          <span style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+            Ready for your first message. Add instructions above, then Send.
+          </span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+            {pendingFiles.map((file, index) => (
+              <button
+                key={`${file.webkitRelativePath || file.name}-${file.size}-${index}`}
+                type="button"
+                className="composer-pill"
+                aria-label={`Remove ${file.webkitRelativePath || file.name}`}
+                title="Remove this staged file"
+                onClick={() =>
+                  setPendingFiles((current) => current.filter((_, candidate) => candidate !== index))
+                }
+                style={{ height: "auto", maxWidth: "100%", whiteSpace: "normal" }}
+              >
+                {file.webkitRelativePath || file.name} ×
+              </button>
+            ))}
+            {pendingDictation && (
+              <button
+                type="button"
+                className="composer-pill"
+                aria-label="Remove voice instruction"
+                title="Remove this staged voice instruction"
+                onClick={() => setPendingDictation(null)}
+              >
+                Voice instruction ready ×
+              </button>
+            )}
+          </div>
+        </div>
       )}
       {error && (
         <p
@@ -216,4 +354,5 @@ export function IntakeControls({ threadId }: { threadId: string }) {
       />
     </div>
   );
-}
+  },
+);
