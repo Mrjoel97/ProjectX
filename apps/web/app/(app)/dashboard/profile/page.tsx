@@ -3,7 +3,10 @@
 import { api } from "@pikar/backend/api";
 import type { BusinessProfile } from "@pikar/core";
 import { useQuery } from "convex/react";
-import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { BillingPanel } from "../settings/BillingPanel";
+import { DataControls } from "../settings/DataControls";
 import { BlueprintPanel } from "./BlueprintPanel";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { NarrativePanel } from "./NarrativePanel";
@@ -46,18 +49,46 @@ const page: React.CSSProperties = {
   alignContent: "start",
 };
 
-const TABS = [
+const PROFILE_TABS = [
   { id: "shape", label: "Business shape" },
   { id: "business", label: "What the business is" },
   { id: "blueprint", label: "Blueprint" },
+] as const;
+
+const TABS = [
+  { id: "profile", label: "Business Profile" },
   { id: "connections", label: "Connections" },
+  { id: "settings", label: "Settings" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+type ProfileTabId = (typeof PROFILE_TABS)[number]["id"];
 
 const isTabId = (v: string | null): v is TabId => TABS.some((t) => t.id === v);
+const isProfileTabId = (v: string | null): v is ProfileTabId =>
+  PROFILE_TABS.some((t) => t.id === v);
 
-export default function ProfilePage() {
+/**
+ * Both tab levels, derived from the query string alone — no component state, no mount-time
+ * snapshot. Exported because this is the only branching part of the page's navigation and it
+ * carries the back-compat contract: before the navigation consolidation `shape`/`business`/
+ * `blueprint` WERE top-level tab ids, so a link minted then must still land on that section of
+ * the Business Profile tab rather than falling back to the default.
+ */
+export function resolveProfileTabs(params: URLSearchParams): {
+  tab: TabId;
+  profileTab: ProfileTabId;
+} {
+  const requestedTab = params.get("tab");
+  const requestedSection = params.get("section");
+  const legacySection = isProfileTabId(requestedTab) ? requestedTab : null;
+  return {
+    tab: legacySection ? "profile" : isTabId(requestedTab) ? requestedTab : "profile",
+    profileTab: legacySection ?? (isProfileTabId(requestedSection) ? requestedSection : "shape"),
+  };
+}
+
+function ProfileSurface() {
   const current = useQuery(api.onboarding.getProfile);
 
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
@@ -67,24 +98,29 @@ export default function ProfilePage() {
     if (current) setProfile(current);
   }, [current]);
 
-  // `?tab=` read ONCE on mount, `window.location.search` deliberately — see
-  // dashboard/voice/page.tsx:23-30. `useSearchParams` needs a Suspense boundary that typecheck
-  // cannot see is missing; it either errors at prerender or silently deopts the page to CSR.
-  // null = not read yet: the page is already showing its loading branch at that point, so the
-  // resolved tab is never late enough to flash.
-  const [tab, setTab] = useState<TabId | null>(null);
-  useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("tab");
-    setTab(isTabId(requested) ? requested : "shape");
-  }, []);
+  // BOTH tab levels are DERIVED from the URL on every render, never snapshotted at mount. The rail
+  // links straight to `?tab=settings` and `?tab=connections`, and a same-route `<Link>` is a soft
+  // navigation that does not remount this page — a mount-time read left the URL and the panel
+  // disagreeing. See the long note in dashboard/approvals/page.tsx; the Suspense boundary at the
+  // bottom of this file is what the App Router charges for `useSearchParams`.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { tab, profileTab } = resolveProfileTabs(new URLSearchParams(searchParams));
 
-  // `replaceState`, not a router push: switching tabs is not a navigation, and a push would add a
-  // history entry per click and re-run the page's queries.
+  // `router.replace`, not `history.replaceState`: a manual history write does not re-run
+  // `useSearchParams`, so the panel would stop tracking the URL. `replace` still adds no history
+  // entry per tab click, which is why `replaceState` was chosen here originally.
   function selectTab(next: TabId) {
-    setTab(next);
-    const url = new URL(window.location.href);
-    url.searchParams.set("tab", next);
-    window.history.replaceState(null, "", url);
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", next);
+    router.replace(`/dashboard/profile?${params}`, { scroll: false });
+  }
+
+  function selectProfileTab(next: ProfileTabId) {
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", "profile");
+    params.set("section", next);
+    router.replace(`/dashboard/profile?${params}`, { scroll: false });
   }
 
   const blueprintState = useQuery(api.blueprint.blueprintState);
@@ -97,8 +133,9 @@ export default function ProfilePage() {
   // only consulted on the keyboard path. The map is a ref (not state) so re-renders never lose the
   // button elements it points at.
   const tabRefs = useRef<Partial<Record<TabId, HTMLButtonElement>>>({});
+  const profileTabRefs = useRef<Partial<Record<ProfileTabId, HTMLButtonElement>>>({});
 
-  if (current === undefined || tab === null || (current && !profile)) {
+  if (current === undefined || (current && !profile)) {
     return (
       <div style={page}>
         <p role="status" aria-live="polite" style={{ color: "var(--ink-soft)" }}>
@@ -158,7 +195,12 @@ export default function ProfilePage() {
       <div
         role="tablist"
         aria-label="Business profile sections"
-        style={{ display: "flex", gap: "0.35rem", borderBottom: "1px solid var(--rule)" }}
+        style={{
+          display: "flex",
+          gap: "0.35rem",
+          borderBottom: "1px solid var(--rule)",
+          overflowX: "auto",
+        }}
         onKeyDown={(e) => {
           const delta = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
           if (delta === 0) return;
@@ -203,46 +245,116 @@ export default function ProfilePage() {
             </button>
           );
         })}
-        <span style={{ flex: 1 }} />
-        {staleCount > 0 && (
-          <span
-            style={{
-              alignSelf: "center",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              /* --held-text, NOT --held: amber on light paper is 1.9:1 and fails WCAG (BRAND §2). */
-              color: "var(--held-text)",
-              background: "color-mix(in srgb, var(--held) 16%, transparent)",
-              padding: "0.2rem 0.55rem",
-              borderRadius: "999px",
-            }}
-          >
-            {staleCount} new {staleCount === 1 ? "document" : "documents"}
-          </span>
-        )}
       </div>
 
-      {/* All three stay MOUNTED and are toggled with `hidden`. That is what makes a half-typed
-          narrative survive a trip to the Blueprint tab and back — no state lifting needed. The
-          wrapper carries no `display` style, because an inline `display` would defeat `hidden`. */}
-      <div role="tabpanel" id="panel-shape" aria-labelledby="tab-shape" hidden={tab !== "shape"}>
-        <ShapePanel oneLineDescription={profile.oneLineDescription} />
-      </div>
       <div
         role="tabpanel"
-        id="panel-business"
-        aria-labelledby="tab-business"
-        hidden={tab !== "business"}
+        id="panel-profile"
+        aria-labelledby="tab-profile"
+        hidden={tab !== "profile"}
+        style={{ minWidth: 0 }}
       >
-        <NarrativePanel profile={profile} setProfile={setProfile} />
-      </div>
-      <div
-        role="tabpanel"
-        id="panel-blueprint"
-        aria-labelledby="tab-blueprint"
-        hidden={tab !== "blueprint"}
-      >
-        <BlueprintPanel />
+        <div style={{ display: "grid", gap: "1.25rem" }}>
+          <div
+            role="tablist"
+            aria-label="Business Profile details"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              borderBottom: "1px solid var(--rule)",
+              overflowX: "auto",
+            }}
+            onKeyDown={(e) => {
+              const delta = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+              if (delta === 0) return;
+              e.preventDefault();
+              const i = PROFILE_TABS.findIndex((t) => t.id === profileTab);
+              const next = PROFILE_TABS[(i + delta + PROFILE_TABS.length) % PROFILE_TABS.length];
+              if (!next) return;
+              selectProfileTab(next.id);
+              profileTabRefs.current[next.id]?.focus();
+            }}
+          >
+            {PROFILE_TABS.map((t) => {
+              const active = t.id === profileTab;
+              return (
+                <button
+                  key={t.id}
+                  ref={(el) => {
+                    if (el) profileTabRefs.current[t.id] = el;
+                  }}
+                  type="button"
+                  role="tab"
+                  id={`profile-tab-${t.id}`}
+                  aria-selected={active}
+                  aria-controls={`profile-panel-${t.id}`}
+                  tabIndex={active ? 0 : -1}
+                  onClick={() => selectProfileTab(t.id)}
+                  style={{
+                    appearance: "none",
+                    border: "none",
+                    background: "none",
+                    font: "inherit",
+                    cursor: "pointer",
+                    padding: "0.5rem 0.75rem",
+                    marginBottom: "-1px",
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    color: active ? "var(--ink)" : "var(--ink-soft)",
+                    borderBottom: `2px solid ${active ? "var(--teal-600)" : "transparent"}`,
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+            <span style={{ flex: 1 }} />
+            {staleCount > 0 && (
+              <span
+                style={{
+                  alignSelf: "center",
+                  whiteSpace: "nowrap",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  color: "var(--held-text)",
+                  background: "color-mix(in srgb, var(--held) 16%, transparent)",
+                  padding: "0.2rem 0.55rem",
+                  borderRadius: "999px",
+                }}
+              >
+                {staleCount} new {staleCount === 1 ? "document" : "documents"}
+              </span>
+            )}
+          </div>
+
+          {/* Profile detail panels stay mounted so half-typed edits survive switching sections. */}
+          <div
+            role="tabpanel"
+            id="profile-panel-shape"
+            aria-labelledby="profile-tab-shape"
+            hidden={profileTab !== "shape"}
+          >
+            <ShapePanel oneLineDescription={profile.oneLineDescription} />
+          </div>
+          <div
+            role="tabpanel"
+            id="profile-panel-business"
+            aria-labelledby="profile-tab-business"
+            hidden={profileTab !== "business"}
+          >
+            <NarrativePanel profile={profile} setProfile={setProfile} />
+          </div>
+          <div
+            role="tabpanel"
+            id="profile-panel-blueprint"
+            aria-labelledby="profile-tab-blueprint"
+            hidden={profileTab !== "blueprint"}
+          >
+            <BlueprintPanel />
+          </div>
+        </div>
       </div>
       <div
         role="tabpanel"
@@ -252,6 +364,33 @@ export default function ProfilePage() {
       >
         <ConnectionsPanel />
       </div>
+      <div
+        role="tabpanel"
+        id="panel-settings"
+        aria-labelledby="tab-settings"
+        hidden={tab !== "settings"}
+      >
+        <div style={{ display: "grid", gap: "1.25rem" }}>
+          <BillingPanel />
+          <DataControls />
+        </div>
+      </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={page}>
+          <p role="status" aria-live="polite" style={{ color: "var(--ink-soft)" }}>
+            Loading your business profile…
+          </p>
+        </div>
+      }
+    >
+      <ProfileSurface />
+    </Suspense>
   );
 }

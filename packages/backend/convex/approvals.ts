@@ -416,7 +416,6 @@ export const blockedSummary = tenantQuery({
       countCapped: countWindow.length > BLOCKED_LIMIT,
       oldestCreatedAt: oldest?.createdAt ?? null,
       newestCreatedAt: newest?.createdAt ?? null,
-      href: "/ops" as const,
     };
   },
 });

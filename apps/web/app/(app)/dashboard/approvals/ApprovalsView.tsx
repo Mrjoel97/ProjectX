@@ -1307,7 +1307,7 @@ function DecisionsAndBlocked() {
               Sensitive details stay in Compliance. This page receives counts and timestamps only.
             </p>
             <Link
-              href={blocked.href}
+              href="/dashboard/approvals?tab=compliance"
               style={{ ...button, textDecoration: "none", justifySelf: "start" }}
             >
               Review in Compliance ↗
@@ -1409,8 +1409,9 @@ class ApprovalsErrorBoundary extends Component<{ children: ReactNode }, { error:
   }
 }
 
-function ConnectedApprovals() {
+function ConnectedApprovals({ headingLevel = "h1" }: { headingLevel?: "h1" | "h2" }) {
   const summary = useQuery(api.approvals.summary);
+  const Heading = headingLevel;
   const dateLabel = new Date().toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
@@ -1432,7 +1433,7 @@ function ConnectedApprovals() {
           {/* The ONE display headline, at the SAME clamp as `.vault-header h1` and the mockup's
               .display. The prior `clamp(2rem, 5vw, 3.6rem)` grew nearly twice as fast per viewport
               width and topped out 1rem larger than every other dashboard page. */}
-          <h1
+          <Heading
             style={{
               margin: 0,
               color: "var(--ink)",
@@ -1444,7 +1445,7 @@ function ConnectedApprovals() {
             }}
           >
             Clear the gate
-          </h1>
+          </Heading>
           <p style={{ ...muted, fontSize: "0.94rem" }}>
             Everything Pikar staged and cannot do without you. Approve once; guarded execution,
             audit and honest outcome states follow.
@@ -1494,10 +1495,10 @@ function ConnectedApprovals() {
   );
 }
 
-export function ApprovalsView() {
+export function ApprovalsView({ headingLevel = "h1" }: { headingLevel?: "h1" | "h2" }) {
   return (
     <ApprovalsErrorBoundary>
-      <ConnectedApprovals />
+      <ConnectedApprovals headingLevel={headingLevel} />
     </ApprovalsErrorBoundary>
   );
 }

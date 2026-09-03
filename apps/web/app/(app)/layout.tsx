@@ -56,7 +56,15 @@ const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean
   // revise a document it had already been told to treat as a source.
   { label: "Content", href: "/dashboard/content", icon: <FileIcon /> },
   { label: "Sales Pipeline", href: "/dashboard/pipeline", icon: <TrendIcon /> },
-  { label: "Compliance", href: "/ops", icon: <ShieldIcon size={18} /> },
+  // Compliance is a TAB on the approvals page now, not its own route. `/ops` still resolves
+  // (ops/page.tsx keeps a default export) so old bookmarks survive, but the rail sends people
+  // to the consolidated surface. The owner gate travels with `ComplianceView` itself, so this
+  // href change moves a mount point and NOT an authorization boundary.
+  {
+    label: "Compliance",
+    href: "/dashboard/approvals?tab=compliance",
+    icon: <ShieldIcon size={18} />,
+  },
   { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },
   { label: "Live Voice", href: "/dashboard/voice", icon: <MicIcon size={18} /> },
   // 26-17 Task 3: LIVE on the owner UAT verdict, 2026-08-22 ("The report interface is okay").
@@ -147,6 +155,12 @@ function Shell({ children }: { children: ReactNode }) {
   // Upgrade path: once useSearchParams (or an equivalent live signal) is adopted elsewhere, drive
   // this off the actual selected tab instead of the path prefix.
   const isActive = (href: string) => {
+    // ponytail: pathname-only match, so entries that differ ONLY by `?tab=` all highlight
+    // together — "Approvals" + "Compliance" now, and "Business Profile" + "Connections" +
+    // "Settings" (the profile pair already behaved this way before the consolidation). Making
+    // exactly one win needs the live query string in this shell, i.e. `useSearchParams` here plus
+    // a Suspense boundary around the rail; that is a shell refactor, not a nav-wiring change, so
+    // it is deliberately not done here. Upgrade path: extract <RailNav> and give it that boundary.
     // String.split always returns at least one element, so this index is never undefined.
     const path = href.split("?")[0] ?? "";
     return path === "/dashboard" ? pathname === path : pathname.startsWith(path);
@@ -173,7 +187,7 @@ function Shell({ children }: { children: ReactNode }) {
               >
                 {item.icon}
                 <span className="rail-label">{item.label}</span>
-                {item.href === "/ops" && <DeadLetterBadge />}
+                {item.href === "/dashboard/approvals?tab=compliance" && <DeadLetterBadge />}
                 {item.href === "/dashboard/approvals" && <ApprovalsBadge />}
               </Link>
             ) : (
@@ -195,22 +209,22 @@ function Shell({ children }: { children: ReactNode }) {
             <UserIcon />
             <span className="rail-label">Business Profile</span>
           </Link>
-          {/* Plain <a>, not <Link>: dashboard/profile/page.tsx reads `?tab=` ONCE on mount from
-              `window.location.search`. App Router client navigation within the same route segment
-              does not remount the page, so a `<Link>` here would change the URL while clicked from
-              /dashboard/profile and leave the panel showing whatever tab was already selected. A
-              full document navigation forces a remount, which re-runs that mount-time read. */}
-          <a
+          {/* Back to <Link> (was a plain <a> that forced a full document reload). That workaround
+              existed only because profile/page.tsx snapshotted `?tab=` at mount and a same-route
+              soft navigation does not remount. That page now derives both tab levels from
+              `useSearchParams` on every render, so soft navigation is correct again and the reload
+              is no longer needed. Do NOT reintroduce the <a> without first re-breaking that page. */}
+          <Link
             href="/dashboard/profile?tab=connections"
             className={`rail-item${isActive("/dashboard/profile?tab=connections") ? " is-active" : ""}`}
             title={collapsed ? "Connections" : undefined}
           >
             <MailIcon />
             <span className="rail-label">Connections</span>
-          </a>
+          </Link>
           <Link
-            href="/dashboard/settings"
-            className={`rail-item${isActive("/dashboard/settings") ? " is-active" : ""}`}
+            href="/dashboard/profile?tab=settings"
+            className={`rail-item${isActive("/dashboard/profile?tab=settings") ? " is-active" : ""}`}
             title={collapsed ? "Settings" : undefined}
           >
             <ShieldIcon size={18} />

@@ -209,8 +209,13 @@ describe("/ops owner presentation boundary", () => {
     // parent shell. This complementary source assertion is intentionally not described as render
     // evidence; it prevents a future cleanup from satisfying the page test while orphaning /ops.
     expect(shellSource.length).toBeGreaterThan(5_000);
-    expect(shellSource).toContain('{ label: "Compliance", href: "/ops"');
-    expect(shellSource).toContain('item.href === "/ops" && <DeadLetterBadge />');
+    // Asserted as two facts, not one formatted line: Biome wraps this NAV entry across several
+    // lines, so pinning the joined form would fail on a pure reformat.
+    expect(shellSource).toContain('label: "Compliance"');
+    expect(shellSource).toContain('href: "/dashboard/approvals?tab=compliance"');
+    expect(shellSource).toContain(
+      'item.href === "/dashboard/approvals?tab=compliance" && <DeadLetterBadge />',
+    );
     expect(shellSource).toContain("useQuery(api.deadLetters.newCount)");
   });
 });

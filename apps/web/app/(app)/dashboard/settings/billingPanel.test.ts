@@ -395,7 +395,9 @@ describe("the panel is mounted on a routed page", () => {
     const page = read("./page.tsx");
     expect(page).toMatch(/<BillingPanel\s*\/>/);
     expect(page).toMatch(/<DataControls\s*\/>/);
-    expect(read("../../layout.tsx")).toContain('href="/dashboard/settings"');
+    // The rail reaches this panel through the consolidated profile tab. `/dashboard/settings`
+    // survives as a route because Stripe's success_url/cancel_url still point at it.
+    expect(read("../../layout.tsx")).toContain('href="/dashboard/profile?tab=settings"');
   });
 
   test("it reads all four billing functions the phase built", () => {

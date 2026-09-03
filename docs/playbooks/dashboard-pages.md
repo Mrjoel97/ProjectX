@@ -1,5 +1,53 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-03 (**COMPLIANCE IS A TAB ON `/dashboard/approvals`, THE RAIL POINTS AT
+> IT, AND `?tab=` IS NOW A REAL NAVIGATION TARGET.** Working tree, uncommitted. 670 web unit tests
+> and `tsc --noEmit` green; `next build` clean. Not verified in a live browser.)
+>
+> `approvals/page.tsx` is no longer a one-line `<ApprovalsView />`. It owns an ARIA tablist
+> (`APPROVAL_COMPLIANCE_TABS`) over `<ApprovalsView headingLevel="h2" />` and `<ComplianceView
+> headingLevel="h2" />` (imported from `../../ops/page`). Both views take `headingLevel` for one
+> reason: an embedded surface must not emit a second `h1`. The page's own `h1` is "Approval &
+> Compliance". The rail's "Compliance" entry now points at `/dashboard/approvals?tab=compliance`
+> and "Settings" at `/dashboard/profile?tab=settings`; `/ops` and `/dashboard/settings` both still
+> resolve, so old bookmarks survive.
+>
+> **THE RULE THIS SURFACE ESTABLISHED — read it before adding any `?tab=` link.** A query param that
+> the RAIL or an in-page link targets is a NAVIGATION TARGET, and the App Router serves a same-route
+> `<Link>` as a soft navigation that does NOT remount the page. The repo's usual idiom — read
+> `window.location.search` once in `useEffect(..., [])` — is a MOUNT-TIME SNAPSHOT and is wrong for
+> such a param: the URL changes and the panel does not. That is exactly how "Review in Compliance"
+> shipped as a dead link. Both tab pages now derive their tab from `useSearchParams()` on every
+> render and write with `router.replace` (a manual `history.replaceState` does not re-run the hook,
+> so it desyncs from the other side). The one-shot `window.location.search` read remains CORRECT and
+> is unchanged for redirect-only values — `?checkout=`, `?code=`, `?view=` — which never change
+> while the page is mounted. The distinction is navigable vs. arrive-once, not old vs. new.
+>
+> `useSearchParams` costs a Suspense boundary; both pages have one, in the shape
+> `(auth)/signup/page.tsx` already used. It is cheap here — `next build` shows every `(app)` route
+> is already `ƒ` (server-rendered on demand), so nothing was prerendered to lose.
+>
+> **Guarded by `dashboard/profile/tabResolution.test.ts`** (13 tests): the pure tab derivation and
+> its legacy-deep-link contract, a source check that neither page goes back to snapshotting, and the
+> rail hrefs. All six mutants — reverting either rail href, swapping `router.replace` for
+> `history.replaceState`, dropping the Suspense boundary, and breaking either derivation branch —
+> were confirmed to turn it red, so the guard is falsifiable rather than decorative.
+>
+> **Settled in the same change:** `approvals.blockedSummary` no longer returns the `href: "/ops"`
+> that nothing read; `apps/web/e2e/approvals.spec.ts` asserts the new href; and the two tripwires
+> that pinned the old rail (`billingPanel.test.ts`, `dataControls.test.ts`) plus the two in
+> `ops/opsPresentation.test.ts` were updated in this same change, which is the only correct time to
+> move them.
+>
+> **STILL OPEN, deliberately.** (1) `/dashboard/settings` CANNOT be deleted: `convex/billing.ts`
+> (~120-121) hardcodes Stripe's `success_url`/`cancel_url` to it and `billing.test.ts` (~185-186)
+> asserts both literally, so `BillingPanel` under the profile tab never sees `?checkout=`. Move
+> those URLs first. (2) The rail highlights every entry sharing a pathname, so "Approvals" +
+> "Compliance" both light up (as "Business Profile" + "Connections" already did). `isActive` matches
+> on pathname only; making one win needs the live query string in the shell — `useSearchParams` in
+> layout plus a Suspense boundary around an extracted `<RailNav>`. That is a shell refactor, not a
+> nav-wiring change, and is noted at the call site.
+
 > **IN FLIGHT 2026-08-30 — `/dashboard/settings` is gaining a BillingPanel (plan 28.1-09).**
 > Recorded here because **this playbook, not `billing.md`, is the one that watches
 > `apps/web/app/(app)/dashboard/settings/`** — `billing.md` watches only `packages/billing`,

@@ -1,5 +1,43 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-03 (**THE PROFILE TABS ARE TWO LEVELS, SETTINGS MOVED IN, AND BOTH LEVELS
+> ARE DERIVED FROM THE URL.** Working tree, uncommitted. 670 web unit tests + typecheck green;
+> `next build` clean. Not verified in a live browser.)
+>
+> Top level is now `TABS = profile | connections | settings`; the former `shape | business |
+> blueprint` became `PROFILE_TABS`, nested inside Business Profile and addressed by `?section=`.
+> The `settings` tab mounts `<BillingPanel />` and `<DataControls />` from `../settings/`, and the
+> rail's "Settings" entry points here (`/dashboard/profile?tab=settings`).
+>
+> **`resolveProfileTabs(params)` is exported and is the whole navigation contract.** It is a PURE
+> function of the query string — no component state, no mount-time snapshot — because the rail now
+> aims a same-route `<Link>` at this page and a soft navigation does not remount it. See
+> `docs/playbooks/dashboard-pages.md` for the full rule; the short version is that a navigable
+> `?tab=` must be derived on every render, while the one-shot `window.location.search` read stays
+> correct for arrive-once values like `?checkout=`. `tabResolution.test.ts` pins every branch,
+> including the back-compat one below, and was mutation-checked.
+>
+> **Old deep links still resolve, deliberately.** `?tab=shape|business|blueprint` were top-level tab
+> ids before the consolidation; `resolveProfileTabs` maps them to `tab="profile"` plus that section,
+> and a legacy `?tab=` deliberately WINS over a disagreeing `?section=` (it is the whole address).
+> Default is now `profile`, not `shape`. Both levels keep the mounted-and-`hidden` idiom, so a
+> half-typed narrative survives a trip to Blueprint and back — do not "optimize" either level into
+> conditional rendering.
+>
+> **Two live hazards to carry forward:**
+>
+> 1. **`?checkout=` never reaches this copy of BillingPanel.** `convex/billing.ts` (~120-121)
+>    hardcodes `success_url`/`cancel_url` to `${origin}/dashboard/settings?checkout=...`, and
+>    `BillingPanel` reads the param at mount. Mounted here that param is absent, so the
+>    post-checkout acknowledgement silently never renders. **`/dashboard/settings` cannot be deleted
+>    until those Stripe URLs move** — and `billing.test.ts` (~185-186) asserts both literally.
+> 2. **The stale-documents badge moved** onto the INNER `PROFILE_TABS` strip, so it is invisible
+>    while the user is on Connections or Settings. Deliberate — it sits beside the Blueprint tab it
+>    refers to — but the count no longer nags from the page's top level.
+>
+> The page still admits idea-stage profiles: only `oneLineDescription` + persona are required and
+> nothing in this restructure tightened that.
+
 > Last verified: 2026-08-31 (28-09 Task 2 — **THE CONNECTOR ROWS ARE NOW WIRED AND ARE NO LONGER AN
 > ISLAND.** `ConnectionsPanel.tsx` renders `<ConnectorRows />`, which reads
 > `connectorConnections.connections` and maps each row through `connectorRowView`. The entry below,

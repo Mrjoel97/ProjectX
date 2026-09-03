@@ -1,5 +1,31 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-09-03 (**`/ops` SPLIT INTO AN EMBEDDABLE VIEW AND THE RAIL NOW MOUNTS IT
+> UNDER APPROVALS. NO AUTHORIZATION DECISION CHANGED.** Working tree, uncommitted.)
+>
+> `apps/web/app/(app)/ops/page.tsx` exports `ComplianceView({ headingLevel })` as a named export and
+> keeps `OpsPage` as a thin default export rendering `<ComplianceView />`, so `/ops` still resolves
+> for old bookmarks. The rail's "Compliance" entry now points at
+> `/dashboard/approvals?tab=compliance`, which mounts the same component as an `h2`. The visible
+> `h1` text changed from "Ops" to "Compliance".
+>
+> **What did NOT change, and this is the point:** the owner gate is inside the component, not the
+> route. `const viewer = useQuery(api.owner.viewer, {}); const isOwner = viewer?.isOwner === true;`
+> is byte-identical and still fails closed while `viewer` is `undefined` — a slow query cannot flash
+> the admin surface at a tenant. Because that check travels WITH the component, mounting it under
+> Approvals inherits the same gate rather than bypassing it. Dead-letter rows remain tenant-scoped;
+> `markResolved` is unchanged; the owner-only sections stay owner-only at the new mount point.
+>
+> **The invariant this creates, and it is now load-bearing on two routes:** a surface that carries
+> its own authorization may be mounted from anywhere, but a future caller MUST NOT infer that the
+> ROUTE is what gates it. If anyone lifts `isOwner` out of `ComplianceView` into a route-level
+> wrapper around `/ops`, the Approvals mount silently loses the gate while `/ops` keeps it — the
+> worst shape of this bug, because the surviving route is the one an owner would test. Keep the
+> check in the component.
+>
+> `ops/opsPresentation.test.ts` still pins the rail entry and the `DeadLetterBadge` branch; both
+> assertions were moved to the new href in the same change as the rail itself.
+
 > Last verified: 2026-08-29 (28.1-05 — **the `/ops` dead-letter card renders one more field**,
 > `source`, from the existing owner-gated `deadLetters.listAll`. No new endpoint, no new
 > authorization decision, no change to `ownerQuery`/`requireOwner`: `listAll` was already
