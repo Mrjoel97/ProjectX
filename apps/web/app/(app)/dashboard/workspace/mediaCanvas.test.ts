@@ -25,8 +25,10 @@ import {
   type FailureFace,
   type FailureScene,
   failureCards,
+  failureClause,
   failureText,
   GENERATED_LENGTH_RANGE,
+  GENERIC_FAILURE_CLAUSE,
   heroState,
   isPickableVideo,
   type JobEstimate,
@@ -410,6 +412,26 @@ describe("a failed render says what happened, and what to do about it", () => {
 
   test("an unknown code falls through to the code itself rather than being swallowed", () => {
     expect(failureText("brand_new_code", "scene")).toBe("brand_new_code");
+  });
+
+  // 33.1-06: the codes that actually happened in the audit log — 11 of 58 jobs failed on money —
+  // every one of which read "no plainer word". And the two render refusals the first live reel
+  // hit, which had collapsed into `render_failed`.
+  test("names the money failures and the two real render refusals in plain words", () => {
+    expect(failureClause("http_402", "scene")).toMatch(/out of credit/);
+    expect(failureClause("credit_balance_exhausted", "scene")).toMatch(/out of credit/);
+    expect(failureClause("card_font_missing", "scene")).toMatch(/font/);
+    expect(failureClause("narration_overruns_reel", "scene")).toMatch(
+      /still going when the reel ends/,
+    );
+    expect(failureClause("tts_not_verbatim", "scene")).toMatch(
+      /differently from how it was written/,
+    );
+    // A provider status with no dedicated entry still says the number rather than nothing.
+    expect(failureClause("http_429", "scene")).toMatch(/HTTP 429/);
+    expect(failureClause("http_5xx", "scene")).toBe(GENERIC_FAILURE_CLAUSE); // not a real status
+    // The assembler no longer refuses a colliding take, so the old sentence is gone, not stale.
+    expect(failureText("speech_out_of_window", "scene")).toBe("speech_out_of_window");
   });
 });
 

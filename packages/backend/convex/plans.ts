@@ -597,6 +597,33 @@ export const stageImagePlan = internalMutation({
  *  truncated body is a worse witness than a long one. Observed bodies run 1,007-6,331 characters. */
 const MAX_REFUSED_BODY_CHARS = 20_000;
 
+/**
+ * 33.1-06 — WHAT THE LAST STORYBOARD WAS REFUSED FOR, so the next attempt can be told.
+ *
+ * "Try again" is an ordinary chat message on the same thread (33-07), and the thread's plan row is
+ * unique (`by_thread`), so the refusal the canvas just showed the owner is sitting on that row.
+ * Until now it went to the owner and never to the model: the specialist got the same brief with no
+ * idea what had just failed, and repeated it — 17 of 27 storyboard failures in the audit log were
+ * the same code. `buildSpecialistPrompt` reads this for the media route and appends one line.
+ *
+ * Codes only (§4): the reason and the variation letter. The clause is rendered by
+ * `deckRefusalClause` at the caller from the same table the canvas uses, so the model and the
+ * owner are told the same thing in the same words.
+ */
+export const refusalForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, threadId },
+  ): Promise<{ reason: string; contract: string; variation?: string } | null> => {
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .unique();
+    return plan?.proposalRefusal ?? null;
+  },
+});
+
 export const landStoryboardRefusal = internalMutation({
   args: {
     tenantId: v.string(),

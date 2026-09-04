@@ -24,6 +24,7 @@ import {
 } from "@pikar/core";
 import {
   type BriefFields,
+  type DeckContract,
   deckRefusalClause,
   narrationChars,
   type ParsedDeck,
@@ -145,6 +146,28 @@ export const MEDIA_TASK_LINE = [
   `Declare \`Target duration:\` on each, in seconds — ${LEGAL_DURATIONS} —`,
   `using the length the brief asks for, or ${DEFAULT_TARGET_DURATION} when it does not say.`,
 ].join(" ");
+/**
+ * 33.1-06 — CLOSE THE RETRY LOOP. When the thread's plan row carries a `proposalRefusal`, the
+ * specialist is about to write the SAME brief again, and until now it was told nothing about why
+ * the last one failed — so it failed the same way (9 of 17 outright refusals and 8 of 10 lost
+ * variations in the audit log were one code). One line, driver-plane like `MEDIA_TASK_LINE`: the
+ * clause is `deckRefusalClause`'s — the exact words the owner just read on the canvas — so the
+ * model is corrected in the vocabulary the skill body already teaches, not re-taught anything.
+ * Short pieces, for the §5 inline-string scan.
+ */
+export function mediaRetryLine(refusal: {
+  reason: string;
+  contract: string;
+  variation?: string;
+}): string {
+  const contract: DeckContract = refusal.contract === "block" ? "block" : "scene";
+  const where = refusal.variation ? ` — variation ${refusal.variation.toUpperCase()}` : "";
+  return [
+    `Your previous storyboard for this brief was refused${where}:`,
+    `${deckRefusalClause(contract, refusal.reason)}.`,
+    "Fix exactly that in this attempt and keep the rest of the direction.",
+  ].join(" ");
+}
 /** Cap the injected snapshot the way evaluateBusiness caps its synopsis: a large evaluation
  *  must not blow the specialist's context (and the loop's cost) on carried prose. */
 const MAX_FINDINGS = 8;
@@ -342,7 +365,14 @@ export async function buildSpecialistPrompt(
   // `dispatch.test.ts` pins that ordering.
   if (a.question !== undefined) {
     const brief = cap(a.question, MAX_QUESTION_CHARS);
-    return withBriefing(a.route === "media" ? `${brief}\n\n${MEDIA_TASK_LINE}` : brief);
+    if (a.route !== "media") return withBriefing(brief);
+    // 33.1-06: a retry on this thread carries the last refusal on its plan row — say so.
+    const refusal = await ctx.runQuery(internal.plans.refusalForThread, {
+      tenantId: a.tenantId,
+      threadId: a.threadId,
+    });
+    const retry = refusal ? `\n\n${mediaRetryLine(refusal)}` : "";
+    return withBriefing(`${brief}\n\n${MEDIA_TASK_LINE}${retry}`);
   }
 
   const evaluation = await ctx.runQuery(internal.evaluations.lastForThread, {

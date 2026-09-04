@@ -3463,3 +3463,61 @@ describe("groundMediaBrief: research lands in the vault BEFORE the deck is writt
     expect(doc?.sourceThreadId).toBe(THREAD);
   });
 });
+
+// 33.1-06: THE RETRY LOOP IS CLOSED. "Try again" is a chat message on the same thread, and the
+// thread's plan row (unique by `by_thread`) still carries the refusal the owner just read. Until
+// now the specialist got the same brief with no idea what had failed — and failed the same way.
+describe("media retry — the specialist is told what the last storyboard was refused for", () => {
+  const promptFor = (t: T) =>
+    t.run(async (ctx) =>
+      buildSpecialistPrompt(ctx as never, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        gapIndex: 0,
+        route: "media",
+        question: "a reel about how much time the inbox eats",
+      }),
+    );
+
+  test("appends the refusal, in the canvas's own words, when the plan row carries one", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: THREAD,
+        status: "proposed",
+        createdAt: Date.now(),
+        proposalRefusal: { reason: "narration_too_long", contract: "scene", variation: "a" },
+      }),
+    );
+    const prompt = await promptFor(t);
+    expect(prompt).toContain("Your previous storyboard for this brief was refused — variation A:");
+    expect(prompt).toContain("the spoken lines add up to more than the reel is long");
+    expect(prompt).toContain("Fix exactly that in this attempt");
+    // Still a media prompt — the task line is intact, the retry line sits after it.
+    expect(prompt.indexOf("Write the storyboard now")).toBeLessThan(
+      prompt.indexOf("Your previous storyboard"),
+    );
+  });
+
+  test("says nothing about a refusal on a first attempt — no row, no line", async () => {
+    const t = convexTest(schema, modules);
+    const prompt = await promptFor(t);
+    expect(prompt).toContain("Write the storyboard now");
+    expect(prompt).not.toContain("previous storyboard");
+  });
+
+  test("is tenant-scoped — another tenant's refusal on the same thread id is invisible", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT_B,
+        threadId: THREAD,
+        status: "proposed",
+        createdAt: Date.now(),
+        proposalRefusal: { reason: "narration_too_long", contract: "scene" },
+      }),
+    );
+    expect(await promptFor(t)).not.toContain("previous storyboard");
+  });
+});

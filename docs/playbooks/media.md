@@ -1,5 +1,38 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-04 (33.1-06 / audit Step 2 - **THE RETRY LOOP IS CLOSED, AND THE
+> FAILURES THAT ACTUALLY HAPPEN HAVE WORDS.**
+>
+> **Retry feedback.** "Try again" is a chat message on the same thread (33-07), and the thread's
+> plan row is unique (`by_thread`), so the refusal the canvas just showed is sitting on that row
+> as `proposalRefusal` -- and until now went to the owner, never to the model. The specialist got
+> the same brief blind and failed the same way: 9 of 17 outright refusals and 8 of 10 lost
+> variations in the audit log were one code. `plans.refusalForThread` reads the row;
+> `buildSpecialistPrompt` appends ONE driver-plane line for the media route (`mediaRetryLine`):
+> *"Your previous storyboard for this brief was refused -- variation A: <clause>. Fix exactly
+> that in this attempt and keep the rest of the direction."* The clause is `deckRefusalClause`'s
+> -- the same table the canvas reads -- so owner and model are told the same thing in the same
+> words, and the skill body is re-taught nothing (§5: driver-plane, short pieces). Tenant-scoped
+> by the index; asserted. Mutation-proven: silencing the line fails exactly the positive case.
+> **Scene numbers are NOT fed back** -- `parseVariations` does not carry them and widening three
+> layers for one number was not worth it; the code names the failure and the skill already teaches
+> the arithmetic.
+>
+> **Failure words.** `reasonCodeFor` matches the assembler's own `ERROR:` wording, and two lines
+> the first live reel printed had no pattern: *"needs a TrueType font"* -> `card_font_missing`,
+> *"is still speaking at ... but the reel ends at"* -> `narration_overruns_reel` (the ONE overrun
+> the assembler still refuses). Both had collapsed into `render_failed` -> "no plainer word". The
+> canvas now words those two plus the codes the audit log actually contains -- `http_402`,
+> `credit_balance_exhausted` (11 of 58 jobs), `media_not_configured`, `submit_threw`,
+> `tts_no_audio`, `tts_not_verbatim` -- and `failureClause` falls back to *"refused the request
+> with HTTP NNN"* for any other real status instead of the generic clause. `speech_out_of_window`'s
+> canvas sentence is deleted: the assembler delays a colliding take and never emits it. Its core
+> pattern stays (render.test.ts pins it; harmless).
+>
+> core render 145/145 (+2 rows), backend dispatch 116/116 (+3), web canvas 127/127 (+1), typecheck
+> clean on core/backend/web, biome clean.)
+
+
 > Last verified: 2026-09-04 (33.1-06 - **THE FIRST REEL RENDERED. WHAT THE OWNER SAW IN IT, AND
 > THE THREE FIXES -- TWO OF THEM PRODUCT DEFECTS THAT WOULD HAVE SHIPPED.**
 >

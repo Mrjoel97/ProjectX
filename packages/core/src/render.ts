@@ -292,6 +292,10 @@ export type RenderReasonCode =
   | "decode_failed"
   | "sandbox_timeout"
   | "caption_track_empty"
+  // 33.1-06: the two refusals the first rendered reel actually hit, both of which had collapsed
+  // to `render_failed` — a clear ERROR line thrown away one hop before the person who needed it.
+  | "card_font_missing"
+  | "narration_overruns_reel"
   | "render_failed";
 
 /** Anchored on `assemble_final.sh`'s OWN error wording, in order. Each pattern matches the fixed
@@ -320,6 +324,12 @@ const STDERR_CODES: ReadonlyArray<readonly [RegExp, RenderReasonCode]> = [
   [/libfreetype is missing/, "missing_binary"],
   [/subtitle track is empty/, "caption_track_empty"],
   [/re-timed the video/, "duration_mismatch"],
+  // The card branch refuses before drawing when no TrueType font is reachable — the first live
+  // reel's actual cause. Environmental (an image/runner without the font), never the deck's.
+  [/needs a TrueType font/, "card_font_missing"],
+  // The ONE overrun the assembler still refuses (33.1-06): a take still speaking when the picture
+  // track has ended. Nothing can delay it further; only a shorter line or a longer reel cures it.
+  [/is still speaking at .* but the reel ends at/, "narration_overruns_reel"],
 ];
 
 /** Codes the RUNNER produces before or around the sandbox, as distinct from the ones ffmpeg

@@ -339,7 +339,13 @@ export function failureText(reason: string, noun: "scene" | "block"): string {
     incomplete_blocks: `a ${noun} is missing its picture or its voice take`,
     // 20.2 wave 6. The one refusal whose cure is neither a retry nor an edit.
     stale_inputs: `some of the footage was bought before you reordered or trimmed the deck, so it belongs to ${noun}s that have moved — generate the reel again to re-buy it`,
-    speech_out_of_window: "a narration line runs into the next one — shorten it and generate again",
+    // 33.1-06: `speech_out_of_window` is gone — the assembler delays a colliding take now and no
+    // longer refuses on it. The ONE overrun it still refuses, and the cause the first live reel
+    // actually hit, are named instead; both had been collapsing into "no plainer word".
+    narration_overruns_reel:
+      "the last spoken line is still going when the reel ends — shorten it, or make the reel longer",
+    card_font_missing:
+      "the render environment has no font to draw a text card with — this is a setup problem, not the deck's",
     clip_too_short: "a generated clip was shorter than its window",
     missing_narration: "a window came out silent",
     duration_mismatch: "the finished file was not the expected length",
@@ -354,6 +360,17 @@ export function failureText(reason: string, noun: "scene" | "block"): string {
     // the request — they are the request never getting there — so neither is a rewrite lever.
     submit_canceled: "the request was canceled before the provider started it",
     submit_failed: "the request never reached the provider",
+    // ── 33.1-06: the codes that ACTUALLY happened in the audit log, none of which had words. 11
+    // of 58 media jobs failed on money and every one of them read "no plainer word". ──────────
+    http_402: "the media account is out of credit — top it up at OpenRouter and generate again",
+    credit_balance_exhausted:
+      "the media account is out of credit — top it up at OpenRouter and generate again",
+    media_not_configured:
+      "a media provider key is missing on this deployment — a setup problem, not the deck's",
+    submit_threw: "the request could not be built — a code fault on our side, not the deck's",
+    tts_no_audio: "the voice model answered with no sound at all — try again",
+    tts_not_verbatim:
+      "the voice model read the line differently from how it was written, so the take was refused rather than shipped with the wrong words",
     // The CAPTIONS plane. `maybeStartCaptions` refuses a transcript whose source takes are
     // missing; `submitCaptions` fails on the transcript itself.
     incomplete_takes: `a ${noun}'s voice take never landed, so there was nothing to transcribe`,
@@ -388,7 +405,13 @@ export const GENERIC_FAILURE_CLAUSE = "something went wrong that we have no plai
 export function failureClause(reason: string | null | undefined, noun: "scene" | "block"): string {
   if (!reason) return GENERIC_FAILURE_CLAUSE;
   const said = failureText(reason, noun);
-  return said === reason ? GENERIC_FAILURE_CLAUSE : said;
+  if (said !== reason) return said;
+  // 33.1-06: a provider HTTP status that has no dedicated entry is still a fact worth saying —
+  // "the provider refused with 429" beats "no plainer word", and the number is a code, not prose.
+  const http = /^http_(\d{3})$/.exec(reason);
+  if (http)
+    return `the media provider refused the request with HTTP ${http[1]} — try again shortly`;
+  return GENERIC_FAILURE_CLAUSE;
 }
 
 /**

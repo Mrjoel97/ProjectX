@@ -774,6 +774,15 @@ describe("reasonCodeFor: a code, and provably never its input", () => {
       "speech_out_of_window",
     ],
     ["ERROR: clip 2 is only 8.1s (<10s) — a held still frame is not a scene.", "clip_too_short"],
+    // 33.1-06: the two lines the first rendered reel actually printed, verbatim shape.
+    [
+      "ERROR: a 'card' scene needs a TrueType font and none was found — install dejavu-sans-fonts in the image or set ASSEMBLE_FONT.",
+      "card_font_missing",
+    ],
+    [
+      "ERROR: voice 3 is still speaking at 32.120s but the reel ends at 30s — shorten the line or lengthen the reel.",
+      "narration_overruns_reel",
+    ],
     [
       "ERROR: the narration declared for scene(s) [3,5] is NOT in the mix — those spans are silent through their centre.",
       "missing_narration",
