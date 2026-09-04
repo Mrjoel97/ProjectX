@@ -2187,3 +2187,56 @@ export const storyboardFactsForPlan = internalQuery({
     };
   },
 });
+
+/**
+ * 33.2: WHICH MODELS ACTUALLY RAN the specialist turns dispatched on a plan's thread — the
+ * bake-off's executed-model check, `modelsForRun` one hop up.
+ *
+ * `runMedia`'s return carries `modelId`, and the runner asserted on it — but that field is the
+ * PIN the lookup chose, not the model that answered. An eligible primary failure rolls over to the
+ * fallback and the run still succeeds, so a candidate the provider refuses on every call would
+ * score the FALLBACK's decks under the candidate's name. Round 3 of the bake-off did exactly that
+ * for 24 passes before the per-pass cost gave it away. Ground truth is `spendEvents.model`, written
+ * once per attempt AFTER the call returns; the dispatch's rows are keyed `agentloop:<turnId>:`
+ * and the `dispatch:<rootRequestId>` step on the thread carries that turn id.
+ *
+ * Refs and counts only (§4). A run with ZERO spend rows is reported as such, never as agreement.
+ */
+export const modelsForPlan = internalQuery({
+  args: { planId: v.id("plans") },
+  handler: async (
+    ctx,
+    { planId },
+  ): Promise<{ models: string[]; rowCount: number; runs: number }> => {
+    const plan = await ctx.db.get(planId);
+    if (!plan) throw new Error("NO_SUCH_PLAN");
+    const steps = await ctx.db
+      .query("agentSteps")
+      .withIndex("by_tenant_tool_startedAt", (q) =>
+        q.eq("tenantId", plan.tenantId).eq("tool", "dispatchMedia"),
+      )
+      .collect();
+    // The loop id is the step's `turnId` (`governedDispatch` mints it), NOT the run id in the
+    // `dispatch:<rootRequestId>` key — the two are different uuids.
+    const runIds = steps
+      .filter((r) => r.threadId === plan.threadId && r.stepKey.startsWith("dispatch:"))
+      .map((r) => r.turnId);
+    const models = new Set<string>();
+    let rowCount = 0;
+    for (const runId of runIds) {
+      const prefix = `agentloop:${runId}:`;
+      const rows = await ctx.db
+        .query("spendEvents")
+        .withIndex("by_correlation", (q) =>
+          q.gte("correlationId", prefix).lt("correlationId", `${prefix}\uffff`),
+        )
+        .collect();
+      for (const r of rows) {
+        if (r.tenantId !== plan.tenantId) continue;
+        rowCount += 1;
+        if (typeof r.model === "string") models.add(r.model);
+      }
+    }
+    return { models: [...models].sort(), rowCount, runs: runIds.length };
+  },
+});

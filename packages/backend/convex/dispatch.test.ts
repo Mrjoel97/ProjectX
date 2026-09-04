@@ -3643,4 +3643,22 @@ describe("33.2 — smoke.storyboardFactsForPlan reads the terminal's verdict off
     expect(facts.sceneCount).toBe(0);
     expect(JSON.stringify(facts)).not.toContain("Prose.");
   });
+
+  test("modelsForPlan reports the model that BILLED, from spend rows, not the pin", async () => {
+    // Round 3 of the bake-off scored 24 fallback passes under the candidate's name because the
+    // runner asserted `modelId` (the pin) instead of what answered. This is the read that cannot
+    // be fooled by a fallback: one spend row per attempt, keyed by the dispatch's run id.
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(TWO_UP_BODY), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    const ran = await t.query(internal.smoke.modelsForPlan, { planId });
+    expect(ran.runs).toBe(1);
+    expect(ran.rowCount).toBeGreaterThan(0);
+    expect(ran.models).toEqual([MEDIA_MODEL]);
+  });
 });

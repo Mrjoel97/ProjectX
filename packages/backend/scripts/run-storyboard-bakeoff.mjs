@@ -220,6 +220,20 @@ function runPass(brief, tenant, candidate, passNo) {
       `pass ran on ${run.modelId}, not the asserted candidate ${candidate} — the deployment is not running the code on disk (push and re-run)`,
     );
   }
+  // `modelId` above is the PIN the lookup chose. What ANSWERED is in the spend rows: an eligible
+  // primary failure rolls over to the fallback and the run still succeeds, so without this a
+  // candidate the provider refuses on every call scores the fallback's decks under its own name.
+  // Round 3 (claude-sonnet-5) did exactly that for 24 passes before the per-pass cost gave it
+  // away. Zero spend rows is a failure of proof, never agreement.
+  const ran = parse(must("smoke:modelsForPlan", { planId }, RETRY_READ));
+  if (ran.rowCount === 0) {
+    throw new EnvironmentAbort(`no spend rows for plan ${planId} — cannot prove which model ran`);
+  }
+  if (ran.models.length !== 1 || ran.models[0] !== candidate) {
+    throw new EnvironmentAbort(
+      `plan ${planId} was answered by ${ran.models.join("+")}, not ${candidate} — the candidate is failing and the fallback is scoring in its name`,
+    );
+  }
   const facts = parse(must("smoke:storyboardFactsForPlan", { planId }, RETRY_READ));
   return {
     brief: brief.id,
