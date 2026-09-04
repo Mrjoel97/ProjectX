@@ -2113,3 +2113,77 @@ export const packRunFacts = internalQuery({
     };
   },
 });
+
+// ── 33.2: the storyboard bake-off's ONE read ─────────────────────────────────────────────────────
+
+/**
+ * The parser's verdict off the plan row, as COUNTS and CODES only (§4).
+ *
+ * `run-storyboard-bakeoff.mjs` drives `dispatch:runMedia` per candidate model and needs to know
+ * what `persistStoryboard` made of the reply: a two-deck proposal, a salvaged one, a refusal (and
+ * its code), or nothing. It reads the ROW the production terminal wrote rather than re-parsing the
+ * body itself, so the bake-off scores exactly what the canvas would have shown — and never a
+ * second parser that could drift from the first.
+ *
+ * NO prose crosses this boundary: no narration, no prompt, no description, no title, no
+ * `refusedBody`. Kinds are counted, generated seconds are summed, uncited figures are counted.
+ * `kind: "one"` is a legacy single-deck proposal (no VARIATION headings) and is reported, not
+ * scored, by the runner.
+ */
+export const storyboardFactsForPlan = internalQuery({
+  args: { planId: v.id("plans") },
+  handler: async (
+    ctx,
+    { planId },
+  ): Promise<{
+    kind: "two" | "salvaged" | "one" | "refused" | "none";
+    reason?: string;
+    variation?: string;
+    lostReason?: string;
+    targetDurationSeconds?: number;
+    sceneCount: number;
+    altSceneCount: number;
+    generatedSeconds: number;
+    kinds: Record<string, number>;
+    unverifiedCount: number;
+    adjustmentCount: number;
+  }> => {
+    const plan = await ctx.db.get(planId);
+    if (!plan) throw new Error("NO_SUCH_PLAN");
+    const shots = plan.shots ?? [];
+    const kinds: Record<string, number> = {};
+    let generatedSeconds = 0;
+    let unverifiedCount = 0;
+    for (const s of shots) {
+      const k = s.visual ?? s.type ?? "unknown";
+      kinds[k] = (kinds[k] ?? 0) + 1;
+      if (s.visual === "generated_video") generatedSeconds += s.seconds;
+      if (s.needsConfirmation === true) unverifiedCount += 1;
+    }
+    const altSceneCount = plan.altShots?.length ?? 0;
+    const kind = plan.proposalRefusal
+      ? "refused"
+      : shots.length === 0
+        ? "none"
+        : plan.lostVariation
+          ? "salvaged"
+          : altSceneCount > 0
+            ? "two"
+            : "one";
+    return {
+      kind,
+      ...(plan.proposalRefusal ? { reason: plan.proposalRefusal.reason } : {}),
+      ...(plan.proposalRefusal?.variation ? { variation: plan.proposalRefusal.variation } : {}),
+      ...(plan.lostVariation ? { lostReason: plan.lostVariation.reason } : {}),
+      ...(plan.targetDurationSeconds !== undefined
+        ? { targetDurationSeconds: plan.targetDurationSeconds }
+        : {}),
+      sceneCount: shots.length,
+      altSceneCount,
+      generatedSeconds,
+      kinds,
+      unverifiedCount,
+      adjustmentCount: plan.deckAdjustments?.length ?? 0,
+    };
+  },
+});

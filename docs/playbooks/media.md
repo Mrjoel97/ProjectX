@@ -1,5 +1,24 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-04 (33.2-02 — **THE STORYBOARD BAKE-OFF RUNNER EXISTS:
+> `scripts/run-storyboard-bakeoff.mjs` + `scripts/storyboard-briefs.json`, registered here.**
+>
+> Which model writes the storyboard is now a MEASURED decision (33.2-PRD L2-L4). The runner drives
+> the PRODUCTION `dispatch:runMedia` — real prompt assembly, real `searchVault` grant, real step
+> budget, real clock — over twelve briefs about the seeded Northwind tenant, one candidate per
+> invocation, and reads the parser's verdict off the plan row through `smoke:storyboardFactsForPlan`
+> (counts and codes only; two tests hold that no model prose crosses it). The candidate is NOT an
+> argument: `--candidate` must equal `MEDIA_MODEL` resolved off cost.ts, and a pass whose returned
+> `modelId` differs aborts the invocation (exit 2). Each pass is a fresh plan row + thread, so no
+> pass sees another's refusal through the retry line; research is bought once per brief (33.2-01's
+> reuse) and reused by every later pass and candidate. `--self-check` is the offline gate: twelve
+> briefs, every legal duration covered, one illegal one, all under MAX_QUESTION_CHARS (it caught a
+> 519-char brief on first run), every validator rejection proven to fire, the alias-chain reader
+> proven on a synthetic chain. Reports land in `.tmp/storyboard-bakeoff/` (gitignored); the
+> decision rule — clean two-deck passes of 24, clock truncation disqualifies, repin only at >= 3
+> over the baseline — is written in the PRD BEFORE any run. Measured: self-check exit 0,
+> dispatch.test.ts facts 2/2, biome clean, tsc 0 outside the connector lane.)
+>
 > Last verified: 2026-09-04 (33.1-06 - **THE MUSIC BED IS FETCHED FROM OPENVERSE AND CREDITED
 > IN THE CAPTION (ADR-031). The "no `mediaJobs` row" section below is SUPERSEDED for the bed.**
 >

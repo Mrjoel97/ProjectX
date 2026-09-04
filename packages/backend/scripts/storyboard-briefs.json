@@ -1,0 +1,66 @@
+{
+  "_about": "33.2 bake-off corpus. Twelve USER TURNS (not agent prompts — CLAUDE.md §5 is about system prompts, and this file lives outside convex/ regardless). Every brief is about the Northwind logistics tenant `vaultSmoke:seedCorpus` + `smoke:seedGoldenEvalBlueprint` seed, so `searchVault` has ground to find. `durationSeconds` is what the brief ASKS for; null means it does not say (the task line defaults it), and a value off TARGET_DURATIONS is deliberate (`illegalDuration: true`) — the specialist must land on a legal one. Text ≤ MAX_QUESTION_CHARS (500, dispatch.ts). --self-check validates all of this offline.",
+  "briefs": [
+    {
+      "id": "15-launch-hook",
+      "durationSeconds": 15,
+      "text": "A 15-second reel announcing that the Northwind logistics platform launches to customers in Q3. Punchy and vertical, aimed at freight brokers who have never heard of us."
+    },
+    {
+      "id": "30-onboarding-offer",
+      "durationSeconds": 30,
+      "text": "30 seconds on our done-for-you shipment onboarding package and the monthly monitoring plan that follows it. Warm tone, for small shippers who have never used a logistics platform and are nervous about switching."
+    },
+    {
+      "id": "60-founder-story",
+      "durationSeconds": 60,
+      "text": "A 60-second founder's-view reel: why we built Northwind, what the monitoring plan actually does for a customer on an ordinary Tuesday, and what a new customer buys first. Calm, specific, no hype."
+    },
+    {
+      "id": "30-figures",
+      "durationSeconds": 30,
+      "text": "30 seconds that leads with numbers: what a missed shipment costs a small shipper, how long onboarding takes with us versus doing it alone, and how our customer acquisition cost compares to lifetime gross profit. Every number on screen."
+    },
+    {
+      "id": "15-thin",
+      "durationSeconds": 15,
+      "text": "Make me a short 15 second reel about our business."
+    },
+    {
+      "id": "45-illegal-duration",
+      "durationSeconds": 45,
+      "illegalDuration": true,
+      "text": "A 45-second reel about warm outreach to past shippers — why the people who shipped with us once are the easiest customers to win back."
+    },
+    {
+      "id": "30-forbidden-asks",
+      "durationSeconds": 30,
+      "text": "30 seconds about the monitoring plan. Set it to Eye of the Tiger, use slow dissolves between every scene, and have the narrator talk fast so we fit more in."
+    },
+    {
+      "id": "60-objections",
+      "durationSeconds": 60,
+      "text": "Sixty seconds answering the objections freight brokers raise about switching logistics platforms mid-contract: data migration, hidden fees, and losing their existing carrier relationships. Address each one directly."
+    },
+    {
+      "id": "30-stock-heavy",
+      "durationSeconds": 30,
+      "text": "30 seconds built mostly from real footage — ports, trucks on a highway, a warehouse at dawn, hands on a keyboard — with the Northwind monitoring plan as the payoff at the end."
+    },
+    {
+      "id": "15-text-only",
+      "durationSeconds": 15,
+      "text": "15 seconds with no photographs or footage at all: just words on our brand colours, three reasons a small shipper should onboard with Northwind before Q3."
+    },
+    {
+      "id": "30-uploaded-footage-claim",
+      "durationSeconds": 30,
+      "text": "30 seconds using the drone footage we shot of the yard last week and the customer interview clip from the trade show. Cut them together with the offer at the end."
+    },
+    {
+      "id": "30-long-brief",
+      "durationSeconds": 30,
+      "text": "30-second reel for LinkedIn. Audience: operations managers at 20-200 employee manufacturers who ship weekly and juggle three carrier portals. Tone: dry, confident, a little wry, never salesy. Open on the pain (the Friday scramble when a pallet is late and nobody knows which carrier has it), show the monitoring plan as the one screen that answers it, then the onboarding package as the way in. Close on a plain call to action. Brand voice: short sentences, no jargon, no exclamation marks."
+    }
+  ]
+}

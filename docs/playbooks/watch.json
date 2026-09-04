@@ -288,7 +288,9 @@
     "apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx",
     "apps/web/app/(app)/dashboard/workspace/mediaCanvasView.ts",
     "apps/web/scripts/bake-sandbox-snapshot.mjs",
-    "apps/web/scripts/music/"
+    "apps/web/scripts/music/",
+    "packages/backend/scripts/run-storyboard-bakeoff.mjs",
+    "packages/backend/scripts/storyboard-briefs.json"
   ],
   "contacts-crm.md": [
     "packages/core/src/contacts.ts",

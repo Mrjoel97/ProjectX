@@ -1,5 +1,14 @@
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-09-04 (33.2-02 — **`smoke:storyboardFactsForPlan`**: the storyboard bake-off's
+> ONE read. The parser's verdict off the plan row as counts and codes — `two` / `salvaged` / `one` /
+> `refused:<reason>` / `none`, scene and alt-scene counts, generated seconds, kind histogram,
+> uncited-figure count, adjustment count. NO prose (no narration, prompt, title, `refusedBody`);
+> `dispatch.test.ts` asserts a two-deck row reads back exactly and that the model's words never
+> appear in the JSON. Read by `scripts/run-storyboard-bakeoff.mjs` (owned by media.md). It reads
+> the ROW `persistStoryboard` wrote rather than re-parsing, so the bake-off scores what the canvas
+> would have shown and never a second parser that could drift.)
+>
 > Last verified: 2026-09-01 (28-15 — `opsSignals.revenueSignals` reads the shared content-free
 > event plane and joins workflow cost/latency from canonical `spendEvents`/`agentSteps`; bounded,
 > tenant-isolated, retention and incomplete-window tests pass. No agent runtime write path changed.)

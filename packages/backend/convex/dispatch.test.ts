@@ -3596,3 +3596,51 @@ describe("media retry — the specialist is told what the last storyboard was re
     expect(await promptFor(t)).not.toContain("previous storyboard");
   });
 });
+
+// ── 33.2: the bake-off's read is the parser's verdict, as counts and codes ───────────────────────
+describe("33.2 — smoke.storyboardFactsForPlan reads the terminal's verdict off the row", () => {
+  test("a two-variation proposal reads back as `two` with its counts", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(TWO_UP_BODY), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    const facts = await t.query(internal.smoke.storyboardFactsForPlan, { planId });
+    expect(facts).toEqual({
+      kind: "two",
+      targetDurationSeconds: 30,
+      sceneCount: 2,
+      altSceneCount: 2,
+      generatedSeconds: 8,
+      kinds: { generated_video: 1, animated_image: 1 },
+      unverifiedCount: 1,
+      adjustmentCount: 0,
+    });
+    // §4: nothing the model wrote crosses this boundary.
+    const text = JSON.stringify(facts);
+    expect(text).not.toContain("Founder at a desk");
+    expect(text).not.toContain("inbox triage");
+  });
+
+  test("a refused proposal reads back as `refused` with the CODE, never the body", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const body = [VAR_BRIEF, "## VARIATION A", "", "Prose.", "## VARIATION B", "", "Prose."].join(
+      "\n",
+    );
+    ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    const facts = await t.query(internal.smoke.storyboardFactsForPlan, { planId });
+    expect(facts.kind).toBe("refused");
+    expect(typeof facts.reason).toBe("string");
+    expect(facts.sceneCount).toBe(0);
+    expect(JSON.stringify(facts)).not.toContain("Prose.");
+  });
+});
