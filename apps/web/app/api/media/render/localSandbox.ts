@@ -37,7 +37,7 @@
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import type { SandboxLike } from "@pikar/core/render";
@@ -58,6 +58,23 @@ const WINDOWS_BASH = [
   "C:/Program Files (x86)/Git/bin/bash.exe",
 ].map((p) => resolve(p));
 
+/** A TrueType font the assembler can draw a `text_card` with, copied into every render root as
+ *  `LOCAL_FONT_NAME`. Any real TTF will do — this is a developer preview, not the shipped look; the
+ *  snapshot's DejaVu Sans is what a customer sees. Forward slashes for the same reason as above. */
+const LOCAL_FONTS = [
+  "C:/Windows/Fonts/DejaVuSans.ttf",
+  "C:/Windows/Fonts/arial.ttf",
+  "C:/Windows/Fonts/segoeui.ttf",
+  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+].map((p) => resolve(p));
+export const LOCAL_FONT_NAME = "font.ttf";
+
+/** The music library the snapshot bakes to `/usr/local/share/pikar-music`, at its SOURCE. It is
+ *  empty in the repo today, and that is fine: the assembler treats a missing track as a warning and
+ *  renders with no bed, exactly as the snapshot does. Pointing here keeps the two behaviours equal
+ *  rather than leaving the local runner to look in a Linux directory that cannot exist. */
+const LOCAL_MUSIC_DIR = resolve(process.cwd(), "scripts", "music");
+
 export function resolveShell(cmd: string): string {
   if (cmd !== "sh" || process.platform !== "win32") return cmd;
   const override = process.env.MEDIA_RENDER_SH;
@@ -70,6 +87,16 @@ const LOCAL_RENDER_TIMEOUT_MS = 240_000;
 
 export async function createLocalSandbox(): Promise<SandboxLike> {
   const root = await mkdtemp(join(tmpdir(), "pikar-render-"));
+
+  // THE FONT. The snapshot bakes DejaVu Sans at a Linux path the assembler probes; this machine has
+  // neither. A `card` scene then refuses ("needs a TrueType font") and the reel dies `render_failed`
+  // after every picture and take has landed — the first live reel did exactly that. The font is
+  // COPIED INTO THE ROOT and named RELATIVELY: an absolute Windows path cannot go into ffmpeg's
+  // drawtext filtergraph, where the drive colon is an option separator (observed: SIGSEGV), and
+  // an MSYS `/c/...` path is not a path to a native binary at all. `font.ttf` beside `in/` avoids
+  // both by never containing a drive letter.
+  const font = LOCAL_FONTS.find((p) => existsSync(p));
+  if (font) await copyFile(font, join(root, LOCAL_FONT_NAME));
 
   /** Resolve a sandbox-relative path and REFUSE anything that escapes the root. `relative()` is
    *  the check rather than a `startsWith` on the joined string, which says the wrong thing for a
@@ -109,7 +136,16 @@ export async function createLocalSandbox(): Promise<SandboxLike> {
         // what bridges the two. Setting `MSYS_NO_PATHCONV=1` to guard a scene spec (`video:7`) that
         // was never actually mangled broke the render — the test below is what settles which of
         // those two is real, instead of a comment claiming it.
-        const child = spawn(resolveShell(cmd), args, { cwd: root, shell: false });
+        const child = spawn(resolveShell(cmd), args, {
+          cwd: root,
+          shell: false,
+          env: {
+            ...process.env,
+            // Relative on purpose — see the font note in `createLocalSandbox`.
+            ASSEMBLE_FONT: LOCAL_FONT_NAME,
+            ASSEMBLE_MUSIC_DIR: LOCAL_MUSIC_DIR,
+          },
+        });
         let stderr = "";
         let settled = false;
         const timer = setTimeout(() => {

@@ -1,5 +1,43 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-04 (33.1-06 - **THE FIRST REEL TO REACH THE ASSEMBLER DIED FOR WANT OF A
+> FONT, AND THE CARD COULD ONLY SAY `render_failed`.**
+>
+> **The furthest any reel has ever got.** Plan `mh74cdsv…`: a 7-second Grok clip, a Pexels still,
+> a `text_card`, three voice takes and a landed transcript -- every purchase succeeded, the render
+> ran (twice: the automatic retry fired), and both attempts exited 1. The canvas said "the render
+> failed without a more specific cause". The route never logs stderr (§4), so the cause was
+> recovered by fetching the five blobs and running `assemble_final.sh` by hand with the plan's own
+> scene list: `ERROR: a 'card' scene needs a TrueType font and none was found`. The snapshot bakes
+> DejaVu Sans at `/usr/share/fonts/...`; this machine has nothing at any probed path.
+>
+> **Why the fix is a RELATIVE path and not `ASSEMBLE_FONT=C:\Windows\Fontsrial.ttf`.** Two
+> trials settled it rather than reasoning: an MSYS `/c/Windows/Fonts/arial.ttf` passes the
+> script's `-f` probe and then SIGSEGVs ffmpeg -- it is not a path a native binary can open, and
+> fontconfig has no config to fall back to. A Windows path with a drive colon cannot go into the
+> drawtext filtergraph at all, where `:` is the option separator. `createLocalSandbox` therefore
+> COPIES a font into the render root as `font.ttf` and sets `ASSEMBLE_FONT=font.ttf`: no drive
+> letter, resolved from the cwd drawtext already uses. With it the same five assets render:
+> exit 0, `out/final.mp4`, 15.100000s, decode-validated, card drawn.
+>
+> **The music bed is empty everywhere, not just locally.** `apps/web/scripts/music/` holds
+> `LICENSES.md` and `README.md` and no track, so every reel ever baked has rendered with
+> `music: none` -- the assembler's WARN path, which is correct behaviour and now identical locally
+> (`ASSEMBLE_MUSIC_DIR` points at that directory). A mood in the art direction is a request the
+> library cannot yet honour; nothing about the reel fails because of it.
+>
+> **The observability lesson is the bigger one.** `reasonCodeFor` now yields only
+> `ok | render_failed | sandbox_timeout | bad_invocation`, so EVERY assembler refusal -- the script
+> writes a dozen distinct, plain-English `ERROR:` lines -- collapses to the same unnamed code, and
+> the canvas still carries words for 19 codes nothing emits. A clear message existed and was
+> discarded one hop before the person who needed it. The fix belongs in the mapper (a closed set
+> of assembler codes the script prints as a token, §4-safe because they are codes, not prose), and
+> is Step 2 of the 2026-09-04 audit plan.
+>
+> Test carries the probe script the assembler would run and is mutation-proven (the font copy
+> deleted → fails). web render suite 10/10, biome clean, `next build` green.)
+
+
 > Last verified: 2026-09-04 (33.1-06 - **A RENDERABLE DECK WAS BEING REFUSED FOR FREE. THE DONOR
 > SEARCH IGNORED WHETHER THE DONOR STILL FIT ITS OWN LINE.**
 >

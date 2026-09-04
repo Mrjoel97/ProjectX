@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { createLocalSandbox, resolveShell } from "./localSandbox";
+import { createLocalSandbox, LOCAL_FONT_NAME, resolveShell } from "./localSandbox";
 
 /**
  * This implementation runs commands and writes files on a REAL filesystem, which is exactly why it
@@ -101,6 +101,32 @@ describe("createLocalSandbox — the dev-only SandboxLike", () => {
       expect(existsSync(resolveShell("sh"))).toBe(true);
     }
     expect(resolveShell("ffmpeg")).toBe("ffmpeg"); // only `sh` is substituted, never a real binary
+    await box.stop();
+  });
+
+  // THE FIRST LIVE REEL DIED HERE. Every picture and every take landed; the assembler then refused
+  // "a 'card' scene needs a TrueType font and none was found" and the card said `render_failed`.
+  // The snapshot bakes DejaVu Sans at a Linux path; this machine has nothing there. The runner now
+  // drops a font into the root and names it RELATIVELY through `ASSEMBLE_FONT` — relative because
+  // a drive colon inside ffmpeg's drawtext filtergraph is an option separator (observed: SIGSEGV).
+  it("gives the assembler a font it can actually draw with, named without a drive letter", async () => {
+    const box = await createLocalSandbox();
+    await box.writeFiles([
+      {
+        path: "probe.sh",
+        // Reports what the SCRIPT sees, not what the test hopes: the env var, and that it resolves
+        // to a real file from the render root, which is the only place drawtext will look.
+        content: new TextEncoder().encode(
+          '[ -n "$ASSEMBLE_FONT" ] || { echo "no-env" >&2; exit 7; }\n' +
+            'case "$ASSEMBLE_FONT" in *:*) echo "drive-letter:$ASSEMBLE_FONT" >&2; exit 6;; esac\n' +
+            '[ -f "$ASSEMBLE_FONT" ] || { echo "missing:$ASSEMBLE_FONT" >&2; exit 5; }\n',
+        ),
+      },
+    ]);
+    const run = await box.runCommand("sh", ["probe.sh"]);
+    expect(await run.stderr()).toBe("");
+    expect(run.exitCode).toBe(0);
+    expect(await box.readFileToBuffer({ path: LOCAL_FONT_NAME })).not.toBeNull();
     await box.stop();
   });
 
