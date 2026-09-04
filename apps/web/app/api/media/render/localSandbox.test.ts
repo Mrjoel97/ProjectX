@@ -1,6 +1,7 @@
+import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { createLocalSandbox } from "./localSandbox";
+import { createLocalSandbox, resolveShell } from "./localSandbox";
 
 /**
  * This implementation runs commands and writes files on a REAL filesystem, which is exactly why it
@@ -59,6 +60,47 @@ describe("createLocalSandbox — the dev-only SandboxLike", () => {
     expect(await good.stderr()).toContain("noise");
     const bad = await box.runCommand("node", ["-e", "process.exit(3)"]);
     expect(bad.exitCode).toBe(3);
+    await box.stop();
+  });
+
+  // THE TEST THIS FILE SHIPPED WITHOUT. Every other case here spawns `node`, which is on PATH on
+  // every platform — so the suite was green while the ONE command `renderReel` actually issues,
+  // `sh`, died `spawn sh ENOENT` on Windows after fetching every input and paying for every asset.
+  // Coverage of the mechanism is not coverage of the behaviour.
+  it("runs `sh` — the command renderReel actually issues — and it is a bash that has arrays", async () => {
+    const box = await createLocalSandbox();
+    // Arrays are the bashism `assemble_final.sh` leans on hardest (TAKE_ABS/TAKE_PAD); a strict
+    // POSIX `sh` substitute would parse this and fail, which is the wrong kind of pass.
+    await box.writeFiles([
+      {
+        path: "probe.sh",
+        content: new TextEncoder().encode(
+          'a=(x y z); [ "${#a[@]}" = 3 ] || { echo "no-arrays" >&2; exit 9; }\n' +
+            '[ "$1" = "video:7" ] || { echo "mangled:$1" >&2; exit 8; }\n',
+        ),
+      },
+    ]);
+    // `video:7` is the scene spec, and the worry was that MSYS argument conversion would rewrite a
+    // `a:b` pair into `a;b` on the way to bash. IT DOES NOT — this case is what established that,
+    // and it matters because the conversion cannot simply be switched off: `assemble_final.sh`
+    // hands ffmpeg POSIX paths from `mktemp -d`, and a NATIVE Windows ffmpeg needs exactly that
+    // conversion to resolve them. The script reports what it RECEIVED on stderr, so if a future
+    // Git build ever does mangle this, it fails here rather than rendering the wrong reel.
+    const run = await box.runCommand("sh", ["probe.sh", "video:7"]);
+    expect(await run.stderr()).toBe("");
+    expect(run.exitCode).toBe(0);
+
+    // AND THE RESOLVER ITSELF, because the run above is NOT the guard it looks like. Vitest is
+    // started from a Git Bash shell, whose PATH already carries `/usr/bin/sh` — so on this machine
+    // the spawn succeeds with the resolver deleted, and the case passes while the bug it exists to
+    // catch is fully present. (Verified: the no-op mutant survived it.) The server that actually
+    // serves this route is launched from `cmd.exe` and has no such PATH. The falsifiable claim is
+    // therefore about `resolveShell`, not about whether a spawn happened to find something.
+    if (process.platform === "win32") {
+      expect(resolveShell("sh")).not.toBe("sh");
+      expect(existsSync(resolveShell("sh"))).toBe(true);
+    }
+    expect(resolveShell("ffmpeg")).toBe("ffmpeg"); // only `sh` is substituted, never a real binary
     await box.stop();
   });
 

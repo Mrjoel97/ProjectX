@@ -36,10 +36,34 @@
  */
 
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import type { SandboxLike } from "@pikar/core/render";
+
+/** `renderReel` asks for `sh`, which every Linux sandbox image has and Windows does not — the
+ *  spawn is `shell: false`, so there is no interpreter to fall back on and the render died
+ *  `spawn sh ENOENT` after fetching every input. `assemble_final.sh` is `#!/usr/bin/env bash` and
+ *  uses arrays throughout, so the substitute must be BASH, not any POSIX `sh`: Git for Windows
+ *  ships one, and `git` being on PATH is already a precondition for working in this repo.
+ *
+ *  ponytail: a fixed probe list, because this path only ever runs on a developer's own machine.
+ *  `MEDIA_RENDER_SH` is the upgrade path for a box that keeps bash somewhere else. */
+const WINDOWS_BASH = [
+  // Forward slashes deliberately: `resolve()` normalises them to the platform separator, and a
+  // literal Windows path in a TS string needs every backslash doubled — `"\b"` is a BACKSPACE, not
+  // a `\` and a `b`, so the escaped spelling is one missed keystroke away from a silent wrong path.
+  "C:/Program Files/Git/bin/bash.exe",
+  "C:/Program Files (x86)/Git/bin/bash.exe",
+].map((p) => resolve(p));
+
+export function resolveShell(cmd: string): string {
+  if (cmd !== "sh" || process.platform !== "win32") return cmd;
+  const override = process.env.MEDIA_RENDER_SH;
+  if (override) return override;
+  return WINDOWS_BASH.find((p) => existsSync(p)) ?? cmd;
+}
 
 /** The same ceiling the real sandbox is clamped to, so a hung ffmpeg cannot outlive the request. */
 const LOCAL_RENDER_TIMEOUT_MS = 240_000;
@@ -78,7 +102,14 @@ export async function createLocalSandbox(): Promise<SandboxLike> {
       // No shell, argv array, cwd pinned to the root. `stderr()` is a thunk in the interface
       // because the real SDK streams it; here it is already buffered and simply handed back.
       return await new Promise((resolvePromise, reject) => {
-        const child = spawn(cmd, args, { cwd: root, shell: false });
+        // MSYS argument conversion is deliberately LEFT ON here, and that is load-bearing rather
+        // than incidental: `assemble_final.sh` builds its scratch paths from `mktemp -d`, which
+        // returns POSIX (`/tmp/tmp.XXXXXX`), while ffmpeg is a NATIVE Windows binary that resolves
+        // `/tmp/...` against the wrong root and dies "No such file or directory". The conversion is
+        // what bridges the two. Setting `MSYS_NO_PATHCONV=1` to guard a scene spec (`video:7`) that
+        // was never actually mangled broke the render — the test below is what settles which of
+        // those two is real, instead of a comment claiming it.
+        const child = spawn(resolveShell(cmd), args, { cwd: root, shell: false });
         let stderr = "";
         let settled = false;
         const timer = setTimeout(() => {

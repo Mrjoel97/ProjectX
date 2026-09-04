@@ -1,5 +1,49 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-04 (33.1-06 - **THE LOCAL RUNNER HAD NEVER RUN THE ASSEMBLER. IT
+> SHIPPED GREEN AND DIED `spawn sh ENOENT` ON THE FIRST REAL REQUEST.**
+>
+> **How a 9-test file missed the only command that matters.** `renderReel` issues exactly one
+> command: `sh assemble_final.sh ...`. Every test in `localSandbox.test.ts` spawned **`node`** --
+> present on PATH on every platform -- so the suite was fully green while the runner could not
+> execute the assembler at all on Windows. Coverage of the mechanism (spawn, cwd, argv, exit code)
+> is not coverage of the behaviour. The new case spawns `sh`.
+>
+> **Why `sh` is absent and why the substitute must be BASH.** The spawn is `shell: false`, so
+> there is no interpreter to fall back on; Windows has no `sh`. `assemble_final.sh` is
+> `#!/usr/bin/env bash` and leans on arrays (`TAKE_ABS`/`TAKE_PAD`), so a strict POSIX `sh` would
+> parse-fail. `resolveShell` substitutes Git for Windows' `bash.exe` -- `git` on PATH is already a
+> precondition for this repo -- with `MEDIA_RENDER_SH` as the override. **Only the literal `sh` is
+> substituted**, never a real binary; asserted for `ffmpeg`.
+>
+> **THE TEST THAT COULD NOT FAIL, AND HOW IT WAS CAUGHT.** The first version of the new case only
+> ran `sh` through the sandbox -- and it PASSED with `resolveShell` mutated to a no-op, because
+> vitest inherits the developer's Git Bash PATH where `/usr/bin/sh` exists, while the server that
+> serves the route is launched from `cmd.exe` and does not. The test was measuring the shell it was
+> started from, not the fix. The falsifiable assertion is on `resolveShell` ITSELF (`!== "sh"`, and
+> the path exists). Re-mutated afterwards: the no-op is now KILLED. A green run proves nothing
+> until a mutant has failed it.
+>
+> **MSYS PATH CONVERSION MUST STAY ON -- switching it off broke the render.** `MSYS_NO_PATHCONV=1`
+> + `MSYS2_ARG_CONV_EXCL=*` were added defensively, to stop a scene spec (`video:7`) being rewritten
+> as `video;7`. That mangling **does not happen** (the test now establishes it), and disabling the
+> conversion caused a real failure instead: `assemble_final.sh` builds scratch paths from
+> `mktemp -d`, which returns POSIX (`/tmp/tmp.XXXXXX`), while ffmpeg is a NATIVE Windows binary --
+> `Error opening output /tmp/tmp.VyOaHKI2hh/p_000.mp4: No such file or directory`. The conversion is
+> the bridge. **A guard added against a hypothesised failure broke the working path**; the env
+> override is gone and the spawn is plain again.
+>
+> **How this was found for $0.** Three assets from a part-paid batch were still in storage (a $0.49
+> 7s Grok clip, a Pexels still, one voice take), and `handleRenderRequest` touches NO plan row -- it
+> fetches blobs, renders, uploads to pre-minted URLs, returns JSON. So the route was exercised
+> directly with real bytes and deliberately-invalid upload URLs. Both defects surfaced before a
+> single new cent was spent. **Do this before paying for a fresh deck: the render step is the one
+> plane no offline test reaches.**
+>
+> web render suite 9/9 (was 8), typecheck and biome clean, `next build` green. Verified end to end
+> through the real spawn: exit 0, `out/final.mp4`, 15.100000s, decode-validated.)
+
+
 > Last verified: 2026-09-03 (33.1-06 — **THE RENDER STEP CAN NOW RUN ON A DEVELOPER'S MACHINE.
 > A SECOND `SandboxLike`, DEV-ONLY, BEHIND TWO GUARDS.**
 >
