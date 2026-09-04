@@ -158,6 +158,15 @@ describe("toAss — a valid file, and text that cannot become markup", () => {
     expect(ass.indexOf("[Events]")).toBeGreaterThan(ass.indexOf("[V4+ Styles]"));
   });
 
+  it("wraps INSIDE the margins — a full-length cue must never run off the frame", () => {
+    // Measured on the first rendered reel: a 31-character cue at 64px touched both frame edges
+    // under `WrapStyle: 2` (no wrapping). 0 is libass's smart wrap within MarginL/MarginR, which
+    // makes overflow impossible for any cue `groupIntoLines` can produce.
+    const header = toAss(lines).split("[V4+ Styles]")[0] ?? "";
+    expect(header).toContain("WrapStyle: 0");
+    expect(header).not.toContain("WrapStyle: 2");
+  });
+
   it("writes H:MM:SS.cc times, ascending", () => {
     const ass = toAss([{ startS: 3661.5, endS: 3662, text: "hour" }]);
     expect(ass).toContain("Dialogue: 0,1:01:01.50,1:01:02.00,");

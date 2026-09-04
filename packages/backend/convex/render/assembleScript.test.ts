@@ -376,8 +376,15 @@ test("the card still uses textfile= and expansion=none — the palette did not w
   // The regression that would matter most: adding colour by switching to `text=` would put the
   // model's WORDS in the filter string too, which is the exact hole the card branch was built to
   // avoid. Re-asserted here because this change edited that very line.
-  expect(SH).toContain("textfile='${txt}':expansion=none");
+  // 33.1-06: the card is now drawn ONE LINE PER drawtext (a LF shaped as a .notdef box, and a
+  // multi-line block left-aligned inside its centred box — both seen on the first rendered reel),
+  // so the file each filter reads is the per-line `${lf}`, written from the folded text. The
+  // property pinned here is unchanged: every drawtext reads a FILE, and every one has
+  // `expansion=none` glued to it.
+  expect(SH).toContain("textfile='${lf}':expansion=none");
   expect(SH, "drawtext must never take the words inline").not.toContain("drawtext=text=");
+  // The wrap step must break at SPACES ONLY — `fold` without `-s` would split inside a word.
+  expect(SH).toContain('fold -s -w "$MAXCH"');
 });
 
 test("the fade is drawn INSIDE the scene and cannot move a boundary", () => {

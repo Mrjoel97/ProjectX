@@ -176,7 +176,13 @@ export function toAss(
     "ScriptType: v4.00+",
     `PlayResX: ${x}`,
     `PlayResY: ${y}`,
-    "WrapStyle: 2",
+    // 0 = smart wrap INSIDE the margins. It was 2 (no wrapping at all) on the reasoning that
+    // `groupIntoLines` already bounds a cue at DEFAULT_LINE_CHARS — but 32 characters of 64px
+    // DejaVu Sans is ~1280px wide against a 920px band (1080 minus the two 80px margins), so a
+    // full-length cue ran off BOTH edges. Measured on the first rendered reel: a 31-character cue
+    // touched both frame edges even in the narrower fallback face. The chunker still keeps cues
+    // short; libass now guarantees that whatever length arrives is drawn within the frame.
+    "WrapStyle: 0",
     "ScaledBorderAndShadow: yes",
     "",
     "[V4+ Styles]",

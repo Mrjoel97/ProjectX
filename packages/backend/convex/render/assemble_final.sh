@@ -410,8 +410,38 @@ for ((i=0;i<SCENES;i++)); do
       # The fade is capped at a third of the scene so a 2-second card is not still arriving when
       # it should be landing. `awk` because SEC is an integer and the duration is not.
       CFADE="$(awk -v s="$SEC" 'BEGIN{d=s/3; if(d>0.4)d=0.4; printf "%.3f", d}')"
+      # WRAP THE WORDS FIRST. drawtext does not wrap: a card longer than the frame is drawn as ONE
+      # line and cropped at both edges — "AUTOMATE THE REPETITIVE" shipped as "UTOMATE THE REPETITIV"
+      # on the first reel ever rendered. The width is derived from the same numbers the filter uses
+      # (fontsize = H/22; an average glyph is ~0.55 em; 86% of W is the usable band), so a frame
+      # size change moves both together. `fold -s` breaks at spaces only, never inside a word, and
+      # the trailing blank each break leaves is stripped so centring is exact. `line_spacing` below
+      # is already there for the newlines this produces. A single word wider than the band is left
+      # whole — cropping one word is better than splitting it into nonsense.
+      MAXCH="$(awk -v w="$W" -v h="$H" 'BEGIN{n=int(0.86*w*22/(0.55*h)); if(n<8)n=8; print n}')"
+      # RELATIVE, beside the original, not under $TMP: `textfile=` sits INSIDE the filter string,
+      # where no path conversion ever reaches it, so on a developer's Windows box a `/tmp/...`
+      # value is a file a native ffmpeg cannot open. A relative name resolves from the cwd on
+      # every platform, which is exactly how the unwrapped `in/cardNN.txt` already worked.
+      wrapped="$IN_DIR/$(printf 'card%02d' "$n").wrapped.txt"
+      fold -s -w "$MAXCH" "$txt" | sed 's/[[:space:]]*$//' > "$wrapped"
+      # ONE drawtext PER LINE, and no newline in any text file. Two reasons, both observed on the
+      # first rendered reel: this ffmpeg lineage (BtbN master, gyan 8.x) shapes a LF as a .notdef
+      # box glyph at the end of the line — in every font tried — and a multi-line block is
+      # left-aligned inside its centred box, so the second line sits flush-left under the first.
+      # Each line is its own filter, centred on its own width, stacked from a computed top.
+      # FS/LH are the same numbers the single filter used (fontsize=H/22, line_spacing=14).
+      FS=$((H / 22)); LH=$((FS + 14))
+      NL="$(wc -l < "$wrapped")"; [[ "$(tail -c1 "$wrapped" | wc -l)" -eq 0 ]] && NL=$((NL + 1))
+      DT=""; k=0
+      while IFS= read -r ln || [[ -n "$ln" ]]; do
+        lf="$IN_DIR/$(printf 'card%02d' "$n").l$k.txt"
+        printf '%s' "$ln" > "$lf"
+        DT="${DT}drawtext=fontfile='${FONT}':textfile='${lf}':expansion=none:fontcolor=${CARD_INK}:fontsize=${FS}:shadowx=2:shadowy=2:shadowcolor=0x000000@0.35:x=(w-text_w)/2:y=(h-${NL}*${LH})/2+${k}*${LH},"
+        k=$((k + 1))
+      done < "$wrapped"
       ffmpeg -y -loglevel error -f lavfi -t "$SEC" -i "color=c=${CARD_BG}:s=${W}x${H}:r=${FPS}" \
-        -vf "drawtext=fontfile='${FONT}':textfile='${txt}':expansion=none:fontcolor=${CARD_INK}:fontsize=${H}/22:line_spacing=14:shadowx=2:shadowy=2:shadowcolor=0x000000@0.35:x=(w-text_w)/2:y=(h-text_h)/2,fade=t=in:st=0:d=${CFADE},${NORM}" \
+        -vf "${DT}fade=t=in:st=0:d=${CFADE},${NORM}" \
         -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
       ;;
   esac
@@ -419,7 +449,15 @@ for ((i=0;i<SCENES;i++)); do
   # THE DIEGETIC BED. A generated clip's own SFX has to come off the ORIGINAL file — the picture
   # built above is silent by construction — and it is lifted out here, at this scene's length, so
   # the master mix below is a list of wavs and offsets rather than a second pass over the inputs.
-  if [[ "$KIND" == "video" ]]; then
+  #
+  # ONLY FOR A SCENE NOBODY SPEAKS OVER. This bed was designed for Sora's ambient SFX. Grok returns
+  # a full soundtrack — the first rendered clip was a presenter TALKING, peaking at 0 dBFS, louder
+  # than the narration take — and at SFXVOL it was plainly a second voice under the user's script.
+  # The narration IS the reel's words; a clip's improvised speech never is. So a narrated scene
+  # takes NO bed from its clip, and a silent scene keeps its clip's sound as the design intended.
+  # Gating here, not by inspecting the audio for speech: deterministic, free, and it cannot be
+  # fooled by music with vocals or a crowd.
+  if [[ "$KIND" == "video" && ! -f "$voice" ]]; then
     src="$IN_DIR/$(printf 'block%02d.mp4' "$n")"
     if [[ "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "$src" | head -1)" == "audio" ]]; then
       dieg="$TMP/d_$(printf '%03d' "$i").wav"

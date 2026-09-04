@@ -1,5 +1,51 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-04 (33.1-06 - **THE FIRST REEL RENDERED. WHAT THE OWNER SAW IN IT, AND
+> THE THREE FIXES -- TWO OF THEM PRODUCT DEFECTS THAT WOULD HAVE SHIPPED.**
+>
+> Plan `mh74cdsv…` rendered end to end (`media.rendered`, 10 gates, `media.reel_saved`). Frames
+> were pulled from the published mp4 and READ rather than described; the findings and their fixes:
+>
+> **1. Two voices.** The 7s Grok clip was a presenter speaking to camera, with a stereo AAC track
+> peaking at 0 dBFS -- louder than the narration take (-19.4 dB). `assemble_final.sh` mixed it as
+> the *diegetic bed* at `SFXVOL=0.12`, exactly as designed for Sora's ambient SFX. **ADR-027's "no
+> native audio" was false** (superseded on that claim by ADR-030). Fix: the bed is taken ONLY from a
+> scene with no voice take -- `[[ "$KIND" == "video" && ! -f "$voice" ]]`. The narration stays;
+> the clip's improvised speech goes. The owner's alternative (detect a voice, skip the take) is
+> declined in ADR-030: it would keep the words nobody approved and drop the ones the owner did.
+>
+> **2. The text card ran off both edges.** "AUTOMATE THE REPETITIVE" was drawn as ONE line at
+> `H/22` px -- drawtext does not wrap -- and shipped as "UTOMATE THE REPETITIV". Fix: the words are
+> folded first (`fold -s`, width derived from the same `W`/`H`/fontsize the filter uses), then
+> drawn **one `drawtext` per line**, each centred on its own width. Per-line rather than one
+> multi-line file because this ffmpeg lineage (BtbN master, gyan 8.x) shapes a LF as a .notdef
+> BOX glyph -- seen in two fonts -- and left-aligns a multi-line block inside its centred box.
+> The per-line files are written RELATIVELY beside the input: `textfile=` sits inside the filter
+> string where no path conversion reaches it, so a `$TMP` (POSIX) path is unopenable by a native
+> ffmpeg on a developer's machine. The `textfile=`/`expansion=none` trust boundary is unchanged and
+> the tripwire now pins the per-line `${lf}`.
+>
+> **3. Captions never burned, and would have overflowed when they did.** `captionStatus: failed`,
+> `captionReason: render_failed`: MSYS argument conversion rewrote `fontsdir=/usr/share/fonts`
+> INSIDE `burn_caps.sh`'s `-vf` string into `C:/Program Files/Git/...`, and the drive colon broke
+> the filtergraph -- the same conversion that SAVES the assembler's `mktemp` paths. The local runner
+> now sets `MSYS2_ARG_CONV_EXCL=subtitles=`, the narrowest exclusion; verified the burn exits 0 AND
+> the assembler still renders. Then the real defect: the shipped style is 64px DejaVu Sans,
+> margins 80/80 on a 1080-wide script, **`WrapStyle: 2` (no wrapping)**, cues up to 32 chars --
+> a 31-char cue touched BOTH frame edges even in the narrower fallback face. `WrapStyle: 0`
+> (smart wrap inside the margins) makes overflow impossible for any cue; asserted in
+> `captions.test.ts`.
+>
+> **Also confirmed, not fixed here:** the music library is EMPTY in the repo (`LICENSES.md` and a
+> README, no track), so every reel ever rendered has been bedless -- the assembler's WARN path,
+> correct behaviour. And a caption burn that fails writes `captionReason` on the plan but emits
+> NO audit row, which is why the audit log showed no caption event at all.
+>
+> All three fixes were proven on the SAME five landed assets: `3 take(s) + 0 diegetic bed(s)`,
+> the card wrapped and centred (frame read), 15.100000s decode-validated. core captions 35/35,
+> backend media+render 308/308 + script tripwires 29/29, web 688/688, biome clean.)
+
+
 > Last verified: 2026-09-04 (33.1-06 - **THE FIRST REEL TO REACH THE ASSEMBLER DIED FOR WANT OF A
 > FONT, AND THE CARD COULD ONLY SAY `render_failed`.**
 >

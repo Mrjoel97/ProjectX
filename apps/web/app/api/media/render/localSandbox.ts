@@ -144,6 +144,14 @@ export async function createLocalSandbox(): Promise<SandboxLike> {
             // Relative on purpose — see the font note in `createLocalSandbox`.
             ASSEMBLE_FONT: LOCAL_FONT_NAME,
             ASSEMBLE_MUSIC_DIR: LOCAL_MUSIC_DIR,
+            // MSYS argument conversion cuts BOTH ways, and this is the narrowest cut. Left on, it
+            // is what lets the assembler hand a native ffmpeg its `mktemp -d` POSIX paths. But it
+            // also rewrites `fontsdir=/usr/share/fonts` INSIDE burn_caps.sh's `-vf` string into
+            // `C:/Program Files/Git/...`, and the drive colon breaks the filtergraph — the first
+            // reel's captions died `render_failed` on exactly that. Excluding the one argument
+            // prefix leaves every other conversion in place. Observed, not reasoned: with it the
+            // burn exits 0 and the assembler still renders.
+            MSYS2_ARG_CONV_EXCL: "subtitles=",
           },
         });
         let stderr = "";

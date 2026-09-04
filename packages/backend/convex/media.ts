@@ -1002,9 +1002,15 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
       // ratio gets reshaped by the assembler. "9:16" reproduces exactly the geometry Sora's
       // `720x1280` requested, so the migration changes the transport and not the picture.
       //
-      // NOT sent: `generate_audio`. Grok has no native audio, narration is generated separately as
-      // TTS and muxed in `assemble_final.sh` — and a dimension the price table cannot see is the
-      // money bug this doc comment exists to prevent.
+      // NOT sent: `generate_audio`, and NOT because Grok is silent — that earlier claim (also in
+      // ADR-027) was wrong. The first rendered clip came back with a stereo AAC track of a
+      // presenter SPEAKING, peaking at 0 dBFS and louder than the narration take, and the
+      // assembler mixed it in as a "diegetic bed" under the voice: two voices at once. The audio
+      // is unrequested, unpriced (the table sees model, resolution and seconds) and unwanted under
+      // a narrated scene, so `assemble_final.sh` now drops a clip's own audio wherever the deck
+      // speaks over it and keeps it only for a silent scene. Whether the route accepts an
+      // audio-off flag is unknown — `/models/.../endpoints` lists chat parameters only, the ADR-029
+      // lesson — and a paid probe is the only way to find out. Not sending one costs nothing.
       return {
         model: spec.model,
         prompt: text,
