@@ -19,6 +19,7 @@ import {
   minCharsFor,
   narrationCeilingSeconds,
   narrationChars,
+  narrationOverrunsReel,
   parseArtDirection,
   parseBlockDeck,
   parseBrief,
@@ -1050,6 +1051,35 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
       reason: "narration_too_long",
       sceneIndex: 2,
     });
+  });
+
+  // THE DECK THE OWNER WAS REFUSED, LIVE, ON 2026-09-04 — verbatim narration and seconds. It is
+  // renderable and always was; `bestDonor` chose on LENGTH alone and never asked whether a donor
+  // still fit its OWN line. Scene 1 (52 chars in 4s) is already at its limit, so donating 2s to
+  // scene 3 makes scene 1 the next offender; the next pass takes them straight back, and the
+  // repair ping-pongs until its pass budget runs out. All the while the 7-second CLIP is carrying
+  // 40 characters -- 4 spare seconds -- and is never asked, because a still that merely looked
+  // slack is preferred first. The clip is the only donor that can actually pay.
+  it("asks the CLIP when every still is already at its own narration limit", () => {
+    const rows = [
+      "| 1 | text_card | 4 | Introduction to the service | Our service helps you manage your tasks efficiently. | MANAGE YOUR TASKS | |",
+      "| 2 | generated_video | 7 | A solopreneur using the service | See how easy it is to organize your day. | | |",
+      "| 3 | stock_image | 2 | A clutter-free workspace | Simplify your workload and focus on growth. | SIMPLIFY YOUR WORKLOAD | |",
+      "| 4 | text_card | 2 | A simple call to action | Join now and take the first step. | JOIN NOW | |",
+    ];
+    const r = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // The clip pays for both short scenes and lands at 4s. The reel is still exactly 15.
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([4, 4, 4, 3]);
+    expect(r.scenes.reduce((n, s) => n + s.durationMs, 0)).toBe(15_000);
+    // Shrinking a clip only ever LOWERS the generated total, so this cannot raise the price.
+    expect(r.adjustments.filter((a) => a.sceneIndex === 1)).toEqual([
+      { sceneIndex: 1, fromSeconds: 7, toSeconds: 5, why: "narration" },
+      { sceneIndex: 1, fromSeconds: 5, toSeconds: 4, why: "narration" },
+    ]);
+    // And the whole point: the reel it produces does NOT overrun, so the refusal was never real.
+    expect(narrationOverrunsReel(r.scenes, 15)).toBeNull();
   });
 
   it("takes from OUTSIDE the window even when a longer scene sits inside it", () => {

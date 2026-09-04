@@ -1,5 +1,43 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-04 (33.1-06 - **A RENDERABLE DECK WAS BEING REFUSED FOR FREE. THE DONOR
+> SEARCH IGNORED WHETHER THE DONOR STILL FIT ITS OWN LINE.**
+>
+> **The live deck** (owner, 2026-09-04, 15s): `text_card 4s/52ch`, `generated_video 7s/40ch`,
+> `stock_image 2s/43ch`, `text_card 2s/33ch`. Scene 3 needs ~3.1s in a 2s window, so
+> `repairNarrationWindows` looks for a donor. `bestDonor` scored candidates on
+> `duration - MIN_DONOR_SECONDS` ALONE, so it took 2s from scene 1 -- which was already at its own
+> limit (52 chars needs all 4s). Scene 1 became the next offender, the next pass took the seconds
+> straight back, and the repair ping-ponged until its pass budget ran out and the deck refused
+> `narration_too_long`. **The 7-second clip carrying 40 characters -- four spare seconds -- was
+> never asked**, because limit 2b prefers a still and scene 1 merely LOOKED slack.
+>
+> **The fix is one bound**: a donor's slack is now
+> `min(duration - MIN_DONOR_SECONDS, itsWindow - ceil(itsChars / MAX_CHARS_PER_SECOND))`. The
+> WINDOW, not the duration -- shrinking a scene shortens the window it speaks into by exactly what
+> it gives away. A silent scene owes its seconds to nobody and is unbounded. The deck above now
+> parses to `[4, 4, 4, 3]`, the clip paying twice (7->5->4), total still exactly 15s, and
+> `narrationOverrunsReel` returns null. **Shrinking a clip only ever LOWERS the generated total, so
+> this can never raise a price the user already approved.**
+>
+> **THE SENTENCE MOVED WITH THE CHECK.** `SCENE_REFUSAL_WHY.narration_too_long` still read "a spoken
+> line is too long to finish before the next line starts" -- a condition 33.1-06 had already
+> DELETED (the assembler delays a colliding take now). The card was describing an impossible failure
+> while the real one -- the lines summing past the reel -- went unnamed. It now reads "the spoken
+> lines add up to more than the reel is long". Grepped repo-wide: no second copy of the old
+> sentence survived in `apps/web`, which is the only reason one reason could not say two things.
+>
+> **`MAX_CHARS_PER_SECOND = 14` was re-derived against the NEW voice model, not assumed.** The
+> provider moved to `openai/gpt-audio-mini` this same phase, so the constant was measured rather
+> than trusted: a real take transcribed back at 37 chars / 2.70s = **13.7 chars/s**, 133 wpm. The
+> constant is right and the refusals it produces are arithmetic, not policy -- which is why the fix
+> had to be in the donor search and could NOT be "remove the constraint".
+>
+> The regression test carries the owner's deck verbatim and is mutation-proven: reverting the bound
+> to `floor` alone fails it. core 1247/1247, backend media+dispatch 399/399, web 687/687, typecheck
+> and biome clean.)
+
+
 > Last verified: 2026-09-04 (33.1-06 - **THE LOCAL RUNNER HAD NEVER RUN THE ASSEMBLER. IT
 > SHIPPED GREEN AND DIED `spawn sh ENOENT` ON THE FIRST REAL REQUEST.**
 >

@@ -859,7 +859,11 @@ export const SCENE_REFUSAL_WHY: Record<string, string> = {
   missing_asset: "a scene said to use your own footage but never named which file",
   duration_mismatch: "the scene lengths did not add up to the reel length it declared",
   no_narration: "not one scene had a spoken line, so there would be nothing to voice",
-  narration_too_long: "a spoken line is too long to finish before the next line starts",
+  // 33.1-06: the SENTENCE had to change with the check. This used to mean "a line runs into the
+  // next one", which the assembler no longer minds — it delays the later take. The surviving fatal
+  // case is the one below, and leaving the old words in place described a failure that can no
+  // longer happen while the real one went unnamed.
+  narration_too_long: "the spoken lines add up to more than the reel is long",
   // 33-01: a Source line the parser cannot read must never silently become creative copy.
   malformed_source: "a scene cited a source in a form I couldn't read back",
 };
@@ -1301,7 +1305,21 @@ function widenNarrationWindow(
     for (const [j, s] of scenes.entries()) {
       if (inSpan(j) || (s.visual === "generated_video") !== wantClip) continue;
       // MIN_DONOR_SECONDS is also what keeps a shrunk clip on the 1..15 grid: the floor is 2.
-      const slack = s.durationMs / 1000 - MIN_DONOR_SECONDS;
+      const floor = s.durationMs / 1000 - MIN_DONOR_SECONDS;
+      // AND IT MUST STILL FIT ITS OWN LINE. Without this, a donor is chosen on length alone and a
+      // scene already at its narration limit gets robbed — it becomes the next offender, the next
+      // pass robs the scene that just took its seconds, and `repairNarrationWindows` ping-pongs
+      // until its pass budget runs out and the deck refuses `narration_too_long` for free. Observed
+      // on a real 15s deck whose 7-second clip carried 40 characters and was never asked, because
+      // a still that merely LOOKED slack was preferred first (limit 2b).
+      //
+      // The bound is the donor's WINDOW, not its own duration: shrinking scene `j` shortens the
+      // window it speaks into by exactly the seconds it gives away.
+      const ownNeed =
+        s.narration === ""
+          ? Number.NEGATIVE_INFINITY // a silent scene owes its seconds to nobody
+          : Math.ceil(s.narration.length / MAX_CHARS_PER_SECOND);
+      const slack = Math.min(floor, narrationCeilingSeconds(scenes, j) - ownNeed);
       if (slack >= deficit && slack > most) {
         at = j;
         most = slack;
