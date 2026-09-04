@@ -165,6 +165,7 @@ set -euo pipefail
 IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""
 KINDS=(); SECS=()
 MUSIC=""            # the requested mood slug, "" for a reel with no bed
+MUSIC_FILE=""       # 33.1-06: a track already in in/ (fetched from a public library); beats the library lookup
 MUSIC_USED="none"   # what actually made it into the mix — the sidecar reports THIS, not the ask
 # THE BED'S LEVEL, PINNED. Not a flag, unlike --sfx-vol: this number is half of the narration
 # assert's soundness (see the MUSIC BED notes above), so a caller must not be able to set it.
@@ -199,6 +200,7 @@ while [[ $# -gt 0 ]]; do
     # not be a thing this script can be asked. The caller validates against its own closed set too;
     # this is the half that does not depend on the caller being the one we think it is.
     --music) MUSIC="$2"; shift 2 ;;
+    --music-file) MUSIC_FILE="$2"; shift 2 ;;
     --card-bg) CARD_BG="$2"; shift 2 ;;
     --card-ink) CARD_INK="$2"; shift 2 ;;
     --in) IN_DIR="$2"; shift 2 ;;
@@ -318,9 +320,17 @@ fi
 MUSICWAV=""
 if [[ -n "$MUSIC" ]]; then
   MTRACK=""
+  # 33.1-06: a FETCHED track first. The runner has already written it beside the other inputs;
+  # the only name accepted is the one core's RENDER_MUSIC_NAME allows, under in/, so a caller
+  # cannot point this at anything else on the VM (the same charset discipline as --music above).
+  if [[ -n "$MUSIC_FILE" ]]; then
+    [[ "$MUSIC_FILE" =~ ^in/music\.(mp3|m4a|ogg|wav|flac)$ ]] || { echo "ERROR: --music-file must be in/music.<mp3|m4a|ogg|wav|flac>, got: $MUSIC_FILE" >&2; exit 2; }
+    [[ -f "$MUSIC_FILE" ]] && MTRACK="$MUSIC_FILE"
+  fi
   # Extension-agnostic: the library is a bake artifact, and pinning a container here would mean a
   # re-bake that switched to m4a silently produced bedless reels. The SLUG is the contract.
   for ext in mp3 m4a ogg wav flac; do
+    [[ -n "$MTRACK" ]] && break
     [[ -f "$MUSIC_DIR/$MUSIC.$ext" ]] && { MTRACK="$MUSIC_DIR/$MUSIC.$ext"; break; }
   done
   if [[ -z "$MTRACK" ]]; then

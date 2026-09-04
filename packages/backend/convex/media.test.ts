@@ -6,6 +6,7 @@
 // environment matches the research.test.ts / dispatch.test.ts harness idiom — convex-test's lazy
 // module loader pulls every convex module, and some of them are "use node".
 import retrierTest from "@convex-dev/action-retrier/test";
+import { MUSIC_BLOCK_INDEX } from "@pikar/core/render";
 import type { Block, Scene, ShotType } from "@pikar/core/storyboard";
 import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
@@ -17,6 +18,7 @@ import {
   MEDIA_DEFAULT_VOICE,
   MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_JOB_CAP_USD,
+  MEDIA_MUSIC_STOCK,
   MEDIA_SANDBOX_USD_PER_RENDER,
   MEDIA_TTS_PRICING,
   MEDIA_VIDEO_PRICING,
@@ -42,6 +44,7 @@ import { contentHash } from "./lib/hash";
 import {
   buildSubmitBody,
   MAX_STOCK_ASSET_BYTES,
+  pickStockAudio,
   pickStockPhoto,
   pickStockVideo,
   reserveJobInner,
@@ -7180,7 +7183,7 @@ describe("the music bed rides the whole-job reservation, and buys no row", () =>
 
   const jobRows = (t: T) => t.run(async (ctx) => ctx.db.query("mediaJobs").collect());
 
-  test("a deck with a bed reserves, and NO mediaJobs row is written for it", async () => {
+  test("a deck with a bed reserves ONE $0 stock row for it at MUSIC_BLOCK_INDEX — and no `music` row", async () => {
     const t = harness();
     const { planId } = await withBed(t, "calm");
     const res = await t.run(async (ctx) =>
@@ -7195,14 +7198,65 @@ describe("the music bed rides the whole-job reservation, and buys no row", () =>
     expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
     const inserted = await jobRows(t);
     expect(inserted.length).toBeGreaterThan(0);
-    // THE LOAD-BEARING ASSERTION. `batchToRender` refuses a batch unless every row reached
-    // `succeeded` with landed bytes. A music row buys no provider call, so it would sit `queued`
-    // forever and the reel would never render at all — the reason this line has the `render`
-    // line's shape (a spec, no row) rather than the `tts` line's.
-    expect(
-      inserted.some((r) => (r.kind as string) === "music"),
-      "a music row would never land and would deadlock the render",
-    ).toBe(false);
+    // 33.1-06: THIS ASSERTION CHANGED MEANING, deliberately. It used to say "no row for the bed",
+    // because the bed came from a baked library and a row would sit queued forever. The bed is
+    // now FETCHED from Openverse, so it HAS a row — the same $0 stock row a Pexels still has — at
+    // MUSIC_BLOCK_INDEX, outside every scene. What must still hold is the reason the old line
+    // existed: `batchToRender` treats that row as OPTIONAL (renderReel.test.ts), so a reel never
+    // waits on its music; and a `music`-KIND row, which nothing could land, is still never
+    // written. Asserting only the latter would have gone green vacuously over the new row.
+    expect(inserted.some((r) => (r.kind as string) === "music")).toBe(false);
+    const bed = inserted.filter((r) => r.kind === "audio");
+    expect(bed, "exactly one bed row").toHaveLength(1);
+    expect(bed[0]?.blockIndex).toBe(MUSIC_BLOCK_INDEX);
+    expect(bed[0]?.provider).toBe("stock");
+    expect(bed[0]?.model).toBe(MEDIA_MUSIC_STOCK.model);
+    expect(bed[0]?.estUsd).toBe(0);
+    expect(bed[0]?.status).toBe("queued");
+    expect(bed[0]?.spec).toEqual({ kind: "stock", media: "audio", seconds: 30 });
+  });
+
+  test("submitting the batch LANDS the bed with its licence line on the plan (fixture)", async () => {
+    vi.stubEnv("MEDIA_PROVIDER_FIXTURE", "1");
+    const t = harness();
+    const { planId } = await withBed(t, "upbeat");
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    if (!res.ok) return;
+    await t.action(internal.media.submitBatch, { tenantId: A, batchId: res.batchId });
+    const bed = (await jobRows(t)).find((r) => r.kind === "audio");
+    expect(bed?.status).toBe("succeeded");
+    expect(bed?.mimeType).toBe("audio/mpeg");
+    expect(bed?.assetStorageId).toBeDefined();
+    expect(bed?.providerRequestId).toMatch(/^fixture-music-/);
+    // CC BY is free of charge, not free of duty: the credit is on the plan before the bytes land.
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.musicCredit?.attribution).toContain("licensed under CC BY");
+    expect(plan?.musicCredit?.license).toBe("by");
+  });
+
+  test("no bed declared means no audio row either", async () => {
+    const t = harness();
+    const { planId } = await withBed(t, undefined);
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect((await jobRows(t)).some((r) => r.kind === "audio")).toBe(false);
   });
 
   test("the bed changes the invoice's SHAPE, never its total", async () => {
@@ -7298,6 +7352,59 @@ const videoFile = (height: number, width: number, id = "f") => ({
   file_type: "video/mp4",
   width,
   height,
+});
+
+// 33.1-06: the music bed's picker. The rows are Openverse's shape (`duration` in MILLISECONDS,
+// `url` a direct download, `attribution` the licence's own wording), and the three rules are the
+// assembler's and the licence's: long enough to lie under the reel without a loop seam,
+// downloadable, and credited — a CC BY track with no credit line is not usable at all.
+describe("pickStockAudio: long enough, downloadable, credited — or skipped", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: "764950",
+    title: "Motionless Land",
+    creator: "Josh Woodward",
+    license: "by",
+    license_version: "3.0",
+    license_url: "https://creativecommons.org/licenses/by/3.0/",
+    foreign_landing_url: "https://www.jamendo.com/track/764950",
+    url: "https://prod-1.storage.jamendo.com/?trackid=764950&format=mp32",
+    duration: 211_000,
+    attribution: '"Motionless Land" by Josh Woodward is licensed under CC BY 3.0.',
+    ...over,
+  });
+
+  test("picks the first row long enough for the reel and carries its licence line", () => {
+    const picked = pickStockAudio({ results: [row()] }, 15);
+    expect(picked?.assetId).toBe("764950");
+    expect(picked?.link).toContain("trackid=764950");
+    expect(picked?.credit.attribution).toContain("licensed under CC BY 3.0");
+    expect(picked?.credit.license).toBe("by 3.0");
+    expect(picked?.credit.sourceUrl).toContain("jamendo.com/track");
+  });
+
+  test("SKIPS a track shorter than the reel — a loop seam inside 15 seconds is audible", () => {
+    // Openverse durations are milliseconds; 12s is short for a 15s reel, 15s is exactly enough.
+    expect(pickStockAudio({ results: [row({ duration: 12_000 })] }, 15)).toBeNull();
+    expect(pickStockAudio({ results: [row({ duration: 15_000 })] }, 15)).not.toBeNull();
+  });
+
+  test("SKIPS a row with no download url or no attribution rather than guessing either", () => {
+    expect(pickStockAudio({ results: [row({ url: undefined })] }, 15)).toBeNull();
+    expect(pickStockAudio({ results: [row({ url: "http://insecure.example/x" })] }, 15)).toBeNull();
+    expect(pickStockAudio({ results: [row({ attribution: "" })] }, 15)).toBeNull();
+  });
+
+  test("skips PAST a bad row to a good one, in the library's own order", () => {
+    const picked = pickStockAudio(
+      { results: [row({ id: "short", duration: 3_000 }), row({ id: "good" })] },
+      15,
+    );
+    expect(picked?.assetId).toBe("good");
+  });
+
+  test("a malformed body throws — the caller maps that to stock_bad_response, never to a pick", () => {
+    expect(() => pickStockAudio({ nope: true }, 15)).toThrow();
+  });
 });
 
 describe("pickStockVideo: the two rules are the assembler's, not taste", () => {

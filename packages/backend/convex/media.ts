@@ -21,7 +21,7 @@
  * wrappers (CLAUDE.md §2).
  */
 import { concatWavTakes, pcm16ToWav } from "@pikar/core/captions";
-import { isRenderableCardText } from "@pikar/core/render";
+import { isRenderableCardText, MUSIC_BLOCK_INDEX } from "@pikar/core/render";
 import type { Block, Scene, ShotType, VisualKind } from "@pikar/core/storyboard";
 import {
   hasAssetSource,
@@ -47,6 +47,7 @@ import {
   MEDIA_DEFAULT_VOICE,
   MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_JOB_CAP_USD,
+  MEDIA_MUSIC_STOCK,
   MEDIA_VIDEO_SECONDS,
   sceneVisualSpec,
 } from "@pikar/cost/media";
@@ -686,6 +687,39 @@ export async function reserveSceneJobInner(
   // In practice the parser's closed set makes that unreachable; this is the gate that makes it
   // unreachable rather than merely unlikely.
   const music = musicSpecOf(planRow && planRow.tenantId === a.tenantId ? planRow : null);
+  // 33.1-06: THE BED'S BYTES. The $0 `music` line above still names the bed on the invoice; this
+  // is the stock ROW that fetches it (Openverse, `provider: "stock"`, `kind: "audio"`), exactly as
+  // a Pexels still is a row. It goes FIRST so `submitBatch` fetches it before the paid lines —
+  // seconds of work — and it has landed by the time the last take does. Deck-wide, so it sits at
+  // MUSIC_BLOCK_INDEX beside captions at -1, outside every scene index. Its `seconds` is the reel:
+  // the picker skips a track that would need a loop seam inside it.
+  if (music !== null) {
+    const bedSpec: MediaSpec = {
+      kind: "stock",
+      model: MEDIA_MUSIC_STOCK.model,
+      media: "audio",
+      seconds: a.targetDurationSeconds,
+    };
+    const priced = estimateMediaUsd(bedSpec);
+    if (!priced.ok) return { ok: false, reason: priced.error.code };
+    lines.unshift({
+      spec: bedSpec,
+      estUsd: priced.value,
+      row: {
+        ...base,
+        provider: "stock",
+        blockIndex: MUSIC_BLOCK_INDEX,
+        kind: "audio",
+        model: MEDIA_MUSIC_STOCK.model,
+        spec: { kind: "stock", media: "audio", seconds: a.targetDurationSeconds },
+        promptHash: await contentHash(music.mood),
+        status: "queued",
+        estUsd: priced.value,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+  }
   const specs: MediaSpec[] = [
     ...lines.map((l) => l.spec),
     ...(music === null ? [] : [music]),
@@ -1091,8 +1125,25 @@ async function providerReasonCode(response: Response): Promise<string> {
 /** `blocked` is the 422 arm — a non-retryable input refusal, which is a `provider_blocked` VERDICT
  *  on the row rather than a failure. Everything else is a plain failure the retrier may re-run. */
 export type SubmitResult =
-  | { ok: true; requestId: string; asset?: { bytes: Uint8Array<ArrayBuffer>; mimeType: string } }
+  | {
+      ok: true;
+      requestId: string;
+      asset?: { bytes: Uint8Array<ArrayBuffer>; mimeType: string };
+      /** 33.1-06: the licence line a CC-licensed stock track carries. Only the music bed sets it —
+       *  Pexels assets need no credit; a CC BY track is not usable without one. Public attribution
+       *  data, written to the plan so the owner has it for the post caption. */
+      credit?: MusicCredit;
+    }
   | { ok: false; code: string; blocked: boolean };
+
+export type MusicCredit = {
+  title: string;
+  creator: string;
+  license: string;
+  licenseUrl: string;
+  sourceUrl: string;
+  attribution: string;
+};
 
 type VisualSpec = Extract<SubmittableSpec, { kind: "video" | "image" }>;
 
@@ -1269,6 +1320,8 @@ export const batchToSubmit = internalQuery({
     lines: SubmitLine[];
     shots: Array<{ index: number; prompt: string; narration: string }>;
     imagePrompt: string | null;
+    /** 33.1-06: the bed's mood — the music stock line's search text. */
+    musicMood: string | null;
   }> => {
     const rows = await ctx.db
       .query("mediaJobs")
@@ -1291,6 +1344,9 @@ export const batchToSubmit = internalQuery({
         narration: s.narration,
       })),
       imagePrompt: plan?.mediaMode === "image" ? (plan.imagePrompt ?? null) : null,
+      // 33.1-06: the bed's mood is the SEARCH for the music stock line, the way a stock scene's
+      // prompt is the search for its picture. Read here, beside the other submit-time text.
+      musicMood: plan?.artDirection?.music ?? null,
     };
   },
 });
@@ -1317,6 +1373,31 @@ export const claimLine = internalMutation({
 /** The submit outcome onto the row. A CODE reaches `failureReason` — never provider prose, never
  *  the prompt, never the narration (CLAUDE.md §4). No provider URL is stored: the poller re-derives
  *  everything it needs from the jobId and the stored request id, so there is nothing to leak. */
+/** 33.1-06: the bed's licence line onto its PLAN. Idempotent (a re-submit rewrites the same
+ *  fields), tenant-checked through the job row, and written BEFORE the bytes land so an action
+ *  that dies between the two leaves the obligation visible rather than a credited-nothing. */
+export const recordMusicCredit = internalMutation({
+  args: {
+    jobId: v.id("mediaJobs"),
+    credit: v.object({
+      title: v.string(),
+      creator: v.string(),
+      license: v.string(),
+      licenseUrl: v.string(),
+      sourceUrl: v.string(),
+      attribution: v.string(),
+    }),
+  },
+  handler: async (ctx, { jobId, credit }): Promise<null> => {
+    const job = await ctx.db.get(jobId);
+    if (!job) return null;
+    const plan = await ctx.db.get(job.planId);
+    if (!plan || plan.tenantId !== job.tenantId) return null;
+    await ctx.db.patch(plan._id, { musicCredit: credit });
+    return null;
+  },
+});
+
 export const recordSubmission = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
@@ -1535,6 +1616,119 @@ const STOCK_SEARCH_PER_PAGE = 15;
 
 /** One asset from the free stock library, or a governed code. Synchronous — bytes come back on
  *  this call, like the image and voice adapters and unlike video, so there is no poller. */
+/**
+ * 33.1-06 — THE MUSIC BED, from Openverse. The Pexels idiom exactly: search, pick, download,
+ * cap, land. No key: Openverse's audio index is anonymous at 20/min and 200/day, read off its
+ * response headers on 2026-09-04 — one bed per reel does not approach either.
+ *
+ * `license_type=commercial` is the whole licence gate: only tracks the library marks usable in a
+ * commercial reel are searched at all, so a non-commercial CC BY-NC track can never be picked.
+ * What survives that filter is CC BY, which is free of charge and NOT free of duty — the
+ * attribution string the library supplies is returned as `credit` and lands on the plan.
+ * The `instrumental` qualifier is not decoration: a track with vocals under narration is two
+ * voices, the exact defect ADR-030 just removed for generated clips.
+ */
+async function fetchStockMusic(mood: string, seconds: number): Promise<SubmitResult> {
+  if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
+    return {
+      ok: true,
+      requestId: `fixture-music-${crypto.randomUUID()}`,
+      asset: { bytes: new Uint8Array(new ArrayBuffer(64)), mimeType: "audio/mpeg" },
+      credit: {
+        title: "Fixture Bed",
+        creator: "Fixture",
+        license: "by",
+        licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+        sourceUrl: "https://example.invalid/fixture",
+        attribution: '"Fixture Bed" by Fixture is licensed under CC BY 4.0.',
+      },
+    };
+  }
+  const url = new URL("https://api.openverse.org/v1/audio/");
+  url.searchParams.set("q", `${mood} ${MEDIA_MUSIC_STOCK.qualifier}`);
+  url.searchParams.set("category", "music");
+  url.searchParams.set("license_type", "commercial");
+  url.searchParams.set("page_size", String(STOCK_SEARCH_PER_PAGE));
+  let search: Response;
+  try {
+    search = await fetch(url, { headers: { "User-Agent": OPENVERSE_USER_AGENT } });
+  } catch {
+    return { ok: false, code: "transport_error", blocked: false };
+  }
+  if (!search.ok) {
+    return { ok: false, code: await providerReasonCode(search), blocked: search.status === 400 };
+  }
+  let picked: ReturnType<typeof pickStockAudio>;
+  try {
+    picked = pickStockAudio((await search.json()) as Record<string, unknown>, seconds);
+  } catch {
+    return { ok: false, code: "stock_bad_response", blocked: false };
+  }
+  if (picked === null) return { ok: false, code: "stock_no_match", blocked: false };
+  let file: Response;
+  try {
+    file = await fetch(picked.link);
+  } catch {
+    return { ok: false, code: "transport_error", blocked: false };
+  }
+  if (!file.ok) return { ok: false, code: `stock_fetch_${file.status}`, blocked: false };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength === 0) return { ok: false, code: "stock_empty_asset", blocked: false };
+  if (bytes.byteLength > MAX_STOCK_ASSET_BYTES) {
+    return { ok: false, code: "stock_asset_too_large", blocked: false };
+  }
+  return {
+    ok: true,
+    requestId: `openverse:${picked.assetId}`,
+    asset: { bytes, mimeType: file.headers.get("content-type") ?? "audio/mpeg" },
+    credit: picked.credit,
+  };
+}
+
+/** Openverse asks callers to identify themselves; a fixed, honest string, never a tenant's. */
+const OPENVERSE_USER_AGENT = "pikar-ai/1.0 (media bed; https://pikar.ai)";
+
+/**
+ * Openverse's audio rows -> the first track long enough to lie under the whole reel, with its
+ * licence line. Exported for the unit tests, the way `pickStockVideo` is.
+ *
+ * The rules are the assembler's and the licence's, not taste:
+ *  - **long enough**: the bed is looped with `-stream_loop -1` and trimmed to the reel, and a
+ *    loop seam inside a 15-second reel is audible; a track shorter than the reel is skipped.
+ *  - **downloadable**: a row with no `url` cannot be fetched; skipped, never guessed at.
+ *  - **credited**: a row with no `attribution` cannot be used under CC BY at all; skipped. The
+ *    library writes that line, so the credit the owner copies is the licence's own wording.
+ */
+export function pickStockAudio(
+  body: Record<string, unknown>,
+  seconds: number,
+): { link: string; assetId: string; credit: MusicCredit } | null {
+  const results = body.results;
+  if (!Array.isArray(results)) throw new Error("shape");
+  const floorMs = (seconds - MEDIA_MUSIC_STOCK.minDurationSlackSeconds) * 1000;
+  for (const raw of results) {
+    const r = raw as Record<string, unknown>;
+    if (typeof r.duration !== "number" || r.duration < floorMs) continue;
+    if (typeof r.url !== "string" || !r.url.startsWith("https://")) continue;
+    if (typeof r.id !== "string" && typeof r.id !== "number") continue;
+    if (typeof r.attribution !== "string" || r.attribution.trim() === "") continue;
+    const str = (k: string): string => (typeof r[k] === "string" ? (r[k] as string) : "");
+    return {
+      link: r.url,
+      assetId: String(r.id),
+      credit: {
+        title: str("title"),
+        creator: str("creator"),
+        license: `${str("license")} ${str("license_version")}`.trim(),
+        licenseUrl: str("license_url"),
+        sourceUrl: str("foreign_landing_url"),
+        attribution: r.attribution.trim(),
+      },
+    };
+  }
+  return null;
+}
+
 async function fetchStock(
   spec: { media: string; seconds: number },
   query: string,
@@ -2056,7 +2250,10 @@ export const submitBatch = internalAction({
     ctx,
     a,
   ): Promise<{ submitted: number; blocked: number; failed: number; skipped: number }> => {
-    const { lines, shots, imagePrompt } = await ctx.runQuery(internal.media.batchToSubmit, a);
+    const { lines, shots, imagePrompt, musicMood } = await ctx.runQuery(
+      internal.media.batchToSubmit,
+      a,
+    );
     const tally = { submitted: 0, blocked: 0, failed: 0, skipped: 0 };
 
     for (const line of lines) {
@@ -2087,8 +2284,13 @@ export const submitBatch = internalAction({
             tally.skipped += 1;
             continue;
           }
-          const stockShot = shots.find((s) => s.index === line.blockIndex);
-          const query = stockShot && SUBMIT_TEXT.stock?.(stockShot);
+          // 33.1-06: the MUSIC BED is a stock line too — deck-wide, searched by the art direction's
+          // mood rather than a scene's prompt, from Openverse rather than Pexels.
+          const isBed = stock.media === "audio";
+          const stockShot = isBed ? undefined : shots.find((s) => s.index === line.blockIndex);
+          const query = isBed
+            ? (musicMood ?? undefined)
+            : stockShot && SUBMIT_TEXT.stock?.(stockShot);
           if (query === undefined) {
             await ctx.runMutation(internal.media.recordSubmission, {
               jobId: line.jobId,
@@ -2097,7 +2299,17 @@ export const submitBatch = internalAction({
             tally.failed += 1;
             continue;
           }
-          const found = await fetchStock(stock, query);
+          const found = isBed
+            ? await fetchStockMusic(query, stock.seconds)
+            : await fetchStock(stock, query);
+          if (found.ok && found.credit) {
+            // The licence line rides on the PLAN (the canvas and the vault document read it there),
+            // written before the bytes land so a crash between the two leaves the duty visible.
+            await ctx.runMutation(internal.media.recordMusicCredit, {
+              jobId: line.jobId,
+              credit: found.credit,
+            });
+          }
           if (!found.ok) {
             await ctx.runMutation(internal.media.recordSubmission, {
               jobId: line.jobId,

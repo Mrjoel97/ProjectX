@@ -1151,3 +1151,70 @@ describe("cardColorsOf: a model-written palette becomes two filtergraph-safe col
     expect(cardColorsOf(["#0000CC"]).ink).toBe("0xFFFFFF");
   });
 });
+
+// ── 33.1-06: the music bed as an INPUT ───────────────────────────────────────────────────────────
+//
+// The bed used to be a slug the script resolved against a baked library; nothing was fetched or
+// written for it. It is now a fetched track shipped like any stock still: `music.mp3` in
+// `inputs`, resolved server-side from its job row, and `musicFile` telling the assembler the
+// track is already in `in/` so it takes it over the library lookup.
+describe("handleRenderRequest: the fetched music bed", () => {
+  const withBed = (over: Record<string, unknown> = {}) =>
+    body({
+      inputs: [
+        { name: "block01.mp4", jobId: "job1" },
+        { name: "voice01.wav", jobId: "job2" },
+        { name: "block02.png", jobId: "job3" },
+        { name: "voice02.wav", jobId: "job4" },
+        { name: "block04.mp4", jobId: "job5" },
+        { name: "voice04.wav", jobId: "job6" },
+        { name: "music.mp3", jobId: "job7" },
+      ],
+      music: "upbeat",
+      musicFile: "music.mp3",
+      ...over,
+    });
+
+  it("ships the bed as in/music.mp3 and tells the script with --music-file", async () => {
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(post(withBed()), d);
+    await expect(res.json()).resolves.toMatchObject({ ok: true });
+    const run = rec.commands.find((c) => c.cmd === "sh");
+    expect(run?.args).toEqual(expect.arrayContaining(["--music", "upbeat"]));
+    expect(run?.args).toEqual(expect.arrayContaining(["--music-file", "in/music.mp3"]));
+    // Relative, beside the other inputs — the same path discipline every input follows.
+    const musicArgAt = run?.args.indexOf("--music-file") ?? -1;
+    expect(run?.args[musicArgAt + 1]).toBe("in/music.mp3");
+  });
+
+  it("REFUSES a musicFile that names a track nobody fetched — before a VM exists", async () => {
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(
+      post(
+        withBed({
+          inputs: withBed().inputs.filter((i: { name: string }) => i.name !== "music.mp3"),
+        }),
+      ),
+      d,
+    );
+    await expect(res.json()).resolves.toMatchObject({ code: "bad_request" });
+    expect(rec.created).toHaveLength(0);
+  });
+
+  it("REFUSES a musicFile outside the closed name set — no path, no other extension", async () => {
+    for (const bad of ["../music.mp3", "music.exe", "in/music.mp3", "bed.mp3"]) {
+      const { deps: d, rec } = deps();
+      const res = await handleRenderRequest(post(withBed({ musicFile: bad })), d);
+      await expect(res.json()).resolves.toMatchObject({ code: "bad_request" });
+      expect(rec.created).toHaveLength(0);
+    }
+  });
+
+  it("a music.mp3 input WITHOUT musicFile is just an input — no flag, no refusal", async () => {
+    const { deps: d, rec } = deps();
+    const res = await handleRenderRequest(post(withBed({ musicFile: undefined })), d);
+    await expect(res.json()).resolves.toMatchObject({ ok: true });
+    const run = rec.commands.find((c) => c.cmd === "sh");
+    expect(run?.args).not.toContain("--music-file");
+  });
+});

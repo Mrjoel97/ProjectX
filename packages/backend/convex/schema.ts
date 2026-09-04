@@ -792,6 +792,20 @@ export default defineSchema({
         music: v.optional(v.string()),
       }),
     ),
+    /** 33.1-06: the bed that was actually laid under the reel and its licence obligation. Written
+     *  when the Openverse row lands; read by the vault document and the canvas so the owner has
+     *  a copy-ready credit for the post caption. CC BY is not free of duty — it is free of
+     *  charge. Public attribution data, not PII; refs-only rules do not apply to a licence line. */
+    musicCredit: v.optional(
+      v.object({
+        title: v.string(),
+        creator: v.string(),
+        license: v.string(),
+        licenseUrl: v.string(),
+        sourceUrl: v.string(),
+        attribution: v.string(),
+      }),
+    ),
     /** The narration script for the whole reel (D8 — voiceover has nothing to say without it). */
     script: v.optional(v.string()),
     /** D8: block length, UNIFORM across the deck, ∈ {5,10} (Wan 2.5 accepts nothing else). */
@@ -2209,7 +2223,15 @@ export default defineSchema({
     // them or what they cost. A stock clip is a `video` and a stock still is an `image`, which is
     // why `renderReel` needed no stock case at all. A fifth member is a deliberate schema edit,
     // the `provider` precedent.
-    kind: v.union(v.literal("video"), v.literal("image"), v.literal("tts"), v.literal("stt")),
+    // 33.1-06: `audio` is the music bed as a STOCK row (Openverse) — landed bytes at blockIndex -2,
+    // priced $0 like a Pexels still. Widen-only: no existing row changes kind.
+    kind: v.union(
+      v.literal("video"),
+      v.literal("image"),
+      v.literal("tts"),
+      v.literal("stt"),
+      v.literal("audio"),
+    ),
     model: v.string(), // MUST be a key of the @pikar/cost/media price table (fail-closed at estimate)
     // Exactly what was SUBMITTED — never a provider default. fal's Wan 2.5 defaults to 1080p, so a
     // spec that omits its resolution is an estimate 3x below the invoice.

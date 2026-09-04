@@ -150,7 +150,24 @@ export const MEDIA_MUSIC_PRICING: Record<string, number> = {
  */
 export const MEDIA_STOCK_PRICING: Record<string, number> = {
   "pexels/v1": 0,
+  // 33.1-06: the music bed's library. Openverse's audio index is CC-licensed and free; the price is
+  // $0 per track, flat, like Pexels — and like Pexels the cost that is NOT zero is the licence
+  // obligation: CC BY requires attribution, which the row carries and the reel's vault document
+  // and canvas show. No key, anonymous rate limit 20/min and 200/day (read off the response
+  // headers on 2026-09-04), which one bed per reel does not approach.
+  "openverse/v1": 0,
 };
+
+/** The music bed's stock source. Kept beside `MEDIA_DEFAULT_STOCK` rather than inside it because
+ *  the two libraries are searched differently: Pexels by a scene's prompt, Openverse by the deck's
+ *  MOOD slug plus a fixed qualifier so a vocal track is not laid under narration. */
+export const MEDIA_MUSIC_STOCK = {
+  model: "openverse/v1",
+  /** Appended to the mood in the search. Instrumental beds only — the narration is the voice. */
+  qualifier: "instrumental",
+  /** A track shorter than the reel would loop with an audible seam; the picker skips it. */
+  minDurationSlackSeconds: 0,
+} as const;
 
 /** D10 — the ceiling on the WHOLE job: clips + voice + STT + render. Supersedes D4's
  *  per-request budget; there is deliberately no $1.00 constant left in this file to pull. */
@@ -301,7 +318,10 @@ export type MediaSpec =
    *  `renderReel`'s slot map keeps reading `video`/`image` and needs no stock case at all.
    *  `seconds` is the scene's window: the fetcher uses it to exclude clips the assembler would
    *  refuse as too short, and it is carried on the row so a re-submit asks the same question. */
-  | { kind: "stock"; model: string; media: "video" | "image"; seconds: number }
+  /** 33.1-06: `audio` is the MUSIC BED fetched from a public library (Openverse) — the same $0
+   *  stock idiom as a Pexels still, one row, landed bytes, and the reel-length `seconds` the
+   *  picker uses to skip tracks shorter than the reel. */
+  | { kind: "stock"; model: string; media: "video" | "image" | "audio"; seconds: number }
   | { kind: "render" } // the flat sandbox constant — a cost line, not a provider call
   | { kind: "free" }; // a scene whose picture costs nothing — see SCENE_VISUAL_LINE
 

@@ -1,5 +1,37 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-04 (33.1-06 - **THE MUSIC BED IS FETCHED FROM OPENVERSE AND CREDITED
+> IN THE CAPTION (ADR-031). The "no `mediaJobs` row" section below is SUPERSEDED for the bed.**
+>
+> **What changed.** The baked library was empty (`LICENSES.md` + README, no track), so every reel
+> was bedless. The bed is now a $0 STOCK row -- `provider: "stock"`, `kind: "audio"`,
+> `model: "openverse/v1"`, at `MUSIC_BLOCK_INDEX` (-2, beside captions) -- written by
+> `reserveSceneJobInner` FIRST in the batch, fetched by `fetchStockMusic` (`<mood> instrumental`,
+> `license_type=commercial`, no key; anonymous 20/min, 200/day read off the headers), picked by
+> `pickStockAudio` (long enough for the reel, downloadable, CREDITED -- or skipped), landed like a
+> Pexels still. The $0 `music` invoice line is unchanged; the row is the mechanism.
+>
+> **Optional by construction.** `batchToRender` ships `music.mp3` + `musicFile` only when the row
+> has landed; failed/missing/landing = bedless reel via the assembler's WARN path. A reel never
+> waits on its music. `assemble_final.sh --music-file in/music.mp3` takes the fetched track over
+> the library; the flag's path is charset-guarded to that one name.
+>
+> **The licence duty.** What survives Openverse's commercial filter is CC BY -- free of charge, not
+> free of duty. The library's own `attribution` string lands on `plans.musicCredit` (BEFORE the
+> bytes, so a crash leaves the duty visible), is written into the reel's vault document as a
+> `Music:` line, and is shown beside the finished reel as a copy-ready caption credit
+> (`data-testid="media-music-credit"`). Owner's choice: caption, not an end card.
+>
+> **Invariants that moved:** `mediaJobs.kind` gained `audio` (widen-only); `RENDER_INPUT_NAME`
+> accepts `music.(mp3|m4a|ogg|wav|flac)`; `parseBody` refuses a `musicFile` not present in
+> `inputs` before a VM exists. The renderReel bed tests carry the "never waited on" property.
+>
+> Proven on the first rendered reel's own assets with a real Openverse track: `music bed: upbeat
+> -> 15s at I=-33`, `mix 3 take(s) + 0 diegetic bed(s) + music:upbeat`, decode-validated. core
+> render +4, backend media +7 (one rewritten: it asserted "no row" and would have gone green
+> vacuously over the new row), renderReel +3, cost 94/94, typecheck + biome clean.)
+
+
 > Last verified: 2026-09-04 (33.1-06 / audit Step 2 - **THE RETRY LOOP IS CLOSED, AND THE
 > FAILURES THAT ACTUALLY HAPPEN HAVE WORDS.**
 >

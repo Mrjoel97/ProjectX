@@ -123,6 +123,10 @@ type MediaPlan = {
   /** 33-11 / 33-13: which sibling variation could not be built, and why. Present ONLY on a
    *  salvaged proposal, and the canvas is obliged to say so — see `ParserNotes`. */
   lostVariation?: { variation: string; reason: string } | null;
+  /** 33.1-06: the music bed's licence line, when an Openverse track was laid under the reel. CC BY
+   *  is free of charge and not free of duty; the owner chose the POST CAPTION as its home, so the
+   *  canvas shows a copy-ready credit beside the finished reel. */
+  musicCredit?: { attribution: string; sourceUrl: string } | null;
   /** 33-12 / 33-13: the seconds the PARSER moved to get the clips onto the provider's grid.
    *  Empty/absent on a deck the model got right — and never silent when it is not. */
   deckAdjustments?: DeckAdjustment[] | null;
@@ -454,6 +458,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
         noun={noun}
         cards={heroFailures}
         planId={planId}
+        musicCredit={plan.musicCredit}
       />
 
       <GenerateBar
@@ -1318,11 +1323,14 @@ function ReelHero({
   noun,
   cards,
   planId,
+  musicCredit,
 }: {
   hero: HeroState;
   tracker: TrackerView;
   reel: { durationS: number | null; sceneCount: number | null; gates: string[] } | undefined;
   noun: "scene" | "block";
+  /** 33.1-06: the bed's licence line, shown beside the finished reel as a copy-ready caption credit. */
+  musicCredit?: { attribution: string } | null;
   /** The reel's OWN failures (33-08) — render, held, captions. Empty for every healthy state, and
    *  also for the one failed state that has no failed row behind it (`rendered` with no url is a
    *  governed refusal to publish), which is why `hero.sentence` remains the fallback. */
@@ -1409,6 +1417,15 @@ function ReelHero({
             {hero.note && (
               <p style={{ ...dimText, marginTop: "0.5rem", color: "var(--held-text)" }}>
                 {hero.note}
+              </p>
+            )}
+            {/* 33.1-06: the bed's licence line. CC BY is free of charge, not free of duty — the
+                owner chose the post caption as its home, so this is the copy-ready credit, and
+                the `Music:` prefix is what a viewer expects to read there. Also saved with the
+                reel in the vault. Never hidden: a credited track without its credit is a breach. */}
+            {musicCredit && (
+              <p style={{ ...dimText, marginTop: "0.5rem" }} data-testid="media-music-credit">
+                Add to your caption — <strong>Music:</strong> {musicCredit.attribution}
               </p>
             )}
             {reel?.sceneCount !== null && reel?.sceneCount !== undefined && (
