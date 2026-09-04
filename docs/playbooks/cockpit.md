@@ -1,3 +1,22 @@
+> Last verified: 2026-09-04 (33.2-03 — **THE AGENT LOOP'S FALLBACK IS AUDITED, AND THE MEDIA
+> DIRECTOR HAS ITS OWN 90 s CLOCK.** Two defects the bake-off surfaced by measuring, not by reading.)
+>
+> (1) `runAgentLoop` swallowed an eligible primary failure and succeeded on the fallback with
+> nothing in any plane saying so. The 33.2 bake-off scored 37 passes under two candidates' names
+> that `gpt-4.1-mini` had actually written (`smoke:modelsForPlan`, spend rows), and the same
+> silence has been letting production storyboards fall back whenever the primary ran long. The
+> loop now writes `llm.fallback` (fromModel, toModel, errorName, stage `agent-loop`) before the
+> retry — the exact shape the route/draft steps already write, §4-clean. `runCockpitAgent.test.ts`
+> asserts the row on the scripted-timeout fallback; its `setup()` registers `auditCounts` for it.
+> (2) `callTimeoutMsFor(media-director) = MEDIA_CALL_TIMEOUT_MS = 90 s`. The 45 s chat-turn clock
+> was the binding constraint on the storyboard (3-4k output tokens after a vault search): luna
+> blew it 13/24, sonnet-5 24/24, gpt-4o-mini 0/24. 90 and not 180 because `runMedia` awaits
+> research (2 × 180 s) AND the deck turn (2 × 90 s) in ONE action under the 600 s ceiling.
+> (3) `llmRedaction.test.ts`'s replyToMessage slice ended on a marker that no longer existed and
+> silently ran ~800 lines past the tool; it now ends at the tools-object close and asserts it
+> stays inside `buildCockpitTools`. Measured: runCockpitAgent 36/36, llmRedaction 61/61,
+> dispatch/cockpitTools/research green, tsc 0 outside the connector lane.)
+>
 > Last verified: 2026-09-04 (33.2-01 — **THE MEDIA DIRECTOR BILLS ITS OWN LANE, AND A STORYBOARD
 > RETRY NO LONGER RE-BUYS ITS RESEARCH.**
 >

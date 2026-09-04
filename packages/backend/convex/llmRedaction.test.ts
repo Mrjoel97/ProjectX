@@ -489,8 +489,17 @@ function replyToMessageBlock(): string {
   const start = full.indexOf("replyToMessage: tool(");
   expect(start, "replyToMessage tool not found — did it get renamed?").toBeGreaterThanOrEqual(0);
   const rest = full.slice(start);
-  const closeAt = rest.indexOf("\n  };\n}");
-  expect(closeAt, "buildCockpitTools close not found after replyToMessage").toBeGreaterThan(0);
+  // The TOOLS OBJECT's close (two-space `};`), not the function's: `buildCockpitTools` ends with a
+  // `return applyGmailCapability(...)` line, so the old `"\n  };\n}"` marker matched nothing until
+  // ~800 lines later — the slice silently swallowed runAgentLoop and runSpecialistTurn, and this
+  // scan reddened on 33.2's `llm.fallback` audit in the agent loop, which is not replyToMessage.
+  const closeAt = rest.indexOf("\n  };\n");
+  expect(closeAt, "the tools-object close not found after replyToMessage").toBeGreaterThan(0);
+  const nextExport = rest.indexOf("\nexport ");
+  expect(
+    closeAt,
+    "the replyToMessage slice runs past buildCockpitTools — the end marker drifted again",
+  ).toBeLessThan(nextExport > 0 ? nextExport : Number.POSITIVE_INFINITY);
   // Strip line comments — the invariant is about the CODE surface (comments name the fields by design).
   return rest.slice(0, closeAt).replace(/\/\/[^\n]*/g, "");
 }

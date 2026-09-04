@@ -9,7 +9,11 @@
 //   #5 recordSpend consumes the daily-spend window on non-zero usage + an eligible failure falls
 //      back to CHEAP_MODEL.
 
-import { OFFER_ARCHITECT_SKILL, RESEARCH_SPECIALIST_SKILL } from "@pikar/contracts/skill";
+import {
+  MEDIA_DIRECTOR_SKILL,
+  OFFER_ARCHITECT_SKILL,
+  RESEARCH_SPECIALIST_SKILL,
+} from "@pikar/contracts/skill";
 import { SPECIALISTS, WORKFLOW_PACK_SKILL_NAMES } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
@@ -51,6 +55,9 @@ type T = ReturnType<typeof convexTest>;
 async function setup(): Promise<{ t: T; planId: Id<"plans"> }> {
   const t = convexTest(schema, modules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+  // 33.2: the agent loop now audits its fallback (`llm.fallback`), and audit.log counts through
+  // the aggregate component — unregistered, the insert throws INSIDE the loop's catch.
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   await t.mutation(internal.skills.seedSkills, {}); // cockpit-agent + email-drafter active seeds
   const planId = await t.mutation(internal.plans.insertPlan, {
     tenantId: "t1",
@@ -435,6 +442,21 @@ test("activity trace: the FALLBACK retry's steps are emitted honestly, not suppr
   expect(steps).toHaveLength(2);
   expect(steps.map((s) => s.tool).sort()).toEqual(["addRecipients", "setSubject"]);
   for (const s of steps) expect(s.phase).toBe("done");
+
+  // 33.2: the rollover itself is on the record. The loop used to swallow the primary's failure and
+  // succeed on the fallback with nothing anywhere saying so; the bake-off scored 37 fallback passes
+  // under two candidates' names before the spend rows gave it away. Ids and an error NAME only.
+  const fallbacks = (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+    (a) => a.eventType === "llm.fallback",
+  );
+  expect(fallbacks).toHaveLength(1);
+  expect(fallbacks[0]?.payload).toMatchObject({
+    stage: "agent-loop",
+    errorName: "TimeoutError",
+  });
+  expect(typeof fallbacks[0]?.payload.fromModel).toBe("string");
+  expect(typeof fallbacks[0]?.payload.toModel).toBe("string");
+  expect(fallbacks[0]?.payload.fromModel).not.toBe(fallbacks[0]?.payload.toModel);
 });
 
 test("activity trace: a SMOKE op leaves ONE terminal row (the offline E2E path — Pitfall 4)", async () => {
@@ -727,6 +749,9 @@ test("draftDocument pin: loads the pinned drafter version, fails closed on a mis
 // exception is that it changes NOTHING for any other path.
 test("callTimeoutMsFor: research gets its own clock, everything else keeps 45s", () => {
   expect(callTimeoutMsFor(RESEARCH_SPECIALIST_SKILL)).toBe(180_000);
+  // 33.2: the storyboard turn has its own 90 s — a literal, for the reason stated below. 90 and not
+  // 180 because `runMedia` awaits research AND this turn in one action (see MEDIA_CALL_TIMEOUT_MS).
+  expect(callTimeoutMsFor(MEDIA_DIRECTOR_SKILL)).toBe(90_000);
   // 27-10: a workflow pack takes the SAME longer clock — its turn is tool-dense in the way research
   // is, and `pack-business-pulse` v2 blew the 45 s wall the moment its body added one tool call.
   // Every pack name, not one sample: the lane is derived from `isWorkflowPackSkill`, so a pack that

@@ -151,6 +151,23 @@ const CALL_TIMEOUT_MS = 45_000;
  */
 const RESEARCH_CALL_TIMEOUT_MS = 180_000;
 
+/**
+ * 33.2: the MEDIA-DIRECTOR clock. The storyboard turn writes two whole variations — 3-4k output
+ * tokens after a vault search — and the 45 s cockpit clock was tuned for a chat turn. Measured in
+ * the 33.2 bake-off (24 passes per model, `smoke:modelsForPlan` reading the spend rows): gpt-4o-mini
+ * finished inside 45 s on 24/24; gpt-5.6-luna's finished passes averaged 45 s and 13/24 blew the
+ * wall; claude-sonnet-5 blew it 24/24 — and every blown pass fell back to gpt-4.1-mini SILENTLY and
+ * scored under the candidate's name. The clock, not the model, was the binding constraint, and a
+ * stronger model cannot be measured (or shipped) on this lane without its own budget.
+ *
+ * 90 s, not the research 180 s: `runMedia` awaits the grounding pass (research clock, primary +
+ * fallback = up to 360 s) and THEN this turn (primary + fallback = 2 × 90 s = 180 s) inside ONE
+ * Convex action, whose ceiling is 600 s — 540 s worst case leaves a minute. The upgrade path if a
+ * measured model needs more is scheduling the deck turn as its own action, never raising this
+ * past the arithmetic. The soft between-step stop derives as 90 − 60 = 30 s (`RESEARCH_STEP_SLACK_MS`).
+ */
+const MEDIA_CALL_TIMEOUT_MS = 90_000;
+
 /** Headroom between the SOFT stop and the HARD abort, so the loop stops cleanly BETWEEN steps
  *  (keeping its partial findings) instead of being killed mid-step and discarding them. */
 const RESEARCH_STEP_SLACK_MS = 60_000;
@@ -185,6 +202,7 @@ export function callTimeoutMsFor(skillName: string): number {
   // `agent_timeout`). The pack lane now also runs a 5.x model, which is slower per call than the
   // volume pin it replaced, so keeping 45 s here would fail the lane for the clock rather than for
   // the answer.
+  if (skillName === MEDIA_DIRECTOR_SKILL) return MEDIA_CALL_TIMEOUT_MS; // 33.2 — see the constant
   return skillName === RESEARCH_SPECIALIST_SKILL || isWorkflowPackSkill(skillName)
     ? RESEARCH_CALL_TIMEOUT_MS
     : CALL_TIMEOUT_MS;
@@ -4978,6 +4996,24 @@ async function runAgentLoop(
     return await run(primary, 1, 0);
   } catch (e) {
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
+    // 33.2: the rollover is RECORDED. Until now the loop swallowed the primary's failure and the
+    // run succeeded on the fallback with nothing in any plane saying so — the 33.2 bake-off scored
+    // 37 fallback passes under two candidates' names before the spend rows gave it away, and the
+    // same silence has been letting production storyboards be written by `gpt-4.1-mini` whenever
+    // the primary blew its clock. The `llm.fallback` shape the route/draft steps already write
+    // (§4: model ids and an error NAME — never the provider's message, which can echo the prompt).
+    await ctx.runMutation(internal.audit.log, {
+      tenantId,
+      correlationId: loopId,
+      eventType: "llm.fallback",
+      actor: "system",
+      payload: {
+        fromModel: primary.id,
+        toModel: fallback.id,
+        errorName: (e as { name?: unknown } | null)?.name?.toString() ?? "unknown",
+        stage: "agent-loop",
+      },
+    });
     try {
       return await run(fallback, 0, 1);
     } catch (e2) {
