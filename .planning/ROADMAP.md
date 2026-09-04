@@ -453,6 +453,18 @@ Plans:
 - [ ] 33.1-05-PLAN.md — The video adapter, the succession flag, and the routing assertion (A7, A8) (Wave 4, owner-gated: one live paid call)
 - [ ] 33.1-06-PLAN.md — The skill body, the owner-timed merge, and the live image and reel (A3, A6) (Wave 5, owner-gated)
 
+### Phase 33.2: Storyboard authoring moves to a measured model pin (INSERTED)
+
+**Goal:** The media-director specialist runs on its own model lane, chosen by a bake-off through the production dispatch path and scored by the production parser — or, if no candidate clears the pre-committed threshold, a recorded decision not to move. A storyboard retry stops re-buying the research it already has.
+**Requirements**: B1-B7 (acceptance criteria in `33.2-PRD.md`; no REQUIREMENTS.md IDs minted — inserted phase, like 33.1)
+**Depends on:** Phase 33.1
+**Plans:** 3 plans in 3 waves
+
+Plans:
+- [ ] 33.2-01-PLAN.md — The MEDIA_MODEL lane (aliased, behaviour-neutral) and research-findings reuse for the same brief within 24 h (B1, B2, B3) (Wave 1)
+- [ ] 33.2-02-PLAN.md — The bake-off runner, the 12-brief corpus, and the §4-clean facts query (B4, B5) (Wave 2)
+- [ ] 33.2-03-PLAN.md — Four candidate rounds, the pin by the pre-committed rule, ADR-032, one owner-viewed reel (B6, B7) (Wave 3, owner-gated: ~$8 of model spend)
+
 ### Phase 1: Foundation & Governance Substrate
 **Goal**: The governed data + orchestration substrate exists so every later feature inherits tenant isolation, immutable audit, durable workflows, and failure handling for free â the decisions that are cheap now and expensive to retrofit.
 **Depends on**: Nothing (first phase)

@@ -13,7 +13,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INCOMPLETE_MARKER, serializeProfile } from "@pikar/core";
 import { TARGET_DURATIONS } from "@pikar/core/storyboard";
-import { CHEAP_MODEL, DEFAULT_MODEL, RESEARCH_FALLBACK_MODEL, RESEARCH_MODEL } from "@pikar/cost";
+import {
+  CHEAP_MODEL,
+  DEFAULT_MODEL,
+  MEDIA_FALLBACK_MODEL,
+  MEDIA_MODEL,
+  RESEARCH_FALLBACK_MODEL,
+  RESEARCH_MODEL,
+} from "@pikar/cost";
 import { APICallError } from "ai";
 import { convexTest, type TestConvex } from "convex-test";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -1965,12 +1972,24 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     expect(research.modelId).toBe(RESEARCH_MODEL);
     expect(research.fallbackModelId).toBe(RESEARCH_FALLBACK_MODEL);
 
-    // 2. EVERYTHING ELSE — `media` must take the repo defaults byte-identically. Without a genuine
-    // default case the lookup could pin EVERY route and stay green.
-    const other = ok(
+    // 2. MEDIA — its own pair since 33.2. The storyboard turn is the heaviest rule load in the
+    // product and used to ride the volume pin.
+    const media = ok(
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...BASE,
         route: "media",
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+    expect(media.modelId).toBe(MEDIA_MODEL);
+    expect(media.fallbackModelId).toBe(MEDIA_FALLBACK_MODEL);
+
+    // 3. EVERYTHING ELSE — `offer-architect` (BASE) must take the repo defaults byte-identically.
+    // Without a genuine default case the lookup could pin EVERY route and stay green.
+    const other = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
         planId,
         primary: [REPLY_STEP],
       }),
@@ -1992,6 +2011,7 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     // MUTATION that turns this RED: collapse the route lookup in llm.ts to a single pair.
     const llmSrc = readFileSync(join(__dirname, "llm.ts"), "utf8");
     expect(llmSrc).toContain("[RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]");
+    expect(llmSrc).toContain("[MEDIA_MODEL, MEDIA_FALLBACK_MODEL]");
     expect(llmSrc).toContain("[DEFAULT_MODEL, CHEAP_MODEL]");
   });
 });
@@ -3461,6 +3481,61 @@ describe("groundMediaBrief: research lands in the vault BEFORE the deck is writt
     expect(doc?.text).toContain("Acme Survey");
     expect(doc?.sourcePlanId).toBe(planId);
     expect(doc?.sourceThreadId).toBe(THREAD);
+  });
+
+  // ── 33.2 (PRD L5): findings are REUSED for the same brief on the same tenant within 24 h ──
+  //
+  // "Try again" on a refused storyboard re-sends the same brief, and every retry used to re-buy
+  // ~$0.21 of research for findings already sitting in the vault. The reuse key is the question
+  // HASH on the document, never the thread — a fresh chat with the identical brief reuses too.
+  const groundTwice = async (first: string, second: string, between?: (t: T) => Promise<void>) => {
+    const { t, planId } = await grounded();
+    let turns = 0;
+    const run = (q: string) =>
+      t.run(async (ctx) => {
+        await groundMediaBrief(ctx as never, args(planId, q), () => {
+          turns += 1;
+          return Promise.resolve(turn());
+        });
+      });
+    await run(first);
+    if (between) await between(t);
+    await run(second);
+    return { turns, docs: await vaultDocs(t) };
+  };
+
+  test("THE SAME BRIEF WITHIN THE WINDOW RUNS NO SECOND TURN and writes no second document", async () => {
+    const { turns, docs } = await groundTwice(
+      "a reel about the monitoring plan",
+      "a reel about the monitoring plan",
+    );
+    expect(turns).toBe(1);
+    expect(docs).toHaveLength(1);
+  });
+
+  test("a DIFFERENT brief on the same tenant is researched on its own", async () => {
+    // The anti-vacuous half: reuse must key on the QUESTION, not on "this tenant has research".
+    const { turns, docs } = await groundTwice(
+      "a reel about the monitoring plan",
+      "a reel about the onboarding package",
+    );
+    expect(turns).toBe(2);
+    expect(docs).toHaveLength(2);
+  });
+
+  test("findings older than the window are bought again", async () => {
+    const { turns, docs } = await groundTwice(
+      "a reel about the monitoring plan",
+      "a reel about the monitoring plan",
+      (t) =>
+        t.run(async (ctx) => {
+          const [doc] = await ctx.db.query("vaultDocuments").collect();
+          if (!doc) throw new Error("no findings document to age");
+          await ctx.db.patch(doc._id, { createdAt: Date.now() - 25 * 60 * 60 * 1000 });
+        }),
+    );
+    expect(turns).toBe(2);
+    expect(docs).toHaveLength(2);
   });
 });
 

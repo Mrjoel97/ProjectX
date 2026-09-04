@@ -34,6 +34,7 @@ import {
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
   INBOX_DIGEST_SKILL,
+  MEDIA_DIRECTOR_SKILL,
   REPLY_DRAFTER_SKILL,
   RESEARCH_SPECIALIST_SKILL,
   REVENUE_SPECIALIST_SKILL,
@@ -91,6 +92,8 @@ import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
   GEMINI_MODEL,
+  MEDIA_FALLBACK_MODEL,
+  MEDIA_MODEL,
   PACK_FALLBACK_MODEL,
   PACK_MODEL,
   priceUsage,
@@ -5150,14 +5153,20 @@ export async function runSpecialistTurn(
   // configurations), so this one arrives with its own measurement and its own abort condition — see
   // `PACK_MODEL`. Derived from the skill NAME like every other decision at this seam.
   const isPack = isWorkflowPackSkill(skillName);
-  // A THREE-TIER LOOKUP rather than nested ternaries: each lane names its own pair, and everything
+  // 33.2: THE FOURTH LANE. The storyboard turn fell through to the defaults — the VOLUME pin —
+  // while carrying the heaviest rule load of any single turn. Its own pair, derived from the skill
+  // name like the other two; the pin itself moves only on 33.2-03's measured rule (cost.ts).
+  const isMedia = skillName === MEDIA_DIRECTOR_SKILL;
+  // A FOUR-TIER LOOKUP rather than nested ternaries: each lane names its own pair, and everything
   // else takes the repo defaults. Order matters only in that the lanes are disjoint by construction —
-  // a pack skill name can never be the research specialist's.
+  // a pack skill name can never be the research specialist's, nor the media director's.
   const [primaryId, fallbackId] = isResearch
     ? [RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]
     : isPack
       ? [PACK_MODEL, PACK_FALLBACK_MODEL]
-      : [DEFAULT_MODEL, CHEAP_MODEL];
+      : isMedia
+        ? [MEDIA_MODEL, MEDIA_FALLBACK_MODEL]
+        : [DEFAULT_MODEL, CHEAP_MODEL];
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,

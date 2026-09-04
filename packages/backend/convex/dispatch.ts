@@ -46,6 +46,7 @@ import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { traced } from "./lib/foglamp";
+import { contentHash } from "./lib/hash";
 import { runSpecialistTurn } from "./llm";
 
 /** Depth 1 = executive → specialist. A specialist can never dispatch anything, which makes
@@ -177,6 +178,10 @@ const MAX_LABEL_CHARS = 160;
  *  reject — a long question is a verbose model, not an attack, and refusing it would cost the user
  *  their run. */
 const MAX_QUESTION_CHARS = 500;
+/** 33.2 (PRD L5): how long research findings for the SAME brief on the SAME tenant are reused
+ *  before `groundMediaBrief` buys them again. A day: long enough that every "Try again" and every
+ *  re-ask in a fresh chat reuses, short enough that a brief revisited next week gets fresh figures. */
+const FINDINGS_REUSE_MS = 24 * 60 * 60 * 1000;
 const cap = (s: string, limit = MAX_LABEL_CHARS): string =>
   s.length > limit ? `${s.slice(0, limit)}…` : s;
 
@@ -1358,6 +1363,17 @@ export async function groundMediaBrief(
   const brief = args.question?.trim();
   if (!brief) return; // nothing to research; the deck path handles a briefless run already
   try {
+    // 33.2 (PRD L5): the SAME brief on the SAME tenant inside the window was grounded already. A
+    // "Try again" on a refused storyboard used to re-buy ~$0.21 of research for identical findings
+    // (and the bake-off runner leans on this so research is a one-time cost per brief). The document
+    // is already where `searchVault` looks; nothing downstream needs to know it was reused. Inside
+    // the try, so a failing read can never fail the reel — it just researches again.
+    const reused = await ctx.runQuery(internal.research.recentFindingsForQuestion, {
+      tenantId: args.tenantId,
+      questionHash: await contentHash(brief),
+      sinceMs: Date.now() - FINDINGS_REUSE_MS,
+    });
+    if (reused) return;
     // The SAME skill and the SAME grant the research route uses, read off the shared registry
     // rather than restated — a second copy here could drift into granting media a tool the
     // research route does not have, which is the one direction that matters.

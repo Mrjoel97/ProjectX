@@ -1,3 +1,19 @@
+> Last verified: 2026-09-04 (33.2-01 — **THE MEDIA DIRECTOR BILLS ITS OWN LANE, AND A STORYBOARD
+> RETRY NO LONGER RE-BUYS ITS RESEARCH.**
+>
+> Two changes, both in the dispatch spine. (1) `runSpecialistTurn`'s lookup has a fourth arm:
+> `isMedia ? [MEDIA_MODEL, MEDIA_FALLBACK_MODEL]` (aliased to the defaults until 33.2-03 measures —
+> see guardrails.md). `dispatch.test.ts` "THE MODEL PIN" now has THREE runtime cases (research,
+> media, and `offer-architect` as the genuine default) plus the source tripwire on all three pairs.
+> (2) `groundMediaBrief` asks `research.recentFindingsForQuestion` — (tenant, `contentHash(brief)`,
+> 24 h over `by_tenant_kind`) — before buying a research turn; `persistFindings` writes that hash
+> as `vaultDocuments.researchQuestionHash` (optional, no backfill; a row without it never matches,
+> so it researches again — fail-closed). Every "Try again" used to re-buy ~$0.21 of identical
+> research. The check sits INSIDE the try, so a failing read can never fail the reel. Three tests:
+> same brief → one turn/one doc; different brief → two; a doc aged past the window → two. Mutation
+> `if (reused && false)` reddens exactly the first. Measured: dispatch.test.ts 10/10 in the two
+> filters, tsc 0 errors outside the connector lane.)
+>
 > Last verified: 2026-09-03 (working tree, uncommitted - **THE COMPOSER'S ATTACH AND MIC ARE LIVE
 > BEFORE A THREAD EXISTS.** Reviewed, typechecks clean. Not verified live.)
 >

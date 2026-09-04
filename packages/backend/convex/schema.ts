@@ -1761,6 +1761,11 @@ export default defineSchema({
     // read. The `by_tenant_kind` index named as the upgrade path now exists (added for the
     // onboarding profile read); this field may move onto it if freshness ever needs ranking.
     retrievedAt: v.optional(v.number()),
+    // 33.2 (PRD L5): `contentHash(question)` of the research QUESTION, written only by
+    // `research.persistFindings`, so `groundMediaBrief` can ask "was this exact brief researched on
+    // this tenant recently?" without a substring match on a truncated title. Optional → no
+    // backfill; a row without it never matches, which is the fail-CLOSED direction (research again).
+    researchQuestionHash: v.optional(v.string()),
     // Phase-26 Content provenance. Only authoritative write sites populate these; absence on
     // existing artifacts remains an explicit unknown and is never inferred by reverse scans.
     sourceThreadId: v.optional(v.string()),

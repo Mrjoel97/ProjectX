@@ -34,7 +34,7 @@ import { categoryFor } from "@pikar/vault";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { contentHash } from "./lib/hash";
 import { startIngest } from "./vaultIngest";
 
@@ -169,9 +169,13 @@ export const persistFindings = internalMutation({
       sourceCount: a.sources.length,
       declaredUnsupported: a.declaredUnsupported,
     });
+    // Computed ONCE, used twice: the audit row's `queryHash` and the document's reuse key (33.2)
+    // are the same hash of the same question by construction, never two derivations to drift.
+    const questionHash = await contentHash(a.question);
     const vaultDocId = await ctx.db.insert("vaultDocuments", {
       tenantId: a.tenantId,
       title: researchTitle(a.question, a.retrievedAt),
+      researchQuestionHash: questionHash,
       kind: "web_research", // the queryable class marker (`kind` is v.string() — no schema change)
       category: categoryFor({ source: "agent" }), // → "workspace-docs", like every generated doc
       source: "web_research",
@@ -198,7 +202,7 @@ export const persistFindings = internalMutation({
       eventType: "research.persisted",
       actor: "system",
       payload: {
-        queryHash: await contentHash(a.question),
+        queryHash: questionHash,
         sourceCount: a.sources.length,
         // A count and a closed enum — §4-clean, and the DURABLE prose-free truth source the eval
         // harness reads (smoke.ts). It replaced a substring scan of `doc.text`, which is model
@@ -217,5 +221,30 @@ export const persistFindings = internalMutation({
       },
     });
     return vaultDocId;
+  },
+});
+
+/**
+ * 33.2 (PRD L5): has THIS exact question been researched on THIS tenant since `sinceMs`?
+ *
+ * Read by `groundMediaBrief` before it buys a research turn. A storyboard "Try again" re-sends the
+ * same brief on the same thread, and until 33.2 every retry re-bought ~$0.21 of research for
+ * findings that were already in the vault where `searchVault` looks. Keyed on the question HASH
+ * (`researchQuestionHash`, written by `persistFindings` above) rather than the thread, so a fresh
+ * thread carrying the identical brief reuses too — and bounded by `sinceMs`, so a brief re-asked a
+ * month later is researched afresh. A boolean, deliberately: the caller needs "skip or not", and
+ * returning the document would be a second read path for content the specialist already reaches
+ * through `searchVault`.
+ */
+export const recentFindingsForQuestion = internalQuery({
+  args: { tenantId: v.string(), questionHash: v.string(), sinceMs: v.number() },
+  handler: async (ctx, a): Promise<boolean> => {
+    const recent = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant_kind", (q) =>
+        q.eq("tenantId", a.tenantId).eq("kind", "web_research").gte("createdAt", a.sinceMs),
+      )
+      .collect();
+    return recent.some((d) => d.researchQuestionHash === a.questionHash);
   },
 });

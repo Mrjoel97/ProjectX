@@ -87,6 +87,16 @@ export const OR_RESEARCH_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
 // silently move another. See PACK_MODEL below for the measurement that bought this lane.
 export const OR_PACK_MODEL = "or/openai/gpt-5.6-luna";
 export const OR_PACK_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
+// 33.2. THE MEDIA-DIRECTOR lane. The storyboard turn used to fall through the skill-name lookup in
+// llm.ts to DEFAULT_MODEL — the VOLUME pin, by the paragraph above's own words — while being the
+// most constraint-loaded single turn in the product (two whole variations, exact second sums, a
+// 12-second generated cap, per-cell narration windows, cited figures). Separate constants for the
+// PACK_MODEL reason: a later change to one lane must not silently move another.
+// ALIASES, not literals (the PRICING computed-key rule below): the lane ships pointing at today's
+// id so the code change is behaviour-neutral, and 33.2-03 moves it ONLY on the bake-off's
+// pre-committed rule — see docs/decisions/032-*.md for the measurement and the decision.
+export const OR_MEDIA_MODEL = OR_DEFAULT_MODEL;
+export const OR_MEDIA_FALLBACK_MODEL = OR_RESEARCH_FALLBACK_MODEL;
 
 // Aliases, deliberately — NOT second string literals. Two literals spelling the same model is how a
 // PRICING row and a pin drift apart, and `PRICING` is keyed by computed property, so duplicate
@@ -283,6 +293,10 @@ export const RESEARCH_FALLBACK_MODEL = OR_RESEARCH_FALLBACK_MODEL;
  */
 export const PACK_MODEL = OR_PACK_MODEL;
 export const PACK_FALLBACK_MODEL = OR_PACK_FALLBACK_MODEL;
+/** 33.2: the media-director lane — see OR_MEDIA_MODEL. Aliased like PACK_MODEL, priced by the same
+ *  cost.test.ts obligation (no PRICING row of its own while it names an id that already has one). */
+export const MEDIA_MODEL = OR_MEDIA_MODEL;
+export const MEDIA_FALLBACK_MODEL = OR_MEDIA_FALLBACK_MODEL;
 
 // **A GROWTH-SPECIALIST PIN WAS TRIED AND REVERTED 2026-08-08 — do not re-derive it.** Fixtures
 // 29/30/31 assert `citesVaultDoc` (the seeded vault needle must reach the specialist's memo), and
