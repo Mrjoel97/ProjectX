@@ -1,5 +1,13 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-05 (34-01 — **A THIRD REVIEW-FAMILY NOTIFICATION KIND, `agenda_proposal`, OUTSIDE
+> `NOTIFICATION_KINDS`.** `AGENDA_PROPOSAL_MESSAGE` sits beside the two review messages in
+> `notificationTemplates.ts`; the kind is inserted directly by `proactiveReview.insertReviewNotification`
+> (never through `notifications.notify`) and `proactiveReview.test.ts`'s guard asserts it absent from
+> `NOTIFICATION_KINDS`, so it can never arm the mailbox path. Banner deep link: `/dashboard/approvals`.
+> No audit, WORM or dead-letter behaviour changed; the staged proposal's specialist dispatch writes the
+> existing refs-only `subagent.*` rows.)
+
 > Last verified: 2026-09-05 (25.3-01 — (1) `worm.exportAudit` drains a BACKLOG: it loops pages
 > (`WORM_PAGE_SIZE` 10k, `pageSize` arg for tests) until a short page or `WORM_RUN_BUDGET_MS` (8 min);
 > each page is its own Object-Lock object and its own cursor advance, so a mid-run failure loses

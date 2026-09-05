@@ -1,5 +1,30 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-09-05 (34-01 — **THE AGENDA SPEAKS (Goal Engine v0, G13, ADR-033).** The weekly
+> review now ends with `internal.agenda.syncFromReview`: every gap on the pinned review thread becomes an
+> `agenda` row keyed by `gapKey` with a lifecycle (`open / proposed / acted / dismissed / recurring`; rules in
+> `@pikar/core` `agenda.ts`), and the lowest-rank `open`/`recurring` gap is staged as ONE proposal through the
+> SAME `applyActOnGap` the review card's "Act on this" uses — same memo/specialist terminals, same `plans`
+> row, same approvals surface, same Approve gate. Nothing sends; nothing recurs beyond the Monday cron. A
+> staged week notifies `agenda_proposal` (deep link to approvals) instead of `weekly_review`; a week whose
+> proposal is still waiting stages nothing and stays silent; `plan_busy` leaves the row `open` for next
+> Monday. Both doors call `markAgendaProposed` (`convex/lib/agenda.ts`), so the row reads `proposed`
+> whichever way it was staged. **`applyActOnGap` now recycles a DONE memo** — before this the review
+> thread's one plan row was `plan_busy` forever after its first approved memo (the review could propose
+> exactly once, ever); a done EMAIL plan is still refused. A proposal's fate is READ from its plan row
+> (`agendaStatusFromPlan`: approved/scheduled/delivering/done → acted, canceled → dismissed) — derived at
+> read time by `agenda.current`, persisted by the next sync; no `executePlan` hook. `agenda.current` is the
+> Command Center's read: ≤3 rows — current gaps, then the review's `notEnoughData` asks as interview
+> openers (the cockpit's `recordScorecardAnswer` stores the answer; this playbook's provenance rules are
+> untouched) — with the review's citation titles and the active goal on the gap's segment
+> (`segmentForRoute`, read-only; the agent still writes no goal). `agenda.dismiss` refuses a `proposed` row.
+> Tests: backend `agenda.test.ts` 10/10 (seeds an UNREGISTERED route so the memo terminal is exercised without
+> a dispatch), core `agenda.test.ts` 6/6, `proactiveReview.test.ts` 8/8 — the fixture's money-model gap now
+> dispatches under test with both model keys stubbed empty, so its audit assertion is "contains
+> `evaluation.ran`, no `review.*`" and `./dispatch.ts` is warmed in a `beforeAll` before the timer-pumped
+> drain. New watched paths: `convex/agenda.ts`, `convex/agenda.test.ts`, `convex/lib/agenda.ts`,
+> `core/src/agenda.ts`, `core/src/agenda.test.ts`.)
+
 > Last verified: 2026-09-05 (25.3-01 — **THE WEEKLY REVIEW FAN-OUT IS A BATCH JOB, NOT A TABLE
 > COLLECT.** `runWeekly` (the cron target, name unchanged) kicks `enumerateWeeklyReview`, a
 > `@convex-dev/migrations` walk over `users` (one row per tenant; tenantId = String(userId)). Per

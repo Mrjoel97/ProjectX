@@ -35,7 +35,12 @@
     "packages/backend/convex/evaluations.ts",
     "packages/backend/convex/evaluations.test.ts",
     "packages/backend/convex/proactiveReview.ts",
-    "packages/backend/convex/proactiveReview.test.ts"
+    "packages/backend/convex/proactiveReview.test.ts",
+    "packages/backend/convex/agenda.ts",
+    "packages/backend/convex/agenda.test.ts",
+    "packages/backend/convex/lib/agenda.ts",
+    "packages/core/src/agenda.ts",
+    "packages/core/src/agenda.test.ts"
   ],
   "onboarding.md": [
     "packages/core/src/businessProfile.ts",

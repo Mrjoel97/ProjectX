@@ -19,6 +19,9 @@ import { type ComponentType, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import CommandCenter, {
+  AgendaCard,
+  type AgendaView,
+  ConnectedAgenda,
   ConnectedBriefing,
   ConnectedStats,
   ConstraintCard,
@@ -64,6 +67,7 @@ const names = (references: unknown[]): string[] =>
   );
 
 type QueryAnswers = {
+  agenda?: unknown;
   summary?: unknown;
   health?: unknown;
   briefing?: unknown;
@@ -85,6 +89,8 @@ function mount(component: unknown, answers: QueryAnswers) {
         return answers.health;
       case "briefings:latestForTenant":
         return answers.briefing;
+      case "agenda:current":
+        return answers.agenda;
       default:
         throw new Error(`Unexpected query mounted: ${name}`);
     }
@@ -872,7 +878,7 @@ const signalWord = (html: string, code: string): string => {
 // ── section independence ──────────────────────────────────────────────────────
 
 describe("one subscription failing or loading never blanks the others", () => {
-  test("the three contracted subscriptions all mount", () => {
+  test("the four contracted subscriptions all mount", () => {
     const { queries } = mount(CommandCenter, {
       summary: READY_SUMMARY,
       health: allClear(),
@@ -881,6 +887,7 @@ describe("one subscription failing or loading never blanks the others", () => {
     expect(queries).toContain("home:summary");
     expect(queries).toContain("home:health");
     expect(queries).toContain("briefings:latestForTenant");
+    expect(queries).toContain("agenda:current");
   });
 
   test("summary still LOADING leaves health and the briefing fully rendered", () => {
@@ -932,10 +939,17 @@ describe("one subscription failing or loading never blanks the others", () => {
       fileURLToPath(new URL("./CommandCenter.tsx", import.meta.url)),
       "utf8",
     );
-    for (const section of ["recommendation", "constraint", "stats", "briefing", "health"]) {
+    for (const section of [
+      "recommendation",
+      "agenda",
+      "constraint",
+      "stats",
+      "briefing",
+      "health",
+    ]) {
       expect(source).toContain(`<SectionBoundary section="${section}">`);
     }
-    expect(source.match(/<SectionBoundary /g) ?? []).toHaveLength(5);
+    expect(source.match(/<SectionBoundary /g) ?? []).toHaveLength(6);
     // A single page-wide boundary is exactly the 26-10 FinanceTabs bug.
     expect(source).not.toMatch(/<SectionBoundary[^>]*>\s*<div className="cc"/);
   });
@@ -952,7 +966,14 @@ describe("one subscription failing or loading never blanks the others", () => {
       health: allClear(),
       briefing: BRIEFING,
     }).html;
-    for (const section of ["recommendation", "constraint", "stats", "briefing", "health"]) {
+    for (const section of [
+      "recommendation",
+      "agenda",
+      "constraint",
+      "stats",
+      "briefing",
+      "health",
+    ]) {
       expect(markers(loaded, section), section).toBe(1);
     }
     expect(markers(loaded, "pipeline")).toBe(1);
@@ -967,7 +988,14 @@ describe("one subscription failing or loading never blanks the others", () => {
     expect(noticed).toContain('data-cc-state="partial"');
     expect(noticed).toContain('data-cc-state="empty"');
     expect(noticed).toContain('data-cc-state="error"');
-    for (const section of ["recommendation", "constraint", "stats", "briefing", "health"]) {
+    for (const section of [
+      "recommendation",
+      "agenda",
+      "constraint",
+      "stats",
+      "briefing",
+      "health",
+    ]) {
       expect(markers(noticed, section), section).toBe(1);
     }
   });
@@ -1002,6 +1030,7 @@ describe("one subscription failing or loading never blanks the others", () => {
       return html.slice(open + 1, html.indexOf("</p>", open)).trim();
     };
     for (const [id, visible] of Object.entries({
+      "cc-agenda-label": "Your agenda",
       "cc-constraint-label": "Your binding constraint",
       "cc-stats-label": "Key numbers",
       "cc-briefing-label": "Latest briefing",
@@ -1026,6 +1055,94 @@ describe("one subscription failing or loading never blanks the others", () => {
     expect(html).toContain('data-cc-priority="binding-constraint"');
     expect(html).toContain("No binding constraint on record");
     expect(html).toContain("Binding constraint</span>");
+  });
+});
+
+// ── a2) the agenda ────────────────────────────────────────────────────────────
+
+const AGENDA: AgendaView = {
+  reviewedAt: 1_700_000_000_000,
+  items: [
+    {
+      key: "money-model-designer/cash-in-30",
+      label: "Customer doesn't pay for themselves in 30 days.",
+      reason: "30-day cash is below acquisition cost, so growth burns cash.",
+      proofMetric: "30-day cash per customer at or above CAC",
+      status: "proposed",
+      gapIndex: 0,
+      citations: ["Business profile", "Q2 numbers"],
+      goal: "Break even on each new client within 30 days",
+    },
+  ],
+  asks: [{ section: "financials", needs: "What does it cost you to win one customer?" }],
+};
+
+describe("the agenda proposes and never acts", () => {
+  const noop = () => undefined;
+  const renderAgenda = (agenda: AgendaView | undefined, note: string | null = null) =>
+    render(AgendaCard, { agenda, note, onStage: noop, onDismiss: noop });
+
+  test("a proposed row says so in words, cites the review's sources, names the goal, and links to approvals", () => {
+    const html = renderAgenda(AGENDA);
+    expect(html).toContain("Customer doesn&#x27;t pay for themselves in 30 days.");
+    expect(html).toContain("Awaiting your approval");
+    expect(html).not.toContain(">proposed<"); // the word, never the slug
+    expect(html).toContain("Grounded in: Business profile · Q2 numbers");
+    expect(html).toContain("Toward your goal: Break even on each new client within 30 days");
+    expect(html).toContain("Done when: 30-day cash per customer at or above CAC");
+    expect(html).toContain('href="/dashboard/approvals"');
+    expect(html).toContain("Review in approvals");
+    // The interview opener rides the same list and only ever links to the workspace.
+    expect(html).toContain("Pikar needs one fact from you");
+    expect(html).toContain("What does it cost you to win one customer?");
+    expect(html).toContain('href="/dashboard/workspace"');
+    expect(html).toContain("Nothing here runs until you approve it.");
+  });
+
+  test("an open row offers exactly two controls — stage for approval, dismiss — and no send", () => {
+    const item = AGENDA?.items[0];
+    if (!AGENDA || !item) throw new Error("fixture");
+    const html = renderAgenda({ ...AGENDA, items: [{ ...item, status: "open" }], asks: [] });
+    expect(html).toContain(">Open<");
+    expect(html).toContain("Stage for approval");
+    expect(html).toContain("Dismiss");
+    expect(html.match(/<button /g) ?? []).toHaveLength(2);
+    expect(html).not.toMatch(/\bsend\b|schedule|approve now/i);
+    // A row that came back says so; an acted one links back to the review, with no controls.
+    expect(
+      renderAgenda({ ...AGENDA, items: [{ ...item, status: "recurring" }], asks: [] }),
+    ).toContain("Came back");
+    const acted = renderAgenda({ ...AGENDA, items: [{ ...item, status: "acted" }], asks: [] });
+    expect(acted).toContain("Acted on");
+    expect(acted).toContain("Open the weekly review");
+    expect(acted).toContain("thread=proactive-review");
+    expect(acted).not.toContain("<button ");
+  });
+
+  test("no review, an empty review, and a malformed payload each render their own honest state", () => {
+    expect(renderAgenda(undefined)).toContain('data-cc-state="loading"');
+    const none = renderAgenda(null);
+    expect(none).toContain('data-cc-state="empty"');
+    expect(none).toContain("Your first weekly review runs Monday.");
+    const clear = renderAgenda({ reviewedAt: 1, items: [], asks: [] });
+    expect(clear).toContain('data-cc-state="empty"');
+    expect(clear).toContain("Nothing is waiting.");
+    expect(
+      renderAgenda({ reviewedAt: 1, items: "x", asks: [] } as unknown as AgendaView),
+    ).toContain('data-cc-state="error"');
+  });
+
+  test("the staging outcome is spoken in a status line", () => {
+    const html = renderAgenda(AGENDA, "Staged. It is waiting in approvals.");
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Staged. It is waiting in approvals.");
+  });
+
+  test("the connected section reads agenda.current and nothing else", () => {
+    const { html, queries } = mount(ConnectedAgenda, { agenda: AGENDA });
+    expect(queries).toEqual(["agenda:current"]);
+    expect(html).toContain('data-cc-section="agenda"');
+    expect(html).toContain("Awaiting your approval");
   });
 });
 

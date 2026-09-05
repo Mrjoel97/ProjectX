@@ -34,7 +34,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 57 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 58 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -49,7 +49,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   telemetry, demoItems                                                     │
 // │                                                                            │
 // │ ── Agent ───────────────────────────────────────────────── ~L998           │
-// │   evaluations, agentSteps                                                  │
+// │   evaluations, agenda, agentSteps                                          │
 // │                                                                            │
 // │ ── Calendar ────────────────────────────────────────────── ~L932           │
 // │   calendarViews, calendarFixtures, calendarEvents                          │
@@ -1494,6 +1494,38 @@ export default defineSchema({
     // SC #5 isolation + "latest per tenant" ; by_tenant_thread = the card's latest-per-thread read.
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_thread", ["tenantId", "threadId"]),
+
+  // ── Phase-34 agenda (Goal Engine v0, ADR-033) ─────────────────────────────
+  // One row per gap the WEEKLY review has ever surfaced for a tenant, keyed by `gapKey`
+  // (route/playbook). The evaluation row is rewritten every Monday; this is where "dismissed",
+  // "acted on" and "came back" survive it. CONTENT PLANE: `label` is diagnose()'s own prose and
+  // never reaches an audit payload. Bounded by the closed prescription vocabulary (a dozen keys
+  // per tenant, ever), so a `by_tenant` collect is honest. New table → no migration.
+  agenda: defineTable({
+    tenantId: v.string(),
+    key: v.string(),
+    label: v.string(),
+    route: v.string(),
+    playbook: v.string(),
+    leverageRank: v.number(),
+    status: v.union(
+      v.literal("open"),
+      v.literal("proposed"), // staged on the review thread's plan row, waiting at the gate
+      v.literal("acted"), // the proposal crossed Approve
+      v.literal("dismissed"), // the user's word; holds until the gap closes and returns
+      v.literal("recurring"), // closed or acted on, and back again
+    ),
+    // Index into the LATEST review row's gaps[] — what `evaluations.actOnGap` takes. Rewritten
+    // by every sync; meaningless for a row that is not current.
+    gapIndex: v.number(),
+    firstSeenAt: v.number(),
+    // createdAt of the latest review that listed it. "Current" ⇔ equals the newest review's.
+    lastSeenAt: v.number(),
+    statusChangedAt: v.number(),
+    planId: v.optional(v.id("plans")), // the proposal's plan row — the review thread's ONE row
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_key", ["tenantId", "key"]),
 
   // ── Phase-3.9 agent activity trace (CKPT-05) ──────────────────────────────
   //

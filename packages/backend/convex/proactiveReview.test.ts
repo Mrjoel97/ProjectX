@@ -6,7 +6,7 @@
 // idiom needs no `node` environment, so a second file would buy nothing but a second harness.
 import { NOTIFICATION_KINDS, REVIEW_THREAD_ID, serializeProfile } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) or the REAL audit path
 // throws "component not registered" (the evaluations.test.ts idiom, copied verbatim).
@@ -16,7 +16,18 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
+// 34: the review now stages its top gap through applyActOnGap, and the fixture's money-model gap
+// routes to a REGISTERED specialist. With no model key the dispatch lands its fallback memo
+// without a network call (dispatch.test.ts's own stub) — never a live model from this suite.
+vi.stubEnv("OPENAI_API_KEY", "");
+vi.stubEnv("OPENROUTER_API_KEY", "");
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+// The staging hop schedules `dispatch.runSpecialist`, whose module graph (llm, models, skills) takes
+// seconds to load the FIRST time. Inside the timer-pumped drain that first load reads as a
+// scheduled function that "did not complete after 10000 timer pumps"; warm it once, up front.
+beforeAll(async () => {
+  await modules["./dispatch.ts"]?.();
+});
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
@@ -91,7 +102,10 @@ async function seedDoc(
 async function runCron(t: ReturnType<typeof convexTest>): Promise<void> {
   // 25.3: the enumeration is a batch job; one synchronous batch (vaultSweep.test.ts idiom) and
   // then drain the randomly-spread reviewOne jobs under fake timers.
-  vi.useFakeTimers();
+  // 34: fake ONLY setTimeout (the spread). The staging hop loads dispatch.ts's module graph on
+  // first use, and that settles through setImmediate/nextTick — the default fake set starves it
+  // into "did not complete after 10000 timer pumps".
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   try {
     await t.mutation(internal.proactiveReview.enumerateWeeklyReview, {
       cursor: null,
@@ -158,9 +172,16 @@ describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in
     expect(rows).toHaveLength(1);
     expect(rows[0]?.findings.length).toBeGreaterThanOrEqual(1); // the card has something to say
 
+    // 34: the fixture's money-model gap is STAGED (the louder fact), so the one notification is
+    // the proposal, linking to approvals — not the plain "review ready".
     const notes = await notifications(t, A);
-    expect(notes.map((n) => n.kind)).toEqual(["weekly_review"]);
+    expect(notes.map((n) => n.kind)).toEqual(["agenda_proposal"]);
     expect(notes[0]?.read).toBe(false);
+    const plan = await t
+      .withIdentity({ subject: A })
+      .query(api.plans.byThread, { threadId: REVIEW_THREAD_ID });
+    expect(plan?.kind).toBe("memo"); // staged on the review thread's one row
+    expect(["approved", "scheduled", "delivering", "done"]).not.toContain(plan?.status); // gate intact
   });
 
   test("notifies only on change (a second identical week stays silent)", async () => {
@@ -175,7 +196,8 @@ describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in
     // The card refreshes every week regardless — it is the notification that is conditional.
     expect(await reviewRows(t, A)).toHaveLength(2);
     const notes = await notifications(t, A);
-    expect(notes.map((n) => n.kind)).toEqual(["weekly_review"]);
+    // 34: week 1 staged the gap; week 2 finds it still `proposed` and stages nothing — silent.
+    expect(notes.map((n) => n.kind)).toEqual(["agenda_proposal"]);
 
     // The second run must be a genuine no-op diff, not merely an unnotified one: same verdict,
     // same finding count, empty delta. (This is the regression guard for the repeat-run
@@ -228,10 +250,17 @@ describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in
         .filter((q) => q.eq(q.field("tenantId"), A))
         .collect(),
     );
-    expect(events.map((e) => e.eventType)).toEqual(["evaluation.ran"]);
+    // 34: the staged proposal's dispatch writes its own refs-only rows beside this one; the claim
+    // here is unchanged — the REVIEW adds no `review.*` eventType of its own.
+    const kinds = events.map((e) => e.eventType);
+    expect(kinds).toContain("evaluation.ran");
+    expect(kinds.filter((k) => k.startsWith("review."))).toEqual([]);
 
     // §4: the payload is counts + closed enums ONLY — never a finding label or citation title.
-    const payload = events[0]?.payload as Record<string, unknown>;
+    const payload = events.find((e) => e.eventType === "evaluation.ran")?.payload as Record<
+      string,
+      unknown
+    >;
     const ENUMS = ["swot", "lean", "bmc", "growth-os", "gaps", "healthy", "insufficient"];
     for (const value of Object.values(payload)) {
       if (typeof value === "number") continue;
@@ -273,6 +302,7 @@ describe("proactive review guards (SC#2 no mailbox token, SC#3 tenant-scoped)", 
     //    backstop if the path ever changes.
     expect(NOTIFICATION_KINDS).not.toContain("weekly_review");
     expect(NOTIFICATION_KINDS).not.toContain("weekly_review_failed");
+    expect(NOTIFICATION_KINDS).not.toContain("agenda_proposal"); // 34: same rule, third kind
     // The positive half: it really does deliver in-app. Without this, a module that stopped
     // notifying at all would sail through every assertion above.
     expect(code).toMatch(/ctx\.db\.insert\(\s*["']notifications["']/);

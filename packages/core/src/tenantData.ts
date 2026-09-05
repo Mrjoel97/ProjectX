@@ -44,6 +44,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   calendarViews: "tenant_owned",
   vaultSources: "tenant_owned",
   evaluations: "tenant_owned",
+  agenda: "tenant_owned", // 34-01 (ADR-033): the weekly review's gap lifecycle
   agentSteps: "tenant_owned",
   calendarFixtures: "tenant_owned",
   calendarEvents: "tenant_owned",

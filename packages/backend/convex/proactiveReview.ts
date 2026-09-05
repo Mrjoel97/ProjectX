@@ -8,7 +8,12 @@
 // requireTenant → ctx.auth) are structurally uncallable. Every function here takes an explicit
 // validated `tenantId` — the established internal-twin convention (runEvaluation, lastForThread,
 // recordScorecardAnswerInternal) — and every scoped read/write carries it (SC#3).
-import { REVIEW_FAILED_MESSAGE, REVIEW_READY_MESSAGE, REVIEW_THREAD_ID } from "@pikar/core";
+import {
+  AGENDA_PROPOSAL_MESSAGE,
+  REVIEW_FAILED_MESSAGE,
+  REVIEW_READY_MESSAGE,
+  REVIEW_THREAD_ID,
+} from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
@@ -114,6 +119,21 @@ export const reviewOne = internalAction({
         framework: last?.framework === "document-review" ? undefined : last?.framework,
         withDelta: true,
       });
+      // 34 (G13, ADR-033): fold the review into the agenda and stage its top open gap through the
+      // "Act on this" path — ONE proposal, onto the approvals surface, behind the same gate. Its
+      // own catch: a staging failure must not turn a SUCCESSFUL review into a "failed" card.
+      let staged = false;
+      try {
+        const sync: { staged: boolean } = await ctx.runMutation(internal.agenda.syncFromReview, {
+          tenantId,
+        });
+        staged = sync.staged;
+      } catch (error) {
+        console.error("[proactiveReview] agenda staging failed", {
+          tenantId,
+          error: error instanceof Error ? error.name : "unknown",
+        });
+      }
       const d = res.delta;
       // Notify-on-change keeps the bell meaningful: first review ever, verdict moved, or the delta
       // is non-empty. An idea-stage tenant gets ONE "not enough data" ping, then silence.
@@ -121,10 +141,11 @@ export const reviewOne = internalAction({
         !last ||
         last.verdict !== res.verdict ||
         Boolean(d && (d.newFindings > 0 || d.gapsClosed.length > 0 || d.gapsOpened.length > 0));
-      if (changed) {
+      // A staged proposal is the louder fact and links to approvals; otherwise the review itself.
+      if (staged || changed) {
         await ctx.runMutation(internal.proactiveReview.insertReviewNotification, {
           tenantId,
-          kind: "weekly_review",
+          kind: staged ? "agenda_proposal" : "weekly_review",
         });
       }
     } catch (error) {
@@ -158,14 +179,23 @@ export const reviewOne = internalAction({
 export const insertReviewNotification = internalMutation({
   args: {
     tenantId: v.string(),
-    kind: v.union(v.literal("weekly_review"), v.literal("weekly_review_failed")),
+    kind: v.union(
+      v.literal("weekly_review"),
+      v.literal("weekly_review_failed"),
+      v.literal("agenda_proposal"), // 34: also outside NOTIFICATION_KINDS (see the guard test)
+    ),
   },
   handler: async (ctx, { tenantId, kind }) => {
     await ctx.db.insert("notifications", {
       tenantId,
       kind,
       // Static labels from the §4 firewall file — never a failure reason, never grounded prose.
-      message: kind === "weekly_review" ? REVIEW_READY_MESSAGE : REVIEW_FAILED_MESSAGE,
+      message:
+        kind === "weekly_review"
+          ? REVIEW_READY_MESSAGE
+          : kind === "agenda_proposal"
+            ? AGENDA_PROPOSAL_MESSAGE
+            : REVIEW_FAILED_MESSAGE,
       read: false,
       createdAt: Date.now(),
     });

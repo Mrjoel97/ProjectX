@@ -11,6 +11,7 @@ import Link from "next/link";
 const KIND_HREF: Record<string, string> = {
   weekly_review: `/dashboard/workspace?thread=${REVIEW_THREAD_ID}`,
   weekly_review_failed: "/dashboard/workspace", // the on-demand evaluateBusiness path is live there
+  agenda_proposal: "/dashboard/approvals", // 34: the staged next step waits at the gate
 };
 
 // OPSG-05 in-app render surface. Every failure terminal in the phase routes through

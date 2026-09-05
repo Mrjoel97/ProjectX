@@ -39,6 +39,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { DatabaseReader, DatabaseWriter, MutationCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { markAgendaProposed } from "./lib/agenda";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import schema from "./schema";
@@ -906,7 +907,7 @@ export type ActOnGapResult =
  * are not shared on purpose: the rules disagree, and a shared helper would need the rule as a
  * parameter. Change one and decide CONSCIOUSLY whether the other moves.
  */
-async function applyActOnGap(
+export async function applyActOnGap(
   ctx: MutationCtx,
   tenantId: string,
   threadId: string,
@@ -934,7 +935,15 @@ async function applyActOnGap(
     .query("plans")
     .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
     .unique();
-  if (plan && !ACTABLE_PLAN_STATUS.has(plan.status)) return { ok: false, reason: "plan_busy" };
+  // 34-01: a DONE memo is a vault artifact, not a send — the review thread's one row would
+  // otherwise be `plan_busy` forever after its first approved memo (the weekly review could
+  // propose exactly once, ever). A done EMAIL plan is still refused: its card is the delivery
+  // report for that thread.
+  const recyclable =
+    !plan ||
+    ACTABLE_PLAN_STATUS.has(plan.status) ||
+    (plan.status === "done" && plan.kind === "memo");
+  if (!recyclable) return { ok: false, reason: "plan_busy" };
 
   let planId: Id<"plans">;
   if (plan) {
@@ -963,6 +972,7 @@ async function applyActOnGap(
       body: buildMemo(row, gap),
       status: "proposed", // the pinned collecting→proposed spine, unchanged (12-05)
     });
+    await markAgendaProposed(ctx, tenantId, threadId, row, gapIndex, planId);
     return { ok: true, planId };
   }
 
@@ -995,6 +1005,8 @@ async function applyActOnGap(
     skillVersions,
     tenantSkillIds,
   });
+  // 34-01: the agenda row (review thread only) records the proposal under this plan.
+  await markAgendaProposed(ctx, tenantId, threadId, row, gapIndex, planId);
   // The public contract does not move, so cards.tsx's existing handler + its `plan_busy` note
   // keep working untouched.
   return { ok: true, planId };

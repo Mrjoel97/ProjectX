@@ -1,5 +1,20 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-05 (34-01 — **THE COMMAND CENTER HAS AN AGENDA (Goal Engine v0, ADR-033).** A
+> sixth section, `data-cc-section="agenda"`, between the hero and the binding constraint, on its own
+> `SectionBoundary` and its own subscription (`api.agenda.current`) — the page's independence rule holds.
+> Up to three rows: the weekly review's current gaps (a status WORD from `AGENDA_STATUS_WORD`, never the
+> slug; `diagnose()`'s own reason and "Done when:" proof metric; "Grounded in:" the review's document
+> titles; "Toward your goal:" the active goal on the gap's segment), then the review's not-enough-data asks
+> as interview openers ("Pikar needs one fact from you" → the workspace). A row's ONLY controls are
+> "Stage for approval" (`evaluations.actOnGap` on `REVIEW_THREAD_ID` — the review card's own button; the
+> proposal lands in approvals) and "Dismiss" (`agenda.dismiss`); a `proposed` row links to approvals, an
+> `acted` row links back to the review. No row can send or schedule; the outcome of staging is spoken in a
+> `role="status"` line. States: loading / no review yet / nothing waiting / malformed → error, each a
+> code-owned sentence. `NotificationsBanner` deep-links the new `agenda_proposal` kind to
+> `/dashboard/approvals`. `commandCenter.test.ts` 61/61: boundary count 6, marker-once and landmark checks
+> include the agenda, and `mount()` names `agenda:current`.)
+
 > Last verified: 2026-09-05 (25.2-02 — **NO ICON RAIL ON A PHONE.** Below 48rem `.rail` is
 > `display: none` and a fixed four-item labelled bar (`.tabbar`: Command Center, Approvals, My
 > Workspace, Knowledge Vault — `TABBAR_HREFS`, drawn from NAV so a renamed entry renames its tab)

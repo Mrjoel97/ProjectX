@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as agenda from "../agenda.js";
 import type * as agentSteps from "../agentSteps.js";
 import type * as aggregates from "../aggregates.js";
 import type * as approvals from "../approvals.js";
@@ -62,6 +63,7 @@ import type * as knowledgeExternalSources from "../knowledgeExternalSources.js";
 import type * as knowledgeLlm from "../knowledgeLlm.js";
 import type * as knowledgeSearch from "../knowledgeSearch.js";
 import type * as knowledgeVaultDrive from "../knowledgeVaultDrive.js";
+import type * as lib_agenda from "../lib/agenda.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
 import type * as lib_env from "../lib/env.js";
 import type * as lib_foglamp from "../lib/foglamp.js";
@@ -151,6 +153,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  agenda: typeof agenda;
   agentSteps: typeof agentSteps;
   aggregates: typeof aggregates;
   approvals: typeof approvals;
@@ -205,6 +208,7 @@ declare const fullApi: ApiFromModules<{
   knowledgeLlm: typeof knowledgeLlm;
   knowledgeSearch: typeof knowledgeSearch;
   knowledgeVaultDrive: typeof knowledgeVaultDrive;
+  "lib/agenda": typeof lib_agenda;
   "lib/allowlist": typeof lib_allowlist;
   "lib/env": typeof lib_env;
   "lib/foglamp": typeof lib_foglamp;

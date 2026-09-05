@@ -50,6 +50,12 @@ export const REVIEW_THREAD_ID = "proactive-review";
 export const REVIEW_READY_MESSAGE = "Your weekly business review is ready.";
 export const REVIEW_FAILED_MESSAGE =
   "We couldn't run your weekly review — open the cockpit to run one now.";
+/**
+ * Phase 34 (Goal Engine v0): the review staged ONE proposal onto the approvals surface. Same
+ * rule as the two review kinds — `agenda_proposal` stays OUT of NOTIFICATION_KINDS above, so it
+ * can never arm the mailbox path. Static copy; the proposal itself is on /dashboard/approvals.
+ */
+export const AGENDA_PROPOSAL_MESSAGE = "Pikar staged one next step for your approval.";
 
 /**
  * The per-provider reconnect prompts — DELIBERATELY OUTSIDE `NOTIFICATION_KINDS` above.

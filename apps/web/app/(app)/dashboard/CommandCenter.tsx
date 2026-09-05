@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Command Center v2 (HOME-01). Three INDEPENDENT Convex subscriptions —
- * `home.summary`, `home.health`, `briefings.latestForTenant` — feeding five sections that each
+ * Command Center v2 (HOME-01). Four INDEPENDENT Convex subscriptions —
+ * `home.summary`, `home.health`, `briefings.latestForTenant`, `agenda.current` (Phase 34) —
+ * feeding six sections that each
  * carry their OWN loading / empty / partial / error state. One section going dark must never
  * blank another, so no section reads another section's data and no section shares a boundary.
  *
@@ -24,6 +25,8 @@
 
 import { api } from "@pikar/backend/api";
 import {
+  AGENDA_STATUS_WORD,
+  type AgendaStatus,
   DASHBOARD_STATE_COPY,
   type DashboardPartialReason,
   HOME_PRIORITY_COPY,
@@ -32,13 +35,14 @@ import {
   type HomePriorityCode,
   type HomeSignal,
   REQUIRED_HOME_SIGNALS,
+  REVIEW_THREAD_ID,
   recommendNextMove,
   rollUpHealth,
   SIGNAL_STATE_WORD,
 } from "@pikar/core";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
-import { Component, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
+import { Component, type CSSProperties, type ErrorInfo, type ReactNode, useState } from "react";
 import { ArrowIcon, ClockIcon, FileIcon, MailIcon, ShieldIcon } from "../../(auth)/icons";
 
 // ── the backend contract, mirrored structurally ───────────────────────────────
@@ -339,6 +343,139 @@ function Recommendation({ signals }: { signals: HomeSignal[] }) {
         {CTA_DESTINATION[move.code]} <ArrowIcon size={16} />
       </Link>
     </>
+  );
+}
+
+// ── section a2: your agenda (Phase 34, Goal Engine v0, ADR-033) ───────────────
+
+/** Mirrors `packages/backend/convex/agenda.ts`'s `AgendaView`, the same way the types above do. */
+export type AgendaView = {
+  reviewedAt: number;
+  items: {
+    key: string;
+    label: string;
+    reason: string | null;
+    proofMetric: string | null;
+    status: AgendaStatus;
+    gapIndex: number;
+    citations: string[];
+    goal: string | null;
+  }[];
+  asks: { section: string; needs: string }[];
+} | null;
+
+/**
+ * Everything the agenda card says on its own behalf. What it renders FROM the wire is either
+ * `diagnose()`'s own code-owned prose (the gap label, reason, proof metric, the ask) or the
+ * tenant's own words (document titles, a goal) — never model output.
+ */
+const AGENDA_COPY = {
+  noReview: "Your first weekly review runs Monday. The agenda fills from it.",
+  clear: "Nothing is waiting. The last review found no blocking constraint.",
+  lede: "From your weekly review. Nothing here runs until you approve it.",
+  ask: "Pikar needs one fact from you",
+  staged: "Staged. It is waiting in approvals.",
+  plan_busy: "The weekly review already has a step in flight. Answer that one first.",
+  gap_not_found: "That step is no longer on the latest review.",
+} as const;
+
+const REVIEW_HREF = `/dashboard/workspace?thread=${REVIEW_THREAD_ID}`;
+
+const agendaRow: CSSProperties = {
+  borderTop: "1px solid var(--rule)",
+  paddingTop: "0.6rem",
+  display: "grid",
+  gap: "0.3rem",
+  minWidth: 0,
+};
+const strong: CSSProperties = { ...muted, fontWeight: 600, color: "var(--ink)" };
+const small: CSSProperties = { ...muted, fontSize: "0.85rem" };
+
+/**
+ * PROPOSE-ONLY, by construction: the only mutations a row can reach are `evaluations.actOnGap`
+ * (stages a proposal that waits at the Approve gate — the review card's own button) and
+ * `agenda.dismiss`. No row can send, schedule or execute anything.
+ */
+export function AgendaCard({
+  agenda,
+  note,
+  onStage,
+  onDismiss,
+}: {
+  agenda: AgendaView | Loading;
+  note: string | null;
+  onStage: (gapIndex: number) => void;
+  onDismiss: (key: string) => void;
+}) {
+  return (
+    <section style={card} aria-labelledby="cc-agenda-label" data-cc-section="agenda">
+      <p className="caps-label" id="cc-agenda-label">
+        Your agenda
+      </p>
+      {agenda === undefined ? (
+        <CommandCenterState state="loading" />
+      ) : agenda === null ? (
+        <CommandCenterState state="empty">{AGENDA_COPY.noReview}</CommandCenterState>
+      ) : !Array.isArray(agenda.items) || !Array.isArray(agenda.asks) ? (
+        <CommandCenterState state="error" />
+      ) : agenda.items.length + agenda.asks.length === 0 ? (
+        <CommandCenterState state="empty">{AGENDA_COPY.clear}</CommandCenterState>
+      ) : (
+        <>
+          <p style={muted}>{AGENDA_COPY.lede}</p>
+          <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "0.6rem" }}>
+            {agenda.items.map((item) => (
+              <li key={item.key} style={agendaRow} data-cc-agenda={item.status}>
+                <p style={strong}>{item.label}</p>
+                <p style={small}>{AGENDA_STATUS_WORD[item.status]}</p>
+                {item.reason ? <p style={muted}>{item.reason}</p> : null}
+                {item.citations.length > 0 ? (
+                  <p style={small}>Grounded in: {item.citations.join(" · ")}</p>
+                ) : null}
+                {item.goal ? <p style={small}>Toward your goal: {item.goal}</p> : null}
+                {item.proofMetric ? <p style={small}>Done when: {item.proofMetric}</p> : null}
+                {item.status === "proposed" ? (
+                  <Link href="/dashboard/approvals" style={linkStyle}>
+                    Review in approvals <ArrowIcon size={14} />
+                  </Link>
+                ) : item.status === "acted" ? (
+                  <Link href={REVIEW_HREF} style={linkStyle}>
+                    Open the weekly review <ArrowIcon size={14} />
+                  </Link>
+                ) : (
+                  <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="cta-dark"
+                      onClick={() => onStage(item.gapIndex)}
+                    >
+                      Stage for approval
+                    </button>
+                    <button type="button" className="cta-ghost" onClick={() => onDismiss(item.key)}>
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+            {agenda.asks.map((ask) => (
+              <li key={`${ask.section}:${ask.needs}`} style={agendaRow} data-cc-agenda="ask">
+                <p style={strong}>{AGENDA_COPY.ask}</p>
+                <p style={muted}>{ask.needs}</p>
+                <Link href="/dashboard/workspace" style={linkStyle}>
+                  Answer in the workspace <ArrowIcon size={14} />
+                </Link>
+              </li>
+            ))}
+          </ol>
+          {note ? (
+            <p role="status" style={muted} data-cc-agenda-note="true">
+              {note}
+            </p>
+          ) : null}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -687,6 +824,25 @@ export function ConnectedBriefing() {
   return <LatestBriefingCard briefing={useQuery(api.briefings.latestForTenant, {})} />;
 }
 
+export function ConnectedAgenda() {
+  const agenda = useQuery(api.agenda.current, {});
+  const actOnGap = useMutation(api.evaluations.actOnGap);
+  const dismiss = useMutation(api.agenda.dismiss);
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <AgendaCard
+      agenda={agenda}
+      note={note}
+      onStage={(gapIndex) =>
+        void actOnGap({ threadId: REVIEW_THREAD_ID, gapIndex }).then((res) =>
+          setNote(res.ok ? AGENDA_COPY.staged : AGENDA_COPY[res.reason]),
+        )
+      }
+      onDismiss={(key) => void dismiss({ key })}
+    />
+  );
+}
+
 export default function CommandCenter() {
   // BRAND §3's signature tracked-caps context label, verbatim from the surface this replaces
   // (`LegacyDashboard.tsx`) and from `docs/design/mockups/pending-pages.html`. "Command Center" is
@@ -711,6 +867,10 @@ export default function CommandCenter() {
           <ConnectedRecommendation />
         </SectionBoundary>
       </section>
+
+      <SectionBoundary section="agenda">
+        <ConnectedAgenda />
+      </SectionBoundary>
 
       <SectionBoundary section="constraint">
         <ConnectedConstraint />

@@ -39,7 +39,8 @@ describe("tenant table classification registry", () => {
     // + billingPeriods (28.1-07, the invoice claim row — `tenant_owned`, argued in tenantData.ts).
     // RE-DERIVED 2026-09-05 at the Phase 28/28.1/29/33.x merge: main's 52 (with knowledgeSearches)
     // + the lane's five billing tables = 57. Counted from the merged schema.ts, not carried over.
-    expect(schemaTables).toHaveLength(57);
+    // + agenda (34-01, ADR-033 — the weekly review's gap lifecycle) = 58.
+    expect(schemaTables).toHaveLength(58);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
