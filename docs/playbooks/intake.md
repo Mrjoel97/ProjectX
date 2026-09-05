@@ -1,3 +1,7 @@
+> Last verified: 2026-09-05 (33.2-06 — `extractVisual` (the attachment extractor) calls
+> `resolveModel(DEFAULT_MODEL)` through OpenRouter; spend labelled DEFAULT_MODEL. With 33.2-05's
+> transcription move, intake no longer touches OPENAI_API_KEY at all. SMOKE seams unchanged.)
+>
 > Last verified: 2026-09-05 (33.2-05 — mic transcription rides OpenRouter:
 > `transcriptionModel(OR_INTAKE_TRANSCRIPTION_MODEL)` = `or/openai/gpt-4o-transcribe` via
 > `lib/models.ts` (probed 200), spend recorded from the response body's `usage.cost` first,

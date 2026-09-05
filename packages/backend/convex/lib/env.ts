@@ -211,7 +211,7 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     name: "OPENAI_API_KEY",
     tier: "required",
     whatBreaks:
-      "The PDF hosted-extraction rail, intake's attachment extractor (file parts), the retained Sora poller, and any bare openai/ pin. Agent turns, embeddings, images and transcription ride OPENROUTER_API_KEY.",
+      "The voice session only (voiceToken.ts mints the Realtime client secret; no OpenRouter equivalent) and any bare openai/ pin. Agent turns, embeddings, extraction, images, clips and transcription ride OPENROUTER_API_KEY.",
   },
   {
     name: "GOOGLE_GENERATIVE_AI_API_KEY",
@@ -295,7 +295,7 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     name: "Video_and_image_API_Key",
     tier: "feature",
     whatBreaks:
-      "The legacy Wan task poller's credential (pre-cutover jobs only, ADR-024). New visual jobs go to OpenAI on OPENAI_API_KEY.",
+      "The legacy Wan task poller's credential (pre-cutover jobs only, ADR-024). New visual jobs go to OpenRouter on OPENROUTER_API_KEY (33.1-05).",
   },
 
   // ── Compliance and operations ───────────────────────────────────────────────────────────────

@@ -75,7 +75,6 @@ describe("estimateMediaUsd — video, priced per video-second", () => {
     // id are three copies of one string, and comparing two of them proves only self-equality.
     expect(MEDIA_DEFAULT_VIDEO.model).toBe("x-ai/grok-imagine-video");
     // The superseded row stays PRICEABLE for historical `mediaJobs` rows, and is NOT the pin.
-    expect(MEDIA_VIDEO_PRICING["sora-2"]).toEqual({ "720p": 0.1 });
   });
   it("Grok 720p x 4 s = $0.28, and $0.07/s is under the $0.10/s it replaces", () => {
     expect(usd(clip())).toBeCloseTo(0.28, 10);

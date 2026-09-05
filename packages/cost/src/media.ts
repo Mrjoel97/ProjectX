@@ -34,7 +34,6 @@ export const MEDIA_VIDEO_PRICING: Record<string, Partial<Record<VideoRes, number
   // still PRICEABLE. Neither is a FALLBACK: rule 2 forbids falling back to another row, and
   // nothing in the code can select a model that is not `MEDIA_DEFAULT_VIDEO.model`.
   "wan2.5-t2v-preview": { "480p": 0.05, "720p": 0.1, "1080p": 0.15 },
-  "sora-2": { "720p": 0.1 },
 
   // ── THE LIVE ROW (33.1-04). xAI's published rates, read 2026-08-30 and corroborated by a live
   // paid call the same day: `{duration: 5, resolution: "480p"}` returned `usage.cost` 0.25, which
@@ -47,7 +46,6 @@ export const MEDIA_VIDEO_PRICING: Record<string, Partial<Record<VideoRes, number
  *  priceable without allowing an unsupported duration to reach the pinned model. */
 export const MEDIA_VIDEO_SECONDS: Record<string, readonly number[]> = {
   "wan2.5-t2v-preview": [5, 10],
-  "sora-2": [4, 8, 12],
   // xAI's published grid is **1-15, any integer**, and it is written out rather than generated:
   // this is a money table, and fifteen integers read at a glance where `Array.from` does not.
   // The GRID is why grok was chosen — it retires `illegal_generated_duration` for every length a

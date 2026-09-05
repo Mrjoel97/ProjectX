@@ -1,5 +1,16 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-05 (33.2-06 — **SORA IS DELETED.** Owner: "we do not use this model anymore".
+> Gone: `pollOpenAiVideoTask` (the retained poller — its endpoint is withdrawn 2026-09-24 and the
+> only sora-2 row in any deployment is `succeeded`), the `sora-2` rows in `MEDIA_VIDEO_PRICING` /
+> `MEDIA_VIDEO_SECONDS`, the sora-2 succession record in `media.fixtures.json` (its job — proving
+> the replacement was wired — is done; A7 now asserts only that the video submit resolves to
+> openrouter.ai), the "OpenAI Sora task landing" tests and their fetch helper, and the block-deck
+> label ("Priced at Grok Imagine on OpenRouter"). `api.openai.com` no longer appears in media.ts
+> and a source scan in media.test.ts holds that; routing is STILL asserted on the resolved url.
+> `pollWanTask` stays (pre-Sora cutover jobs). OPENAI_API_KEY is down to the voice session.
+> Measured: cost suite green, media.test.ts green, reliabilitySweep green.)
+>
 > Last verified: 2026-09-05 (33.2-04 â€” **GENERATE IS THE APPROVAL, AND THE RENDER IS THE TERMINAL.**
 > Owner-reported on the first reel of the new pin: the approvals page kept the rendered reel under
 > "awaiting" with an Approve button. `generateReel` bought the deck and left the plan `proposed`;

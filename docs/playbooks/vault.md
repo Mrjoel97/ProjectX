@@ -1,3 +1,11 @@
+> Last verified: 2026-09-05 (33.2-06 — the PDF/image hosted-extraction rail (`extractHosted`, and
+> `fanOutPages` through it) calls `resolveModel(DEFAULT_MODEL)` — `or/openai/gpt-4o-mini` at
+> OpenRouter — instead of a literal direct `openai("gpt-4o-mini")`. Probed 2026-09-05 through the
+> same provider: a PDF file part came back verbatim, a PNG file part was read. Spend is recorded
+> under DEFAULT_MODEL. `lib/models.test.ts`'s tripwire now also fails on a literal `openai("…")`
+> or a direct `openai.transcription(…)` anywhere outside lib/models.ts. OPENAI_API_KEY is no
+> longer needed by any vault rail.)
+>
 > Last verified: 2026-09-05 (33.2-05 — **TRANSCRIPTION RIDES OPENROUTER, and Retry on a reel
 > re-INGESTS instead of re-extracting the mp4.** (1) `vaultTranscribe` calls
 > `transcriptionModel(OR_TRANSCRIPTION_MODEL)` = `or/openai/whisper-1` through `lib/models.ts` (the

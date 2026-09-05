@@ -1,3 +1,7 @@
+> Last verified: 2026-09-05 (33.2-06 — `lib/models.test.ts` tripwire widened: a literal
+> `openai("…")` or `openai.transcription(…)` outside lib/models.ts fails the suite. llm.ts's
+> `openai.tools.webSearch` is a provider-executed tool, not a model, and is not matched.)
+>
 > Last verified: 2026-09-05 (33.2-05 — `lib/models.ts` grows `transcriptionModel(id)` (OpenAI
 > provider at OpenRouter's base URL for `or/` ids — the OpenRouter SDK provider has no
 > transcription model) and `transcriptionUsage(result)` (the bill from the body). No llm.ts change.)

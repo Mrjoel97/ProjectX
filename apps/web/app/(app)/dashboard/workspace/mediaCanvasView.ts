@@ -417,7 +417,7 @@ export function failureClause(reason: string | null | undefined, noun: "scene" |
 /**
  * THE VERDICT COPY, and this is a compliance statement rather than a style choice.
  *
- * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every Sora 2 video
+ * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every generated video
  * and every voice take lands there, and rendering it as a pass would make a safety claim the
  * provider never made. Never a green tick, and never colour alone (BRAND §6).
  */
@@ -718,7 +718,7 @@ export const pricedAsLine = (
   clipSeconds: number,
 ): string =>
   targetSeconds === null
-    ? `Priced at OpenAI Sora 2, 720p, ${clipSeconds} s per block`
+    ? `Priced at Grok Imagine on OpenRouter, 720p, ${clipSeconds} s per block`
     : `A ${targetSeconds}-second reel of ${sceneCount} scenes, priced per scene`;
 
 /** What the hero slot holds. A discriminated union rather than five booleans, because "playing the

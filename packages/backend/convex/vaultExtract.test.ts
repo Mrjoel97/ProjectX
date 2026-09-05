@@ -990,14 +990,15 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     );
   });
 
-  test("hosted call carries the extractVisual shape verbatim (skill system, gpt-4o-mini, timeout, retries, spend)", () => {
+  test("hosted call carries the extractVisual shape verbatim (skill system, the shared resolver, timeout, retries, spend)", () => {
+    // 33.2-06: the model is the SHARED resolver on DEFAULT_MODEL (OpenRouter), never a literal.
     for (const needle of [
-      'openai("gpt-4o-mini")',
+      "resolveModel(DEFAULT_MODEL)",
       "system: skill.body",
       "mediaType: mimeType",
       "AbortSignal.timeout(CALL_TIMEOUT_MS)",
       "maxRetries: 1",
-      'priceUsage("openai/gpt-4o-mini"',
+      "priceUsage(DEFAULT_MODEL",
       "runMutation(internal.guardrails.recordSpend",
     ]) {
       expect(src, `vaultExtract.ts is missing "${needle}"`).toContain(needle);

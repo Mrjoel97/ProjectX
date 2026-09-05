@@ -342,7 +342,7 @@ export const runSweep = internalMutation({
     //
     // This sweep WRITES FAILURE TERMINALS to live rows, and it has never run against a real
     // deployment: every threshold in this file was calibrated against fixtures. A false positive
-    // here does not fail safe — it marks a healthy, slow-but-progressing Sora render as failed,
+    // here does not fail safe — it marks a healthy, slow-but-progressing video render as failed,
     // which manufactures exactly the silent-inconsistency this phase existed to remove.
     //
     // So it ships dormant and is armed deliberately, after a real render has been watched end to

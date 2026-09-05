@@ -27,7 +27,6 @@ import {
 } from "@pikar/cost/media";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import mediaFixtures from "../../cost/src/media.fixtures.json";
 // The reserve drives the REAL rate-limiter component (relative import — the packages block deep
 // specifiers). guardrails.test.ts carries the same line for the same reason.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -1089,21 +1088,6 @@ const TTS: SubmittableSpec = {
   sampleRateHertz: MEDIA_DEFAULT_VOICE.sampleRateHertz,
 };
 
-/** Sora task accept, one distinct video id per call. A fresh Response per call is REQUIRED:
- *  a body is a single-read stream, so `mockResolvedValue(new Response(...))` would hand the same
- *  consumed object to call 2 and every test asserting N submits would be a lie. */
-function acceptFetch() {
-  let n = 0;
-  return vi.fn().mockImplementation(() => {
-    n += 1;
-    return Promise.resolve(
-      new Response(JSON.stringify({ id: `req_${n}`, status: "queued" }), {
-        status: 200,
-      }),
-    );
-  });
-}
-
 function stubMediaEnv() {
   vi.stubEnv("Video_and_image_API_Key", "test-key");
   vi.stubEnv("WAN_API_BASE_URL", "https://workspace.ap-southeast-1.maas.aliyuncs.com");
@@ -1317,8 +1301,8 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
 // ── 33.1-05: the VIDEO plane on OpenRouter ────────────────────────────────────────────
 //
 // The same discipline as the image block below: every assertion reads the RESOLVED first argument
-// handed to the fetch mock. `api.openai.com` legitimately survives in media.ts for TTS, STT and the
-// RETAINED Sora poller, so a source scan proves spelling and not routing (VALIDATION.md trap 3).
+// handed to the fetch mock. A source scan proves spelling and not routing (VALIDATION.md trap 3);
+// since 33.2-06 the hostname is also absent from media.ts, and a scan below holds that.
 describe("OpenRouter video submit contract", () => {
   /** The 202 shape measured on 2026-08-30 (33.1-PRICE-EVIDENCE.md). `polling_url` is present in the
    *  real response and is deliberately IGNORED by the adapter — see the trust-boundary test. */
@@ -1498,9 +1482,9 @@ describe("A8 — every visual submit resolves to OpenRouter, and none to OpenAI"
 // ── 33.1-03: the still-image plane on OpenRouter ──────────────────────────────────────
 //
 // VALIDATION.md trap 3, and it is the reason every assertion below reads the RESOLVED first
-// argument handed to the fetch mock rather than grepping the source: `api.openai.com` LEGITIMATELY
-// survives in media.ts for TTS, STT and the retained Sora poller, so its absence is unassertable
-// and its presence proves nothing about where an image request goes.
+// argument handed to the fetch mock rather than grepping the source: a hostname's presence or
+// absence in a file proves nothing about where an image request goes (33.2-06 removed the last
+// `api.openai.com` from media.ts and a scan holds that — the routing proof is still the url).
 describe("OpenRouter image submit contract", () => {
   /** One PNG-shaped success, fresh per call — a Response body is a single-read stream. */
   const imageOk = () =>
@@ -1665,66 +1649,6 @@ describe("WAN task landing", () => {
   });
 });
 
-describe("OpenAI Sora task landing", () => {
-  test("a completed video is downloaded from OpenAI and stored in the workspace", async () => {
-    const t = harness();
-    const planId = await seedPlan(t);
-    const jobId = await t.run((ctx) =>
-      ctx.db.insert("mediaJobs", {
-        tenantId: A,
-        planId,
-        batchId: "sora-video",
-        blockIndex: 0,
-        provider: "openai",
-        kind: "video",
-        model: MEDIA_DEFAULT_VIDEO.model,
-        spec: {
-          kind: "video",
-          resolution: MEDIA_DEFAULT_VIDEO.resolution,
-          seconds: MEDIA_DEFAULT_VIDEO.seconds,
-        },
-        promptHash: "0".repeat(64),
-        status: "submitted",
-        providerRequestId: "video_1",
-        estUsd: 0.4,
-        createdAt: T0,
-        updatedAt: T0,
-      }),
-    );
-    stubMediaEnv();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "video_1", status: "completed" })))
-      .mockResolvedValueOnce(
-        new Response(new Uint8Array([0, 0, 0, 24]), {
-          status: 200,
-          headers: { "content-type": "video/mp4" },
-        }),
-      );
-    vi.stubGlobal("fetch", fetchMock);
-
-    await t.action(internal.media.pollOpenAiVideoTask, {
-      jobId,
-      videoId: "video_1",
-      attempt: 0,
-    });
-
-    expect(await jobRow(t, jobId)).toMatchObject({
-      status: "succeeded",
-      mimeType: "video/mp4",
-      bytes: 4,
-    });
-    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      "https://api.openai.com/v1/videos/video_1",
-      "https://api.openai.com/v1/videos/video_1/content",
-    ]);
-  });
-});
-
-// ── 33.1-05: the OpenRouter video POLLER ──────────────────────────────────────────────
-//
-// The Sora poller above is RETAINED and its tests stay green; this describes the sibling that new
-// submissions actually reach.
 describe("OpenRouter video task landing", () => {
   /** One `submitted` video row, ready for the poller's CAS. */
   // `seconds: number`, NOT inferred from the default: MEDIA_DEFAULT_VIDEO is `as const`, so an
@@ -2045,11 +1969,8 @@ describe("OpenRouter video task landing", () => {
 // means the only way to green this test is to have actually moved the submit. Reverting the
 // submitLine video arm to api.openai.com reddens it while packages/cost stays green; that asymmetry
 // is the whole reason the pairing exists and it was mutation-checked before the flag was flipped.
-describe("A7 — the succession flag is only true beside a submit that resolves to OpenRouter", () => {
-  test("replacementWiredUp is true AND the video submit resolves to openrouter.ai", async () => {
-    const sora = mediaFixtures.entries.find((row: { id: string }) => row.id === "sora-2");
-    expect(sora, "the sora-2 succession record must still exist").toBeDefined();
-
+describe("A7 — the video submit resolves to OpenRouter", () => {
+  test("the video submit resolves to openrouter.ai", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -2063,8 +1984,17 @@ describe("A7 — the succession flag is only true beside a submit that resolves 
     // The two assertions live in one body deliberately: the flag cannot be green while the routing
     // is not. Splitting them into two tests would restore exactly the failure mode this closes.
     expect(new URL(url).hostname).toBe("openrouter.ai");
-    expect(sora?.succession?.replacementWiredUp).toBe(true);
-    expect(sora?.succession?.replacement).toBe(MEDIA_DEFAULT_VIDEO.model);
+  });
+});
+
+// 33.2-06: the retained Sora poller is gone, so the hostname CAN be asserted absent now. A scan
+// proves spelling, not routing — the RESOLVED-url assertions above remain the routing proof.
+describe("media.ts no longer names api.openai.com", () => {
+  test("the source contains no api.openai.com — the Sora poller was its last legitimate use", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const src = readFileSync(join(__dirname, "media.ts"), "utf8");
+    expect(src.includes("api.openai.com")).toBe(false);
   });
 });
 

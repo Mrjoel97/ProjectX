@@ -111,7 +111,7 @@ type ProviderLine = {
  * NOT `CLIP_SECONDS`. That constant is the DISPLAY set — deliberately wide ([4,5,8,10,12]) so a
  * deck proposed under an older provider still renders on the canvas. What may be BOUGHT is
  * whatever the model this code is about to submit to supports, which after the OpenAI cutover is
- * `MEDIA_VIDEO_SECONDS["sora-2"]` = [4,8,12].
+ * `MEDIA_VIDEO_SECONDS` (the sora-2 grid then; the row left in 33.2-06) = [4,8,12].
  *
  * The two drifted apart at the cutover and nothing noticed, because a 10-second deck still failed
  * — just three checks later, inside `estimateMediaUsd`, with the same code. ONE predicate, asked of
@@ -236,7 +236,7 @@ export async function reserveJobInner(
   //
   //    This checked `CLIP_SECONDS` until 20.2 found the hole, and the hole was real rather than
   //    theoretical: `CLIP_SECONDS` is [4,5,8,10,12] — deliberately WIDE, so a historical Wan deck
-  //    still DISPLAYS — while `MEDIA_VIDEO_SECONDS["sora-2"]` is [4,8,12]. After the OpenAI
+  //    still DISPLAYS — while `MEDIA_VIDEO_SECONDS` (the sora-2 grid then; the row left in 33.2-06) is [4,8,12]. After the OpenAI
   //    cutover a 10-second deck therefore parsed free, cleared THIS check, and was refused deeper
   //    in by `estimateMediaUsd` with the same `illegal_duration` code. Same outcome, wrong place,
   //    and it made `cockpit.test.ts` red for a reason that read like a pricing bug.
@@ -974,20 +974,21 @@ export const listJobs = internalQuery({
 //               and ADR-029 corrects it: the `/models` catalogue lists CHAT models only, so a
 //               transcription model is absent from it while being perfectly serviceable at the
 //               endpoint. **Do not conclude from that catalogue that an audio route is missing.**
-// So `api.openai.com` still appears in this file — for the RETAINED Sora poller ALONE, which no
-// submit path reaches and which may be deleted after 2026-09-24. Its presence proves nothing about
-// where any request goes, which is why the routing tests assert the RESOLVED url handed to `fetch`
-// rather than grepping this source.
+// The OpenAI API hostname no longer appears in this file. 33.2-06 deleted the retained Sora poller: the
+// endpoint it polled is withdrawn on 2026-09-24, the only sora-2 row in any deployment is
+// `succeeded`, and the owner retired the model. `media.test.ts` holds a source scan against the
+// hostname coming back — and STILL asserts routing on the RESOLVED url handed to `fetch`, because a
+// scan proves spelling, not routing.
 //
-// TWO pollers are retained beside the live one, and they are retained for the SAME reason:
-// `pollWanTask` (pre-Sora cutover) and `pollOpenAiVideoTask` (pre-OpenRouter cutover) each let a
-// job submitted before a cutover still land. Neither is a fallback and no submit path reaches them.
+// ONE poller is retained beside the live one, for the reason it always was: `pollWanTask`
+// (pre-Sora cutover) lets a job submitted before a cutover still land. It is not a fallback and
+// no submit path reaches it.
 //
-// ponytail: three near-identical pollers, one per vendor generation — not a provider registry.
-// Upgrade path: extract a shared poller only when a FOURTH arrives AND all four still agree branch
-// for branch. They do not today: OpenRouter's status vocabulary is `pending -> completed|failed`
-// where Sora's is `queued|in_progress -> completed`, and a premature generalisation over that
-// difference is exactly how a poller lands `provider_failed` on a job that was merely pending.
+// ponytail: two near-identical pollers, one per vendor generation — not a provider registry.
+// Upgrade path: extract a shared poller only when a THIRD arrives AND all three agree branch for
+// branch. OpenRouter's status vocabulary is `pending -> completed|failed`; a premature
+// generalisation over that difference is exactly how a poller lands `provider_failed` on a job
+// that was merely pending.
 
 /** The `gmailAuth.requireEnv` idiom with a media-worded message. Provider credentials are Convex
  *  deployment env vars (`npx convex env set`), never client-visible variables. */
@@ -1077,7 +1078,7 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
       // that endpoint (probed), so the voice plane rides `/chat/completions` with an audio
       // modality. Four consequences are wire facts rather than choices:
       //   * `model` is UNSTRIPPED. OpenRouter routes on the `openai/` prefix; the old arm removed
-      //     it because it was posting to api.openai.com. Same lesson as `openai/gpt-image-2`.
+      //     it because it was posting to OpenAI's own host. Same lesson as `openai/gpt-image-2`.
       //   * `stream: true` is MANDATORY — without it the API answers 400 "Audio output requires
       //     stream: true". The reader in `generateOpenRouterVoice` exists for this reason alone.
       //   * `pcm16` is HEADERLESS, so `pcm16ToWav` gives it the RIFF header everything downstream
@@ -2013,112 +2014,6 @@ export const pollWanTask = internalAction({
 });
 
 /**
- * RETAINED, NOT LIVE. Poll one OpenAI Sora job and copy the completed MP4 into tenant storage.
- *
- * **No submit path reaches this function.** 33.1-05 moved the video submit to OpenRouter and this
- * is kept for exactly one reason: a job submitted BEFORE that deploy and still `submitted` has a
- * scheduled continuation that already names this function, and deleting it would strand that job.
- * `pollWanTask` below was retained on identical grounds at the previous cutover.
- *
- * **It is not a fallback and must never be used as one** — the endpoint it polls is WITHDRAWN on
- * 2026-09-24, so switching back is not a thing anyone can do. That is also its expiry: after
- * 2026-09-24 there is no in-flight job it could serve and this function may simply be deleted.
- */
-export const pollOpenAiVideoTask = internalAction({
-  args: { jobId: v.id("mediaJobs"), videoId: v.string(), attempt: v.number() },
-  handler: async (ctx, a): Promise<null> => {
-    const key = requireEnvMedia("OPENAI_API_KEY");
-    const row = await ctx.runQuery(internal.media.jobForPoll, { jobId: a.jobId });
-    if (!row || row.status !== "submitted" || row.spec.kind !== "video") return null;
-
-    let response: Response;
-    try {
-      response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-    } catch {
-      if (a.attempt < 180) {
-        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
-          ...a,
-          attempt: a.attempt + 1,
-        });
-        return null;
-      }
-      await ctx.runMutation(internal.mediaComplete.landResult, {
-        jobId: a.jobId,
-        outcome: { ok: false, code: "poll_transport_error" },
-      });
-      return null;
-    }
-    if (!response.ok) {
-      await ctx.runMutation(internal.mediaComplete.landResult, {
-        jobId: a.jobId,
-        outcome: { ok: false, code: await providerReasonCode(response) },
-      });
-      return null;
-    }
-    const body = (await response.json().catch(() => null)) as {
-      status?: unknown;
-      error?: { code?: unknown };
-    } | null;
-    const status = body?.status;
-    if (status === "queued" || status === "in_progress") {
-      if (a.attempt >= 180) {
-        await ctx.runMutation(internal.mediaComplete.landResult, {
-          jobId: a.jobId,
-          outcome: { ok: false, code: "poll_timeout" },
-        });
-      } else {
-        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
-          ...a,
-          attempt: a.attempt + 1,
-        });
-      }
-      return null;
-    }
-    if (status !== "completed") {
-      const candidate = body?.error?.code;
-      const code =
-        typeof candidate === "string" && SAFE_CODE.test(candidate) ? candidate : "provider_failed";
-      await ctx.runMutation(internal.mediaComplete.landResult, {
-        jobId: a.jobId,
-        outcome: { ok: false, code },
-      });
-      return null;
-    }
-
-    let asset: Response;
-    try {
-      asset = await fetch(
-        `https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}/content`,
-        { headers: { Authorization: `Bearer ${key}` } },
-      );
-    } catch {
-      await ctx.runMutation(internal.mediaComplete.landResult, {
-        jobId: a.jobId,
-        outcome: { ok: false, code: "asset_transport_error" },
-      });
-      return null;
-    }
-    if (!asset.ok) {
-      await ctx.runMutation(internal.mediaComplete.landResult, {
-        jobId: a.jobId,
-        outcome: { ok: false, code: `asset_http_${asset.status}` },
-      });
-      return null;
-    }
-    await storeAndLand(
-      ctx,
-      a.jobId,
-      new Uint8Array(await asset.arrayBuffer()),
-      asset.headers.get("content-type") ?? "video/mp4",
-      { resolution: row.spec.resolution, seconds: row.spec.seconds },
-    );
-    return null;
-  },
-});
-
-/**
  * THE LIVE VIDEO POLLER. Poll one OpenRouter video job and copy the completed MP4 into tenant
  * storage. The content endpoint is called immediately after completion because provider-side job
  * assets are not our durable workspace artifact.
@@ -2132,7 +2027,7 @@ export const pollOpenAiVideoTask = internalAction({
  * strictly stronger than host-checking one, and here it costs nothing. `polling_url` is likewise
  * absent from this function's args on purpose.
  *
- * **This is NOT a branch-for-branch copy of `pollOpenAiVideoTask`, and the difference is the whole
+ * **This is NOT a branch-for-branch copy of the (deleted) Sora poller, and the difference is the whole
  * reason it is a separate function.** Sora emits `queued | in_progress | completed | failed`;
  * OpenRouter emitted only `pending` then `completed` across nine measured polls — `pending` is on
  * NEITHER of Sora's in-progress names. So this poller inverts the test: it treats `completed` and
@@ -2593,7 +2488,7 @@ export const submitCaptions = internalAction({
     form.append("timestamp_granularities[]", "word");
     let response: Response;
     try {
-      // WHY THIS IS NOT ON api.openai.com ANY MORE, and why the first look said it had to be:
+      // WHY THIS IS NOT ON OPENAI'S OWN HOST ANY MORE, and why the first look said it had to be:
       // OpenRouter's `/models` catalogue lists CHAT models only, so grepping it for a Whisper
       // turns up nothing and invites the conclusion that transcription cannot move. It can. The
       // catalogue is not the API surface — probed 2026-09-03, `openai/whisper-1` here returns

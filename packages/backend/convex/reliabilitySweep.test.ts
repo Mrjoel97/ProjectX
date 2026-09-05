@@ -120,7 +120,7 @@ const seedJob = (
       blockIndex: 0,
       provider: "openai",
       kind: "video",
-      model: "sora-2",
+      model: "x-ai/grok-imagine-video",
       spec: { kind: "video", resolution: "720p", seconds: 4 },
       promptHash: "hash",
       status: "submitted",

@@ -47,7 +47,7 @@ describe("lib/models — the one resolver", () => {
   // The defect class: a module-local copy of the resolver that never learned the `or/` route.
   // Five files carried one for nine days and broke every vault ingest. Only this module may turn
   // an id into a provider call; llm.ts wraps it for the stealth/ and google/ branches.
-  test("no other module under convex/ resolves a model id on its own", () => {
+  test("no other module under convex/ builds a model on its own — resolver copy, literal, or transcription", () => {
     const root = join(__dirname, "..");
     const offenders: string[] = [];
     const walk = (dir: string) => {
@@ -58,7 +58,11 @@ describe("lib/models — the one resolver", () => {
         else if (/\.ts$/.test(entry.name) && !/\.test\.ts$/.test(entry.name)) {
           if (p.endsWith(join("lib", "models.ts"))) continue;
           const src = readFileSync(p, "utf8");
-          if (/openai\(\s*id\.replace/.test(src)) offenders.push(p.slice(root.length + 1));
+          // A resolver copy, a literal `openai("gpt-4o-mini")`, or a direct transcription model.
+          // (`openai.tools.webSearch` in llm.ts is a provider-executed TOOL, not a model — allowed.)
+          if (/openai\(\s*id\.replace|\bopenai\(\s*["'`]|openai\.transcription\(/.test(src)) {
+            offenders.push(p.slice(root.length + 1));
+          }
         }
       }
     };

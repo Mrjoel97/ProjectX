@@ -1,65 +1,9 @@
 {
   "_what": "Provider-price provenance for the media estimator. Values were read from the official OpenAI documentation.",
   "_how_to_refresh": "Re-read the OpenAI model and pricing pages, then run packages/cost/src/media.test.ts. THE IMAGE ROW IS NOT REFRESHED THAT WAY: since 33.1-03 it is MEASURED, not read — re-run the one-call probe recorded in .planning/phases/33.1-*/33.1-PRICE-EVIDENCE.md and take usage.cost from the response.",
-  "source": "https://developers.openai.com/api/docs/models/sora-2",
+  "source": "https://openrouter.ai/api/v1/models (each entry carries its own vendor page)",
   "readAt": "2026-08-14",
   "entries": [
-    {
-      "id": "sora-2",
-      "kind": "video",
-      "unit": "USD per output video-second, per resolution",
-      "rates": {
-        "720p": 0.1
-      },
-      "confidence": "HIGH",
-      "vendor": {
-        "pricingInfoOverride": "Sora 2 costs $0.10 per second at 720p. VERIFIED 2026-08-26 against developers.openai.com/api/docs/pricing.",
-        "status": "public",
-        "deprecated": true,
-        "shutdown": "2026-09-24",
-        "removed": false,
-        "alsoShutdown": ["sora-2-pro", "the Videos API itself"]
-      },
-      "notes": "OpenAI Videos API. The adapter pins model, prompt, 720x1280 portrait size and an officially supported duration.",
-      "succession": {
-        "status": "migrated",
-        "raisedOn": "2026-08-26",
-        "decidedOn": "2026-08-30",
-        "decisionRecord": "docs/decisions/027-grok-imagine-video-succeeds-sora-2-on-openrouter.md",
-        "replacement": "x-ai/grok-imagine-video",
-        "replacementWiredUp": true,
-        "wiredUpOn": "2026-08-30",
-        "whatRemains": "The SUBMIT PATH IS LANDED (plan 33.1-05): submitLine's video arm POSTs JSON to openrouter.ai/api/v1/videos on OPENROUTER_API_KEY, pollOpenRouterVideoTask owns the async half, submitBatch schedules it, and the api.openai.com/v1/videos SUBMIT is deleted. Verified on a live call 2026-08-30: duration 7 accepted, usage.cost $0.49 against 7 x $0.07 predicted - exact, so the reservation does not sit below the invoice. This flag is asserted in packages/backend/convex/media.test.ts in the SAME test body as the resolved submit hostname, so it cannot be green while the routing is not; reverting the arm to api.openai.com was mutation-checked and reddens that test. STILL OPEN, and neither blocks the flag: (1) A3/A6 - the end-to-end storyboard-to-rendered-reel run - need the seeded local Convex DB in the main tree, so no reel has yet been rendered through this path; that is plan 33.1-06. (2) pollOpenAiVideoTask is RETAINED, not live, so pre-cutover jobs can still land; it may be deleted after 2026-09-24 when the endpoint it polls no longer exists.",
-        "why": "OpenAI is retiring the VIDEOS API ITSELF on 2026-09-24, not merely this model, and names NO replacement. sora-2-pro carries the SAME shutdown date, so the successor cannot be an OpenAI model - which means it amends ADR-024 ('OpenAI is the provider for every media kind') and is an owner decision about where customer prompts are sent. Corroborated 2026-08-26 across developers.openai.com/api/docs/deprecations and independent trade coverage; announced 2026-03-24. ADR-027 (2026-08-30) supersedes ADR-026's veo-3.1-lite choice: the owner took grok-imagine-video for its 1-15 any-integer duration grid, knowingly accepting xAI as a new recipient of customer scene prompts.",
-        "shortlistPricedPerOutputSecond": [
-          {
-            "model": "veo-3.1-lite",
-            "usdPerSecond": 0.05,
-            "note": "Cheapest, and HALF the sora-2 rate. Owner already holds a GCP credential (ADR-016). ADR-016 currently forbids Veo as a fallback target on ECONOMICS that do not hold for this variant, so it needs a superseding ADR rather than a quiet override."
-          },
-          {
-            "model": "kling-3.0",
-            "usdPerSecond": 0.112,
-            "note": "Per-second on the API side, but yuan-denominated - FX drift inside a USD price table."
-          },
-          {
-            "model": "minimax-h3",
-            "usdPerSecond": 0.13,
-            "note": "2K output at roughly a third of Veo 3.1's full 1080p rate."
-          }
-        ],
-        "rejectedByRule3": [
-          {
-            "model": "seedance-2.0",
-            "why": "Bills per MILLION TOKENS, configuration-dependent. Not pre-computable per output second before the request exists, which is exactly what rule 3 refuses."
-          },
-          {
-            "model": "sora-2-pro",
-            "why": "Shares the 2026-09-24 shutdown. A fallback that dies on the same day as the primary is not a fallback."
-          }
-        ]
-      }
-    },
     {
       "id": "x-ai/grok-imagine-video",
       "kind": "video",

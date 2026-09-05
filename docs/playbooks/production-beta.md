@@ -1,5 +1,10 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-09-05 (33.2-06 — OPENAI_API_KEY `whatBreaks` is now "the voice session only"
+> (voiceToken.ts mints the Realtime client secret; OpenRouter has no equivalent) plus any bare
+> `openai/` pin; the Wan entry no longer claims new visual jobs go to OpenAI. Tier stays
+> `required` while voice ships; drop it to `feature` when voice is gated.)
+>
 > Last verified: 2026-09-05 (33.2-05 — `lib/env.ts` `whatBreaks` rewritten for both model keys:
 > OPENROUTER_API_KEY now carries agent turns, embeddings, images/clips AND transcription;
 > OPENAI_API_KEY is down to the PDF hosted-extraction rail, intake's attachment extractor, the

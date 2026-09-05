@@ -11,9 +11,8 @@
 // try/catch so an unexpected throw also lands as markFailed (refs-only reason).
 // NEVER imports llm.ts or vaultTranscribe.ts (§96 circular-inference rule — "use node"
 // modules stay siblings, not imports).
-import { openai } from "@ai-sdk/openai";
 import { ATTACHMENT_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
-import { priceUsage } from "@pikar/cost";
+import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import {
   MIN_CHARS_PER_PAGE,
@@ -40,6 +39,7 @@ import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { fogIntegration } from "./lib/foglamp";
+import { resolveModel } from "./lib/models";
 
 // Pitfall 1: unpdf bundles pdf.js 5.x, which needs Promise.withResolvers (Node >= 22); Convex
 // node actions default to Node 20. Local Node 24 masks the bug — ONLY the live smoke proves it
@@ -124,20 +124,22 @@ async function extractHosted(
   });
   const { text, usage } = await generateText({
     telemetry: { integrations: [fogIntegration({ agentName: "attachment-extractor" })] },
-    model: openai("gpt-4o-mini"),
+    // 33.2-06: through OpenRouter (lib/models.ts). Probed 2026-09-05: a PDF file part comes back
+    // verbatim and an image file part is read, both on openai/gpt-4o-mini at OpenRouter.
+    model: resolveModel(DEFAULT_MODEL),
     system: skill.body,
     messages: [{ role: "user", content: [{ type: "file", data: bytes, mediaType: mimeType }] }],
     abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     maxRetries: 1,
   });
-  const priced = priceUsage("openai/gpt-4o-mini", usage);
+  const priced = priceUsage(DEFAULT_MODEL, usage);
   if (priced.ok) {
     await ctx.runMutation(internal.guardrails.recordSpend, {
       tenantId,
       costUsd: priced.value,
       rail: spendRail,
       correlationId,
-      model: "openai/gpt-4o-mini",
+      model: DEFAULT_MODEL,
       kind: "vault.extract", // code-owned token, refs/counts only (§4)
     });
   }
