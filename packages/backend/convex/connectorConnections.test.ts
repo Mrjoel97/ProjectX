@@ -186,7 +186,8 @@ describe("the surface shows passed lanes and nothing else", () => {
     const h = await harness();
     await passed(h);
     await connection(h, h.tenantId, "hubspot");
-    const serialized = JSON.stringify(await view(h));
+    const rows = await view(h);
+    const serialized = JSON.stringify(rows);
     for (const forbidden of [
       "CIPHERTEXT_SENTINEL",
       "IV_SENTINEL",
@@ -198,6 +199,22 @@ describe("the surface shows passed lanes and nothing else", () => {
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
+    // ...and a CLOSED key set on top, because the loop above can only refuse names somebody already
+    // thought of. A field added to `ConnectorView` passes the substring scan silently; the whole
+    // risk of this projection is a field nobody classified, so the assertion has to be exhaustive
+    // rather than a blocklist. Adding a field here is deliberate work, not an accident.
+    expect(Object.keys(rows[0] ?? {}).sort()).toEqual([
+      "connected",
+      "connectedAt",
+      "environment",
+      "grantRemainsLiveUpstream",
+      "lastFailureClass",
+      "lastReadAt",
+      "provider",
+      "revokeSupport",
+      "status",
+      "unproven",
+    ]);
   });
 
   // The disconnect button has to be able to tell the truth before it is pressed.
@@ -213,6 +230,74 @@ describe("the surface shows passed lanes and nothing else", () => {
       stripe: "unsupported",
       paypal: "unsupported",
     });
+  });
+});
+
+// ── The surface and the gate are ONE rule ─────────────────────────────────────────────────
+
+/**
+ * THE DEFECT THIS DESCRIBE EXISTS FOR. `connectStartAllowed` grew an owner branch so that somebody
+ * could complete a real grant against an admitted-but-unproven lane — without it the phase
+ * deadlocks, because a lane cannot pass without evidence and evidence needs a grant. But the
+ * surface kept filtering on `passed` alone, so that branch was reachable by NO caller: the gate
+ * said yes and there was no row to render a button on. Every test on both sides was green.
+ *
+ * So the property is not "the owner sees parked lanes". It is that the two answers CANNOT DISAGREE.
+ */
+describe("what the surface offers is exactly what the gate would accept", () => {
+  const connectable = async (h: Harness) => {
+    vi.stubEnv("HUBSPOT_OAUTH_CLIENT_ID", "id");
+    vi.stubEnv("HUBSPOT_OAUTH_CLIENT_SECRET", "secret");
+    vi.stubEnv(
+      "HUBSPOT_OAUTH_REDIRECT_URI",
+      "https://app.test/connectors/hubspot/callback/sandbox",
+    );
+    return h.as
+      .action(api.connectorConnections.startConnect, {
+        provider: "hubspot",
+        environment: "sandbox",
+        redirectPath: "/dashboard/profile",
+      })
+      .then(() => true)
+      .catch((e: Error) => {
+        if (e.message.includes("PROVIDER_NOT_CONNECTABLE")) return false;
+        throw e;
+      });
+  };
+
+  test.each([
+    ["no gate row at all", false, null, false, false],
+    ["parked, ordinary tenant", false, "parked", false, false],
+    ["parked, OWNER", true, "parked", true, true],
+    ["passed, ordinary tenant", false, "passed", true, false],
+    ["passed, OWNER", true, "passed", true, false],
+    ["failed, OWNER", true, "failed", false, false],
+    ["expired evidence, OWNER", true, "expired", false, false],
+    ["blocked admission, OWNER", true, "blocked", false, false],
+  ] as const)("%s → visible=%s", async (_name, isOwner, state, expectVisible, expectUnproven) => {
+    const h = await harness(isOwner);
+    if (state === "passed") await passed(h);
+    else if (state === "expired") await gate(h, { reviewBy: Date.now() - 1 });
+    else if (state === "blocked") await gate(h, { admission: "blocked" });
+    else if (state !== null) await gate(h, { lane: state });
+
+    const rows = await view(h);
+    expect(rows.length).toBe(expectVisible ? 1 : 0);
+    if (expectVisible) expect(rows[0]?.unproven).toBe(expectUnproven);
+
+    // The parity that matters: a row exists if and only if a consent may actually be started.
+    expect(await connectable(h)).toBe(expectVisible);
+  });
+
+  // Non-vacuity: without this the table above could be satisfied by a surface that shows nothing
+  // and a gate that refuses everything, in lockstep, forever.
+  test("the table exercises both answers, not one repeated eight times", async () => {
+    const owner = await harness(true);
+    await gate(owner, { lane: "parked" });
+    const tenant = await harness();
+    await gate(tenant, { lane: "parked" });
+    expect((await view(owner)).length).toBe(1);
+    expect((await view(tenant)).length).toBe(0);
   });
 });
 

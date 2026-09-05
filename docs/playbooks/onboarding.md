@@ -1,5 +1,11 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-06 (28.2-01 — **THE CONNECTIONS PANEL SHOWS THE OWNER AN UNPROVEN LANE, MARKED.**
+> `connectorRows` rows carry `unproven`; every state's detail is prefixed with the "Not yet verified…" sentence
+> when set. The server sends such rows to the OWNER only (`connectableProviderGates`), so this is the operator
+> being told which job they are doing, not a tenant-facing warning. Tenants see exactly the passed lanes, as
+> before. Carried over from the shared tree's uncommitted work; `connectorRows.test.ts` green.)
+
 > Last verified: 2026-09-05 (25.2-01 — item 5: the three "Not available" connection rows (social,
 > databases, apps — each citing a blocker or ADR-007 to the tenant) are DELETED from both surfaces
 > that rendered them, `ConnectionsPanel` and `SegmentAnatomy`'s tools band; `connections.ts` is

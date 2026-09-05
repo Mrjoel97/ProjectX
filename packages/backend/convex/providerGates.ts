@@ -375,13 +375,55 @@ export async function connectStartAllowed(
   environment: ConnectorEnvironment,
   isOwner: boolean,
 ): Promise<boolean> {
-  const row = await rowFor(ctx, provider, environment);
-  if (row === null || row.lane === "failed") return false;
-  if (row.reviewBy <= Date.now()) return false;
-  if (!admissionPermits(row.admission, environment)) return false;
+  return startAllowedFor(await rowFor(ctx, provider, environment), Date.now(), isOwner) !== null;
+}
+
+/**
+ * The connect-start rule for ONE already-read row, and the ONLY copy of it.
+ *
+ * `connectStartAllowed` answers it for a single provider at the choke point;
+ * `connectableProviderGates` answers it for every row so a surface can offer exactly what the gate
+ * would accept. Those two had drifted: the gate grew the owner branch above to break the phase
+ * deadlock, while the surface kept filtering on `passed` alone — so the owner branch was reachable
+ * by no caller and the evidence it exists to collect could never be gathered. One predicate, two
+ * callers, no second copy to drift.
+ *
+ * Returns `null` for "not connectable" and otherwise the one fact a surface needs beyond yes:
+ * whether this lane is still UNPROVEN, so a row can say so instead of presenting an untested
+ * provider as a finished integration.
+ */
+function startAllowedFor(
+  row: GateRow | null,
+  now: number,
+  isOwner: boolean,
+): { unproven: boolean } | null {
+  if (row === null || row.lane === "failed") return null;
+  if (row.reviewBy <= now) return null;
+  if (!admissionPermits(row.admission, row.environment)) return null;
   // The full rule, not just the admission: a passed lane is open to everyone.
-  if (resolve(asRecord(row), provider, Date.now()).state === "passed") return true;
-  return isOwner;
+  if (resolve(asRecord(row), row.provider, now).state === "passed") return { unproven: false };
+  return isOwner ? { unproven: true } : null;
+}
+
+/**
+ * Every (provider, environment) THIS caller may start a consent for, with the unproven ones marked.
+ *
+ * For a tenant this is exactly `passedProviderGates`. For the owner it additionally includes the
+ * admitted-but-unproven lanes — the evidence-gathering window — which is what gives
+ * `connectorConnections.connections` a row to render a Connect button on.
+ */
+export async function connectableProviderGates(
+  ctx: QueryCtx | MutationCtx,
+  now: number,
+  isOwner: boolean,
+): Promise<{ provider: Provider; environment: ConnectorEnvironment; unproven: boolean }[]> {
+  const rows = await ctx.db.query("providerGates").collect();
+  return rows.flatMap((row) => {
+    const allowed = startAllowedFor(row, now, isOwner);
+    return allowed === null
+      ? []
+      : [{ provider: row.provider, environment: row.environment, unproven: allowed.unproven }];
+  });
 }
 
 /**

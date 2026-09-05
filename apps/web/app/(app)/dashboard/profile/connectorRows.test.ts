@@ -22,7 +22,51 @@ const row = (over: Partial<ConnectorRow> = {}): ConnectorRow => ({
   lastFailureClass: null,
   revokeSupport: "unproven",
   grantRemainsLiveUpstream: false,
+  unproven: false,
   ...over,
+});
+
+// `revokeSupport: "unproven"` and `unproven: true` are DIFFERENT facts that share a word: the first
+// is about whether a disconnect can revoke upstream, the second about whether the LANE has ever
+// passed its gate. The fixture above pins the first to "unproven" already, so every assertion below
+// varies only the second.
+describe("an unproven lane is offered, and says it is unproven", () => {
+  test("the owner still gets a Connect button — the whole point of showing the row", () => {
+    const v = connectorRowView(row({ connected: false, status: null, unproven: true }));
+    expect(v.action).toBe("connect");
+    expect(v.state).toBe("connect");
+    expect(v.detail).toContain("never completed a live read");
+  });
+
+  test("a proven lane says nothing of the sort", () => {
+    const v = connectorRowView(row({ connected: false, status: null, unproven: false }));
+    expect(v.action).toBe("connect");
+    expect(v.detail).not.toContain("never completed a live read");
+  });
+
+  // The marker has to survive CONNECTING. A lane that has been connected but never proven is
+  // exactly the state this phase is trying to reach, and a row that dropped the caveat the moment a
+  // grant existed would present an unjudged connector as a finished integration.
+  test.each([
+    ["connecting", { status: "connecting" as const, connected: false }],
+    ["connected", { status: "connected" as const, connected: true }],
+    ["reauth_required", { status: "reauth_required" as const, connected: true }],
+    ["failed", { status: "failed" as const, connected: true }],
+    ["revoked", { status: "revoked" as const, connected: false }],
+  ])("state %s keeps the caveat", (_name, over) => {
+    expect(connectorRowView(row({ ...over, unproven: true })).detail).toContain(
+      "never completed a live read",
+    );
+    expect(connectorRowView(row({ ...over, unproven: false })).detail).not.toContain(
+      "never completed a live read",
+    );
+  });
+
+  test("the caveat is added to the row's own detail, never instead of it", () => {
+    const v = connectorRowView(row({ connected: true, status: "connected", unproven: true }));
+    expect(v.detail).toContain("never completed a live read");
+    expect(v.detail).toContain("Read-only. Pikar never writes to this account.");
+  });
 });
 
 describe("a connectable-but-unconnected row offers Connect and nothing else", () => {

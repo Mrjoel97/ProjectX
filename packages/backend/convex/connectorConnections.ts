@@ -1,5 +1,5 @@
 /**
- * The tenant-facing connector surface: ONE passed-only projection, and one dispatcher each for
+ * The tenant-facing connector surface: ONE gate-derived projection, and one dispatcher each for
  * starting and ending a connection.
  *
  * WHY THIS EXISTS RATHER THAN THE UI READING `connectorCredentials.connectorStatuses`.
@@ -9,10 +9,19 @@
  * because the tenant happens to hold a row for it. Discovery has to be a function of the GATE, not
  * of what the tenant connected before the gate said no.
  *
- * SO THE SHAPE IS: iterate the PASSED gates, then look up the tenant's row for each. A tenant row
- * with no passed gate contributes nothing — it is not "disconnected", it is absent, the same way
- * `workflowPackDiscovery.listPacks` makes a non-active pack invisible by construction rather than
- * by every caller remembering to filter (the Phase 27 prior art `providerGates` was built on).
+ * SO THE SHAPE IS: iterate the gates THIS CALLER may start a consent for, then look up the tenant's
+ * row for each. A tenant row with no such gate contributes nothing — it is not "disconnected", it is
+ * absent, the same way `workflowPackDiscovery.listPacks` makes a non-active pack invisible by
+ * construction rather than by every caller remembering to filter (the Phase 27 prior art
+ * `providerGates` was built on).
+ *
+ * WHY "MAY START A CONSENT FOR" AND NOT "PASSED". For a tenant those are the same set. For the
+ * OWNER they are not: `providerGates.connectStartAllowed` deliberately admits an unproven lane for
+ * the owner alone, because somebody has to complete a real grant before wave 7 can judge that lane.
+ * This surface used to filter on `passed` independently, which made that branch reachable by no
+ * caller at all — the gate said yes and no button existed to ask it. Both now read ONE predicate
+ * (`connectableProviderGates`), so the surface cannot be stricter than the gate again. An unproven
+ * row is marked `unproven` rather than hidden, and says so where it renders.
  *
  * WHAT IT DELIBERATELY DOES NOT RETURN: the evidence ref, the gate revision, the review date, the
  * external account hash, the ciphertext, the connection id. A surface that could see the review
@@ -25,7 +34,7 @@ import { api } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
 import { PROVIDER_REVOKE_SUPPORT } from "./connectorOAuth";
 import { tenantAction, tenantQuery } from "./lib/functions";
-import { passedProviderGates } from "./providerGates";
+import { connectableProviderGates } from "./providerGates";
 
 const environmentArg = v.union(v.literal("sandbox"), v.literal("production"));
 const providerArg = v.union(
@@ -57,18 +66,30 @@ export type ConnectorView = {
   revokeSupport: "confirmed" | "unproven" | "unsupported";
   /** Set only after a disconnect that could not revoke upstream — the sentence the tenant is owed. */
   grantRemainsLiveUpstream: boolean;
+  /**
+   * This lane has NOT passed its gate and is visible only because the caller is the owner.
+   *
+   * It is here so the row can say so. An unproven lane looks identical to a proven one at this
+   * layer — same provider, same buttons — and rendering it unmarked would present a connector that
+   * has never spoken to its vendor as a finished integration.
+   */
+  unproven: boolean;
 };
 
-async function viewFor(ctx: QueryCtx, tenantId: string): Promise<ConnectorView[]> {
-  const passed = await passedProviderGates(ctx, Date.now());
-  if (passed.length === 0) return [];
+async function viewFor(
+  ctx: QueryCtx,
+  tenantId: string,
+  isOwner: boolean,
+): Promise<ConnectorView[]> {
+  const connectable = await connectableProviderGates(ctx, Date.now(), isOwner);
+  if (connectable.length === 0) return [];
 
   const rows = await ctx.db
     .query("connectorConnections")
     .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
     .collect();
 
-  return passed.map(({ provider, environment }) => {
+  return connectable.map(({ provider, environment, unproven }) => {
     const row = rows.find((r) => r.provider === provider && r.environment === environment);
     return {
       provider,
@@ -84,6 +105,7 @@ async function viewFor(ctx: QueryCtx, tenantId: string): Promise<ConnectorView[]
       revokeSupport: PROVIDER_REVOKE_SUPPORT[provider],
       grantRemainsLiveUpstream:
         row?.revocation !== undefined && row.revocation.upstream !== "confirmed",
+      unproven,
     };
   });
 }
@@ -96,7 +118,8 @@ async function viewFor(ctx: QueryCtx, tenantId: string): Promise<ConnectorView[]
  */
 export const connections = tenantQuery({
   args: {},
-  handler: (ctx): Promise<ConnectorView[]> => viewFor(ctx, ctx.tenantId),
+  handler: async (ctx): Promise<ConnectorView[]> =>
+    viewFor(ctx, ctx.tenantId, (await ctx.db.get(ctx.userId))?.owner === true),
 });
 
 /**

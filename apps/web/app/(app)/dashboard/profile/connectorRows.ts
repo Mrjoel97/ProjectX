@@ -20,6 +20,8 @@ export type ConnectorRow = {
   lastFailureClass: string | null;
   revokeSupport: "confirmed" | "unproven" | "unsupported";
   grantRemainsLiveUpstream: boolean;
+  /** The lane has not passed its gate; only the owner is shown it, and only to prove it. */
+  unproven: boolean;
 };
 
 /**
@@ -61,9 +63,9 @@ export type ConnectorRowView = {
 
 /**
  * The list query has a lifecycle of its own. `undefined` is checking; an empty server answer is
- * hidden because the server has already omitted every parked/failed/expired lane. Keeping this
- * tiny derivation pure makes the false-negative loading branch executable in the plan's focused
- * test instead of leaving it as a comment in JSX.
+ * hidden because the server has already omitted every lane this caller may not start a consent for.
+ * Keeping this tiny derivation pure makes the false-negative loading branch executable in the plan's
+ * focused test instead of leaving it as a comment in JSX.
  */
 export function connectorListView(rows: readonly ConnectorRow[] | undefined): {
   state: "checking" | "hidden" | "ready";
@@ -91,6 +93,22 @@ const TITLES: Record<ConnectorRow["provider"], string> = {
 /** Read-only, and the row says so. Every Phase 28 lane is a READ; none of them writes. */
 const READ_ONLY = "Read-only. Pikar never writes to this account.";
 
+/**
+ * What an UNPROVEN lane says, on every one of its states.
+ *
+ * The server only sends these rows to the owner, so this is not a tenant-facing warning — it is the
+ * operator being told which of the two jobs they are doing. Connecting a parked lane is evidence
+ * gathering, not adoption, and the row that offers the button is the last place that can say so
+ * before it is pressed.
+ */
+const UNPROVEN =
+  "Not yet verified: this connector has never completed a live read against the provider. " +
+  "Connecting it here is how that evidence gets collected.";
+
+/** Prefix the unproven sentence onto whatever this row was going to say. */
+const detailFor = (row: ConnectorRow, detail: string): string =>
+  row.unproven ? `${UNPROVEN} ${detail}` : detail;
+
 const DISCONNECT_NOTES: Record<ConnectorRow["revokeSupport"], string | null> = {
   // QuickBooks is the only lane with a documented revocation endpoint a platform may call.
   confirmed: null,
@@ -115,7 +133,7 @@ export function connectorRowView(row: ConnectorRow): ConnectorRowView {
     return {
       ...base,
       state: "checking",
-      detail: "Checking this connection…",
+      detail: detailFor(row, "Checking this connection…"),
       action: null,
       canDisconnect: false,
       disconnectNote: null,
@@ -129,7 +147,7 @@ export function connectorRowView(row: ConnectorRow): ConnectorRowView {
     return {
       ...base,
       state: partialRevoke ? "revoke_partial" : disconnected ? "disconnected" : "connect",
-      detail: disconnected ? `Disconnected here. ${READ_ONLY}` : READ_ONLY,
+      detail: detailFor(row, disconnected ? `Disconnected here. ${READ_ONLY}` : READ_ONLY),
       action: "connect",
       canDisconnect: false,
       disconnectNote: null,
@@ -146,7 +164,10 @@ export function connectorRowView(row: ConnectorRow): ConnectorRowView {
     return {
       ...base,
       state: "reauth",
-      detail: "This connection needs to be re-authorised before Pikar can read again.",
+      detail: detailFor(
+        row,
+        "This connection needs to be re-authorised before Pikar can read again.",
+      ),
       action: "reconnect",
       canDisconnect: true,
       disconnectNote: DISCONNECT_NOTES[row.revokeSupport],
@@ -160,7 +181,10 @@ export function connectorRowView(row: ConnectorRow): ConnectorRowView {
       state: "failed",
       // A CLOSED CLASS, never provider prose — vendor error text can carry account ids and
       // customer names (CLAUDE.md §4), and this string is rendered.
-      detail: `Last read failed (${row.lastFailureClass ?? "unknown"}). Reconnecting usually fixes it.`,
+      detail: detailFor(
+        row,
+        `Last read failed (${row.lastFailureClass ?? "unknown"}). Reconnecting usually fixes it.`,
+      ),
       action: "reconnect",
       canDisconnect: true,
       disconnectNote: DISCONNECT_NOTES[row.revokeSupport],
@@ -171,9 +195,12 @@ export function connectorRowView(row: ConnectorRow): ConnectorRowView {
   return {
     ...base,
     state: "ready",
-    detail: row.lastReadAt
-      ? `${READ_ONLY} Last read ${new Date(row.lastReadAt).toLocaleString()}.`
-      : `${READ_ONLY} Not read yet.`,
+    detail: detailFor(
+      row,
+      row.lastReadAt
+        ? `${READ_ONLY} Last read ${new Date(row.lastReadAt).toLocaleString()}.`
+        : `${READ_ONLY} Not read yet.`,
+    ),
     action: null,
     canDisconnect: true,
     disconnectNote: DISCONNECT_NOTES[row.revokeSupport],

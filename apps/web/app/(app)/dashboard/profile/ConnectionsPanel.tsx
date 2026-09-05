@@ -148,13 +148,17 @@ function MicrosoftRow() {
 /**
  * The Phase 28 connectors, and the whole row set is a function of the SERVER GATE.
  *
- * `connectorConnections.connections` returns only lanes whose gate resolved to `passed`, so a
- * parked, failed or expired provider is ABSENT here rather than filtered out by this component.
- * There is deliberately no client-side check of a provider name or an admission: a surface that
- * filtered for itself would be a second copy of the release rule, and the two would drift.
+ * `connectorConnections.connections` returns the lanes THIS caller may start a consent for, so a
+ * failed or expired provider — and, for a non-owner, a parked one — is ABSENT here rather than
+ * filtered out by this component. There is deliberately no client-side check of a provider name, an
+ * admission or an owner flag: a surface that filtered for itself would be a second copy of the
+ * release rule, and the two would drift (they did, and the owner's connect path was unreachable for
+ * it).
  *
- * An EMPTY list renders nothing at all. Today every lane is parked, so this component is invisible
- * — the correct amount of promise to make about connectors that have never spoken to a provider.
+ * An EMPTY list renders nothing at all. For a tenant today every lane is parked, so this component
+ * is invisible — the correct amount of promise to make about connectors that have never spoken to a
+ * provider. The OWNER sees those same lanes marked unproven, because the owner is the one who has
+ * to connect one before it can ever be proven.
  *
  * Unlike the Google and Microsoft rows above, these ARE written through a shared row: four
  * providers with one identical shape is the repetition the panel comment above said to revisit at.
