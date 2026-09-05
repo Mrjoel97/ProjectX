@@ -492,7 +492,10 @@ Plans:
 **Goal:** Propose-only initiative: the system reads the Business Ledger and proposes the next three actions on the Command Center with citations; nothing acts without approval, nothing recurs. Source: G13, `.planning/design/goal-engine.md` (v0), Track B step 6 — the chief-of-staff promise, inserted after activation rather than after the research engine.
 **Requirements**: none minted yet — the goal-engine design note is the spec until a PRD is written.
 **Depends on:** 25.2 (a surface a user can see it on) and 25.1-07.
-**Plans:** 0/TBD — not planned.
+**Plans:** 1/1 — **COMPLETE 2026-09-05.** Research, plan and summary in `.planning/phases/34-goal-engine-v0-the-agenda-speaks/`; ADR-033.
+
+Plans:
+- [x] 34-01-PLAN.md — The `agenda` table + lifecycle, the weekly review's ONE staged proposal through `applyActOnGap`, asks as interview openers, read-only goal linkage, the Command Center "Your agenda" section, the `agenda_proposal` notification (Wave 1)
 
 ### Phase 1: Foundation & Governance Substrate
 **Goal**: The governed data + orchestration substrate exists so every later feature inherits tenant isolation, immutable audit, durable workflows, and failure handling for free â the decisions that are cheap now and expensive to retrofit.
@@ -1508,7 +1511,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 25. Private Beta Productionization | 0/14 | Planned — execution blocked on 25-00 prerequisite evidence; two lanes (19, 31) run ahead of it | - |
 | 25.2 Delete-first UX pass (INSERTED) | 3/3 | **Complete 2026-09-05** — ten items shipped (`1ead554`, `319badb`, `623fab3`): rail trimmed and Compliance owner-only, plain-word copy, dead rows and pill deleted, one-pane cockpit + four-tab bar on phones, invite-only entry path | 2026-09-05 |
 | 25.3 Scale constants + armed sweep (INSERTED) | 1/1 | **Complete 2026-09-05** — the three deployment ceilings read from env (`DEPLOYMENT_*_BUDGET_CENTS`); weekly review, token-expiry scan, WORM export, retryStuckIngests and backfillAuditCounts are batch jobs or paged; sharding deferred with the ceiling named. G1 arming is the owner's `convex env set --prod RELIABILITY_SWEEP_ARMED 1` | 2026-09-05 |
-| 34. Goal Engine v0 (INSERTED) | 0/TBD | Not started — inserted 2026-09-05 (G13); after 25.2 | - |
+| 34. Goal Engine v0 (INSERTED) | 1/1 | **Complete 2026-09-05** — `agenda` table with gap lifecycle (ADR-033); the weekly review stages ONE proposal through `applyActOnGap` onto approvals (a done memo is recyclable — the review thread could propose once, ever); asks as interview openers; goal linkage read-only; Command Center "Your agenda" section; `agenda_proposal` notification | 2026-09-05 |
 | 26. Connected Product Pages | 21/21 | **Complete — deployed to production** (`8f76aac`; CI green, `deploy-production` succeeded, www.pikar-ai.com 200) | 2026-08-23 |
 | 28. Connector-Backed Revenue Pack | 28/29 | In progress — 28-16 now gives server-owned gated discovery, authenticated desktop/tablet/mobile parked-state evidence, and an exhaustive strict provider/REVN completion matrix. Privacy-safe revenue telemetry and three activated pins are ready, but all four provider lanes remain parked/hidden; REVN-01..06 remain pending and only 28-27's owner subset/strict seal remains | - |
 | 28.1 Stripe Billing, Invoicing and Tax for Pikar's OWN merchant account (INSERTED) | 11/11 | **Code complete and SEALED 2026-08-30** — every plan landed, a 15-defect adversarial audit fixed, the rollup has a producer and the erasure arm cancels before the walk. **NOTHING IN IT HAS EVER SPOKEN TO STRIPE**: `requirements-completed: []`, BILL-01..06 all PENDING | 2026-08-30 |
