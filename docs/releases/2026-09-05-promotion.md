@@ -80,6 +80,7 @@ Repairs made during the merge, each caught by a gate and recorded in the owning 
 - `knowledgeExternalSources.test.ts` (Phase 29 CRM adapter): the lane's 28-16 connect-start gate refuses a provider with no passed lane, so the fixture now seeds a passed HubSpot gate per environment. No product code changed.
 - `lib/env.ts`: the lane's 217-character `whatBreaks` sentence for `OPENAI_API_KEY` shortened under the 200-character hardcoded-prompt ceiling (`skills.test.ts`). Same meaning.
 - `core/src/render.test.ts`: an optional chain that failed `tsc` on the lane itself.
+- `apps/web/app/api/media/render/localSandbox.ts` (dev-only render sandbox): CI on Linux failed its `sh` probe because Ubuntu's `sh` is dash; `resolveShell` now prefers `/bin/bash` off Windows. No production path runs this module.
 
 One mistake caught by the suite: six files were first resolved with `git checkout --ours`, which takes the whole file and dropped the lane's auto-merged hunks (`stageInvoiceReminder` vanished from the tool list; six tests red). Redone hunk-by-hunk with `git checkout -m`.
 

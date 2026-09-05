@@ -76,9 +76,15 @@ export const LOCAL_FONT_NAME = "font.ttf";
 const LOCAL_MUSIC_DIR = resolve(process.cwd(), "scripts", "music");
 
 export function resolveShell(cmd: string): string {
-  if (cmd !== "sh" || process.platform !== "win32") return cmd;
+  if (cmd !== "sh") return cmd;
   const override = process.env.MEDIA_RENDER_SH;
   if (override) return override;
+  if (process.platform !== "win32") {
+    // Debian/Ubuntu (CI, most Linux dev boxes) link `/bin/sh` to dash, which has NO arrays, so the
+    // assembler dies at its first `a=(...)`. The snapshot's `sh` is bash; prefer bash where it
+    // exists so the dev runner parses the same scripts the image does. Found by CI on 2026-09-05.
+    return existsSync("/bin/bash") ? "/bin/bash" : cmd;
+  }
   return WINDOWS_BASH.find((p) => existsSync(p)) ?? cmd;
 }
 

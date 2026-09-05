@@ -1,5 +1,10 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-05 (release CI — `localSandbox.ts` `resolveShell` now substitutes `/bin/bash` for
+> `sh` on Linux too: Debian/Ubuntu link `/bin/sh` to dash, which has no arrays, and the first Linux run of
+> the dev-only sandbox test (CI on `5d3f7b4`) died at `a=(x y z)`. The snapshot's `sh` is bash, so this
+> makes the dev runner parse what the image parses. `MEDIA_RENDER_SH` now overrides on every platform.)
+>
 > Last verified: 2026-09-05 (33.2-06 — **SORA IS DELETED.** Owner: "we do not use this model anymore".
 > Gone: `pollOpenAiVideoTask` (the retained poller — its endpoint is withdrawn 2026-09-24 and the
 > only sora-2 row in any deployment is `succeeded`), the `sora-2` rows in `MEDIA_VIDEO_PRICING` /
