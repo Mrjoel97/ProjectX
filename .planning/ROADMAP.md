@@ -458,12 +458,12 @@ Plans:
 **Goal:** The media-director specialist runs on its own model lane, chosen by a bake-off through the production dispatch path and scored by the production parser — or, if no candidate clears the pre-committed threshold, a recorded decision not to move. A storyboard retry stops re-buying the research it already has.
 **Requirements**: B1-B7 (acceptance criteria in `33.2-PRD.md`; no REQUIREMENTS.md IDs minted — inserted phase, like 33.1)
 **Depends on:** Phase 33.1
-**Plans:** 3 plans in 3 waves
+**Plans:** 3 plans in 3 waves — **COMPLETE 2026-09-05** (pin moved to gpt-4.1-mini by rule; ADR-032; owner reel check open)
 
 Plans:
-- [ ] 33.2-01-PLAN.md — The MEDIA_MODEL lane (aliased, behaviour-neutral) and research-findings reuse for the same brief within 24 h (B1, B2, B3) (Wave 1)
-- [ ] 33.2-02-PLAN.md — The bake-off runner, the 12-brief corpus, and the §4-clean facts query (B4, B5) (Wave 2)
-- [ ] 33.2-03-PLAN.md — Four candidate rounds, the pin by the pre-committed rule, ADR-032, one owner-viewed reel (B6, B7) (Wave 3, owner-gated: ~$8 of model spend)
+- [x] 33.2-01-PLAN.md — The MEDIA_MODEL lane (aliased, behaviour-neutral) and research-findings reuse for the same brief within 24 h (B1, B2, B3) (Wave 1)
+- [x] 33.2-02-PLAN.md — The bake-off runner, the 12-brief corpus, and the §4-clean facts query (B4, B5) (Wave 2)
+- [x] 33.2-03-PLAN.md — Four candidate rounds, the pin by the pre-committed rule, ADR-032, one owner-viewed reel (B6, B7) (Wave 3, owner-gated: ~$8 of model spend)
 
 ### Phase 1: Foundation & Governance Substrate
 **Goal**: The governed data + orchestration substrate exists so every later feature inherits tenant isolation, immutable audit, durable workflows, and failure handling for free â the decisions that are cheap now and expensive to retrofit.

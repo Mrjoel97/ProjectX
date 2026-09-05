@@ -232,15 +232,17 @@ describe("research model pins (16-02)", () => {
   // constraint-loaded single turn in the product; an unpriced pin would bill it at $0 against the
   // per-tenant rail, and a fallback on the cheap tier would hand the hardest prompt to the weakest
   // model on any hiccup. NO `MEDIA_MODEL !== DEFAULT_MODEL` line yet, deliberately: the lane ships
-  // ALIASED to the default until 33.2-03's bake-off moves it by rule — add the inequality with the
-  // pin, not before.
-  it("MEDIA_MODEL and MEDIA_FALLBACK_MODEL are priced, and the fallback is not the cheap tier", () => {
+  // 33.2-03 moved the pin by the bake-off's pre-committed rule (ADR-032): the inequality lands
+  // with it, the pack idiom. A rollover must CHANGE the model, so the pair may not collapse.
+  it("MEDIA_MODEL moved off the volume pin, the pair is priced and distinct, the fallback is not the cheap tier", () => {
     for (const id of [MEDIA_MODEL, MEDIA_FALLBACK_MODEL]) {
       expect(
         priceUsage(id, { inputTokens: 1, outputTokens: 1 }).ok,
         `${id} has no PRICING row`,
       ).toBe(true);
     }
+    expect(MEDIA_MODEL).not.toBe(DEFAULT_MODEL);
+    expect(MEDIA_MODEL).not.toBe(MEDIA_FALLBACK_MODEL);
     expect(MEDIA_FALLBACK_MODEL).not.toBe(CHEAP_MODEL);
   });
 

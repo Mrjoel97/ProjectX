@@ -1,5 +1,18 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-05 (33.2-03 — **THE STORYBOARD PIN MOVED TO `gpt-4.1-mini`, BY THE RULE.**
+> `33.2-BAKEOFF.md` + ADR-032. On the 90 s media clock, executed model asserted per pass from
+> spend rows: gpt-4o-mini 14 clean of 24 (baseline), gpt-5.6-luna 11, gpt-4.1-mini 18 (+4, clears
+> the >= 3 threshold), claude-sonnet-5 and gpt-5.6-sol DISQUALIFIED — both blew the 90 s clock on
+> the production path (`llm.fallback` audit rows, `TimeoutError`; sol after three clean passes at
+> 64-90 s and $0.09 each, sonnet on pass 1 — it reasons by default on OpenRouter and the lane sets
+> no effort). Fallback is now gpt-4o-mini (a rollover must CHANGE the model; the baseline finished
+> inside 45 s on 24/24). Re-measure recipe: repoint `OR_MEDIA_MODEL`, let `convex dev` push, run
+> the runner — it aborts (exit 2) if the pin or the executed model differs. Two corpus facts for
+> the next corpus: the 12 s generated cap is NOT parser-enforced, and `45-illegal-duration` is a
+> refusal fixture (ceiling 22 not 24). Measured: cost 95/95, dispatch + runCockpitAgent 158/158,
+> tsc 0 outside the connector lane.)
+>
 > Last verified: 2026-09-04 (33.2-02 — **THE STORYBOARD BAKE-OFF RUNNER EXISTS:
 > `scripts/run-storyboard-bakeoff.mjs` + `scripts/storyboard-briefs.json`, registered here.**
 >

@@ -1,5 +1,14 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-09-05 (33.2-03 — **`MEDIA_MODEL` = `OR_RESEARCH_FALLBACK_MODEL` (gpt-4.1-mini),
+> `MEDIA_FALLBACK_MODEL` = `OR_DEFAULT_MODEL` (gpt-4o-mini): the pin moved on the bake-off rule.**
+> ADR-032, `33.2-BAKEOFF.md`. The inequality landed with the pin: `cost.test.ts` now holds
+> `MEDIA_MODEL !== DEFAULT_MODEL` AND `MEDIA_MODEL !== MEDIA_FALLBACK_MODEL` (a rollover must change
+> the model), both priced, fallback off the cheap tier. Still NO media PRICING row: both ids already
+> have one (the computed-key collapse rule). The two premium candidate constants and their rows
+> left with the bake-off — the ids and prices live in the ADR. Bill: a storyboard is ~$0.008,
+> 2.6x the old $0.003. Measured: cost 95/95.)
+>
 > Last verified: 2026-09-04 (33.2-01 — **A FOURTH MODEL LANE: `MEDIA_MODEL` / `MEDIA_FALLBACK_MODEL`,
 > shipped ALIASED to `OR_DEFAULT_MODEL` / `OR_RESEARCH_FALLBACK_MODEL`, so this commit moves no bill.**
 >

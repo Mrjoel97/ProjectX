@@ -92,11 +92,17 @@ export const OR_PACK_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
 // most constraint-loaded single turn in the product (two whole variations, exact second sums, a
 // 12-second generated cap, per-cell narration windows, cited figures). Separate constants for the
 // PACK_MODEL reason: a later change to one lane must not silently move another.
-// ALIASES, not literals (the PRICING computed-key rule below): the lane ships pointing at today's
-// id so the code change is behaviour-neutral, and 33.2-03 moves it ONLY on the bake-off's
-// pre-committed rule — see docs/decisions/032-*.md for the measurement and the decision.
-export const OR_MEDIA_MODEL = OR_DEFAULT_MODEL;
-export const OR_MEDIA_FALLBACK_MODEL = OR_RESEARCH_FALLBACK_MODEL;
+// ALIASES, not literals (the PRICING computed-key rule below).
+// 33.2-03 MOVED THE PIN, on the rule fixed before the run (ADR-032, 33.2-BAKEOFF.md). Clean
+// two-deck passes of 24 on the 90 s media clock, executed model asserted from spend rows:
+// gpt-4o-mini 14 (the baseline) · gpt-5.6-luna 11 · gpt-4.1-mini 18 · claude-sonnet-5 and
+// gpt-5.6-sol DISQUALIFIED — both blew the 90 s clock on the production path (audited
+// `llm.fallback` TimeoutError; sol at pass 4 of 24 after three clean ones, sonnet at pass 1).
+// +4 clears the >= 3 repin threshold; the win costs 2.6x the baseline per storyboard ($0.008).
+// The FALLBACK is the measured baseline, not the primary's own id: a rollover must change the
+// model, and gpt-4o-mini finished inside 45 s on 24/24 — the fallback's job is to be fast.
+export const OR_MEDIA_MODEL = OR_RESEARCH_FALLBACK_MODEL;
+export const OR_MEDIA_FALLBACK_MODEL = OR_DEFAULT_MODEL;
 
 // Aliases, deliberately — NOT second string literals. Two literals spelling the same model is how a
 // PRICING row and a pin drift apart, and `PRICING` is keyed by computed property, so duplicate
