@@ -1,5 +1,10 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-09-05 (33.2-05 — `lib/env.ts` `whatBreaks` rewritten for both model keys:
+> OPENROUTER_API_KEY now carries agent turns, embeddings, images/clips AND transcription;
+> OPENAI_API_KEY is down to the PDF hosted-extraction rail, intake's attachment extractor, the
+> retained Sora poller and any bare `openai/` pin. Tiers unchanged.)
+>
 > Last verified: 2026-08-30 (33.1-03 — **`OPENROUTER_API_KEY` IS NOW REQUIRED BY TWO INDEPENDENT
 > PLANES, AND THAT RETIRES THE CONDITIONAL BELOW.** The 2026-08-24 block says the tier "must drop
 > back to `feature` on the same edit that reverts those pins". **It must not.** The still-image

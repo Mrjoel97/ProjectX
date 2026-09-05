@@ -105,7 +105,17 @@ export const retryExtraction = tenantMutation({
     // (:98-101) — "the user PRESSED A BUTTON and nothing observable happened" — so it gets the same
     // answer: do the work the doc actually needs. Only a doc with text qualifies; no bytes AND no
     // text really is nothing to retry.
-    if (!doc.storageId) {
+    // 33.2-05: the discriminator is "does the row already carry its text", NOT "does it have
+    // bytes". A rendered reel has BOTH — the mp4 in `storageId`, the transcript in `text`
+    // (`saveReelToVault`) — and the `!storageId` test sent it down the extraction rail, which
+    // sniffed the mp4 under `text/markdown`, failed `unsupported_format`, and told the owner to
+    // "re-save it as PDF, DOCX, XLSX or plain text" (owner-reported 2026-09-05, on every reel).
+    // Text present ⇒ extraction is done or was never needed; the retry is the ingest.
+    const folder = doc.folderId ? await ctx.db.get(doc.folderId) : null;
+    if (folder?.status === "reserving") return { ok: false }; // (2) nothing is paid for yet
+    // (1) The un-terminalling and the counter are one fact, so they are one transaction.
+    if (folder && doc.status === "failed") await unbumpFolder(ctx, folder._id, true);
+    if (!doc.storageId || doc.text) {
       if (!doc.text) return { ok: false }; // no bytes and no text — genuinely nothing to redo
       await ctx.db.patch(vaultDocId, { status: "processing", failureReason: undefined });
       await startIngest(ctx, {
@@ -119,10 +129,6 @@ export const retryExtraction = tenantMutation({
     // the worst of the three skips: the user PRESSED A BUTTON and nothing observable happened.
     // The three refusals above are real (cross-tenant, wrong status, no stored bytes); an unknown
     // format is not a refusal, it is work the action must do and then fail honestly at.
-    const folder = doc.folderId ? await ctx.db.get(doc.folderId) : null;
-    if (folder?.status === "reserving") return { ok: false }; // (2) nothing is paid for yet
-    // (1) The un-terminalling and the counter are one fact, so they are one transaction.
-    if (folder && doc.status === "failed") await unbumpFolder(ctx, folder._id, true);
     await ctx.db.patch(vaultDocId, {
       status: "pending_extraction",
       failureReason: undefined,

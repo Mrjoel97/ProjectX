@@ -1,3 +1,7 @@
+> Last verified: 2026-09-05 (33.2-05 — `lib/models.ts` grows `transcriptionModel(id)` (OpenAI
+> provider at OpenRouter's base URL for `or/` ids — the OpenRouter SDK provider has no
+> transcription model) and `transcriptionUsage(result)` (the bill from the body). No llm.ts change.)
+>
 > Last verified: 2026-09-05 (33.2-04 â€” **`convex/lib/models.ts` is THE model resolver.** llm.ts
 > keeps only its stealth/ (per-model settings) and google/ (Buffer-bound Vertex credential)
 > branches and delegates every vendor id to `resolveVendorModel`; the OpenRouter provider factory

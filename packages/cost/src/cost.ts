@@ -420,6 +420,13 @@ export function priceUsage(
 // gpt-4o-transcribe per-audio-minute pricing (OpenAI published rate, verified 2026-07-14).
 export const TRANSCRIPTION_PRICING: { perMinuteUsd: number } = { perMinuteUsd: 0.006 };
 
+// 33.2-05: transcription rides OpenRouter too. Probed 2026-09-05 against `/api/v1/audio/transcriptions`:
+// whisper-1 answered 200 on mp3 AND mp4 (container demuxed upstream), billed per SECOND at the same
+// $0.006/min; gpt-4o-transcribe 200. The `or/` prefix is the ROUTE (lib/models.ts strips it) and
+// the response body carries the bill (`usage.cost`), which the callers record ahead of this table.
+export const OR_TRANSCRIPTION_MODEL = "or/openai/whisper-1";
+export const OR_INTAKE_TRANSCRIPTION_MODEL = "or/openai/gpt-4o-transcribe";
+
 /** INTK-03: prices audio transcription per-audio-minute (billed in whole minutes,
  *  rounded up — matches OpenAI's per-minute billing). Fail-closed: non-finite or
  *  negative seconds → Err (never NaN/throw), so recordSpend can never silently

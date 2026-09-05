@@ -1,3 +1,9 @@
+> Last verified: 2026-09-05 (33.2-05 — mic transcription rides OpenRouter:
+> `transcriptionModel(OR_INTAKE_TRANSCRIPTION_MODEL)` = `or/openai/gpt-4o-transcribe` via
+> `lib/models.ts` (probed 200), spend recorded from the response body's `usage.cost` first,
+> `priceTranscription` as the fallback. The attachment extractor's `openai("gpt-4o-mini")` file-part
+> call stays DIRECT and still needs OPENAI_API_KEY credits. SMOKE seam unchanged.)
+>
 > Last verified: 2026-09-03 (working tree, uncommitted - **INTAKE NOW STAGES BEFORE A THREAD
 > EXISTS, AND GAINED FOLDER ATTACH.** Reviewed, typechecks clean. Not verified live.)
 >

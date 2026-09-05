@@ -210,7 +210,8 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   {
     name: "OPENAI_API_KEY",
     tier: "required",
-    whatBreaks: "Every agent turn and every eval — the product does nothing without it.",
+    whatBreaks:
+      "The PDF hosted-extraction rail, intake's attachment extractor (file parts), the retained Sora poller, and any bare openai/ pin. Agent turns, embeddings, images and transcription ride OPENROUTER_API_KEY.",
   },
   {
     name: "GOOGLE_GENERATIVE_AI_API_KEY",
@@ -233,7 +234,7 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     name: "OPENROUTER_API_KEY",
     tier: "required",
     whatBreaks:
-      "Every agent turn and every eval (the model pins), AND every still image (the media plane, since 33.1). OPENAI_API_KEY stays separately required for TTS, STT and — until 33.1-05 — video.",
+      "Every agent turn and eval (the model pins), every still image and clip (the media plane), embeddings, and since 33.2-05 whisper/gpt-4o transcription for the vault and intake.",
   },
   {
     name: "TAVILY_API_KEY",

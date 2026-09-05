@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 
@@ -32,3 +32,43 @@ export const openRouter = () => {
 
 export const resolveModel = (id: string): LanguageModel =>
   id.startsWith("or/") ? openRouter().chat(id.slice(3)) : openai(id.replace(/^openai\//, ""));
+
+/**
+ * 33.2-05: TRANSCRIPTION through OpenRouter. `@openrouter/ai-sdk-provider@3.0.0` has no
+ * transcription model, but OpenRouter's `/audio/transcriptions` is OpenAI-wire-compatible, so the
+ * OpenAI provider with OpenRouter's base URL carries it with zero new deps. Probed 2026-09-05:
+ * whisper-1 200 on mp3 and mp4 (no mediaType needed), gpt-4o-transcribe 200.
+ */
+let compatProvider: ReturnType<typeof createOpenAI> | undefined;
+const openRouterOpenAiCompat = () => {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
+  compatProvider ??= createOpenAI({ baseURL: "https://openrouter.ai/api/v1", apiKey });
+  return compatProvider;
+};
+
+export const transcriptionModel = (id: string) =>
+  id.startsWith("or/")
+    ? openRouterOpenAiCompat().transcription(id.slice(3))
+    : openai.transcription(id.replace(/^openai\//, ""));
+
+/**
+ * The bill, from the provider's own body. OpenRouter answers `{ text, usage: { seconds, cost } }`
+ * (whisper) or `{ usage: { ..., cost } }` (gpt-4o-transcribe) whatever the response format. The
+ * SDK only surfaces `durationInSeconds` from verbose_json, which it requests for the bare
+ * "whisper-1" id alone — so on the routed id a caller pricing from `durationInSeconds ?? 0`
+ * would record $0 and walk past the kill switch (cost.ts Pitfall 5). Read the body first.
+ */
+// `responses[0].body` is on the wire object but not on `TranscriptionModelResponseMetadata`'s
+// type (timestamp/modelId/headers only), hence the structural read.
+export const transcriptionUsage = (result: {
+  responses?: ReadonlyArray<object>;
+}): { seconds?: number; costUsd?: number } => {
+  const usage = (
+    result.responses?.[0] as
+      | { body?: { usage?: { seconds?: unknown; cost?: unknown } } }
+      | undefined
+  )?.body?.usage;
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : undefined);
+  return { seconds: num(usage?.seconds), costUsd: num(usage?.cost) };
+};

@@ -1,5 +1,10 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-09-05 (33.2-05 — two routed transcription pins beside TRANSCRIPTION_PRICING:
+> `OR_TRANSCRIPTION_MODEL` (whisper-1) and `OR_INTAKE_TRANSCRIPTION_MODEL` (gpt-4o-transcribe). No
+> PRICING rows — transcription is billed per second/minute, and OpenRouter's body carries the
+> figure the callers record; `priceTranscription` remains the fallback. Measured: cost 95/95.)
+>
 > Last verified: 2026-09-05 (33.2-03 — **`MEDIA_MODEL` = `OR_RESEARCH_FALLBACK_MODEL` (gpt-4.1-mini),
 > `MEDIA_FALLBACK_MODEL` = `OR_DEFAULT_MODEL` (gpt-4o-mini): the pin moved on the bake-off rule.**
 > ADR-032, `33.2-BAKEOFF.md`. The inequality landed with the pin: `cost.test.ts` now holds

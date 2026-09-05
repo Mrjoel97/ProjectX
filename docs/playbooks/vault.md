@@ -1,3 +1,17 @@
+> Last verified: 2026-09-05 (33.2-05 — **TRANSCRIPTION RIDES OPENROUTER, and Retry on a reel
+> re-INGESTS instead of re-extracting the mp4.** (1) `vaultTranscribe` calls
+> `transcriptionModel(OR_TRANSCRIPTION_MODEL)` = `or/openai/whisper-1` through `lib/models.ts` (the
+> OpenAI provider on OpenRouter's base URL — `/audio/transcriptions` is wire-compatible; probed
+> 200 on mp3 AND mp4, billed per second at the same $0.006/min). The bill is read from the
+> response body (`transcriptionUsage`): on the routed id the SDK reports NO duration, and the old
+> `priceTranscription(duration ?? 0)` would have recorded $0 and walked past the kill switch.
+> OPENAI_API_KEY is no longer needed for STT. (2) `retryExtraction` decides by "does the row
+> already carry its text", not "does it have bytes": a rendered reel has both, and the old
+> `!storageId` test sent its mp4 down the extraction rail — `unsupported_format`, the "re-save it
+> as PDF, DOCX, XLSX or plain text" popup the owner hit on every reel. The folder counter logic
+> now runs before BOTH branches. Measured: vaultSweep, vaultTranscribe, intake, env, lib/models
+> green; tsc 0 outside the connector lane. Owner action: press Retry on the four reels again.)
+>
 > Last verified: 2026-09-05 (33.2-04 â€” **EVERY VAULT INGEST THAT REACHED `extractGraph` HAD FAILED
 > SINCE 2026-08-27, `ingest_failed`, 69 rows including all four rendered reels.** Root cause:
 > `845f4b1` moved `DEFAULT_MODEL` to `or/openai/gpt-4o-mini` and llm.ts learned the `or/` route, but

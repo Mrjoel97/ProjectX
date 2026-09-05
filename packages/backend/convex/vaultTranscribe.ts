@@ -10,14 +10,14 @@
 // ingestExtractedText seam. Every governed stop is a RETURN, never a throw.
 //
 // No skill row: transcription takes no prompt (§5 does not apply). Zero new deps.
-import { openai } from "@ai-sdk/openai";
-import { priceTranscription } from "@pikar/cost";
+import { OR_TRANSCRIPTION_MODEL, priceTranscription } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { TRANSCRIBABLE_CONTAINER_MIME, VAULT_EXTRACT_CHAR_CAP } from "@pikar/vault";
 import { experimental_transcribe as transcribe } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
+import { transcriptionModel, transcriptionUsage } from "./lib/models";
 
 // Per-call wall-clock ceiling. NOT intake.ts's 45s (that's tuned for seconds-long mic clips):
 // a vault video runs up to 25 MB ≈ many minutes of audio, and the call = upload + transcription —
@@ -108,24 +108,30 @@ export const transcribeDoc = internalAction({
         // ponytail: no duration cap — 25 MB of compressed video bounds duration in practice
         // (~a few min typical); audio-extract/chunk is the upgrade path if a >25 MB video (or a
         // duration limit) ever needs to be supported.
+        // 33.2-05: through OpenRouter (lib/models.ts). The provider's own bill first — on the
+        // routed id the SDK reports no duration, and pricing `?? 0` would record $0 spend.
         const result = await transcribe({
-          model: openai.transcription("whisper-1"),
+          model: transcriptionModel(OR_TRANSCRIPTION_MODEL),
           audio: bytes,
           abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         });
-        const priced = priceTranscription(result.durationInSeconds ?? 0);
+        const usage = transcriptionUsage(result);
+        durationSeconds = result.durationInSeconds ?? usage.seconds ?? 0;
+        const priced =
+          usage.costUsd === undefined
+            ? priceTranscription(durationSeconds)
+            : { ok: true as const, value: usage.costUsd };
         if (priced.ok) {
           await ctx.runMutation(internal.guardrails.recordSpend, {
             tenantId,
             costUsd: priced.value,
             rail: spendRail,
             correlationId: `vault:transcribe:${vaultDocId}:${runId}`,
-            model: "whisper-1",
+            model: OR_TRANSCRIPTION_MODEL,
             kind: "vault.transcribe", // code-owned token, refs only (§4)
           });
         }
         rawText = result.text;
-        durationSeconds = result.durationInSeconds ?? 0;
       }
 
       // 7. scanText FAIL-CLOSED gate (redact-before-audit ordering, §4). The transcript never
