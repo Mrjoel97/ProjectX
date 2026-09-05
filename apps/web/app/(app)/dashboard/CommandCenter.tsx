@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Command Center v2 (HOME-01). Four INDEPENDENT Convex subscriptions —
- * `home.summary`, `home.health`, `briefings.latestForTenant`, `agenda.current` (Phase 34) —
- * feeding six sections that each
+ * Command Center v2 (HOME-01). Five INDEPENDENT Convex subscriptions —
+ * `home.summary`, `home.health`, `briefings.latestForTenant`, `agenda.current` (Phase 34),
+ * `workflowPackDiscovery.listPacks` (35-02, the idea-stage card) — feeding seven sections that each
  * carry their OWN loading / empty / partial / error state. One section going dark must never
  * blank another, so no section reads another section's data and no section shares a boundary.
  *
@@ -40,7 +40,7 @@ import {
   rollUpHealth,
   SIGNAL_STATE_WORD,
 } from "@pikar/core";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { Component, type CSSProperties, type ErrorInfo, type ReactNode, useState } from "react";
 import { ArrowIcon, ClockIcon, FileIcon, MailIcon, ShieldIcon } from "../../(auth)/icons";
@@ -843,6 +843,133 @@ export function ConnectedAgenda() {
   );
 }
 
+// ── section a3: the first finished thing (35-02, G23 half B) ──────────────────
+
+/**
+ * The ONE pack an idea-stage tenant is offered from the home page, by id. Code-owned: this card can
+ * render exactly this pack and no other, and only while ACTIVE-only `listPacks` returns it — so
+ * while the pack is a candidate (dark) the card does not exist, by construction, with no flag.
+ */
+export const FIRST_THING_PACK_ID = "offer-and-lead-plan";
+
+const FIRST_THING_COPY = {
+  label: "Your first finished thing",
+  heading: "Your offer and a 30-day lead plan, written for you",
+  // Honest about the trigger (the review has nothing to rank yet) and about the boundary (a saved
+  // document; nothing sent). BRAND §1: outcome first, never a claim a send happened.
+  body: "The weekly review has nothing to rank yet, and this does not wait for it. Pikar writes your offer and the first 30 days of finding leads from what your profile already says, and saves it as one document you can edit. Nothing is sent.",
+  cta: "Write it now",
+  busy: "Writing…",
+  started: "Started. It is being written in your workspace now.",
+  open: "Open it in the workspace",
+  failed: "That could not be started. Nothing ran — try again.",
+} as const;
+
+/** The subset of a `listPacks` row this card needs. */
+export type FirstThingPack = { packId: string; title: string; opener: string };
+
+export type FirstThingState =
+  | { kind: "idle" }
+  | { kind: "busy" }
+  | { kind: "started"; threadId: string; title: string }
+  | { kind: "failed" };
+
+/**
+ * Is the diagnosis unable to rank anything yet? `null` = no review has run; an empty `items` list
+ * = the review ran and found nothing grounded to act on (the sparse-start case, where only the
+ * interview `asks` exist). Loading stays loading so the card never flashes in before the answer.
+ */
+export function agendaHasNothingToRank(agenda: AgendaView | Loading): boolean | Loading {
+  if (agenda === undefined) return undefined;
+  if (agenda === null) return true;
+  return Array.isArray(agenda.items) && agenda.items.length === 0;
+}
+
+/**
+ * Renders NOTHING unless both facts are in: the pack is offered (active) AND the agenda has nothing
+ * to rank. It starts the pack through `cockpit.startWorkflowPack` — a different agent from the
+ * conversation (allow-listed, structurally unable to dispatch a specialist), the same seam the
+ * workspace quick starts use — and then LINKS to the thread rather than navigating, so the person
+ * decides when to leave this page. No `previewVersion` is ever sent from here.
+ */
+export function FirstThingCard({
+  pack,
+  nothingToRank,
+  state,
+  onStart,
+}: {
+  pack: FirstThingPack | null | Loading;
+  nothingToRank: boolean | Loading;
+  state: FirstThingState;
+  onStart: () => void;
+}) {
+  if (pack === undefined || pack === null || nothingToRank !== true) return null;
+  if (pack.packId !== FIRST_THING_PACK_ID) return null;
+  const threadHref = (threadId: string, title: string) =>
+    `/dashboard/workspace?thread=${encodeURIComponent(threadId)}&label=${encodeURIComponent(title)}`;
+  return (
+    <section style={card} aria-labelledby="cc-first-thing-label" data-cc-section="first-thing">
+      <p className="caps-label" id="cc-first-thing-label">
+        {FIRST_THING_COPY.label}
+      </p>
+      <h2 style={heading}>{FIRST_THING_COPY.heading}</h2>
+      <p style={muted}>{FIRST_THING_COPY.body}</p>
+      {state.kind === "started" ? (
+        <>
+          <p role="status" style={small}>
+            {FIRST_THING_COPY.started}
+          </p>
+          <Link href={threadHref(state.threadId, state.title)} style={linkStyle}>
+            {FIRST_THING_COPY.open} <ArrowIcon size={14} />
+          </Link>
+        </>
+      ) : (
+        <>
+          {state.kind === "failed" ? (
+            <p role="status" style={small}>
+              {FIRST_THING_COPY.failed}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="cta-dark"
+            style={{ justifySelf: "start" }}
+            disabled={state.kind === "busy"}
+            onClick={onStart}
+          >
+            {state.kind === "busy" ? FIRST_THING_COPY.busy : FIRST_THING_COPY.cta}
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
+export function ConnectedFirstThing() {
+  const packs = useQuery(api.workflowPackDiscovery.listPacks, {});
+  const agenda = useQuery(api.agenda.current, {});
+  const startPack = useAction(api.cockpit.startWorkflowPack);
+  const [state, setState] = useState<FirstThingState>({ kind: "idle" });
+  const pack =
+    packs === undefined ? undefined : (packs.find((p) => p.packId === FIRST_THING_PACK_ID) ?? null);
+  return (
+    <FirstThingCard
+      pack={pack}
+      nothingToRank={agendaHasNothingToRank(agenda)}
+      state={state}
+      onStart={() => {
+        if (pack === undefined || pack === null || state.kind === "busy") return;
+        setState({ kind: "busy" });
+        // The opener is code-owned in `@pikar/core` and sent as the USER's first message, because
+        // pressing the button IS the request — identical to the workspace quick start.
+        void startPack({ packId: pack.packId, text: pack.opener })
+          .then((res) => setState({ kind: "started", threadId: res.threadId, title: pack.title }))
+          .catch(() => setState({ kind: "failed" }));
+      }}
+    />
+  );
+}
+
 export default function CommandCenter() {
   // BRAND §3's signature tracked-caps context label, verbatim from the surface this replaces
   // (`LegacyDashboard.tsx`) and from `docs/design/mockups/pending-pages.html`. "Command Center" is
@@ -870,6 +997,10 @@ export default function CommandCenter() {
 
       <SectionBoundary section="agenda">
         <ConnectedAgenda />
+      </SectionBoundary>
+
+      <SectionBoundary section="first-thing">
+        <ConnectedFirstThing />
       </SectionBoundary>
 
       <SectionBoundary section="constraint">

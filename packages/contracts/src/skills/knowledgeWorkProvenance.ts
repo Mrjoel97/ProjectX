@@ -104,3 +104,36 @@ export const KNOWLEDGE_WORK_PROVENANCE: Readonly<Record<string, KnowledgeWorkPro
       "Rewritten to review against general principles, because Pikar has no tenant brand store; the pack says so and names what would unlock the stronger review.",
   },
 };
+
+/**
+ * 35-02 (G23 half B): provenance for a pack body WRITTEN IN THIS REPOSITORY. Deliberately a second
+ * record and not a seventh key above — `knowledgeWorkProvenance.test.ts` pins the map above to the
+ * vendor manifest key-for-key, and an original body has no vendor row to agree with. Held to the
+ * SAME shape the gate checks (`hasValidPackProvenance`): an exact 40-hex commit of THIS repo at
+ * which the in-repo material it was built from last changed, the paths of that material, the LF
+ * body hash, and a notice. `pinnedAt` is that commit's timestamp, for the reason
+ * `KNOWLEDGE_WORK_PINNED_AT` exists: provenance must be a pure function of the pinned material,
+ * never a clock.
+ */
+export type InHousePackProvenance = Omit<KnowledgeWorkProvenance, "license"> & {
+  readonly license: "Pikar-original";
+  /** The pinned commit's own timestamp, epoch ms. NOT the publication time. */
+  readonly pinnedAt: number;
+};
+
+export const IN_HOUSE_PACK_PROVENANCE: Readonly<Record<string, InHousePackProvenance>> = {
+  "pack-offer-and-lead-plan": {
+    sourceRepo: "https://github.com/Mrjoel97/ProjectX",
+    // `git log -1 --format=%H -- packages/contracts/skills/offer-architect.md lead-engine.md`
+    sourceCommit: "3f77378bc036ffeae4c138ddefb4d71df3368ecb",
+    sourcePaths: [
+      "packages/contracts/skills/offer-architect.md",
+      "packages/contracts/skills/lead-engine.md",
+    ],
+    bodySha256: "72949904d7c763fab9176a15d6cee15a43c0071637b59fa9562f2210211ea50d",
+    license: "Pikar-original",
+    modificationNotice:
+      "Original Pikar body. Method taken from the in-repo offer-architect (value equation, market gate, build sequence) and lead-engine (four channels, warm-first, one channel, lead magnet) specialist bodies, turned from read-only memos into one saved document with a webResearch grant; price and 30-day cash are questions for the owner, never figures.",
+    pinnedAt: Date.parse("2026-08-01T20:39:38Z"),
+  },
+};

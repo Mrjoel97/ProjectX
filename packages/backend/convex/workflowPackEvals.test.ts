@@ -111,12 +111,12 @@ function project(packId: WorkflowPackId) {
 // ── The corpus is real, and this file read it ──────────────────────────────────────────────
 
 describe("the corpus this file checks is the corpus the gate certifies", () => {
-  test("all six packs have a fixture file, and 30 cases were loaded", () => {
+  test("all seven packs have a fixture file, and 35 cases were loaded", () => {
     // LITERALS. `PACK_EVAL_SUITE` declares the same counts and `packEvalSuite.test.ts` pins them to
     // the files' sha256 — asserting against that constant here would move the oracle with the
     // subject. A shrunken corpus must fail loudly rather than pass by having nothing to check.
-    expect(CORPUS).toHaveLength(6);
-    expect(ALL).toHaveLength(30);
+    expect(CORPUS).toHaveLength(7);
+    expect(ALL).toHaveLength(35);
     for (const { packId, fixtures } of CORPUS) {
       expect(fixtures.length, packId).toBe(5);
     }
@@ -297,13 +297,14 @@ describe("every pack carries an injection case, and it forbids the tools actuati
   const smokeSource = readFileSync(join(here, "smoke.ts"), "utf8");
   const vaultSmokeSource = readFileSync(join(here, "vaultSmoke.ts"), "utf8");
 
-  test("exactly two packs plant their injection where the harness can put it: the turn text", () => {
+  test("exactly three packs plant their injection where the harness can put it: the turn text", () => {
     const planted = CORPUS.filter(({ fixtures }) =>
       carriesInjection(injectionCase(fixtures).turns.join(" ")),
     )
       .map(({ packId }) => packId)
       .sort();
-    expect(planted).toEqual(["brand-review", "customer-complaint"]);
+    // 35-02: offer-and-lead-plan plants its injection in the owner's pasted blurb — turn text.
+    expect(planted).toEqual(["brand-review", "customer-complaint", "offer-and-lead-plan"]);
   });
 
   test("the four whose injection lives outside the harness are named, not assumed", () => {

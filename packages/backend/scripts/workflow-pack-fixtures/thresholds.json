@@ -42,6 +42,12 @@
       "maxUnsupportedFigures": 0,
       "minCitationsWhenWebRead": 0,
       "$why": "Not granted webResearch, and the most capability-starved pack in the pilot: it reads the vault and nothing else."
+    },
+    "offer-and-lead-plan": {
+      "minCasesPassed": 5,
+      "maxUnsupportedFigures": 0,
+      "minCitationsWhenWebRead": 1,
+      "$why": "Granted webResearch, and the whole document is written for a business with NO figures of its own: price, cash and list size are questions for the owner by design, so any currency amount is invented. 35-02 (G23 half B)."
     }
   }
 }

@@ -73,6 +73,7 @@ import { inboxDigestSkillBody } from "@pikar/contracts/skills/inboxDigest";
 import { knowledgeQueryPlannerSkillBody } from "@pikar/contracts/skills/knowledgeQueryPlanner";
 import { knowledgeSynthesizerSkillBody } from "@pikar/contracts/skills/knowledgeSynthesizer";
 import {
+  IN_HOUSE_PACK_PROVENANCE,
   KNOWLEDGE_WORK_PINNED_AT,
   KNOWLEDGE_WORK_PROVENANCE,
 } from "@pikar/contracts/skills/knowledgeWorkProvenance";
@@ -86,6 +87,7 @@ import { packBrandReviewSkillBody } from "@pikar/contracts/skills/packBrandRevie
 import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusinessPulse";
 import { packCampaignPlanSkillBody } from "@pikar/contracts/skills/packCampaignPlan";
 import { packCustomerComplaintSkillBody } from "@pikar/contracts/skills/packCustomerComplaint";
+import { packOfferAndLeadPlanSkillBody } from "@pikar/contracts/skills/packOfferAndLeadPlan";
 import { packProcessSopSkillBody } from "@pikar/contracts/skills/packProcessSop";
 import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCallPrep";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
@@ -1090,6 +1092,8 @@ const PACK_BODIES: Readonly<Record<string, string>> = {
   "pack-sales-call-prep": packSalesCallPrepSkillBody,
   "pack-process-sop": packProcessSopSkillBody,
   "pack-brand-review": packBrandReviewSkillBody,
+  // 35-02: the original body. Same channel — a CANDIDATE through `seedPackCandidates`, never SEEDS.
+  "pack-offer-and-lead-plan": packOfferAndLeadPlanSkillBody,
 };
 
 /**
@@ -1100,13 +1104,20 @@ const PACK_BODIES: Readonly<Record<string, string>> = {
  * published is `skills.createdAt`, which the row already carries.
  */
 function packProvenanceFor(name: string, version: number): string {
-  const record = KNOWLEDGE_WORK_PROVENANCE[name];
-  if (record === undefined) throw new Error(`${NOT_A_PACK_ERROR}: no provenance for ${name}`);
-  return JSON.stringify({
-    ...record,
-    skillVersions: { [name]: version },
-    ts: KNOWLEDGE_WORK_PINNED_AT,
-  });
+  const vendor = KNOWLEDGE_WORK_PROVENANCE[name];
+  if (vendor !== undefined) {
+    return JSON.stringify({
+      ...vendor,
+      skillVersions: { [name]: version },
+      ts: KNOWLEDGE_WORK_PINNED_AT,
+    });
+  }
+  // 35-02: an ORIGINAL body pins a commit of this repository instead of the vendor's; its `ts` is
+  // that commit's timestamp for the same no-clock reason.
+  const own = IN_HOUSE_PACK_PROVENANCE[name];
+  if (own === undefined) throw new Error(`${NOT_A_PACK_ERROR}: no provenance for ${name}`);
+  const { pinnedAt, ...record } = own;
+  return JSON.stringify({ ...record, skillVersions: { [name]: version }, ts: pinnedAt });
 }
 
 /**

@@ -57,6 +57,7 @@ describe("listPacks is ACTIVE-ONLY", () => {
       "pack-sales-call-prep",
       "pack-process-sop",
       "pack-brand-review",
+      "pack-offer-and-lead-plan",
     ]) {
       await publish(t, name);
     }

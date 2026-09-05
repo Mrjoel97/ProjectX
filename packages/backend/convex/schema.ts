@@ -2826,6 +2826,7 @@ export default defineSchema({
       v.literal("sales-call-prep"),
       v.literal("process-sop"),
       v.literal("brand-review"),
+      v.literal("offer-and-lead-plan"),
       // Measurement-only Phase 28 stream; not a discoverable Phase 27 workflow pack.
       v.literal("revenue"),
     ),

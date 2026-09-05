@@ -1,5 +1,41 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-09-06 (35-02, G23 half B — **THE SEVENTH PACK, AND THE FIRST ORIGINAL ONE:
+> `offer-and-lead-plan`.** ONE saved document — the offer (niche + market check, dream outcome, the
+> problem→solution stack, guarantee + reason to act, name, and the price/terms/30-day-cash as QUESTIONS
+> for the owner) plus a 30-day lead plan (one channel by the warm-first / time-versus-money rule, one lead
+> magnet, four weeks of COUNTED actions, the one funnel number, "what I assumed" + the one sharpening
+> question). Registry: same grant shape as campaign-plan (`searchVault`, `webResearch`+`declareUnsupported`,
+> `saveAsDocument`), three starved sources (`crm-facts` = the warm list, `connector-financials` = price and
+> cost-per-lead, `content-shelf` = a reusable magnet), `output: "document"`. Customization dial `plan_days`
+> 14–60. Every literal pin of the six-pack set moved to seven: `WORKFLOW_PACK_IDS`, the grant / pair /
+> missing / output tables, `schema.ts` + `workflowPackOutcomes.ts` `packId` unions, `READABLE` + `ALL_KEYS`,
+> the backend `PACKS` handler table, `listPacks` candidate list, `PACK_EVAL_SUITE` (7 rows, NO revision
+> bump — the six certified rows are byte-unchanged), `packEvalSuite.test` 6→7, `workflowPackEvals.test`
+> 6/30→7/35 and the injection-plant literal (three packs plant in turn text now). Corpus: five fixtures
+> (`offer-and-lead-plan.json`: one-line business, price-as-question, unsupported market claim, no list /
+> no money / only time, injected pasted blurb), `thresholds.json` row (`minCitationsWhenWebRead: 1`,
+> `maxUnsupportedFigures: 0`). `--fixtures-only` 35 valid.
+>
+> **PROVENANCE IS THE ONE GATE CHANGE (ADR-034).** `hasValidPackProvenance` accepted only
+> `license: "Apache-2.0"`; an original body has no vendor row. `PACK_PROVENANCE_LICENSES` is now the closed
+> set `["Apache-2.0", "Pikar-original"]`, every other field keeps its rule, and the record lives in
+> `IN_HOUSE_PACK_PROVENANCE` (contracts) — pinned to THIS repo's commit `3f77378` (where `offer-architect.md`
+> and `lead-engine.md`, the method sources, last changed), their paths, the body hash, a notice, and that
+> commit's timestamp as `ts`. `packProvenanceFor` reads vendor first, in-house second. The vendor parity test
+> is untouched; the in-house record has its own bytes-level test.
+>
+> **THE PACK IS DARK ON DEPLOY, BY CONSTRUCTION.** It is in `PACK_BODIES` (→ `seedPackCandidates`, a
+> candidate) and NOT in `SEEDS`. Going live is the owner's gate run, in order: `npx convex run
+> skills:seedPackCandidates --prod` (inserts `pack-offer-and-lead-plan` v1 candidate; the six others are
+> idempotent no-ops) → owner preview in the workspace candidates section → `CONVEX_URL=<prod> node
+> scripts/run-workflow-pack-evals.mjs --packs offer-and-lead-plan --candidate` (paid, ~5 cases) → the
+> `workflow-pack-pilot.spec.ts` browser run (`TITLE_TO_PACK` carries "Offer and lead plan") → `activateSkill`.
+> Until then `listPacks` never returns it and the Command Center card (dashboard-pages.md) does not exist.
+>
+> Measured: core 1501/1501, contracts 122/122, backend two shards 67 + 66 files all green, web
+> `commandCenter.test.ts` 66/66, repo typecheck 12/12, biome ci exit 0.)
+
 > Last verified: 2026-09-03 (formatter sweep — **NO PACK BEHAVIOUR CHANGED.**)
 >
 > Reformatted under this playbook's watch: `convex/workflowPackEventLog.ts`,

@@ -1,5 +1,15 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-06 (35-02, G23 half B — **AN ORIGINAL PACK BODY ENTERS THE REGISTRY THROUGH THE
+> SAME DOOR AS THE ADAPTED SIX.** `pack-offer-and-lead-plan` (`packages/contracts/skills/pack-offer-and-lead-
+> plan.md`, mirrored to `packOfferAndLeadPlan.ts`, row added to `skillBodies.test.ts`'s md↔ts table) is in
+> `PACK_BODIES` and therefore published by `seedPackCandidates` as a CANDIDATE; it is NOT in `SEEDS`, so the
+> new-name `active v1` branch never sees it. `packProvenanceFor` gained a second lookup:
+> `IN_HOUSE_PACK_PROVENANCE` (same file as the vendor mirror, separate constant so the manifest parity test
+> stays key-exact), license `Pikar-original`, `ts` = the pinned in-repo commit's timestamp (ADR-034).
+> `PACK_EVAL_SUITE` has a seventh row without a revision bump. `WORKFLOW_PACK_SKILL_NAMES` literal in
+> `skills.test.ts` and the `PACKS` handler table (`plan_days`, 30) both extended. Backend shards green.)
+
 > Last verified: 2026-09-03 (formatter sweep — **NO REGISTRY BEHAVIOUR CHANGED.**)
 >
 > Reformatted under this playbook's watch: `convex/skills.ts`, `convex/skills.test.ts`,

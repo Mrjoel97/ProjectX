@@ -737,6 +737,12 @@ export const PACK_EVAL_SUITE = {
       casesHash: "b176af0e0bf4957eafcbf9b092ef742f768c82e9b11ef4d9c215fac350598c57",
       caseCount: 5,
     },
+    // 35-02 (G23 half B). Added WITHOUT a revision bump: the six rows above are unchanged, so the
+    // evidence already recorded against them stays valid; this pack has no evidence yet to retire.
+    "pack-offer-and-lead-plan": {
+      casesHash: "730479b3de1bb018b907abbab53e7daf5a90ac00c57101bf628bd4634168edb7",
+      caseCount: 5,
+    },
   },
 } as const;
 

@@ -22,7 +22,7 @@ describe("the pack eval suite identity matches the fixtures on disk", () => {
   test("every declared casesHash and caseCount is the file's own", () => {
     // Non-vacuity floor: an empty or shrunken suite must fail loudly rather than pass by having
     // nothing to compare.
-    expect(PACK_NAMES).toHaveLength(6);
+    expect(PACK_NAMES).toHaveLength(7);
 
     for (const name of PACK_NAMES) {
       const declared = PACK_EVAL_SUITE.packs[name];

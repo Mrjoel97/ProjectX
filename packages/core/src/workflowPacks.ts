@@ -34,6 +34,8 @@ export const WORKFLOW_PACK_IDS = [
   "sales-call-prep",
   "process-sop",
   "brand-review",
+  // 35-02 (G23 half B): the idea-stage artifact. The ONE original (non-vendor) pack body.
+  "offer-and-lead-plan",
 ] as const satisfies readonly string[];
 export type WorkflowPackId = (typeof WORKFLOW_PACK_IDS)[number];
 
@@ -572,6 +574,36 @@ export const WORKFLOW_PACKS: Readonly<Record<WorkflowPackId, WorkflowPackSpec>> 
       ...LEAF_FORBIDDEN_OPERATIONS,
     ],
   },
+
+  // THE IDEA-STAGE ARTIFACT (35-02, G23 half B). ONE document — the offer plus a 30-day lead
+  // plan — for a tenant whose business may be one sentence. Same grant shape as `campaign-plan`
+  // and the same three starved sources: the warm list is `crm-facts`, price and cost-per-lead are
+  // `connector-financials`, a reusable lead magnet is `content-shelf`. It never holds a figure of
+  // the business's own — the body turns price and 30-day cash into questions for the owner.
+  "offer-and-lead-plan": {
+    skillName: "pack-offer-and-lead-plan",
+    title: "Offer and lead plan",
+    opener: "Write my offer and my 30-day lead plan.",
+    blurb:
+      "Your offer written out and a 30-day plan for the first leads, in one document you can act on this week.",
+    output: "document",
+    operations: [
+      groundInVault,
+      researchTheWeb("Research the niche and how its buyers are usually reached."),
+      saveDocument(
+        "save-offer-and-lead-plan",
+        "Save the offer and the lead plan to the vault as one document.",
+      ),
+      missing("read-warm-list", "crm-facts", "Read the contacts and past customers to start from."),
+      missing(
+        "read-price-and-lead-cost",
+        "connector-financials",
+        "Read what has ever been paid and what a lead costs.",
+      ),
+      missing("read-content-shelf", "content-shelf", "Reuse saved content as the lead magnet."),
+      ...LEAF_FORBIDDEN_OPERATIONS,
+    ],
+  },
 };
 
 export type ResolvedWorkflowPack =
@@ -754,6 +786,16 @@ export type PackBrowserEvidence = {
 };
 
 /**
+ * The CLOSED set of licences a pack body's provenance may carry. `Apache-2.0` is the vendor drop
+ * every Phase 27 body was adapted from; `Pikar-original` (35-02) is a body written in this repo,
+ * whose `sourceRepo`/`sourceCommit`/`sourcePaths` name the in-repo material it was built from. An
+ * original body is NOT exempt from provenance — it is held to the same shape, pinned to a commit
+ * of this repository instead of the vendor's.
+ */
+export const PACK_PROVENANCE_LICENSES = ["Apache-2.0", "Pikar-original"] as const;
+export type PackProvenanceLicense = (typeof PACK_PROVENANCE_LICENSES)[number];
+
+/**
  * Immutable upstream provenance for an adapted pack body (27-01/27-08). `bodySha256` pins the
  * canonical `.md` under `packages/contracts/skills/`, never the auto-derived `.ts` constant.
  */
@@ -764,7 +806,7 @@ export type PackProvenance = {
   sourcePaths: string[];
   /** SHA-256 of the canonical `.md` body bytes. */
   bodySha256: string;
-  license: "Apache-2.0";
+  license: PackProvenanceLicense;
   modificationNotice: string;
   skillVersions: Record<string, number>;
   ts: number;
@@ -853,7 +895,7 @@ export function hasValidPackProvenance(
   try {
     const p = JSON.parse(provenance) as Partial<PackProvenance>;
     return (
-      p.license === "Apache-2.0" &&
+      (PACK_PROVENANCE_LICENSES as readonly unknown[]).includes(p.license) &&
       typeof p.sourceRepo === "string" &&
       p.sourceRepo.length > 0 &&
       typeof p.sourceCommit === "string" &&

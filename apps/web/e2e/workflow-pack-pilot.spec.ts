@@ -170,6 +170,7 @@ const TITLE_TO_PACK: Record<string, string> = {
   "Sales call prep": "sales-call-prep",
   "Process / SOP": "process-sop",
   "Brand review": "brand-review",
+  "Offer and lead plan": "offer-and-lead-plan",
 };
 
 // ── FREE: the pilot is dark, and the product proves it ────────────────────────────────────────
@@ -195,6 +196,7 @@ test.describe("@dark the pilot is invisible while every pack is a candidate", ()
       "Sales call prep",
       "Process / SOP",
       "Brand review",
+      "Offer and lead plan",
     ]) {
       const everywhere = await page.getByText(title, { exact: true }).count();
       const inOwnerOnly =

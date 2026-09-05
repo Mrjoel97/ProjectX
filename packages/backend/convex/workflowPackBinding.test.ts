@@ -25,6 +25,7 @@ import { packBrandReviewSkillBody } from "@pikar/contracts/skills/packBrandRevie
 import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusinessPulse";
 import { packCampaignPlanSkillBody } from "@pikar/contracts/skills/packCampaignPlan";
 import { packCustomerComplaintSkillBody } from "@pikar/contracts/skills/packCustomerComplaint";
+import { packOfferAndLeadPlanSkillBody } from "@pikar/contracts/skills/packOfferAndLeadPlan";
 import { packProcessSopSkillBody } from "@pikar/contracts/skills/packProcessSop";
 import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCallPrep";
 import {
@@ -66,6 +67,7 @@ const PACK_BODIES: Record<string, string> = {
   "pack-sales-call-prep": packSalesCallPrepSkillBody,
   "pack-process-sop": packProcessSopSkillBody,
   "pack-brand-review": packBrandReviewSkillBody,
+  "pack-offer-and-lead-plan": packOfferAndLeadPlanSkillBody,
 };
 
 const provUsage = (input: number, output: number) => ({

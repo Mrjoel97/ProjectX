@@ -21,10 +21,14 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import CommandCenter, {
   AgendaCard,
   type AgendaView,
+  agendaHasNothingToRank,
   ConnectedAgenda,
   ConnectedBriefing,
+  ConnectedFirstThing,
   ConnectedStats,
   ConstraintCard,
+  FIRST_THING_PACK_ID,
+  FirstThingCard,
   HealthCard,
   type HomeHealth,
   type HomeSummary,
@@ -37,6 +41,7 @@ import CommandCenter, {
 const hooks = vi.hoisted(() => {
   const state = {
     queryCalls: [] as unknown[],
+    actionCalls: [] as unknown[],
     resolveQuery: (_reference: unknown): unknown => undefined,
   };
   return {
@@ -46,12 +51,17 @@ const hooks = vi.hoisted(() => {
       return state.resolveQuery(reference);
     }),
     useMutation: vi.fn(() => async () => undefined),
+    useAction: vi.fn((reference: unknown) => {
+      state.actionCalls.push(reference);
+      return async () => ({ threadId: "t_new", ok: true });
+    }),
   };
 });
 
 vi.mock("convex/react", () => ({
   useQuery: hooks.useQuery,
   useMutation: hooks.useMutation,
+  useAction: hooks.useAction,
 }));
 
 // ── harness ───────────────────────────────────────────────────────────────────
@@ -68,6 +78,8 @@ const names = (references: unknown[]): string[] =>
 
 type QueryAnswers = {
   agenda?: unknown;
+  /** `workflowPackDiscovery.listPacks` — ACTIVE packs only. Absent = still loading. */
+  packs?: unknown;
   summary?: unknown;
   health?: unknown;
   briefing?: unknown;
@@ -91,6 +103,8 @@ function mount(component: unknown, answers: QueryAnswers) {
         return answers.briefing;
       case "agenda:current":
         return answers.agenda;
+      case "workflowPackDiscovery:listPacks":
+        return answers.packs;
       default:
         throw new Error(`Unexpected query mounted: ${name}`);
     }
@@ -103,6 +117,7 @@ function mount(component: unknown, answers: QueryAnswers) {
 
 beforeEach(() => {
   hooks.state.queryCalls.length = 0;
+  hooks.state.actionCalls.length = 0;
   hooks.useQuery.mockClear();
 });
 
@@ -888,6 +903,7 @@ describe("one subscription failing or loading never blanks the others", () => {
     expect(queries).toContain("home:health");
     expect(queries).toContain("briefings:latestForTenant");
     expect(queries).toContain("agenda:current");
+    expect(queries).toContain("workflowPackDiscovery:listPacks");
   });
 
   test("summary still LOADING leaves health and the briefing fully rendered", () => {
@@ -942,6 +958,7 @@ describe("one subscription failing or loading never blanks the others", () => {
     for (const section of [
       "recommendation",
       "agenda",
+      "first-thing",
       "constraint",
       "stats",
       "briefing",
@@ -949,7 +966,7 @@ describe("one subscription failing or loading never blanks the others", () => {
     ]) {
       expect(source).toContain(`<SectionBoundary section="${section}">`);
     }
-    expect(source.match(/<SectionBoundary /g) ?? []).toHaveLength(6);
+    expect(source.match(/<SectionBoundary /g) ?? []).toHaveLength(7);
     // A single page-wide boundary is exactly the 26-10 FinanceTabs bug.
     expect(source).not.toMatch(/<SectionBoundary[^>]*>\s*<div className="cc"/);
   });
@@ -1143,6 +1160,104 @@ describe("the agenda proposes and never acts", () => {
     expect(queries).toEqual(["agenda:current"]);
     expect(html).toContain('data-cc-section="agenda"');
     expect(html).toContain("Awaiting your approval");
+  });
+});
+
+// ── a3) the first finished thing (35-02) ──────────────────────────────────────
+
+const FIRST_THING_PACK = {
+  packId: FIRST_THING_PACK_ID,
+  title: "Offer and lead plan",
+  opener: "Write my offer and my 30-day lead plan.",
+};
+const OTHER_PACK = {
+  packId: "brand-review",
+  title: "Brand review",
+  opener: "Review a piece of my copy.",
+};
+
+describe("the first finished thing is offered only when the pack is live and nothing can be ranked", () => {
+  const noop = () => undefined;
+  const renderCard = (
+    pack: unknown,
+    nothingToRank: boolean | undefined,
+    state: unknown = { kind: "idle" },
+  ) => render(FirstThingCard, { pack, nothingToRank, state, onStart: noop });
+
+  test("nothing to rank: no review, or a review with no items (asks alone do not count)", () => {
+    expect(agendaHasNothingToRank(undefined)).toBeUndefined();
+    expect(agendaHasNothingToRank(null)).toBe(true);
+    expect(agendaHasNothingToRank({ reviewedAt: 1, items: [], asks: [] })).toBe(true);
+    expect(
+      agendaHasNothingToRank({
+        reviewedAt: 1,
+        items: [],
+        asks: [{ section: "financials", needs: "What does it cost you to win one customer?" }],
+      }),
+    ).toBe(true);
+    expect(agendaHasNothingToRank(AGENDA)).toBe(false);
+  });
+
+  test("it renders NOTHING while the pack is dark, while anything is loading, or when the agenda has items", () => {
+    expect(renderCard(null, true)).toBe(""); // listPacks answered without the pack: a candidate
+    expect(renderCard(undefined, true)).toBe(""); // packs still loading
+    expect(renderCard(FIRST_THING_PACK, undefined)).toBe(""); // agenda still loading
+    expect(renderCard(FIRST_THING_PACK, false)).toBe(""); // the review has something to rank
+    // Only THIS pack — a live pack with another id is not this card's business.
+    expect(renderCard(OTHER_PACK, true)).toBe("");
+  });
+
+  test("offered: one control that writes, a saved-document promise, and no send", () => {
+    const html = renderCard(FIRST_THING_PACK, true);
+    expect(html).toContain('data-cc-section="first-thing"');
+    expect(html).toContain('aria-labelledby="cc-first-thing-label"');
+    expect(html).toContain("Your first finished thing");
+    expect(html).toContain("Your offer and a 30-day lead plan, written for you");
+    expect(html).toContain("saves it as one document you can edit. Nothing is sent.");
+    expect(html).toContain("Write it now");
+    expect(html.match(/<button /g) ?? []).toHaveLength(1);
+    expect(html).not.toMatch(/\bsend\b|schedule|approve now/i);
+    // Busy: the same single control, disabled, saying so.
+    const busy = renderCard(FIRST_THING_PACK, true, { kind: "busy" });
+    expect(busy).toContain("Writing…");
+    expect(busy).toMatch(/<button [^>]*disabled/);
+  });
+
+  test("started: a status line and a link to THAT thread in the workspace, no second start", () => {
+    const html = renderCard(FIRST_THING_PACK, true, {
+      kind: "started",
+      threadId: "t_new",
+      title: "Offer and lead plan",
+    });
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Started. It is being written in your workspace now.");
+    expect(html).toContain(
+      'href="/dashboard/workspace?thread=t_new&amp;label=Offer%20and%20lead%20plan"',
+    );
+    expect(html).toContain("Open it in the workspace");
+    expect(html).not.toContain("<button ");
+    const failed = renderCard(FIRST_THING_PACK, true, { kind: "failed" });
+    expect(failed).toContain("That could not be started. Nothing ran");
+    expect(failed).toContain("Write it now");
+  });
+
+  test("the connected section reads listPacks + agenda.current, binds startWorkflowPack, and starts nothing on render", () => {
+    const { html, queries } = mount(ConnectedFirstThing, {
+      packs: [OTHER_PACK, FIRST_THING_PACK],
+      agenda: null,
+    });
+    expect(queries.sort()).toEqual(["agenda:current", "workflowPackDiscovery:listPacks"]);
+    expect(names(hooks.state.actionCalls)).toEqual(["cockpit:startWorkflowPack"]);
+    expect(html).toContain("Write it now");
+    // The page-level mount with a real agenda hides it: nothing on the busy home page changes.
+    const page = mount(CommandCenter, {
+      summary: READY_SUMMARY,
+      health: allClear(),
+      briefing: BRIEFING,
+      agenda: AGENDA,
+      packs: [FIRST_THING_PACK],
+    }).html;
+    expect(page).not.toContain('data-cc-section="first-thing"');
   });
 });
 

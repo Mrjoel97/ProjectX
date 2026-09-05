@@ -70,6 +70,8 @@ describe("the workflow-pack registry is total", () => {
       "sales-call-prep",
       "process-sop",
       "brand-review",
+      // 35-02: the seventh, and the only original body — the idea-stage artifact.
+      "offer-and-lead-plan",
     ]);
   });
 
@@ -269,6 +271,11 @@ describe("the grant is code-owned and exact", () => {
       ],
       ["process-sop", ["findInDrive", "listDriveFolders", "saveAsDocument", "searchVault"]],
       ["brand-review", ["saveAsDocument", "searchVault"]],
+      // Same grant as campaign-plan: research + one saved document, nothing that actuates.
+      [
+        "offer-and-lead-plan",
+        ["declareUnsupported", "saveAsDocument", "searchVault", "webResearch"],
+      ],
     ]);
   });
 
@@ -309,7 +316,7 @@ describe("the grant is code-owned and exact", () => {
     // Non-vacuity: at least one pack actually researches, or the rule above asserts nothing.
     expect(
       WORKFLOW_PACK_IDS.filter((id) => toolsForWorkflowPack(id).includes("webResearch")),
-    ).toEqual(["campaign-plan", "sales-call-prep"]);
+    ).toEqual(["campaign-plan", "sales-call-prep", "offer-and-lead-plan"]);
   });
 
   // The output contract is BOUND to the grant. A pack that promises a durable document without the
@@ -341,6 +348,8 @@ describe("the grant is code-owned and exact", () => {
       "draft_reply",
       "document",
       "document",
+      "document",
+      // 35-02: offer-and-lead-plan — ONE saved document, by the same rule.
       "document",
     ]);
   });
@@ -484,6 +493,9 @@ describe("the honest-partial contract is in the matrix, not in prose", () => {
       ["process-sop", ["org-roles", "task-system"]],
       // There is no tenant brand store: `brandVoice` is a per-plan optional string (schema.ts:757).
       ["brand-review", ["tenant-brand-guidance", "content-shelf"]],
+      // The warm list is a CRM read, price/cost-per-lead are connector reads, a reusable lead
+      // magnet is the content shelf — all three unreadable, all three named in the body.
+      ["offer-and-lead-plan", ["crm-facts", "connector-financials", "content-shelf"]],
     ]);
   });
 
@@ -728,6 +740,26 @@ describe("the pack activation gate's two extra evidence planes fail closed", () 
     expect(hasValidPackProvenance(provenance({ license: "MIT" }), "pack-brand-review", 3)).toBe(
       false,
     );
+    // 35-02: an ORIGINAL body carries the in-house licence and the same shape — a commit of this
+    // repository, the in-repo paths it was built from, the body hash. Nothing else is relaxed.
+    expect(
+      hasValidPackProvenance(
+        provenance({
+          license: "Pikar-original",
+          sourceRepo: "https://github.com/Mrjoel97/ProjectX",
+          sourcePaths: ["packages/contracts/skills/offer-architect.md"],
+        }),
+        "pack-brand-review",
+        3,
+      ),
+    ).toBe(true);
+    expect(
+      hasValidPackProvenance(
+        provenance({ license: "Pikar-original", sourceCommit: "main" }),
+        "pack-brand-review",
+        3,
+      ),
+    ).toBe(false);
     // A branch or a tag is not provenance — only an exact commit is reproducible.
     expect(
       hasValidPackProvenance(provenance({ sourceCommit: "main" }), "pack-brand-review", 3),

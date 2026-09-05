@@ -3,7 +3,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { KNOWLEDGE_WORK_PINNED_AT, KNOWLEDGE_WORK_PROVENANCE } from "./knowledgeWorkProvenance";
+import {
+  IN_HOUSE_PACK_PROVENANCE,
+  KNOWLEDGE_WORK_PINNED_AT,
+  KNOWLEDGE_WORK_PROVENANCE,
+} from "./knowledgeWorkProvenance";
 
 // 27-01 (PACK-01). The upstream material Phase 27's packs are adapted from is pinned to ONE exact
 // commit, snapshotted byte-for-byte, and hashed. This is the vitest-resident half of that gate:
@@ -210,6 +214,33 @@ describe("every pack has a real, reproducible source record", () => {
     expect(notices).toMatch(/NOTICE OF MODIFICATION/i);
     for (const pack of manifest.packs) {
       expect(notices, `${pack.packId} is not named in the notices`).toContain(pack.packId);
+    }
+  });
+});
+
+// 35-02 (G23 half B). The ONE original pack body. It is NOT in the vendor map above — the parity
+// test pins that map to the manifest — so this is where its record is held to the same standard:
+// the hash IS the `.md` on disk, the commit IS a commit of this repository, the paths exist, and no
+// name is claimed by both records.
+describe("the in-house pack provenance is real, pinned and disjoint from the vendor record", () => {
+  test("pack-offer-and-lead-plan is pinned to its own body, an exact commit and existing paths", () => {
+    const own = IN_HOUSE_PACK_PROVENANCE["pack-offer-and-lead-plan"];
+    if (own === undefined) throw new Error("no in-house provenance for pack-offer-and-lead-plan");
+    const body = join(repoRoot, "packages", "contracts", "skills", "pack-offer-and-lead-plan.md");
+    expect(sha256(lf(readFileSync(body, "utf8")))).toBe(own.bodySha256);
+    expect(own.sourceCommit).toMatch(/^[0-9a-f]{40}$/);
+    expect(own.sourceRepo.startsWith("https://")).toBe(true);
+    expect(own.license).toBe("Pikar-original");
+    expect(own.sourcePaths.length).toBeGreaterThan(0);
+    for (const p of own.sourcePaths) expect(existsSync(join(repoRoot, p)), p).toBe(true);
+    expect(own.modificationNotice.length).toBeGreaterThan(0);
+    expect(Number.isFinite(own.pinnedAt)).toBe(true);
+  });
+
+  test("no registry name is claimed by both the vendor record and the in-house record", () => {
+    for (const name of Object.keys(IN_HOUSE_PACK_PROVENANCE)) {
+      expect(KNOWLEDGE_WORK_PROVENANCE[name], name).toBeUndefined();
+      expect(name.startsWith("pack-"), name).toBe(true);
     }
   });
 });

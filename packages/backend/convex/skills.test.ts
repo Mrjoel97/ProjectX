@@ -4676,6 +4676,7 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
       "pack-business-pulse",
       "pack-campaign-plan",
       "pack-customer-complaint",
+      "pack-offer-and-lead-plan",
       "pack-process-sop",
       "pack-sales-call-prep",
     ]);
@@ -5229,6 +5230,7 @@ describe("publishPackCustomization — schema-driven pack candidates (29-05)", (
       ["sales-call-prep", "pack-sales-call-prep", "brief_max_points", 7],
       ["process-sop", "pack-process-sop", "sop_max_steps", 12],
       ["brand-review", "pack-brand-review", "review_max_findings", 9],
+      ["offer-and-lead-plan", "pack-offer-and-lead-plan", "plan_days", 30],
     ];
 
     test("this table covers the whole closed pack set — no pack can be added past it", () => {

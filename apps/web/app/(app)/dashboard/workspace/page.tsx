@@ -347,9 +347,12 @@ export default function WorkspacePage() {
   // already minted the thread + its PLAN card, so we just re-open it at the existing Approve gate. Read
   // once on mount (client-only — avoids the useSearchParams Suspense boundary for a redirect-only value,
   // the connect-gmail precedent). Nothing sends: the user still crosses the same single Approve.
+  // 35-02: the Command Center's first-thing card links here as ?thread=<id>&label=<pack title>;
+  // `openThread` caps the label at 24 chars and React escapes it, so a URL cannot smuggle markup.
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("thread");
-    if (id) openThread(id, "Voice brief");
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("thread");
+    if (id) openThread(id, params.get("label") || "Voice brief");
   }, [openThread]);
   // THE CANVAS VIEW (20-10 follow-up). The right pane shows either the agent's work stream or the
   // media canvas, full-width. It is a VIEWPORT, not a route: the thread, the tab strip and every

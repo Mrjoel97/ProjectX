@@ -507,6 +507,14 @@ const PACK_THRESHOLD_FIELD: Readonly<
     max: 20,
     integer: true,
   },
+  "offer-and-lead-plan": {
+    key: "plan_days",
+    kind: "threshold",
+    label: "How many days the lead plan covers",
+    min: 14,
+    max: 60,
+    integer: true,
+  },
 };
 
 /**

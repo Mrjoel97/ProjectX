@@ -780,6 +780,7 @@ describe("pack customization schemas are derived from the Phase 27 manifest", ()
     "sales-call-prep": ["vault", "web", "calendar"],
     "process-sop": ["vault", "drive"],
     "brand-review": ["vault"],
+    "offer-and-lead-plan": ["vault", "web"],
   };
 
   test("every pack's readable sources are exactly its manifest's existing reads", () => {
@@ -869,6 +870,7 @@ describe("a pack customization field can never carry authority", () => {
       "business_terms",
       "campaign_weeks",
       "extra_guidance",
+      "plan_days",
       "preferred_sources",
       "priority_count",
       "reply_max_words",

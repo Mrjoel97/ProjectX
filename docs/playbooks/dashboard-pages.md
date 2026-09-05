@@ -1,5 +1,20 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-06 (35-02, G23 half B — **THE COMMAND CENTER OFFERS AN IDEA-STAGE USER THEIR
+> FIRST FINISHED THING.** A seventh section, `data-cc-section="first-thing"` in its OWN boundary, reads
+> `workflowPackDiscovery.listPacks` (ACTIVE-only) and `agenda.current`, and renders ONLY when both facts
+> are in: the `offer-and-lead-plan` pack is offered AND the agenda has nothing to rank (`null` review, or
+> `items: []` — interview `asks` alone do not hide it). While the pack is a candidate the card does not
+> exist, with no flag. One control, "Write it now", calls `cockpit.startWorkflowPack({ packId, text:
+> opener })` — the workspace quick-start seam, never the conversation action, never `previewVersion` —
+> then shows a status line and a LINK to `/dashboard/workspace?thread=<id>&label=<title>` (the workspace
+> deep link now honours `label`, capped at 24 chars). Copy: "Your first finished thing" / "Your offer and a
+> 30-day lead plan, written for you" / "…saves it as one document you can edit. Nothing is sent." No
+> send, schedule or approve word anywhere on the card. `commandCenter.test.ts` 66/66: nothing-to-rank
+> rule, the five render-nothing conditions, the offered/busy/started/failed states, and the connected
+> section's exact query + action set; the page mount with a real agenda hides it. Browser spec
+> `command-center.spec.ts` unchanged — the card is conditional, so it is not in the always-present list.)
+
 > Last verified: 2026-09-06 (35-01, G23 — **THE COMMAND CENTER SPEAKS TO A BUSINESS OWNER.** Words only;
 > no query, order, route or rule moved. `HOME_PRIORITY_COPY`: "Finish the work that stopped" (was Clear the
 > blocked work), "Fix the first thing blocking growth" (was Fix the failing gate), "Name what is holding

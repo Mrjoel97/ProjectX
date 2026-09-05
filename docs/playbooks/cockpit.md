@@ -1,3 +1,11 @@
+> Last verified: 2026-09-06 (35-02, G23 half B — **THE WORKSPACE DEEP LINK CARRIES A LABEL, AND THE PACK
+> BROWSER SPEC KNOWS THE SEVENTH TITLE.** `/dashboard/workspace?thread=<id>&label=<text>` opens the thread
+> tab under `label` (falls back to "Voice brief", the VOIC-04 caller); `openThread` caps it at 24 chars and
+> React escapes it. Caller: the Command Center's first-thing card (dashboard-pages.md). `workflow-pack-
+> pilot.spec.ts`: `TITLE_TO_PACK` + the dark-pilot title list gained "Offer and lead plan", so the @dark
+> test fails if the new pack leaks outside the owner-only sections and the @evidence writer can pin its
+> row. Nothing else in the cockpit moved.)
+
 > Last verified: 2026-09-06 (28.2-01 — **THE REVENUE OFFER PANEL CAN LIST OPEN INVOICES.** On a passed
 > quickbooks/stripe lane the invoice-reminder offer gains "Show open invoices" (a request, never a render-time
 > read): owed > 0, oldest due first, ten rows, `formatMoneyAmount` + currency code, lateness in words, partial
