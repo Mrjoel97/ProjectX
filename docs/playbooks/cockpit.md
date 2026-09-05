@@ -1,3 +1,11 @@
+> Last verified: 2026-09-06 (28.2-01 — **THE REVENUE OFFER PANEL CAN LIST OPEN INVOICES.** On a passed
+> quickbooks/stripe lane the invoice-reminder offer gains "Show open invoices" (a request, never a render-time
+> read): owed > 0, oldest due first, ten rows, `formatMoneyAmount` + currency code, lateness in words, partial
+> and unavailable reads say so. Each row's "Draft a reminder" sends the eval-pinned opener to the cockpit; the
+> turn's `stageInvoiceReminder` stages an ordinary `proposed` email plan behind Approve. No new tool, no new
+> mutation, no send from the panel. `RevenuePackPanel.test.tsx` 11/11. Owner runbook for passing the lane:
+> revenue-connectors.md.)
+
 > Last verified: 2026-09-05 (25.3-01 — `gmailAuth.flagExpiringTokens` (cron target, name unchanged)
 > kicks `scanExpiringTokens`, a batch walk over `gmailTokens`; an expiring grant raises ONE unread
 > `gmail_reconnect` notice (dedupe through `by_tenant_read`, bounded take) and a read/dismissed one

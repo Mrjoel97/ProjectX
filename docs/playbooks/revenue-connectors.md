@@ -1,5 +1,52 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
+> Last verified: 2026-09-06 (28.2-01, G22 — **THE EVIDENCE WINDOW IS REACHABLE, AND AN INVOICE CAN BE PICKED.**
+> Two changes, one carried over. **(1) Carried over from the shared tree's uncommitted work:** `providerGates.
+> connectableProviderGates` is the ONE connect-start predicate (`startAllowedFor`), shared by the gate
+> (`connectStartAllowed`) and the surface (`connectorConnections.connections`). Before this the gate admitted an
+> unproven lane for the owner while the panel filtered on `passed` alone, so the owner branch was reachable by
+> no button and no lane could ever gather the live evidence wave 7 judges. A tenant still sees exactly
+> `passedProviderGates`; the OWNER additionally sees admitted-but-unproven lanes, each row marked `unproven`
+> and prefixed "Not yet verified: this connector has never completed a live read against the provider.
+> Connecting it here is how that evidence gets collected." **(2) `RevenuePackPanel`:** the quickbooks/stripe
+> invoice-reminder offers can list the tenant's OPEN invoices on request (`quickbooks.readEntity Invoice` /
+> `stripeConnector.readEntity invoices`, 90 d — the same gated read `stageInvoiceReminder` refetches from;
+> owed > 0, oldest due first, capped at 10, partial says so), and one "Draft a reminder" per row sends
+> `reminderOpener(providerLabel, id)` — pinned by test to eval case 42's first turn. Nothing loads on render;
+> nothing in the panel stages or sends. PayPal's offer gets no list (the tool refuses it).
+>
+> **OWNER RUNBOOK — passing the QuickBooks lane (chosen 2026-09-06; owner has an empty or sandbox company):**
+> 1. `cd packages/backend && npx convex env set --prod QUICKBOOKS_CLIENT_ID …`, `QUICKBOOKS_CLIENT_SECRET`,
+>    `QUICKBOOKS_REDIRECT_URI` = `https://<prod>.convex.site/connectors/quickbooks/callback/production`
+>    (registered VERBATIM on the Intuit app; the sandbox proof uses `/callback/sandbox`), optional
+>    `QUICKBOOKS_HOME_CURRENCY`.
+> 2. `npx convex run providerGates:inspectGate '{"provider":"quickbooks","environment":"production"}' --prod`.
+>    No row → `node scripts/check-provider-lane.mjs --provider quickbooks --seal-decision from-owner --apply`
+>    with the CLI pointed at prod (writes `approved_production` + `parked`). Repeat for `sandbox` if the reminder
+>    proof will run there (an Intuit sandbox company ships with sample invoices; the empty production company
+>    proves only read + revoke).
+> 3. Signed in as owner: Connections → QuickBooks (row says "Not yet verified…") → Connect → Intuit consent.
+> 4. Live read: the cash-flow opener, or `quickbooks:readEntity {environment, entity:"Invoice"}` — observe
+>    `ready`/`partial`. Disconnect → `revocation.upstream = "confirmed"` (QuickBooks is the one lane that can).
+>    Reconnect.
+> 5. Record the observation (counts and enum values only) under `docs/connectors/quickbooks-suitability.md`
+>    with a heading anchor, state the Intuit App Partner tier, then
+>    `--seal-decision pass --evidence quickbooks-suitability.md#<anchor> --clear-condition partner-tier-and-poll-budget --apply`
+>    (the CLI passes `expectedRevision`; a moved revision refuses and you re-inspect).
+> 6. Eval evidence ON PROD (EVAL_GATE is per deployment): with `CONVEX_URL`/`NEXT_PUBLIC_CONVEX_URL` set to the
+>    production URL, `pnpm eval:golden --skill revenue-specialist@1`, then `--skill revenue-invoice-reminder@1`,
+>    `revenue-cash-flow@1`, `revenue-payroll-confidence@1` (full runs; each ~$0.10-0.50). Then `activateSkill`
+>    for each (owner mutation; the choke point refuses without that exact-version evidence).
+> 7. Verify: Connections shows QuickBooks proven; the workspace shows the three QuickBooks offers; "Show open
+>    invoices" → pick one → the reminder plan is `proposed` → Approve → sent. `recovery_observed` follows a
+>    later passed read that shows it paid (28-29).
+> 8. 28-27: record the subset release here and in cockpit.md; `node scripts/check-phase28-completion.mjs
+>    --verify-current`. Phase 28 stays incomplete (three lanes parked) — a subset release is not completion.
+>
+> Tests: `connectorConnections.test.ts` 32/32 (owner sees unproven, tenant does not, both answers exercised),
+> `providerGates.test.ts` + `connectorCallbacks.test.ts` green, `connectorRows.test.ts` green,
+> `RevenuePackPanel.test.tsx` 11/11. Two carried-over `noUncheckedIndexedAccess` type errors fixed on landing.)
+
 > Last verified: 2026-09-03 (**THE TYPECHECK GATE IS GREEN AGAIN — `reminders.test.ts` TYPE ONLY,
 > NO GUARD CHANGED.**)
 >
