@@ -80,6 +80,15 @@ const NAV: Array<{ label: string; icon: ReactNode; href: string; ownerOnly?: boo
 
 const RAIL_KEY = "pikar:rail-collapsed";
 
+// 25.2 (G15): below 48rem the rail is hidden by CSS and these four NAV entries become a labelled
+// bottom bar. Derived from NAV, so a renamed rail entry renames its tab.
+const TABBAR_HREFS = [
+  "/dashboard",
+  "/dashboard/approvals",
+  "/dashboard/workspace",
+  "/dashboard/vault",
+];
+
 // OPSG-07: a failure nobody sees is a failure nobody fixes. This is an unread-mail
 // badge, not a toast — `newCount` is a LIVE query, so the count reflects the DB and
 // only falls when an operator marks the letter resolved. It never auto-clears and
@@ -255,6 +264,21 @@ function Shell({ children }: { children: ReactNode }) {
             <span className="rail-label">Sign Out</span>
           </button>
         </div>
+      </nav>
+
+      <nav className="tabbar" aria-label="Primary (compact)">
+        {NAV.filter((item) => TABBAR_HREFS.includes(item.href)).map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`tabbar-item${isActive(item.href) ? " is-active" : ""}`}
+            aria-current={isActive(item.href) ? "page" : undefined}
+          >
+            {item.icon}
+            <span className="tabbar-label">{item.label}</span>
+            {item.href === "/dashboard/approvals" && <ApprovalsBadge />}
+          </Link>
+        ))}
       </nav>
 
       <div className="canvas-col">

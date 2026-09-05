@@ -15,6 +15,21 @@ const MAX = 80;
 const DEFAULT = 30; // chat ~30% left / workspace ~70% right
 const clamp = (n: number) => Math.min(MAX, Math.max(MIN, n));
 
+// 25.2 (G15): below this width the two-pane grid gave the chat ~110px. A phone gets ONE pane at a
+// time — chat first, the work behind a toggle. Both panes stay MOUNTED (hidden, not unmounted), so
+// a half-typed message and every open subscription survive the switch.
+export const NARROW_QUERY = "(max-width: 48rem)";
+export function paneLayout(
+  narrow: boolean,
+  showWork: boolean,
+  pct: number,
+): { showLeft: boolean; showRight: boolean; columns: string } {
+  if (!narrow) return { showLeft: true, showRight: true, columns: `${pct}% 6px 1fr` };
+  return showWork
+    ? { showLeft: false, showRight: true, columns: "1fr" }
+    : { showLeft: true, showRight: false, columns: "1fr" };
+}
+
 // Convex Auth's JWT `sub` is "<userId>|<sessionId>" — the userId half identifies the
 // signed-in user client-side with no round-trip. Falls back to "anon" pre-auth (the page
 // mounts inside <Authenticated>, so a real token is present by the time it matters).
@@ -39,6 +54,17 @@ export function SplitPane({ left, right }: { left: ReactNode; right: ReactNode }
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const [pct, setPct] = useState<number>(() => readSaved(storageKey));
+  // SSR renders the desktop grid; the media query is read after mount and tracked live.
+  const [narrow, setNarrow] = useState(false);
+  const [showWork, setShowWork] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_QUERY);
+    const sync = () => setNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  const layout = paneLayout(narrow, showWork, pct);
 
   const persist = (p: number) => {
     try {
@@ -89,15 +115,33 @@ export function SplitPane({ left, right }: { left: ReactNode; right: ReactNode }
       ref={containerRef}
       style={{
         display: "grid",
-        gridTemplateColumns: `${pct}% 6px 1fr`,
+        gridTemplateColumns: layout.columns,
+        gridTemplateRows: narrow ? "auto minmax(0, 1fr)" : undefined,
         height: "100%",
         minHeight: 0,
       }}
     >
-      <div data-testid="split-left" style={{ minWidth: 0, overflow: "auto" }}>
+      {narrow && (
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "0.4rem 0.6rem 0" }}>
+          <button
+            type="button"
+            className="composer-pill"
+            aria-pressed={showWork}
+            onClick={() => setShowWork((w) => !w)}
+          >
+            {showWork ? "Back to chat" : "Show work"}
+          </button>
+        </div>
+      )}
+      <div
+        data-testid="split-left"
+        hidden={!layout.showLeft}
+        style={{ minWidth: 0, overflow: "auto" }}
+      >
         {left}
       </div>
       <hr
+        hidden={narrow}
         data-testid="split-handle"
         aria-orientation="vertical"
         aria-valuenow={Math.round(pct)}
@@ -120,7 +164,11 @@ export function SplitPane({ left, right }: { left: ReactNode; right: ReactNode }
           touchAction: "none",
         }}
       />
-      <div data-testid="split-right" style={{ minWidth: 0, overflow: "auto" }}>
+      <div
+        data-testid="split-right"
+        hidden={!layout.showRight}
+        style={{ minWidth: 0, overflow: "auto" }}
+      >
         {right}
       </div>
     </div>

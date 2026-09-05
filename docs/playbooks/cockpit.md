@@ -1,3 +1,12 @@
+> Last verified: 2026-09-05 (25.2-02 — **THE COCKPIT WORKS ON A PHONE (G15).** Below 48rem
+> `SplitPane` shows ONE pane at a time — chat first, the work behind a "Show work" / "Back to chat"
+> toggle (`aria-pressed`). `paneLayout(narrow, showWork, pct)` is the pure decision; `narrow` is a
+> live `matchMedia("(max-width: 48rem)")` state read after mount (SSR renders the desktop grid).
+> Both panes stay MOUNTED and are toggled with `hidden`, so a half-typed message and every open
+> subscription survive the switch; the drag handle is hidden while narrow. Desktop behaviour —
+> per-user persisted split, 20-80 clamp, pointer + arrow-key resize — is byte-for-byte unchanged.
+> Pinned by `splitPane.test.ts` (truth table + source scans).)
+>
 > Last verified: 2026-09-05 (25.2-01 — items 6-7 of the delete-first pass: the composer's disabled
 > "Auto" model pill is deleted (it promised a dial that does not exist), and "Adapt a business skill"
 > in the chat options menu renders only for the owner (`viewer?.isOwner === true`, the query the page

@@ -1,5 +1,13 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-05 (25.2-02 — **NO ICON RAIL ON A PHONE.** Below 48rem `.rail` is
+> `display: none` and a fixed four-item labelled bar (`.tabbar`: Command Center, Approvals, My
+> Workspace, Knowledge Vault — `TABBAR_HREFS`, drawn from NAV so a renamed entry renames its tab)
+> navigates, with `aria-current="page"` and the approvals badge. `.app-frame` is shortened by the
+> bar's 3.6rem so nothing scrolls behind it. The old mobile block that shrank the rail to 15
+> unlabelled icons is replaced, and the `is-soon` / `rail-soon` rules left by 25.2-01 are deleted.
+> Nothing changes at 48rem and above.)
+>
 > Last verified: 2026-09-05 (25.2-01 — **DELETE-FIRST UX PASS, items 1-4 (G14).** The rail loses the
 > "Join Community · Soon" placeholder (every NAV entry now has an href; the `is-soon` branch is gone)
 > and "Compliance" is `ownerOnly` — filtered on `api.owner.viewer` in the Shell, the same flag the

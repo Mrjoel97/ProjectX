@@ -584,7 +584,6 @@ a {
 }
 
 .rail.is-collapsed .rail-label,
-.rail.is-collapsed .rail-soon,
 .rail.is-collapsed .rail-word {
   display: none;
 }
@@ -710,11 +709,6 @@ button.rail-item:hover {
   font-weight: 600;
 }
 
-.rail-item.is-soon {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .rail-item svg {
   flex: none;
 }
@@ -724,15 +718,54 @@ button.rail-item:hover {
   text-overflow: ellipsis;
 }
 
-.rail-soon {
-  margin-left: auto;
-  font-size: 0.54rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  border: 1px solid rgb(255 255 255 / 32%);
-  border-radius: 999px;
-  padding: 0.08rem 0.38rem;
-  flex: none;
+/* 25.2 (G15): the compact primary nav. Hidden above 48rem, where the rail owns that width. Same
+   gradient family as the rail so the two read as one chrome; 44px targets (BRAND §6). */
+.tabbar {
+  display: none;
+  position: fixed;
+  inset: auto 0 0 0;
+  height: 3.6rem;
+  z-index: 20;
+  align-items: stretch;
+  padding: 0 0.25rem env(safe-area-inset-bottom);
+  background: linear-gradient(180deg, var(--teal-900) 0%, #073733 100%);
+  color: #fff;
+  box-shadow: 0 -1px 0 rgb(255 255 255 / 8%);
+}
+
+.tabbar-item {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 44px;
+  margin: 0.3rem 0.15rem;
+  border-radius: 0.6rem;
+  color: rgb(255 255 255 / 82%);
+  font-size: 0.68rem;
+  line-height: 1.1;
+  text-decoration: none;
+}
+
+.tabbar-item.is-active {
+  color: #fff;
+  font-weight: 600;
+  background: linear-gradient(135deg, rgb(64 202 208 / 35%), rgb(0 150 137 / 88%));
+}
+
+.tabbar-item:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.tabbar-item .rail-badge {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.6rem;
+  margin: 0;
 }
 
 /* OPSG-07: the live unresolved-DLQ count. Never auto-clears; red on purpose. */
@@ -792,46 +825,16 @@ button.rail-item:hover {
 
 /* Mobile auto-collapse — mirrors `.rail.is-collapsed` above. Keep the two in sync. */
 @media (max-width: 48rem) {
+  /* 25.2 (G15): no icon rail on a phone. The four-item .tabbar below navigates, and the frame
+     is shortened by its height so nothing scrolls behind it. */
   .rail {
-    width: 3.2rem;
-    padding-left: 0.4rem;
-    padding-right: 0.4rem;
-  }
-
-  .rail .rail-label,
-  .rail .rail-soon,
-  .rail .rail-word {
     display: none;
   }
-
-  .rail .rail-item {
-    justify-content: center;
-    padding: 0.65rem 0;
+  .tabbar {
+    display: flex;
   }
-
-  .rail .rail-brand {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-  }
-
-  .rail .rail-logo {
-    width: 1.9rem;
-    height: 1.9rem;
-    border-radius: 0.65rem;
-  }
-
-  .rail .rail-logo svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  .rail .rail-badge {
-    position: absolute;
-    top: 0.15rem;
-    right: 0.35rem;
-    margin: 0;
-    transform: scale(0.85);
+  .app-frame {
+    height: calc(100vh - 3.6rem);
   }
 }
 
