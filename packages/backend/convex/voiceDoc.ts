@@ -20,7 +20,6 @@
 //     memo body, ILLEGAL in every `audit` / `deadLetters` / `telemetry` payload and in
 //     `agentSteps`. Plan 14-09 pins that with a mutation-verified static scan.
 //
-import { openai } from "@ai-sdk/openai";
 import { DOCUMENT_ANALYST_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import {
@@ -36,7 +35,7 @@ import {
   shapeDocReview,
   voiceDocThreadId,
 } from "@pikar/voice";
-import { generateObject, jsonSchema, type LanguageModel } from "ai";
+import { generateObject, jsonSchema } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -44,6 +43,7 @@ import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { tenantAction, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { resolveModel } from "./lib/models";
 
 /**
  * Collect the passages of THIS session's document that match `query`. Returns `[]` — never
@@ -175,9 +175,6 @@ export const searchDocument = tenantAction({
 
 /** Per-call wall-clock ceiling (mirrors `llm.ts` / `vaultLlm.ts`). One retry budget. */
 const CALL_TIMEOUT_MS = 45_000;
-
-/** Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel. */
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 /** Counts and a closed-enum verdict — the ONLY thing the producer hands back. No label, no
  *  excerpt, no passage, no transcript turn ever crosses this boundary (§4). */

@@ -3989,6 +3989,9 @@ describe("the PAID write plane: one money gate, and a regenerate that cannot lea
     // 3 video + 3 tts + 1 stt. The render line has no row, by construction.
     expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(7);
     expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
+    // 33.2-04: generate IS the approval â€” the row leaves `proposed`, so the approvals page stops
+    // offering an Approve whose pre-step would buy the whole deck again.
+    expect((await planRowOf(t, planId))?.status).toBe("delivering");
   });
 
   test("a REFUSED generate schedules nothing and consumes nothing", async () => {
@@ -6830,6 +6833,8 @@ describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline termi
     const atRender = await reelDocs(t);
     expect(atRender).toHaveLength(1);
     expect(atRender[0]?.storageId).toBe(mp4);
+    // 33.2-04: the render terminal closes the plan â€” "done", not "delivering"/"proposed" for ever.
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
 
     // The burn lands later over the captioned cut: the SAME doc repoints, and the uncaptioned
     // blob it used to hold is deleted — one doc per plan, no second row, no leaked mp4.

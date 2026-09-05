@@ -1,5 +1,16 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-05 (33.2-04 â€” **GENERATE IS THE APPROVAL, AND THE RENDER IS THE TERMINAL.**
+> Owner-reported on the first reel of the new pin: the approvals page kept the rendered reel under
+> "awaiting" with an Approve button. `generateReel` bought the deck and left the plan `proposed`;
+> `executePlan`'s media pre-step reserves the WHOLE deck before its CAS, so that Approve was a
+> second bill, not a no-op. Now: `generateReel` patches `status: "delivering"` on a successful
+> whole-deck reservation (both arms) â€” the same state `executePlan` leaves â€” and `recordRender`
+> closes the plan to `done` (a `canceled` row stays canceled). Before this, approved reels sat under
+> "in flight" for ever too (DB: 1 delivering/rendered, 1 proposed/rendered). The one legacy
+> proposed/rendered row (the owner's 2026-09-05 reel) is dismissed with Discard, not Approve.
+> Measured: media.test.ts generateReel + render-terminal tests carry the two assertions.)
+>
 > Last verified: 2026-09-05 (33.2-03 — **THE STORYBOARD PIN MOVED TO `gpt-4.1-mini`, BY THE RULE.**
 > `33.2-BAKEOFF.md` + ADR-032. On the 90 s media clock, executed model asserted per pass from
 > spend rows: gpt-4o-mini 14 clean of 24 (baseline), gpt-5.6-luna 11, gpt-4.1-mini 18 (+4, clears

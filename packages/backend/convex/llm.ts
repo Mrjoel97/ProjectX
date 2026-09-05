@@ -23,7 +23,6 @@ import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
 import { createVertex, vertex } from "@ai-sdk/google-vertex";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { ActionCache } from "@convex-dev/action-cache";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { draftSchema } from "@pikar/contracts/drafting";
 import { parseRouting, type RoutingDecision, routingSchema } from "@pikar/contracts/routing";
 import {
@@ -129,6 +128,7 @@ import {
 import { buildInvoiceReminderTool } from "./invoiceReminders";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
+import { openRouter, resolveModel as resolveVendorModel } from "./lib/models";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
 import { buildRevenueTools, isRevenueToolGrant } from "./revenueTools";
 
@@ -311,13 +311,10 @@ const googleVertex = (): ReturnType<typeof createVertex> => {
 //
 // The FULL id ("stealth/ox-alpha") is what OpenRouter wants AND what PRICING is keyed on, so unlike
 // the openai/ and google/ branches nothing is stripped.
-let openRouterProvider: ReturnType<typeof createOpenRouter> | undefined;
-const openRouter = () => {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
-  openRouterProvider ??= createOpenRouter({ apiKey });
-  return openRouterProvider;
-};
+// 33.2-04: the provider and the or/ + openai/ branches live in `lib/models.ts` — the V8 vault,
+// digest, blueprint, onboarding and voice actions share ONE resolver with this lane now. Five
+// module-local copies of the old one-liner sent `or/openai/gpt-4o-mini` to api.openai.com for nine
+// days; see that file's header. Only stealth/ (per-model settings) and google/ (Buffer) stay here.
 
 /**
  * Model-level settings for ox-alpha. **EMPTY ON PURPOSE, AND THE MEASUREMENTS ARE WHY.**
@@ -363,8 +360,7 @@ const resolveModel = (id: string): LanguageModel => {
   // stays the PRICING/audit key, so `or/openai/gpt-4o-mini` and `openai/gpt-4o-mini` price and audit
   // as the different billing paths they are. No per-model settings: unlike ox-alpha these are not
   // reasoning-mandatory, and the 45 s lane is the one place reasoning has actually cost us runs.
-  if (id.startsWith("or/")) return openRouter().chat(id.slice(3));
-  if (!id.startsWith("google/")) return openai(id.replace(/^openai\//, ""));
+  if (!id.startsWith("google/")) return resolveVendorModel(id);
   const bare = id.replace(/^google\//, "");
   // AI Studio if a key is set, else Vertex. `googleVertex()` still throws its own worded error when
   // NEITHER credential exists, so "no Google config at all" stays one clear message rather than two.

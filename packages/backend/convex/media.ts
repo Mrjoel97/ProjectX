@@ -3372,8 +3372,9 @@ export const generateReel = tenantMutation({
     // exists — the assembler builds three kinds of scene, the sidecar describes them, and
     // `reserveSceneJobInner` prices them per kind. This is where a scene deck becomes BUYABLE.
     const sceneDeck = sceneDeckOf(plan);
+    let res: Awaited<ReturnType<typeof reserveAndSchedule>>;
     if (sceneDeck !== null) {
-      const res = await reserveAndSchedule(ctx, {
+      res = await reserveAndSchedule(ctx, {
         tenantId: ctx.tenantId,
         planId,
         deck: { kind: "scene", ...sceneDeck },
@@ -3390,15 +3391,26 @@ export const generateReel = tenantMutation({
           altTargetDurationSeconds: undefined,
         });
       }
-      return res;
+    } else {
+      const blocks = deckOf(plan);
+      if (!blocks || plan.clipSeconds === undefined)
+        return { ok: false as const, reason: "no_deck" };
+      res = await reserveAndSchedule(ctx, {
+        tenantId: ctx.tenantId,
+        planId,
+        deck: { kind: "block", blocks, clipSeconds: plan.clipSeconds },
+      });
     }
-    const blocks = deckOf(plan);
-    if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
-    return await reserveAndSchedule(ctx, {
-      tenantId: ctx.tenantId,
-      planId,
-      deck: { kind: "block", blocks, clipSeconds: plan.clipSeconds },
-    });
+    // 33.2-04 — GENERATE IS THE APPROVAL. This is the canvas's paid entry point and it bought the
+    // whole reel, yet the plan stayed `proposed`: the approvals page kept listing it under
+    // "awaiting" with an Approve button whose media pre-step would have reserved the ENTIRE deck a
+    // second time (owner-reported 2026-09-05 on a rendered reel — the double approval was also a
+    // double bill waiting to happen). The plan row now says what `cockpit.executePlan`'s media arm
+    // says at the same point: `delivering` (the reservation already set `renderStatus: "pending"`),
+    // and `recordRender` closes it to `done`. `executePlan`'s CAS refuses anything but `proposed`,
+    // so the card can no longer be approved twice from either door.
+    if (res.ok) await ctx.db.patch(planId, { status: "delivering" });
+    return res;
   },
 });
 

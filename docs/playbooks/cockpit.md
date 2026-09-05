@@ -1,3 +1,10 @@
+> Last verified: 2026-09-05 (33.2-04 â€” **`convex/lib/models.ts` is THE model resolver.** llm.ts
+> keeps only its stealth/ (per-model settings) and google/ (Buffer-bound Vertex credential)
+> branches and delegates every vendor id to `resolveVendorModel`; the OpenRouter provider factory
+> moved there so the V8 vault/onboarding/voice actions share it. Registered under this playbook in
+> `watch.json`. Why: five module-local copies of the old resolver broke every vault ingest for nine
+> days (vault.md). `lib/models.test.ts` holds the route and a source tripwire against new copies.)
+>
 > Last verified: 2026-09-04 (33.2-03 — **THE AGENT LOOP'S FALLBACK IS AUDITED, AND THE MEDIA
 > DIRECTOR HAS ITS OWN 90 s CLOCK.** Two defects the bake-off surfaced by measuring, not by reading.)
 >

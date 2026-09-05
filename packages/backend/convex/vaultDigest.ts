@@ -21,7 +21,6 @@
 // never hardcoded. §4: the assembled manifest is scanned (fail-closed) BEFORE the model call.
 // A `SMOKE::digest::` sentinel anywhere in the assembled prompt returns a deterministic fixture
 // with NO model call (the offline convex-test path).
-import { openai } from "@ai-sdk/openai";
 import { FOLDER_DIGEST_SKILL } from "@pikar/contracts/skill";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
@@ -31,7 +30,7 @@ import {
   VAULT_FOLDER_MEMBER_BATCH,
   VAULT_GRID_READ_BUDGET_BYTES,
 } from "@pikar/vault";
-import { generateText, type LanguageModel } from "ai";
+import { generateText } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -43,15 +42,11 @@ import {
 } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { resolveModel } from "./lib/models";
 import { startIngest } from "./vaultIngest";
 
 // Per-call wall-clock ceiling + one retry budget (mirrors llm.ts / vaultLlm.ts).
 const CALL_TIMEOUT_MS = 45_000;
-
-// Map a pricing/audit model id ("openai/gpt-4o-mini") to a direct-OpenAI LanguageModel. Duplicated
-// from llm.ts / vaultLlm.ts / blueprint.ts — the third module-local copy of one line, deliberately
-// not a shared helper (it would be the only reason for a new module).
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 /** The excerpt budget. Mirrors `vaultGround.ts:29-30`'s PER_DOC_CHAR_CAP / TOTAL_CHAR_CAP, which
  *  are module-private `const`s there and therefore cannot be imported. Same numbers, same job: cap

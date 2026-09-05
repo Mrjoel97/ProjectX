@@ -538,6 +538,11 @@ export const recordRender = internalMutation({
     // after `parseAssemblySidecar` accepted the bytes. That co-location is what lets `media.reel`
     // treat their presence as proof the sidecar validated, without re-reading the blob.
     await ctx.db.patch(a.planId, {
+      // 33.2-04: the render IS the delivery. Neither door (canvas `generateReel`, approvals
+      // `executePlan`) ever closed the plan: approved reels sat under "in flight" for ever and
+      // canvas reels under "awaiting" (see generateReel). A plan the owner discarded while the
+      // render was in flight keeps `canceled` — the reel still lands, the row is not resurrected.
+      ...(before?.status === "canceled" ? {} : { status: "done" as const }),
       renderStatus: "rendered",
       renderStorageId: a.result.renderStorageId,
       sidecarStorageId: a.result.sidecarStorageId,

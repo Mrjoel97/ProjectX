@@ -1,5 +1,10 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-05 (33.2-04 â€” blueprint.ts and onboarding.ts resolve their model through
+> `convex/lib/models.ts` now; their module-local `openai(id.replace(...))` copies had been sending
+> `or/openai/gpt-4o-mini` to api.openai.com since 2026-08-27 (404, see vault.md). No behaviour
+> change on a bare `openai/` id; the `or/` pin now actually reaches OpenRouter from here.)
+>
 > Last verified: 2026-09-03 (**THE PROFILE TABS ARE TWO LEVELS, SETTINGS MOVED IN, AND BOTH LEVELS
 > ARE DERIVED FROM THE URL.** Working tree, uncommitted. 670 web unit tests + typecheck green;
 > `next build` clean. Not verified in a live browser.)

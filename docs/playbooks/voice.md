@@ -1,5 +1,8 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-09-05 (33.2-04 â€” voiceDoc.ts resolves its model through `convex/lib/models.ts`;
+> its local resolver copy could not route an `or/` id (see vault.md). One-line import swap.)
+>
 > Last verified: 2026-08-14 (⚠ **SOURCE REVIEW OF AN UNCOMMITTED FOREIGN-LANE DIFF, NOT A RUN.**
 > Reviewed by reading the working-tree diff of `voiceToken.ts` and `packages/voice/src/brief.ts`;
 > no voice session, mint, or brief was executed, and no live gate was re-run. Two behaviours moved.

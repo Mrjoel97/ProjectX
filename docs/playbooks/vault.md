@@ -1,3 +1,17 @@
+> Last verified: 2026-09-05 (33.2-04 â€” **EVERY VAULT INGEST THAT REACHED `extractGraph` HAD FAILED
+> SINCE 2026-08-27, `ingest_failed`, 69 rows including all four rendered reels.** Root cause:
+> `845f4b1` moved `DEFAULT_MODEL` to `or/openai/gpt-4o-mini` and llm.ts learned the `or/` route, but
+> vaultLlm.ts / vaultDigest.ts (and blueprint, onboarding, voiceDoc) each kept a module-local
+> `openai(id.replace(/^openai\//, ""))` â€” the literal `or/...` id went to api.openai.com â†’ 404 â†’
+> retries exhausted â†’ `onIngestComplete` marked the doc failed. The dev log said it plainly
+> (`The model or/openai/gpt-4o-mini does not exist`) and was read as another lane's. Fix: ONE
+> resolver, `convex/lib/models.ts` (`resolveModel`, `openRouter()`), imported by all six; a source
+> tripwire in `lib/models.test.ts` fails on any new copy. Owner-visible: the reels ARE in the vault
+> (`kind: "reel"`, category videos, transcript as text, mp4 as bytes) but sat `failed`; the vault's
+> per-doc Retry (`vaultSweep.retryExtraction`, accepts `failed`) re-runs them on the fixed route.
+> Still DIRECT-OpenAI by design and needing OPENAI credits: the PDF hosted rail (vaultExtract
+> `openai("gpt-4o-mini")` with a file part), whisper transcription (vaultTranscribe), intake.)
+>
 > Last verified: 2026-08-27 (**EMBEDDINGS RUN THROUGH OPENROUTER NOW — AND THE CHANGE NEARLY TOOK
 > THE RETRY WORK WITH IT.** `EMBEDDING_MODEL` is `openai/text-embedding-3-small`: the SAME OpenAI
 > model as before, reached through OpenRouter's namespaced id and OpenRouter's balance. A ROUTE

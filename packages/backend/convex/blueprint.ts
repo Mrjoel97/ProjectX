@@ -4,7 +4,6 @@
  * CLAUDE.md §2 bans public query/mutation/action builders; these identity-less tenant-scoped
  * readers deliberately use the allowed internalQuery builder and accept an explicit tenantId.
  */
-import { openai } from "@ai-sdk/openai";
 import { BUSINESS_BLUEPRINT_SKILL } from "@pikar/contracts/skill";
 import {
   aggregatePulse,
@@ -32,7 +31,7 @@ import {
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
 import { categoryFor } from "@pikar/vault";
-import { generateObject, jsonSchema, type LanguageModel } from "ai";
+import { generateObject, jsonSchema } from "ai";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -45,14 +44,13 @@ import {
 import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { resolveModel } from "./lib/models";
 import { sealedIn } from "./vaultFolders";
 
 const TOP_ENTITY_COUNT = 20;
 const DRIFT_SCAN_CAP = 100;
 const CALL_TIMEOUT_MS = 45_000;
 const SMOKE_BLUEPRINT_PREFIX = "SMOKE::blueprint::";
-
-const resolveModel = (id: string): LanguageModel => openai(id.replace(/^openai\//, ""));
 
 type DeriveCandidatesResult =
   | {
