@@ -1,3 +1,134 @@
+> Last verified: 2026-09-05 (release merge — `lib/models.ts` existed on BOTH sides as an add/add
+> conflict: main's (seven copies converted, `offlineSeamAvailable`, `stealth/` settings, `google/`
+> fails closed) and the media lane's (`transcriptionModel` / `transcriptionUsage`, exported
+> `openRouter`). The merged module is main's resolver with the lane's transcription section appended;
+> `models.test.ts` carries main's suite plus the lane's transcription tests and its NARROW
+> literal-call tripwire (`openai("…")` / `openai.transcription(` outside lib/models.ts). llm.ts keeps
+> main's shape: everything but `google/` delegates to the shared resolver.)
+>
+> Last verified: 2026-09-05 (33.2-06 — `lib/models.test.ts` tripwire widened: a literal
+> `openai("…")` or `openai.transcription(…)` outside lib/models.ts fails the suite. llm.ts's
+> `openai.tools.webSearch` is a provider-executed tool, not a model, and is not matched.)
+>
+
+> Last verified: 2026-09-05 (33.2-05 — `lib/models.ts` grows `transcriptionModel(id)` (OpenAI
+> provider at OpenRouter's base URL for `or/` ids — the OpenRouter SDK provider has no
+> transcription model) and `transcriptionUsage(result)` (the bill from the body). No llm.ts change.)
+>
+
+> Last verified: 2026-09-05 (33.2-04 â€” **`convex/lib/models.ts` is THE model resolver.** llm.ts
+> keeps only its stealth/ (per-model settings) and google/ (Buffer-bound Vertex credential)
+> branches and delegates every vendor id to `resolveVendorModel`; the OpenRouter provider factory
+> moved there so the V8 vault/onboarding/voice actions share it. Registered under this playbook in
+> `watch.json`. Why: five module-local copies of the old resolver broke every vault ingest for nine
+> days (vault.md). `lib/models.test.ts` holds the route and a source tripwire against new copies.)
+>
+
+> Last verified: 2026-09-04 (33.2-03 — **THE AGENT LOOP'S FALLBACK IS AUDITED, AND THE MEDIA
+> DIRECTOR HAS ITS OWN 90 s CLOCK.** Two defects the bake-off surfaced by measuring, not by reading.)
+>
+> (1) `runAgentLoop` swallowed an eligible primary failure and succeeded on the fallback with
+> nothing in any plane saying so. The 33.2 bake-off scored 37 passes under two candidates' names
+> that `gpt-4.1-mini` had actually written (`smoke:modelsForPlan`, spend rows), and the same
+> silence has been letting production storyboards fall back whenever the primary ran long. The
+> loop now writes `llm.fallback` (fromModel, toModel, errorName, stage `agent-loop`) before the
+> retry — the exact shape the route/draft steps already write, §4-clean. `runCockpitAgent.test.ts`
+> asserts the row on the scripted-timeout fallback; its `setup()` registers `auditCounts` for it.
+> (2) `callTimeoutMsFor(media-director) = MEDIA_CALL_TIMEOUT_MS = 90 s`. The 45 s chat-turn clock
+> was the binding constraint on the storyboard (3-4k output tokens after a vault search): luna
+> blew it 13/24, sonnet-5 24/24, gpt-4o-mini 0/24. 90 and not 180 because `runMedia` awaits
+> research (2 × 180 s) AND the deck turn (2 × 90 s) in ONE action under the 600 s ceiling.
+> (3) `llmRedaction.test.ts`'s replyToMessage slice ended on a marker that no longer existed and
+> silently ran ~800 lines past the tool; it now ends at the tools-object close and asserts it
+> stays inside `buildCockpitTools`. Measured: runCockpitAgent 36/36, llmRedaction 61/61,
+> dispatch/cockpitTools/research green, tsc 0 outside the connector lane.)
+>
+
+> Last verified: 2026-09-04 (33.2-01 — **THE MEDIA DIRECTOR BILLS ITS OWN LANE, AND A STORYBOARD
+> RETRY NO LONGER RE-BUYS ITS RESEARCH.**
+>
+> Two changes, both in the dispatch spine. (1) `runSpecialistTurn`'s lookup has a fourth arm:
+> `isMedia ? [MEDIA_MODEL, MEDIA_FALLBACK_MODEL]` (aliased to the defaults until 33.2-03 measures —
+> see guardrails.md). `dispatch.test.ts` "THE MODEL PIN" now has THREE runtime cases (research,
+> media, and `offer-architect` as the genuine default) plus the source tripwire on all three pairs.
+> (2) `groundMediaBrief` asks `research.recentFindingsForQuestion` — (tenant, `contentHash(brief)`,
+> 24 h over `by_tenant_kind`) — before buying a research turn; `persistFindings` writes that hash
+> as `vaultDocuments.researchQuestionHash` (optional, no backfill; a row without it never matches,
+> so it researches again — fail-closed). Every "Try again" used to re-buy ~$0.21 of identical
+> research. The check sits INSIDE the try, so a failing read can never fail the reel. Three tests:
+> same brief → one turn/one doc; different brief → two; a doc aged past the window → two. Mutation
+> `if (reused && false)` reddens exactly the first. Measured: dispatch.test.ts 10/10 in the two
+> filters, tsc 0 errors outside the connector lane.)
+>
+
+> Last verified: 2026-09-03 (working tree, uncommitted - **THE COMPOSER'S ATTACH AND MIC ARE LIVE
+> BEFORE A THREAD EXISTS.** Reviewed, typechecks clean. Not verified live.)
+>
+> `ChatPane` used to render two DISABLED placeholder buttons ("Send a message first - then attach
+> files") until `threadId` was truthy, and mounted `IntakeControls` only after. It now mounts
+> `IntakeControls` unconditionally, passing `threadId` as OPTIONAL plus an `onPendingChange`
+> callback, and holds an `IntakeControlsHandle` ref.
+>
+> **The governance ordering is preserved and is the whole design.** Selecting a file on a fresh chat
+> uploads NOTHING. The `File`/`Blob` stays in the browser. The first ordinary send mints the
+> plan-backed thread, and only then does `onSend` call `intakeRef.current.flushToThread(res.threadId)`,
+> which replays the staged items through the SAME `intake.ts` actions an existing thread uses. There
+> is no second intake path and there must never be one - see `docs/playbooks/intake.md` for the
+> staging mechanics.
+>
+> **Known wart, deliberately recorded rather than fixed here:** the `flushToThread` await sits INSIDE
+> `onSend`'s `try`, whose `catch` does `setText(t)` and rethrows. A send that succeeds followed by a
+> staged-file failure therefore refills the composer with text that was already sent, reading as a
+> failed send. The message did go. Fix by awaiting the flush outside that try, or by having the
+> catch distinguish the two phases.
+>
+> Layout, same pass: the composer is now `position: sticky; bottom: 0` with an explicit `--card`
+> background (it must stay opaque or messages scroll under it), and the workspace header's title
+> block moved from `flex: 1` to `flex: "1 1 20rem"` - a zero basis let the title collapse to ~15px
+> against the divider's 20% clamp once the header was allowed to wrap.
+>
+> **`apps/web/e2e/approvals.spec.ts` changed under this playbook's `apps/web/e2e/` watch, for a
+> reason that is not cockpit-shaped:** its "Review in Compliance" assertion pinned `href="/ops"`,
+> and that link now targets `/dashboard/approvals?tab=compliance`. Nothing about the cockpit specs
+> moved. See `docs/playbooks/dashboard-pages.md` for the navigation consolidation that caused it.
+
+> Last verified: 2026-09-01 (28-16 — **DISCOVERY AND PHASE COMPLETION ARE TWO INDEPENDENT
+> FAIL-CLOSED VIEWS OF THE SAME FOUR PROVIDER LANES.** The server query alone controls exposure;
+> `check-phase28-completion.mjs --report` independently derives the provider/REVN close matrix.
+> Its self-test exhausts all 16 pass/park combinations, and parked, expired, failed or unreachable
+> named lanes remain hidden and keep Phase 28 incomplete. `--verify-current` validates the current
+> repository projection without claiming completion; `--strict` is the all-four-passed close gate.
+> A useful subset is explicitly named `subset`, never `complete`.)
+>
+
+> Last verified: 2026-09-01 (28-16 — **REVENUE WORKFLOWS APPEAR ONLY FROM SERVER-OWNED PASSED
+> EVIDENCE PLUS ACTIVE PINS.** `RevenuePackPanel` is a dumb responsive renderer over
+> `providerGates.revenueDiscovery`; it cannot derive a workflow from client files or connector
+> presence. Each offer names its read-only provider and passed-evidence status in text, and starts
+> through the existing trusted-clock cockpit send hook only inside an existing conversation.
+> Parked, failed, expired and inactive lanes render nothing.)
+>
+
+> Last verified: 2026-09-01 (28-29 — **REVENUE DECISIONS EMIT ONLY AFTER THE REAL TERMINAL.** A
+> reminder-staged plan records `plan_decided` after a successful re-propose, after the approve CAS
+> and every governed refusal, or after the proposed-to-canceled discard transition. Drafting,
+> refused approval, duplicate approval and delivery-terminal writes cannot manufacture a decision
+> or recovery event; stored telemetry is plan refs plus the closed `edited|approved|rejected`
+> status only.)
+>
+
+> Last verified: 2026-09-01 (28-19 — **THE REVENUE GOLDEN GATE NOW EXECUTES THE CANDIDATE BODY,
+> NOT THE COCKPIT BODY.** `llm:runRevenueCandidateEval` is an internal, eval-only door beside the
+> governed specialist loop. It accepts only `eval-<8hex>` tenants, the closed 11-case revenue
+> corpus, the case's exact skill name, and an explicit global version; a mismatched case/name,
+> non-eval tenant, missing plan, or governed stop fails before `generateText`. The action reuses
+> `runSpecialistTurn`, returns the SHA-256 of the exact registry body passed to the provider, and
+> exposes the SDK-attested ordered tool trace/results to the local runner. Production dispatch and
+> cockpit callers never supply the eval selector, so their tool construction and runtime semantics
+> are unchanged. Invoice fixtures use the same inert `stageProposed` boundary; the suppressed case
+> stops before staging and still creates zero requests or sends.)
+>
+
 > Last verified: 2026-08-31 (**`runSpecialistTurn` NOW RECORDS WHICH BODY A PINNED RUN LOADED.**
 >
 > `dispatch.ts` has written the full registry attribution onto `subagent.completed` since 21-03, so a
@@ -25,6 +156,32 @@
 > the earlier instances were the local backend dying underneath the run (two `convex dev` watchers
 > were fighting over one deployment), so the residue may be the same cause — but it was still
 > reproducing after that was fixed, so it is recorded as open rather than explained away.)
+
+> Last verified: 2026-08-31 (28-13 — **INVOICE REMINDERS STOP AT THE EXISTING HUMAN APPROVE
+> GATE.** The executive-only `stageInvoiceReminder` tool accepts an explicit user request plus a
+> bounded QuickBooks or Stripe invoice ref, re-fetches the source, refuses paid/void/unknown or
+> changed invoices, and writes code-owned subject/body text onto an existing collecting email plan
+> as `status: "proposed"`. Exact retries are idempotent. It creates no request, workflow, audit,
+> scheduler, provider write, or mail call; the revenue specialist grant does not receive this tool.
+> After approval, immediate and scheduled cockpit delivery share the single `startFanout` workflow
+> call site, while the legacy pipeline reaches the same `internal.delivery.send` dispatcher. Gmail
+> and Microsoft therefore both pass through `prepareGovernedMessage`: current suppression and the
+> required postal footer are checked at the terminal, including every member of a comma-joined
+> recipient row. One suppressed member refuses the whole terminal send. Phase 28 owns selection and
+> staging only; Phase 19 continues to own contacts, approval, fan-out, delivery, suppression, and
+> footer enforcement.)
+>
+
+> Last verified: 2026-08-31 (28-12 — **THE REVENUE SPECIALIST GRANT IS NOW LIVE AND READ-ONLY.**
+> The code-owned tuple is exactly `readRevenueCrm`, `readBusinessFinance`, and
+> `declareUnsupported`. `buildCockpitTools` constructs those keys only after identity-checking the
+> immutable `SPECIALISTS.revenue.tools` tuple; a copied list with the same strings does not open the
+> grant. CRM/provider text is never returned as instructions: `revenueTools.ts` emits a
+> `<revenue_evidence>` fence containing only closed enums, opaque refs, counts, and code-calculated
+> numbers. Partial coverage remains `partial`, unavailable stays `unavailable`, and every retained
+> provider label is evidence only. Generic HTTP/MCP, Gmail, `executePlan`, provider/CRM/accounting
+> writes, refunds, credits, dispute updates, and paid media remain structurally absent.)
+>
 
 > Last verified: 2026-08-30 (**TWO REFS-ONLY PROBE SURFACES ON THE GMAIL RAIL, for the ROUT-02
 > recurrence evidence collector. No cockpit behaviour changed and no existing function was touched.**
@@ -110,6 +267,71 @@
 > skip: if the decision ever flips to `enable-safe` this absence proof is the wrong proof and must be
 > replaced by a lifecycle spec, and going red is how that gets noticed.)
 
+> Last verified: 2026-08-30 (33.1-04 — **THE CANVAS STOPPED RESTATING TWO NUMBERS IT SHOULD HAVE
+> BEEN COMPUTING.** Three sentences in `mediaCanvasView.ts` typed out the clip-vs-still cost ratio
+> ("about a fortieth", "costs about 40×") and two typed out the generator's legal clip lengths
+> ("4, 8 or 12 seconds"). Both are values the price table and `GENERATED_CLIP_SECONDS` already
+> compute, and both went stale the moment either moved — with a GREEN suite each time, because the
+> guards asserted the stale literal. They are derived now (`CLIP_VS_STILL_RATIO`,
+> `GENERATED_LENGTH_RANGE`, `CLIP_COST_LEVER_NOTE`), the unit tests recompute the same quotient
+> instead of pinning a word, and `e2e/media-canvas.spec.ts` IMPORTS the sentence. If you add a
+> sentence here that names a price or a member of a closed set, derive it — this is the third time.
+> `apps/web` gained a `@pikar/cost` dependency for it, plus a `transpilePackages` entry.)
+
+> Last verified: 2026-08-30 (33.1-01 — **THE STORYBOARD WRITE BOUNDARY WAS SILENTLY REJECTING
+> EVERY DECK WITH A MUSIC BED, AND THE SUITE WAS GREEN OVER IT.**
+>
+> **The defect.** `plans.persistDeck`'s `artDirection` arg validator is a HAND-MAINTAINED MIRROR
+> of `plans.artDirection` in `schema.ts`, and Convex `v.object` is CLOSED. So a field the parser
+> emits and the schema already stores is not ignored here — it THROWS. `e2b281f` ("the music
+> bed") widened `parseArtDirection`, the schema, the price table, the renderer, the assembler and
+> the skill body, and never this validator. From then until 2026-08-30 every storyboard carrying a
+> `Music:` line died with `ArgumentValidationError` at `persistDeck`.
+>
+> **Why it did not look like a crash.** The throw lands AFTER `dispatchAndLand` has already landed
+> the memo. The plan row survives at `kind: "memo"` carrying the model's raw prose, so the user
+> reads a wall of text where a storyboard should be and the app reports no error at all.
+>
+> **The signature to recognise it by:** a `subagent.completed` audit row with NO
+> `media.deck_persisted` AND NO `media.deck_refused`. Neither terminal is written when the mutation
+> throws between them — the absence of BOTH is the fingerprint, and it is not the same shape as a
+> refusal. Two of the owner's three media dispatches on 2026-08-30 read exactly like this.
+>
+> **Why the tests were green.** `storyboard.test.ts` carried 14 `Music` fixtures; `dispatch.test.ts`
+> carried ZERO. Coverage of a PARSER is not coverage of the BOUNDARY it writes across. Worse, the
+> SCENE/variations path (`dispatch.ts:886`) — the one production actually runs — had never been
+> exercised with a non-null `artDirection` at all: `TWO_UP_BODY` had no `## 2. ART DIRECTION`
+> section. Only the BLOCK path did.
+>
+> **A trap if you write that fixture.** `persistSceneDeck` is handed `variations.a.body`, the slice
+> BETWEEN the two `## VARIATION` headings — NOT the whole body. An art-direction section placed
+> above `## VARIATION A` parses to `null`, and every music assertion under it then passes with or
+> without the fix. It must ride INSIDE variation A.
+>
+> **The standing rule.** A new `artDirection` field lands in `schema.ts` AND in `plans.ts`'s
+> `persistDeck` validator in the SAME commit, with a `dispatch.test.ts` fixture carrying it on both
+> deck contracts. Mirror the schema's `v.optional(v.string())` — do NOT restate a core closed set
+> (`MUSIC_MOODS`) as a `v.union` of literals here: this package cannot import it, so it would be a
+> third copy to keep in step, and the one that fails loudest.)
+>
+
+> Last verified: 2026-08-30 (the 28-09 callback slice — **`http.ts` ONLY**: three connector OAuth
+> callback routes, `/connectors/{hubspot,quickbooks,stripe}/callback/<env>`, each a thin dispatcher
+> to the auth module's existing `internalAction` and gated on `providerGates.connectPermitted` —
+> the ADMISSION axis, never `availableProviders`, because gating the callback on a passed lane
+> deadlocks the phase. The route census in `microsoftAuth.test.ts` moved 8 -> 11 and caught it.
+> PayPal deliberately has no route. Owned by docs/playbooks/revenue-connectors.md; only the
+> wiring lives here. Prior: 2026-08-29, 28.1-05 — **`http.ts` ONLY**, and only the Stripe billing route at
+> the bottom of the file. The route now calls `eventFacts(event.type, event.data.object)` at the
+> trust boundary and passes ONLY the resulting ids into `receiveAndApply`; the parsed Stripe
+> object never crosses into Convex. `event.created` is threaded through in milliseconds as the
+> only delivery ordering Stripe provides. **The five-line security ordering above it is
+> unchanged** — secret + header present → read the raw body ONCE → verify → only then parse.
+> Nothing on the Gmail, Microsoft, agent or delivery paths was read or touched, and this is NOT
+> a re-verification of anything else in this playbook. See `docs/playbooks/billing.md`.)
+>
+> Previously verified: 2026-08-28 (28.1-01 — **`http.ts` GAINED A ROUTE THIS PLAYBOOK DOES NOT OWN.**
+
 > Last verified: 2026-08-29 (29-08 FIX — **PINNING A WORKFLOW WAS EVICTING A SAVED PROMPT FROM THIS
 > MENU.** Correcting the entry after this one. `savedPrompts.list` applied its
 > `templateId === undefined` filter to the page it had already taken, so each workflow pin consumed
@@ -185,6 +407,7 @@
 > violation, exact = 1 and usable). An eighth test was added for correction (4). Still zero
 > executions against a running stack — see `29-SEARCH-GATE.md`.)
 >
+
 > Last verified: 2026-08-29 (29-09 — **THE COCKPIT GAINED A THIRD INLINE CARD: UNIFIED KNOWLEDGE
 > SEARCH (KNOW-01).** `KnowledgeSearchPanel.tsx` is opened from the same "Chat options" menu as
 > `SkillAuthoringPanel`, mounted in the same place in `page.tsx`, on the same terms — session state,
@@ -331,6 +554,7 @@
 > verified.) `lib/models.test.ts` pins the END STATE, not a shrinking list: its allow-list is EMPTY,
 > and it fails if any module under `convex/` routes a model id to a provider itself.)
 >
+
 > Last verified: 2026-08-28 (29-03 — **`gmail.ts` GAINS A FIFTH READ VERB, `knowledgeQuery`, AND
 > IT IS DELIBERATELY NOT `search`.** `search` resolves a CONTACT: it asks `from:/to:` about a name,
 > fetches `format=metadata` only and never touches a body. `knowledgeQuery` asks a free-text
@@ -394,6 +618,9 @@
 > observed RED.)
 
 > Last verified: 2026-08-28 (28.1-01 — **`http.ts` GAINED A ROUTE THIS PLAYBOOK DOES NOT OWN.**
+
+> Last verified: 2026-08-27 (**`@drill` RAN AGAINST PRODUCTION FOR THE FIRST TIME. Rollback-to-dark
+
 > `POST /billing/stripe/webhook` is the Stripe webhook receiver for PIKAR'S OWN merchant account;
 > it is documented in `docs/playbooks/billing.md`, not here. It touches no cockpit surface — no
 > tool, no card, no `VERB` entry, no `agentSteps.tool` literal, no skill body. This entry exists
@@ -1061,8 +1288,9 @@
 > route's only reachable caller was therefore somebody holding the secret, for whom it offered an
 > outbound fetch and a terminal `succeeded` write. Provider truth and the removal record: ADR-024.
 >
-> `http.ts` now holds the OAuth callbacks, `/skillopt/*`, `GET /media/blob/*` and the unsubscribe
-> pair. `contacts.ts`'s unsubscribe token is the last living copy of the 20-06 stateless-token
+> `http.ts` now holds the OAuth callbacks (Gmail, Microsoft, and — since the 28-09 slice — the
+> hubspot/quickbooks/stripe connector callbacks, which belong to revenue-connectors.md),
+> `/skillopt/*`, `GET /media/blob/*` and the unsubscribe pair. `contacts.ts`'s unsubscribe token is the last living copy of the 20-06 stateless-token
 > pattern, and its comment says so rather than pointing at the deleted route.
 > Last verified: 2026-08-21 (25.1-05 Task 2, D11 — **THE MEMO CARD RENDERS ITS DOCUMENT AND SHOWS
 > ITS SOURCES.** `MemoCardBody` (exported from `cards.tsx`, hook-free) replaces the memo branch's
@@ -1493,7 +1721,8 @@
 > re-consent now. Mutation-proven: gating on `connected` reddens that case.
 >
 > **NO SECOND OAUTH SURFACE WAS ADDED, and a test asserts it** — `microsoftAuth.test.ts` pins
-> `http.route(` at exactly 8 and at most one Microsoft callback path. 17-06 built the authorize
+> `http.route(` at exactly 11 (8 until the 28-09 connector callbacks; the pin is on the TOTAL, so
+> any route appearing or disappearing has to be justified) and at most one Microsoft callback path. 17-06 built the authorize
 > URL, callback, consent page and token row; a plan named "provider lifecycle" is precisely the one
 > that would quietly add a second, so the absence is measured rather than assumed.
 >

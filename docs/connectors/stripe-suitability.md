@@ -25,6 +25,40 @@ review_by: 2026-11-27
 
 ---
 
+## Wave-7 owner park
+
+**Decision recorded: PARK — 2026-08-31.**
+
+The owner chose **park** at plan 28-24's provider judgment checkpoint. This is a lane decision,
+not a reversal of the earlier suitability admission: `approved_production` still records permission
+to engineer the route, while `parked` keeps Stripe out of every tenant-visible provider projection.
+
+The offline seal builder resolved the decision to this payload:
+
+```json
+{
+  "provider": "stripe",
+  "environment": "production",
+  "admission": "approved_production",
+  "evidenceRef": "docs/connectors/stripe-suitability.md#wave-7-owner-park",
+  "reviewBy": 1795737600000,
+  "lane": "parked",
+  "clearedConditions": []
+}
+```
+
+This execution was explicitly local-only: `--apply` was not used, the Convex deployment was not
+read or changed, and no Stripe endpoint was called. The durable repository decision is therefore
+**PARK**, while deployment state is deliberately not asserted here. Both absence of a gate row and
+a `parked` row are invisible because the tenant projection admits only a current `passed` row; the
+offline provider-gate suite proves the parked arm returns no provider.
+
+`platform-initiated-revocation` remains **UNCLEARED**, no live read or revoke evidence exists, and
+REVN-03 remains incomplete. Parking is reversible only through a later evidence-backed review and a
+new explicit seal; structural consistency alone can never promote this lane.
+
+---
+
 ## Owner decision — `approved_production`, 2026-08-27 — **OWNER OVERRIDE**
 
 > **This is an override, not a finding.** The evidence below does **not** support production, and the
@@ -59,8 +93,8 @@ This approval does not resolve it, soften it, or discharge it.
 - Stripe's own `oauth-changes-for-standard-platforms` page **still describes the dead Extension
   path**. It is stale. Do not follow it and do not cite it.
 
-**Authorizes:** plan **28-07** (adapter) and production exposure for Stripe, subject to the open
-condition above and to the wave-7 seal **28-24**.
+**Authorized:** plan **28-07** (adapter). Production exposure remains withheld by the wave-7
+**PARK** decision recorded above.
 
 ### Scope of this approval
 
@@ -238,8 +272,9 @@ create the gate, prove it offline, and stop — the same shape 28-05 and 28-06 u
 QuickBooks.
 
 `node scripts/check-provider-lane.mjs --provider stripe` reads **`consistent`, 1 row pending**.
-Consistent is NOT passed. The `providerGates` lane row stays `parked` and the open condition
-`platform-initiated-revocation` stays **UNCLEARED**. 28-24 owns the seal.
+Consistent is NOT passed. The wave-7 owner decision is **PARK**, and the open condition
+`platform-initiated-revocation` stays **UNCLEARED**. See the local-only execution boundary above;
+this record does not invent a deployment observation.
 
 ### What the route turned out to be
 

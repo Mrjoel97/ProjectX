@@ -16,7 +16,7 @@ import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { SEND_TIME_HORIZON_MS, withheldNote } from "@pikar/core";
 import { maxCharsFor } from "@pikar/core/storyboard";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 // cancelScheduledPlan writes a refs-only plan.canceled audit; the SOLE audit-insert surface counts
 // the auditCounts aggregate, so register the component (relative import — the package blocks the
 // deep specifier), same pattern as cockpitTools.test.ts.
@@ -47,6 +47,36 @@ const rateLimiterModules = import.meta.glob(
 );
 
 const TENANT = "tenant_a";
+type DeliveryHarness = ReturnType<typeof convexTest>;
+const deliveryHarnesses = new Set<DeliveryHarness>();
+
+/** Stop zero-delay workflow/workpool callbacks from crossing the test boundary. A mutation can
+ * return after arming a workflow but before its first scheduler tick; without this cleanup, that
+ * callback runs under the next test (or after Vitest tears down the edge-runtime `process`). */
+async function quiesceDeliveryHarness(t: DeliveryHarness): Promise<void> {
+  for (let pass = 0; pass < 20; pass += 1) {
+    await t.run(async (ctx) => {
+      const scheduled = await ctx.db.system.query("_scheduled_functions").collect();
+      for (const row of scheduled) {
+        if (row.state.kind === "pending") await ctx.scheduler.cancel(row._id);
+      }
+    });
+    await t.finishInProgressScheduledFunctions();
+    const remaining = await t.run(async (ctx) =>
+      (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+        (row) => row.state.kind === "pending" || row.state.kind === "inProgress",
+      ),
+    );
+    if (remaining.length === 0) return;
+  }
+  throw new Error("cockpit test left scheduled delivery work after cleanup");
+}
+
+afterEach(async () => {
+  const harnesses = [...deliveryHarnesses];
+  deliveryHarnesses.clear();
+  await Promise.all(harnesses.map(quiesceDeliveryHarness));
+});
 
 /** A convex-test instance wired for both executePlan delivery arms. */
 function withDelivery() {
@@ -55,6 +85,7 @@ function withDelivery() {
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   retrierTest.register(t);
+  deliveryHarnesses.add(t);
   return t;
 }
 
@@ -505,9 +536,14 @@ describe("executePlan media arm (20-07, MEDIA-01)", () => {
     ).toBeLessThan(before);
   });
 
-  test("a reel over the JOB CAP is a governed refusal — plan stays proposed, ZERO rows, nothing scheduled", async () => {
+  test("a reel over the SECONDS CEILING is a governed refusal — plan stays proposed, ZERO rows, nothing scheduled", async () => {
     const t = withMedia();
-    const planId = await seedMediaPlan(t, { blocks: 12 }); // 12 x $0.50 clips blows the $3.50 cap
+    // 33.1-04: twelve 4-second blocks are 48 generated seconds against a 12 s ceiling. They are
+    // ALSO $3.36, which now passes the unchanged $3.50 cap — so the refusal moved from
+    // `over_job_cap` to `over_generated_seconds` and the test says which. What it is really
+    // asserting is unchanged and is the part that protects the tenant: a governed stop RETURNS,
+    // the CAS never runs, no row is written and not a cent moves.
+    const planId = await seedMediaPlan(t, { blocks: 12 });
     const before = await t.query(internal.guardrails.mediaRemainingCents, { tenantId: TENANT });
 
     const result = await t
@@ -516,7 +552,7 @@ describe("executePlan media arm (20-07, MEDIA-01)", () => {
     await t.finishInProgressScheduledFunctions();
 
     // A governed stop RETURNS. Only bugs throw.
-    expect(result).toEqual({ ok: false, reason: "over_job_cap" });
+    expect(result).toEqual({ ok: false, reason: "over_generated_seconds" });
     const plan = await t.run((ctx) => ctx.db.get(planId));
     expect(plan?.status).toBe("proposed"); // the CAS never ran
     expect(plan?.renderStatus).toBeUndefined();
@@ -534,9 +570,14 @@ describe("executePlan media arm (20-07, MEDIA-01)", () => {
   // approve. Its body does now, so the refusal is deleted rather than left as a member nothing can
   // reach.
 
-  /** A staged SCENE DECK: 8 s clip / 6 s still / 4 s card / 12 s clip = an exact 30 s. */
+  /** A staged SCENE DECK: 4 s clip / 14 s still / 4 s card / 8 s clip = an exact 30 s.
+   *
+   *  33.1-04: the two clips were 8 s and 12 s, which is 20 generated seconds — over
+   *  `MEDIA_GENERATED_SECONDS_CAP`, so this deck stopped being buyable at all. It keeps its shape
+   *  (four scenes, one of each kind, two clips of DIFFERENT lengths so "bought at its own length"
+   *  is still provable) and spends exactly 12 generated seconds. */
   async function seedMediaScenePlan(t: ReturnType<typeof convexTest>) {
-    const seconds = [8, 6, 4, 12];
+    const seconds = [4, 14, 4, 8];
     const visuals = ["generated_video", "animated_image", "text_card", "generated_video"];
     let startMs = 0;
     const shots = seconds.map((sec, index) => {
@@ -596,7 +637,7 @@ describe("executePlan media arm (20-07, MEDIA-01)", () => {
         .filter((r) => r.kind === "video")
         .map((r) => (r.spec.kind === "video" ? r.spec.seconds : 0))
         .sort((l, r) => l - r),
-    ).toEqual([8, 12]);
+    ).toEqual([4, 8]);
     expect(jobs.filter((r) => r.kind === "image").map((r) => r.blockIndex)).toEqual([1]);
     expect(jobs.some((r) => r.kind === "video" && r.blockIndex === 2)).toBe(false);
 
@@ -629,7 +670,9 @@ describe("executePlan media arm (20-07, MEDIA-01)", () => {
 
   test.each([
     ["an over-length narration line", { chars: maxCharsFor(4) + 1 }, "narration_too_long"],
-    ["a clip length nobody prices", { clipSeconds: 7, chars: 90 }, "illegal_duration"],
+    // 33.1-04: was 7 s, which grok makes. 16 s is above the top of the 1..15 grid, and ONE block
+    // so that the refusal is the duration rather than the seconds ceiling.
+    ["a clip length nobody prices", { blocks: 1, clipSeconds: 16, chars: 90 }, "illegal_duration"],
   ] as const)("%s refuses before the CAS", async (_label, opts, reason) => {
     const t = withMedia();
     const planId = await seedMediaPlan(t, opts);

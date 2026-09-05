@@ -1,5 +1,11 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-09-01 (28-16 verification — unsubscribe configuration now fails closed when
+> the runtime does not expose `process`, as well as when either deployment variable is absent.
+> The literal `UNSUBSCRIBE_SECRET` and `CONVEX_SITE_URL` reads retain the environment-manifest
+> census and each has the same runtime guard; footer/token generation returns `null` instead of
+> leaking a `ReferenceError` out of a scheduled delivery.)
+>
 > Touched 2026-08-21 (25.1-06) — **COMMENT-ONLY, no CRM behaviour changed.** Two doc comments in
 > `contacts.ts` cited `convex/http.ts`'s fal-webhook as the precedent for the stateless unsubscribe
 > token and for `verifyUnsubToken`'s rules. That route was deleted at 25.1-06 (ADR-024), so the

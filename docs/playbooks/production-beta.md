@@ -1,5 +1,27 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-09-05 (**RELEASE MERGE — Phases 28, 28.1, 29, 33.1 (01-05) and 33.2 promoted to
+> production in ONE `[deploy]` push; see `docs/releases/2026-09-05-promotion.md` for the per-change
+> manifest.** Production had sat at `860e3f5` (2026-08-27) while 428 commits accumulated across main
+> and `feat/28.1-billing-mapping`; the lane merged into main with 21 conflicting files. Two facts
+> for the next operator: (1) the deploy seed ACTIVATES `media-director`'s new body at deploy time
+> (it is not in `GATED_SKILLS`; `research-specialist` lands as a candidate) and seeds ten new skill
+> names active at v1; (2) `git checkout --ours -- <file>` takes the WHOLE file from one side and
+> silently drops the other side's auto-merged hunks — six files were resolved that way first, the
+> backend suite caught it (6 red), and they were redone hunk-by-hunk with `git checkout -m`.)
+>
+> Last verified: 2026-09-05 (33.2-06 — OPENAI_API_KEY `whatBreaks` is now "the voice session only"
+> (voiceToken.ts mints the Realtime client secret; OpenRouter has no equivalent) plus any bare
+> `openai/` pin; the Wan entry no longer claims new visual jobs go to OpenAI. Tier stays
+> `required` while voice ships; drop it to `feature` when voice is gated.)
+>
+
+> Last verified: 2026-09-05 (33.2-05 — `lib/env.ts` `whatBreaks` rewritten for both model keys:
+> OPENROUTER_API_KEY now carries agent turns, embeddings, images/clips AND transcription;
+> OPENAI_API_KEY is down to the PDF hosted-extraction rail, intake's attachment extractor, the
+> retained Sora poller and any bare `openai/` pin. Tiers unchanged.)
+>
+
 > Last verified: 2026-08-30 (**THE READINESS SCREEN NOW CHECKS THE SKILL REGISTRY, WHICH IT NEVER
 > DID.** `ops:envCheck` gains `unseededSkills: string[]` — every name in `REGISTRY_SKILL_NAMES`
 > (`skills.ts`, already exported) with no `status: "active"` row — and `ready` now turns on THREE
@@ -30,6 +52,25 @@
 > that name is reported — the partial/drifted-seed case). Verified LIVE against the 1.24 GB local
 > deployment: 31 index lookups, `unseededSkills: []`, `ready: false` for localhost origins only.
 > `env.test.ts` 23 passed / 1 failed — the standing `QUICKBOOKS_*` red owned by 28-06, not this.)
+
+> Last verified: 2026-08-30 (33.1-03 — **`OPENROUTER_API_KEY` IS NOW REQUIRED BY TWO INDEPENDENT
+> PLANES, AND THAT RETIRES THE CONDITIONAL BELOW.** The 2026-08-24 block says the tier "must drop
+> back to `feature` on the same edit that reverts those pins". **It must not.** The still-image
+> submit (`submitLine`, `packages/backend/convex/media.ts`) moved from `api.openai.com` to
+> `openrouter.ai/api/v1/images` and reads `OPENROUTER_API_KEY`, so the key is `required` by the
+> media plane whatever the model pins do. Reverting `stealth/ox-alpha` no longer makes it optional.
+>
+> **`OPENAI_API_KEY` IS NOT NOW OPTIONAL, and an operator reading the readiness screen must not
+> conclude that it is.** It still carries voiceover (TTS, `generateOpenAiVoice`), captions (STT,
+> `submitCaptions`) and — until 33.1-05 lands the Grok video path — the video submit and its poller.
+> Only the IMAGE arm moved. `submitLine` picks its credential from `spec.kind`, so the two keys are
+> read on the same code path and neither substitutes for the other.
+>
+> Why the move: the OpenAI account is out of credit (`credit_balance_exhausted` on the two most
+> recent `mediaJobs` rows), so the image plane bought nothing at all. Both keys are Convex deployment
+> env vars (`npx convex env set`), never Vercel. Nothing else in this playbook's scope was re-read
+> against this change; the price row and the request shape are in docs/playbooks/media.md and
+> .planning/.../33.1-PRICE-EVIDENCE.md.)
 
 > Last verified: 2026-08-29 (**COMMENT-ONLY CORRECTION IN `convex/lib/env.ts`; NO READINESS
 > BEHAVIOUR CHANGED.** `missingEnv`'s comment above `fixturesActive` claimed the screen "cannot
@@ -75,6 +116,7 @@
 > model keys, which turned a lost-credentials misconfiguration into silent fabrication; see
 > `docs/playbooks/vault.md`'s wave-3 block. NOTHING ELSE in the readiness surface changed, and this
 > entry does NOT discharge the separate bump this playbook owes for Phase 28's `lib/env.ts` change.)
+
 > Last verified: 2026-08-29 (28.1-04 billing — **TWO NEW `feature`-TIER MANIFEST NAMES:**
 > `BILLING_STRIPE_SECRET_KEY` and `BILLING_STRIPE_PRICE_ID`, added to `ENV_MANIFEST` in
 > `convex/lib/env.ts`. A **FOURTH** credential family, and the one that CHARGES CARDS: it is Pikar's

@@ -21,6 +21,7 @@ import { assembleScriptBody } from "@pikar/backend/render/assembleScript";
 import { burnCapsScriptBody } from "@pikar/backend/render/burnCapsScript";
 import { handleRenderRequest, type SandboxLike } from "@pikar/core/render";
 import { Sandbox } from "@vercel/sandbox";
+import { createLocalSandbox } from "./localSandbox";
 
 export const runtime = "nodejs";
 
@@ -38,9 +39,32 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(req: Request): Promise<Response> {
+  // ── THE LOCAL RUNNER, AND THE TWO GUARDS THAT KEEP IT LOCAL ────────────────────────────────
+  //
+  // On a developer's machine there is no OIDC, so `Sandbox.create` cannot authenticate and the
+  // render step is unreachable — every other plane can be exercised locally and the reel dies at
+  // the last one. `MEDIA_RENDER_LOCAL=1` swaps in a `SandboxLike` backed by this machine's own
+  // ffmpeg (see `localSandbox.ts`, which is explicit that it is NOT a sandbox).
+  //
+  // TWO conditions, and the second is the one that matters: an env var is a thing that gets copied
+  // between environments by accident, so the opt-in alone is not enough. `VERCEL` is set by the
+  // platform on every deployment and cannot be forgotten, so a stray `MEDIA_RENDER_LOCAL` in a
+  // production project downgrades nothing — it is ignored, and loudly.
+  const wantsLocal = process.env.MEDIA_RENDER_LOCAL === "1";
+  const onVercel = process.env.VERCEL !== undefined;
+  if (wantsLocal && onVercel) {
+    console.error("MEDIA_RENDER_LOCAL is set on a Vercel deployment and is being IGNORED.");
+  }
+  const useLocal = wantsLocal && !onVercel;
+
   return await handleRenderRequest(req, {
     secret: process.env.MEDIA_RENDER_SECRET,
-    snapshotId: process.env.MEDIA_SANDBOX_SNAPSHOT_ID,
+    // `snapshotId` is only ever read to build `source: {type:"snapshot"}` for the real SDK, and
+    // the local runner ignores its options entirely. A sentinel keeps `not_configured` — which is
+    // a real governed stop for the Vercel path — from refusing a local render that needs no image.
+    snapshotId: useLocal
+      ? (process.env.MEDIA_SANDBOX_SNAPSHOT_ID ?? "local")
+      : process.env.MEDIA_SANDBOX_SNAPSHOT_ID,
     deploymentUrl: process.env.NEXT_PUBLIC_CONVEX_URL,
     assembleScript: assembleScriptBody,
     // The second mode's script (plan 20-17). Passed the same way and for the same reason: core
@@ -48,6 +72,7 @@ export async function POST(req: Request): Promise<Response> {
     burnScript: burnCapsScriptBody,
     fetch: globalThis.fetch,
     createSandbox: async (options): Promise<SandboxLike> => {
+      if (useLocal) return await createLocalSandbox();
       // NO token/teamId/projectId argument, and there must never be one. `options` is
       // `buildSandboxOptions(...)`, never an inline literal — that is what keeps
       // `persistent: false` and `networkPolicy: "deny-all"` assertable without a real VM.

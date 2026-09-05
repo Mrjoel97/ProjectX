@@ -6,6 +6,7 @@
 // environment matches the research.test.ts / dispatch.test.ts harness idiom — convex-test's lazy
 // module loader pulls every convex module, and some of them are "use node".
 import retrierTest from "@convex-dev/action-retrier/test";
+import { MUSIC_BLOCK_INDEX } from "@pikar/core/render";
 import type { Block, Scene, ShotType } from "@pikar/core/storyboard";
 import { maxCharsFor, minCharsFor } from "@pikar/core/storyboard";
 import {
@@ -15,8 +16,11 @@ import {
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
+  MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_JOB_CAP_USD,
+  MEDIA_MUSIC_STOCK,
   MEDIA_SANDBOX_USD_PER_RENDER,
+  MEDIA_TTS_PRICING,
   MEDIA_VIDEO_PRICING,
   MEDIA_VIDEO_SECONDS,
   type MediaSpec,
@@ -39,6 +43,7 @@ import { contentHash } from "./lib/hash";
 import {
   buildSubmitBody,
   MAX_STOCK_ASSET_BYTES,
+  pickStockAudio,
   pickStockPhoto,
   pickStockVideo,
   reserveJobInner,
@@ -135,14 +140,28 @@ const mediaLeft = (t: T, tenantId = A) =>
 const llmLeft = (t: T, tenantId = A) =>
   t.query(internal.guardrails.remainingDailyCents, { tenantId });
 
-/** The reference job: six paid Sora blocks at the default duration, with captions. */
-const JOB_41 = () => deck(6);
-// 6 x $0.40 clips + 6 voice lines at 2 x 56 chars ($0.01008) + one rounded-up STT minute
+/**
+ * The reference job: THREE paid blocks at the default duration, with captions.
+ *
+ * **It was SIX until 33.1-04, and the change is the cap, not a tidy-up.** §4.1's six-block reel
+ * spends `6 x 4 = 24` generated seconds against `MEDIA_GENERATED_SECONDS_CAP = 12`, so it is no
+ * longer a reservation at all — it is a refusal, asserted by name in its own test below. Three
+ * blocks is the largest block deck the rail still buys at the default clip length, and it sits
+ * EXACTLY on the ceiling. Renamed from `REF_JOB` deliberately: a constant called after a plan
+ * section it no longer matches is the same defect as a sentence restating a stale price.
+ */
+const REF_JOB = () => deck(3);
+// 3 x $0.28 clips + 3 voice lines at 2 x 56 chars ($0.002016) + one rounded-up STT minute
 // ($0.006) + the flat render, DOUBLED at its source to cover the one automatic retry sandbox
 // (33-04: $0.02 -> $0.04 — a deliberate money change, noted in the playbook).
-const JOB_41_USD = 2.45608;
-const JOB_41_CENTS = 246;
-const JOB_41_LINES = 13; // 6 video + 6 tts + 1 stt — the render line gets NO row
+// 33.1-04: the clip rate moved from sora-2's $0.10/s to grok's $0.07/s at the same time.
+// 33.1-06: the voice lines fell from $0.00504 to $0.002016 when the tts plane moved to
+// `openai/gpt-audio-mini` on OpenRouter — $0.015 -> $0.006 per 1000 chars, so 3 x 112 chars is
+// 0.336 of a thousand at the new rate. The $0.003024 delta is the whole change to this total, and
+// 88.8016 cents CEILINGS to 89 rather than 90.
+const REF_JOB_USD = 0.888016;
+const REF_JOB_CENTS = 89;
+const REF_JOB_LINES = 7; // 3 video + 3 tts + 1 stt — the render line gets NO row
 
 // ── the two kill switches ──────────────────────────────────────────────────────────
 
@@ -166,7 +185,7 @@ describe("kill switches: two INDEPENDENT levers, either one stops media", () => 
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
@@ -184,7 +203,7 @@ describe("kill switches: two INDEPENDENT levers, either one stops media", () => 
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
@@ -240,7 +259,7 @@ test("an unpriced model is unknown_model — zero rows, never a guess", async ()
       reserveJobInner(ctx, {
         tenantId: A,
         planId,
-        blocks: JOB_41(),
+        blocks: REF_JOB(),
         clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
         withCaptions: true,
       }),
@@ -255,19 +274,47 @@ test("an unpriced model is unknown_model — zero rows, never a guess", async ()
 
 // ── the §4.1 job, end to end ───────────────────────────────────────────────────────
 
-describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
+describe("the reference job: the WHOLE reel is ONE reserved unit", () => {
   test("the arithmetic, derived from the price table rather than asserted twice", () => {
     const clips =
-      6 *
+      3 *
       MEDIA_DEFAULT_VIDEO.seconds *
       (MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.[MEDIA_DEFAULT_VIDEO.resolution] ?? 0);
-    const voice = 6 * ((2 * maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds)) / 1000) * 0.015; // 2x — rewrite allowance
+    // 2x — rewrite allowance. 33.1-06: the rate is READ from the table now, like the clip line
+    // above. It was the literal `0.015`, which made a test whose own name says "derived from the
+    // price table" go red on a price move it should have absorbed — and would have gone SILENTLY
+    // stale had the constant moved the other way.
+    const voice =
+      3 *
+      ((2 * maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds)) / 1000) *
+      (MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model] ?? 0);
     const stt = 1 * 0.006; // the sub-minute input is billed as one minute
-    expect(clips + voice + stt + MEDIA_SANDBOX_USD_PER_RENDER).toBeCloseTo(JOB_41_USD, 6);
-    expect(JOB_41_USD).toBeLessThan(MEDIA_JOB_CAP_USD); // 13% headroom — the test is not vacuous
+    expect(clips + voice + stt + MEDIA_SANDBOX_USD_PER_RENDER).toBeCloseTo(REF_JOB_USD, 6);
+    expect(REF_JOB_USD).toBeLessThan(MEDIA_JOB_CAP_USD); // 75% headroom — the test is not vacuous
   });
 
-  test("reserves ONCE, for the floored TOTAL — not the sum of 13 floored line items", async () => {
+  test("§4.1's SIX-BLOCK REEL IS NOW A REFUSAL — 24 generated seconds against a 12 s ceiling", async () => {
+    // 33.1-04, and it is the cost the generated-seconds cap spends, stated where the old reference
+    // job used to be reserved. A block deck is generated-video by construction (`reserveJobInner`
+    // builds one video spec per paid block), so the UNIFORM cap refuses it exactly as it refuses an
+    // all-generated scene deck. Option B — passing Infinity on the block path — was rejected: a
+    // model emitting a block deck would evade the ceiling entirely, and a money guard with a
+    // documented bypass reads as protection while providing none (ADR-027).
+    const t = harness();
+    const planId = await seedPlan(t);
+    const res = await reserve(t, {
+      tenantId: A,
+      planId,
+      blocks: deck(6),
+      clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
+      withCaptions: true,
+    });
+    expect(res).toEqual({ ok: false, reason: "over_generated_seconds" });
+    expect(await rows(t)).toHaveLength(0);
+    expect(await mediaLeft(t)).toBe(MEDIA_DAILY_BUDGET_CENTS); // not a cent consumed
+  });
+
+  test("reserves ONCE, for the floored TOTAL — not the sum of 7 floored line items", async () => {
     const t = harness();
     const planId = await seedPlan(t);
     const before = await mediaLeft(t);
@@ -275,18 +322,18 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
 
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.estUsd).toBeCloseTo(JOB_41_USD, 6);
-    expect(res.estCents).toBe(JOB_41_CENTS);
-    expect(res.lineCount).toBe(JOB_41_LINES);
+    expect(res.estUsd).toBeCloseTo(REF_JOB_USD, 6);
+    expect(res.estCents).toBe(REF_JOB_CENTS);
+    expect(res.lineCount).toBe(REF_JOB_LINES);
     // The window moved by the ONE floored total. Flooring per line would move it by more.
-    expect(await mediaLeft(t)).toBe(before - JOB_41_CENTS);
+    expect(await mediaLeft(t)).toBe(before - REF_JOB_CENTS);
   });
 
   test("the rows: N video + N tts + 1 stt at queued, sharing ONE batchId", async () => {
@@ -295,7 +342,7 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
@@ -303,9 +350,9 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
     if (!res.ok) return;
 
     const all = await rows(t);
-    expect(all).toHaveLength(JOB_41_LINES);
-    expect(all.filter((r) => r.kind === "video")).toHaveLength(6);
-    expect(all.filter((r) => r.kind === "tts")).toHaveLength(6);
+    expect(all).toHaveLength(REF_JOB_LINES);
+    expect(all.filter((r) => r.kind === "video")).toHaveLength(3);
+    expect(all.filter((r) => r.kind === "tts")).toHaveLength(3);
     expect(all.filter((r) => r.kind === "stt")).toHaveLength(1);
     expect(new Set(all.map((r) => r.batchId))).toEqual(new Set([res.batchId]));
     expect(all.every((r) => r.status === "queued")).toBe(true);
@@ -331,7 +378,7 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
   test("THE VOICE LINE IS RESERVED AT 2x — provable on the row and in the total", async () => {
     const t = harness();
     const planId = await seedPlan(t);
-    const blocks = JOB_41();
+    const blocks = REF_JOB();
     const res = await reserve(t, {
       tenantId: A,
       planId,
@@ -373,15 +420,25 @@ describe("the §4.1 job: the WHOLE reel is ONE reserved unit", () => {
     const raw = chooseMediaBatch(onceOver, MEDIA_JOB_CAP_USD);
     expect(raw.ok).toBe(true);
     if (!raw.ok) return;
-    const oneVoicePass = (6 * maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) * 0.015) / 1000;
+    // 33.1-06: reads the table, for the reason spelled out on the reference-job arithmetic above.
+    const oneVoicePass =
+      (3 *
+        maxCharsFor(MEDIA_DEFAULT_VIDEO.seconds) *
+        (MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model] ?? 0)) /
+      1000;
     expect(res.estUsd - raw.value.estUsd).toBeCloseTo(oneVoicePass, 6);
   });
 });
 
 // ── the cap refusals ───────────────────────────────────────────────────────────────
 
-describe("over_job_cap: the cap is bounded by the CLIPS", () => {
-  test("12 default Sora blocks are refused — zero rows, zero consumption", async () => {
+describe("the two ceilings: the CLIPS are bounded by seconds first, then by money", () => {
+  test("12 default blocks are refused — zero rows, zero consumption", async () => {
+    // 33.1-04 CHANGED THE CODE THIS RETURNS, and that is the record of what the cap did: twelve
+    // 4-second blocks are $3.36 and would now PASS the $3.50 job cap (they were $4.80 on sora-2),
+    // but 48 generated seconds is four times `MEDIA_GENERATED_SECONDS_CAP`, so the refusal comes
+    // earlier and names a different lever. Zero rows and zero consumption are unchanged, which is
+    // the part that actually protects the tenant.
     const t = harness();
     const planId = await seedPlan(t);
     const res = await reserve(t, {
@@ -391,12 +448,15 @@ describe("over_job_cap: the cap is bounded by the CLIPS", () => {
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
-    expect(res).toEqual({ ok: false, reason: "over_job_cap" });
+    expect(res).toEqual({ ok: false, reason: "over_generated_seconds" });
     expect(await rows(t)).toHaveLength(0);
     expect(await mediaLeft(t)).toBe(MEDIA_DAILY_BUDGET_CENTS);
   });
 
-  test("eight default clips pass while nine cross the existing cap", () => {
+  test("three default clips pass while four cross the SECONDS ceiling", () => {
+    // WAS "eight pass, nine cross" against the job cap. At $0.07/s the money cap is no longer what
+    // binds a video-only job — 3 x 4 s = 12 s is the last passing count, and the fourth clip is
+    // refused for seconds rather than for dollars ($1.12, a third of the cap).
     const at = (count: number): MediaSpec[] =>
       Array.from({ length: count }, () => ({
         kind: "video" as const,
@@ -404,10 +464,10 @@ describe("over_job_cap: the cap is bounded by the CLIPS", () => {
         resolution: MEDIA_DEFAULT_VIDEO.resolution,
         seconds: MEDIA_DEFAULT_VIDEO.seconds,
       }));
-    expect(chooseMediaBatch(at(8), MEDIA_JOB_CAP_USD).ok).toBe(true);
-    const over = chooseMediaBatch(at(9), MEDIA_JOB_CAP_USD);
+    expect(chooseMediaBatch(at(3), MEDIA_JOB_CAP_USD).ok).toBe(true);
+    const over = chooseMediaBatch(at(4), MEDIA_JOB_CAP_USD);
     expect(over.ok).toBe(false);
-    if (!over.ok) expect(over.error.code).toBe("over_job_cap");
+    if (!over.ok) expect(over.error.code).toBe("over_generated_seconds");
   });
 });
 
@@ -417,9 +477,13 @@ test("a clip length nobody prices is illegal_duration — zero rows", async () =
   const res = await reserve(t, {
     tenantId: A,
     planId,
-    // 7 s is not in CLIP_SECONDS. Wan 2.5 accepts 5 or 10 only; there is no 15 s either.
-    blocks: deck(3, { seconds: 7, chars: 90 }),
-    clipSeconds: 7,
+    // 33.1-04: 7 s USED to be the unpriceable length here and is now an ordinary one on grok's
+    // 1..15 grid — leaving it would have made this test assert nothing. 16 s is above the top of
+    // the grid, which is the only unpriceable length left. ONE block, so the refusal is the
+    // duration and not the seconds ceiling (16 > 12 would refuse either way, and a test that
+    // cannot tell which code it got is not a test of either).
+    blocks: deck(1, { seconds: 16, chars: 90 }),
+    clipSeconds: 16,
     withCaptions: false,
   });
   expect(res).toEqual({ ok: false, reason: "illegal_duration" });
@@ -579,13 +643,13 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
     expect(res.ok).toBe(true);
 
-    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - JOB_41_CENTS);
+    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - REF_JOB_CENTS);
     // Mutation check: drop `key: tenantId` from mediaSpendCents and this line goes RED.
     expect(await mediaLeft(t, B)).toBe(MEDIA_DAILY_BUDGET_CENTS);
   });
@@ -596,20 +660,22 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
     const job = {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     } as const;
-    // Four jobs fit in the tenant window. The fifth cannot.
-    for (let i = 0; i < 4; i++) expect((await reserve(t, job)).ok).toBe(true);
+    // ELEVEN jobs fit in the tenant window. The twelfth cannot. (It was four and a fifth while
+    // the reference job was six sora-2 blocks at 246 cents; the same reel is 90 cents on grok at
+    // the seconds ceiling, so the count is recomputed rather than left to pass by luck.)
+    for (let i = 0; i < 11; i++) expect((await reserve(t, job)).ok).toBe(true);
     const rowsBefore = (await rows(t)).length;
-    expect(rowsBefore).toBe(4 * JOB_41_LINES);
+    expect(rowsBefore).toBe(11 * REF_JOB_LINES);
 
     const res = await reserve(t, job);
 
     expect(res).toEqual({ ok: false, reason: "media_daily_exhausted" });
     expect((await rows(t)).length).toBe(rowsBefore); // all-or-nothing
-    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - 4 * JOB_41_CENTS);
+    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - 11 * REF_JOB_CENTS);
   });
 
   test("the KEYLESS ceiling refuses independently, with its own distinct reason", async () => {
@@ -619,17 +685,17 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
       ({
         tenantId,
         planId,
-        blocks: JOB_41(),
+        blocks: REF_JOB(),
         clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
         withCaptions: true,
       }) as const;
 
-    // Many tenants, each individually modest (3 jobs = 915 < its own 1000 allowance), together
+    // Many tenants, each individually modest (11 jobs = 990 < its own 1000 allowance), together
     // exceeding the 10,000 ceiling. No single tenant is over its own window, so only the global
-    // rail can refuse here.
+    // rail can refuse here. Counts recomputed for the 90-cent reference job (33.1-04).
     let sawCeiling = false;
-    outer: for (let i = 0; i < 12 && !sawCeiling; i++) {
-      for (let j = 0; j < 4; j++) {
+    outer: for (let i = 0; i < 15 && !sawCeiling; i++) {
+      for (let j = 0; j < 11; j++) {
         const res = await reserve(t, job(`crowd_${i}`));
         if (!res.ok) {
           expect(res.reason).toBe("deployment_media_exhausted");
@@ -657,7 +723,7 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
@@ -669,7 +735,7 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
     // ...and the reverse: real LLM spend does not consume media budget.
     await t.mutation(internal.guardrails.recordSpend, { tenantId: A, costUsd: 2 });
     expect(await llmLeft(t, A)).toBe(300);
-    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - JOB_41_CENTS);
+    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS - REF_JOB_CENTS);
   });
 
   test("a media rail driven negative by reserve:true clamps to 0, never a negative budget", async () => {
@@ -678,7 +744,7 @@ describe("the media windows: keyed per tenant, with a keyless ceiling behind the
     const job = {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     } as const;
@@ -695,17 +761,17 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
   const job = {
     tenantId: A,
     planId,
-    blocks: JOB_41(),
+    blocks: REF_JOB(),
     clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
     withCaptions: true,
   } as const;
 
-  // Leave room for exactly one more job.
-  for (let i = 0; i < 3; i++) expect((await reserve(t, job)).ok).toBe(true);
+  // Leave room for exactly one more job. TEN at 90 cents leaves 100: one fits, two do not.
+  for (let i = 0; i < 10; i++) expect((await reserve(t, job)).ok).toBe(true);
   const room = await mediaLeft(t, A);
-  expect(room).toBe(MEDIA_DAILY_BUDGET_CENTS - 3 * JOB_41_CENTS);
-  expect(room).toBeGreaterThanOrEqual(JOB_41_CENTS); // one fits...
-  expect(room).toBeLessThan(2 * JOB_41_CENTS); // ...two do not. The test is not vacuous.
+  expect(room).toBe(MEDIA_DAILY_BUDGET_CENTS - 10 * REF_JOB_CENTS);
+  expect(room).toBeGreaterThanOrEqual(REF_JOB_CENTS); // one fits...
+  expect(room).toBeLessThan(2 * REF_JOB_CENTS); // ...two do not. The test is not vacuous.
 
   // Issued together, unawaited. `check` does not consume; `limit` does — and BOTH run inside the
   // SAME serializable mutation, which is the only reason the loser cannot pass a check against a
@@ -717,9 +783,9 @@ test("CONCURRENCY: two jobs that fit alone but not together — exactly ONE wins
   expect(winners).toHaveLength(1);
   expect(losers).toEqual([{ ok: false, reason: "media_daily_exhausted" }]);
   // Consumed cents equal the WINNER's estimate, not both.
-  expect(await mediaLeft(t, A)).toBe(room - JOB_41_CENTS);
+  expect(await mediaLeft(t, A)).toBe(room - REF_JOB_CENTS);
   // ...and the loser wrote nothing.
-  expect(await rows(t)).toHaveLength(4 * JOB_41_LINES);
+  expect(await rows(t)).toHaveLength(11 * REF_JOB_LINES);
 });
 
 // ── plan 20-18: the D5 reconciliation readers ──────────────────────────────────────
@@ -884,7 +950,7 @@ describe("spendForPeriod: the D5(a) aggregate, and the three things that would m
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
@@ -1005,6 +1071,15 @@ const VIDEO: SubmittableSpec = {
   resolution: MEDIA_DEFAULT_VIDEO.resolution,
   seconds: MEDIA_DEFAULT_VIDEO.seconds,
 };
+/** The route-qualified id is a LITERAL here, not `MEDIA_DEFAULT_IMAGE.model`. A constant the
+ *  test imports moves the oracle with the subject, so it pins nothing. */
+const IMAGE = {
+  kind: "image",
+  model: "openai/gpt-image-2",
+  width: MEDIA_DEFAULT_IMAGE.width,
+  height: MEDIA_DEFAULT_IMAGE.height,
+} as const satisfies SubmittableSpec;
+
 const TTS: SubmittableSpec = {
   kind: "tts",
   model: MEDIA_DEFAULT_VOICE.model,
@@ -1013,25 +1088,14 @@ const TTS: SubmittableSpec = {
   sampleRateHertz: MEDIA_DEFAULT_VOICE.sampleRateHertz,
 };
 
-/** Sora task accept, one distinct video id per call. A fresh Response per call is REQUIRED:
- *  a body is a single-read stream, so `mockResolvedValue(new Response(...))` would hand the same
- *  consumed object to call 2 and every test asserting N submits would be a lie. */
-function acceptFetch() {
-  let n = 0;
-  return vi.fn().mockImplementation(() => {
-    n += 1;
-    return Promise.resolve(
-      new Response(JSON.stringify({ id: `req_${n}`, status: "queued" }), {
-        status: 200,
-      }),
-    );
-  });
-}
-
 function stubMediaEnv() {
   vi.stubEnv("Video_and_image_API_Key", "test-key");
   vi.stubEnv("WAN_API_BASE_URL", "https://workspace.ap-southeast-1.maas.aliyuncs.com");
   vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
+  // DELIBERATELY DIFFERENT from the OpenAI sentinel. The image arm reads this one and the
+  // tts/stt/video arms read the other; identical values would let a test that reads the wrong
+  // variable pass by coincidence, which is the failure mode 33.1-03 exists to close.
+  vi.stubEnv("OPENROUTER_API_KEY", "openrouter-test-key");
   vi.stubEnv("FAL_WEBHOOK_SECRET", "test-secret");
   vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
 }
@@ -1085,25 +1149,32 @@ afterEach(async () => {
 });
 
 describe("buildSubmitBody: the body is a function of the PRICED spec, and nothing else", () => {
-  test("the video body pins every priced Sora field", () => {
+  test("the video body pins every priced OpenRouter field", () => {
+    // 33.1-05 moved these names off Sora's: `duration` (a NUMBER) and `resolution` (the tier), not
+    // `seconds` (a string) and `size` (WxH). Measured against a live 202 on 2026-08-30.
     expect(buildSubmitBody(VIDEO, "a lighthouse at dusk")).toEqual({
       model: MEDIA_DEFAULT_VIDEO.model,
       prompt: "a lighthouse at dusk",
-      seconds: String(MEDIA_DEFAULT_VIDEO.seconds),
-      size: "720x1280",
+      duration: MEDIA_DEFAULT_VIDEO.seconds,
+      resolution: MEDIA_DEFAULT_VIDEO.resolution,
+      aspect_ratio: "9:16",
     });
   });
 
-  test("duration remains the submitted OpenAI string enum", () => {
-    const body = buildSubmitBody({ ...VIDEO, seconds: 8 }, "p");
-    expect(body.seconds).toBe("8");
+  test("duration is a NUMBER, and off the old 4/8/12 grid", () => {
+    // Sora took `String(seconds)` off a three-member enum. Grok takes any integer 1..15, which is
+    // the single fact ADR-027 accepted a new counterparty for — so the type matters as much as the
+    // value: `"7"` would be a different wire contract than the one that was measured.
+    const body = buildSubmitBody({ ...VIDEO, seconds: 7 }, "p");
+    expect(body.duration).toBe(7);
+    expect(typeof body.duration).toBe("number");
   });
 
-  test("a DIFFERENT priced tier travels through unchanged — the field is not a hardcoded 480p", () => {
+  test("a DIFFERENT priced tier travels through unchanged — the field is not a hardcoded 720p", () => {
     // Not vacuous: were `resolution` dropped from the arm, the test above would still see the key
     // absent, but THIS one proves the value tracks the spec rather than a constant.
-    expect(buildSubmitBody({ ...VIDEO, resolution: "1080p" }, "p").size).toBe("1080x1920");
-    expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").size).toBe("720x1280");
+    expect(buildSubmitBody({ ...VIDEO, resolution: "480p" }, "p").resolution).toBe("480p");
+    expect(buildSubmitBody({ ...VIDEO, resolution: "720p" }, "p").resolution).toBe("720p");
   });
 
   test("NO audio field is sent, on any video submit", () => {
@@ -1135,6 +1206,16 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
     });
   });
 
+  test("the image model keeps its OpenRouter route prefix — the tts strip must NOT reach here", () => {
+    // The tts arm does `.replace(/^openai\//, "")` because it posts to OpenAI's own API, which
+    // does not know a route prefix. The image arm posts to OpenRouter, which DOES — stripping here
+    // would send `gpt-image-2` to a gateway that has never heard of that id.
+    expect(buildSubmitBody(IMAGE, "a poster").model).toBe("openai/gpt-image-2");
+    // 33.1: the tts arm no longer strips either, because the voice plane moved to OpenRouter too.
+    // Both arms now post to a gateway that routes ON the vendor prefix, so BOTH keep it.
+    expect(buildSubmitBody(TTS, "n").model).toBe("openai/gpt-audio-mini");
+  });
+
   test("the switch ends in a `never` binding, and no `default` returns a body", () => {
     expect(mediaCode).toMatch(/const\s+_never\s*:\s*never\s*=\s*spec/);
     expect(mediaCode).not.toMatch(/default:\s*\n?\s*return\s*\{/);
@@ -1142,65 +1223,200 @@ describe("buildSubmitBody: the body is a function of the PRICED spec, and nothin
 
   // ── 20-14: the voiceover arm ──────────────────────────────────────────────────
 
-  test("the OpenAI TTS body pins model, WAV, voice, and neutral speed", () => {
-    // Exact equality, not a property spot-check: this single assertion is what makes the two
-    // mutation checks below fire, and it is the only thing standing between D8 and a `speed` knob.
+  test("the TTS body is the OpenRouter CHAT-AUDIO shape, streamed, with no speed knob", () => {
+    // Exact equality, not a property spot-check: this single assertion is what makes the mutation
+    // checks below fire, and it is the only thing standing between D8 and a `speed` knob.
+    //
+    // 33.1 replaced the `/audio/speech` shape wholesale. OpenRouter serves NO model on that
+    // endpoint (every candidate probed 2026-09-03 answered "does not exist"), so the voice plane
+    // rides `/chat/completions` with an audio modality instead.
     expect(buildSubmitBody(TTS, "Six weeks, start to finish.")).toEqual({
-      model: "tts-1",
-      input: "Six weeks, start to finish.",
-      voice: MEDIA_DEFAULT_VOICE.voice,
-      response_format: "wav",
-      speed: 1,
+      model: "openai/gpt-audio-mini",
+      stream: true,
+      modalities: ["text", "audio"],
+      audio: { voice: MEDIA_DEFAULT_VOICE.voice, format: "pcm16" },
+      messages: [
+        { role: "system", content: expect.stringContaining("VERBATIM") },
+        { role: "user", content: "Six weeks, start to finish." },
+      ],
     });
   });
 
+  test("`stream: true` is sent — without it OpenRouter refuses audio output outright", () => {
+    // Not a style choice and not defensive: the API answers 400 "Audio output requires stream:
+    // true". Dropping this field does not degrade the take, it removes the voice plane entirely.
+    expect(buildSubmitBody(TTS, "p").stream).toBe(true);
+  });
+
   test("NO time-stretch knob is submitted, under any name — delta pitfall 15's tripwire", () => {
-    // `fal-ai/inworld-tts` has no `speed`/`rate` field at all, so D8's no-time-stretch rule is
-    // enforced by the PROVIDER rather than by our discipline. This asserts we never start sending
-    // one anyway — e.g. after a swap to `fal-ai/kokoro/*`, which exposes `speed: 0.1-5.0`.
+    // The old arm sent `speed: 1` to hold this line. The chat-audio route has no such field, so
+    // the rule is now enforced by ABSENCE — which is the stronger form, and the reason this test
+    // asserts no key matches rather than asserting a neutral value.
     const body = buildSubmitBody(TTS, "p");
-    expect(body.speed).toBe(1);
-    expect(Object.keys(body).filter((k) => /tempo|setpts|stretch|pace/i.test(k))).toEqual([]);
+    expect(body.speed).toBeUndefined();
+    expect(Object.keys(body).filter((k) => /tempo|setpts|stretch|pace|speed/i.test(k))).toEqual([]);
   });
 
   test("the narration is submitted VERBATIM — never truncated, never re-wrapped", () => {
     // A silent truncation ships a voiceover missing its last words, with no error anywhere and a
     // clip that still renders. The submitted text is the text that was priced.
+    const userMsg = (body: Record<string, unknown>) =>
+      (body.messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")
+        ?.content;
     const long = `${"y".repeat(139)}.`;
-    expect(buildSubmitBody(TTS, long).input).toBe(long);
+    expect(userMsg(buildSubmitBody(TTS, long))).toBe(long);
     const wrapped = "one.\n  two.\ttrailing space ";
-    expect(buildSubmitBody(TTS, wrapped).input).toBe(wrapped);
+    expect(userMsg(buildSubmitBody(TTS, wrapped))).toBe(wrapped);
+  });
+
+  test("the SCRIPT rides as the user turn and the engine instruction as the system turn", () => {
+    // The ordering is load-bearing, and it is the whole reason this model reads instead of
+    // answering. Measured 2026-09-03: under a WEAKER system line, `openai/gpt-audio-mini` was
+    // given "Nothing sends until you approve it." and REPLIED to it — twice out of two — in a
+    // voice that would have been rendered into the reel as the owner's own script. The line below
+    // took the same input verbatim 3/3. A refactor that folds the script into the system turn, or
+    // drops the system turn, reintroduces exactly that.
+    const msgs = buildSubmitBody(TTS, "Nothing sends until you approve it.").messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    expect(msgs.map((m) => m.role)).toEqual(["system", "user"]);
+    expect(msgs[1]?.content).toBe("Nothing sends until you approve it.");
+    expect(msgs[0]?.content).toMatch(/text-to-speech engine/i);
+    expect(msgs[0]?.content).toMatch(/answer nothing/i);
+    // Each literal chunk stays under the §5 scan ceiling, the `searchVault` convention.
+    for (const chunk of (msgs[0]?.content ?? "").split(". "))
+      expect(chunk.length).toBeLessThan(200);
   });
 
   test("the pinned fields track the SPEC, not a constant — a re-voiced row travels", () => {
-    // Not vacuous: were `voice`/`sample_rate_hertz` read from MEDIA_DEFAULT_VOICE at the arm, the
-    // assertions above would still pass and a row reserved under one voice could submit under
-    // another after a constant bump. The row is the record of what was priced.
+    // Not vacuous: were `voice` read from MEDIA_DEFAULT_VOICE at the arm, the assertions above
+    // would still pass and a row reserved under one voice could submit under another after a
+    // constant bump. The row is the record of what was priced.
     const body = buildSubmitBody({ ...TTS, voice: "alloy", sampleRateHertz: 48000 }, "p");
-    expect(body.voice).toBe("alloy");
+    expect((body.audio as { voice: string }).voice).toBe("alloy");
   });
 });
 
-describe("OpenAI Sora submit contract", () => {
-  test("missing visual key refuses before fetch", async () => {
+// ── 33.1-05: the VIDEO plane on OpenRouter ────────────────────────────────────────────
+//
+// The same discipline as the image block below: every assertion reads the RESOLVED first argument
+// handed to the fetch mock. A source scan proves spelling and not routing (VALIDATION.md trap 3);
+// since 33.2-06 the hostname is also absent from media.ts, and a scan below holds that.
+describe("OpenRouter video submit contract", () => {
+  /** The 202 shape measured on 2026-08-30 (33.1-PRICE-EVIDENCE.md). `polling_url` is present in the
+   *  real response and is deliberately IGNORED by the adapter — see the trust-boundary test. */
+  const videoAccepted = () =>
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "vid_abc",
+          polling_url: "https://openrouter.ai/api/v1/videos/vid_abc",
+          status: "pending",
+        }),
+        { status: 202 },
+      ),
+    );
+
+  test("missing OpenRouter key refuses before fetch — the credential moved with the vendor", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubEnv("OPENAI_API_KEY", "");
-    await expect(submitLine(VIDEO, "p")).rejects.toThrow(/OPENAI_API_KEY/);
+    stubMediaEnv();
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    await expect(submitLine(VIDEO, "p")).rejects.toThrow(/OPENROUTER_API_KEY/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("submits an asynchronous Sora task with bearer auth and the priced body", async () => {
-    const fetchMock = acceptFetch();
+  test("a video submit RESOLVES to openrouter.ai, as JSON, on the OpenRouter key", async () => {
+    const fetchMock = videoAccepted();
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv();
-    expect(await submitLine(VIDEO, "a lighthouse")).toEqual({ ok: true, requestId: "req_1" });
+    expect(await submitLine(VIDEO, "a lighthouse")).toEqual({ ok: true, requestId: "vid_abc" });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("https://api.openai.com/v1/videos");
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer openai-test-key");
-    expect(Object.fromEntries((init.body as FormData).entries())).toEqual(
-      buildSubmitBody(VIDEO, "a lighthouse"),
+    expect(new URL(url).hostname).toBe("openrouter.ai");
+    expect(new URL(url).pathname).toBe("/api/v1/videos");
+    expect(init.method).toBe("POST");
+    // The OPENROUTER sentinel in stubMediaEnv is deliberately different from the OpenAI one, so an
+    // arm reading the wrong variable cannot pass by coincidence.
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer openrouter-test-key");
+    expect(headers["Content-Type"]).toBe("application/json");
+    // JSON, not the FormData the withdrawn OpenAI Videos API required.
+    expect(init.body).not.toBeInstanceOf(FormData);
+    expect(JSON.parse(init.body as string)).toEqual(buildSubmitBody(VIDEO, "a lighthouse"));
+  });
+
+  test("all three PRICED dimensions travel from a NON-DEFAULT spec — a hardcoded default cannot pass", async () => {
+    // 480p and 7s are both away from MEDIA_DEFAULT_VIDEO, and 7 is not on the old 4/8/12 grid.
+    // Were the arm to emit constants, every assertion here would fail.
+    const fetchMock = videoAccepted();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const spec: SubmittableSpec = { ...VIDEO, resolution: "480p", seconds: 7 };
+    await submitLine(spec, "p");
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.model).toBe(MEDIA_DEFAULT_VIDEO.model);
+    expect(body.resolution).toBe("480p");
+    expect(body.duration).toBe(7);
+  });
+
+  test("A5 submit leg: a 7-second spec reaches a provider carrying 7", async () => {
+    // The seconds 33.1-04 made parseable (GENERATED_CLIP_SECONDS = 1..15) now leave the building.
+    // `duration` as a NUMBER and not Sora's `String(seconds)` — the 202 measured on 2026-08-30
+    // accepted `duration: 7`, which is the single fact ADR-027 accepted a new counterparty for.
+    const fetchMock = videoAccepted();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    await submitLine({ ...VIDEO, seconds: 7 }, "p");
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.duration).toBe(7);
+    expect(typeof body.duration).toBe("number");
+  });
+
+  test("no unpriced dimension is sent — not generate_audio, not Sora's size", () => {
+    // Grok has no native audio and this pipeline muxes TTS separately in assemble_final.sh.
+    // The price table keys on model/resolution/seconds; a fourth priced-looking dimension the table
+    // cannot see is exactly the money bug buildSubmitBody's doc comment exists to prevent.
+    expect(buildSubmitBody(VIDEO, "p")).not.toHaveProperty("generate_audio");
+    expect(buildSubmitBody(VIDEO, "p")).not.toHaveProperty("size");
+  });
+
+  test("400 and 422 are blocked; other non-OK statuses are not, and the code is never prose", async () => {
+    for (const [status, blocked] of [
+      [400, true],
+      [422, true],
+      [500, false],
+    ] as const) {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            new Response(JSON.stringify({ error: { code: "moderation_blocked" } }), { status }),
+          ),
+      );
+      stubMediaEnv();
+      expect(await submitLine(VIDEO, "p")).toEqual({
+        ok: false,
+        code: "moderation_blocked",
+        blocked,
+      });
+    }
+  });
+
+  test("a 202 with no id is no_request_id, not a silent success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ status: "pending" }), { status: 202 })),
     );
+    stubMediaEnv();
+    expect(await submitLine(VIDEO, "p")).toEqual({
+      ok: false,
+      code: "no_request_id",
+      blocked: false,
+    });
   });
 
   test("fixture mode remains free but still requires configured credentials", async () => {
@@ -1214,46 +1430,173 @@ describe("OpenAI Sora submit contract", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+});
 
-  test("GPT Image 2 decodes the returned PNG and keeps it off the job payload", async () => {
-    const encoded = btoa(String.fromCharCode(137, 80, 78, 71));
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ data: [{ b64_json: encoded }] }), {
+// ── 33.1-05 / A8: the ROUTING assertion, over BOTH visual kinds ────────────────────────
+//
+// Written as a loop over the kinds rather than as two tests, so that adding a third visual kind
+// without a routing assertion is VISIBLY missing rather than quietly absent.
+describe("A8 — every visual submit resolves to OpenRouter, and none to OpenAI", () => {
+  const SPECS: Array<[string, Parameters<typeof submitLine>[0]]> = [
+    ["video", VIDEO],
+    ["image", IMAGE],
+  ];
+
+  /** Satisfies BOTH arms at once: `id` for the async video ticket, `data[0].b64_json` for the
+   *  synchronous image bytes. One mock, so the loop body stays the same for every kind. */
+  const anyVisualOk = () =>
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "x", status: "pending", data: [{ b64_json: "AAAA" }] }), {
         status: 200,
-        headers: { "x-request-id": "image_req_1" },
       }),
     );
+
+  test("both kinds resolve to openrouter.ai", async () => {
+    for (const [name, spec] of SPECS) {
+      const fetchMock = anyVisualOk();
+      vi.stubGlobal("fetch", fetchMock);
+      stubMediaEnv();
+      await submitLine(spec, "p");
+      const url = (fetchMock.mock.calls[0] as [string, RequestInit])[0];
+      expect(new URL(url).hostname, `${name} must resolve to OpenRouter`).toBe("openrouter.ai");
+    }
+  });
+
+  test("neither kind resolves to api.openai.com", async () => {
+    // The RUNTIME version of the source scan. Unlike a grep this stays true while TTS, STT and the
+    // retained Sora poller keep that hostname in the file — which they legitimately do.
+    for (const [name, spec] of SPECS) {
+      const fetchMock = anyVisualOk();
+      vi.stubGlobal("fetch", fetchMock);
+      stubMediaEnv();
+      await submitLine(spec, "p");
+      for (const call of fetchMock.mock.calls) {
+        expect(new URL(call[0] as string).hostname, `${name} must not reach OpenAI`).not.toBe(
+          "api.openai.com",
+        );
+      }
+    }
+  });
+});
+
+// ── 33.1-03: the still-image plane on OpenRouter ──────────────────────────────────────
+//
+// VALIDATION.md trap 3, and it is the reason every assertion below reads the RESOLVED first
+// argument handed to the fetch mock rather than grepping the source: a hostname's presence or
+// absence in a file proves nothing about where an image request goes (33.2-06 removed the last
+// `api.openai.com` from media.ts and a scan holds that — the routing proof is still the url).
+describe("OpenRouter image submit contract", () => {
+  /** One PNG-shaped success, fresh per call — a Response body is a single-read stream. */
+  const imageOk = () =>
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          // The measured shape, 2026-08-30 (33.1-PRICE-EVIDENCE.md): `media_type` rides alongside
+          // `b64_json` and is ignored, exactly as it was on OpenAI. No response-shape change.
+          data: [{ b64_json: btoa(String.fromCharCode(137, 80, 78, 71)), media_type: "image/png" }],
+        }),
+        { status: 200, headers: { "x-request-id": "image_req_1" } },
+      ),
+    );
+
+  test("the RESOLVED url is OpenRouter's images endpoint, not OpenAI's", async () => {
+    const fetchMock = imageOk();
     vi.stubGlobal("fetch", fetchMock);
     stubMediaEnv();
-    const result = await submitLine(
-      {
-        kind: "image",
-        model: MEDIA_DEFAULT_IMAGE.model,
-        width: MEDIA_DEFAULT_IMAGE.width,
-        height: MEDIA_DEFAULT_IMAGE.height,
-      },
-      "a baobab at dawn",
+    await submitLine(IMAGE, "a baobab at dawn");
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(url.host).toBe("openrouter.ai");
+    expect(url.pathname).toBe("/api/v1/images");
+  });
+
+  test("the bearer is the OPENROUTER key — the two sentinels differ, so a wrong read cannot pass", async () => {
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    // Guarding the guard: were these two ever set to the same string, the assertion below would go
+    // green while `submitLine` read the wrong variable.
+    expect(process.env.OPENROUTER_API_KEY).not.toBe(process.env.OPENAI_API_KEY);
+    await submitLine(IMAGE, "p");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer openrouter-test-key",
     );
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
+  });
+
+  test("a missing OPENROUTER_API_KEY refuses before fetch, and names THAT variable", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    await expect(submitLine(IMAGE, "p")).rejects.toThrow(/OPENROUTER_API_KEY/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("an image submit no longer needs OPENAI_API_KEY at all", async () => {
+    // The behaviour change worth its own test: the image plane is no longer hostage to a credential
+    // it does not use, on the account that is out of credit.
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const result = await submitLine(IMAGE, "p");
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("the submitted body is the priced one, with the route prefix intact", async () => {
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    await submitLine(IMAGE, "a baobab at dawn");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toEqual({
+      model: "openai/gpt-image-2",
+      prompt: "a baobab at dawn",
+      n: 1,
+      // `size` and NOT `aspect_ratio`, and never both — measured 2026-08-30: they are not
+      // interchangeable (9:16 returns 864x1536 at $0.003735, size returns 1024x1536 at $0.004875).
+      // Keeping `size` preserves today's exact geometry; the cheaper 9:16 option is a deliberate
+      // deferral because it changes what every still looks like.
+      size: "1024x1536",
+      quality: "low",
+      output_format: "png",
+    });
+    expect(Object.keys(JSON.parse(String(init.body)))).not.toContain("aspect_ratio");
+  });
+
+  test("GPT Image 2 decodes the returned PNG and keeps it off the job payload", async () => {
+    const fetchMock = imageOk();
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const result = await submitLine(IMAGE, "a baobab at dawn");
     expect(result).toMatchObject({ ok: true, requestId: "image_req_1" });
     if (!result.ok) return;
     expect([...((result.asset?.bytes ?? new Uint8Array()) as Uint8Array)]).toEqual([
       137, 80, 78, 71,
     ]);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/images/generations");
+  });
+
+  test("the requestId fallback does not claim a vendor this arm no longer talks to", async () => {
+    // 33.1-PRICE-EVIDENCE.md does NOT record whether OpenRouter returns `x-request-id`, so this
+    // fallback is load-bearing rather than decorative — and it must not say `openai-`.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ b64_json: btoa("x"), media_type: "image/png" }] }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    const result = await submitLine(IMAGE, "p");
+    expect(result.ok && result.requestId).toMatch(/^openrouter-/);
   });
 });
 
-describe("OpenAI audio request bodies", () => {
-  test("TTS pins neutral speed and WAV output", () => {
-    expect(buildSubmitBody(TTS, "Narration")).toEqual({
-      model: "tts-1",
-      input: "Narration",
-      voice: MEDIA_DEFAULT_VOICE.voice,
-      response_format: "wav",
-      speed: 1,
-    });
-  });
-});
+// 33.1 removed `describe("OpenAI audio request bodies")` from here. It asserted the tts submit
+// body a SECOND time, more weakly than the voiceover-arm block above, and under a name that is now
+// simply wrong — the voice plane is not on OpenAI any more. Two copies of one assertion is how a
+// repair reaches one site and not the other; the surviving copy is the richer one.
 
 describe("WAN task landing", () => {
   test("a successful image task is copied into owned storage and lands the row", async () => {
@@ -1306,36 +1649,49 @@ describe("WAN task landing", () => {
   });
 });
 
-describe("OpenAI Sora task landing", () => {
-  test("a completed video is downloaded from OpenAI and stored in the workspace", async () => {
-    const t = harness();
+describe("OpenRouter video task landing", () => {
+  /** One `submitted` video row, ready for the poller's CAS. */
+  // `seconds: number`, NOT inferred from the default: MEDIA_DEFAULT_VIDEO is `as const`, so an
+  // inferred default would narrow the parameter to the literal `4` and reject the 7 the A5 leg
+  // needs — the constant would silently become the only legal argument.
+  async function seedSubmittedVideo(t: T, seconds: number = MEDIA_DEFAULT_VIDEO.seconds) {
     const planId = await seedPlan(t);
-    const jobId = await t.run((ctx) =>
+    return await t.run((ctx) =>
       ctx.db.insert("mediaJobs", {
         tenantId: A,
         planId,
-        batchId: "sora-video",
+        batchId: "grok-video",
         blockIndex: 0,
         provider: "openai",
         kind: "video",
         model: MEDIA_DEFAULT_VIDEO.model,
-        spec: {
-          kind: "video",
-          resolution: MEDIA_DEFAULT_VIDEO.resolution,
-          seconds: MEDIA_DEFAULT_VIDEO.seconds,
-        },
+        spec: { kind: "video", resolution: MEDIA_DEFAULT_VIDEO.resolution, seconds },
         promptHash: "0".repeat(64),
         status: "submitted",
-        providerRequestId: "video_1",
-        estUsd: 0.4,
+        providerRequestId: "vid_abc",
+        estUsd: 0.28,
         createdAt: T0,
         updatedAt: T0,
       }),
     );
+  }
+
+  test("a completed video is downloaded from OpenRouter and stored in the workspace", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
     stubMediaEnv();
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "video_1", status: "completed" })))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "vid_abc",
+            status: "completed",
+            unsigned_urls: ["https://openrouter.ai/api/v1/videos/vid_abc/content?sig=whatever"],
+            usage: { cost: 0.28 },
+          }),
+        ),
+      )
       .mockResolvedValueOnce(
         new Response(new Uint8Array([0, 0, 0, 24]), {
           status: 200,
@@ -1344,9 +1700,9 @@ describe("OpenAI Sora task landing", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    await t.action(internal.media.pollOpenAiVideoTask, {
+    await t.action(internal.media.pollOpenRouterVideoTask, {
       jobId,
-      videoId: "video_1",
+      videoId: "vid_abc",
       attempt: 0,
     });
 
@@ -1355,10 +1711,290 @@ describe("OpenAI Sora task landing", () => {
       mimeType: "video/mp4",
       bytes: 4,
     });
+    // BOTH URLs are ours, constructed from the id. The response's `unsigned_urls[0]` above is a
+    // DIFFERENT string (it carries a query) and is deliberately not among these — see the next test.
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      "https://api.openai.com/v1/videos/video_1",
-      "https://api.openai.com/v1/videos/video_1/content",
+      "https://openrouter.ai/api/v1/videos/vid_abc",
+      "https://openrouter.ai/api/v1/videos/vid_abc/content?index=0",
     ]);
+  });
+
+  test("TRUST BOUNDARY: a provider-supplied URL is never fetched, whatever host it names", async () => {
+    // Measured 2026-08-30: `unsigned_urls[0]` is NOT a pre-signed link — it 401s without our bearer,
+    // so following it would mean sending our credential to a host a provider response chose. The
+    // adapter constructs every URL from the id instead, which is strictly stronger than a host
+    // check because no foreign value is accepted at all. This fixture names a hostile host so the
+    // assertion is falsifiable: a `fetch(body.unsigned_urls[0])` implementation reddens here.
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "vid_abc",
+            status: "completed",
+            unsigned_urls: ["https://evil.example.com/v1/videos/vid_abc/content"],
+            polling_url: "https://evil.example.com/v1/videos/vid_abc",
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(new Uint8Array([0, 0, 0, 24]), {
+          status: 200,
+          headers: { "content-type": "video/mp4" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    for (const call of fetchMock.mock.calls) {
+      expect(new URL(call[0] as string).hostname).toBe("openrouter.ai");
+    }
+  });
+
+  test("`pending` is NOT terminal — it reschedules rather than landing a failure", async () => {
+    // The trap a branch-for-branch copy of the Sora poller walks into. Sora emits
+    // `queued | in_progress`; the 2026-08-30 probe showed OpenRouter emits `pending`, which is on
+    // NEITHER list. A poller that enumerates in-progress states would land `provider_failed` on the
+    // very first poll of every job — a green suite over a pipeline that never delivers a video.
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "vid_abc", status: "pending" }))),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({ status: "submitted" });
+  });
+
+  test("an UNKNOWN non-terminal status also reschedules — the default is retry, not fail", async () => {
+    // Fail-open toward retrying, bounded by the 180-attempt ceiling below, so an unlisted future
+    // state costs a delay and never a spuriously failed job that was about to succeed.
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ id: "vid_abc", status: "warming_up" }))),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({ status: "submitted" });
+  });
+
+  test("at attempt 180 a still-pending job lands poll_timeout — the retry loop is bounded", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "vid_abc", status: "pending" }))),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 180,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "poll_timeout",
+    });
+  });
+
+  test("`failed` lands the provider's error CODE through SAFE_CODE, never its prose", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "vid_abc",
+            status: "failed",
+            error: { code: "content_policy", message: "a sentence that must never be stored" },
+          }),
+        ),
+      ),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "content_policy",
+    });
+  });
+
+  test("a prose-shaped error code is replaced, not stored (CLAUDE.md §4)", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: "vid_abc",
+            status: "failed",
+            error: { code: "the model refused: a prompt about a real named person" },
+          }),
+        ),
+      ),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "provider_failed",
+    });
+  });
+
+  test("a non-OK content fetch lands asset_http_N and stores no bytes", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: "vid_abc", status: "completed", unsigned_urls: [] })),
+        )
+        .mockResolvedValueOnce(new Response("", { status: 404 })),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({
+      status: "failed",
+      failureReason: "asset_http_404",
+    });
+  });
+
+  test("the CAS: a row that is not `submitted` is a no-op, so a duplicate schedule is free", async () => {
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t);
+    await t.run((ctx) => ctx.db.patch(jobId, { status: "succeeded" }));
+    stubMediaEnv();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("the seconds on the ROW reach the REPRICE — a 7-second clip reconciles at 49 cents", async () => {
+    // A5's landing leg, asserted on the money rather than on a column. `storeAndLand`'s `actual`
+    // is not stored verbatim; it feeds `repriceUsd`, so the seconds only "arrive" if the reconciled
+    // charge moves. 7 x $0.07 = $0.49, and $0.49 is EXACTLY what the live 2026-08-30 probe was
+    // invoiced for a 7-second 720p clip — so this number ties the landing path to a real receipt.
+    // Were the poller to pass a default 4 instead of the row's 7, this would read 28.
+    const t = harness();
+    const jobId = await seedSubmittedVideo(t, 7);
+    stubMediaEnv();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: "vid_abc", status: "completed", unsigned_urls: [] })),
+        )
+        .mockResolvedValueOnce(
+          new Response(new Uint8Array([0, 0, 0, 24]), {
+            status: 200,
+            headers: { "content-type": "video/mp4" },
+          }),
+        ),
+    );
+
+    await t.action(internal.media.pollOpenRouterVideoTask, {
+      jobId,
+      videoId: "vid_abc",
+      attempt: 0,
+    });
+
+    expect(await jobRow(t, jobId)).toMatchObject({ status: "succeeded", actualCents: 49 });
+  });
+});
+
+// ── 33.1-05 / A7: the flag, and a test that does not believe it ────────────────────────
+//
+// VALIDATION.md trap 2, and the single most likely way this phase ships a lie. Setting
+// `replacementWiredUp` greens the runway tripwire in packages/cost whether or not anything was
+// wired — the exact failure `7012068` re-keyed that tripwire to close.
+//
+// So the flag is never asserted alone. It is asserted in the SAME test body as the routing, which
+// means the only way to green this test is to have actually moved the submit. Reverting the
+// submitLine video arm to api.openai.com reddens it while packages/cost stays green; that asymmetry
+// is the whole reason the pairing exists and it was mutation-checked before the flag was flipped.
+describe("A7 — the video submit resolves to OpenRouter", () => {
+  test("the video submit resolves to openrouter.ai", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: "vid_abc", status: "pending" }), { status: 202 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    stubMediaEnv();
+    await submitLine(VIDEO, "p");
+    const url = (fetchMock.mock.calls[0] as [string, RequestInit])[0];
+
+    // The two assertions live in one body deliberately: the flag cannot be green while the routing
+    // is not. Splitting them into two tests would restore exactly the failure mode this closes.
+    expect(new URL(url).hostname).toBe("openrouter.ai");
+  });
+});
+
+// 33.2-06: the retained Sora poller is gone, so the hostname CAN be asserted absent now. A scan
+// proves spelling, not routing — the RESOLVED-url assertions above remain the routing proof.
+describe("media.ts no longer names api.openai.com", () => {
+  test("the source contains no api.openai.com — the Sora poller was its last legitimate use", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const src = readFileSync(join(__dirname, "media.ts"), "utf8");
+    expect(src.includes("api.openai.com")).toBe(false);
   });
 });
 
@@ -1844,11 +2480,37 @@ describe("reserveSceneJobInner: what a scene deck BUYS, kind by kind", () => {
 
   test("a generated clip off the provider's duration GRID is refused", async () => {
     const t = harness();
+    // 33.1-04: was a 7-second clip, which grok makes perfectly well. Above 15 is the only
+    // off-grid left — and 16 also breaches the seconds ceiling, so the scene is deliberately the
+    // ONLY generated one and the assertion pins `illegal_duration`: a test that cannot tell which
+    // of two refusals it received is a test of neither. The pair below proves the ordering.
     const scenes = [
-      sc({ index: 0, startMs: 0, durationMs: 7000, visual: "generated_video" }),
-      sc({ index: 1, startMs: 7000, durationMs: 23_000, visual: "animated_image" }),
+      sc({ index: 0, startMs: 0, durationMs: 16_000, visual: "generated_video" }),
+      sc({ index: 1, startMs: 16_000, durationMs: 14_000, visual: "animated_image" }),
     ];
     expect(await reserveScenes(t, scenes)).toEqual({ ok: false, reason: "illegal_duration" });
+  });
+
+  test("A DECK OVER THE GENERATED-SECONDS CEILING IS REFUSED — priced, legal, still too much", async () => {
+    // 33.1-04. Every clip is on the grid and the reel is affordable ($1.05 of pictures against a
+    // $3.50 cap), so neither `illegal_duration` nor `over_job_cap` fires. What refuses it is the
+    // ceiling: 15 generated seconds against 12. The lever the user is sent to is different from
+    // both — swap a generated scene for a still, which costs the same at any length.
+    const t = harness();
+    const scenes = [
+      sc({ index: 0, startMs: 0, durationMs: 15_000, visual: "generated_video" }),
+      sc({ index: 1, startMs: 15_000, durationMs: 15_000, visual: "animated_image" }),
+    ];
+    expect(await reserveScenes(t, scenes)).toEqual({
+      ok: false,
+      reason: "over_generated_seconds",
+    });
+    // ...and one second less is bought.
+    const legal = [
+      sc({ index: 0, startMs: 0, durationMs: 12_000, visual: "generated_video" }),
+      sc({ index: 1, startMs: 12_000, durationMs: 18_000, visual: "animated_image" }),
+    ];
+    expect((await reserveScenes(t, legal)).ok).toBe(true);
   });
 
   test("the narration ceiling is the TAKE's window — a silent scene lends its duration", async () => {
@@ -2916,23 +3578,23 @@ describe("the canvas READ plane: two states per block, and a url only when it is
   // ── 20.2 wave 6: what a SCENE tile needs, and what it must not have to guess ─────────────────
   test("byPlan projects each scene's own kind, place and length — never index x clipSeconds", async () => {
     const t = harness();
-    // 8 / 6 / 4 / 12, summing to 30. `clipSeconds` on this row is 12 (the longest scene), which is
+    // 4 / 14 / 4 / 8, summing to 30. `clipSeconds` on this row is 14 (the longest scene), which is
     // exactly the number a tile must NOT size itself from.
     const { planId } = await seedSceneDeck(t);
     const rows = await asA(t).query(api.media.byPlan, { planId });
     expect(rows.map((r) => [r.visual, r.startMs, r.durationMs])).toEqual([
-      ["generated_video", 0, 8000],
-      ["animated_image", 8000, 6000],
-      ["text_card", 14_000, 4000],
-      ["generated_video", 18_000, 12_000],
+      ["generated_video", 0, 4000],
+      ["animated_image", 4000, 14_000],
+      ["text_card", 18_000, 4000],
+      ["generated_video", 22_000, 8000],
     ]);
   });
 
   test("a scene's character ceiling is its TAKE's window, not the deck's longest scene", async () => {
     const t = harness();
-    // Scene 2 is silent, so scene 1's line runs until scene 3 starts: 6 s + 4 s = 10 s of room,
-    // where the deck-wide `clipSeconds` (12) would have promised more and the scene's own length
-    // (6) less. Both wrong numbers are reachable; only one is the number the reserve applies.
+    // Scene 2 is silent, so scene 1's line runs until scene 3 starts: 14 s + 4 s = 18 s of room,
+    // where the deck-wide `clipSeconds` (14) would have promised less and the scene's own length
+    // (14) less again. Both wrong numbers are reachable; only one is what the reserve applies.
     const { planId } = await seedSceneDeck(t);
     await t.run(async (ctx) => {
       const plan = await ctx.db.get(planId);
@@ -2940,16 +3602,16 @@ describe("the canvas READ plane: two states per block, and a url only when it is
       await ctx.db.patch(planId, { shots });
     });
     const rows = await asA(t).query(api.media.byPlan, { planId });
-    expect(rows[1]?.maxChars).toBe(maxCharsFor(10));
+    expect(rows[1]?.maxChars).toBe(maxCharsFor(18));
     // …and the mutation that edits the line applies the SAME ceiling, or the count beside the
     // textarea would promise room the money gate then refuses.
     expect(
       await asA(t).mutation(api.media.editBlockNarration, {
         planId,
         blockIndex: 1,
-        narration: "x".repeat(maxCharsFor(10) + 1),
+        narration: "x".repeat(maxCharsFor(18) + 1),
       }),
-    ).toMatchObject({ ok: false, reason: "narration_too_long", maxChars: maxCharsFor(10) });
+    ).toMatchObject({ ok: false, reason: "narration_too_long", maxChars: maxCharsFor(18) });
   });
 
   test("a take bought for a line that has since been rewritten is reported STALE", async () => {
@@ -3184,7 +3846,10 @@ describe("jobEstimate: four itemised lines, and the SAME number the rail will co
 
   test("THE ANTI-DRIFT ASSERTION: the estimate equals what reserveJobInner actually consumes", async () => {
     const t = harness();
-    const { planId, clipSeconds, shots } = await seedDeck(t, { blocks: 4 });
+    // THREE blocks, not four: four 4-second blocks are 16 generated seconds, over
+    // `MEDIA_GENERATED_SECONDS_CAP`. The claim under test is that the two sites agree, and they
+    // have to agree on a job that is actually bought.
+    const { planId, clipSeconds, shots } = await seedDeck(t, { blocks: 3 });
     const est = await asA(t).query(api.media.jobEstimate, { planId });
 
     // The SAME deck through the rail. A UI that computes its own total and a rail that computes
@@ -3254,6 +3919,9 @@ describe("the PAID write plane: one money gate, and a regenerate that cannot lea
     // 3 video + 3 tts + 1 stt. The render line has no row, by construction.
     expect(await t.run(async (ctx) => await ctx.db.query("mediaJobs").collect())).toHaveLength(7);
     expect((await planRowOf(t, planId))?.renderStatus).toBe("pending");
+    // 33.2-04: generate IS the approval â€” the row leaves `proposed`, so the approvals page stops
+    // offering an Approve whose pre-step would buy the whole deck again.
+    expect((await planRowOf(t, planId))?.status).toBe("delivering");
   });
 
   test("a REFUSED generate schedules nothing and consumes nothing", async () => {
@@ -4281,7 +4949,7 @@ async function seedCaptionable(
   return { planId, batchId, jobIds, sttJobId };
 }
 
-describe("OpenAI caption submission", () => {
+describe("caption submission — OpenRouter, with the route prefix kept", () => {
   test("clean voice audio is sent as multipart and word timestamps land in owned storage", async () => {
     const t = harness();
     const { batchId, planId, sttJobId } = await seedCaptionable(t, {
@@ -4303,12 +4971,21 @@ describe("OpenAI caption submission", () => {
     });
 
     const firstCall = fetchMock.mock.calls[0];
-    if (!firstCall) throw new Error("OpenAI transcription was not called");
-    const [, init] = firstCall;
-    if (!init) throw new Error("OpenAI transcription request options were missing");
+    if (!firstCall) throw new Error("transcription was not called");
+    const [url, init] = firstCall;
+    if (!init) throw new Error("transcription request options were missing");
+    // 33.1-06: assert the RESOLVED url, the discipline the image and video arms already use.
+    // `api.openai.com` still appears in media.ts for the retained Sora poller, so a source scan
+    // proves spelling and not routing — this test previously asserted neither.
+    expect(new URL(url as string).hostname).toBe("openrouter.ai");
+    expect(new URL(url as string).pathname).toBe("/api/v1/audio/transcriptions");
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer openrouter-test-key",
+    );
     expect(init.body).toBeInstanceOf(FormData);
     const form = init.body as FormData;
-    expect(form.get("model")).toBe("whisper-1");
+    // UNSTRIPPED — OpenRouter rejects a bare `whisper-1`, and accepts `openai/whisper-1`.
+    expect(form.get("model")).toBe("openai/whisper-1");
     expect(form.get("timestamp_granularities[]")).toBe("word");
     expect(form.get("file")).toBeInstanceOf(Blob);
     expect((await planRow(t, planId))?.captionOffsetsS).toEqual([0, 1]);
@@ -4629,7 +5306,7 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
@@ -4644,11 +5321,11 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
       phase: "reserved",
       // THE WHOLE JOB, once — not one row per line. The batch floor was applied across all 13
       // lines exactly once (D12a), so per-line reserved rows would not sum back to this number.
-      amountCents: JOB_41_CENTS,
+      amountCents: REF_JOB_CENTS,
       correlationId: `mediabatch:${res.batchId}`,
       planId,
     });
-    expect(res.lineCount).toBe(JOB_41_LINES); // non-vacuity: this really is a many-line job
+    expect(res.lineCount).toBe(REF_JOB_LINES); // non-vacuity: this really is a many-line job
   });
 
   test("a refused reservation writes no movement at all", async () => {
@@ -4657,16 +5334,16 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
     const job = {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     } as const;
 
     // Drain the tenant's media window through the REAL rail rather than a test-only door, then ask
-    // for one more. 305c a job against a 1000c window, so the fourth is the one that cannot fit.
+    // for one more. 90c a job against a 1000c window, so the twelfth is the one that cannot fit.
     let refused: Awaited<ReturnType<typeof reserve>> | null = null;
-    for (let i = 0; i < 5 && refused === null; i += 1) {
-      const res = await reserve(t, { ...job, blocks: JOB_41() });
+    for (let i = 0; i < 13 && refused === null; i += 1) {
+      const res = await reserve(t, { ...job, blocks: REF_JOB() });
       if (!res.ok) refused = res;
     }
     expect(
@@ -4677,8 +5354,8 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
 
     // Exactly the successful reservations are recorded, and the refusal added nothing.
     const reserved = (await events(t)).filter((r) => r.phase === "reserved");
-    expect(reserved).toHaveLength(4);
-    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(JOB_41_CENTS * 4);
+    expect(reserved).toHaveLength(11);
+    expect(reserved.reduce((sum, r) => sum + r.amountCents, 0)).toBe(REF_JOB_CENTS * 11);
   });
 
   test("even a REFUSED media job opens coverage — a refusal is a confident zero", async () => {
@@ -4696,7 +5373,7 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
     const refused = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
@@ -4780,7 +5457,7 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
     const res = await reserve(t, {
       tenantId: A,
       planId,
-      blocks: JOB_41(),
+      blocks: REF_JOB(),
       clipSeconds: MEDIA_DEFAULT_VIDEO.seconds,
       withCaptions: true,
     });
@@ -4792,7 +5469,7 @@ describe("ledger parity: the media rail reserves whole and lands per line", () =
       .reduce((sum, r) => sum + r.amountCents, 0);
     const refunded = movements.filter((r) => r.phase === "refunded");
 
-    expect(reserved).toBe(JOB_41_CENTS);
+    expect(reserved).toBe(REF_JOB_CENTS);
     // THE MEDIA RAIL NEVER REFUNDS. If a refund movement ever appears here, either the rail grew
     // a credit path (a real design change that must be argued, not slipped in) or something is
     // minting money into the ledger that the limiter never returned.
@@ -4812,7 +5489,13 @@ async function seedSceneDeck(
   opts: { tenantId?: string; seconds?: number[]; target?: number; visuals?: string[] } = {},
 ) {
   const tenantId = opts.tenantId ?? A;
-  const seconds = opts.seconds ?? [8, 6, 4, 12];
+  // 33.1-04: WAS `[8, 6, 4, 12]`, which spends 8 + 12 = 20 generated seconds — over
+  // `MEDIA_GENERATED_SECONDS_CAP` (12), so every reserving test built on this helper started
+  // refusing with `over_generated_seconds`. The deck keeps its shape (four scenes, one of each
+  // kind, two generated clips of DIFFERENT lengths, summing to 30) and moves its seconds so the
+  // generated half is exactly 4 + 8 = 12. Two different lengths is the load-bearing property —
+  // it is what proves a clip is bought at ITS OWN length rather than at a uniform `clipSeconds`.
+  const seconds = opts.seconds ?? [4, 14, 4, 8];
   const visuals = opts.visuals ?? [
     "generated_video",
     "animated_image",
@@ -4850,9 +5533,9 @@ async function seedSceneDeck(
 describe("20.2 wave 2 — the ordering arithmetic is a RUNNING SUM", () => {
   test("reorder recomputes offsets from each scene's OWN length, not index * clipSeconds", async () => {
     const t = harness();
-    // 8 / 6 / 4 / 12 reordered to 12 / 4 / 8 / 6 must give offsets 0 / 12000 / 16000 / 24000.
-    // The old `index * clipSeconds` arithmetic would have written 0 / 12000 / 24000 / 36000 off
-    // the deck-wide clipSeconds (12) — a grid none of these scenes was cut to, and a 36-second
+    // 4 / 14 / 4 / 8 reordered to 8 / 4 / 4 / 14 must give offsets 0 / 8000 / 12000 / 16000.
+    // The old `index * clipSeconds` arithmetic would have written 0 / 14000 / 28000 / 42000 off
+    // the deck-wide clipSeconds (14) — a grid none of these scenes was cut to, and a 42-second
     // offset inside a 30-second reel.
     const { planId } = await seedSceneDeck(t);
 
@@ -4861,8 +5544,8 @@ describe("20.2 wave 2 — the ordering arithmetic is a RUNNING SUM", () => {
     );
 
     const after = await planRowOf(t, planId);
-    expect(after?.shots?.map((x) => x.seconds)).toEqual([12, 4, 8, 6]);
-    expect(after?.shots?.map((x) => x.windowStartMs)).toEqual([0, 12_000, 16_000, 24_000]);
+    expect(after?.shots?.map((x) => x.seconds)).toEqual([8, 4, 4, 14]);
+    expect(after?.shots?.map((x) => x.windowStartMs)).toEqual([0, 8000, 12_000, 16_000]);
     expect(after?.shots?.map((x) => x.index)).toEqual([0, 1, 2, 3]);
   });
 
@@ -4873,9 +5556,9 @@ describe("20.2 wave 2 — the ordering arithmetic is a RUNNING SUM", () => {
       ok: true,
     });
     const after = await planRowOf(t, planId);
-    // 8 / 4 / 12 — the 6-second scene is gone and everything after it moved UP by exactly 6s.
-    expect(after?.shots?.map((x) => x.seconds)).toEqual([8, 4, 12]);
-    expect(after?.shots?.map((x) => x.windowStartMs)).toEqual([0, 8_000, 12_000]);
+    // 4 / 4 / 8 — the 14-second scene is gone and everything after it moved UP by exactly 14s.
+    expect(after?.shots?.map((x) => x.seconds)).toEqual([4, 4, 8]);
+    expect(after?.shots?.map((x) => x.windowStartMs)).toEqual([0, 4000, 8000]);
   });
 
   test("a UNIFORM deck is byte-identical under the new arithmetic — this is a generalisation", async () => {
@@ -4918,8 +5601,8 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
       .filter((r) => r.kind === "video")
       .map((r) => (r.spec.kind === "video" ? r.spec.seconds : 0))
       .sort((l, r) => l - r);
-    // If `deckOf` ever read a scene row, both would be priced at the deck-wide `clipSeconds` (12).
-    expect(secs).toEqual([8, 12]);
+    // If `deckOf` ever read a scene row, both would be priced at the deck-wide `clipSeconds` (14).
+    expect(secs).toEqual([4, 8]);
   });
 
   test("the canvas estimate opens in the SAME commit — a working button behind a refusing estimate spends money nothing showed", async () => {
@@ -4929,7 +5612,7 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     expect(estimate.refusal).toBeNull();
     expect(estimate.totalCents).toBeGreaterThan(0);
     // ONE LINE PER PAID KIND (wave 7). The blended `pictures` row wave 5 printed hid the only
-    // lever the user has: 20 s of generated clip is $2.00 and the still beside it is $0.01.
+    // lever the user has: 12 s of generated clip is $0.84 and the still beside it is $0.006.
     expect(estimate.lines.map((l) => l.label)).toEqual([
       "clips",
       "stills",
@@ -4939,7 +5622,7 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
     ]);
     const line = (label: string) => estimate.lines.find((l) => l.label === label);
     expect(line("clips")?.qty).toBe(2);
-    expect(line("clips")?.cents).toBe(200); // 8 s + 12 s at $0.10 a second
+    expect(line("clips")?.cents).toBe(84); // 4 s + 8 s at $0.07 a second
     expect(line("stills")?.qty).toBe(1);
     expect(line("stills")?.cents).toBe(1); // ONE still, whatever its scene's length
     // 33-04: the render line is DOUBLED at its one source so the retry sandbox is reserved, not
@@ -5009,6 +5692,56 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
       kind: "stt",
       audioMinutes: 30 / 60,
     });
+  });
+
+  // ── 33.1-04: THE PARTIAL BUY AND THE GENERATED-SECONDS CEILING ──────────────────────────────
+  //
+  // The 33.1 audit raised this and then REFUTED it, on the only ground available at the time: the
+  // cap did not exist yet. That refutation expired the moment the cap landed, so it is re-tested
+  // here rather than inherited.
+  //
+  // THE HOLE, and it was real: `reserveSceneJobInner` narrows `lines` to the chosen scene on a
+  // partial buy, and the specs handed to `chooseMediaBatch` are built FROM `lines`. So a deck
+  // spending 24 generated seconds is refused as a whole reel and then bought one scene at a time,
+  // 8 or 12 seconds per reservation, each one under the ceiling — the whole deck, in instalments,
+  // through a mutation with no prior-batch check. `regenerateBlock` does not require the deck to
+  // have been bought before, so nothing else stood in the way.
+  //
+  // THE FIX is the file's own documented rule, applied to one more refusal: "every refusal a full
+  // buy would raise, a partial buy raises too — only the LINES are narrowed." The ceiling is now
+  // measured over the WHOLE deck's generated scenes, not over the lines being bought.
+  test("A PARTIAL BUY CANNOT WALK AN OVER-CEILING DECK PAST THE CAP ONE SCENE AT A TIME", async () => {
+    const t = harness();
+    // 12 + 12 + 6 = 30, of which 24 seconds are generated — double the ceiling. The whole deck is
+    // refused, and so is each scene of it on its own.
+    const { planId } = await seedSceneDeck(t, {
+      seconds: [12, 12, 6],
+      visuals: ["generated_video", "generated_video", "animated_image"],
+      target: 30,
+    });
+    expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
+      ok: false,
+      reason: "over_generated_seconds",
+    });
+    for (const blockIndex of [0, 1, 2]) {
+      expect(
+        await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex }),
+        `scene ${blockIndex} bought alone`,
+      ).toEqual({ ok: false, reason: "over_generated_seconds" });
+    }
+    // Not one row, not one cent, on any of the four attempts.
+    expect(await t.run((ctx) => ctx.db.query("mediaJobs").collect())).toHaveLength(0);
+    expect(await mediaLeft(t, A)).toBe(MEDIA_DAILY_BUDGET_CENTS);
+  });
+
+  test("...and a LEGAL deck's partial buy is untouched — the gate is the deck, not the purchase", async () => {
+    // The other half, or the fix above would read as "partial buys are refused". 4 + 8 = 12
+    // generated seconds is exactly the ceiling, so every scene of it is still re-buyable.
+    const t = harness();
+    const { planId } = await seedSceneDeck(t);
+    expect((await asA(t).mutation(api.media.regenerateBlock, { planId, blockIndex: 3 })).ok).toBe(
+      true,
+    );
   });
 
   test("a partial buy still refuses on a NEIGHBOUR's broken row — the deck is validated whole", async () => {
@@ -5135,10 +5868,11 @@ describe("20.2 wave 5 — THE SCENE GATE OPENS: a scene deck is finally buyable"
 describe("20.2 wave 2 — the money gate asks the PROVIDER what it can buy", () => {
   test("a clip length the pinned model cannot produce refuses BEFORE any pricing", async () => {
     const t = harness();
-    // 10 seconds is in `CLIP_SECONDS` (the display set) and NOT in the Sora grid. Before 20.2 it
-    // cleared this gate and was refused three checks later inside `estimateMediaUsd` — same code,
-    // wrong place, and it read like a pricing bug.
-    const { planId } = await seedDeck(t, { clipSeconds: 10, chars: 90 });
+    // 33.1-04: the example moved from 10 s to 16 s. Ten seconds is in `CLIP_SECONDS` (the display
+    // set) AND, since grok, in the buyable grid too — so the old fixture proved nothing. 16 s is
+    // above the grid's top. The point is unchanged: this refuses at the pre-flight gate rather
+    // than three checks later inside `estimateMediaUsd`, where it read like a pricing bug.
+    const { planId } = await seedDeck(t, { blocks: 1, clipSeconds: 16, chars: 90 });
     expect(await asA(t).mutation(api.media.generateReel, { planId })).toEqual({
       ok: false,
       reason: "illegal_duration",
@@ -5147,21 +5881,31 @@ describe("20.2 wave 2 — the money gate asks the PROVIDER what it can buy", () 
 
   test("the canvas estimate names the SAME refusal, so the button explains itself", async () => {
     const t = harness();
-    const { planId } = await seedDeck(t, { clipSeconds: 10, chars: 90 });
+    const { planId } = await seedDeck(t, { blocks: 1, clipSeconds: 16, chars: 90 });
     const estimate = await asA(t).query(api.media.jobEstimate, { planId });
     expect(estimate.refusal).toEqual({ reason: "illegal_duration" });
   });
 
-  test("every duration the pinned model DOES support is buyable", async () => {
+  test("every duration the pinned model supports is buyable UP TO the seconds ceiling", async () => {
+    // 33.1-04 SPLIT THIS IN TWO, because the grid and the ceiling are now different questions and
+    // a single "all of them are buyable" loop would have to be weakened to stay green. Every one
+    // of the fifteen lengths is PRICEABLE; the ones at or below the ceiling are buyable, and the
+    // ones above it are refused by the CEILING rather than by the grid. Asserting which code comes
+    // back is the whole value — the old loop would have gone red at 13, 14 and 15 with a message
+    // about durations, which is not what refused them.
     for (const seconds of MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model] ?? []) {
       const t = harness();
       const { planId } = await seedDeck(t, {
         blocks: 1,
         clipSeconds: seconds,
-        chars: minCharsFor(seconds),
+        // A one-second block has a NEGATIVE character floor (`(1 - 1.4) * 14`), and `repeat` on a
+        // negative count throws — the grid never reached lengths this short before.
+        chars: Math.max(0, minCharsFor(seconds)),
       });
       const estimate = await asA(t).query(api.media.jobEstimate, { planId });
-      expect(estimate.refusal).toBeNull();
+      expect(estimate.refusal, `${seconds}s`).toEqual(
+        seconds <= MEDIA_GENERATED_SECONDS_CAP ? null : { reason: "over_generated_seconds" },
+      );
     }
   });
 });
@@ -5178,11 +5922,16 @@ const BRIEF = {
   defaulted: ["audience", "tone"],
 };
 
-/** A second, deliberately DIFFERENT scene deck parked as the alternate: a 12 s clip + a 3 s
- *  still (15 s total, both lengths the pinned models accept) against the primary's 8/6/4/12
- *  (30 s) — so a swapped estimate, target and narration set are all distinguishable. */
+/** A second, deliberately DIFFERENT scene deck parked as the alternate: an 8 s clip + a 7 s
+ *  still (15 s total, both lengths the pinned models accept) against the primary's 4/14/4/8
+ *  (30 s) — so a swapped estimate, target and narration set are all distinguishable.
+ *
+ *  33.1-04 moved the clip from 12 s to 8 s. At grok's $0.07/s a 12 s alternate prices at exactly
+ *  84 cents, which is what the PRIMARY deck's two clips now cost — the two sides of the switch
+ *  would have been indistinguishable, and the test that reads them would have passed while
+ *  proving nothing. */
 async function seedAltDeck(t: T, planId: Id<"plans">) {
-  const seconds = [12, 3];
+  const seconds = [8, 7];
   const visuals = ["generated_video", "animated_image"];
   let startMs = 0;
   const altShots = seconds.map((sec, i) => {
@@ -5314,21 +6063,21 @@ describe("33-02 switchDeck: the unpicked deck swaps in atomically, until Generat
     const { planId } = await seedSceneDeck(t);
     await seedAltDeck(t, planId);
 
-    // Before the switch: the picked deck is 8 s + 12 s of paid clip → 200 cents of clips.
+    // Before the switch: the picked deck is 4 s + 8 s of paid clip → 84 cents of clips.
     const before = await asA(t).query(api.media.jobEstimate, { planId });
-    expect(before.lines.find((l) => l.label === "clips")?.cents).toBe(200);
+    expect(before.lines.find((l) => l.label === "clips")?.cents).toBe(84);
 
     await asA(t).mutation(api.media.switchDeck, { planId });
 
     // After: the SAME query, textually untouched by this plan, prices the formerly-alternate deck
-    // (one 12 s clip → 120 cents) because `plans.shots` IS the picked deck.
+    // (one 8 s clip → 56 cents) because `plans.shots` IS the picked deck.
     const row = await planRowOf(t, planId);
     const deck = row ? sceneDeckOf(row) : null;
     expect(deck?.targetDurationSeconds).toBe(15);
     expect(deck?.scenes.map((s) => s.narration)).toEqual(["alt line 0", "alt line 1"]);
     const after = await asA(t).query(api.media.jobEstimate, { planId });
     expect(after.refusal).toBeNull();
-    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(120);
+    expect(after.lines.find((l) => l.label === "clips")?.cents).toBe(56);
   });
 
   test("no_alternate when there is nothing to switch to", async () => {
@@ -6014,6 +6763,8 @@ describe("33-05 saveReelToVault: one vault doc per plan, at every pipeline termi
     const atRender = await reelDocs(t);
     expect(atRender).toHaveLength(1);
     expect(atRender[0]?.storageId).toBe(mp4);
+    // 33.2-04: the render terminal closes the plan â€” "done", not "delivering"/"proposed" for ever.
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("done");
 
     // The burn lands later over the captioned cut: the SAME doc repoints, and the uncaptioned
     // blob it used to hold is deleted — one doc per plan, no second row, no leaked mp4.
@@ -6367,7 +7118,7 @@ describe("the music bed rides the whole-job reservation, and buys no row", () =>
 
   const jobRows = (t: T) => t.run(async (ctx) => ctx.db.query("mediaJobs").collect());
 
-  test("a deck with a bed reserves, and NO mediaJobs row is written for it", async () => {
+  test("a deck with a bed reserves ONE $0 stock row for it at MUSIC_BLOCK_INDEX — and no `music` row", async () => {
     const t = harness();
     const { planId } = await withBed(t, "calm");
     const res = await t.run(async (ctx) =>
@@ -6382,14 +7133,65 @@ describe("the music bed rides the whole-job reservation, and buys no row", () =>
     expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
     const inserted = await jobRows(t);
     expect(inserted.length).toBeGreaterThan(0);
-    // THE LOAD-BEARING ASSERTION. `batchToRender` refuses a batch unless every row reached
-    // `succeeded` with landed bytes. A music row buys no provider call, so it would sit `queued`
-    // forever and the reel would never render at all — the reason this line has the `render`
-    // line's shape (a spec, no row) rather than the `tts` line's.
-    expect(
-      inserted.some((r) => (r.kind as string) === "music"),
-      "a music row would never land and would deadlock the render",
-    ).toBe(false);
+    // 33.1-06: THIS ASSERTION CHANGED MEANING, deliberately. It used to say "no row for the bed",
+    // because the bed came from a baked library and a row would sit queued forever. The bed is
+    // now FETCHED from Openverse, so it HAS a row — the same $0 stock row a Pexels still has — at
+    // MUSIC_BLOCK_INDEX, outside every scene. What must still hold is the reason the old line
+    // existed: `batchToRender` treats that row as OPTIONAL (renderReel.test.ts), so a reel never
+    // waits on its music; and a `music`-KIND row, which nothing could land, is still never
+    // written. Asserting only the latter would have gone green vacuously over the new row.
+    expect(inserted.some((r) => (r.kind as string) === "music")).toBe(false);
+    const bed = inserted.filter((r) => r.kind === "audio");
+    expect(bed, "exactly one bed row").toHaveLength(1);
+    expect(bed[0]?.blockIndex).toBe(MUSIC_BLOCK_INDEX);
+    expect(bed[0]?.provider).toBe("stock");
+    expect(bed[0]?.model).toBe(MEDIA_MUSIC_STOCK.model);
+    expect(bed[0]?.estUsd).toBe(0);
+    expect(bed[0]?.status).toBe("queued");
+    expect(bed[0]?.spec).toEqual({ kind: "stock", media: "audio", seconds: 30 });
+  });
+
+  test("submitting the batch LANDS the bed with its licence line on the plan (fixture)", async () => {
+    vi.stubEnv("MEDIA_PROVIDER_FIXTURE", "1");
+    const t = harness();
+    const { planId } = await withBed(t, "upbeat");
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    if (!res.ok) return;
+    await t.action(internal.media.submitBatch, { tenantId: A, batchId: res.batchId });
+    const bed = (await jobRows(t)).find((r) => r.kind === "audio");
+    expect(bed?.status).toBe("succeeded");
+    expect(bed?.mimeType).toBe("audio/mpeg");
+    expect(bed?.assetStorageId).toBeDefined();
+    expect(bed?.providerRequestId).toMatch(/^fixture-music-/);
+    // CC BY is free of charge, not free of duty: the credit is on the plan before the bytes land.
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.musicCredit?.attribution).toContain("licensed under CC BY");
+    expect(plan?.musicCredit?.license).toBe("by");
+  });
+
+  test("no bed declared means no audio row either", async () => {
+    const t = harness();
+    const { planId } = await withBed(t, undefined);
+    const res = await t.run(async (ctx) =>
+      reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: sceneDeckOf((await ctx.db.get(planId)) as Doc<"plans">)?.scenes ?? [],
+        targetDurationSeconds: 30,
+        withCaptions: true,
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect((await jobRows(t)).some((r) => r.kind === "audio")).toBe(false);
   });
 
   test("the bed changes the invoice's SHAPE, never its total", async () => {
@@ -6485,6 +7287,59 @@ const videoFile = (height: number, width: number, id = "f") => ({
   file_type: "video/mp4",
   width,
   height,
+});
+
+// 33.1-06: the music bed's picker. The rows are Openverse's shape (`duration` in MILLISECONDS,
+// `url` a direct download, `attribution` the licence's own wording), and the three rules are the
+// assembler's and the licence's: long enough to lie under the reel without a loop seam,
+// downloadable, and credited — a CC BY track with no credit line is not usable at all.
+describe("pickStockAudio: long enough, downloadable, credited — or skipped", () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: "764950",
+    title: "Motionless Land",
+    creator: "Josh Woodward",
+    license: "by",
+    license_version: "3.0",
+    license_url: "https://creativecommons.org/licenses/by/3.0/",
+    foreign_landing_url: "https://www.jamendo.com/track/764950",
+    url: "https://prod-1.storage.jamendo.com/?trackid=764950&format=mp32",
+    duration: 211_000,
+    attribution: '"Motionless Land" by Josh Woodward is licensed under CC BY 3.0.',
+    ...over,
+  });
+
+  test("picks the first row long enough for the reel and carries its licence line", () => {
+    const picked = pickStockAudio({ results: [row()] }, 15);
+    expect(picked?.assetId).toBe("764950");
+    expect(picked?.link).toContain("trackid=764950");
+    expect(picked?.credit.attribution).toContain("licensed under CC BY 3.0");
+    expect(picked?.credit.license).toBe("by 3.0");
+    expect(picked?.credit.sourceUrl).toContain("jamendo.com/track");
+  });
+
+  test("SKIPS a track shorter than the reel — a loop seam inside 15 seconds is audible", () => {
+    // Openverse durations are milliseconds; 12s is short for a 15s reel, 15s is exactly enough.
+    expect(pickStockAudio({ results: [row({ duration: 12_000 })] }, 15)).toBeNull();
+    expect(pickStockAudio({ results: [row({ duration: 15_000 })] }, 15)).not.toBeNull();
+  });
+
+  test("SKIPS a row with no download url or no attribution rather than guessing either", () => {
+    expect(pickStockAudio({ results: [row({ url: undefined })] }, 15)).toBeNull();
+    expect(pickStockAudio({ results: [row({ url: "http://insecure.example/x" })] }, 15)).toBeNull();
+    expect(pickStockAudio({ results: [row({ attribution: "" })] }, 15)).toBeNull();
+  });
+
+  test("skips PAST a bad row to a good one, in the library's own order", () => {
+    const picked = pickStockAudio(
+      { results: [row({ id: "short", duration: 3_000 }), row({ id: "good" })] },
+      15,
+    );
+    expect(picked?.assetId).toBe("good");
+  });
+
+  test("a malformed body throws — the caller maps that to stock_bad_response, never to a pick", () => {
+    expect(() => pickStockAudio({ nope: true }, 15)).toThrow();
+  });
 });
 
 describe("pickStockVideo: the two rules are the assembler's, not taste", () => {
@@ -6625,17 +7480,22 @@ describe("pickStockPhoto: the rendition the Ken Burns path actually needs", () =
 
 // ── STOCK, END TO END THROUGH THE ONE MONEY RAIL (phase 2) ─────────────────────────────────────
 
-/** stock_video:8 + stock_image:10 + generated:12 — 30s, one paid scene among two free ones. */
+/** stock_video:8 + stock_image:18 + generated:4 — 30s, one paid scene among two free ones.
+ *
+ *  33.1-04 shortened the paid scene from 12 s to 4 s and lent the seconds to the free still. The
+ *  test below re-grids the two FREE scenes to generated 4 s each to price the same reel with no
+ *  free pictures, and at 12 s the twin would have been 8 + 8 + 12 = 28 generated seconds — over
+ *  `MEDIA_GENERATED_SECONDS_CAP`, so the comparison would have had nothing to compare. */
 const STOCK_SCENES = (): Scene[] => [
   sc({ index: 0, startMs: 0, durationMs: 8000, visual: "stock_video", prompt: "city street dawn" }),
   sc({
     index: 1,
     startMs: 8000,
-    durationMs: 10_000,
+    durationMs: 18_000,
     visual: "stock_image",
     prompt: "hands typing laptop",
   }),
-  sc({ index: 2, startMs: 18_000, durationMs: 12_000, visual: "generated_video" }),
+  sc({ index: 2, startMs: 26_000, durationMs: 4000, visual: "generated_video" }),
 ];
 
 describe("stock scenes: free, and still a LINE on the same rail", () => {
@@ -6664,7 +7524,7 @@ describe("stock scenes: free, and still a LINE on the same rail", () => {
     expect(clip?.kind).toBe("video");
     expect(still?.kind).toBe("image");
     expect(clip?.spec).toEqual({ kind: "stock", media: "video", seconds: 8 });
-    expect(still?.spec).toEqual({ kind: "stock", media: "image", seconds: 10 });
+    expect(still?.spec).toEqual({ kind: "stock", media: "image", seconds: 18 });
     expect(clip?.model).toBe(MEDIA_DEFAULT_STOCK.model);
   });
 
@@ -6686,18 +7546,32 @@ describe("stock scenes: free, and still a LINE on the same rail", () => {
     // The same three scenes at the same three lengths, differing only in which kind the first two
     // are. Everything else — durations, narration, the captions and render lines — is held
     // constant, so the delta is the picture kinds and nothing else.
-    const generatedTwin = (): Scene[] =>
-      STOCK_SCENES().map((scene) =>
-        scene.visual === "stock_video" || scene.visual === "stock_image"
-          ? ({ ...scene, visual: "generated_video", durationMs: 8000 } as Scene)
-          : scene,
-      );
-    // stock deck is 8 + 10 + 12 = 30; the twin re-grids the two free scenes to 8s each (the
-    // generator's grid has no 10), so it declares 28.
+    const generatedTwin = (): Scene[] => {
+      let startMs = 0;
+      return STOCK_SCENES().map((scene) => {
+        const moved = {
+          ...scene,
+          startMs,
+          // The narration comes back to a length its 4-second window can hold: `sc`'s default line
+          // is 40 characters, which fits an 8- or 18-second scene and not a 4-second one.
+          ...(scene.visual === "stock_video" || scene.visual === "stock_image"
+            ? { visual: "generated_video", durationMs: 4000, narration: "x".repeat(20) }
+            : {}),
+        } as Scene;
+        // `startMs` is RECOMPUTED, not inherited. The narration ceiling is measured off the
+        // timeline, so leaving a 26-second offset on a 12-second reel gives the last line a
+        // NEGATIVE window and refuses the deck for a reason that has nothing to do with kinds.
+        startMs += moved.durationMs;
+        return moved;
+      });
+    };
+    // stock deck is 8 + 18 + 4 = 30; the twin re-cuts the two free scenes to 4s each, so it
+    // declares 12 — and spends exactly `MEDIA_GENERATED_SECONDS_CAP` doing it, which is the most
+    // generated video any reel may now buy.
     const t = harness();
     const withStock = await reserveScenes(t, STOCK_SCENES());
     const t2 = harness();
-    const allGenerated = await reserveScenes(t2, generatedTwin(), { targetDurationSeconds: 28 });
+    const allGenerated = await reserveScenes(t2, generatedTwin(), { targetDurationSeconds: 12 });
     expect(withStock.ok, `stock refused: ${withStock.ok ? "" : withStock.reason}`).toBe(true);
     expect(
       allGenerated.ok,
@@ -6722,6 +7596,71 @@ describe("stock scenes: free, and still a LINE on the same rail", () => {
     expect(!res.ok && res.reason).toBe("unrenderable_block");
     // Nothing at all was inserted — not the free lines, and not the PAID clip beside them.
     expect(await rows(t)).toHaveLength(0);
+  });
+
+  // ── 33.1-06: A MISSING CREDENTIAL FAILS THE LINE, IT DOES NOT STRAND IT ─────────────────────
+  //
+  // Observed live 2026-09-03. A deck with free stock scenes on a deployment with no
+  // `PEXELS_API_KEY` reached `fetchStock`, which calls `requireEnvMedia` and throws — AFTER
+  // `claimLine` had moved the row out of `queued`. The action died, no `recordSubmission` ran, and
+  // the reel sat at "Waiting" forever: no error on screen, none in the ledger, and no retry
+  // possible because `claimLine` will not re-claim a claimed row. A silent stall is strictly worse
+  // than a failure, and this is the test that says so.
+  //
+  // NOT VACUOUS: `MEDIA_PROVIDER_FIXTURE` is deliberately NOT set here. Every other stock test
+  // sets it, which short-circuits `fetchStock` before the env read — so the whole suite could pass
+  // with this defect live, which is exactly what happened.
+  test("a stock line with NO Pexels key ends BLOCKED with a code, never stuck at queued", async () => {
+    vi.stubEnv("PEXELS_API_KEY", "");
+    vi.stubEnv("OPENROUTER_API_KEY", "openrouter-test-key");
+    const t = harness();
+    const scene = sc({
+      index: 0,
+      startMs: 0,
+      durationMs: 30_000,
+      visual: "stock_video",
+      prompt: "city street dawn",
+      narration: "",
+    });
+    const res = await t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: A,
+        threadId: "thread_stock_noenv",
+        status: "proposed",
+        createdAt: Date.now(),
+        shots: [
+          {
+            index: 0,
+            visual: "stock_video",
+            seconds: 30,
+            windowStartMs: 0,
+            description: "d",
+            narration: "",
+            prompt: "city street dawn",
+          },
+        ],
+      });
+      return await reserveSceneJobInner(ctx, {
+        tenantId: A,
+        planId,
+        scenes: [scene],
+        targetDurationSeconds: 30,
+        withCaptions: false,
+      });
+    });
+    expect(res.ok, `refused: ${res.ok ? "" : res.reason}`).toBe(true);
+    if (!res.ok) return;
+
+    // THE POINT: the action RESOLVES. Before the fix this rejected and the row stayed claimed.
+    const tally = await t.action(internal.media.submitBatch, { tenantId: A, batchId: res.batchId });
+    expect(tally).toMatchObject({ blocked: 1, submitted: 0 });
+
+    const [row] = await rows(t);
+    expect(row?.status).toBe("blocked");
+    expect(row?.failureReason).toBe("media_not_configured");
+    // §4: the CODE, and nothing the throw was carrying. A thrown message can hold a url, a request
+    // body, or a fragment of the narration the line was submitting.
+    expect(row?.failureReason).not.toMatch(/PEXELS|api\.pexels|Error|http/i);
   });
 
   test("submitBatch ROUTES ON PROVIDER: a stock row is fetched, never POSTed as a generation", async () => {

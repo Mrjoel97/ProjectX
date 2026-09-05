@@ -69,6 +69,13 @@ export const HUBSPOT_READ_SCOPES = [
 ] as const;
 
 /**
+ * The complete required scope set sent during installation. HubSpot's project-based OAuth apps
+ * require the base `oauth` scope in the install URL as well as every configured data scope. Keep
+ * it separate from `HUBSPOT_READ_SCOPES`: `oauth` authorizes the grant ceremony, not a CRM read.
+ */
+export const HUBSPOT_AUTHORIZE_SCOPES = ["oauth", ...HUBSPOT_READ_SCOPES] as const;
+
+/**
  * Every path this rail may GET, mirrored into `convex/connectorFetch.PROVIDER_READ_PATHS.hubspot`.
  * Two copies exist because the allow-list must be enforceable without importing a Convex module
  * into a pure package; `hubspot.test.ts` (backend) compares them so they cannot drift.
@@ -114,9 +121,10 @@ const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.trim() 
  * The consent URL. `state` is the one-time nonce minted by `connectorOAuth.mintConnectState` — it
  * is NOT built here, so this function cannot be tricked into signing anything.
  *
- * The redirect must be HTTPS. It comes from deployment configuration rather than a request, so
- * this is a cheap assertion rather than a boundary check, but a misconfigured `http://` redirect
- * would put an authorization code on the wire in the clear and that is worth one `if`.
+ * The redirect must be HTTPS, except for HubSpot's documented `http://localhost` development
+ * carve-out. It comes from deployment configuration rather than a request, so this is a cheap
+ * assertion rather than a boundary check, but permitting any other cleartext host would put an
+ * authorization code on the wire in the clear.
  */
 export function buildHubSpotAuthorizeUrl(input: {
   clientId: string;
@@ -125,15 +133,23 @@ export function buildHubSpotAuthorizeUrl(input: {
 }): string {
   if (!nonEmpty(input.clientId)) throw new Error("HubSpot authorize needs a client id.");
   if (!nonEmpty(input.state)) throw new Error("HubSpot authorize needs a one-time state.");
-  if (!input.redirectUri.startsWith("https://")) {
-    throw new Error("HubSpot redirect URI must be https.");
+  let redirect: URL;
+  try {
+    redirect = new URL(input.redirectUri);
+  } catch {
+    throw new Error("HubSpot redirect URI must be an absolute URL.");
+  }
+  const secure = redirect.protocol === "https:";
+  const localDevelopment = redirect.protocol === "http:" && redirect.hostname === "localhost";
+  if (!secure && !localDevelopment) {
+    throw new Error("HubSpot redirect URI must be https (or http://localhost for development).");
   }
   const params = new URLSearchParams({
     client_id: input.clientId,
     redirect_uri: input.redirectUri,
     // Space-joined, and REQUIRED rather than optional: an install that silently drops a scope
     // would read as an empty CRM rather than as a misconfiguration.
-    scope: HUBSPOT_READ_SCOPES.join(" "),
+    scope: HUBSPOT_AUTHORIZE_SCOPES.join(" "),
     state: input.state,
   });
   return `${HUBSPOT_AUTHORIZE_URL}?${params.toString()}`;

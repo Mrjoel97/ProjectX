@@ -41,9 +41,11 @@
 
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { must } from "./smokeRun.mjs";
 
 const parse = (out) => JSON.parse(out);
@@ -74,6 +76,100 @@ const RETRY_READ = { retryOnEmpty: true };
 const RETRY_TURN = { retryOnEmpty: true };
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 const costSrcPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../cost/src/cost.ts");
+const skillsLockPath = resolve(dirname(fileURLToPath(import.meta.url)), "../skills-lock.json");
+
+const REVENUE_FIXTURE_IDS = [
+  "36-revenue-lead-triage",
+  "37-revenue-partial",
+  "38-revenue-injection",
+  "39-revenue-cash-flow",
+  "40-revenue-mixed-currency",
+  "41-revenue-payroll-unknown",
+  "42-revenue-invoice-reminder",
+  "43-revenue-suppressed-reminder",
+  "44-revenue-specialist",
+  "45-revenue-call-list",
+  "46-revenue-pipeline-review",
+];
+
+function revenueCandidatePins() {
+  const lock = JSON.parse(readFileSync(skillsLockPath, "utf8"));
+  const block = lock?.revenueCandidates;
+  if (block?.schemaVersion !== 1 || !Array.isArray(block.candidates)) {
+    throw new Error(`revenueCandidates schemaVersion 1 not found in ${skillsLockPath}`);
+  }
+  const pins = block.candidates.map((candidate) => {
+    if (
+      typeof candidate?.name !== "string" ||
+      !Number.isInteger(candidate.version) ||
+      candidate.version < 1 ||
+      candidate.status !== "candidate" ||
+      !/^[0-9a-f]{64}$/.test(candidate.bodySha256 ?? "")
+    ) {
+      throw new Error(`malformed revenue candidate pin ${JSON.stringify(candidate?.name)}`);
+    }
+    return {
+      name: candidate.name,
+      version: candidate.version,
+      bodySha256: candidate.bodySha256,
+    };
+  });
+  if (pins.length !== 8 || new Set(pins.map((pin) => pin.name)).size !== pins.length) {
+    throw new Error(`expected exactly 8 unique revenue candidate pins, found ${pins.length}`);
+  }
+  return pins.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function revenueFixtureSuite() {
+  const fixtures = loadFixtures().filter((fixture) => fixture.candidate !== undefined);
+  assert.deepEqual(
+    fixtures.map((fixture) => fixture.id),
+    REVENUE_FIXTURE_IDS,
+    "the complete eleven-case revenue fixture set must be present in sorted order",
+  );
+  const cases = fixtures.map((fixture) => {
+    const file = `${fixture.id}.json`;
+    return {
+      id: fixture.id,
+      file,
+      sha256: createHash("sha256")
+        .update(readFileSync(join(casesDir, file)))
+        .digest("hex"),
+    };
+  });
+  return {
+    schemaVersion: 1,
+    caseCount: cases.length,
+    casesHash: createHash("sha256")
+      .update(cases.map((entry) => `${entry.file}:${entry.sha256}`).join("|"))
+      .digest("hex"),
+    cases,
+    fixtures,
+  };
+}
+
+function revenueFixturesForPin(pin, stateSuite) {
+  const fixtures = stateSuite.fixtures.filter(
+    (fixture) => fixture.candidate.name === pin.name && fixture.candidate.version === pin.version,
+  );
+  assert.ok(fixtures.length > 0, `${pin.name}@${pin.version} has zero direct revenue fixtures`);
+  assert.ok(
+    fixtures.every((fixture) => REVENUE_FIXTURE_IDS.includes(fixture.id)),
+    `${pin.name}@${pin.version} references a legacy/non-revenue fixture`,
+  );
+  return fixtures;
+}
+
+function revenueArtifactPaths() {
+  const dir = resolve(
+    process.env.PIKAR_REVENUE_EVAL_ARTIFACT_DIR ?? join(tmpdir(), "pikar-revenue-eval"),
+  );
+  return {
+    dir,
+    diagnostic: join(dir, "revenue-candidate-diagnostic.v1.json"),
+    activationEvidence: join(dir, "revenue-activation-evidence.v1.json"),
+  };
+}
 
 // Hard per-run cost cap (discretion default; expected actuals $0.05–0.15 at
 // gpt-4o-mini). Cumulative costUsd beyond this ABORTS the run (exit 2).
@@ -208,12 +304,15 @@ function computeSuiteIdentity() {
   const files = readdirSync(casesDir)
     .filter((f) => f.endsWith(".json"))
     .sort();
-  const cases = files.map((file) => ({
-    file,
-    sha256: createHash("sha256")
-      .update(readFileSync(join(casesDir, file)))
-      .digest("hex"),
-  }));
+  // Revenue candidates have their own eight-case suite and activation evidence. Keeping those
+  // files out of AGENT_EVAL_SUITE prevents an offline corpus addition from invalidating evidence
+  // for the unrelated executive/authoring gate.
+  const cases = files.flatMap((file) => {
+    const bytes = readFileSync(join(casesDir, file));
+    return JSON.parse(bytes.toString("utf8")).candidate === undefined
+      ? [{ file, sha256: createHash("sha256").update(bytes).digest("hex") }]
+      : [];
+  });
   // Hash of the LISTING, not of concatenated bodies: a rename with identical bytes must still move
   // the hash, because id drift is exactly as dangerous to a `--only`-shaped claim as a content edit.
   const casesHash = createHash("sha256")
@@ -583,6 +682,10 @@ const EXPECT_KEYS = new Set([
   // from success. And a staged event is never evidence anything reached a calendar: the create
   // happens behind a human Approve this harness never clicks, same as every other staging tool.
   "calendarEventPresent",
+  // Phase 28 revenue candidates: one exact persisted snapshot. The value contains an outcome,
+  // ordered tool trace, exact code-owned result, refs and counts. Deep equality is deliberate:
+  // an extra tool, omitted ref, rounded result or widened status must all fail the case.
+  "expectedState",
 ]);
 
 // The pinned plans lifecycle order (schema.ts) — statusAtMost compares indices.
@@ -623,6 +726,74 @@ function validateFixture(fx, source) {
   if (!fx.expect || typeof fx.expect !== "object") fail("missing expect block");
   for (const key of Object.keys(fx.expect)) {
     if (!EXPECT_KEYS.has(key)) fail(`unknown expect key "${key}" (closed vocabulary)`);
+  }
+  const isRevenue = fx.candidate !== undefined || fx.expect.expectedState !== undefined;
+  if (isRevenue) {
+    if (fx.candidate === undefined || fx.expect.expectedState === undefined) {
+      fail("revenue fixtures require both candidate and expect.expectedState");
+    }
+    if (Object.keys(fx.expect).length !== 1) {
+      fail(
+        "a revenue fixture asserts only expectedState; mixing plan-state keys changes its oracle",
+      );
+    }
+    const pins = revenueCandidatePins();
+    const pin = pins.find((candidate) => candidate.name === fx.candidate?.name);
+    if (!pin || fx.candidate?.version !== pin.version) {
+      fail(
+        `candidate pin ${JSON.stringify(fx.candidate)} is missing or stale against skills-lock.json`,
+      );
+    }
+    const expected = fx.expect.expectedState;
+    if (!expected || typeof expected !== "object" || Array.isArray(expected)) {
+      fail("expect.expectedState must be an object");
+    }
+    const stateKeys = Object.keys(expected).sort();
+    assert.deepEqual(
+      stateKeys,
+      ["counts", "outcome", "refs", "result", "toolTrace"],
+      `bad fixture ${source}: expectedState has a closed shape`,
+    );
+    if (!["ready", "partial", "refused", "proposed"].includes(expected.outcome)) {
+      fail(`unknown expectedState.outcome ${JSON.stringify(expected.outcome)}`);
+    }
+    if (
+      !Array.isArray(expected.toolTrace) ||
+      expected.toolTrace.length === 0 ||
+      expected.toolTrace.some(
+        (toolName) => typeof toolName !== "string" || toolName.length === 0,
+      ) ||
+      new Set(expected.toolTrace).size !== expected.toolTrace.length
+    ) {
+      fail("expectedState.toolTrace must be a non-empty ordered list of unique tool names");
+    }
+    if (
+      !expected.result ||
+      typeof expected.result !== "object" ||
+      Array.isArray(expected.result) ||
+      Object.keys(expected.result).length === 0
+    ) {
+      fail("expectedState.result must be a non-empty exact result object");
+    }
+    if (
+      !Array.isArray(expected.refs) ||
+      expected.refs.some((ref) => typeof ref !== "string" || ref.length === 0) ||
+      new Set(expected.refs).size !== expected.refs.length
+    ) {
+      fail("expectedState.refs must be a unique string list");
+    }
+    if (
+      !expected.counts ||
+      typeof expected.counts !== "object" ||
+      Array.isArray(expected.counts) ||
+      Object.keys(expected.counts).length === 0 ||
+      Object.values(expected.counts).some((count) => !Number.isInteger(count) || count < 0) ||
+      !Object.values(expected.counts).some((count) => count > 0)
+    ) {
+      fail("expectedState.counts must contain non-negative integers and one positive witness");
+    }
+  } else if (fx.candidate !== undefined || fx.expect.expectedState !== undefined) {
+    fail("candidate and expectedState are revenue-only fields");
   }
   if ((fx.expect.status ?? fx.expect.statusAtMost) !== undefined) {
     const s = fx.expect.status ?? fx.expect.statusAtMost;
@@ -855,8 +1026,14 @@ function parseSkillPin(spec) {
       `malformed --skill "${spec}" (expected <name>@<version>, e.g. cockpit-agent@3)`,
     );
   const [, name, versionStr] = m;
-  if (!SKILL_NAMES.includes(name)) {
-    throw new Error(`unknown --skill name "${name}" (gated skills: ${SKILL_NAMES.join(", ")})`);
+  const revenueNames = revenueCandidatePins().map((pin) => pin.name);
+  if (!SKILL_NAMES.includes(name) && !revenueNames.includes(name)) {
+    throw new Error(
+      `unknown --skill name "${name}" (gated or revenue candidates: ${[
+        ...SKILL_NAMES,
+        ...revenueNames,
+      ].join(", ")})`,
+    );
   }
   return { name, version: Number(versionStr) };
 }
@@ -1054,6 +1231,10 @@ const KNOWN_FLAGS = new Set([
   // 23-04 (SKILL-02).
   "--write-suite-manifest",
   "--inspect-agent-source",
+  // Phase 28 revenue candidate orchestration. These are mode selectors, never fixture filters.
+  "--all-candidates",
+  "--diagnostic",
+  "--activation-evidence",
 ]);
 /** The flags that take a following value — so the value itself is not mistaken for an argument. */
 const VALUED_FLAGS = new Set([
@@ -1089,6 +1270,33 @@ function assertKnownArgs(argv) {
     if (VALUED_FLAGS.has(flag) && !a.includes("=")) i++; // skip the value
   }
   return true;
+}
+
+function parseRevenueCandidateMode(argv) {
+  const allCandidates = argv.includes("--all-candidates");
+  const modes = ["--diagnostic", "--activation-evidence"].filter((flag) => argv.includes(flag));
+  if (!allCandidates && modes.length > 0) {
+    throw new Error(`${modes.join(" and ")} requires --all-candidates`);
+  }
+  if (!allCandidates) return null;
+  if (modes.length !== 1) {
+    throw new Error(
+      "--all-candidates requires exactly one of --diagnostic or --activation-evidence",
+    );
+  }
+  for (const incompatible of [
+    "--skill",
+    "--tenant-skill",
+    "--only",
+    "--inspect-tenant-skill",
+    "--inspect-agent-source",
+    "--write-suite-manifest",
+  ]) {
+    if (argv.some((arg) => arg === incompatible || arg.startsWith(`${incompatible}=`))) {
+      throw new Error(`${modes[0]} cannot be combined with ${incompatible}`);
+    }
+  }
+  return modes[0].slice(2);
 }
 
 /** `--flag=value`, or undefined when absent. `--flag` with no `=` is an error rather than a
@@ -1415,6 +1623,9 @@ function evaluateExpect(
    * @param authoring {{before: {activeIds: string[]}, after: object} | null}
    */
   authoring = null,
+  /** Phase 28: the persisted revenue snapshot assembled after the candidate workflow. Null is
+   * fail-closed; exact deep equality makes every extra/missing tool, ref, count and result bite. */
+  revenueState = null,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -1588,6 +1799,11 @@ function evaluateExpect(
         if (staged !== expected) miss(key, expected, staged);
         break;
       }
+      case "expectedState":
+        if (!isDeepStrictEqual(revenueState, expected)) {
+          miss("expectedState", expected, revenueState ?? "no revenue state snapshot");
+        }
+        break;
       case "attributionRoute": {
         // specialistMemoBody puts this FIRST, so match the prefix — a fallback memo (refusal,
         // throw, empty reply) starts with "# Next step" and fails here.
@@ -1606,6 +1822,439 @@ function evaluateExpect(
     }
   }
   return failures;
+}
+
+function evaluateRevenueFixture(fixture, actual) {
+  return evaluateExpect(
+    fixture.expect,
+    { status: "collecting" },
+    0,
+    false,
+    0,
+    0,
+    0,
+    "",
+    0,
+    false,
+    0,
+    false,
+    0,
+    0,
+    0,
+    0,
+    null,
+    actual,
+  );
+}
+
+function dryRevenueDiagnostic(pins, stateSuite) {
+  for (const fixture of stateSuite.fixtures) {
+    assert.equal(
+      evaluateRevenueFixture(fixture, structuredClone(fixture.expect.expectedState)).length,
+      0,
+      `${fixture.id} dry diagnostic witness must pass`,
+    );
+  }
+  return pins.map((pin) => {
+    const fixtures = revenueFixturesForPin(pin, stateSuite);
+    return {
+      pin: `${pin.name}@${pin.version}`,
+      bodySha256: pin.bodySha256,
+      outcome: "dry_passed",
+      casesPassed: fixtures.length,
+      casesTotal: fixtures.length,
+      costUsd: 0,
+      latencyMs: 0,
+      refs: fixtures.map((fixture) => fixture.id),
+    };
+  });
+}
+
+function toolOutputValue(output) {
+  if (typeof output === "string") return output;
+  if (output && typeof output === "object") {
+    if (typeof output.value === "string") return output.value;
+    if (typeof output.text === "string") return output.text;
+    if (output.value !== undefined) return output.value;
+  }
+  return output;
+}
+
+function parsedRevenueOutput(run, toolName) {
+  const hit = run.toolOutputs?.find((entry) => entry.tool === toolName);
+  assert.ok(hit, `runtime produced no ${toolName} result`);
+  const value = toolOutputValue(hit.output);
+  if (typeof value !== "string") return value;
+  const fenced = value.match(/<revenue_evidence[^>]*>\s*([\s\S]*?)\s*<\/revenue_evidence>/);
+  return JSON.parse(fenced?.[1] ?? value);
+}
+
+function aliasesIn(value, aliases) {
+  const reverse = new Map(Object.entries(aliases).map(([alias, id]) => [id, alias]));
+  const walk = (node) => {
+    if (typeof node === "string") return reverse.get(node) ?? node;
+    if (Array.isArray(node)) return node.map(walk);
+    if (node && typeof node === "object") {
+      return Object.fromEntries(Object.entries(node).map(([key, child]) => [key, walk(child)]));
+    }
+    return node;
+  };
+  return walk(value);
+}
+
+function observedRevenueState(fixture, run, facts, aliases) {
+  assert.deepEqual(
+    facts.toolTrace,
+    run.toolTrace,
+    `${fixture.id} persisted agentSteps trace differs from the SDK trace`,
+  );
+  const id = fixture.id;
+  if (["36-revenue-lead-triage", "44-revenue-specialist", "45-revenue-call-list"].includes(id)) {
+    const result = aliasesIn(parsedRevenueOutput(run, "readRevenueCrm"), aliases);
+    return {
+      outcome: "ready",
+      toolTrace: facts.toolTrace,
+      result,
+      refs: result.rows.map((row) => row.contactId),
+      counts: {
+        scanned: result.scanned,
+        ranked: result.rows.length,
+        suppressed: facts.suppressionCount,
+      },
+    };
+  }
+  if (["37-revenue-partial", "38-revenue-injection", "46-revenue-pipeline-review"].includes(id)) {
+    const result = parsedRevenueOutput(run, "readRevenueCrm");
+    const refs = result.externalRef ? [result.externalRef] : [];
+    if (id === "38-revenue-injection") {
+      const unauthorized = facts.toolTrace.filter(
+        (tool) => !["readRevenueCrm", "declareUnsupported"].includes(tool),
+      ).length;
+      return {
+        outcome: result.state,
+        toolTrace: facts.toolTrace,
+        result: { operation: "customer_pulse", ...result },
+        refs,
+        counts: {
+          providerReads: facts.auditEvents.filter((event) => event === "revenue.crm_read").length,
+          unauthorizedToolCalls: unauthorized,
+          writes: 0,
+          sends: facts.sentCount,
+        },
+      };
+    }
+    return {
+      outcome: result.state,
+      toolTrace: facts.toolTrace,
+      result: { operation: "customer_pulse", ...result },
+      refs,
+      counts: {
+        result: result.state === "unavailable" ? 0 : 1,
+        missing: facts.auditEvents.includes("revenue.unsupported_declared") ? 1 : 0,
+        writes: 0,
+      },
+    };
+  }
+  if (
+    ["39-revenue-cash-flow", "40-revenue-mixed-currency", "41-revenue-payroll-unknown"].includes(id)
+  ) {
+    const evidence = parsedRevenueOutput(run, "readBusinessFinance");
+    if (id === "40-revenue-mixed-currency") {
+      const currencies = evidence.values
+        .map((row) => row.currency)
+        .filter(Boolean)
+        .sort();
+      return {
+        outcome:
+          currencies.length > 1 && facts.auditEvents.includes("revenue.unsupported_declared")
+            ? "refused"
+            : "ready",
+        toolTrace: facts.toolTrace,
+        result: { operation: "cash_flow", state: "refused", reason: "mixed_currency", currencies },
+        refs: [],
+        counts: { currencyBuckets: currencies.length, combinedTotals: 0, writes: 0 },
+      };
+    }
+    if (id === "41-revenue-payroll-unknown") {
+      return {
+        outcome: evidence.coverage.partial ? "partial" : "ready",
+        toolTrace: facts.toolTrace,
+        result: evidence,
+        refs: [],
+        counts: {
+          payrollRuns: evidence.values.filter((row) => row.state === "known").length,
+          unknownValues: evidence.values.filter((row) => row.state === "unknown").length,
+          writes: 0,
+        },
+      };
+    }
+    return {
+      outcome: evidence.coverage.partial ? "partial" : "ready",
+      toolTrace: facts.toolTrace,
+      result: evidence,
+      refs: ["quickbooks:account:cash"],
+      counts: {
+        values: evidence.values.length,
+        points: evidence.values.reduce((sum, row) => sum + (row.pointCount ?? 0), 0),
+        writes: 0,
+      },
+    };
+  }
+  const result = parsedRevenueOutput(run, "stageInvoiceReminder");
+  const invoiceRef = id === "42-revenue-invoice-reminder" ? "qb-invoice-42" : "qb-invoice-43";
+  return {
+    outcome: result.ok ? "proposed" : "refused",
+    toolTrace: facts.toolTrace,
+    result,
+    refs: result.ok
+      ? [`quickbooks:${invoiceRef}`, `plan:invoice-reminder-${id.startsWith("42") ? "42" : "43"}`]
+      : [`quickbooks:${invoiceRef}`],
+    counts: result.ok
+      ? {
+          proposedPlans: facts.planStatus === "proposed" ? 1 : 0,
+          requests: facts.requestCount,
+          sends: facts.sentCount,
+        }
+      : {
+          proposedPlans: facts.planStatus === "proposed" ? 1 : 0,
+          suppressedRecipients: facts.suppressionCount,
+          partialSends: 0,
+          sends: facts.sentCount,
+        },
+  };
+}
+
+async function liveRevenueDiagnostic(pins, stateSuite) {
+  if (process.env.PIKAR_REVENUE_EVAL_LIVE_APPROVED !== "I_ACCEPT_PAID_REVENUE_EVAL") {
+    throw new Error(
+      "LIVE_REVENUE_EVAL_BLOCKED: set PIKAR_REVENUE_EVAL_DRY_RUN=1 for the deterministic offline gate; " +
+        "the paid all-candidate diagnostic requires the owner's explicit PIKAR_REVENUE_EVAL_LIVE_APPROVED=I_ACCEPT_PAID_REVENUE_EVAL qualification",
+    );
+  }
+  const results = [];
+  let totalCostUsd = 0;
+  for (const pin of pins) {
+    const fixtures = revenueFixturesForPin(pin, stateSuite);
+    const startedAt = Date.now();
+    let pinCostUsd = 0;
+    let casesPassed = 0;
+    const failures = [];
+    for (const fixture of fixtures) {
+      try {
+        const tenantId = `eval-${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+        const seed = parse(must("smoke:seedRevenueEvalCase", { tenantId, fixtureId: fixture.id }));
+        const turnId = randomUUID();
+        const run = parse(
+          must(
+            "llm:runRevenueCandidateEval",
+            {
+              tenantId,
+              threadId: seed.threadId,
+              turnId,
+              planId: seed.planId,
+              fixtureId: fixture.id,
+              skillName: pin.name,
+              skillVersion: pin.version,
+              prompt: fixture.turns.join("\n\n"),
+            },
+            RETRY_TURN,
+          ),
+        );
+        const caseCostUsd = Number(run.costUsd ?? 0);
+        pinCostUsd += caseCostUsd;
+        totalCostUsd += caseCostUsd;
+        if (pinCostUsd > COST_CAP_USD || totalCostUsd > COST_CAP_USD * pins.length) {
+          throw new Error(
+            `revenue eval cost cap exceeded (pin $${pinCostUsd.toFixed(4)}, total $${totalCostUsd.toFixed(4)})`,
+          );
+        }
+        assert.equal(run.skillName, pin.name, `${fixture.id} executed the wrong skill name`);
+        assert.equal(
+          run.skillVersion,
+          pin.version,
+          `${fixture.id} executed the wrong skill version`,
+        );
+        assert.equal(
+          run.skillBodyHash,
+          pin.bodySha256,
+          `${fixture.id} executed the wrong body hash`,
+        );
+        const facts = parse(
+          must(
+            "smoke:revenueEvalFacts",
+            { tenantId, threadId: seed.threadId, planId: seed.planId },
+            RETRY_READ,
+          ),
+        );
+        const actual = observedRevenueState(fixture, run, facts, seed.aliases);
+        const misses = evaluateRevenueFixture(fixture, actual);
+        if (misses.length > 0) throw new Error(`${fixture.id}: ${JSON.stringify(misses)}`);
+        casesPassed++;
+        console.log(`[eval:golden] PASS ${pin.name}@${pin.version} / ${fixture.id}`);
+      } catch (error) {
+        failures.push(`${fixture.id}: ${error.message}`);
+        console.error(
+          `[eval:golden] FAIL ${pin.name}@${pin.version} / ${fixture.id}: ${error.message}`,
+        );
+      }
+    }
+    results.push({
+      pin: `${pin.name}@${pin.version}`,
+      bodySha256: pin.bodySha256,
+      outcome: failures.length === 0 && casesPassed === fixtures.length ? "passed" : "failed",
+      casesPassed,
+      casesTotal: fixtures.length,
+      costUsd: pinCostUsd,
+      latencyMs: Math.max(0, Date.now() - startedAt),
+      // Refs identify the complete fixture set RUN for this exact pin, not only the passing
+      // prefix. A failed diagnostic is still evidence, and `assertRevenueDiagnosticArtifact`
+      // deliberately rejects partial refs. Stopping at the first failure made those two rules
+      // contradict each other and discarded every honest red live artifact.
+      refs: fixtures.map((fixture) => fixture.id),
+      ...(failures.length === 0 ? {} : { failure: failures.join(" | ") }),
+    });
+  }
+  return results;
+}
+
+function assertRevenueDiagnosticArtifact(artifact, pins, gateSuite, stateSuite) {
+  assert.equal(artifact?.schemaVersion, 1, "revenue diagnostic schemaVersion must be 1");
+  assert.equal(artifact?.kind, "revenue-candidate-diagnostic", "wrong diagnostic artifact kind");
+  assert.deepEqual(artifact?.suite, {
+    schemaVersion: 1,
+    caseCount: gateSuite.caseCount,
+    casesHash: gateSuite.casesHash,
+  });
+  assert.deepEqual(artifact?.stateSuite, {
+    schemaVersion: stateSuite.schemaVersion,
+    caseCount: stateSuite.caseCount,
+    casesHash: stateSuite.casesHash,
+  });
+  assert.deepEqual(
+    artifact?.pins,
+    pins.map((pin) => ({
+      name: pin.name,
+      version: pin.version,
+      bodySha256: pin.bodySha256,
+    })),
+    "diagnostic pins are missing or stale against skills-lock.json",
+  );
+  assert.equal(
+    artifact?.results?.length,
+    pins.length,
+    "diagnostic must contain one result per pin",
+  );
+  for (const [index, pin] of pins.entries()) {
+    const result = artifact.results[index];
+    const expectedRefs = revenueFixturesForPin(pin, stateSuite).map((fixture) => fixture.id);
+    assert.equal(result?.pin, `${pin.name}@${pin.version}`, "diagnostic result pin drifted");
+    assert.equal(
+      result?.bodySha256,
+      pin.bodySha256,
+      "diagnostic result body hash drifted from skills-lock.json",
+    );
+    assert.equal(
+      result?.casesTotal,
+      expectedRefs.length,
+      "diagnostic result used a partial fixture set",
+    );
+    assert.deepEqual(
+      result?.refs,
+      expectedRefs,
+      "diagnostic result refs used a partial fixture set",
+    );
+    assert.ok(
+      ["dry_passed", "passed", "failed"].includes(result?.outcome),
+      "diagnostic outcome is not closed",
+    );
+    assert.ok(
+      result?.costUsd === null || Number.isFinite(result?.costUsd),
+      "costUsd is not numeric",
+    );
+    assert.ok(Number.isFinite(result?.latencyMs), "latencyMs is not numeric");
+  }
+  return artifact;
+}
+
+async function runRevenueCandidateMode(mode) {
+  const pins = revenueCandidatePins();
+  const gateSuite = computeSuiteIdentity();
+  const stateSuite = revenueFixtureSuite();
+  const paths = revenueArtifactPaths();
+  mkdirSync(paths.dir, { recursive: true });
+
+  if (mode === "diagnostic") {
+    const dryRun = process.env.PIKAR_REVENUE_EVAL_DRY_RUN === "1";
+    const results = dryRun
+      ? dryRevenueDiagnostic(pins, stateSuite)
+      : await liveRevenueDiagnostic(pins, stateSuite);
+    const artifact = {
+      schemaVersion: 1,
+      kind: "revenue-candidate-diagnostic",
+      runMode: dryRun ? "dry" : "live",
+      generatedAt: dryRun ? null : new Date().toISOString(),
+      suite: {
+        schemaVersion: 1,
+        caseCount: gateSuite.caseCount,
+        casesHash: gateSuite.casesHash,
+      },
+      stateSuite: {
+        schemaVersion: stateSuite.schemaVersion,
+        caseCount: stateSuite.caseCount,
+        casesHash: stateSuite.casesHash,
+      },
+      pins: pins.map((pin) => ({
+        name: pin.name,
+        version: pin.version,
+        bodySha256: pin.bodySha256,
+      })),
+      results,
+    };
+    assertRevenueDiagnosticArtifact(artifact, pins, gateSuite, stateSuite);
+    writeFileSync(paths.diagnostic, `${JSON.stringify(artifact, null, 2)}\n`);
+    console.log(
+      `[eval:golden] revenue ${dryRun ? "DRY " : ""}diagnostic ${results.filter((r) => r.outcome === (dryRun ? "dry_passed" : "passed")).length}/${results.length} pins passed; artifact ${paths.diagnostic}`,
+    );
+    return results.every((result) => result.outcome === (dryRun ? "dry_passed" : "passed")) ? 0 : 1;
+  }
+
+  if (!existsSync(paths.diagnostic)) {
+    throw new Error(`revenue diagnostic artifact missing at ${paths.diagnostic}`);
+  }
+  const diagnostic = assertRevenueDiagnosticArtifact(
+    JSON.parse(readFileSync(paths.diagnostic, "utf8")),
+    pins,
+    gateSuite,
+    stateSuite,
+  );
+  const evidence = {
+    schemaVersion: 1,
+    kind: "revenue-activation-evidence",
+    runMode: diagnostic.runMode,
+    generatedAt: diagnostic.generatedAt,
+    diagnosticRef: paths.diagnostic,
+    suite: diagnostic.suite,
+    stateSuite: diagnostic.stateSuite,
+    candidates: diagnostic.results.map((result) => ({
+      pin: result.pin,
+      bodySha256: result.bodySha256,
+      outcome: result.outcome,
+      costUsd: result.costUsd,
+      latencyMs: result.latencyMs,
+      refs: result.refs,
+    })),
+  };
+  writeFileSync(paths.activationEvidence, `${JSON.stringify(evidence, null, 2)}\n`);
+  console.log(
+    `[eval:golden] ${diagnostic.runMode === "dry" ? "DRY " : ""}activation evidence ${evidence.candidates.length}/${pins.length} exact pins; artifact ${paths.activationEvidence}; registry state unchanged`,
+  );
+  return evidence.candidates.every((candidate) =>
+    diagnostic.runMode === "dry"
+      ? candidate.outcome === "dry_passed"
+      : candidate.outcome === "passed",
+  )
+    ? 0
+    : 1;
 }
 
 // ── cost cap ─────────────────────────────────────────────────────────────────
@@ -1646,6 +2295,178 @@ function selfCheck() {
   const ids = new Set(fixtures.map((f) => f.id));
   assert.equal(ids.size, fixtures.length, "fixture ids must be unique");
 
+  // 28-19: eight revenue fixtures, exact locked pins, and a falsifiable state oracle. A passing
+  // synthetic snapshot proves the fixture is representable; one mutation per required dimension
+  // proves outcome/tool/result/ref/count assertions all have teeth.
+  const revenueFixtures = fixtures.filter((fixture) => fixture.candidate !== undefined);
+  assert.deepEqual(
+    revenueFixtures.map((fixture) => fixture.id),
+    REVENUE_FIXTURE_IDS,
+    "the complete eleven-case revenue fixture set must be present in sorted order",
+  );
+  const lockedPins = revenueCandidatePins();
+  assert.equal(lockedPins.length, 8, "all eight code-owned revenue pins are discoverable offline");
+  for (const pin of lockedPins) revenueFixturesForPin(pin, { fixtures: revenueFixtures });
+  for (const fixture of revenueFixtures) {
+    const expected = fixture.expect.expectedState;
+    assert.equal(
+      evaluateRevenueFixture(fixture, structuredClone(expected)).length,
+      0,
+      `${fixture.id} witness passes`,
+    );
+    const mutations = [
+      { ...structuredClone(expected), outcome: expected.outcome === "ready" ? "partial" : "ready" },
+      { ...structuredClone(expected), toolTrace: [...expected.toolTrace, "unauthorizedTool"] },
+      { ...structuredClone(expected), result: { ...expected.result, fabricated: true } },
+      { ...structuredClone(expected), refs: [...expected.refs, "fabricated-ref"] },
+      {
+        ...structuredClone(expected),
+        counts: {
+          ...expected.counts,
+          [Object.keys(expected.counts)[0]]: expected.counts[Object.keys(expected.counts)[0]] + 1,
+        },
+      },
+    ];
+    for (const [index, mutation] of mutations.entries()) {
+      assert.equal(
+        evaluateRevenueFixture(fixture, mutation).length,
+        1,
+        `${fixture.id} mutation ${index + 1} must fail the exact-state oracle`,
+      );
+    }
+  }
+  const revenueStateSuite = revenueFixtureSuite();
+  const revenueGateSuite = computeSuiteIdentity();
+  const dryResults = dryRevenueDiagnostic(lockedPins, revenueStateSuite);
+  assert.equal(dryResults.length, lockedPins.length, "dry diagnostics cover every exact pin");
+  assert.ok(
+    dryResults.every(
+      (result) =>
+        result.outcome === "dry_passed" &&
+        result.casesTotal === result.refs.length &&
+        result.refs.length > 0 &&
+        result.refs.every((ref) => REVENUE_FIXTURE_IDS.includes(ref)),
+    ),
+    "dry diagnostics prove the full unfiltered gate without impersonating live evidence",
+  );
+  const dryArtifact = {
+    schemaVersion: 1,
+    kind: "revenue-candidate-diagnostic",
+    runMode: "dry",
+    generatedAt: null,
+    suite: {
+      schemaVersion: 1,
+      caseCount: revenueGateSuite.caseCount,
+      casesHash: revenueGateSuite.casesHash,
+    },
+    stateSuite: {
+      schemaVersion: revenueStateSuite.schemaVersion,
+      caseCount: revenueStateSuite.caseCount,
+      casesHash: revenueStateSuite.casesHash,
+    },
+    pins: lockedPins.map((pin) => ({
+      name: pin.name,
+      version: pin.version,
+      bodySha256: pin.bodySha256,
+    })),
+    results: dryResults,
+  };
+  assert.doesNotThrow(() =>
+    assertRevenueDiagnosticArtifact(dryArtifact, lockedPins, revenueGateSuite, revenueStateSuite),
+  );
+  const redArtifact = {
+    ...structuredClone(dryArtifact),
+    runMode: "live",
+    generatedAt: "2026-09-01T00:00:00.000Z",
+  };
+  redArtifact.results[0] = {
+    ...redArtifact.results[0],
+    outcome: "failed",
+    casesPassed: 0,
+    costUsd: 0.01,
+    latencyMs: 123,
+    failure: `${redArtifact.results[0].refs[0]}: synthetic live failure`,
+  };
+  assert.doesNotThrow(
+    () =>
+      assertRevenueDiagnosticArtifact(redArtifact, lockedPins, revenueGateSuite, revenueStateSuite),
+    "a red live result with the complete per-pin fixture refs is valid diagnostic evidence",
+  );
+  assert.throws(
+    () =>
+      assertRevenueDiagnosticArtifact(
+        { ...dryArtifact, pins: dryArtifact.pins.slice(1) },
+        lockedPins,
+        revenueGateSuite,
+        revenueStateSuite,
+      ),
+    /missing or stale/,
+    "missing pins fail before evidence can be emitted",
+  );
+  assert.throws(
+    () =>
+      assertRevenueDiagnosticArtifact(
+        {
+          ...dryArtifact,
+          results: [
+            { ...dryArtifact.results[0], refs: dryArtifact.results[0].refs.slice(1) },
+            ...dryArtifact.results.slice(1),
+          ],
+        },
+        lockedPins,
+        revenueGateSuite,
+        revenueStateSuite,
+      ),
+    /partial fixture set/,
+    "partial fixture refs fail before evidence can be emitted",
+  );
+  assert.throws(
+    () =>
+      assertRevenueDiagnosticArtifact(
+        {
+          ...dryArtifact,
+          results: [
+            { ...dryArtifact.results[0], bodySha256: "0".repeat(64) },
+            ...dryArtifact.results.slice(1),
+          ],
+        },
+        lockedPins,
+        revenueGateSuite,
+        revenueStateSuite,
+      ),
+    /body hash/,
+    "a pin resolving to the wrong body fails before evidence can be emitted",
+  );
+  assert.throws(
+    () =>
+      assertRevenueDiagnosticArtifact(
+        {
+          ...dryArtifact,
+          results: [
+            { ...dryArtifact.results[0], refs: ["01-legacy-case"] },
+            ...dryArtifact.results.slice(1),
+          ],
+        },
+        lockedPins,
+        revenueGateSuite,
+        revenueStateSuite,
+      ),
+    /partial fixture set/,
+    "a per-pin ref pointing at a legacy case fails closed",
+  );
+  const liveRevenueSource = liveRevenueDiagnostic.toString();
+  assert.ok(
+    liveRevenueSource.indexOf("LIVE_REVENUE_EVAL_BLOCKED") < liveRevenueSource.indexOf('must("'),
+    "the paid diagnostic qualification must precede the first Convex/model call",
+  );
+  assert.ok(
+    !liveRevenueSource.includes("break;"),
+    "one failed revenue fixture must not skip the rest of that candidate's complete suite",
+  );
+  assert.ok(
+    liveRevenueSource.includes("refs: fixtures.map"),
+    "red diagnostics must retain the complete candidate-specific fixture refs",
+  );
   // 17.1-10: the live gate must prove the runner's THROWAWAY tenant is Blueprint-bearing before
   // the first paid turn. Source order is load-bearing: seeding/asserting after the fixture loop
   // would let a fully green run measure the old no-spine prompt.
@@ -2502,7 +3323,7 @@ function selfCheck() {
     // the whole `--self-check` gate has been red on main ever since — invisibly, because `runLive`
     // never calls `selfCheck()`, so the one check that stops a bad fixture BEFORE it costs a cent
     // was itself unrunnable. Re-snapshot here when a route is added; that is the drift signal.
-    ["offer-architect", "money-model-designer", "lead-engine", "research", "media"],
+    ["offer-architect", "money-model-designer", "lead-engine", "research", "media", "revenue"],
     "all dispatchable routes, including research, are read off the core registry",
   );
   for (const route of SPECIALIST_ROUTES) {
@@ -2523,8 +3344,10 @@ function selfCheck() {
     // activates with no eval evidence. What is NOT tolerated is silence — a dispatchable route
     // whose skill is neither gated nor justified fails right here.
     assert.ok(
-      SKILL_NAMES.includes(skillName) || UNGATED_SKILL_NAMES.includes(skillName),
-      `${skillName} (route "${route}") must either be in GATED_SKILLS — a body edit rides the gate —` +
+      SKILL_NAMES.includes(skillName) ||
+        UNGATED_SKILL_NAMES.includes(skillName) ||
+        revenueCandidatePins().some((pin) => pin.name === skillName),
+      `${skillName} (route "${route}") must be GATED_SKILLS, an exact revenue candidate pin,` +
         ` or carry a written DELIBERATELY UNGATED justification in packages/contracts/src/skill.ts`,
     );
   }
@@ -3097,6 +3920,20 @@ function selfCheck() {
   // 8j. Unknown arguments ABORT rather than falling through to a paid run. `--tenant-skil <id>`
   //     would otherwise run the full gate unpinned, pay for all of it, and record nothing.
   assert.ok(assertKnownArgs(["--self-check"]), "every shipped flag is known");
+  assert.ok(assertKnownArgs(["--all-candidates", "--diagnostic"]));
+  assert.ok(assertKnownArgs(["--all-candidates", "--activation-evidence"]));
+  assert.equal(parseRevenueCandidateMode(["--all-candidates", "--diagnostic"]), "diagnostic");
+  assert.equal(
+    parseRevenueCandidateMode(["--all-candidates", "--activation-evidence"]),
+    "activation-evidence",
+  );
+  assert.throws(() => parseRevenueCandidateMode(["--diagnostic"]), /requires --all-candidates/);
+  assert.throws(
+    () => parseRevenueCandidateMode(["--all-candidates", "--diagnostic", "--only", "36-"]),
+    /cannot be combined with --only/,
+    "a partial all-candidate diagnostic must fail before any paid call",
+  );
+  assert.throws(() => parseRevenueCandidateMode(["--all-candidates"]), /exactly one/);
   assert.ok(assertKnownArgs(["--skill", "cockpit-agent@9", "--only", "research"]));
   assert.ok(
     assertKnownArgs(["--inspect-tenant-skill", "k57rowA", "--json", "--expect-status=candidate"]),
@@ -3180,7 +4017,11 @@ function selfCheck() {
   // 1. The suite really is what the manifest AND contracts both say it is. This is the assertion
   //    that makes a fixture edit cost a deliberate revision bump; everything else here is detail.
   const suite = assertSuiteIdentity();
-  assert.ok(suite.caseCount === fixtures.length, "suite identity disagrees with the loaded set");
+  const legacyFixtures = fixtures.filter((fixture) => fixture.candidate === undefined);
+  assert.ok(
+    suite.caseCount === legacyFixtures.length,
+    "AGENT_EVAL_SUITE identity disagrees with the non-revenue fixture set",
+  );
   assert.ok(/^[0-9a-f]{64}$/.test(suite.casesHash), "casesHash must be a sha256 hex digest");
 
   // 2. …and the recomputation is genuinely sensitive: one changed byte in one fixture moves it.
@@ -3896,7 +4737,9 @@ function suiteIdentityFor() {
 }
 
 async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
-  const allFixtures = loadFixtures(); // fail fast BEFORE the first spawn
+  // Revenue fixtures run only through the explicit all-candidates path. Feeding them into this
+  // legacy cockpit gate would bill the wrong body and produce an `expectedState` with no oracle.
+  const allFixtures = loadFixtures().filter((fixture) => fixture.candidate === undefined);
   const fixtures = applyOnly(allFixtures, filters); // ditto — a bad --only must not cost a seed
   const runId = randomUUID().slice(0, 8);
   const tenant = `eval-${runId}`; // throwaway — isolates every tenant-scoped table
@@ -4095,7 +4938,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
           : "a PINNED BODY WAS NEVER LOADED by this run — the run does not exercise what it pins";
     console.log(`[eval:golden] evidence SUPPRESSED — ${why}.`);
   }
-  if (record && pins.length) {
+  if (record && pins.length && process.env.PIKAR_REVENUE_EVAL_NO_REGISTRY_WRITE !== "1") {
     const skillVersions = skillVersionsOf(pins);
     for (const pin of pins) {
       const evidence = JSON.stringify({
@@ -4113,6 +4956,10 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
       must("skills:recordEvalEvidence", { name: pin.name, version: pin.version, evidence });
       console.log(`[eval:golden] evidence recorded on ${pin.name} v${pin.version}`);
     }
+  } else if (record && pins.length) {
+    console.log(
+      "[eval:golden] registry evidence SUPPRESSED — all-candidate diagnostics write refs-only artifacts, never registry state",
+    );
   }
   // 21-03: one row per EXACT tenant candidate, off the same run. The write is BY ID
   // (`recordTenantEvalEvidence`), never by name/version — two tenants can hold the same pair, and a
@@ -4281,6 +5128,13 @@ try {
   if (agentSource) runAgentSourceInspect(agentSource); // read-only: exits before any seed/model
   const inspect = parseInspectArgs(argv);
   if (inspect) runInspect(inspect); // read-only: exits before any seed/model/evidence code
+  const revenueMode = parseRevenueCandidateMode(argv);
+  if (revenueMode) {
+    // Free preflight first. The live qualification check inside runRevenueCandidateMode happens
+    // before spawnSync, so an unqualified invocation cannot reach Convex or a model/provider call.
+    selfCheck();
+    process.exit(await runRevenueCandidateMode(revenueMode));
+  }
   // A live run inherits every free fixture/vocabulary/cost/registry guard. Keep this immediately
   // before runLive: no fixture seed, Convex call or model/provider work may precede the preflight.
   selfCheck();

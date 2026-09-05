@@ -7,6 +7,34 @@
 
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-09-04 (33.2-02 — **`smoke:storyboardFactsForPlan`**: the storyboard bake-off's
+> ONE read. The parser's verdict off the plan row as counts and codes — `two` / `salvaged` / `one` /
+> `refused:<reason>` / `none`, scene and alt-scene counts, generated seconds, kind histogram,
+> uncited-figure count, adjustment count. NO prose (no narration, prompt, title, `refusedBody`);
+> `dispatch.test.ts` asserts a two-deck row reads back exactly and that the model's words never
+> appear in the JSON. Read by `scripts/run-storyboard-bakeoff.mjs` (owned by media.md). It reads
+> the ROW `persistStoryboard` wrote rather than re-parsing, so the bake-off scores what the canvas
+> would have shown and never a second parser that could drift.)
+>
+
+> Last verified: 2026-09-01 (28-15 — `opsSignals.revenueSignals` reads the shared content-free
+> event plane and joins workflow cost/latency from canonical `spendEvents`/`agentSteps`; bounded,
+> tenant-isolated, retention and incomplete-window tests pass. No agent runtime write path changed.)
+>
+
+> Last verified: 2026-09-01 (28-19 — **EIGHT REVENUE PINS NOW HAVE NON-VACUOUS DIRECT COVERAGE.**
+> The state suite contains 11 cases: every locked candidate has at least one case and the umbrella,
+> call-list, and pipeline-review bodies have dedicated fixtures. The runner groups cases by exact
+> `name@version`, verifies the executed body hash against `skills-lock.json`, compares the SDK trace
+> with persisted `agentSteps`, then judges exact tool output plus persisted plan/audit/request/
+> suppression facts. Each artifact result lists only the revenue cases actually executed for that
+> pin; the global suite hash is context, not proof. The free self-check rejects a missing revenue
+> case, zero-case pin, wrong body hash, legacy per-pin ref, partial ref set, or filtered
+> all-candidate invocation. Finance fixtures supply deterministic normalized projections but still
+> cross `composeBusinessFinance`; no provider call, registry activation, request, or send is hidden
+> in the fixture seam.)
+>
+
 > Last verified: 2026-08-29 (29-W3-TAIL — **`run-eval-golden.mjs` AND `planTenantActivation` DO NOT
 > REFUSE THE SAME SET, AND THE COMMENT SAID THEY DID.** `assertEvaluableCandidate`'s note claimed
 > *"`planTenantActivation` now refuses every `pack-*` name outright"*. It does not: it gates on

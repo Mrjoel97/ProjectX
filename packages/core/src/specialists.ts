@@ -31,6 +31,7 @@ export const SPECIALIST_ROUTES = [
   "lead-engine",
   "research",
   "media",
+  "revenue",
 ] as const satisfies readonly string[];
 export type SpecialistRoute = (typeof SPECIALIST_ROUTES)[number];
 
@@ -47,7 +48,8 @@ export type SpecialistSpec = {
     | "dispatchMoneyModelDesigner"
     | "dispatchLeadEngine"
     | "dispatchResearch"
-    | "dispatchMedia";
+    | "dispatchMedia"
+    | "dispatchRevenue";
 };
 
 /**
@@ -106,6 +108,17 @@ const SPECIALIST_TOOLS = ["searchVault"] as const;
  */
 const RESEARCH_TOOLS = ["webResearch", "declareUnsupported"] as const;
 
+/**
+ * Phase 28's connector-backed revenue grant. Runtime-frozen as well as readonly-by-type: a skill
+ * row or provider response can select only from these three local tools and can never widen the
+ * specialist into HTTP/MCP, provider writes, Gmail, approval, refunds or paid generation.
+ */
+const REVENUE_TOOLS = Object.freeze([
+  "readRevenueCrm",
+  "readBusinessFinance",
+  "declareUnsupported",
+] as const);
+
 // The §5 skill-registry row names. These are the string VALUES of `OFFER_ARCHITECT_SKILL` /
 // `MONEY_MODEL_DESIGNER_SKILL` / `LEAD_ENGINE_SKILL` in packages/contracts/src/skill.ts, inlined
 // because @pikar/contracts is not a dependency of @pikar/core (package.json) and adding one to
@@ -138,6 +151,11 @@ export const SPECIALISTS: Readonly<Record<SpecialistRoute, SpecialistSpec>> = {
     skillName: "media-director",
     tools: SPECIALIST_TOOLS,
     stepTool: "dispatchMedia",
+  },
+  revenue: {
+    skillName: "revenue-specialist",
+    tools: REVENUE_TOOLS,
+    stepTool: "dispatchRevenue",
   },
 };
 

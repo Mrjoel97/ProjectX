@@ -13,9 +13,12 @@
 //   distribution covers BOTH lanes and is the approve-proxy for cockpit sends.
 // - `costPerDeliveredUsd` is pipeline LLM cost per delivered send.
 // The ops card labels each metric against these realities (Pitfall 6).
+import { type PackMetricEvent, projectRevenueSignals } from "@pikar/core";
 import { v } from "convex/values";
 import { tenantQuery } from "./lib/functions";
 import { REVIEW_DECISIONS } from "./review";
+import { PACK_EVENT_PAGE_MAX, toMetricEvent } from "./workflowPackEventLog";
+import { costForRun, latencyForRun, PACK_RUN_JOIN_MAX } from "./workflowPackOutcomes";
 
 const DEFAULT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days — window shown in the card label
 
@@ -106,6 +109,83 @@ export const evalSignals = tenantQuery({
       deliveredCount,
       // 0 when nothing delivered — never NaN.
       costPerDeliveredUsd: deliveredCount > 0 ? totalCostUsd / deliveredCount : 0,
+    };
+  },
+});
+
+export const REVENUE_SIGNAL_DEFAULT_WINDOW_MS = 30 * 24 * 60 * 60 * 1_000;
+export const REVENUE_SIGNAL_MAX_WINDOW_MS = 90 * 24 * 60 * 60 * 1_000;
+
+/**
+ * Phase 28's bounded tenant projection over the shared immutable event plane. No source content is
+ * reconstructed. Cost and latency are joined from their canonical owners by revenue workflow run.
+ */
+export const revenueSignals = tenantQuery({
+  args: { sinceMs: v.optional(v.number()), untilMs: v.optional(v.number()) },
+  handler: async (ctx, { sinceMs, untilMs }) => {
+    const until = untilMs ?? Date.now();
+    const requestedSince = sinceMs ?? until - REVENUE_SIGNAL_DEFAULT_WINDOW_MS;
+    if (
+      !Number.isSafeInteger(until) ||
+      !Number.isSafeInteger(requestedSince) ||
+      requestedSince > until
+    )
+      throw new Error("INVALID_REVENUE_SIGNAL_WINDOW");
+    const retentionSince = until - REVENUE_SIGNAL_MAX_WINDOW_MS;
+    const since = Math.max(requestedSince, retentionSince);
+    const reasons: Array<"retention_boundary" | "event_cap" | "join_cap"> = [];
+    if (since !== requestedSince) reasons.push("retention_boundary");
+
+    const fetched = await ctx.db
+      .query("workflowPackEvents")
+      .withIndex("by_tenant_pack_createdAt", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("packId", "revenue").gte("createdAt", since),
+      )
+      .order("asc")
+      .take(PACK_EVENT_PAGE_MAX + 1);
+    const inWindow = fetched.filter((row) => row.createdAt <= until);
+    if (inWindow.length > PACK_EVENT_PAGE_MAX) reasons.push("event_cap");
+    const events: PackMetricEvent[] = inWindow.slice(0, PACK_EVENT_PAGE_MAX).map(toMetricEvent);
+    const projected = projectRevenueSignals(events);
+
+    const workflowRunIds = [
+      ...new Set(
+        events.filter((event) => event.event === "workflow_completed").map((event) => event.runId),
+      ),
+    ];
+    if (workflowRunIds.length > PACK_RUN_JOIN_MAX) reasons.push("join_cap");
+    const joinedRunIds = workflowRunIds.slice(0, PACK_RUN_JOIN_MAX);
+    const costs: number[] = [];
+    const latencies: number[] = [];
+    for (const runId of joinedRunIds) {
+      const cost = await costForRun(ctx, ctx.tenantId, runId);
+      if (cost !== null) costs.push(cost);
+      const latency = await latencyForRun(ctx, ctx.tenantId, runId);
+      if (latency !== null) latencies.push(latency);
+    }
+    latencies.sort((a, b) => a - b);
+
+    return {
+      window: {
+        requestedSinceMs: requestedSince,
+        sinceMs: since,
+        untilMs: until,
+        eventCount: events.length,
+        complete: reasons.length === 0,
+        reasons,
+      },
+      ...projected,
+      workflowCost: {
+        totalCents: costs.reduce((sum, cost) => sum + cost, 0),
+        runsPriced: costs.length,
+        runsJoined: joinedRunIds.length,
+      },
+      workflowLatency: {
+        runsMeasured: latencies.length,
+        medianMs: latencies.length === 0 ? null : (latencies[latencies.length >> 1] ?? null),
+        maxMs: latencies.length === 0 ? null : (latencies[latencies.length - 1] ?? null),
+        runsJoined: joinedRunIds.length,
+      },
     };
   },
 });

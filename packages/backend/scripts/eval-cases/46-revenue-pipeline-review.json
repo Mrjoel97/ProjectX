@@ -1,0 +1,24 @@
+{
+  "id": "46-revenue-pipeline-review",
+  "description": "The pipeline-review candidate must execute its own locked body and retain partial local evidence when provider-owned deal coverage is unavailable.",
+  "candidate": { "name": "revenue-pipeline-review", "version": 1 },
+  "turns": [
+    "Review the local follow-up for HubSpot contact hs-pipeline-46 and keep unavailable provider-owned deal facts explicit."
+  ],
+  "expect": {
+    "expectedState": {
+      "outcome": "partial",
+      "toolTrace": ["readRevenueCrm", "declareUnsupported"],
+      "result": {
+        "operation": "customer_pulse",
+        "state": "partial",
+        "provider": "hubspot",
+        "externalRef": "hs-pipeline-46",
+        "pulse": "watch"
+      },
+      "refs": ["hs-pipeline-46"],
+      "counts": { "result": 1, "missing": 1, "writes": 0 }
+    }
+  },
+  "needles": ["hs-pipeline-46", "provider-owned deal facts"]
+}

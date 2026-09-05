@@ -8,7 +8,7 @@ const read = (relative: string) =>
 describe("tenant data control reachability", () => {
   test("mounts the downloader on a routed settings page linked from the rail", () => {
     expect(read("./page.tsx")).toMatch(/<DataControls\s*\/>/);
-    expect(read("../../layout.tsx")).toContain('href="/dashboard/settings"');
+    expect(read("../../layout.tsx")).toContain('href="/dashboard/profile?tab=settings"');
     expect(read("../../layout.tsx")).toContain("Settings</span>");
   });
 

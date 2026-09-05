@@ -779,8 +779,8 @@ function AllTenantDeadLetters() {
                 fontFamily: "var(--font-mono), ui-monospace, monospace",
               }}
             >
-              tenant <code>{d.tenantId}</code> · workflow <code>{d.workflowId || "—"}</code> ·
-              correlation <code>{d.correlationId}</code>
+              tenant <code>{d.tenantId}</code> · source <code>{d.source}</code> · workflow{" "}
+              <code>{d.workflowId || "—"}</code> · correlation <code>{d.correlationId}</code>
             </div>
             <details>
               <summary style={{ cursor: "pointer", fontSize: "0.78rem", color: "var(--ink-soft)" }}>
@@ -817,7 +817,7 @@ function AllTenantDeadLetters() {
 // fixes. Tenant-scoped (not owner-gated — CONTEXT). Rows are redaction-safe: refs, hashes,
 // ids, counts ONLY — never raw user content or PII (CLAUDE.md §4). Ships resolve only;
 // replay is deferred.
-export default function OpsPage() {
+export function ComplianceView({ headingLevel = "h1" }: { headingLevel?: "h1" | "h2" }) {
   const deadLetters = useQuery(api.deadLetters.listNew);
   const markResolved = useMutation(api.deadLetters.markResolved);
   const [busy, setBusy] = useState<string | null>(null);
@@ -826,10 +826,11 @@ export default function OpsPage() {
   // NOTHING optimizer-shaped — fail closed, so a slow query cannot flash the admin surface.
   const viewer = useQuery(api.owner.viewer, {});
   const isOwner = viewer?.isOwner === true;
+  const Heading = headingLevel;
 
   return (
     <div style={{ display: "grid", gap: "1.5rem", alignContent: "start" }}>
-      <h1
+      <Heading
         style={{
           margin: 0,
           fontFamily: "var(--font-display), system-ui, sans-serif",
@@ -839,8 +840,8 @@ export default function OpsPage() {
           color: "var(--ink)",
         }}
       >
-        Ops
-      </h1>
+        Compliance
+      </Heading>
 
       {/* Eval signals sit ABOVE dead letters: signals are the ambient read, dead letters the incident read. */}
       <section style={{ display: "grid", gap: "0.9rem" }}>
@@ -977,4 +978,9 @@ export default function OpsPage() {
       </section>
     </div>
   );
+}
+
+/** Preserve old bookmarks while the canonical navigation embeds this surface under Approvals. */
+export default function OpsPage() {
+  return <ComplianceView />;
 }

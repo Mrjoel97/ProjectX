@@ -120,7 +120,7 @@ const seedJob = (
       blockIndex: 0,
       provider: "openai",
       kind: "video",
-      model: "sora-2",
+      model: "x-ai/grok-imagine-video",
       spec: { kind: "video", resolution: "720p", seconds: 4 },
       promptHash: "hash",
       status: "submitted",
@@ -203,13 +203,14 @@ describe("the cron actually registers the sweep", () => {
     expect((await getJob(t, jobId))?.status).toBe("failed");
   });
 
-  test("crons.ts holds exactly FIVE jobs — a sixth is a deliberate edit here", () => {
+  test("crons.ts holds exactly SIX jobs — a sixth is a deliberate edit here", () => {
     // A COUNT, not a ">= 1". A cron is unattended spend and unattended writes; the number of them
     // is a fact worth having to change on purpose.
     const jobs = [
       ...cronsSrc().matchAll(/\bcrons\.(daily|weekly|interval|hourly|monthly|cron)\(/g),
     ];
-    expect(jobs).toHaveLength(5);
+    // 28.1-07 added the sixth: `billing-invoice-rollup`, the daily invoice claim tick.
+    expect(jobs).toHaveLength(6);
   });
 });
 

@@ -33,8 +33,11 @@ import {
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
   INBOX_DIGEST_SKILL,
+  MEDIA_DIRECTOR_SKILL,
   REPLY_DRAFTER_SKILL,
   RESEARCH_SPECIALIST_SKILL,
+  REVENUE_SPECIALIST_SKILL,
+  REVENUE_WORKFLOW_SKILLS,
   VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
@@ -78,6 +81,7 @@ import {
   type RecipientEdit,
   rankCandidates,
   renderHtmlDocument,
+  SPECIALISTS,
   selectForDigest,
   tokenizeMarkdown,
   toWinAnsi,
@@ -87,6 +91,8 @@ import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
   GEMINI_MODEL,
+  MEDIA_FALLBACK_MODEL,
+  MEDIA_MODEL,
   PACK_FALLBACK_MODEL,
   PACK_MODEL,
   priceUsage,
@@ -119,10 +125,12 @@ import {
   isHarnessDrivenEvaluation,
   shouldUseGmailCapability,
 } from "./cockpitCapabilities";
+import { buildInvoiceReminderTool } from "./invoiceReminders";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
 import { NODE_ONLY_MODEL_PREFIX, resolveModel as resolveSharedModel } from "./lib/models";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
+import { buildRevenueTools, isRevenueToolGrant } from "./revenueTools";
 
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
 // primary + one CHEAP_MODEL fallback (the pipeline runs these steps with retry:false).
@@ -142,6 +150,23 @@ const CALL_TIMEOUT_MS = 45_000;
  * is watching a spinner; the run is scheduled in the background (D9-REVISED).
  */
 const RESEARCH_CALL_TIMEOUT_MS = 180_000;
+
+/**
+ * 33.2: the MEDIA-DIRECTOR clock. The storyboard turn writes two whole variations — 3-4k output
+ * tokens after a vault search — and the 45 s cockpit clock was tuned for a chat turn. Measured in
+ * the 33.2 bake-off (24 passes per model, `smoke:modelsForPlan` reading the spend rows): gpt-4o-mini
+ * finished inside 45 s on 24/24; gpt-5.6-luna's finished passes averaged 45 s and 13/24 blew the
+ * wall; claude-sonnet-5 blew it 24/24 — and every blown pass fell back to gpt-4.1-mini SILENTLY and
+ * scored under the candidate's name. The clock, not the model, was the binding constraint, and a
+ * stronger model cannot be measured (or shipped) on this lane without its own budget.
+ *
+ * 90 s, not the research 180 s: `runMedia` awaits the grounding pass (research clock, primary +
+ * fallback = up to 360 s) and THEN this turn (primary + fallback = 2 × 90 s = 180 s) inside ONE
+ * Convex action, whose ceiling is 600 s — 540 s worst case leaves a minute. The upgrade path if a
+ * measured model needs more is scheduling the deck turn as its own action, never raising this
+ * past the arithmetic. The soft between-step stop derives as 90 − 60 = 30 s (`RESEARCH_STEP_SLACK_MS`).
+ */
+const MEDIA_CALL_TIMEOUT_MS = 90_000;
 
 /** Headroom between the SOFT stop and the HARD abort, so the loop stops cleanly BETWEEN steps
  *  (keeping its partial findings) instead of being killed mid-step and discarding them. */
@@ -177,6 +202,7 @@ export function callTimeoutMsFor(skillName: string): number {
   // `agent_timeout`). The pack lane now also runs a 5.x model, which is slower per call than the
   // volume pin it replaced, so keeping 45 s here would fail the lane for the clock rather than for
   // the answer.
+  if (skillName === MEDIA_DIRECTOR_SKILL) return MEDIA_CALL_TIMEOUT_MS; // 33.2 — see the constant
   return skillName === RESEARCH_SPECIALIST_SKILL || isWorkflowPackSkill(skillName)
     ? RESEARCH_CALL_TIMEOUT_MS
     : CALL_TIMEOUT_MS;
@@ -1752,6 +1778,13 @@ export function buildCockpitTools(
      * a future context that legitimately needs one silently receives both.
      */
     grantSkillAuthoring?: boolean;
+    /** Phase 28: the exact revenue specialist tuple opens only the two bounded read tools. */
+    grantRevenueReads?: boolean;
+    /** REVN-06: executive-only staging; never derived from a specialist allow-list. */
+    grantInvoiceReminderStage?: boolean;
+    /** Phase 28 eval-only fixture selector. Set only by runRevenueCandidateEval after its
+     * throwaway-tenant and closed-corpus checks; absent keeps production construction unchanged. */
+    evalRevenueFixtureId?: string;
     /**
      * 27-10. True only for a workflow pack whose `output` contract IS a saved document, derived in
      * `runSpecialistTurn` from the SKILL NAME (`packOutputIsDocument`). It BUILDS `saveAsDocument`
@@ -2391,6 +2424,12 @@ export function buildCockpitTools(
     ...(agentContext?.grantSkillAuthoring && agentContext.threadId && agentContext.rootRequestId
       ? skillAuthoringTool
       : ({} as typeof skillAuthoringTool)),
+    ...(agentContext?.grantRevenueReads
+      ? buildRevenueTools(ctx, tenantId, planId, agentContext.evalRevenueFixtureId)
+      : ({} as ReturnType<typeof buildRevenueTools>)),
+    ...(agentContext?.grantInvoiceReminderStage
+      ? buildInvoiceReminderTool(ctx, tenantId, planId, agentContext.evalRevenueFixtureId)
+      : ({} as ReturnType<typeof buildInvoiceReminderTool>)),
     setSubject: tool({
       description: "Set the email subject line.",
       inputSchema: jsonSchema<{ subject: string }>({
@@ -4500,6 +4539,7 @@ async function runAgentLoop(
     // every existing caller keeps working. A specialist is a swapped (system, tools) pair through
     // THIS function; there is no second loop.
     toolNames?: readonly string[];
+    evalRevenueFixtureId?: string;
     // 27-10. Append-only optional. A property of WHICH SPECIALIST is running, so it is derived
     // from `skillName` at the `runSpecialistTurn` seam (the `maxSteps`/`timeoutMs` precedent) and
     // simply travels through here to `buildCockpitTools`. Absent => today, byte-identical.
@@ -4522,6 +4562,10 @@ async function runAgentLoop(
   reply: string;
   costUsd: number;
   webSearchCalls: number;
+  /** Eval observer: ordered SDK-attested tool calls and their structured outputs. Internal only;
+   * ordinary callers ignore these additive fields. */
+  toolTrace: readonly string[];
+  toolOutputs: readonly { tool: string; output: unknown }[];
   /** 22.1b: did the specialist CALL `declareUnsupported`? One bit, monotone downward — it can only
    *  move `evidenceVerdict` from `sourced` to `insufficient_evidence`, never the other way. */
   declaredUnsupported: boolean;
@@ -4549,6 +4593,7 @@ async function runAgentLoop(
     omitRecipientEdits,
     gmailEnabled,
     toolNames,
+    evalRevenueFixtureId,
     documentIsDeliverable,
     maxSteps,
     timeoutMs,
@@ -4576,6 +4621,11 @@ async function runAgentLoop(
       // `toolNames.includes("authorSkillCandidate")`. An allow-list is a REQUEST from the caller;
       // reading one here would let a specialist ask for the capability by name and receive it.
       grantSkillAuthoring: toolNames === undefined,
+      // REVN-04/05: identity-check the immutable code-owned tuple. A copied or model-authored list
+      // with the same strings is still not the grant.
+      grantRevenueReads: isRevenueToolGrant(toolNames) || evalRevenueFixtureId !== undefined,
+      grantInvoiceReminderStage: toolNames === undefined || evalRevenueFixtureId !== undefined,
+      evalRevenueFixtureId,
       // 27-10: passed through, NEVER derived here. `toolNames.includes("createDocument")` would let
       // any specialist granted the tool relax its own trigger rule by holding it.
       documentIsDeliverable,
@@ -4635,6 +4685,8 @@ async function runAgentLoop(
     reply: string;
     costUsd: number;
     webSearchCalls: number;
+    toolTrace: readonly string[];
+    toolOutputs: readonly { tool: string; output: unknown }[];
     declaredUnsupported: boolean;
     saveRequest?: { title: string };
     truncated: boolean;
@@ -4717,6 +4769,14 @@ async function runAgentLoop(
     // loop declares exactly ONE provider-executed tool, so the flag is one source of truth and
     // cannot drift when the provider renames anything.
     const toolCalls = res.steps.flatMap((st) => st.content).filter((p) => p.type === "tool-call");
+    const toolTrace = toolCalls.map((part) => part.toolName);
+    const toolOutputs = res.steps
+      .flatMap((step) => step.content)
+      .filter((part) => part.type === "tool-result")
+      .map((part) => ({
+        tool: part.toolName,
+        output: (part as { output?: unknown }).output,
+      }));
     // COUNTED BY NAME, not by `providerExecuted` (changed 2026-08-07 with the move to Tavily).
     // The old comment above was right FOR A HOSTED TOOL: the provider chose the emitted name
     // (`web_search`, not our key `webResearch`) and could rename it, so the flag was the stable
@@ -4852,6 +4912,8 @@ async function runAgentLoop(
       reply: res.text,
       costUsd,
       webSearchCalls,
+      toolTrace,
+      toolOutputs,
       declaredUnsupported,
       saveRequest,
       sources,
@@ -4873,6 +4935,24 @@ async function runAgentLoop(
     return await run(primary, 1, 0);
   } catch (e) {
     if (!isFallbackEligible(e)) throw e; // our bug / config → propagate (the driver saves an error turn)
+    // 33.2: the rollover is RECORDED. Until now the loop swallowed the primary's failure and the
+    // run succeeded on the fallback with nothing in any plane saying so — the 33.2 bake-off scored
+    // 37 fallback passes under two candidates' names before the spend rows gave it away, and the
+    // same silence has been letting production storyboards be written by `gpt-4.1-mini` whenever
+    // the primary blew its clock. The `llm.fallback` shape the route/draft steps already write
+    // (§4: model ids and an error NAME — never the provider's message, which can echo the prompt).
+    await ctx.runMutation(internal.audit.log, {
+      tenantId,
+      correlationId: loopId,
+      eventType: "llm.fallback",
+      actor: "system",
+      payload: {
+        fromModel: primary.id,
+        toModel: fallback.id,
+        errorName: (e as { name?: unknown } | null)?.name?.toString() ?? "unknown",
+        stage: "agent-loop",
+      },
+    });
     try {
       return await run(fallback, 0, 1);
     } catch (e2) {
@@ -4917,6 +4997,8 @@ export async function runSpecialistTurn(
      *  once two tenants each own version 2 (21-02's two-tenant test builds that collision). Trusted
      *  server state — an `internalAction` carries it, so no model-supplied id reaches here. */
     tenantSkillIds?: Record<string, Id<"tenantSkills">>;
+    /** Phase 28: closed eval-only case selector. Never set by dispatch or production cockpit. */
+    evalRevenueFixtureId?: string;
     /** test-support: a MockLanguageModelV4 doGenerate script (the __runCockpitAgentWithScript
      *  shim's mechanism). Absent ⇒ the real gateway models.
      *  `softCutoffMs` drives ONLY the soft wall-clock stop (D11). It is deliberately NOT a hard-
@@ -4952,6 +5034,8 @@ export async function runSpecialistTurn(
   skillName: string;
   skillBodyHash: string;
   webSearchCalls: number;
+  toolTrace: readonly string[];
+  toolOutputs: readonly { tool: string; output: unknown }[];
   /** 22.1b: the SAME `truncatedReason` seam — the `{ ...res, skillVersion }` spread below ALREADY
    *  forwards the value, so only this type widens. Without the widening `governedDispatch` cannot
    *  see the declaration and the whole channel dead-ends one function short of the verdict, which
@@ -4968,7 +5052,17 @@ export async function runSpecialistTurn(
   modelId: string;
   fallbackModelId: string;
 }> {
-  const { tenantId, planId, skillName, toolNames, prompt, turnId, threadId, skillVersions } = args;
+  const {
+    tenantId,
+    planId,
+    skillName,
+    toolNames,
+    prompt,
+    turnId,
+    threadId,
+    skillVersions,
+    evalRevenueFixtureId,
+  } = args;
   const tenantSkillIds = args.tenantSkillIds;
   // The §5 loader, fail-closed on both branches (a missing pin throws NO_SUCH_SKILL_VERSION, a
   // never-seeded skill throws NO_ACTIVE_SKILL) — a specialist NEVER runs on a hardcoded prompt.
@@ -5043,14 +5137,20 @@ export async function runSpecialistTurn(
   // configurations), so this one arrives with its own measurement and its own abort condition — see
   // `PACK_MODEL`. Derived from the skill NAME like every other decision at this seam.
   const isPack = isWorkflowPackSkill(skillName);
-  // A THREE-TIER LOOKUP rather than nested ternaries: each lane names its own pair, and everything
+  // 33.2: THE FOURTH LANE. The storyboard turn fell through to the defaults — the VOLUME pin —
+  // while carrying the heaviest rule load of any single turn. Its own pair, derived from the skill
+  // name like the other two; the pin itself moves only on 33.2-03's measured rule (cost.ts).
+  const isMedia = skillName === MEDIA_DIRECTOR_SKILL;
+  // A FOUR-TIER LOOKUP rather than nested ternaries: each lane names its own pair, and everything
   // else takes the repo defaults. Order matters only in that the lanes are disjoint by construction —
-  // a pack skill name can never be the research specialist's.
+  // a pack skill name can never be the research specialist's, nor the media director's.
   const [primaryId, fallbackId] = isResearch
     ? [RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]
     : isPack
       ? [PACK_MODEL, PACK_FALLBACK_MODEL]
-      : [DEFAULT_MODEL, CHEAP_MODEL];
+      : isMedia
+        ? [MEDIA_MODEL, MEDIA_FALLBACK_MODEL]
+        : [DEFAULT_MODEL, CHEAP_MODEL];
   const res = await runAgentLoop(ctx, {
     tenantId,
     planId,
@@ -5080,6 +5180,7 @@ export async function runSpecialistTurn(
     turnId,
     threadId,
     toolNames,
+    evalRevenueFixtureId,
     // 27-10: derived HERE from the skill name, beside the model pin and the step budget, for the
     // reason stated above — it is a property of WHICH SPECIALIST is running, not a request the
     // caller can make. `packOutputIsDocument` is false for every non-pack name, so every other
@@ -5150,6 +5251,80 @@ export async function runSpecialistTurn(
     skillBodyHash,
   };
 }
+
+const REVENUE_EVAL_CASE_SKILL = {
+  "36-revenue-lead-triage": "revenue-lead-triage",
+  "37-revenue-partial": "revenue-customer-pulse",
+  "38-revenue-injection": "revenue-customer-pulse",
+  "39-revenue-cash-flow": "revenue-cash-flow",
+  "40-revenue-mixed-currency": "revenue-cash-flow",
+  "41-revenue-payroll-unknown": "revenue-payroll-confidence",
+  "42-revenue-invoice-reminder": "revenue-invoice-reminder",
+  "43-revenue-suppressed-reminder": "revenue-invoice-reminder",
+  "44-revenue-specialist": "revenue-specialist",
+  "45-revenue-call-list": "revenue-call-list",
+  "46-revenue-pipeline-review": "revenue-pipeline-review",
+} as const;
+const REVENUE_EVAL_TENANT = /^eval-[0-9a-f]{8}$/;
+const REVENUE_EVAL_SKILLS = new Set<string>([REVENUE_SPECIALIST_SKILL, ...REVENUE_WORKFLOW_SKILLS]);
+type RevenueEvalResult = Awaited<ReturnType<typeof runSpecialistTurn>>;
+
+/**
+ * Phase 28's direct-candidate eval seam. It is intentionally an internalAction beside the loop it
+ * reuses: production dispatch never supplies an eval fixture id, and this door accepts only a
+ * random throwaway eval tenant, a closed case→skill pair, and an exact global version pin.
+ */
+export const runRevenueCandidateEval = internalAction({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    turnId: v.string(),
+    planId: v.id("plans"),
+    fixtureId: v.string(),
+    skillName: v.string(),
+    skillVersion: v.number(),
+    prompt: v.string(),
+  },
+  handler: async (
+    ctx,
+    { tenantId, threadId, turnId, planId, fixtureId, skillName, skillVersion, prompt },
+  ): Promise<RevenueEvalResult> => {
+    if (!REVENUE_EVAL_TENANT.test(tenantId)) throw new Error("REVENUE_EVAL_TENANT_REQUIRED");
+    const expectedSkill =
+      REVENUE_EVAL_CASE_SKILL[fixtureId as keyof typeof REVENUE_EVAL_CASE_SKILL];
+    if (
+      expectedSkill === undefined ||
+      expectedSkill !== skillName ||
+      !REVENUE_EVAL_SKILLS.has(skillName)
+    ) {
+      throw new Error("REVENUE_EVAL_CASE_SKILL_MISMATCH");
+    }
+    if (!Number.isSafeInteger(skillVersion) || skillVersion < 1) {
+      throw new Error("REVENUE_EVAL_VERSION_REQUIRED");
+    }
+    const plan: PlanRow | null = await ctx.runQuery(internal.plans.getById, { planId });
+    if (!plan || plan.tenantId !== tenantId || plan.threadId !== threadId) {
+      throw new Error("REVENUE_EVAL_PLAN_MISMATCH");
+    }
+    const pre = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    if (!pre.ok) throw new Error(`REVENUE_EVAL_GOVERNED_STOP:${pre.reason}`);
+    const toolNames =
+      skillName === "revenue-invoice-reminder"
+        ? (["stageInvoiceReminder"] as const)
+        : SPECIALISTS.revenue.tools;
+    return await runSpecialistTurn(ctx, {
+      tenantId,
+      planId,
+      skillName,
+      toolNames,
+      prompt,
+      threadId,
+      turnId,
+      skillVersions: { [skillName]: skillVersion },
+      evalRevenueFixtureId: fixtureId,
+    });
+  },
+});
 
 // ── SMOKE:: agent sentinel (the Plan 05 offline E2E path) ────────────────────
 // The E2E has no gateway, so it drives the loop turn-by-turn: ONE sentinel op per user message

@@ -1,0 +1,18 @@
+{
+  "id": "43-revenue-suppressed-reminder",
+  "description": "A grouped reminder with one suppressed recipient is terminally refused with zero partial sends; staging cannot bypass the shared delivery guard.",
+  "candidate": { "name": "revenue-invoice-reminder", "version": 1 },
+  "turns": [
+    "Prepare the proposed reminder for invoice qb-invoice-43, then verify delivery for the grouped recipients including suppressed-43@golden.example."
+  ],
+  "expect": {
+    "expectedState": {
+      "outcome": "refused",
+      "toolTrace": ["stageInvoiceReminder"],
+      "result": { "ok": false, "reason": "suppressed", "status": "collecting" },
+      "refs": ["quickbooks:qb-invoice-43"],
+      "counts": { "proposedPlans": 0, "suppressedRecipients": 1, "partialSends": 0, "sends": 0 }
+    }
+  },
+  "needles": ["qb-invoice-43", "suppressed-43@golden.example"]
+}

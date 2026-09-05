@@ -45,6 +45,9 @@ graphify-out/cache/
 graphify-out/*.html
 graphify-out/20[0-9][0-9]-*/
 graphify-out/.graph.tmp.json
+# Absolute path to the interpreter that has graphify installed. Machine-specific,
+# so the tracked hooks read it from here instead of hardcoding one user's path.
+graphify-out/.graphify_python
 .playwright-mcp/
 .playwright-cli/
 

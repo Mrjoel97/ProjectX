@@ -1,5 +1,32 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-09-05 (33.2-05 — two routed transcription pins beside TRANSCRIPTION_PRICING:
+> `OR_TRANSCRIPTION_MODEL` (whisper-1) and `OR_INTAKE_TRANSCRIPTION_MODEL` (gpt-4o-transcribe). No
+> PRICING rows — transcription is billed per second/minute, and OpenRouter's body carries the
+> figure the callers record; `priceTranscription` remains the fallback. Measured: cost 95/95.)
+>
+> Last verified: 2026-09-05 (33.2-03 — **`MEDIA_MODEL` = `OR_RESEARCH_FALLBACK_MODEL` (gpt-4.1-mini),
+> `MEDIA_FALLBACK_MODEL` = `OR_DEFAULT_MODEL` (gpt-4o-mini): the pin moved on the bake-off rule.**
+> ADR-032, `33.2-BAKEOFF.md`. The inequality landed with the pin: `cost.test.ts` now holds
+> `MEDIA_MODEL !== DEFAULT_MODEL` AND `MEDIA_MODEL !== MEDIA_FALLBACK_MODEL` (a rollover must change
+> the model), both priced, fallback off the cheap tier. Still NO media PRICING row: both ids already
+> have one (the computed-key collapse rule). The two premium candidate constants and their rows
+> left with the bake-off — the ids and prices live in the ADR. Bill: a storyboard is ~$0.008,
+> 2.6x the old $0.003. Measured: cost 95/95.)
+>
+> Last verified: 2026-09-04 (33.2-01 — **A FOURTH MODEL LANE: `MEDIA_MODEL` / `MEDIA_FALLBACK_MODEL`,
+> shipped ALIASED to `OR_DEFAULT_MODEL` / `OR_RESEARCH_FALLBACK_MODEL`, so this commit moves no bill.**
+>
+> The storyboard turn (`media-director`) fell through `runSpecialistTurn`'s skill-name lookup to
+> `DEFAULT_MODEL` — the VOLUME pin, by cost.ts's own paragraph — while carrying the heaviest rule
+> load of any single turn. It now has its own pair, for the `PACK_MODEL` reason (one lane must not
+> silently move another). NO PRICING row of its own while it aliases an id that already has one
+> (the computed-key collapse rule); `cost.test.ts` holds both pins priced and the fallback off the
+> cheap tier. Deliberately NO `MEDIA_MODEL !== DEFAULT_MODEL` inequality yet — 33.2-03's bake-off
+> (`.planning/phases/33.2-*/33.2-PRD.md` L3/L4: four candidates, a decision rule fixed BEFORE the
+> run, repin only at >= 3 of 24 passes over the baseline) moves the pin or records that it stays,
+> and the inequality lands with the pin. Measured: cost 95/95.)
+>
 > Last verified: 2026-08-26 (**A THIRD MODEL LANE: `PACK_MODEL` / `PACK_FALLBACK_MODEL`, pinned to
 > `or/openai/gpt-5.6-luna` + `or/openai/gpt-4.1-mini`, and the A/B was run in BOTH directions before
 > the pin was kept.**

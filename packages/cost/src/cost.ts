@@ -87,6 +87,22 @@ export const OR_RESEARCH_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
 // silently move another. See PACK_MODEL below for the measurement that bought this lane.
 export const OR_PACK_MODEL = "or/openai/gpt-5.6-luna";
 export const OR_PACK_FALLBACK_MODEL = "or/openai/gpt-4.1-mini";
+// 33.2. THE MEDIA-DIRECTOR lane. The storyboard turn used to fall through the skill-name lookup in
+// llm.ts to DEFAULT_MODEL — the VOLUME pin, by the paragraph above's own words — while being the
+// most constraint-loaded single turn in the product (two whole variations, exact second sums, a
+// 12-second generated cap, per-cell narration windows, cited figures). Separate constants for the
+// PACK_MODEL reason: a later change to one lane must not silently move another.
+// ALIASES, not literals (the PRICING computed-key rule below).
+// 33.2-03 MOVED THE PIN, on the rule fixed before the run (ADR-032, 33.2-BAKEOFF.md). Clean
+// two-deck passes of 24 on the 90 s media clock, executed model asserted from spend rows:
+// gpt-4o-mini 14 (the baseline) · gpt-5.6-luna 11 · gpt-4.1-mini 18 · claude-sonnet-5 and
+// gpt-5.6-sol DISQUALIFIED — both blew the 90 s clock on the production path (audited
+// `llm.fallback` TimeoutError; sol at pass 4 of 24 after three clean ones, sonnet at pass 1).
+// +4 clears the >= 3 repin threshold; the win costs 2.6x the baseline per storyboard ($0.008).
+// The FALLBACK is the measured baseline, not the primary's own id: a rollover must change the
+// model, and gpt-4o-mini finished inside 45 s on 24/24 — the fallback's job is to be fast.
+export const OR_MEDIA_MODEL = OR_RESEARCH_FALLBACK_MODEL;
+export const OR_MEDIA_FALLBACK_MODEL = OR_DEFAULT_MODEL;
 
 // Aliases, deliberately — NOT second string literals. Two literals spelling the same model is how a
 // PRICING row and a pin drift apart, and `PRICING` is keyed by computed property, so duplicate
@@ -283,6 +299,10 @@ export const RESEARCH_FALLBACK_MODEL = OR_RESEARCH_FALLBACK_MODEL;
  */
 export const PACK_MODEL = OR_PACK_MODEL;
 export const PACK_FALLBACK_MODEL = OR_PACK_FALLBACK_MODEL;
+/** 33.2: the media-director lane — see OR_MEDIA_MODEL. Aliased like PACK_MODEL, priced by the same
+ *  cost.test.ts obligation (no PRICING row of its own while it names an id that already has one). */
+export const MEDIA_MODEL = OR_MEDIA_MODEL;
+export const MEDIA_FALLBACK_MODEL = OR_MEDIA_FALLBACK_MODEL;
 
 // **A GROWTH-SPECIALIST PIN WAS TRIED AND REVERTED 2026-08-08 — do not re-derive it.** Fixtures
 // 29/30/31 assert `citesVaultDoc` (the seeded vault needle must reach the specialist's memo), and
@@ -399,6 +419,13 @@ export function priceUsage(
 
 // gpt-4o-transcribe per-audio-minute pricing (OpenAI published rate, verified 2026-07-14).
 export const TRANSCRIPTION_PRICING: { perMinuteUsd: number } = { perMinuteUsd: 0.006 };
+
+// 33.2-05: transcription rides OpenRouter too. Probed 2026-09-05 against `/api/v1/audio/transcriptions`:
+// whisper-1 answered 200 on mp3 AND mp4 (container demuxed upstream), billed per SECOND at the same
+// $0.006/min; gpt-4o-transcribe 200. The `or/` prefix is the ROUTE (lib/models.ts strips it) and
+// the response body carries the bill (`usage.cost`), which the callers record ahead of this table.
+export const OR_TRANSCRIPTION_MODEL = "or/openai/whisper-1";
+export const OR_INTAKE_TRANSCRIPTION_MODEL = "or/openai/gpt-4o-transcribe";
 
 /** INTK-03: prices audio transcription per-audio-minute (billed in whole minutes,
  *  rounded up — matches OpenAI's per-minute billing). Fail-closed: non-finite or

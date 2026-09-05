@@ -22,9 +22,18 @@
 // COPY-DRIFT IS THEREFORE UNGUARDED. See `docs/playbooks/cockpit.md`'s model-routing section and
 // `.planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md` for the five escapes
 // and the upgrade path (an AST/type-level pass or a lint rule — not a pattern over source text).
+
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { missingEnv } from "./env";
-import { NODE_ONLY_MODEL_PREFIX, offlineSeamAvailable, resolveModel } from "./models";
+import {
+  NODE_ONLY_MODEL_PREFIX,
+  offlineSeamAvailable,
+  resolveModel,
+  transcriptionModel,
+  transcriptionUsage,
+} from "./models";
 
 // A key is needed only to CONSTRUCT the provider; nothing here makes a request.
 process.env.OPENROUTER_API_KEY ??= "test-openrouter-key";
@@ -176,5 +185,63 @@ describe("offlineSeamAvailable is a POSITIVE operator opt-in, not the absence of
     vi.stubEnv("OPENROUTER_API_KEY", undefined);
     expect(offlineSeamAvailable()).toBe(false);
     expect(missingEnv((n) => process.env[n]).fixturesActive).toContain("PIKAR_OFFLINE_FIXTURES");
+  });
+});
+
+// Merged 2026-09-05 from the media lane (33.2-04/05): transcription rides the same module, and a
+// NARROW literal-call tripwire — it catches `openai("…")` / `openai.transcription(` spelled out in a
+// feature file, nothing more; the broader route-table scan was deleted above for the reasons given.
+describe("lib/models — transcription and the literal-call tripwire", () => {
+  test("transcription: an or/ id rides the OpenAI-compatible provider at OpenRouter, prefix stripped", () => {
+    process.env.OPENROUTER_API_KEY ??= "test-key-never-sent";
+    const routed = transcriptionModel("or/openai/whisper-1") as unknown as {
+      provider: string;
+      modelId: string;
+    };
+    expect(routed.provider).toMatch(/^openai\.transcription/);
+    expect(routed.modelId).toBe("openai/whisper-1");
+    const direct = transcriptionModel("openai/whisper-1") as unknown as { modelId: string };
+    expect(direct.modelId).toBe("whisper-1");
+  });
+
+  // On the routed id the SDK reports no duration; the provider's body is the bill. A caller that
+  // priced `durationInSeconds ?? 0` would record $0 and walk past the kill switch.
+  test("transcriptionUsage reads OpenRouter's usage block and tolerates its absence", () => {
+    expect(
+      transcriptionUsage({
+        responses: [{ body: { text: "x", usage: { seconds: 3, cost: 0.0003 } } }],
+      }),
+    ).toEqual({ seconds: 3, costUsd: 0.0003 });
+    expect(transcriptionUsage({ responses: [{ body: { text: "x" } }] })).toEqual({});
+    expect(transcriptionUsage({})).toEqual({});
+    expect(
+      transcriptionUsage({ responses: [{ body: { usage: { seconds: "3", cost: Number.NaN } } }] }),
+    ).toEqual({});
+  });
+
+  // The defect class: a module-local copy of the resolver that never learned the `or/` route.
+  // Five files carried one for nine days and broke every vault ingest. Only this module may turn
+  // an id into a provider call; llm.ts wraps it for the stealth/ and google/ branches.
+  test("no other module under convex/ builds a model on its own — resolver copy, literal, or transcription", () => {
+    const root = join(__dirname, "..");
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "_generated" || entry.name === "node_modules") continue;
+        const p = join(dir, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (/\.ts$/.test(entry.name) && !/\.test\.ts$/.test(entry.name)) {
+          if (p.endsWith(join("lib", "models.ts"))) continue;
+          const src = readFileSync(p, "utf8");
+          // A resolver copy, a literal `openai("gpt-4o-mini")`, or a direct transcription model.
+          // (`openai.tools.webSearch` in llm.ts is a provider-executed TOOL, not a model — allowed.)
+          if (/openai\(\s*id\.replace|\bopenai\(\s*["'`]|openai\.transcription\(/.test(src)) {
+            offenders.push(p.slice(root.length + 1));
+          }
+        }
+      }
+    };
+    walk(root);
+    expect(offenders).toEqual([]);
   });
 });

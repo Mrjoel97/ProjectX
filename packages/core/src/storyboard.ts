@@ -535,14 +535,39 @@ export const VISUAL_KINDS = [
 ] as const;
 export type VisualKind = (typeof VISUAL_KINDS)[number];
 
-/** The provider's duration grid. Sora returns 4, 8 or 12 second clips and nothing between, so a
- *  `generated_video` scene MUST land on it. **This is the real reason the other three kinds
- *  exist**: they are frame-exact at any length, and every member of this grid is a multiple of 4,
- *  so a deck of ONLY generated clips cannot sum to 15 or 30 at all (and a 60 costs $6.00, over the
- *  job cap). It is also a 40x cost lever — measured at wave 7: a 4 s generated clip is $0.40 and a
- *  still is $0.01 at ANY length — so a deck that reaches for a still first is cheaper AND more
- *  flexible. See ADR-019. */
-export const GENERATED_CLIP_SECONDS = [4, 8, 12] as const;
+/**
+ * The provider's duration grid: xAI's **1-15, any integer** (33.1-04, ADR-027). A
+ * `generated_video` scene MUST land on it, and above 15 it is snapped down or refused.
+ *
+ * **WHAT THIS GRID CHANGED, stated because the old comment claimed the opposite.** Until
+ * 2026-08-30 this was sora-2's `[4, 8, 12]`, and the multiple-of-four property was called *"the
+ * real reason the other three kinds exist"*: no sum of them is 15 or 30, so a deck of only
+ * generated clips could not be built at all. That is **no longer true**. Two 15-second clips make
+ * a 30-second reel and price at $2.10, under the $3.50 job cap. The arithmetic no longer forbids
+ * anything.
+ *
+ * So the cheap kinds are now a **COST lever rather than an arithmetic necessity**: a 30-second
+ * all-generated reel is $2.10 of pictures against $0.864 for the mixed deck in
+ * `media.fixtures.json` — the same thirty seconds for a third of the money. Kind-mixing is kept
+ * MANDATORY by `@pikar/cost`'s `MEDIA_GENERATED_SECONDS_CAP` (12 generated seconds per
+ * reservation, below `min(TARGET_DURATIONS)`), which is a code-owned ceiling at the money
+ * boundary rather than a fact about the provider. See ADR-027's structural-guarantee section: a
+ * mitigation in code is not the same thing as an impossibility in arithmetic, and the ADR says so
+ * rather than pretending nothing was spent.
+ *
+ * **THIS CONSTANT MUST STAY IDENTICAL TO `MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model]` in
+ * `@pikar/cost`.** They are two hand-maintained copies of one provider grid, and they DRIFTED at
+ * the last cutover with nothing noticing — `isBuyableClipLength`'s comment in
+ * `packages/backend/convex/media.ts` records what that cost. `packages/cost/src/media.test.ts`
+ * now asserts the two are equal, which is the only thing that makes "keep them in step"
+ * enforceable.
+ *
+ * ponytail: two copies, one assertion — NOT an inverted package dependency. `@pikar/core`
+ * deliberately does not depend on `@pikar/cost` (the dependency runs the other way, because
+ * pricing is downstream of the contract), and inverting that to deduplicate fifteen integers
+ * would be a much larger change than the drift it prevents.
+ */
+export const GENERATED_CLIP_SECONDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const;
 
 /** The old closed set, mapped onto the new one, so a deck proposed under the block contract still
  *  READS. Accepted by the parser for one version and taught by the skill body for none:
@@ -834,7 +859,11 @@ export const SCENE_REFUSAL_WHY: Record<string, string> = {
   missing_asset: "a scene said to use your own footage but never named which file",
   duration_mismatch: "the scene lengths did not add up to the reel length it declared",
   no_narration: "not one scene had a spoken line, so there would be nothing to voice",
-  narration_too_long: "a spoken line is too long to finish before the next line starts",
+  // 33.1-06: the SENTENCE had to change with the check. This used to mean "a line runs into the
+  // next one", which the assembler no longer minds — it delays the later take. The surviving fatal
+  // case is the one below, and leaving the old words in place described a failure that can no
+  // longer happen while the real one went unnamed.
+  narration_too_long: "the spoken lines add up to more than the reel is long",
   // 33-01: a Source line the parser cannot read must never silently become creative copy.
   malformed_source: "a scene cited a source in a form I couldn't read back",
 };
@@ -1044,22 +1073,9 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
   const finalScenes = repaired?.scenes ?? scenes;
   const finalAdjustments = repaired ? [...adjustments, ...repaired.adjustments] : adjustments;
 
-  // The ONE narration rule left: a line must not run into the next line. No floor — see the
-  // header note. Still the LAST word: a repair that could not fix every window leaves the deck
-  // exactly as it was, and this loop refuses it on the same terms as before.
-  for (const [index, scene] of finalScenes.entries()) {
-    if (scene.narration === "") continue;
-    const availableSeconds = narrationCeilingSeconds(finalScenes, index);
-    if (scene.narration.length > availableSeconds * MAX_CHARS_PER_SECOND) {
-      return {
-        ok: false,
-        reason: "narration_too_long",
-        sceneIndex: index,
-        chars: scene.narration.length,
-        availableSeconds,
-      };
-    }
-  }
+  // The ONE narration rule left, and 33.1-06 NARROWED it to exactly what can still fail.
+  const overrun = narrationOverrunsReel(finalScenes, targetDurationSeconds);
+  if (overrun) return { ok: false, ...overrun };
 
   return {
     ok: true,
@@ -1067,6 +1083,69 @@ export function parseSceneDeck(body: string): ParsedSceneDeck {
     scenes: finalScenes,
     adjustments: finalAdjustments,
   };
+}
+
+/** The gap the assembler leaves between two takes it had to separate. Mirrors `TAKE_GAP_S` in
+ *  `assemble_final.sh`; if you change one, change both — this constant exists to PREDICT that
+ *  script, and a prediction that disagrees with it is worse than no prediction. */
+export const TAKE_GAP_S = 0.12;
+
+/**
+ * WILL ANY SPOKEN LINE STILL BE TALKING WHEN THE REEL ENDS?
+ *
+ * **This replaced "does a line run into the next line", and the reason is that the assembler no
+ * longer minds.** `assemble_final.sh` used to hard-error on BOTH overruns; since 33.1-06 it
+ * resolves a collision by DELAYING the later take (`TAKE_GAP_S`) and keeps only one fatal case —
+ * speech still running at the end of the reel, which cannot be delayed anywhere because the
+ * picture track is a fixed length. Predicting a failure the renderer no longer has is how a deck
+ * gets refused for free that would have rendered perfectly, which is what the owner hit
+ * repeatedly.
+ *
+ * So this SIMULATES the assembler rather than approximating it, and the fidelity is the point:
+ *
+ *  * A take that fits inside its own scene is CENTRED there, so it ends at
+ *    `sceneStart + (sceneDur + speech)/2` — later than a left-aligned end, and modelling it as
+ *    left-aligned would under-predict the push handed to the line after it.
+ *  * A take longer than its scene ANCHORS at the scene start and carries over the cut.
+ *  * A take that would begin before the previous one finished starts at `previousEnd + gap`
+ *    instead, and that displacement CASCADES — which is the only way the surviving fatal case can
+ *    still be reached, and precisely why this is a running cursor and not a per-line test.
+ *
+ * `MAX_CHARS_PER_SECOND` is an estimate of a thing the renderer measures exactly, so this stays
+ * fail-closed: it refuses a deck it predicts will overrun, and the renderer refuses again on the
+ * real audio if the estimate was generous.
+ */
+export function narrationOverrunsReel(
+  scenes: readonly Scene[],
+  targetDurationSeconds: number,
+): {
+  reason: "narration_too_long";
+  sceneIndex: number;
+  chars: number;
+  availableSeconds: number;
+} | null {
+  let cursor = 0;
+  for (const [index, scene] of scenes.entries()) {
+    if (scene.narration === "") continue;
+    const sceneStart = scene.durationMs === 0 ? 0 : scene.startMs / 1000;
+    const sceneSeconds = scene.durationMs / 1000;
+    const speech = scene.narration.length / MAX_CHARS_PER_SECOND;
+    const pushed = cursor > sceneStart;
+    const end =
+      !pushed && speech <= sceneSeconds
+        ? sceneStart + (sceneSeconds + speech) / 2 // centred in its own scene
+        : Math.max(sceneStart, cursor) + speech; // anchored, or displaced by the line before it
+    if (end > targetDurationSeconds) {
+      return {
+        reason: "narration_too_long",
+        sceneIndex: index,
+        chars: scene.narration.length,
+        availableSeconds: narrationCeilingSeconds(scenes, index),
+      };
+    }
+    cursor = end + TAKE_GAP_S;
+  }
+  return null;
 }
 
 /**
@@ -1175,9 +1254,19 @@ const restartScenes = (scenes: readonly Scene[], seconds: readonly number[]): Sc
  *  1. **Seconds, never words.** No narration cell is read except for its LENGTH. Rewriting a line
  *     to fit would put words in the user's mouth — the provenance rule, and the reason this
  *     function moves time instead of text.
- *  2. **Never a `generated_video`, at either end.** Resizing one puts it off the provider's
- *     4/8/12 grid — the exact defect `repairGeneratedGrid` exists to prevent, and it would be
- *     absurd to reintroduce it here.
+ *  2. **A `generated_video` may DONATE but never RECEIVE, and that asymmetry is 33.1's.** The rule
+ *     used to be "never, at either end", because resizing a clip put it off the provider's 4/8/12
+ *     grid. 33.1 widened `GENERATED_CLIP_SECONDS` to every integer 1..15, so that reason is gone —
+ *     and leaving the ban in place cost real decks: a 15-second reel whose clip takes 7 seconds
+ *     leaves four scenes sharing 8, every one of them at `MIN_DONOR_SECONDS`, so the donor pool was
+ *     empty and the deck refused with `narration_too_long` while five spare seconds sat in the clip.
+ *     Shrinking one is safe on both counts that matter: it lands at or above `MIN_DONOR_SECONDS`,
+ *     which is inside the grid, and it only ever LOWERS the deck's generated total and its cost.
+ *     GROWING one is still refused — that spends money the user has not approved yet and could
+ *     breach `MEDIA_GENERATED_SECONDS_CAP`, which this package cannot see.
+ *  2b. **A still is preferred as donor over a clip.** Shrinking a still costs the reel nothing;
+ *     shrinking a clip takes motion out of it. Only when no still can cover the deficit is a clip
+ *     asked, which is why the search runs twice rather than taking the longest scene outright.
  *  3. **The total never moves.** Donor and receiver trade the same whole number of seconds, so
  *     the exact-length rule still holds and the generated clips are still priced at what the user
  *     approved.
@@ -1202,20 +1291,44 @@ function widenNarrationWindow(
   const spanEnd = next === -1 ? scenes.length : next;
   const inSpan = (j: number) => j >= i && j < spanEnd;
 
+  // A clip may not GROW — see limit 2. Growing one spends money the user has not approved and
+  // could push the deck past the generated-seconds cap, which lives in `@pikar/cost` and is not
+  // visible from here. A still or a card growing is free.
   const receiver = scenes.findIndex((s, j) => inSpan(j) && s.visual !== "generated_video");
   if (receiver === -1) return null; // a span of nothing but generated clips cannot grow
 
-  // The donor with the most to give, so one trade covers as much as any single trade can.
-  let donor = -1;
-  let most = 0;
-  for (const [j, s] of scenes.entries()) {
-    if (inSpan(j) || s.visual === "generated_video") continue;
-    const slack = s.durationMs / 1000 - MIN_DONOR_SECONDS;
-    if (slack >= deficit && slack > most) {
-      donor = j;
-      most = slack;
+  // The donor with the most to give, so one trade covers as much as any single trade can. Stills
+  // first, clips only if no still can cover the deficit (limit 2b).
+  const bestDonor = (wantClip: boolean): number => {
+    let at = -1;
+    let most = 0;
+    for (const [j, s] of scenes.entries()) {
+      if (inSpan(j) || (s.visual === "generated_video") !== wantClip) continue;
+      // MIN_DONOR_SECONDS is also what keeps a shrunk clip on the 1..15 grid: the floor is 2.
+      const floor = s.durationMs / 1000 - MIN_DONOR_SECONDS;
+      // AND IT MUST STILL FIT ITS OWN LINE. Without this, a donor is chosen on length alone and a
+      // scene already at its narration limit gets robbed — it becomes the next offender, the next
+      // pass robs the scene that just took its seconds, and `repairNarrationWindows` ping-pongs
+      // until its pass budget runs out and the deck refuses `narration_too_long` for free. Observed
+      // on a real 15s deck whose 7-second clip carried 40 characters and was never asked, because
+      // a still that merely LOOKED slack was preferred first (limit 2b).
+      //
+      // The bound is the donor's WINDOW, not its own duration: shrinking scene `j` shortens the
+      // window it speaks into by exactly the seconds it gives away.
+      const ownNeed =
+        s.narration === ""
+          ? Number.NEGATIVE_INFINITY // a silent scene owes its seconds to nobody
+          : Math.ceil(s.narration.length / MAX_CHARS_PER_SECOND);
+      const slack = Math.min(floor, narrationCeilingSeconds(scenes, j) - ownNeed);
+      if (slack >= deficit && slack > most) {
+        at = j;
+        most = slack;
+      }
     }
-  }
+    return at;
+  };
+  let donor = bestDonor(false);
+  if (donor === -1) donor = bestDonor(true);
   if (donor === -1) return null;
 
   const seconds = scenes.map((s) => s.durationMs / 1000);

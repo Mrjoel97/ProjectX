@@ -119,12 +119,17 @@ const parseCredential = (plaintext: string): HubSpotCredential => JSON.parse(pla
 export const hubspotConnectUrl = tenantAction({
   args: { environment: environmentArg, redirectPath: v.optional(v.string()) },
   handler: async (ctx, { environment, redirectPath }): Promise<{ url: string }> => {
-    const config = requireHubSpotConfig();
+    // GATE BEFORE CONFIG. `mintConnectState` holds the connect-start gate, so minting first means
+    // an unauthorized caller is refused with `PROVIDER_NOT_CONNECTABLE` before learning anything —
+    // reading the deployment config first told a stranger whether this provider is set up here.
+    // ponytail: an unconfigured deployment now leaves ONE state row that expires in 10 minutes.
+    // Cheaper than a second gate call, and the row grants nothing on its own.
     const { state } = await ctx.runMutation(api.connectorOAuth.mintConnectState, {
       provider: PROVIDER,
       environment,
       redirectPath: redirectPath ?? DEFAULT_REDIRECT_PATH,
     });
+    const config = requireHubSpotConfig();
     return {
       url: buildHubSpotAuthorizeUrl({
         clientId: config.clientId,

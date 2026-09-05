@@ -2,6 +2,344 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 28 of 29 executed; next 28-27, wave 20
+status: in_progress
+stopped_at: "28-16 COMPLETE (`ce7a083`, `1be383c`, `1fb3956`, `f385725`; verification fixes `040b1f9`). Server-owned discovery intersects passed provider gates with exact active workflow/runtime pins. Authenticated Playwright is green in one real context across desktop/tablet/mobile; all four parked providers and PLAN/REPORT offers remain absent only after positive settle signals, with three PNGs under output/playwright/revenue-pack. Completion self-test is green for all 16 pass/park combinations plus parked/expired/failed/unreachable refusals; report and verify-current pass; strict correctly exits 1. Prior full close remains revenue 337/337, web 657/657 plus typecheck/build, backend sharded 3378/3378, playbook gate green. REVN-01..06 and Phase 28 remain pending because all four provider lanes are parked/hidden. Next: 28-27 owner subset decision and strict named-provider seal. Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times."
+last_updated: "2026-09-02T00:46:42+03:00"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 353
+  percent: 83
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE, a GAP AUDIT, and the TENANTDELETE CONNECTOR ARM
+status: in_progress
+stopped_at: "THE LAST UNOWNED PHASE-28 GAP IS CLOSED (`abba1a2`). `tenantDelete.ts` deleted the four
+connector rows and never asked any provider to revoke, leaving up to four live grants into a
+business CRM, books and payment account with nothing in the record. `revenue-connectors.md` had it
+as `Flagged, not fixed` and NO PHASE 28 PLAN CLAIMED IT. Same defect class 28.1-08 closed for
+billing; the playbook note is now rewritten as CLOSED.
+ORDERING, as with billing: `connectorConnections` is `tenant_credential`, so the page loop deletes
+the sealed blob the revocation needs. The arm is a FOURTH revoke-first block above the loop.
+**PROVEN BY CONSEQUENCE, AND ONLY HUBSPOT CAN PROVE IT** -- `revokeGrant` returns `not_attempted`
+when the row is absent and reaches decryption when it is present, so above the loop yields
+`attempted_failed` and below it would yield `not_attempted`. PayPal and Stripe answer `unsupported`
+from a PURE CLASSIFIER without reading the row, so an assertion on either would have passed with the
+arm on EITHER side. My first version of that test used PayPal and was vacuous.
+**WHAT THE ARM MAY HONESTLY CLAIM IS NARROW.** Only QuickBooks documents a platform-callable
+revocation; Stripe Apps have none documented, PayPal none anywhere, HubSpot cascade unproven. So
+`revokedAtProvider` is true ONLY for `confirmed`, and a fifth field `revokeUpstream` carries the
+closed `RevocationUpstream` enum -- a boolean cannot separate `we asked and failed` from `this
+vendor offers nothing`, which is the collapse the four-value enum exists to prevent. A DOCUMENTED
+ABSENCE IS NOT A FAILURE: reporting one on every erasure trains the reader to ignore the field. The
+enum reaches the `tenant.deleted` payload because the walk deletes the row carrying
+`revocation.upstream` -- afterwards the audit row is the ONLY surviving record.
+**THREE closed shapes had to move together, not two:** the TS union, the Convex
+`providerResultValidator`, AND the hand-written `makeFunctionReference` return type for
+`authorizeTenantDeletion`, which does NOT follow handler inference. `tsc` caught the third. The 16
+new payload keys were hand-added to `AUDIT_VIEWER_EVENTS` for the same reason as 28.1-08 -- built
+from a template at the write site, so no literal exists for a forward scan.
+Entries are APPENDED and CONDITIONAL: a tenant with no connector rows still gets exactly the
+original three, which is its own regression test.
+**7 MUTATIONS, 7 KILLED, restored byte-identical -- and the round caught a VACUOUS TEST OF MINE:**
+the `sandbox and production disagree` case paired a sealed grant with an UNSEALED one, but an
+unsealed grant is never called and contributes no upstream value, so the list had ONE element and
+`take the first` survived. It now uses two grants that are both CALLED and answer DIFFERENTLY
+(ciphertext without an IV returns `not_attempted` without throwing).
+GATES: backend sharded **1516/1516 + 1717/1717 = 3233** (up exactly 8 = tenantDelete 13 -> 21),
+contracts 93/93, `tsc --noEmit` exit 0, `biome check` exit 0, playbook gate silent.
+**REMAINING PHASE 28 GAPS ALL HAVE PLANS:** connectorConnections.ts + Connections UI + the ungated
+connect-START (28-09); the five revenue* modules (28-12/13/14); `check-phase28-completion.mjs`
+(28-27); `recordLaneFailure` has no production caller BY DESIGN.
+**NEXT AND IT NEEDS THE OWNER:** (1) seal a gate row --
+`check-provider-lane.mjs --provider hubspot --seal-decision from-owner --apply` (shells out to
+`npx convex run`, which THIS SESSION MUST NOT RUN); (2) register
+`http://localhost:3211/connectors/hubspot/callback/production` in the HubSpot developer app and
+complete the consent; (3) `smoke-hubspot-read.mjs --revoke`; (4) 28-22 judges on real evidence and
+waves 8-20 unblock. Deployment env already set: `CONNECTOR_CREDENTIAL_KEY_V1` (32 bytes verified),
+`HUBSPOT_OAUTH_CLIENT_ID`/`_CLIENT_SECRET`/`_REDIRECT_URI`.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-31T01:30:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 336
+  percent: 80
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE and a connector-plane GAP AUDIT
+status: in_progress
+stopped_at: "GAP AUDIT of the connector plane (`1eaf5d2`), after the callback slice (`ad12c4e`).
+METHOD: scanned every exported Convex function in the 17 connector-plane modules for callers
+anywhere in packages/apps/scripts. Most unconsumed surface is the phase being 11 of 29 -- the
+revenue tools and the UI that consume it are 28-09/28-12/28-13, and the roadmap rows already say
+so. TWO WERE REAL.
+**(1) `hubspot.hubspotReadForTenant` DELETED.** An `internalAction` taking an ARBITRARY `tenantId`
+and returning the FULL unsanitized `HubSpotReadResult`, carrying a doc comment naming
+`scripts/smoke-hubspot-read.mjs` as its caller -- that script calls `hubspot:hubspotReadEvidence`.
+No test, no script, no plan referenced it. It left HubSpot as the ONLY lane with three read
+surfaces where QuickBooks, Stripe and PayPal each have exactly two (`readEntity` +
+`<provider>ReadEvidence`). A leftover from before the sanitized evidence read existed in the same
+plan.
+**(2) `stripeConnector.openInvoices` HAD NO TEST OF ANY KIND** -- the only export in that module
+without one, while its three siblings each pin the lane gate. The gate could have been dropped from
+`openInvoices` alone and every suite in the repo would still have been green. Six tests added; the
+gate refuses on unsealed, `parked` AND `failed` lanes and refuses BEFORE the request.
+**MUTATION-PROVEN:** swapping `gatedRead` for `readEntityRows` in `openInvoices` ALONE killed
+exactly the three gate cases and nothing else; restored byte-identical.
+**TWO LESSONS FROM WRITING THOSE SIX TESTS:** `tsc` caught two real errors a GREEN vitest run was
+silent over (`Projection` is a discriminated union; the tests reached `.items` without narrowing) --
+the 28-03/28-07 lesson recurring. And narrowing the draft case is what exposed the real behaviour:
+a rejected row degrades the read to **`partial`** with `missing` naming the gap, NOT `ready`. The
+assertion I first wrote said `ready`, which would have passed ONLY IF THE DROP WERE SILENT.
+**KNOWN GAPS THAT REMAIN, ALL OWNED EXCEPT ONE:** `connectorConnections.ts` + Connections UI +
+the ungated connect-START (28-09); `revenueTools`/`revenueTelemetry`/`invoiceReminders`/
+`revenueCrm`/`revenueFinance` modules absent (28-12/13/14); `scripts/check-phase28-completion.mjs`
+absent though watch-registered and cited by the playbook's release table (28-27);
+`providerGates.recordLaneFailure` has no production caller (by design -- future lane refresh).
+**THE ONE UNOWNED GAP: `tenantDelete.ts` does not know about connector connections.** Erasure
+DELETES the four providers' rows (they are `tenant_credential`) but never attempts upstream
+revocation and the deletion report says nothing about it -- the SAME defect class 28.1-08 just
+closed for billing. `revenue-connectors.md` records it as `Flagged, not fixed` and NO PHASE 28 PLAN
+CLAIMS IT. `disconnectForTenant` exists on all four lanes, so the arm is buildable today.
+GATES: backend sharded `--shard=1/2` **1508/1508** and `--shard=2/2` **1716/1717** = 3225 (up
+exactly 6 = the new tests); the single shard-2 failure is `media.test.ts`, green ALONE at 255/255
+and already recorded as an order-dependent flake. A `workflowPackBinding.test.ts` failure seen
+twice earlier also cleared (35/35 alone, then 1508/1508 in shard 1) -- its slowest case is 14.5s,
+the known load-flake class, and it imports `@pikar/contracts` skill bodies, disjoint from
+everything this session touched. `tsc --noEmit` exit 0, `biome check` exit 0, playbook gate silent,
+lane gate `consistent`, readiness `passed`.
+SHARDING RECIPE THAT WORKS: from `packages/backend`, `npx vitest run --shard=1/2` then `--shard=2/2`
+-- 57 files each, both well inside the Bash 10-min cap. Do NOT pass `--root packages/backend` from
+the repo root; it breaks convex-test's `_generated` glob.
+NEXT: the owner steps from the block below (seal a gate row, register the redirect URI, run the
+HubSpot revoke probe), then 28-22 judges on real evidence.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-31T00:45:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 336
+  percent: 80
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28
+current_plan: 11 of 29 executed -- plus the 28-09 CALLBACK SLICE (out of wave order, deliberate)
+status: in_progress
+stopped_at: "PHASE 28 RESUMED. `ad12c4e` registers the three connector OAuth callback routes.
+**THE PHASE WAS DEADLOCKED AND THE DEADLOCK WAS STRUCTURAL, NOT A CREDENTIAL GAP.** Wave 7
+(28-22..25) judges each lane pass/park from live evidence; live evidence needs a completed OAuth
+grant; a grant needs a callback route; and 28-09, which registers the routes, `depends_on`
+28-22..25. `hubspotAuth.completeHubSpotConnect`, `quickbooksAuth.handleCallback` and
+`stripeAuth.handleCallback` had all shipped as `internalAction`s whose comments said the route was
+a later plan's. NOTHING COULD EVER PASS. Owner chose (2026-08-30) to pull the routes forward.
+**THE GATE IS THE ADMISSION AXIS, AND THAT IS THE WHOLE FIX.** `providerGates.connectPermitted`
+(new internalQuery) permits a callback when a gate ROW exists, the lane is not `failed`, `reviewBy`
+is future, and `admissionPermits(admission, environment)` -- the rule now EXPORTED from
+`@pikar/revenue` contracts rather than copied. It is deliberately NOT `availableProviders`: gating
+the callback on `lane === passed` re-closes the loop, while gating on the admission opens it
+exactly where the register says it should, since `approved_production` means PERMISSION TO START.
+**A `parked` lane accepts a callback and stays invisible to every tenant.** Do not re-point this at
+`availableProviders`.
+PAYPAL HAS NO ROUTE AND MUST NOT GET ONE -- `paypalAuth.beginConnect` refuses by design
+(`PAYPAL_PARTNER_SURFACE_GAP`) and mints no state, so there is nothing to call back. Three routes,
+not four.
+PROVEN: the gate runs BEFORE the provider handler by CONSEQUENCE (after a refused callback the
+one-time state is still UNBURNED, which can only be true if nothing consumed it -- and
+`consumeConnectState` PATCHES `usedAt` rather than deleting, so the burn marker is the assertion,
+never a row count). A callback ALWAYS redirects: `requireQbApp`/`requireStripeApp` read config
+BEFORE consuming state and throw by name, which without the route's catch is a 500 on the Convex
+site origin plus a provider message in a log line. connectorCallbacks 27/27.
+TWO REAL SUITE FAILURES, BOTH WORTH THE NOTE: (1) `microsoftAuth.test.ts` pins `http.route(` at a
+TOTAL and went 8 -> 11 -- the census working, updated deliberately. (2) `billingWebhook.test.ts`
+scanned the WHOLE stored row including `_creationTime` for the fixture's `1200`, and
+`1788120082071` contains it -- a RANDOM red on a clock, now a closed key set over the row's own
+fields.
+**ENV PREREQUISITES FOUND AND SET ON THE LOCAL DEPLOYMENT (2026-08-30):**
+`CONNECTOR_CREDENTIAL_KEY_V1` was UNSET -- a grant would have completed the exchange and then
+thrown at the seal, wasting the consent. Generated per the playbook's never-print procedure and
+validated at exactly 32 bytes. `HUBSPOT_OAUTH_CLIENT_ID`/`_CLIENT_SECRET` set from `.env`
+(`HUBSPOTAPP_*`; owner will rotate), `HUBSPOT_OAUTH_REDIRECT_URI` =
+`http://localhost:3211/connectors/hubspot/callback/production`. QuickBooks (`QUICKBOOKS_*`) and
+the Stripe APP (`STRIPE_APP_*`) have NO credentials anywhere -- and the Stripe App pair is NOT the
+`sk_test_` merchant key, which belongs to 28.1.
+**WHAT IS STILL OWED, IN ORDER, AND THE FIRST TWO NEED THE OWNER:**
+ 1. Seal a gate row so the callback is permitted at all -- today `connectPermitted` refuses
+    everything because NO providerGates row exists anywhere. `node scripts/check-provider-lane.mjs
+    --provider hubspot --seal-decision from-owner --apply` records
+    `admission: approved_production, lane: parked`, which is exactly the evidence-gathering state.
+    It shells out to `npx convex run`, which THIS SESSION MUST NOT RUN.
+ 2. Register `http://localhost:3211/connectors/hubspot/callback/production` in the HubSpot
+    developer app, then complete the consent in a browser.
+ 3. `node scripts/smoke-hubspot-read.mjs --revoke` -- the DESTRUCTIVE cascade probe that answers
+    `revoke-cascades-to-access-tokens`. Its `--self-test` is green (20 cases, every guard observed
+    refusing), so the validator is proven; only the observation is missing.
+ 4. Then 28-22 judges pass or park on real evidence, and waves 8-20 unblock.
+**KNOWN GAP, OWNED BY 28-09 TASK 2:** the connect-START (`hubspotConnectUrl`,
+`quickbooksAuth.beginConnect`, `stripeAuth.beginConnect`) is still an ungated `tenantAction`. Once
+a park row is sealed, a tenant calling it directly could complete a grant against a parked
+provider. Bounded and owner-controlled (needs BOTH configured credentials AND a sealed row) and
+the credential is inert because every reader gates on `availableProviders` -- but it is a stored
+credential nobody uses. Recorded in revenue-connectors.md's Known gaps.
+GATES: connectorCallbacks 27/27, six affected suites 221/221, full backend 3219 tests with the two
+failures above now fixed, revenue 296/296, `tsc --noEmit` exit 0 (backend + revenue), `biome check`
+exit 0 across both packages, playbook gate silent, lane gate `consistent`, readiness `passed`,
+`git diff --stat HEAD` empty for packages/ and docs/.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-30T23:15:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 336
+  percent: 80
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28.1
+current_plan: 11 of 11 executed -- 28.1 CODE COMPLETE AND SEALED
+status: phase_complete
+stopped_at: "28.1 SEALED at 28.1-08 (`374b3aa` raiseAdjustment, `dc2893b` the erasure arm + the
+seal). All eleven plans landed. **THE PHASE IS CODE COMPLETE AND HAS NEVER SPOKEN TO STRIPE**, and
+those two facts must be read together: `requirements-completed: []` and BILL-01..BILL-06 ALL STAY
+PENDING.
+**28.1-10 gave the rollup an input.** 28.1-07 shipped a correct, bounded, 28-mutation-proven invoice
+rollup that NOTHING fed: the daily cron ran, found nothing due, and did nothing, for every tenant,
+forever. `raiseAdjustment` is now its ONE writer -- an `ownerMutation` (a tenant must not bill
+themselves or anyone else), with `charges[].raisedBy` REQUIRED and taken from `ctx`, and
+`periodForPost` STRIPPING it so it never reaches Stripe. `kind` is hard-coded with a source
+assertion, because a parameter is how the metered kind gets written by accident.
+**28.1-08 closed the loop that kept charging a deleted tenant's card.** The billing arm sits ABOVE
+the page loop, because `billingCustomers` is `tenant_owned` and the loop deletes the row holding the
+`subscriptionId` -- an arm below it reports `hadSubscription: false`, indistinguishable from a tenant
+who never subscribed. The test proves ordering by CONSEQUENCE (`revokedAtProvider` cannot be true
+unless the read preceded the walk), not by reading source order. `terminateBilling` never throws AND
+never reports a silent success; those are opposite failure modes and both are tested.
+**The naming boundary is now ENFORCED BY THE SUITE:** nothing under `packages/billing` or
+`convex/billing*` may name `STRIPE_APP_`, `connectorFetch`, `providers/stripe`, `stripeAuth` or
+`stripeConnector`, and `BILLING_STRIPE_SECRET_KEY` has exactly ONE consumer. Proven by mutation.
+**TWO MEASUREMENT DEFECTS FOUND IN MY OWN TOOLING, and they are the transferable lesson:**
+(1) the mutation harness wrote mutants with `io.open(...).write(...)` and never closed the handle,
+so three of eight never reached disk before vitest read the file and were reported SURVIVED -- false
+accusations rather than false clean bills, which was luck; the replacement `fsync`s and reads the
+file back before running. (2) One mutant then survived FOR REAL: deleting the currency guard left a
+bare `rejects.toThrow()` green because the SCHEMA rejected `currency: undefined` downstream. The
+refusal was real and the test was vacuous. Guard tests now pin their own MESSAGE.
+GATES: billing suites 431/431 across 10 affected files, core 1234/1234, `tsc --noEmit` exit 0 run
+SEPARATELY, `biome check` exit 0, playbook gate silent, `git diff --stat HEAD` empty.
+ENV REALITY: `BILLING_STRIPE_SECRET_KEY` was set on the LOCAL deployment 2026-08-30 (owner-supplied
+`sk_test_`, owner said they will rotate). `BILLING_STRIPE_PRICE_ID` and
+`BILLING_STRIPE_WEBHOOK_SECRET` are UNSET EVERYWHERE, and Convex env vars are PER-DEPLOYMENT -- the
+cloud dev and production deployments carry no billing variable at all.
+**NEXT: PHASE 28 (Connector-Backed Revenue Pack), 11 of 29 plans.** All four read-only rails are
+BUILT and NONE has spoken to its provider: `node scripts/check-provider-lane.mjs --provider <p>`
+reads `consistent` for hubspot/quickbooks/stripe/paypal, and CONSISTENT IS NOT PASSED -- each still
+carries one PEND row for a live read/revoke that has never run. `.env` holds HubSpot and PayPal APP
+credentials (`HUBSPOTAPP_*`, `PAYPALAPP_*`) which MAY unblock those two lanes; there are NO
+QuickBooks credentials and NO `STRIPE_APP_*` (Phase 28's Stripe rail needs a registered Stripe App's
+OAuth pair, NOT the `sk_test_` merchant key -- that one belongs to 28.1 and using it here would read
+Pikar's own books through a surface built to read a customer's).
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-30T21:55:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 36
+  total_plans: 421
+  completed_plans: 336
+  percent: 80
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
+current_phase: 28.1
+current_plan: 9 of 11 executed (28.1-01 webhook receiver + dedupe table, 28.1-02 Dashboard config
+mirror, 28.1-03 pure tax posture + event-to-phase mapping, 28.1-04 outbound transport + hosted
+Checkout/Portal, 28.1-05 tenant<->Stripe-customer mapping, 28.1-06 billingEvents book of record,
+28.1-07 scheduled invoice rollup, 28.1-09 the tenant-facing BillingPanel, 28.1-11 the
+adversarial-audit fix wave) -- 28.1 IN PROGRESS
+status: executing
+stopped_at: "28.1-11 COMPLETE (`5add3ec` correlations, `0bb36d0` dedupe+attribution, `2ce7b7b`
+double-invoice/card/re-subscribe, `064f5f8` biome, `d811cc7` cleared-hold clock, `86a1dea` the four
+vacuous guards + playbook). **THE ADVERSARIAL-AUDIT FIX WAVE: all 15 confirmed defects closed.**
+A 10-agent audit over waves 1-7 (6 lenses + 3 batch skeptics + 1 synthesis) gave 37 candidates ->
+27 survivors -> 15 distinct defects, recorded in
+`.planning/audits/28.1-billing-audit-2026-08-30.md`. Owner chose to fix ALL FIFTEEN as one wave
+before 28.1-10 and the seal. NINE behavioural, FOUR guards that could not fail.
+**#1/#6/#7 are ONE root cause:** a correlation built from an entity that REPEATS instead of from
+the movement that is UNIQUE -- `billingLedger.ts:142` answers a repeat by returning the first row
+and DISCARDING the amount, so only a customer's first bank transfer was ever booked.
+**#3:** a failed rollup discarded the invoice it had already created and the daily cron guarantees
+the retry lands past Stripe's ~24h key-pruning horizon -> a SECOND BILL. A failed period now KEEPS
+`stripeInvoiceId` and is excluded from the retry sweep.
+**#8+#13 had to be ONE edit,** and the fix DEVIATES from the audit's and the plan's prescription:
+the cleared `billingUnapplied` row is ZEROED, not deleted, because deleting it deletes the new
+`amountAt` ordering guard and Stripe redelivers for days -- the pre-clear event would re-insert the
+old figure as a hold nothing is left to clear. Reopening a zeroed row restarts `observedAt`.
+**THE FOUR VACUOUS GUARDS:** `codeOf` truncated every line at `https://`; `billingWebhook.test.ts`
+still ran the UNREPAIRED 28.1-07 stripper (203 of 556 non-blank lines, NONE of the module's three
+exports, both tripwires in the surviving half); the append-only `patch` guard asked for a table name
+as `patch`'s first argument, which Convex never passes -- zero reachable matches.
+Root cause of the stripper defect is DUPLICATION (repaired once in 28.1-07, in two of three files),
+so there is now ONE copy in `packages/backend/__fixtures__/sourceScan.ts`.
+**EVERY FINDING SEEN RED BEFORE ITS FIX** except #2 and one arm of #9, whose code paths were
+UNREACHABLE so a new test passed VACUOUSLY -- those two are mutation-proven and marked as such.
+Gates: backend **3150/3150** across 113 files, billing **156/156**, core **1234/1234**, `tsc
+--noEmit` exit 0 in backend and billing run SEPARATELY, `biome check` exit 0, and `git diff --stat
+HEAD` EMPTY so the committed HEAD is the tree that was tested.
+NOTHING HAS STILL EVER SPOKEN TO STRIPE -- no `BILLING_STRIPE_*` is set in any deployment.
+`requirements-completed: []`. **BILL-04 STAYS PENDING**: nothing writes a `billingPeriods` row.
+**NEXT: 28.1-10** (owner-raised adjustments -- `raiseAdjustment` as the ONE writer of
+`billingPeriods.charges`, owner-only, provenance from `ctx`, refused on a non-`pending` period),
+THEN 28.1-08 LAST (tenant-deletion billing arm + phase seal, carrying the constraint that billing
+termination runs BEFORE the deletion page loop while `billingCustomers` still holds the id).
+NOTE: this top block was STALE -- it reported 28.1-03 and never recorded 28.1-04 through 28.1-09,
+all complete on disk with SUMMARYs. The plan counter is corrected to 11 (28.1-09/-10/-11 were
+authored after 28.1-08 and all three run BEFORE it). `completed_plans` incremented by SIX for the
+plans this block reconciles; the frontmatter total (421) still does not match the files on disk and
+was not reconciled here.
+Do NOT run any `gsd-tools state *` subcommand against this file -- it has corrupted it seven times.
+Working branch feat/27-02-pack-contracts."
+last_updated: "2026-08-30T18:40:00.000Z"
+progress:
+  total_phases: 53
+  completed_phases: 35
+  total_plans: 421
+  completed_plans: 334
+  percent: 79
+---
+
+---
+gsd_state_version: 1.0
+milestone: v2.0
+milestone_name: - Platform -> Private Beta
 current_phase: 28.1
 current_plan: 3 of 8 executed (28.1-01 webhook receiver + dedupe table, 28.1-02 Dashboard config mirror, 28.1-03 pure tax posture + event-to-phase mapping) -- 28.1 IN PROGRESS
 status: executing
@@ -2526,6 +2864,14 @@ Progress (v2.0): [███░░░░░░░] 25%  (4/16 phases complete; Ph
 ## Accumulated Context
 
 ### Roadmap Evolution
+
+- Phase 33.2 inserted after Phase 33.1 (2026-09-04): **Storyboard authoring moves to a measured model pin.** The media-director turn falls through `runSpecialistTurn`'s skill-name lookup to `DEFAULT_MODEL` (`or/openai/gpt-4o-mini`), the pin cost.ts itself calls a VOLUME pin; the 2026-09-04 audit measured 55 storyboards -> 28 clean / 10 salvaged / 17 refused, but 17 of the 27 failures were the `widenNarrationWindow` donor bug (fixed 32099f5), so the post-fix baseline is unknown and must be re-measured. OWNER DECISIONS: prioritise the model upgrade over breadth features (parked until a reel completes; one has, 2026-09-04). Design: a fourth lane `MEDIA_MODEL`/`MEDIA_FALLBACK_MODEL` (aliased first, moved on measurement); the bake-off drives `dispatch:runMedia` on seeded eval tenants and reads the plan row the parser wrote (no judge); candidates gpt-4o-mini (baseline), gpt-5.6-luna, claude-sonnet-5, gpt-5.6-sol; decision rule fixed BEFORE the run (clean two-deck passes of 24, clock truncation disqualifies, repin only at >= 3 passes over baseline). Side fix: `groundMediaBrief` re-bought ~$0.21 research on every retry; findings are now reused per (tenant, question hash, 24 h).
+- Phase 33.2 COMPLETE (2026-09-05): **the storyboard pin moved to `or/openai/gpt-4.1-mini` by the pre-committed rule** (`33.2-BAKEOFF.md`, ADR-032). On the 90 s media clock with the executed model asserted from spend rows: gpt-4o-mini 14/24 clean (baseline), gpt-5.6-luna 11, gpt-4.1-mini 18 (+4 >= 3), claude-sonnet-5 and gpt-5.6-sol DISQUALIFIED (both timed out on the production path; sonnet reasons by default on OpenRouter and the lane sets no effort — a fair re-measure is a LANE change first). Fallback = gpt-4o-mini. Side findings shipped: the agent loop's silent fallback is now audited (`llm.fallback`), the media turn has its own 90 s clock, research is reused per brief. Task 3 DONE 2026-09-05 (owner-verified reel). 33.2-04 (same day, owner-reported gaps): canvas Generate now flips the plan to `delivering` and the render terminal to `done` (no second Approve / second bill); ONE model resolver in `convex/lib/models.ts` — five module-local copies had sent `or/...` ids to api.openai.com since 2026-08-27, failing every vault ingest incl. all four reels. Dev deployment moved to the owner's NEW OpenRouter account key 2026-09-05; production still holds the old account's key.
+
+- Phase 33.1 inserted after Phase 33 (2026-08-30): **Media provider migration to OpenRouter** (URGENT — a dated deadline, not a preference). THREE drivers, in the order they bind: (1) `plans.persistDeck`'s `artDirection` arg validator omits `music`, which `parseArtDirection` emits and `schema.ts` stores — Convex `v.object` is closed, so EVERY storyboard carrying a `Music:` line is rejected at the write boundary and `runMedia` throws AFTER the memo landed; proven in isolation (baseline green, +music red: `Validator error: Expected one of null, object`). Live evidence: 2 of 3 media runs on 2026-08-30 produced NO `media.deck_*` audit terminal at all. Introduced by `e2b281f`, which touched parser/schema/price-table/renderer/skill-body and never `plans.ts`; `dispatch.test.ts` has ZERO `Music` fixtures where `storyboard.test.ts` has 14. (2) OpenAI withdraws `/v1/videos` and all `sora-2` aliases on **2026-09-24** (announced 2026-03-24) — and `packages/cost/src/media.test.ts:299` `RUNWAY_DAYS=14` turns the cost suite RED on **2026-09-10** while `succession.replacementWiredUp !== true`. (3) The OpenAI account is out of credit: the two most recent `mediaJobs` rows read `failureReason: "credit_balance_exhausted"` (OpenAI's own code — the string appears nowhere in this repo), so NO media has generated since ~2026-08-17. The text plane moved to OpenRouter at `845f4b1`; the media plane never did and still posts to `api.openai.com` with `OPENAI_API_KEY`.
+  **OWNER DECISIONS (2026-08-30, both explicit):** video = `x-ai/grok-imagine-video` via OpenRouter, NOT ADR-026's `veo-3.1-lite`. This REVERSES ADR-026's decisive argument (no new data-transfer counterparty) and needs a superseding **ADR-027** — xAI becomes a new counterparty for customer scene prompts, accepted knowingly. Bought with it: durations **1–15, any integer** (vs Veo's 4/6/8 and Sora's 4/8/12), which RETIRES the `illegal_generated_duration` failure class outright rather than narrowing it — the second of the two defects the owner hit live. Cost 720p $0.07/s vs Sora $0.10/s (Veo would have been $0.03–0.05/s; the grid won over the price). Images stay `gpt-image-2` but move onto OpenRouter: same model, ADR-024's image half is untouched by ADR-026 and remains valid, ~4x cheaper than Grok's images, and its OpenRouter endpoint advertises **`n`: 1–10**, which is the batch capability the owner asked for, natively. Grok images were REJECTED for `n: {min:1,max:1}` — no batch.
+  **Verified live against OpenRouter's API on 2026-08-30, not assumed:** `/api/v1/videos` is async (`202` → `polling_url` → `unsigned_urls[0]`), structurally the same shape `pollOpenAiVideoTask` already implements; `/api/v1/images` is synchronous and returns `data[0].b64_json`, which `submitLine` ALREADY parses byte-identically. Seedance was ruled out independently by both this session and ADR-026 on `packages/cost/src/media.ts` rule 1 — it bills per video TOKEN and cannot be pre-computed before a reservation exists.
+  Lane: worktree `C:/Users/expert/AppData/Local/Temp/pikar-lane-34`, branch `feat/34-media-openrouter`, cut from `feat/media-rail-gaps` (NOT from main or the billing branch — ADR-026 and the runway tripwire exist only there). Must be merged back into `C:/Users/expert/Desktop/Pikar-Ai` for live verification: the local Convex DB is cwd-relative, so a fresh worktree comes up EMPTY.
 
 - Phase 25.1 inserted after Phase 25: Consistency and Reliability Hardening (URGENT) — 2026-08-21 owner-directed, from the Pikar Consistency Audit rev 2 (gaps G1/G2/G3/G9/G11/G12): honest terminal states on the media render path, renderReel under the action retrier, a stuck-work watchdog cron, image/reel vault persistence, approvals feedback + image-arm honesty, memo-card markdown + research sources, env-manifest completion, dead fal-webhook removal, Sora-cutover ADR, DLQ visibility.
 

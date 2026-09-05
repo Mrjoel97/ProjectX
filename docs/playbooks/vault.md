@@ -1,3 +1,42 @@
+> Last verified: 2026-09-05 (33.2-06 — the PDF/image hosted-extraction rail (`extractHosted`, and
+> `fanOutPages` through it) calls `resolveModel(DEFAULT_MODEL)` — `or/openai/gpt-4o-mini` at
+> OpenRouter — instead of a literal direct `openai("gpt-4o-mini")`. Probed 2026-09-05 through the
+> same provider: a PDF file part came back verbatim, a PNG file part was read. Spend is recorded
+> under DEFAULT_MODEL. `lib/models.test.ts`'s tripwire now also fails on a literal `openai("…")`
+> or a direct `openai.transcription(…)` anywhere outside lib/models.ts. OPENAI_API_KEY is no
+> longer needed by any vault rail.)
+>
+
+> Last verified: 2026-09-05 (33.2-05 — **TRANSCRIPTION RIDES OPENROUTER, and Retry on a reel
+> re-INGESTS instead of re-extracting the mp4.** (1) `vaultTranscribe` calls
+> `transcriptionModel(OR_TRANSCRIPTION_MODEL)` = `or/openai/whisper-1` through `lib/models.ts` (the
+> OpenAI provider on OpenRouter's base URL — `/audio/transcriptions` is wire-compatible; probed
+> 200 on mp3 AND mp4, billed per second at the same $0.006/min). The bill is read from the
+> response body (`transcriptionUsage`): on the routed id the SDK reports NO duration, and the old
+> `priceTranscription(duration ?? 0)` would have recorded $0 and walked past the kill switch.
+> OPENAI_API_KEY is no longer needed for STT. (2) `retryExtraction` decides by "does the row
+> already carry its text", not "does it have bytes": a rendered reel has both, and the old
+> `!storageId` test sent its mp4 down the extraction rail — `unsupported_format`, the "re-save it
+> as PDF, DOCX, XLSX or plain text" popup the owner hit on every reel. The folder counter logic
+> now runs before BOTH branches. Measured: vaultSweep, vaultTranscribe, intake, env, lib/models
+> green; tsc 0 outside the connector lane. Owner action: press Retry on the four reels again.)
+>
+
+> Last verified: 2026-09-05 (33.2-04 â€” **EVERY VAULT INGEST THAT REACHED `extractGraph` HAD FAILED
+> SINCE 2026-08-27, `ingest_failed`, 69 rows including all four rendered reels.** Root cause:
+> `845f4b1` moved `DEFAULT_MODEL` to `or/openai/gpt-4o-mini` and llm.ts learned the `or/` route, but
+> vaultLlm.ts / vaultDigest.ts (and blueprint, onboarding, voiceDoc) each kept a module-local
+> `openai(id.replace(/^openai\//, ""))` â€” the literal `or/...` id went to api.openai.com â†’ 404 â†’
+> retries exhausted â†’ `onIngestComplete` marked the doc failed. The dev log said it plainly
+> (`The model or/openai/gpt-4o-mini does not exist`) and was read as another lane's. Fix: ONE
+> resolver, `convex/lib/models.ts` (`resolveModel`, `openRouter()`), imported by all six; a source
+> tripwire in `lib/models.test.ts` fails on any new copy. Owner-visible: the reels ARE in the vault
+> (`kind: "reel"`, category videos, transcript as text, mp4 as bytes) but sat `failed`; the vault's
+> per-doc Retry (`vaultSweep.retryExtraction`, accepts `failed`) re-runs them on the fixed route.
+> Still DIRECT-OpenAI by design and needing OPENAI credits: the PDF hosted rail (vaultExtract
+> `openai("gpt-4o-mini")` with a file part), whisper transcription (vaultTranscribe), intake.)
+>
+
 > Last verified: 2026-08-29 (29-W3-TAIL-FIX2 — citation sweep, prose only, no vault code changed.
 > The four `vaultRag.ts:390` citations for `vaultRag.embedDoc`'s `SMOKE::` short-circuit are now the
 > SYMBOL (`SMOKE_PREFIX`); the line was still correct today, which is exactly when a line number is
@@ -17,6 +56,7 @@
 > hold the SAME two numbers as `vaultGround.ts`'s caps and nothing couples the pairs, which is now
 > what the sentence says. Prose-only; no vault code changed.)
 >
+
 > Last verified: 2026-08-29 (**29-FIN-06 — `vaultGround.ts`'s `SMOKE::` SEAM IS GATED ON THE
 > OPERATOR, NOT ON THE QUERY.** It was the last tenant-supplied string on the knowledge plane that
 > could select an offline fixture: `vaultGround` is a `tenantAction`, and every
@@ -286,6 +326,7 @@
 > behavioural test can reach it and a source scan is the only instrument there is. The DRIVE one
 > has a real behavioural test — a content-shaped `row.id` is dropped and reported
 > `partial/provider_error`, the state that arm is the sole producer of.)
+
 > Last verified: 2026-08-28 (**WAVE-2 REMEDIATION, PART A — the two vault-plane honesty defects, and
 > the one that was reported fixed and was not.**
 >
@@ -322,6 +363,7 @@
 > `knowledgeVaultDrive.ts`'s private `settle` and `KnowledgeAdapterResult` are gone. See
 > `knowledge-search-routines.md` for why, and for the per-source vs per-run clamp split.)
 >
+
 > Last verified: 2026-08-28 (**DRIVE IS A KNOWLEDGE SOURCE, AND IT IS METADATA ONLY — BY
 > CONSTRUCTION, NOT BY POLICY** — Phase 29 plan 29-02 task 2).
 >

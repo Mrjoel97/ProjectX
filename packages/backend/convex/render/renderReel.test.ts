@@ -13,7 +13,8 @@
 
 import type { RunId } from "@convex-dev/action-retrier";
 import retrierTest from "@convex-dev/action-retrier/test";
-import { MEDIA_DEFAULT_VIDEO, MEDIA_DEFAULT_VOICE } from "@pikar/cost/media";
+import { MUSIC_BLOCK_INDEX, MUSIC_INPUT_NAME } from "@pikar/core/render";
+import { MEDIA_DEFAULT_VIDEO, MEDIA_DEFAULT_VOICE, MEDIA_MUSIC_STOCK } from "@pikar/cost/media";
 import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -554,5 +555,90 @@ describe("D2: a non-JSON 200 from the render route is a failed terminal, not an 
     const rows = await deadLetters(t);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.error).toBe("route_bad_response");
+  });
+});
+
+// ── 33.1-06: the music bed is an OPTIONAL input — present when landed, never waited on ──────────
+//
+// The bed used to come from a baked library and had no row. It is now fetched from Openverse onto
+// a $0 stock row at MUSIC_BLOCK_INDEX. The property the old design bought — "a reel never waits on
+// its music" — is kept by construction here: `batchToRender` reads the bed row if it has landed and
+// says nothing about it otherwise. A failed or missing bed is a bedless reel (the assembler's WARN
+// path), never a refusal and never a stall.
+describe("33.1-06: the music bed is optional — shipped when landed, silently absent otherwise", () => {
+  const ART = {
+    palette: ["#0B4F4A deep teal"],
+    mood: "Quietly confident.",
+    lighting: "Warm golden light from camera left.",
+    composition: "Off-centre right.",
+    environment: "A small office.",
+    texture: "35mm grain.",
+    references: ["Gregory Crewdson"],
+    avoid: "No stock-footage handshakes.",
+  };
+  const bedRow = (t: T, planId: Id<"plans">, landed: boolean) =>
+    t.run(async (ctx) => {
+      const storageId = landed
+        ? await ctx.storage.store(new Blob([new Uint8Array([9, 9, 9])], { type: "audio/mpeg" }))
+        : undefined;
+      return ctx.db.insert("mediaJobs", {
+        tenantId: A,
+        planId,
+        batchId: "batch_render",
+        blockIndex: MUSIC_BLOCK_INDEX,
+        provider: "stock",
+        kind: "audio",
+        model: MEDIA_MUSIC_STOCK.model,
+        spec: { kind: "stock", media: "audio", seconds: 16 },
+        promptHash: "0".repeat(64),
+        status: landed ? "succeeded" : "failed",
+        ...(landed
+          ? { assetStorageId: storageId, mimeType: "audio/mpeg" }
+          : { failureReason: "stock_no_match" }),
+        estUsd: 0,
+        createdAt: T0,
+        updatedAt: T0,
+      });
+    });
+  const inputsOf = (t: T, batchId: string) =>
+    t.query(internal.render.renderReel.batchToRender, { tenantId: A, batchId });
+
+  test("a LANDED bed becomes the music.mp3 input and musicFile — the assembler is told where it is", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedMidRender(t, {
+      planPatch: { artDirection: { ...ART, music: "upbeat" } },
+    });
+    const jobId = await bedRow(t, planId, true);
+    const r = await inputsOf(t, batchId);
+    expect(r.ok, `refused: ${r.ok ? "" : r.reason}`).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.music).toBe("upbeat");
+    expect(r.value.musicFile).toBe(MUSIC_INPUT_NAME);
+    expect(r.value.inputs).toContainEqual({ name: MUSIC_INPUT_NAME, jobId });
+  });
+
+  test("a FAILED bed is a bedless reel — the batch still renders and nothing names a track", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedMidRender(t, {
+      planPatch: { artDirection: { ...ART, music: "upbeat" } },
+    });
+    await bedRow(t, planId, false);
+    const r = await inputsOf(t, batchId);
+    expect(r.ok, `refused: ${r.ok ? "" : r.reason}`).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.music).toBe("upbeat"); // the mood still reaches the sidecar
+    expect(r.value.musicFile).toBeUndefined();
+    expect(r.value.inputs.some((i) => i.name === MUSIC_INPUT_NAME)).toBe(false);
+  });
+
+  test("no mood declared means no bed input, even if a stray audio row landed", async () => {
+    const t = harness();
+    const { planId, batchId } = await seedMidRender(t);
+    await bedRow(t, planId, true);
+    const r = await inputsOf(t, batchId);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.musicFile).toBeUndefined();
+    expect(r.value.inputs.some((i) => i.name === MUSIC_INPUT_NAME)).toBe(false);
   });
 });

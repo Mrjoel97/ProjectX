@@ -100,6 +100,8 @@ const CONVEX_MODULES = [
   "auth.ts",
   "billing.ts",
   "billingApi.ts",
+  "billingLedger.ts",
+  "billingRollup.ts",
   "billingWebhook.ts",
   "blueprint.ts",
   "briefings.ts",
@@ -110,6 +112,7 @@ const CONVEX_MODULES = [
   "cash.ts",
   "cockpit.ts",
   "cockpitCapabilities.ts",
+  "connectorConnections.ts",
   "connectorCredentials.ts",
   "connectorFetch.ts",
   "connectorOAuth.ts",
@@ -140,6 +143,7 @@ const CONVEX_MODULES = [
   "intake.ts",
   "intakeDb.ts",
   "invites.ts",
+  "invoiceReminders.ts",
   "knowledgeExternalSources.ts",
   "knowledgeLlm.ts",
   "knowledgeSearch.ts",
@@ -185,6 +189,10 @@ const CONVEX_MODULES = [
   "reportsGovernance.ts",
   "requests.ts",
   "research.ts",
+  "revenueCrm.ts",
+  "revenueFinance.ts",
+  "revenueTelemetry.ts",
+  "revenueTools.ts",
   "review.ts",
   "savedPrompts.ts",
   "schema.ts",
@@ -235,6 +243,7 @@ const CONVEX_MODULES = [
 // FOLLOW-UP STEP of a run the user started: a poll for a media job, a watchdog timeout, the next
 // page of a folder walk. None re-arms itself on a cadence.
 const SCHEDULER_CALL_SITES = [
+  "billingRollup.ts",
   "cockpit.ts",
   "evaluations.ts",
   "llm.ts",
@@ -337,6 +346,7 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       "proactive-review",
       "vault-pending-extraction-sweep",
       "reliability-sweep",
+      "billing-invoice-rollup",
     ]);
   });
 });

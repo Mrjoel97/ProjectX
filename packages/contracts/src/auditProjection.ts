@@ -112,6 +112,19 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   // REFS ONLY (§4): a name, a version number, a SHA-256 of the body, and whether the run was pinned.
   // The body itself is never in the payload, so there is nothing here to project that could leak it.
   "agent.skill_loaded": ["skillName", "skillVersion", "skillBodyHash", "pinned"],
+  // 28.1-10. An owner-raised charge on a tenant's bill. `ref` and `periodKey` are the two halves of
+  // the Stripe idempotency identity, `charges` is the resulting line COUNT, and there is no
+  // description field anywhere in the payload — the owner's reason for a charge belongs in their
+  // own records, not in an append-only log (CLAUDE.md §4). The author is the audit row's `actor`.
+  "billing.adjustment.raised": [
+    "source",
+    "periodKey",
+    "ref",
+    "kind",
+    "amountMinor",
+    "currency",
+    "charges",
+  ],
   "blueprint.confirmed": [
     "docId",
     "sourceDocCount",
@@ -271,6 +284,26 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   ],
   "request.redacted": ["requestId", "safeTextHash"],
   "request.rejected": ["reason", "retryAfterMs", "goalHash", "attachmentCount"],
+  // 28-12 revenue reads. These rows expose only the closed operation/provider/status labels,
+  // bounded refs that still pass SAFE_REF, and aggregate counts — never CRM or finance content.
+  "revenue.crm_read": [
+    "operation",
+    "provider",
+    "externalRef",
+    "status",
+    "scanned",
+    "count",
+    "capped",
+  ],
+  "revenue.finance_read": [
+    "operation",
+    "environment",
+    "status",
+    "providerCount",
+    "valueCount",
+    "missingCount",
+  ],
+  "revenue.unsupported_declared": ["reason"],
   "research.persist_failed": [...LINEAGE, "reason"],
   "research.persist_skipped": [...LINEAGE, "reason", "webSearchCalls"],
   "research.persisted": [
@@ -368,6 +401,35 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "microsoftLocalRowDeleted",
     "microsoftRevokedAtProvider",
     "microsoftFailure",
+    // 28.1-08's third provider arm. Omitting these here would leave the audit VIEWER showing an
+    // erasure with two arms while the row carries three — the renderer half of a backend change.
+    "billingLocalRowDeleted",
+    "billingRevokedAtProvider",
+    "billingFailure",
+    // The Phase 28 connector arm. These keys are built from `payload[`${provider.provider}...`]`
+    // at the write site, so NO literal exists in the source for a forward scan to find — the same
+    // reason 28.1-08's three billing keys had to be added by hand. They appear only when the
+    // tenant actually held that connector's row, and `RevokeUpstream` is the one that matters:
+    // after the walk deletes `connectorConnections` it is the only surviving record of whether the
+    // grant is dead upstream, and for three of these four lanes the honest answer is that it is
+    // NOT. A viewer that showed the booleans without it would render "not revoked" with no way to
+    // tell a failure from a provider that documents no revocation at all.
+    "hubspotLocalRowDeleted",
+    "hubspotRevokedAtProvider",
+    "hubspotFailure",
+    "hubspotRevokeUpstream",
+    "quickbooksLocalRowDeleted",
+    "quickbooksRevokedAtProvider",
+    "quickbooksFailure",
+    "quickbooksRevokeUpstream",
+    "stripeLocalRowDeleted",
+    "stripeRevokedAtProvider",
+    "stripeFailure",
+    "stripeRevokeUpstream",
+    "paypalLocalRowDeleted",
+    "paypalRevokedAtProvider",
+    "paypalFailure",
+    "paypalRevokeUpstream",
   ],
   "tenant.tier_changed": ["from", "to", "tierSource", "factsChanged"],
   "vault.drive.import": [

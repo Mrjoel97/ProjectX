@@ -1,6 +1,11 @@
 # Playbook: PayPal connector (REVN-03)
 
-> Last verified: 2026-08-28 (28-08 complete — model, reads and the offline lane gate landed)
+> Last verified: 2026-09-01 (28-29 recovery telemetry — after the passed-only transaction read
+> returns a normalized successful payment linked to an invoice, it can match a provider-scoped
+> one-way ref from an earlier tenant-owned reminder and emit one idempotent `recovery_observed`.
+> Unavailable reads, another tenant and another provider cannot match). Prior: 28-21 terminal
+> telemetry reduced each bounded projection to content-free state and counts. Prior: 2026-08-31 (28-25 owner judgment:
+> PARK; offline absence and gate behavior re-verified)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-08, 28-25) · Related ADRs: none yet
 
 > **Status: BUILT, PARKED, AND UNABLE TO CONNECT — deliberately.** The normalizer, the bounded read
@@ -13,6 +18,13 @@
 > deployment; nothing here has ever spoken to PayPal, and the sandbox could not prove it if it had.
 > Items still marked **[PLANNED]** are contracts a later plan must satisfy. Shared credential,
 > OAuth-state, fetch, telemetry and release rules live in `revenue-connectors.md`.
+
+> **Wave-7 decision (28-25, 2026-08-31): PARK.** The owner chose to keep PayPal invisible and
+> continue the code-only remainder of Phase 28. `check-provider-lane --seal-decision from-owner`
+> resolved the record to `lane: parked`, with `clearedConditions: []`, offline. Under the
+> local-proof-only execution constraint, the payload was not applied to a Convex deployment and no
+> PayPal endpoint was called; no deployment revision or live observation is claimed. The decision
+> remains reversible through a later evidence-backed review.
 
 ## Purpose
 
@@ -147,12 +159,18 @@ third parties requires **partner status and partner-manager coordination**.
 | `node scripts/smoke-paypal-read.mjs --self-test` | The evidence builder and every validator guard. **NOT a live pass.** | offline |
 | `node scripts/smoke-paypal-read.mjs` | Exits 2. There is no grant to read; see Known gaps. | — |
 | `node scripts/check-provider-lane.mjs --provider paypal --stage engineering` | The lane is consistent with its record. **Consistent is not passed.** | offline |
+| `node scripts/check-provider-lane.mjs --provider paypal --seal-decision from-owner` | Resolves the owner/admission record to a parked payload; without `--apply` it is offline and mutates nothing. | offline |
+| `node scripts/check-provider-lane.mjs --provider paypal --verify-gate` | Parked/failed/expired gates remain absent from the passed-only projection. | offline |
 
 ## Operational notes
 
 - **Sandbox proves payload parsing and nothing else.** It does not prove production partner
   authorization. Production exposure needs written approval/status evidence *plus* a controlled
   merchant read. A green sandbox run recorded as lane evidence would be a false `passed`.
+- **Current release posture: PARKED.** Keep PayPal out of discovery and tenant-facing reads. Do not
+  clear `no-documented-revoke-endpoint`, and do not turn the dry-run seal payload into evidence of a
+  deployment mutation. A later operator may apply a parked row or re-open the lane only under a
+  separately authorized, evidence-backed review.
 
 ## Known gaps & deferred work
 

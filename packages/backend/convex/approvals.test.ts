@@ -383,7 +383,6 @@ describe("Approvals decisions and blocked summary", () => {
       countCapped: true,
       oldestCreatedAt: 1_000,
       newestCreatedAt: 1_020,
-      href: "/ops",
     });
     expect(JSON.stringify(blocked)).not.toMatch(
       /secret|payload|error|correlation|workflow|foreign/i,

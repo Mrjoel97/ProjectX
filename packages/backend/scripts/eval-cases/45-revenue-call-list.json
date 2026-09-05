@@ -1,0 +1,37 @@
+{
+  "id": "45-revenue-call-list",
+  "description": "The call-list candidate must execute its own locked body, preserve the code-owned order, and exclude the persisted suppression.",
+  "candidate": { "name": "revenue-call-list", "version": 1 },
+  "turns": [
+    "Create the human review call list from the bounded attention projection. Preserve its order and suppression boundary."
+  ],
+  "expect": {
+    "expectedState": {
+      "outcome": "ready",
+      "toolTrace": ["readRevenueCrm"],
+      "result": {
+        "operation": "attention",
+        "coverage": "local",
+        "scanned": 3,
+        "capped": false,
+        "rows": [
+          {
+            "contactId": "contact-overdue",
+            "priority": 100,
+            "reasons": ["follow_up_overdue"],
+            "provenance": { "pikar": true, "provider": false }
+          },
+          {
+            "contactId": "contact-due",
+            "priority": 20,
+            "reasons": ["follow_up_due"],
+            "provenance": { "pikar": true, "provider": true }
+          }
+        ]
+      },
+      "refs": ["contact-overdue", "contact-due"],
+      "counts": { "scanned": 3, "ranked": 2, "suppressed": 1 }
+    }
+  },
+  "needles": ["human review call list", "suppression boundary"]
+}

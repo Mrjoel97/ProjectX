@@ -34,7 +34,12 @@ describe("tenant table classification registry", () => {
     // `schema.ts` and `tenantData.ts` — 52 tables, 52 classifications, nothing unclassified in
     // either direction — not carried over from a branch. Re-derive it the same way after any
     // future merge; do not pick a side.
-    expect(schemaTables).toHaveLength(52);
+    // + billingCustomers (28.1-05, the tenant<->Stripe-customer mapping).
+    // + billingEvents, billingCoverage, billingUnapplied (28.1-06, the billing book of record).
+    // + billingPeriods (28.1-07, the invoice claim row — `tenant_owned`, argued in tenantData.ts).
+    // RE-DERIVED 2026-09-05 at the Phase 28/28.1/29/33.x merge: main's 52 (with knowledgeSearches)
+    // + the lane's five billing tables = 57. Counted from the merged schema.ts, not carried over.
+    expect(schemaTables).toHaveLength(57);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -63,6 +68,48 @@ describe("tenant table classification registry", () => {
   test("workflow-pack events sit on the audit plane — erasure and export cannot reach them", () => {
     expect(TENANT_TABLE_CLASSIFICATION.workflowPackEvents).toBe("audit_immutable");
     expect(deletableTables()).not.toContain("workflowPackEvents");
+  });
+
+  /**
+   * 28.1-05, asserted POSITIVELY and by name for the same reason `workflowPackEvents` is above:
+   * the derived equality in the next test reads the classification itself and would stay green if
+   * the category silently flipped.
+   *
+   * The property is a compliance one. `billingCustomers` is the ONLY row joining a tenant to its
+   * Stripe customer id, so a tenant erasure that left it behind would leave an orphaned link to a
+   * live merchant record. It is NOT `tenant_credential`: `cus_...` grants no access to anything
+   * without the secret key, and the credential category SUMMARISES rows on export
+   * (`summarizeTenantCredential`), which would replace the one fact the tenant actually wants to
+   * see with `{connected, updatedAt, scopeHalves: []}`.
+   */
+  test("the Stripe-customer mapping is tenant-owned — erasure removes it, export shows it", () => {
+    expect(TENANT_TABLE_CLASSIFICATION.billingCustomers).toBe("tenant_owned");
+    expect(deletableTables()).toContain("billingCustomers");
+    // The delivery log next door is deliberately the OPPOSITE call, and the pair is the point:
+    // erasing it would let a redelivered event for that tenant re-apply.
+    expect(TENANT_TABLE_CLASSIFICATION.billingStripeEvents).toBe("global");
+    expect(deletableTables()).not.toContain("billingStripeEvents");
+  });
+
+  /**
+   * 28.1-06, asserted POSITIVELY and by name for the same reason the two above are.
+   *
+   * The pair is the property. `billingEvents` is Pikar's OWN record of what a customer PAID it —
+   * erasure must not let a customer delete the merchant's books, and the tenant's own copy of that
+   * history is Stripe's hosted Customer Portal, not this table. `billingUnapplied` is the opposite
+   * call on purpose: it is mutable, and the money it describes is still the customer's, so it
+   * exports and it deletes.
+   */
+  test("the billing book of record is immutable; unapplied funds are the tenant's own", () => {
+    expect(TENANT_TABLE_CLASSIFICATION.billingEvents).toBe("audit_immutable");
+    expect(TENANT_TABLE_CLASSIFICATION.billingCoverage).toBe("audit_immutable");
+    expect(deletableTables()).not.toContain("billingEvents");
+    // Coverage and its events must delete together or never. Never is the answer, and a split
+    // would report "unknown coverage" over rows that are sitting right there.
+    expect(deletableTables()).not.toContain("billingCoverage");
+
+    expect(TENANT_TABLE_CLASSIFICATION.billingUnapplied).toBe("tenant_owned");
+    expect(deletableTables()).toContain("billingUnapplied");
   });
 
   test("exposes only tenant-owned and credential tables to deletion, with identity last", () => {

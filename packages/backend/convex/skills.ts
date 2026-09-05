@@ -90,6 +90,7 @@ import { packProcessSopSkillBody } from "@pikar/contracts/skills/packProcessSop"
 import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCallPrep";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
+import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
 import { styleCoachingSkillBody } from "@pikar/contracts/skills/styleCoaching";
 import { styleConciseSkillBody } from "@pikar/contracts/skills/styleConcise";
 import { styleDirectSkillBody } from "@pikar/contracts/skills/styleDirect";
@@ -110,6 +111,7 @@ import {
   WORKFLOW_PACK_SKILL_NAMES,
 } from "@pikar/core";
 import { v } from "convex/values";
+import skillsLock from "../skills-lock.json";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -232,7 +234,7 @@ async function planGlobalActivation(
   // archived/rolled_back were active before and are exempt BY STATUS (rollback
   // must always work mid-incident, never blocked by a broken eval harness).
   if (
-    isGatedSkill(name) &&
+    (isGatedSkill(name) || isRevenueCandidateName(name)) &&
     target.status === "candidate" &&
     !hasPassingEvidence(target.evidence, name, version)
   ) {
@@ -1178,6 +1180,117 @@ export const inspectPackCandidates = internalQuery({
         provenanceValid: hasValidPackProvenance(newest.provenance, name, newest.version),
         evidenceValid: hasPassingPackEvalEvidence(newest.evidence, name, newest.version),
         browserValid: hasPassingPackBrowserEvidence(newest.browserEvidence, name, newest.version),
+      });
+    }
+    return out;
+  },
+});
+
+export const REVENUE_PIN_CONFLICT_ERROR = "REVENUE_PIN_CONFLICT";
+
+const REVENUE_CANDIDATE_PINS = skillsLock.revenueCandidates.candidates;
+
+function isRevenueCandidateName(name: string): boolean {
+  return REVENUE_CANDIDATE_PINS.some((candidate) => candidate.name === name);
+}
+
+function revenueProvenanceFor(pin: (typeof REVENUE_CANDIDATE_PINS)[number]): string {
+  return JSON.stringify({
+    sourceRepo: pin.sourceRepo,
+    sourceCommit: pin.sourceCommit,
+    sourcePaths: pin.sourcePaths,
+    bodySha256: pin.bodySha256,
+    license: pin.license,
+    modificationNotice: pin.modificationNotice,
+    skillVersions: { [pin.name]: pin.version },
+    ts: Date.parse(skillsLock.revenueCandidates.pinnedAt),
+  });
+}
+
+function hasValidRevenueProvenance(
+  provenance: string | undefined,
+  pin: (typeof REVENUE_CANDIDATE_PINS)[number],
+): boolean {
+  if (provenance === undefined) return false;
+  try {
+    return provenance === revenueProvenanceFor(pin);
+  } catch {
+    return false;
+  }
+}
+
+export const seedRevenueCandidates = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const out: { name: string; version: number; inserted: boolean }[] = [];
+    for (const pin of REVENUE_CANDIDATE_PINS) {
+      const body = revenueSkillBodies[pin.name];
+      if (
+        body === undefined ||
+        pin.version !== 1 ||
+        pin.status !== "candidate" ||
+        new TextEncoder().encode(body).length !== pin.bodyBytes ||
+        (await contentHash(body)) !== pin.bodySha256
+      ) {
+        throw new Error(`${REVENUE_PIN_CONFLICT_ERROR}: ${pin.name} does not match its lock pin`);
+      }
+
+      const rows = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", pin.name))
+        .collect();
+      const provenance = revenueProvenanceFor(pin);
+      const exact = rows.find(
+        (row) =>
+          row.version === pin.version &&
+          row.status === "candidate" &&
+          row.body === body &&
+          row.provenance === provenance,
+      );
+      if (exact !== undefined && rows.length === 1) {
+        out.push({ name: pin.name, version: pin.version, inserted: false });
+        continue;
+      }
+      if (rows.length > 0) {
+        throw new Error(`${REVENUE_PIN_CONFLICT_ERROR}: ${pin.name}@${pin.version} is not exact`);
+      }
+
+      await ctx.db.insert("skills", {
+        name: pin.name,
+        version: pin.version,
+        body,
+        provenance,
+        status: "candidate",
+        createdAt: Date.now(),
+      });
+      out.push({ name: pin.name, version: pin.version, inserted: true });
+    }
+    return out;
+  },
+});
+
+export const inspectRevenueCandidates = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const out = [];
+    for (const pin of REVENUE_CANDIDATE_PINS) {
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", pin.name).eq("version", pin.version))
+        .unique();
+      if (row === null) {
+        out.push({ name: pin.name, present: false as const });
+        continue;
+      }
+      out.push({
+        name: pin.name,
+        present: true as const,
+        skillId: String(row._id),
+        version: row.version,
+        status: row.status,
+        bodyHash: await contentHash(row.body),
+        bodyBytes: new TextEncoder().encode(row.body).length,
+        provenanceValid: hasValidRevenueProvenance(row.provenance, pin),
       });
     }
     return out;

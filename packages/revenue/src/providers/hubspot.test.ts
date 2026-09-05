@@ -5,10 +5,13 @@
 // substring match, and this repo has already shipped a rename through a fully green symbol gate.
 // Renaming `crm.objects.deals.read` to `crm.objects.deal.read`, or `2026-03` to `v3`, must turn
 // this file red.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { validateProjection, validateSourceRef } from "../contracts";
 import {
   buildHubSpotAuthorizeUrl,
+  HUBSPOT_AUTHORIZE_SCOPES,
   HUBSPOT_AUTHORIZE_URL,
   HUBSPOT_COMPANY_PROPERTIES,
   HUBSPOT_CONTACT_PROPERTIES,
@@ -59,6 +62,29 @@ describe("scopes — the exact evidenced read set, pinned to literals", () => {
     // Deal pipelines/stages come from these two together, which is the trap the register records.
     expect(HUBSPOT_READ_SCOPES).toContain("crm.objects.deals.read");
     expect(HUBSPOT_READ_SCOPES).toContain("crm.schemas.deals.read");
+  });
+
+  it("adds HubSpot's mandatory oauth scope only to the installation scope set", () => {
+    expect([...HUBSPOT_AUTHORIZE_SCOPES]).toEqual(["oauth", ...HUBSPOT_READ_SCOPES]);
+    expect(HUBSPOT_READ_SCOPES).not.toContain("oauth");
+  });
+
+  // HubSpot enforces the scope set declared in the APP MANIFEST, not the one we send: an install
+  // URL asking for a scope the app does not declare is rejected outright, and a scope the app
+  // declares but we never request silently yields a token that cannot read what the rails expect.
+  // `apps/hubspot/src/app/app-hsmeta.json` is that declaration and it lives in this repo, so the
+  // two can drift in a single commit. They are the same list by construction, asserted as a set
+  // equality in both directions so neither file can quietly gain or lose one.
+  it("matches the scope set declared in the HubSpot app manifest", () => {
+    const manifest = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../../../../apps/hubspot/src/app/app-hsmeta.json", import.meta.url)),
+        "utf8",
+      ),
+    );
+    const declared: string[] = manifest.config.auth.requiredScopes;
+    expect([...declared].sort()).toEqual([...HUBSPOT_AUTHORIZE_SCOPES].sort());
+    expect(manifest.config.auth.optionalScopes).toEqual([]);
   });
 });
 
@@ -133,20 +159,33 @@ describe("authorize URL", () => {
     state: "st-abc",
   };
 
-  it("carries client id, redirect, state and the space-joined read scope set", () => {
+  it("carries client id, redirect, state and the complete required installation scope set", () => {
     const url = new URL(buildHubSpotAuthorizeUrl(input));
     expect(`${url.origin}${url.pathname}`).toBe(HUBSPOT_AUTHORIZE_URL);
     expect(url.searchParams.get("client_id")).toBe("cid-1");
     expect(url.searchParams.get("redirect_uri")).toBe(input.redirectUri);
     expect(url.searchParams.get("state")).toBe("st-abc");
-    expect(url.searchParams.get("scope")).toBe(HUBSPOT_READ_SCOPES.join(" "));
+    expect(url.searchParams.get("scope")).toBe(HUBSPOT_AUTHORIZE_SCOPES.join(" "));
     expect(url.searchParams.get("optional_scope")).toBeNull();
   });
 
-  it("refuses a non-https redirect and an empty state", () => {
+  it("allows HubSpot's documented http://localhost development redirect", () => {
+    const redirectUri = "http://localhost:3211/connectors/hubspot/callback/production";
+    const url = new URL(buildHubSpotAuthorizeUrl({ ...input, redirectUri }));
+    expect(url.searchParams.get("redirect_uri")).toBe(redirectUri);
+  });
+
+  it("refuses cleartext non-localhost redirects, lookalikes, invalid URLs and an empty state", () => {
     expect(() =>
       buildHubSpotAuthorizeUrl({ ...input, redirectUri: "http://evil.test/cb" }),
     ).toThrow();
+    expect(() =>
+      buildHubSpotAuthorizeUrl({ ...input, redirectUri: "http://localhost.evil.test/cb" }),
+    ).toThrow();
+    expect(() =>
+      buildHubSpotAuthorizeUrl({ ...input, redirectUri: "http://127.0.0.1:3211/cb" }),
+    ).toThrow();
+    expect(() => buildHubSpotAuthorizeUrl({ ...input, redirectUri: "not a URL" })).toThrow();
     expect(() => buildHubSpotAuthorizeUrl({ ...input, state: "" })).toThrow();
   });
 });

@@ -22,6 +22,7 @@ import {
 } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { passedGate } from "../__fixtures__/providerGates";
 import { api, internal } from "./_generated/api";
 import { DEFAULT_WINDOW_DAYS } from "./hubspot";
 import { EXTERNAL_KNOWLEDGE_READERS } from "./knowledgeExternalSources";
@@ -601,6 +602,14 @@ describe("the CRM adapter maps the LANDED HubSpot projection honestly", () => {
     environment: "production" | "sandbox" = "production",
   ) {
     stubProvider(() => tokenReply());
+    // 28-16 (merged 2026-09-05): connect-start is gated on a PASSED provider lane. These tests are
+    // about the CRM projection, not the gate, so a passed HubSpot gate is seeded once per environment.
+    await h.t.run(async (ctx) => {
+      const gates = await ctx.db.query("providerGates").collect();
+      if (!gates.some((g) => g.provider === "hubspot" && g.environment === environment)) {
+        await ctx.db.insert("providerGates", passedGate("hubspot", environment));
+      }
+    });
     const { url } = await h[who].action(api.hubspotAuth.hubspotConnectUrl, { environment });
     const state = new URL(url).searchParams.get("state") ?? "";
     await h.t.action(internal.hubspotAuth.completeHubSpotConnect, {

@@ -13,7 +13,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INCOMPLETE_MARKER, serializeProfile } from "@pikar/core";
 import { TARGET_DURATIONS } from "@pikar/core/storyboard";
-import { CHEAP_MODEL, DEFAULT_MODEL, RESEARCH_FALLBACK_MODEL, RESEARCH_MODEL } from "@pikar/cost";
+import {
+  CHEAP_MODEL,
+  DEFAULT_MODEL,
+  MEDIA_FALLBACK_MODEL,
+  MEDIA_MODEL,
+  RESEARCH_FALLBACK_MODEL,
+  RESEARCH_MODEL,
+} from "@pikar/cost";
 import { APICallError } from "ai";
 import { convexTest, type TestConvex } from "convex-test";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -1965,12 +1972,24 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     expect(research.modelId).toBe(RESEARCH_MODEL);
     expect(research.fallbackModelId).toBe(RESEARCH_FALLBACK_MODEL);
 
-    // 2. EVERYTHING ELSE — `media` must take the repo defaults byte-identically. Without a genuine
-    // default case the lookup could pin EVERY route and stay green.
-    const other = ok(
+    // 2. MEDIA — its own pair since 33.2. The storyboard turn is the heaviest rule load in the
+    // product and used to ride the volume pin.
+    const media = ok(
       await t.action(internal.dispatch.__runSpecialistWithScript, {
         ...BASE,
         route: "media",
+        planId,
+        primary: [REPLY_STEP],
+      }),
+    );
+    expect(media.modelId).toBe(MEDIA_MODEL);
+    expect(media.fallbackModelId).toBe(MEDIA_FALLBACK_MODEL);
+
+    // 3. EVERYTHING ELSE — `offer-architect` (BASE) must take the repo defaults byte-identically.
+    // Without a genuine default case the lookup could pin EVERY route and stay green.
+    const other = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...BASE,
         planId,
         primary: [REPLY_STEP],
       }),
@@ -1992,6 +2011,7 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
     // MUTATION that turns this RED: collapse the route lookup in llm.ts to a single pair.
     const llmSrc = readFileSync(join(__dirname, "llm.ts"), "utf8");
     expect(llmSrc).toContain("[RESEARCH_MODEL, RESEARCH_FALLBACK_MODEL]");
+    expect(llmSrc).toContain("[MEDIA_MODEL, MEDIA_FALLBACK_MODEL]");
     expect(llmSrc).toContain("[DEFAULT_MODEL, CHEAP_MODEL]");
   });
 });
@@ -2017,6 +2037,34 @@ describe("the activity trace always terminalizes", () => {
 // `dispatchAndLand` and the SAME `persistStoryboard` the scheduled `runMedia` does. $0: the model
 // is a script.
 
+/**
+ * 33.1-01: koda's art-direction section, with the `Music` line the write boundary used to reject.
+ *
+ * ONE fixture for BOTH deck contracts, because the seam it exercises is the same one —
+ * `parseArtDirection` -> `plans.persistDeck`'s arg validator. Before this existed, `dispatch.test.ts`
+ * carried ZERO `Music` fixtures while `storyboard.test.ts` carried 14: the parser was covered and
+ * the boundary it writes across was not, so a field the parser emitted and the schema stored threw
+ * `ArgumentValidationError` in production with a green suite over it.
+ *
+ * `mood` must be a member of `MUSIC_MOODS` (`calm|warm|upbeat|cinematic`) — anything else parses to
+ * `undefined` and the assertion downstream is vacuous.
+ */
+const artDirectionSection = (mood: string) =>
+  [
+    "## 2. ART DIRECTION",
+    "",
+    "- **Palette** — `#0B4F4A deep teal`, `#F4F1EA bone`",
+    "- **Mood** — Quietly confident, never triumphant.",
+    "- **Lighting** — Warm golden light from camera left at 45 degrees.",
+    "- **Composition** — Subject off-centre right, camera locked off.",
+    "- **Environment** — A working studio, mid-afternoon.",
+    "- **Texture** — 35mm film grain over matte paper.",
+    "- **References** — Gregory Crewdson; the film Locke",
+    "- **Do NOT** — No stock-footage handshakes.",
+    `- **Music** — ${mood}`,
+    "",
+  ].join("\n");
+
 /** A body in the exact shape the `media-director` skill body asks for. Narration lines sit inside
  *  the 103-140 band a 10-second window admits, or `parseBlockDeck` refuses them before payment. */
 const MEDIA_BODY = [
@@ -2024,17 +2072,7 @@ const MEDIA_BODY = [
   "",
   "Six weeks, start to finish. Nobody believed it could be done that fast.",
   "",
-  "## 2. ART DIRECTION",
-  "",
-  "- **Palette** — `#0B4F4A deep teal`, `#F4F1EA bone`",
-  "- **Mood** — Quietly confident, never triumphant.",
-  "- **Lighting** — Warm golden light from camera left at 45 degrees.",
-  "- **Composition** — Subject off-centre right, camera locked off.",
-  "- **Environment** — A working studio, mid-afternoon.",
-  "- **Texture** — 35mm film grain over matte paper.",
-  "- **References** — Gregory Crewdson; the film Locke",
-  "- **Do NOT** — No stock-footage handshakes.",
-  "",
+  artDirectionSection("cinematic"),
   "BLOCK DECK",
   "Clip seconds: 10",
   "",
@@ -2089,6 +2127,9 @@ describe("20-08 — a media dispatch proposes a deck and spends nothing but toke
     expect(plan?.script).toContain("Six weeks, start to finish.");
     expect(plan?.artDirection?.palette).toEqual(["#0B4F4A deep teal", "#F4F1EA bone"]);
     expect(plan?.artDirection?.avoid).toContain("stock-footage handshakes");
+    // 33.1-01 (A1, BLOCK path): the music bed the parser emits reaches the row. Before the arg
+    // validator was widened this line was unreachable — `persistDeck` threw on the whole object.
+    expect(plan?.artDirection?.music).toBe("cinematic");
 
     expect(plan?.shots).toHaveLength(2);
     expect(plan?.shots?.map((s) => s.index)).toEqual([0, 1]);
@@ -2807,6 +2848,13 @@ const TWO_UP_BODY = [
   VAR_BRIEF,
   "## VARIATION A",
   "",
+  // 33.1-01: the art direction rides INSIDE variation A's slice, and that placement is the point.
+  // `persistSceneDeck` is handed `variations.a.body` — the slice between the two VARIATION
+  // headings — not the whole body, so a section sitting above `## VARIATION A` would parse to
+  // `null`, the assertions below would pass with or without the fix, and the test would prove
+  // nothing. Until this line, the SCENE path (dispatch.ts:886) — the one production runs and the
+  // one the owner hit live on 2026-08-30 — had never been exercised with a non-null artDirection.
+  artDirectionSection("upbeat"),
   VAR_A_DECK,
   "## VARIATION B",
   "",
@@ -2836,6 +2884,11 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(plan?.altShots).toHaveLength(2);
     expect(plan?.altTargetDurationSeconds).toBe(15);
     expect(plan?.altShots?.map((s) => s.visual)).toEqual(["animated_image", "text_card"]);
+    // 33.1-01 (A1, SCENE path — the production one). The palette assertion is not decoration: it
+    // proves the section was READ off variation A's slice, so `music` below is a field that
+    // actually travelled the seam rather than one the parser silently dropped.
+    expect(plan?.artDirection?.palette).toEqual(["#0B4F4A deep teal", "#F4F1EA bone"]);
+    expect(plan?.artDirection?.music).toBe("upbeat");
     // The brief landed beside the decks, defaulted markers stripped into the array.
     expect(plan?.brief).toMatchObject({
       topic: "Inbox triage, and what it costs a founder",
@@ -2856,6 +2909,50 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(plan?.deckLockedAt).toBeUndefined();
   });
 
+  // ── 33.1-04 (A5, the PERSIST leg) ────────────────────────────────────────────────────────────
+  //
+  // THE SEAM, not the parser. `storyboard.test.ts` already proves a 5 s and a 7 s generated scene
+  // parse; this proves the same seconds survive the write boundary and land on the row, which is
+  // where the owner's other 2026-08-30 defect lived (a field the parser emitted and `persistDeck`
+  // refused). The `deckAdjustments` assertion is the load-bearing one: an absent adjustments array
+  // is the difference between "the deck was accepted as written" and "the repair silently snapped
+  // it to 4 s and 4 s", and until 33.1-04 the latter is exactly what happened.
+  test("A 5-SECOND AND A 7-SECOND GENERATED SCENE PERSIST AT THEIR OWN LENGTHS, with no deckAdjustments", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const body = [
+      "SCENE DECK",
+      "Target duration: 15",
+      "",
+      "| # | Visual | Seconds | Description | Narration | Text overlay | Asset |",
+      "|---|--------|---------|-------------|-----------|--------------|-------|",
+      "| 1 | generated_video | 5 | Founder at a desk | Founders lose an hour a day. | | |",
+      "| 2 | generated_video | 7 | Mail icons collapsing | Pikar drafts the reply for you. | | |",
+      "| 3 | animated_image | 3 | Logo on black | You approve it. | | |",
+      "",
+    ].join("\n");
+    const res = ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    expect(res.ok).toBe(true);
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    expect(plan?.shots?.map((sh) => sh.seconds)).toEqual([5, 7, 3]);
+    expect(plan?.shots?.map((sh) => sh.windowStartMs)).toEqual([0, 5_000, 12_000]);
+    expect(plan?.shots?.map((sh) => sh.visual)).toEqual([
+      "generated_video",
+      "generated_video",
+      "animated_image",
+    ]);
+    // NOTHING was repaired, so nothing is disclosed. Before the 1..15 grid this deck did not reach
+    // the row at all — it refused with `illegal_generated_duration`.
+    expect(plan?.deckAdjustments).toBeUndefined();
+  });
+
   test("the deck_persisted audit gains variations/citedScenes/unverifiedScenes COUNTS — and no titles (§4)", async () => {
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
@@ -2871,6 +2968,73 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
     expect(payload.unverifiedScenes).toBe(1);
     // Refs and COUNTS only: the doc title and the claim text appear NOWHERE in the audit plane.
     expect(JSON.stringify(await readLineage(t))).not.toContain("pricing one-pager");
+  });
+
+  // ── 33.1-01 (A2): the terminal, asserted as an ABSENCE that is excluded ────────────────────
+  //
+  // The live signature on 2026-08-30 was NEITHER `media.deck_persisted` NOR `media.deck_refused`
+  // after a `subagent.completed` — `persistDeck` threw between them, and a throw writes no
+  // terminal at all. So "persisted === 1" alone is not the assertion: "refused === 0" is what
+  // excludes a refusal wearing the fix's clothes, and `subagent.completed` present is what proves
+  // the run actually got as far as the seam rather than dying earlier for some other reason.
+  test("33.1-01/A2: a body carrying a music bed writes deck_persisted, no deck_refused", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      mediaArgs(planId, { primary: [{ ...textStep(TWO_UP_BODY), usage: SPEND_8_CENTS }] }),
+    );
+    const lineage = await readLineage(t);
+    const types = lineage.map((r) => r.eventType);
+    expect(types).toContain("subagent.completed");
+    expect(types.filter((e) => e === "media.deck_persisted")).toHaveLength(1);
+    expect(types.filter((e) => e === "media.deck_refused")).toHaveLength(0);
+    const persisted = lineage.find((r) => r.eventType === "media.deck_persisted");
+    expect((persisted?.payload as Record<string, unknown> | undefined)?.hasArtDirection).toBe(true);
+  });
+
+  // ── 33.1-01: the seam itself, with nothing between the caller and the validator ────────────
+  //
+  // The two tests above run the whole dispatch, so a green there could in principle come from any
+  // layer. This one calls `persistDeck` directly with the exact object `parseArtDirection` emits
+  // for `- **Music** — upbeat`, which is the shape that threw
+  // `ArgumentValidationError` in production. If the field is missing from the arg validator this
+  // is the failure that names it and nothing else.
+  test("33.1-01: persistDeck accepts an artDirection carrying music, and reads it back", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    await t.mutation(internal.plans.persistDeck, {
+      tenantId: TENANT,
+      planId,
+      script: "Six weeks, start to finish.",
+      artDirection: {
+        palette: ["#0B4F4A deep teal", "#F4F1EA bone"],
+        mood: "Quietly confident, never triumphant.",
+        lighting: "Warm golden light from camera left at 45 degrees.",
+        composition: "Subject off-centre right, camera locked off.",
+        environment: "A working studio, mid-afternoon.",
+        texture: "35mm film grain over matte paper.",
+        typography: "Grotesque, tight tracking.",
+        references: ["Gregory Crewdson", "the film Locke"],
+        avoid: "No stock-footage handshakes.",
+        music: "upbeat",
+      },
+      clipSeconds: 10,
+      shots: [
+        {
+          index: 0,
+          type: "AI",
+          seconds: 10,
+          windowStartMs: 0,
+          description: "Founder at a desk",
+          prompt: "A founder at a desk in warm 45-degree light, 35mm grain",
+          narration: "Most founders lose a full hour a day to inbox triage.",
+        },
+      ],
+    });
+    const plan = await readPlan(t, planId);
+    expect(plan?.kind).toBe("media");
+    expect(plan?.artDirection?.music).toBe("upbeat");
   });
 
   test("a refusing variation SALVAGES its good sibling — proposed alone, and disclosed", async () => {
@@ -2925,13 +3089,17 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
   test("33-12: an off-grid clip is repaired ON THE ROW, and the row says what moved", async () => {
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
-    // 10 + 20 = 30, the declared length: only the GRID is wrong. The parser snaps 10 -> 8 and
-    // gives the 2 seconds to the animated scene. Asserted from the STORED ROW, not the parser —
+    // 18 + 12 = 30, the declared length: only the GRID is wrong. The parser snaps 18 -> 15 and
+    // gives the 3 seconds to the animated scene. Asserted from the STORED ROW, not the parser —
     // a repair that never reaches the database is a repair the user never gets.
+    //
+    // 33.1-04 moved this fixture from 10 -> 8 to 18 -> 15. Ten seconds was off sora-2's 4/8/12
+    // grid and is an ORDINARY length on grok's 1..15, so the old body no longer exercises the
+    // repair at all — it just parses. Above 15 is the only off-grid left.
     const body = VAR_A_DECK.replace(
       "| 1 | generated_video | 8 |",
-      "| 1 | generated_video | 10 |",
-    ).replace("| 2 | animated_image | 22 |", "| 2 | animated_image | 20 |");
+      "| 1 | generated_video | 18 |",
+    ).replace("| 2 | animated_image | 22 |", "| 2 | animated_image | 12 |");
     await t.action(
       internal.dispatch.__runSpecialistWithScript,
       mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
@@ -2939,10 +3107,10 @@ describe("33-03 — the variations terminal: parseVariations runs FIRST", () => 
 
     const plan = await readPlan(t, planId);
     expect(plan?.kind).toBe("media");
-    expect(plan?.shots?.map((s) => s.seconds)).toEqual([8, 22]);
+    expect(plan?.shots?.map((s) => s.seconds)).toEqual([15, 15]);
     expect(plan?.deckAdjustments).toEqual([
-      { sceneIndex: 0, fromSeconds: 10, toSeconds: 8, why: "grid" },
-      { sceneIndex: 1, fromSeconds: 20, toSeconds: 22, why: "rebalance" },
+      { sceneIndex: 0, fromSeconds: 18, toSeconds: 15, why: "grid" },
+      { sceneIndex: 1, fromSeconds: 12, toSeconds: 15, why: "rebalance" },
     ]);
   });
 
@@ -3313,5 +3481,184 @@ describe("groundMediaBrief: research lands in the vault BEFORE the deck is writt
     expect(doc?.text).toContain("Acme Survey");
     expect(doc?.sourcePlanId).toBe(planId);
     expect(doc?.sourceThreadId).toBe(THREAD);
+  });
+
+  // ── 33.2 (PRD L5): findings are REUSED for the same brief on the same tenant within 24 h ──
+  //
+  // "Try again" on a refused storyboard re-sends the same brief, and every retry used to re-buy
+  // ~$0.21 of research for findings already sitting in the vault. The reuse key is the question
+  // HASH on the document, never the thread — a fresh chat with the identical brief reuses too.
+  const groundTwice = async (first: string, second: string, between?: (t: T) => Promise<void>) => {
+    const { t, planId } = await grounded();
+    let turns = 0;
+    const run = (q: string) =>
+      t.run(async (ctx) => {
+        await groundMediaBrief(ctx as never, args(planId, q), () => {
+          turns += 1;
+          return Promise.resolve(turn());
+        });
+      });
+    await run(first);
+    if (between) await between(t);
+    await run(second);
+    return { turns, docs: await vaultDocs(t) };
+  };
+
+  test("THE SAME BRIEF WITHIN THE WINDOW RUNS NO SECOND TURN and writes no second document", async () => {
+    const { turns, docs } = await groundTwice(
+      "a reel about the monitoring plan",
+      "a reel about the monitoring plan",
+    );
+    expect(turns).toBe(1);
+    expect(docs).toHaveLength(1);
+  });
+
+  test("a DIFFERENT brief on the same tenant is researched on its own", async () => {
+    // The anti-vacuous half: reuse must key on the QUESTION, not on "this tenant has research".
+    const { turns, docs } = await groundTwice(
+      "a reel about the monitoring plan",
+      "a reel about the onboarding package",
+    );
+    expect(turns).toBe(2);
+    expect(docs).toHaveLength(2);
+  });
+
+  test("findings older than the window are bought again", async () => {
+    const { turns, docs } = await groundTwice(
+      "a reel about the monitoring plan",
+      "a reel about the monitoring plan",
+      (t) =>
+        t.run(async (ctx) => {
+          const [doc] = await ctx.db.query("vaultDocuments").collect();
+          if (!doc) throw new Error("no findings document to age");
+          await ctx.db.patch(doc._id, { createdAt: Date.now() - 25 * 60 * 60 * 1000 });
+        }),
+    );
+    expect(turns).toBe(2);
+    expect(docs).toHaveLength(2);
+  });
+});
+
+// 33.1-06: THE RETRY LOOP IS CLOSED. "Try again" is a chat message on the same thread, and the
+// thread's plan row (unique by `by_thread`) still carries the refusal the owner just read. Until
+// now the specialist got the same brief with no idea what had failed — and failed the same way.
+describe("media retry — the specialist is told what the last storyboard was refused for", () => {
+  const promptFor = (t: T) =>
+    t.run(async (ctx) =>
+      buildSpecialistPrompt(ctx as never, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        gapIndex: 0,
+        route: "media",
+        question: "a reel about how much time the inbox eats",
+      }),
+    );
+
+  test("appends the refusal, in the canvas's own words, when the plan row carries one", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: THREAD,
+        status: "proposed",
+        createdAt: Date.now(),
+        proposalRefusal: { reason: "narration_too_long", contract: "scene", variation: "a" },
+      }),
+    );
+    const prompt = await promptFor(t);
+    expect(prompt).toContain("Your previous storyboard for this brief was refused — variation A:");
+    expect(prompt).toContain("the spoken lines add up to more than the reel is long");
+    expect(prompt).toContain("Fix exactly that in this attempt");
+    // Still a media prompt — the task line is intact, the retry line sits after it.
+    expect(prompt.indexOf("Write the storyboard now")).toBeLessThan(
+      prompt.indexOf("Your previous storyboard"),
+    );
+  });
+
+  test("says nothing about a refusal on a first attempt — no row, no line", async () => {
+    const t = convexTest(schema, modules);
+    const prompt = await promptFor(t);
+    expect(prompt).toContain("Write the storyboard now");
+    expect(prompt).not.toContain("previous storyboard");
+  });
+
+  test("is tenant-scoped — another tenant's refusal on the same thread id is invisible", async () => {
+    const t = convexTest(schema, modules);
+    await t.run((ctx) =>
+      ctx.db.insert("plans", {
+        tenantId: TENANT_B,
+        threadId: THREAD,
+        status: "proposed",
+        createdAt: Date.now(),
+        proposalRefusal: { reason: "narration_too_long", contract: "scene" },
+      }),
+    );
+    expect(await promptFor(t)).not.toContain("previous storyboard");
+  });
+});
+
+// ── 33.2: the bake-off's read is the parser's verdict, as counts and codes ───────────────────────
+describe("33.2 — smoke.storyboardFactsForPlan reads the terminal's verdict off the row", () => {
+  test("a two-variation proposal reads back as `two` with its counts", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(TWO_UP_BODY), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    const facts = await t.query(internal.smoke.storyboardFactsForPlan, { planId });
+    expect(facts).toEqual({
+      kind: "two",
+      targetDurationSeconds: 30,
+      sceneCount: 2,
+      altSceneCount: 2,
+      generatedSeconds: 8,
+      kinds: { generated_video: 1, animated_image: 1 },
+      unverifiedCount: 1,
+      adjustmentCount: 0,
+    });
+    // §4: nothing the model wrote crosses this boundary.
+    const text = JSON.stringify(facts);
+    expect(text).not.toContain("Founder at a desk");
+    expect(text).not.toContain("inbox triage");
+  });
+
+  test("a refused proposal reads back as `refused` with the CODE, never the body", async () => {
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    const body = [VAR_BRIEF, "## VARIATION A", "", "Prose.", "## VARIATION B", "", "Prose."].join(
+      "\n",
+    );
+    ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(body), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    const facts = await t.query(internal.smoke.storyboardFactsForPlan, { planId });
+    expect(facts.kind).toBe("refused");
+    expect(typeof facts.reason).toBe("string");
+    expect(facts.sceneCount).toBe(0);
+    expect(JSON.stringify(facts)).not.toContain("Prose.");
+  });
+
+  test("modelsForPlan reports the model that BILLED, from spend rows, not the pin", async () => {
+    // Round 3 of the bake-off scored 24 fallback passes under the candidate's name because the
+    // runner asserted `modelId` (the pin) instead of what answered. This is the read that cannot
+    // be fooled by a fallback: one spend row per attempt, keyed by the dispatch's run id.
+    const { t } = await setup();
+    const planId = await stagedMediaPlan(t);
+    ok(
+      await t.action(
+        internal.dispatch.__runSpecialistWithScript,
+        mediaArgs(planId, { primary: [{ ...textStep(TWO_UP_BODY), usage: SPEND_8_CENTS }] }),
+      ),
+    );
+    const ran = await t.query(internal.smoke.modelsForPlan, { planId });
+    expect(ran.runs).toBe(1);
+    expect(ran.rowCount).toBeGreaterThan(0);
+    expect(ran.models).toEqual([MEDIA_MODEL]);
   });
 });

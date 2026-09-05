@@ -1,13 +1,38 @@
 # Playbook: Stripe connector (REVN-03)
 
-> Last verified: 2026-08-28 against 28-07 (the read-only Stripe App lane: OAuth, bounded reads and
+> Last verified: 2026-09-01 (28-29 recovery telemetry — after the passed-only tenant read returns a
+> normalized zero-balance invoice or linked successful charge, it can match a provider-scoped
+> one-way ref from an earlier tenant-owned reminder and emit one idempotent `recovery_observed`.
+> Unavailable reads, another tenant and another provider cannot match). Prior: 28-21 terminal
+> telemetry — the bounded read reduces its projection to provider, state and counts on the shared
+> Phase 27 plane; lifecycle events remain centralized at the credential mutation seam.
+> Prior: 2026-08-31 (28-24 wave-7 owner decision — **PARK**. The offline seal payload keeps
+> `admission: approved_production` separate from `lane: parked`, clears no conditions, and was not
+> applied to a deployment. `providerGates.test.ts` passed 25/25 and proves a parked row is absent
+> from the tenant projection; no Stripe or Convex deployment call is part of this evidence. Prior:
+> 2026-08-31 (28-09 connect-start gate — `stripeAuth.beginConnect` mints before
+> reading `requireStripeApp()`, for the same reason as the HubSpot lane: authorization refuses
+> first, and a config error must not tell a stranger what this deployment has configured.
+> `stripeConnector.test.ts` seeds passed gate rows in its harness and `sealLane` PATCHES rather
+> than inserts, because two rows for one provider+environment make `rowFor`'s `.unique()` throw.
+> Prior: 2026-08-30 (gap audit of the connector plane) — **`openInvoices` had NO TEST OF
+> ANY KIND** and was the only export in `stripeConnector.ts` without one; its three siblings each
+> pin the lane gate, so the gate could have been dropped from `openInvoices` alone and every suite
+> in the repo would still have been green. Six tests added: the gate refuses on an unsealed, a
+> `parked` AND a `failed` lane and refuses BEFORE the request (a gated read that still spends the
+> call has only hidden the data); `total` and `outstanding` stay separate; NO aging is computed
+> here (the 28-12 boundary, now pinned so a later plan cannot add a single-currency aging field to
+> a multi-currency source); a `draft` invoice is rejected rather than counted. **Non-vacuity
+> proven by mutation** — swapping `gatedRead` for `readEntityRows` in `openInvoices` alone killed
+> exactly the three gate cases and nothing else. Prior: 2026-08-28 against 28-07 (the read-only Stripe App lane: OAuth, bounded reads and
 > the lane gate script)
 > Build history: `.planning/phases/28-connector-backed-revenue-pack/` (28-07, 28-24) · Related ADRs: none yet
 
-> **Status: BUILT, LANE PARKED, NEVER RUN LIVE.** The code below is on disk at the `Last verified`
+> **Status: BUILT, OWNER DECISION PARK, NEVER RUN LIVE.** The code below is on disk at the `Last verified`
 > sha and proven offline. **No Stripe App credential exists in this deployment and nothing here has
-> ever spoken to Stripe.** The `providerGates` lane row is `parked`, the open condition
-> `platform-initiated-revocation` is UNCLEARED, and 28-24 owns the seal. Shared credential,
+> ever spoken to Stripe.** Plan 28-24 records the local owner decision as `parked`; it deliberately
+> does not assert deployment state. The open condition `platform-initiated-revocation` is UNCLEARED.
+> Shared credential,
 > OAuth-state, fetch, telemetry and release rules live in `revenue-connectors.md`.
 
 > **Naming:** this is the *tenant's own* Stripe account, read for their business finance. It is
@@ -137,6 +162,8 @@ Extension path; it is stale, do not follow it.
 | `node scripts/smoke-stripe-read.mjs` | Exits **2** with `LIVE_EVIDENCE_NOT_PRODUCED`. | offline |
 | `node scripts/smoke-stripe-read.mjs --tenant <id>` | Controlled live read. Lane evidence. | live creds |
 | `node scripts/check-provider-lane.mjs --provider stripe --stage engineering` | `consistent`, 1 row pending. Consistent is NOT passed. | offline |
+| `node scripts/check-provider-lane.mjs --provider stripe --seal-decision park --evidence docs/connectors/stripe-suitability.md#wave-7-owner-park` | Rebuilds the owner-approved local park payload; without `--apply` it changes no deployment. | offline |
+| `node scripts/check-provider-lane.mjs --verify-gate` | Runs the real gate behavior suite; a parked row is absent from tenant visibility. | offline |
 
 ## Operational notes
 
@@ -153,8 +180,9 @@ Extension path; it is stale, do not follow it.
 
 ## Known gaps & deferred work
 
-- **THE LANE HAS NEVER RUN LIVE.** No Stripe App credential exists in this deployment. The lane row
-  is `parked`, the open condition is UNCLEARED, and REVN-03 stays incomplete.
+- **THE LANE HAS NEVER RUN LIVE.** No Stripe App credential exists in this deployment. The wave-7
+  owner decision is PARK; deployment state was not inspected or changed in the local-only 28-24
+  execution. The open condition is UNCLEARED, and REVN-03 stays incomplete.
 - **`handleCallback` has NO CALLER.** The `/stripe/callback` HTTP route and the connections UI are
   28-09's, so a live run cannot complete a consent yet.
 - **The Stripe App itself is not registered.** The manifest declaring `stripe_api_access_type:

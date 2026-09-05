@@ -10,8 +10,13 @@
 // must move to the Subscription Update API. v1 avoids this by keeping metering internal. That is
 // a migration, not a flag flip.
 import { TRIAL_DAYS } from "@pikar/billing/config";
+import { subscriptionState } from "@pikar/billing/events";
+import { unappliedStage } from "@pikar/billing/reconcile";
 import { v } from "convex/values";
-import { stripePost } from "./billingApi";
+import { internal } from "./_generated/api";
+import { internalAction, internalQuery } from "./_generated/server";
+import { billingConfigured, stripeDelete, stripeHostedUrl, stripePost } from "./billingApi";
+import { billingCoverageFor } from "./billingLedger";
 import { tenantAction, tenantQuery } from "./lib/functions";
 
 /**
@@ -22,9 +27,6 @@ import { tenantAction, tenantQuery } from "./lib/functions";
  * link that has already been spent. Sixty seconds collapses a double-click and nothing more.
  */
 export const PORTAL_IDEMPOTENCY_WINDOW_MS = 60_000;
-
-/** Where a hosted Stripe page is allowed to send a browser. */
-const STRIPE_HOSTED_SUFFIX = ".stripe.com";
 
 /** The result shape both doors return: a hosted url, or a code-token refusal. Never prose. */
 type Door = { ok: true; url: string } | { ok: false; reason: string };
@@ -84,8 +86,10 @@ export function checkoutParams(input: {
   priceId: string;
   trialDays: number | null;
   origin: string;
+  /** The tenant's existing Stripe customer, or `null` when they have never subscribed (#5). */
+  customerId: string | null;
 }): Record<string, string> {
-  const { tenantId, priceId, trialDays, origin } = input;
+  const { tenantId, priceId, trialDays, origin, customerId } = input;
   if (typeof trialDays !== "number" || !Number.isInteger(trialDays) || trialDays <= 0) {
     throw new Error("TRIAL_DAYS is not configured — refusing to open Checkout with no trial");
   }
@@ -101,34 +105,35 @@ export function checkoutParams(input: {
     // tenant; without it a paid checkout has nothing to match and must dead-letter.
     client_reference_id: tenantId,
     "metadata[tenantId]": tenantId,
+    // THE SAME THREAD, ON THE SUBSCRIPTION. `client_reference_id` lives on the Checkout Session
+    // only, and Stripe does not guarantee delivery order: a `customer.subscription.created` that
+    // overtakes its `checkout.session.completed` carries no session, so without this it cannot be
+    // attributed to a tenant at all and must dead-letter. Added in 28.1-05 (deviation Rule 2) —
+    // "order-independent" is not achievable with one thread.
+    "subscription_data[metadata][tenantId]": tenantId,
+    // AUDIT #5: reuse the Stripe customer this tenant already has. Omitted entirely when there is
+    // none — an empty string is a 400 and a fabricated id is worse. Without this, a tenant who
+    // cancels and re-subscribes is minted a SECOND `cus_`, `applyMapping` refuses it as a
+    // `tenantConflict` against the stored one, and every event for the new customer dead-letters:
+    // their money reaches Stripe and never reaches our ledger.
+    ...(customerId === null ? {} : { customer: customerId }),
     success_url: `${origin}/dashboard/settings?checkout=success`,
     cancel_url: `${origin}/dashboard/settings?checkout=cancel`,
   };
 }
 
 /**
- * Lift ONLY the hosted url out of a Stripe response, and only if it points at Stripe.
+ * Lift ONLY the hosted url out of a Checkout/Portal session response, and only if it is Stripe's.
  *
- * The caller redirects a browser to whatever comes back, so an unvalidated `url` field is an
- * open redirect with a Stripe response as its source. Everything else in the response — the
- * customer id, `customer_details.email`, the amount — is dropped here rather than at the UI.
+ * The caller redirects a browser to whatever comes back, so an unvalidated `url` field is an open
+ * redirect with a Stripe response as its source. Everything else in the response — the customer
+ * id, `customer_details.email`, the amount — is dropped here rather than at the UI.
  *
- * ponytail: host suffix check, not an allow-list of `checkout.` and `billing.`. Ceiling: it would
- * accept a Stripe CUSTOM DOMAIN only if that domain were still under stripe.com, and we configure
- * none. Upgrade path: if a custom Checkout domain is ever configured, name it explicitly here.
+ * The origin check itself lives in `billingApi.ts` (`stripeHostedUrl`), shared with the invoice
+ * rollup, which reads the same class of url off `invoice.hosted_invoice_url`.
  */
 function hostedUrl(value: unknown): string | null {
-  const raw = (value as { url?: unknown } | null)?.url;
-  if (typeof raw !== "string") return null;
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== "https:") return null;
-  if (!parsed.hostname.endsWith(STRIPE_HOSTED_SUFFIX)) return null;
-  return raw;
+  return stripeHostedUrl((value as { url?: unknown } | null)?.url);
 }
 
 /**
@@ -171,13 +176,25 @@ export function portalSession(
 /**
  * The tenant's Stripe customer id, or null.
  *
- * 28.1-05 creates the `billingCustomers` table and fills this in. Until then there is no table to
- * read, so it is null for every tenant — and null must NEVER become "create one". Provisioning a
- * customer to make a portal call succeed mints a Stripe object nothing maps back to.
+ * An `internalQuery` rather than a helper because `portalLink` is an ACTION and an action has no
+ * `ctx.db` — the same shape `requireOwnerAction` takes for the same reason. Not client-callable,
+ * so there is no second door to authorize; `tenantId` arrives from `tenantAction`'s own identity
+ * resolution and is never caller-supplied.
+ *
+ * Null must NEVER become "create one". Provisioning a Stripe customer to make a portal call
+ * succeed mints a merchant-side object that nothing in this database maps back to.
  */
-function stripeCustomerId(_tenantId: string): string | null {
-  return null;
-}
+export const stripeCustomerFor = internalQuery({
+  args: { tenantId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { tenantId }) => {
+    const row = await ctx.db
+      .query("billingCustomers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .first();
+    return row?.stripeCustomerId ?? null;
+  },
+});
 
 /** BILL-01: start a Stripe-hosted Checkout for the flat-rate plan. */
 export const startCheckout = tenantAction({
@@ -186,12 +203,23 @@ export const startCheckout = tenantAction({
   handler: async (ctx): Promise<Door> => {
     const priceId = requirePriceId();
     const origin = requireAppOrigin();
+    const customerId = await ctx.runQuery(internal.billing.stripeCustomerFor, {
+      tenantId: ctx.tenantId,
+    });
     return hostedSession(
       "/v1/checkout/sessions",
-      checkoutParams({ tenantId: ctx.tenantId, priceId, trialDays: TRIAL_DAYS, origin }),
-      // Deterministic per (tenant, price, UTC day): a double-click cannot mint two sessions, and
-      // the key is derived from exactly the inputs that build the body above.
-      `checkout:${ctx.tenantId}:${priceId}:${billingPeriodKey(Date.now())}`,
+      checkoutParams({
+        tenantId: ctx.tenantId,
+        priceId,
+        trialDays: TRIAL_DAYS,
+        origin,
+        customerId,
+      }),
+      // Deterministic per (tenant, price, customer, UTC day): a double-click cannot mint two
+      // sessions, and the key is derived from exactly the inputs that build the body above —
+      // `customerId` included, because replaying a key with a DIFFERENT body is an error at Stripe
+      // and a mapping that lands mid-day changes the body.
+      `checkout:${ctx.tenantId}:${priceId}:${customerId ?? "new"}:${billingPeriodKey(Date.now())}`,
     );
   },
 });
@@ -204,7 +232,9 @@ export const portalLink = tenantAction({
   args: {},
   returns: doorReturns,
   handler: async (ctx): Promise<Door> => {
-    const customerId = stripeCustomerId(ctx.tenantId);
+    const customerId = await ctx.runQuery(internal.billing.stripeCustomerFor, {
+      tenantId: ctx.tenantId,
+    });
     if (customerId === null) return { ok: false, reason: "no_stripe_customer" };
     const origin = requireAppOrigin();
     const window = Math.floor(Date.now() / PORTAL_IDEMPOTENCY_WINDOW_MS);
@@ -219,15 +249,297 @@ export const portalLink = tenantAction({
 /**
  * BILL-01: what this tenant's billing state is — or, honestly, that we do not know.
  *
- * `unknown` is NOT `not_subscribed` and is never a free tier or a zero. 28.1-05 creates
- * `billingCustomers`; today there is no row to read for anyone, so `unknown` is the only answer
- * the code has evidence for. The other two literals are the contract 28.1-05 fills in — they are
- * UNREACHABLE today and no test pretends otherwise.
+ * `unknown` is NOT `not_subscribed` and is never a free tier or a zero, and 28.1-05 did not change
+ * that — it only gave the other two arms a row to be reached from. THREE things still answer
+ * `unknown`: no mapping at all, a mapping written by a checkout that has not yet seen a
+ * `customer.subscription.*` (status `pending`), and any status Stripe adds after
+ * `subscriptionState` was written. The classification is @pikar/billing's; this handler only reads
+ * the row.
  */
 export const billingStatus = tenantQuery({
   args: {},
   returns: v.object({
     state: v.union(v.literal("unknown"), v.literal("not_subscribed"), v.literal("subscribed")),
   }),
-  handler: async () => ({ state: "unknown" as const }),
+  handler: async (ctx) => {
+    const row = await ctx.db
+      .query("billingCustomers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .first();
+    return { state: subscriptionState(row?.status) };
+  },
+});
+
+/**
+ * How many held balances one read returns. A tenant has ONE Stripe customer, so in practice this
+ * is one row per currency — the cap exists because an unbounded read on a money surface is a
+ * defect waiting for a bad day, not because the number is expected to be large.
+ */
+export const UNAPPLIED_FUNDS_PAGE_LIMIT = 100;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * BILL-03: money we HOLD that is attached to nothing — with its AGE, which is the whole point.
+ *
+ * **THIS IS NOT "MONEY ARRIVED", AND GETTING IT BACKWARDS IS THE TRAP THE RESEARCH FLAGGED.**
+ * Under Stripe's DEFAULT automatic reconciliation, `cash_balance.funds_available` fires only when
+ * a positive balance REMAINS after reconciliation. So every row here is leftover bank-transfer
+ * money in the customer's cash balance that Stripe could not match to an invoice — not a payment,
+ * and not revenue. It books ZERO `billingEvents` rows for exactly that reason.
+ *
+ * THE AGE IS THE ACTIONABLE HALF. The amount alone cannot be acted on, because unreconciled money
+ * has a clock: Stripe emails reminders, attempts to RETURN the funds to the customer's bank at
+ * `UNRECONCILED_RETURN_DAYS` (75), and SWEEPS what it cannot return to the account balance by
+ * `UNRECONCILED_SWEEP_DAYS` (90). A screen that shows the number without the age reports a
+ * standing balance that is quietly about to leave.
+ *
+ * COVERAGE IS REPORTED SEPARATELY AND IS NEVER FOLDED INTO THE LIST. An empty list under
+ * `unknown` means "we have never watched this tenant's billing"; an empty list under `known` means
+ * "there is genuinely nothing held". Rendering both as "nothing owed" is the `CashFigure` mistake
+ * (`@pikar/core`'s `cash.ts`): missing history is unknown, never zero.
+ */
+export const unappliedFunds = tenantQuery({
+  args: {},
+  returns: v.object({
+    coverage: v.union(v.literal("unknown"), v.literal("known")),
+    coverageStartedAt: v.union(v.number(), v.null()),
+    funds: v.array(
+      v.object({
+        stripeObjectId: v.string(),
+        amountMinor: v.number(),
+        currency: v.string(),
+        ageDays: v.number(),
+        stage: v.union(v.literal("held"), v.literal("return-attempted"), v.literal("swept")),
+      }),
+    ),
+    /** True when the cap bit. Said out loud, because a silently partial money list is a wrong one. */
+    truncated: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const coverageStartedAt = await billingCoverageFor(ctx, ctx.tenantId);
+    const page = await ctx.db
+      .query("billingUnapplied")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .take(UNAPPLIED_FUNDS_PAGE_LIMIT + 1);
+    // A ZEROED row is a hold that CLEARED, kept only so a late Stripe redelivery cannot resurrect
+    // it (28.1-11 #8). It is not money we hold, so it never reaches a surface — and it must never
+    // arrive here wearing an age and a 75/90 stage over an amount of nothing.
+    const held = page.filter((row) => row.amountMinor !== 0);
+    const now = Date.now();
+
+    return {
+      // `null` is the unknown, and it is not collapsed into a zero anywhere on the way out.
+      coverage: coverageStartedAt === null ? ("unknown" as const) : ("known" as const),
+      coverageStartedAt,
+      funds: held.slice(0, UNAPPLIED_FUNDS_PAGE_LIMIT).map((row) => {
+        // From `observedAt`, which is when the money was FIRST seen unapplied and never moves —
+        // so the clock keeps running while the row sits here, which is the behaviour that makes
+        // the 75/90 stages mean anything. Two currencies are two rows and are never combined.
+        const ageDays = Math.max(0, Math.floor((now - row.observedAt) / DAY_MS));
+        return {
+          stripeObjectId: row.stripeObjectId,
+          amountMinor: row.amountMinor,
+          currency: row.currency,
+          ageDays,
+          stage: unappliedStage(ageDays),
+        };
+      }),
+      truncated: page.length > UNAPPLIED_FUNDS_PAGE_LIMIT,
+    };
+  },
+});
+
+/**
+ * How many invoices one read returns. A monthly biller reaches this in four years, so the cap is
+ * about never letting a money surface run unbounded — not about the number being expected.
+ */
+export const INVOICE_PAGE_LIMIT = 50;
+
+/**
+ * BILL-04: the tenant's invoices, as ONE LINK EACH.
+ *
+ * B2B customers who cannot pay by card pay on Stripe's HOSTED INVOICE PAGE
+ * (`invoice.hosted_invoice_url`). We serve that link and nothing else: no invoice renderer, no
+ * payment form, no card field and no custom 3DS anywhere in this repo (locked decision, and
+ * `billing.test.ts` scans both this subsystem and `apps/web` to hold it). The hosted page is also
+ * what handles authentication and, where the merchant's country supports it, prints the bank
+ * transfer instructions.
+ *
+ * BANK TRANSFER IS COUNTRY-GATED AND THIS DEPLOYMENT CANNOT ANSWER IT. `BANK_TRANSFER_ENABLED` is
+ * `true` in config but `HEAD_OFFICE_COUNTRY` is null and `CONFIG_CONFIRMED` is false — the
+ * business is not registered yet. If bank transfer turns out NOT to be available for the eventual
+ * country, nothing here changes and nothing here is faked: the hosted page simply serves card
+ * payment and the transfer instructions do not appear. The code path is not deleted, because the
+ * law it encodes (we serve a link, we never render a payment surface) is what makes it safe to
+ * enable later. Recorded in `docs/playbooks/billing.md`.
+ *
+ * ONLY `posted` PERIODS. A `pending` or `claimed` period is work in progress and a `failed` one is
+ * an operator's problem — neither is a document anybody owes money on, and neither has a hosted
+ * url to serve. Showing them would turn an internal state machine into a billing statement.
+ *
+ * COVERAGE IS REPORTED SEPARATELY, exactly as `unappliedFunds` does it: an empty list under
+ * `unknown` means "this ledger has never watched this tenant", an empty list under `known` means
+ * "there is genuinely no invoice". Missing history is unknown, never zero (`@pikar/core`'s
+ * `cash.ts`).
+ */
+export const invoices = tenantQuery({
+  args: {},
+  returns: v.object({
+    coverage: v.union(v.literal("unknown"), v.literal("known")),
+    coverageStartedAt: v.union(v.number(), v.null()),
+    invoices: v.array(
+      v.object({
+        periodKey: v.string(),
+        periodStart: v.number(),
+        periodEnd: v.number(),
+        postedAt: v.number(),
+        amountMinor: v.number(),
+        currency: v.string(),
+        /** Stripe's, verbatim. It was validated to an https `*.stripe.com` origin before it was
+         *  stored (`billingApi.stripeHostedUrl`); nothing re-writes it on the way out. */
+        hostedInvoiceUrl: v.string(),
+      }),
+    ),
+    /** True when the cap bit. A silently partial list of bills is a wrong one. */
+    truncated: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const coverageStartedAt = await billingCoverageFor(ctx, ctx.tenantId);
+    const page = await ctx.db
+      .query("billingPeriods")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .take(INVOICE_PAGE_LIMIT + 1);
+
+    return {
+      coverage: coverageStartedAt === null ? ("unknown" as const) : ("known" as const),
+      coverageStartedAt,
+      invoices: page
+        .slice(0, INVOICE_PAGE_LIMIT)
+        // ponytail: filter after the page rather than a fourth index on `status`. Ceiling: a
+        // tenant with more than INVOICE_PAGE_LIMIT unposted periods would push posted ones off
+        // the page. Upgrade path: a `by_tenant_status` index, the day a producer exists at all.
+        .flatMap((row) =>
+          row.status === "posted" &&
+          row.hostedInvoiceUrl !== undefined &&
+          row.postedAt !== undefined &&
+          row.amountMinor !== undefined &&
+          row.currency !== undefined
+            ? [
+                {
+                  periodKey: row.periodKey,
+                  periodStart: row.periodStart,
+                  periodEnd: row.periodEnd,
+                  postedAt: row.postedAt,
+                  amountMinor: row.amountMinor,
+                  currency: row.currency,
+                  hostedInvoiceUrl: row.hostedInvoiceUrl,
+                },
+              ]
+            : [],
+        ),
+      truncated: page.length > INVOICE_PAGE_LIMIT,
+    };
+  },
+});
+
+// ── BILL-06: the erasure arm ──────────────────────────────────────────────────────────────────
+
+/** Stripe subscription ids are a prefix plus base62. Shape-checked before it is interpolated into
+ *  a request path — a raw stored string reaching a URL is path injection. */
+const SUBSCRIPTION_ID = /^sub_[A-Za-z0-9]{1,128}$/;
+
+/** The subscription to terminate, or `null` when this tenant never had one. Read from
+ *  `billingCustomers` — which is `tenant_owned`, and therefore DELETED by the erasure page loop.
+ *  That is precisely why the billing arm must run BEFORE the loop. */
+export const subscriptionForTermination = internalQuery({
+  args: { tenantId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { tenantId }) => {
+    const row = await ctx.db
+      .query("billingCustomers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .first();
+    return row?.subscriptionId ?? null;
+  },
+});
+
+/**
+ * Cancel a tenant's subscription IMMEDIATELY, as part of erasing them (BILL-06).
+ *
+ * Immediately, not at the period end: the tenant is being deleted, and a subscription left running
+ * to the period boundary goes on charging a card belonging to nobody — which is the exact failure
+ * the requirement names. Stripe's immediate cancellation is `DELETE /v1/subscriptions/{id}`.
+ *
+ * **IT MUST NEVER THROW.** `deleteTenantData` records a `failure` rather than aborting, and an
+ * erasure that stops because Stripe is down is a worse outcome than one that completes with a
+ * recorded failure the owner can act on. Every failure class — an HTTP error, a timeout, a network
+ * drop, missing configuration, an unusable stored id — comes back as `failure: true` with a CODE.
+ *
+ * **AND AN ABSENT SUBSCRIPTION IS NOT A FAILURE.** A tenant who never subscribed has nothing to
+ * cancel; reporting that as a failure would train the owner to ignore the field. But a missing
+ * SECRET KEY is a failure, and loudly: a "no-op cancel" that reports done is how a subscription
+ * outlives the tenant it belonged to, and it would look identical to success in the audit row.
+ */
+export const terminateBilling = internalAction({
+  args: { tenantId: v.string() },
+  returns: v.object({
+    hadSubscription: v.boolean(),
+    cancelled: v.boolean(),
+    failure: v.boolean(),
+    failureCode: v.optional(v.string()),
+  }),
+  handler: async (ctx, { tenantId }) => {
+    const subscriptionId = await ctx.runQuery(internal.billing.subscriptionForTermination, {
+      tenantId,
+    });
+    if (subscriptionId === null) {
+      return { hadSubscription: false, cancelled: false, failure: false };
+    }
+    if (!SUBSCRIPTION_ID.test(subscriptionId)) {
+      return {
+        hadSubscription: true,
+        cancelled: false,
+        failure: true,
+        failureCode: "unusable_subscription_id",
+      };
+    }
+    if (!billingConfigured()) {
+      // Asked BEFORE the call, not caught after it. `stripeDelete` throws on a missing key, and a
+      // caught throw here would be indistinguishable from a network fault — the owner needs to
+      // know the difference between "Stripe refused" and "we never asked".
+      return {
+        hadSubscription: true,
+        cancelled: false,
+        failure: true,
+        failureCode: "billing_not_configured",
+      };
+    }
+    try {
+      const result = await stripeDelete(`/v1/subscriptions/${subscriptionId}`, {
+        // Derived from the pair, so a retry re-sends the SAME cancellation rather than a new one.
+        idempotencyKey: `billing-terminate:${tenantId}:${subscriptionId}`,
+      });
+      if (!result.ok) {
+        // A code token, never Stripe prose (§4). `StripeFailure.kind` is already a closed set and
+        // `code` is shape-checked at the transport.
+        return {
+          hadSubscription: true,
+          cancelled: false,
+          failure: true,
+          failureCode: `stripe_${result.error.kind}`,
+        };
+      }
+      return { hadSubscription: true, cancelled: true, failure: false };
+    } catch {
+      // The transport already turns network and timeout faults into `err(...)`, so reaching here
+      // means something unforeseen. It still may not abort an erasure.
+      return {
+        hadSubscription: true,
+        cancelled: false,
+        failure: true,
+        failureCode: "billing_terminate_threw",
+      };
+    }
+  },
 });

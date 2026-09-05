@@ -14,9 +14,13 @@
 // a second "use node" module importing a sibling "use node" module's internals would re-trigger
 // the TS circular-inference cliff (04-RESEARCH §6) — the model-resolution helper below is a
 // small local duplicate, not a shared import.
-import { openai } from "@ai-sdk/openai";
 import { ATTACHMENT_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
-import { priceTranscription, priceUsage } from "@pikar/cost";
+import {
+  DEFAULT_MODEL,
+  OR_INTAKE_TRANSCRIPTION_MODEL,
+  priceTranscription,
+  priceUsage,
+} from "@pikar/cost";
 import { classify, frameForConversation, type IntakeKind } from "@pikar/extraction";
 import { scanText } from "@pikar/pii";
 import { generateText, experimental_transcribe as transcribe } from "ai";
@@ -26,6 +30,7 @@ import { api, internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { fogIntegration } from "./lib/foglamp";
 import { tenantAction } from "./lib/functions";
+import { resolveModel, transcriptionModel, transcriptionUsage } from "./lib/models";
 
 // Per-call wall-clock ceiling (mirrors llm.ts's CALL_TIMEOUT_MS).
 const CALL_TIMEOUT_MS = 45_000;
@@ -69,12 +74,17 @@ async function transcribeAudio(
   if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX))
     return sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
 
+  // 33.2-05: through OpenRouter (lib/models.ts); the provider's own bill first — see vaultTranscribe.
   const result = await transcribe({
-    model: openai.transcription("gpt-4o-transcribe"),
+    model: transcriptionModel(OR_INTAKE_TRANSCRIPTION_MODEL),
     audio: bytes,
     abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
   });
-  const priced = priceTranscription(result.durationInSeconds ?? 0);
+  const usage = transcriptionUsage(result);
+  const priced =
+    usage.costUsd === undefined
+      ? priceTranscription(result.durationInSeconds ?? usage.seconds ?? 0)
+      : { ok: true as const, value: usage.costUsd };
   if (priced.ok) {
     // FIN-01 correlation. `artifactId` is the discriminator: runIntake inserts a FRESH
     // intakeArtifacts row per attempt (step 4, unconditional), so an action re-entry — which
@@ -87,7 +97,7 @@ async function transcribeAudio(
       tenantId,
       costUsd: priced.value,
       correlationId: `intake:transcribe:${artifactId}`,
-      model: "gpt-4o-transcribe",
+      model: OR_INTAKE_TRANSCRIPTION_MODEL,
       kind: "transcribe",
     });
   }
@@ -115,13 +125,13 @@ async function extractVisual(
   });
   const { text, usage } = await generateText({
     telemetry: { integrations: [fogIntegration({ agentName: "attachment-extractor" })] },
-    model: openai("gpt-4o-mini"),
+    model: resolveModel(DEFAULT_MODEL), // 33.2-06: through OpenRouter — see vaultExtract.extractHosted
     system: skill.body,
     messages: [{ role: "user", content: [{ type: "file", data: bytes, mediaType: mimeType }] }],
     abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     maxRetries: 1,
   });
-  const priced = priceUsage("openai/gpt-4o-mini", usage);
+  const priced = priceUsage(DEFAULT_MODEL, usage);
   if (priced.ok) {
     // FIN-01 correlation — same reasoning as transcribeAudio above: the per-attempt `artifactId`
     // is what keeps a re-entered action's second (real) vision call on its own ledger row, and the
@@ -130,7 +140,7 @@ async function extractVisual(
       tenantId,
       costUsd: priced.value,
       correlationId: `intake:extract:${artifactId}`,
-      model: "gpt-4o-mini",
+      model: DEFAULT_MODEL,
       kind: "extract",
     });
   }

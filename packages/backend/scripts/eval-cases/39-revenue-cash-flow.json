@@ -1,0 +1,43 @@
+{
+  "id": "39-revenue-cash-flow",
+  "description": "Cash flow is the exact precomputed minor-unit result; the candidate may explain it but may not recalculate or round it.",
+  "candidate": { "name": "revenue-cash-flow", "version": 1 },
+  "turns": ["What is our 30-day cash-flow outlook in USD? Use the computed result exactly."],
+  "expect": {
+    "expectedState": {
+      "outcome": "ready",
+      "toolTrace": ["readBusinessFinance"],
+      "result": {
+        "operation": "cash_flow",
+        "asOfMs": 1788134400000,
+        "horizonDays": 30,
+        "confidence": "high",
+        "coverage": {
+          "providers": ["quickbooks"],
+          "authorities": ["accounting_authority"],
+          "capped": false,
+          "partial": false,
+          "missingCount": 0
+        },
+        "values": [
+          {
+            "currency": "USD",
+            "state": "known",
+            "pointCount": 3,
+            "closingMinor": 1250000,
+            "closingCurrency": "USD"
+          }
+        ],
+        "sources": [
+          { "provider": "quickbooks", "state": "ready", "coverageCount": 4, "missingCount": 0 },
+          { "provider": "stripe", "state": "unavailable", "coverageCount": 0, "missingCount": 0 },
+          { "provider": "paypal", "state": "unavailable", "coverageCount": 0, "missingCount": 0 }
+        ],
+        "exclusionCount": 2
+      },
+      "refs": ["quickbooks:account:cash"],
+      "counts": { "values": 1, "points": 3, "writes": 0 }
+    }
+  },
+  "needles": ["30-day", "USD"]
+}

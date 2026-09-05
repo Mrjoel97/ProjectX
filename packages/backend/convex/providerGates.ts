@@ -22,8 +22,20 @@
 // DEPLOYMENT-GLOBAL. `providerGates` has no `tenantId` (classified `global` in
 // `@pikar/core/tenantData`), which is what stops a tenant from ever widening its own provider
 // access. Every tenant reads the identical projection and none of them can write one.
+
+import {
+  REVENUE_CALL_LIST_SKILL,
+  REVENUE_CASH_FLOW_SKILL,
+  REVENUE_CUSTOMER_PULSE_SKILL,
+  REVENUE_INVOICE_REMINDER_SKILL,
+  REVENUE_LEAD_TRIAGE_SKILL,
+  REVENUE_PAYROLL_CONFIDENCE_SKILL,
+  REVENUE_PIPELINE_REVIEW_SKILL,
+  REVENUE_SPECIALIST_SKILL,
+} from "@pikar/contracts/skill";
 import {
   type Admission,
+  admissionPermits,
   type ConnectorEnvironment,
   type Eligibility,
   type Lane,
@@ -132,6 +144,24 @@ async function eligibilityFor(
 }
 
 /**
+ * Every PASSED (provider, environment), as a plain function so a server-side reader can join
+ * against it without going through a tenant query.
+ *
+ * ONE resolver, one filter. `availableProviders` below is this same answer wrapped for a browser;
+ * `connectorConnections.connections` uses this directly. Two filters over the same rows is how one
+ * of them eventually forgets an axis.
+ */
+export async function passedProviderGates(
+  ctx: QueryCtx | MutationCtx,
+  now: number,
+): Promise<{ provider: Provider; environment: ConnectorEnvironment }[]> {
+  const rows = await ctx.db.query("providerGates").collect();
+  return rows
+    .filter((row) => resolve(asRecord(row), row.provider, now).state === "passed")
+    .map((row) => ({ provider: row.provider, environment: row.environment }));
+}
+
+/**
  * The PASSED-ONLY projection every consumer reads: connections UI, discovery, the revenue tools and
  * the final-close gate. It returns the provider and the environment and NOTHING else — no evidence
  * ref, no revision, no review date. A surface that could see the review date could render "expiring
@@ -148,6 +178,156 @@ export const availableProviders = tenantQuery({
     return rows
       .filter((row) => resolve(asRecord(row), row.provider, now).state === "passed")
       .map((row) => ({ provider: row.provider, environment: row.environment }));
+  },
+});
+
+type RevenueDiscoverySpec = {
+  id: string;
+  provider: Provider;
+  providerLabel: string;
+  title: string;
+  summary: string;
+  opener: string;
+  skillName:
+    | typeof REVENUE_LEAD_TRIAGE_SKILL
+    | typeof REVENUE_CALL_LIST_SKILL
+    | typeof REVENUE_PIPELINE_REVIEW_SKILL
+    | typeof REVENUE_CUSTOMER_PULSE_SKILL
+    | typeof REVENUE_CASH_FLOW_SKILL
+    | typeof REVENUE_PAYROLL_CONFIDENCE_SKILL
+    | typeof REVENUE_INVOICE_REMINDER_SKILL;
+};
+
+/**
+ * Code-owned workflow suitability. Provider rows decide whether a lane may be used; active skill
+ * rows decide whether this exact workflow and its runtime specialist may be offered. The browser
+ * receives only their intersection and cannot reconstruct a parked lane from module or docs presence.
+ */
+const REVENUE_DISCOVERY: readonly RevenueDiscoverySpec[] = [
+  {
+    id: "lead-triage",
+    provider: "hubspot",
+    providerLabel: "HubSpot",
+    title: "Lead triage",
+    summary: "Rank the people who need attention from current CRM facts.",
+    opener: "Review my HubSpot leads and rank who needs attention.",
+    skillName: REVENUE_LEAD_TRIAGE_SKILL,
+  },
+  {
+    id: "call-list",
+    provider: "hubspot",
+    providerLabel: "HubSpot",
+    title: "Call list",
+    summary: "Build a review list from current follow-ups and CRM coverage.",
+    opener: "Build my HubSpot call list from current follow-ups.",
+    skillName: REVENUE_CALL_LIST_SKILL,
+  },
+  {
+    id: "pipeline-review",
+    provider: "hubspot",
+    providerLabel: "HubSpot",
+    title: "Pipeline review",
+    summary: "Review source-owned deals beside local follow-up state.",
+    opener: "Review my HubSpot pipeline and name any missing coverage.",
+    skillName: REVENUE_PIPELINE_REVIEW_SKILL,
+  },
+  {
+    id: "customer-pulse-hubspot",
+    provider: "hubspot",
+    providerLabel: "HubSpot",
+    title: "Customer pulse",
+    summary: "Review bounded CRM signals without inventing missing history.",
+    opener: "Give me a customer pulse from HubSpot and name any missing coverage.",
+    skillName: REVENUE_CUSTOMER_PULSE_SKILL,
+  },
+  {
+    id: "cash-flow-quickbooks",
+    provider: "quickbooks",
+    providerLabel: "QuickBooks",
+    title: "Cash flow",
+    summary: "Explain the deterministic cash view with coverage and confidence.",
+    opener: "Review my QuickBooks cash flow and explain its coverage and confidence.",
+    skillName: REVENUE_CASH_FLOW_SKILL,
+  },
+  {
+    id: "payroll-confidence",
+    provider: "quickbooks",
+    providerLabel: "QuickBooks",
+    title: "Payroll confidence",
+    summary: "Explain the computed payroll view without treating unknowns as zero.",
+    opener: "Review my QuickBooks payroll confidence and name every unknown.",
+    skillName: REVENUE_PAYROLL_CONFIDENCE_SKILL,
+  },
+  ...(["quickbooks", "stripe", "paypal"] as const).map((provider) => ({
+    id: `invoice-reminder-${provider}`,
+    provider,
+    providerLabel:
+      provider === "quickbooks" ? "QuickBooks" : provider === "stripe" ? "Stripe" : "PayPal",
+    title: "Invoice reminder",
+    summary: "Prepare a reminder draft for human approval. Nothing is sent.",
+    opener: `Prepare an invoice reminder from ${provider === "quickbooks" ? "QuickBooks" : provider === "stripe" ? "Stripe" : "PayPal"}. Keep it as a draft for my approval.`,
+    skillName: REVENUE_INVOICE_REMINDER_SKILL,
+  })),
+  ...(["stripe", "paypal"] as const).flatMap((provider) => {
+    const providerLabel = provider === "stripe" ? "Stripe" : "PayPal";
+    return [
+      {
+        id: `cash-flow-${provider}`,
+        provider,
+        providerLabel,
+        title: "Cash flow",
+        summary: "Explain the deterministic payment-rail view with honest coverage.",
+        opener: `Review my ${providerLabel} cash flow and name any missing coverage.`,
+        skillName: REVENUE_CASH_FLOW_SKILL,
+      },
+      {
+        id: `customer-pulse-${provider}`,
+        provider,
+        providerLabel,
+        title: "Customer pulse",
+        summary: "Review bounded payment signals without inventing missing history.",
+        opener: `Give me a customer pulse from ${providerLabel} and name any missing coverage.`,
+        skillName: REVENUE_CUSTOMER_PULSE_SKILL,
+      },
+    ];
+  }),
+];
+
+/** PASSED provider state plus exact active workflow/runtime pins, composed on the server. */
+export const revenueDiscovery = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const passed = new Set(
+      (await passedProviderGates(ctx, Date.now()))
+        .filter(({ environment }) => environment === "production")
+        .map(({ provider }) => provider),
+    );
+    if (passed.size === 0) return [];
+
+    const runtime = await ctx.db
+      .query("skills")
+      .withIndex("by_name_status", (q) =>
+        q.eq("name", REVENUE_SPECIALIST_SKILL).eq("status", "active"),
+      )
+      .unique();
+    if (runtime === null) return [];
+
+    const out = [];
+    for (const spec of REVENUE_DISCOVERY) {
+      if (!passed.has(spec.provider)) continue;
+      const skill = await ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", spec.skillName).eq("status", "active"))
+        .unique();
+      if (skill === null) continue;
+      const { skillName, ...view } = spec;
+      out.push({
+        ...view,
+        skill: { name: skillName, version: skill.version },
+        runtimeSkill: { name: REVENUE_SPECIALIST_SKILL, version: runtime.version },
+      });
+    }
+    return out;
   },
 });
 
@@ -168,6 +348,69 @@ export const inspectGate = ownerQuery({
       openConditions: openConditionIdsFor(provider),
       eligibility: resolve(row === null ? null : asRecord(row), provider, Date.now()),
     };
+  },
+});
+
+/**
+ * May a consent be STARTED for this provider, by THIS caller?
+ *
+ * Three answers, and the middle one is the whole reason this is not just `connectPermitted`:
+ *
+ *   - `lane === "passed"` — ANY tenant may start. The provider proved itself; it is a product
+ *     feature.
+ *   - admission permits but the lane has not passed — **OWNER ONLY**. This is the evidence-
+ *     gathering window: somebody has to complete a real grant before wave 7 can judge the lane, and
+ *     that somebody is the operator, not a customer. Without this branch the phase deadlocks again
+ *     (see `connectPermitted`); without the owner restriction, sealing a `parked` row would quietly
+ *     make an unproven provider connectable by every tenant who called the action directly.
+ *   - anything else — nobody.
+ *
+ * Called from ONE place: `connectorOAuth.mintConnectState`, which every provider's connect flow
+ * passes through. Gating there rather than in four provider modules means a fifth lane cannot
+ * forget it.
+ */
+export async function connectStartAllowed(
+  ctx: QueryCtx | MutationCtx,
+  provider: Provider,
+  environment: ConnectorEnvironment,
+  isOwner: boolean,
+): Promise<boolean> {
+  const row = await rowFor(ctx, provider, environment);
+  if (row === null || row.lane === "failed") return false;
+  if (row.reviewBy <= Date.now()) return false;
+  if (!admissionPermits(row.admission, environment)) return false;
+  // The full rule, not just the admission: a passed lane is open to everyone.
+  if (resolve(asRecord(row), provider, Date.now()).state === "passed") return true;
+  return isOwner;
+}
+
+/**
+ * May an OAuth consent for this provider be COMPLETED in this environment?
+ *
+ * This is the callback route's only gate, and it is deliberately NOT `availableProviders`. Those two
+ * questions are different, and collapsing them deadlocks the phase:
+ *
+ *   - `availableProviders` asks "may a TENANT see and use this?" — it needs `lane === "passed"`,
+ *     which needs live evidence, which needs a completed grant, which needs this route.
+ *   - This asks "may a grant be completed at all?" — the ADMISSION axis alone, which is precisely
+ *     what `approved_production` means: permission to START. Wave 7 (28-22..25) judges the lane
+ *     with the evidence a completed grant produces; it cannot be the prerequisite for producing it.
+ *
+ * So a lane that is `parked` still permits a callback while remaining invisible to every tenant —
+ * the exact separation `providerGates` was built with two fields to express.
+ *
+ * What it still refuses: no row at all (nobody has judged this provider, so nothing permits it), a
+ * `failed` lane (a lane discovered broken must not accept new grants), an admission that does not
+ * reach this environment, and an expired review date (an approval that outlived its evidence is not
+ * an approval). The answer is one boolean — a route has no use for a reason it must not echo.
+ */
+export const connectPermitted = internalQuery({
+  args: { provider: providerValidator, environment: environmentValidator },
+  handler: async (ctx, { provider, environment }): Promise<boolean> => {
+    const row = await rowFor(ctx, provider, environment);
+    if (row === null || row.lane === "failed") return false;
+    if (row.reviewBy <= Date.now()) return false;
+    return admissionPermits(row.admission, environment);
   },
 });
 

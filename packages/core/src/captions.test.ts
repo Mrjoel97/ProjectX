@@ -19,6 +19,7 @@ import {
   concatWavTakes,
   DEFAULT_LINE_CHARS,
   groupIntoLines,
+  pcm16ToWav,
   rebaseWords,
   type SttWord,
   toAss,
@@ -155,6 +156,15 @@ describe("toAss — a valid file, and text that cannot become markup", () => {
     expect(ass.indexOf("[Script Info]")).toBe(0);
     expect(ass.indexOf("[V4+ Styles]")).toBeGreaterThan(0);
     expect(ass.indexOf("[Events]")).toBeGreaterThan(ass.indexOf("[V4+ Styles]"));
+  });
+
+  it("wraps INSIDE the margins — a full-length cue must never run off the frame", () => {
+    // Measured on the first rendered reel: a 31-character cue at 64px touched both frame edges
+    // under `WrapStyle: 2` (no wrapping). 0 is libass's smart wrap within MarginL/MarginR, which
+    // makes overflow impossible for any cue `groupIntoLines` can produce.
+    const header = toAss(lines).split("[V4+ Styles]")[0] ?? "";
+    expect(header).toContain("WrapStyle: 0");
+    expect(header).not.toContain("WrapStyle: 2");
   });
 
   it("writes H:MM:SS.cc times, ascending", () => {
@@ -467,5 +477,43 @@ describe("the module is pure", () => {
     expect(source).not.toMatch(/from\s+["']convex/);
     expect(source).not.toMatch(/from\s+["']node:/);
     expect(source).not.toMatch(/\bfetch\(/);
+  });
+});
+
+// ── 33.1: THE PCM16 -> WAV BRIDGE ─────────────────────────────────────────────────────────────
+//
+// OpenRouter's chat-audio stream returns HEADERLESS pcm16. Every reader downstream expects WAV.
+// These assertions deliberately go through `concatWavTakes` — the real consumer, which parses
+// `fmt `/`data` and refuses anything it does not recognise — rather than re-reading the header
+// this function just wrote. A test that only checked its own bytes back would pass just as well
+// against a header no other reader in this repo accepts.
+describe("pcm16ToWav — headerless samples become something the takes plane can read", () => {
+  /** 24 kHz mono 16-bit, the pinned MEDIA_DEFAULT_VOICE shape. */
+  const pcm = (samples: number): Uint8Array =>
+    Uint8Array.from({ length: samples * 2 }, (_, i) => i % 251);
+
+  it("produces a wav the REAL consumer accepts, with the duration the samples imply", () => {
+    const out = concatWavTakes([pcm16ToWav(pcm(24_000), 24_000)]);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    // 24,000 mono 16-bit samples at 24 kHz is exactly one second. A header that lied about the
+    // sample rate or the block align would still parse and would land here as the wrong number.
+    expect(out.value.durationS).toBe(1);
+  });
+
+  it("keeps every sample byte, at offset 44 — a voice take is not allowed to lose its tail", () => {
+    const samples = pcm(1_000);
+    const wav = pcm16ToWav(samples, 24_000);
+    expect(wav.byteLength).toBe(44 + samples.byteLength);
+    expect(Array.from(wav.subarray(44))).toEqual(Array.from(samples));
+  });
+
+  it("honours the sample rate it is given rather than assuming the default", () => {
+    // Not vacuous: a hardcoded 24000 inside the writer passes every assertion above. Here the
+    // same samples must read as HALF the duration, which only a threaded rate produces.
+    const out = concatWavTakes([pcm16ToWav(pcm(24_000), 48_000)]);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.value.durationS).toBe(0.5);
   });
 });

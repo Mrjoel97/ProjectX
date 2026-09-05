@@ -1,5 +1,33 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-08-31 (28-12 — **A FOURTH SPECIALIST ROUTE, `revenue`, AND ITS GRANT IS
+> FROZEN AND READ-ONLY.** Read from the committed RED tests (`f3f361a`) by the 33.1 lane, which does
+> not own this subsystem; recorded because §9 asks a change to travel with its playbook.
+>
+> **THE IMPLEMENTATION IS NOT LANDED. This is a TDD cycle mid-flight and the tests are deliberately
+> FAILING.** `specialists.ts` is modified in the working tree, and eight `revenue-*.md` bodies are
+> untracked. So read everything below as the CONTRACT the tests pin, not as shipped behaviour —
+> and expect the surrounding implementation notes to move. What will NOT move is the contract
+> itself: it was written first, which is the whole point of writing it as tests.
+>
+> **The registry becomes three growth specialists plus research, media and `revenue`.** The route
+> resolves to skill `revenue-specialist` and step tool `dispatchRevenue`.
+>
+> **The grant is EXACTLY three tools and it cannot write:**
+> `["readRevenueCrm", "readBusinessFinance", "declareUnsupported"]`. Two assertions guard it and
+> they guard different things — one pins the exact list, the other scans every granted tool name for
+> write/send/mutate/spend words, so a tool added later with an innocuous-looking name still has to
+> pass the word check. **Do not add a fourth tool to this route without re-reading both.**
+>
+> **`spec.tools` is the SAME OBJECT as `SPECIALISTS.revenue.tools` and is `Object.isFrozen`.** That
+> identity assertion is not ceremony: a resolver that returned a fresh copy per call would let one
+> caller's mutation of its own array go unnoticed, and the freeze is what makes the grant
+> immutable rather than merely conventional. A refactor that maps or spreads the array on the way
+> out breaks both assertions, and it should.
+>
+> `declareUnsupported` in a read-only grant is the honest-refusal primitive — the specialist can say
+> it cannot answer rather than reaching for a capability it was never given.)
+
 > Last verified: 2026-08-09 (cash-business-finance Task 5 REVIEW FIX — **`financialSpine.ts`'s
 > `round2` is now `export`ed, no other change.** `cash.ts`'s industry-CAC comparison
 > (`cacVsIndustry`) was rounding with its own `Math.round(x * 100) / 100`, a second definition of

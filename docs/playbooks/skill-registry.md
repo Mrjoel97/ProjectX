@@ -1,5 +1,95 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-03 (formatter sweep — **NO REGISTRY BEHAVIOUR CHANGED.**)
+>
+> Reformatted under this playbook's watch: `convex/skills.ts`, `convex/skills.test.ts`,
+> `contracts/src/skills/revenueBodies.ts`, `contracts/src/skills/skillBodies.test.ts`.
+>
+> **The one thing that would have mattered here, and did not happen:** a skill body is content that
+> gets hashed and version-pinned, so reformatting a body string would silently invalidate pins.
+> `skills-lock.json` was reformatted too, and its parsed content is byte-for-byte identical in
+> structure — the body hashes live INSIDE the JSON, not over its bytes, so `run-eval-golden.mjs`'s
+> pin comparison and `skills.ts`'s import both read exactly what they read before. `skills.test.ts`
+> passed in the green backend shard, which is the check that would fail first if a pin had drifted.
+>
+> **This is a `Last verified` bump ONLY, and deliberately not a re-verification of the sections
+> below.** The change was `pnpm format` (commit 6335831): Biome's formatter and organizeImports,
+> applied repo-wide to clear a Lint gate that had been exiting 1 with 45 diagnostics — all from
+> files this branch touched, none on main. `ci.yml` runs Lint BEFORE Test and Build, so a red Lint
+> was stopping the pipeline rather than reporting anything about whether the code works.
+>
+> Mechanical only, and checked rather than assumed: every changed `.json` parses to a structure
+> identical to its previous content, and the full suites re-ran green afterwards (web 670, backend
+> 3378 across both shards, core 1239, contracts 113, revenue 340).
+
+> Last verified: 2026-09-01 (28-20 Task 3 — **THE OWNER JUDGMENT IS EXACT-PINNED AND CLOSED.**
+> APPROVE exactly `revenue-call-list@1`, `revenue-lead-triage@1`, and
+> `revenue-specialist@1`. PARK exactly `revenue-cash-flow@1`, `revenue-customer-pulse@1`,
+> `revenue-invoice-reminder@1`, `revenue-payroll-confidence@1`, and
+> `revenue-pipeline-review@1`; each mandatory park is bound to its failed complete run. The durable
+> `activationDecision` rows in `packages/backend/skills-lock.json` all name activation-evidence
+> SHA-256 `16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec` and record the
+> exact reason. The publication pin remains `status: candidate` by design: a fresh deployment may
+> not turn an owner judgment into implicit activation, and `activateSkill` remains the sole status
+> writer.
+>
+> The automated activation diff was exercised offline through the real registry transition: the
+> three approved rows received exact-version passing evidence, transitioned to `active`, loaded via
+> `loadSkill`, and preserved their locked body SHA-256; all five parked rows remained candidates,
+> refused activation with `EVAL_GATE`, and were undiscoverable through `loadSkill` with
+> `NO_ACTIVE_SKILL`. No deployment, provider, or paid-evaluation call was made. Verification:
+> backend `skills` **144/144 passed**, contracts `skillBodies` **48/48 passed**, and
+> `node scripts/check-playbooks.mjs` passed after this record was added.
+>
+
+> Last verified: 2026-09-01 (28-20 Task 1 — **THE COMPLETE EXACT-PIN REVENUE ACTIVATION
+> EVIDENCE EXISTS BEFORE OWNER JUDGMENT; NOTHING IS ACTIVE.** The unfiltered live diagnostic from
+> 28-19 attempted all eleven state fixtures across all eight `name@1` pins. The refs-only 28-20
+> handoff was regenerated from that diagnostic with
+> `pnpm eval:golden --all-candidates --activation-evidence`; it covered 8/8 exact pins, performed no
+> registry write, and exited 1 by design because five pins are red. `node scripts/check-playbooks.mjs`
+> passed. Exact evidence:
+>
+> - `revenue-call-list@1`: **passed**, $0.00031800, 10,275 ms, ref `45-revenue-call-list`.
+> - `revenue-lead-triage@1`: **passed**, $0.00032445, 9,407 ms, ref
+>   `36-revenue-lead-triage`.
+> - `revenue-specialist@1`: **passed**, $0.00030240, 8,885 ms, ref `44-revenue-specialist`.
+> - `revenue-cash-flow@1`: **failed / preclassified parked**, $0.00047490, 16,963 ms, refs
+>   `39-revenue-cash-flow`, `40-revenue-mixed-currency`.
+> - `revenue-customer-pulse@1`: **failed / preclassified parked**, $0.00071385, 18,889 ms, refs
+>   `37-revenue-partial`, `38-revenue-injection`.
+> - `revenue-invoice-reminder@1`: **failed / preclassified parked**, $0.00044700, 16,578 ms,
+>   refs `42-revenue-invoice-reminder`, `43-revenue-suppressed-reminder`.
+> - `revenue-payroll-confidence@1`: **failed / preclassified parked**, $0.00034980, 11,424 ms,
+>   ref `41-revenue-payroll-unknown`.
+> - `revenue-pipeline-review@1`: **failed / preclassified parked**, $0.00029205, 8,940 ms, ref
+>   `46-revenue-pipeline-review`.
+>
+> The live diagnostic is
+> `C:\Users\expert\AppData\Local\Temp\pikar-revenue-eval-28-19\revenue-candidate-diagnostic.v1.json`
+> (SHA-256 `73c15e0ac9463e77713b202975441a463c0d9bcb743fd3250e0eb05cbcf3f236`). The exact-pin handoff is
+> `C:\Users\expert\AppData\Local\Temp\pikar-revenue-eval-28-19\revenue-activation-evidence.v1.json`
+> (SHA-256 `16681ff2ff13b897ee40cac057c24c5e2fc958d5ceebf46131dd690a28857bec`). Both bind golden suite
+> `1cbf5d5b389173c64490f3932734d445375cfd42a2460a86509bc35308a4e913` (46 cases) and revenue state
+> suite `1789da27caa827e8f290db9aa4756b90eabde2f4ecd10c2c10757f6bbf32391f` (11 cases). Only the three
+> green pins are eligible for an approve/park judgment; red pins cannot be approved.
+>
+
+> Last verified: 2026-09-01 (28-28 — **EIGHT REVENUE BODIES ARE BYTE-PINNED DARK CANDIDATES,
+> NOT ACTIVE SKILLS.** `packages/backend/skills-lock.json` is the code-owned manifest: every entry
+> fixes `name@1`, `status: candidate`, LF UTF-8 byte count, SHA-256, exact upstream commit/path,
+> Apache-2.0 attribution, and modification notice. `seedRevenueCandidates` re-hashes the derived
+> runtime body before any insert, accepts only the one exact v1 duplicate, and refuses every
+> pre-existing or drifted row with `REVENUE_PIN_CONFLICT`; it never allocates a later version.
+>
+> Revenue names remain outside `SEEDS`, so ordinary dev boot cannot publish or activate them.
+> `loadSkill` continues to discover only `active`, while `inspectRevenueCandidates` returns only
+> ids, pins, status, bytes/hash, and provenance validity—never body or provenance text. The existing
+> global activation choke point now treats every lock-listed revenue name as eval-gated; Plan 28-19
+> owns evidence and Plan 28-20 owns any owner judgment/activation. This plan ran only in-memory
+> tests: no live Convex mutation, provider action, paid eval, or activation occurred.)
+>
+
 > Last verified: 2026-08-31 (**`recordTenantPackBrowserEvidence` — the browser plane for a tenant
 > pack candidate, and the last of the three producers.**
 >
@@ -51,6 +141,77 @@
 > pack specialist), and no browser gate emits a `tenantTarget`-pinned artifact. So the lane is open
 > and correct, and in practice still unreachable until an evidence producer exists for planes 2 and 3.
 > That is a smaller, better-defined job than it was — but it is a job, not a detail.)
+
+> Last verified: 2026-08-31 (33.1-06 — **THE `media-director` BODY NOW TEACHES THE GRID AND THE CAP
+> THE CODE ACTUALLY ENFORCES, AND THE ONE COST FIGURE LEFT IN IT IS GUARDED BY A DERIVED TEST.**
+> AUTHORED, NOT LIVE: nothing below reaches a model until `seedSkills` runs in the main tree, which
+> is 33.1-06 Task 3 and has not happened.
+>
+> **`media-director` IS DELIBERATELY UNGATED, and this is the fact to read first before editing it.**
+> `skillBodies.test.ts:130` asserts `isGatedSkill(MEDIA_DIRECTOR_SKILL) === false` and it is not an
+> oversight: `run-eval-golden.mjs` derives its `--skill` list from `GATED_SKILLS` and drives
+> `runCockpitAgent` over TEXT fixtures, which structurally cannot exercise a
+> script/art-direction/storyboard turn. Gating it would strand it at v1 on its first body edit with
+> no runner able to clear the gate. **Do not "tidy up the gate list".**
+>
+> The consequence is the thing to hold onto: **`seedSkills` publishes at `maxVersion + 1` straight
+> to ACTIVE, with no eval between the prose and production.** There is no EVAL_GATE to run here and
+> no ~$0.35 to spend. Everything that stands between a bad sentence and a live cockpit is offline.
+>
+> **What changed in the body.** Four edits, and only the first two were in the plan:
+> 1. The grid rule: a `generated_video` scene may be **any whole number of seconds from 1 to 15**,
+>    not 4/8/12. The old sentence's argument — that 4, 8 and 12 are all multiples of four so an
+>    all-generated reel cannot sum to 15 or 30 — became FALSE with the grok repin, and *"Every legal
+>    reel therefore mixes kinds"* went with it. Replaced by a COST argument. The
+>    **"THE ORDER TO REACH IN"** section is untouched on purpose: ADR-027 records that it is now the
+>    only remaining defence, and weakening it in the same edit that removed the structural one would
+>    have been the worst available combination.
+> 2. The worked answer now SHOWS the new grid rather than describing it — VARIATION A's generated
+>    scenes are **5 s and 7 s**, the two lengths that produced the owner's live
+>    `illegal_generated_duration` on 2026-08-30. Their total is still exactly 12, so the deck stays
+>    on the right side of the cap with the same zero slack ADR-027 noted.
+> 3. **The generated-seconds cap is now TAUGHT, and it was not before.** The body said *"at most
+>    three or four `generated_video` scenes in a reel"*. Under `MEDIA_GENERATED_SECONDS_CAP = 12`
+>    that advice PRODUCES REFUSED DECKS: four 4-second clips is 16 seconds, three 5-second clips is
+>    15, and both are rejected whole with nothing trimmed. A code-owned refusal the prose never
+>    learned about — this repo's *"a backend fix that never reaches the renderer"*, one layer up,
+>    where the renderer is the model. The scene-COUNT advice is **deleted**, not supplemented: a
+>    body carrying two rules that disagree gets the easier one followed.
+> 4. **FOUR numeric cost claims collapsed to ONE.** This literal has now gone stale three times
+>    ("a tenth" → "a fortieth" → wrong again after the 33.1-03 reprice). The audit's prescription
+>    was *derive, don't restate* — but **a skill body cannot derive anything**; it is a static
+>    string handed to a model. So the equivalent is: state it in exactly one place, make the other
+>    three qualitative ("a small fraction", "dramatically cheaper"), and put a test over the one
+>    that computes what it must say.
+>
+> **THE TWO NEW GUARDS, and the mutations that prove they can fail** (`packages/cost/src/media.test.ts`):
+> - the body's single `N times` figure must equal `round(sceneVisualSpec("generated_video",4).usd /
+>   sceneVisualSpec("animated_image",4).usd)`, and there must be **exactly one** such figure — a
+>   count, not an "at least one", so a second rot site cannot be added back silently. Mutation:
+>   `47 times` → `40 times` reddens it with the derived number in the message.
+> - the body must contain the cap sentence naming `MEDIA_GENERATED_SECONDS_CAP`, and must NOT still
+>   carry the old scene-count advice. Mutation: deleting the cap sentence reddens it.
+>
+> **THE ROUND TRIP IS STILL THE ONLY PRE-LIVE GATE**
+> (`packages/core/src/storyboard.test.ts:316`). It `readFileSync`s the `.md`, runs `parseVariations`
+> first and then every per-deck rule against BOTH variations. Mutation-verified again here the way
+> 33-09 did it: reverting the worked answer's scene 1 from 5 s to 4 s **without** rebalancing
+> reddened **15 assertions** — the same count 33-09 measured for a mismatched target, so the gate is
+> genuinely parsing the shipped example and not decorating it.
+>
+> **REGENERATING THE DERIVED `.ts` IS A MANUAL STEP AND THERE IS NO COMMITTED GENERATOR.** The
+> Convex runtime cannot `fs.read` repo files, so `packages/contracts/src/skills/mediaDirector.ts` is
+> what actually ships and `skillBodies.test.ts` holds it byte-identical to the `.md` (LF-normalized).
+> Regenerate with a throwaway `JSON.stringify` of the `.md` spliced in after
+> `export const mediaDirectorSkillBody =`, then `biome check --write` (it prefers double quotes).
+> **If `skillBodies.test.ts` is red after a body edit, the regeneration is stale — not the test.**
+>
+> **What is NOT verified.** No model has read this body. Repo memory is explicit that a body edit
+> once made the model start passing an optional enum it had never passed before and broke an
+> unrelated fixture, so 33.1-06 Task 3 A/Bs one fixture against the previous active version before
+> trusting it. And the active version number this lands at is **not predictable from any plan** —
+> optimizer dry-run candidates occupy version numbers, and phase 10 shipped at `@14` where its plan
+> said `@13`. Read it back; a recorded version that was never read back is a guess.)
 
 > Last verified: 2026-08-30 (**THE EVAL GATE NOW VERIFIES THAT THE PINNED BODY RAN.**
 > `shouldRecordEvidence` built its certificate from `skillVersionsOf(pins)` — the caller's own claim
@@ -203,6 +364,9 @@
 >    MUTATIONS OBSERVED RED: insert `Gmail` into the planner body; remove the whitespace collapse.
 >
 > PREVIOUS: 2026-08-27 (**SUPERSEDES "A FILTERED PROBE OF AN EMAIL FIXTURE MUST CARRY A PIN"
+
+> Last verified: 2026-08-27 (**THE EVAL SUITE MANIFEST WAS STALE FOR EVERYONE, AND RE-CUTTING IT
+
 > **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
 > subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
 > steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no

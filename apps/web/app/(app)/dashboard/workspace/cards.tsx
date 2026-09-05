@@ -28,6 +28,7 @@ import { MarkdownDocument } from "../MarkdownDocument";
 // viewer would be a second thing to keep in step with `previewState`.
 import { PreviewModal } from "../vault/PreviewModal";
 import { MediaCanvas, ProposalFailureCanvas } from "./MediaCanvas";
+import { RevenuePackPanel } from "./RevenuePackPanel";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
@@ -3209,6 +3210,9 @@ export function CardList({
       {/* Same footing, same reason (ACTN-02): checking availability is a read, so an availability
           turn carries no plan row and the CALENDAR card must not sit under a plan gate. */}
       <CalendarCard threadId={threadId} />
+      {/* Revenue discovery is the passed-provider + active-pin server projection. Parked, failed,
+          expired and inactive workflows never reach this renderer. */}
+      <RevenuePackPanel threadId={threadId} />
       {rest()}
     </div>
   );

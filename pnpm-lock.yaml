@@ -32,12 +32,21 @@ importers:
       '@pikar/backend':
         specifier: workspace:*
         version: link:../../packages/backend
+      '@pikar/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@pikar/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
       '@pikar/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@pikar/cost':
+        specifier: workspace:*
+        version: link:../../packages/cost
+      '@pikar/revenue':
+        specifier: workspace:*
+        version: link:../../packages/revenue
       '@pikar/vault':
         specifier: workspace:*
         version: link:../../packages/vault

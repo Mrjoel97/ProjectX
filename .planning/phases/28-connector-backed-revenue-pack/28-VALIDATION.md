@@ -95,8 +95,8 @@ Phase 27 manifest/grant/eval/discovery/event contracts. All dependent work stops
 | 28-17-02 | 17 | 1 | REVN-01, REVN-02, REVN-03, REVN-04, REVN-05, REVN-06 | manual judgment | The owner states pass only when production secret source, redirect ownership and fail-closed behavior are evidenced. | external | ⬜ pending |
 | 28-17-03 | 17 | 1 | REVN-01, REVN-02, REVN-03, REVN-04, REVN-05, REVN-06 | automated | node scripts/check-phase28-readiness.mjs &amp;&amp; node scripts/check-playbooks.mjs | planned | ⬜ pending |
 | 28-18-01 | 18 | 2 | REVN-01, REVN-02, REVN-03, REVN-04, REVN-05, REVN-06 | automated | node scripts/check-playbooks.mjs | planned | ⬜ pending |
-| 28-19-01 | 19 | 14 | REVN-04, REVN-05, REVN-06 | automated | pnpm eval:golden --self-check | planned | ⬜ pending |
-| 28-19-02 | 19 | 14 | REVN-04, REVN-05, REVN-06 | automated | pnpm eval:golden --all-candidates --diagnostic &amp;&amp; pnpm eval:golden --all-candidates --activation-evidence | planned | ⬜ pending |
+| 28-19-01 | 19 | 14 | REVN-04, REVN-05, REVN-06 | automated | pnpm eval:golden --self-check | complete | ✅ 57 fixtures valid; state oracle and fail-closed preflight green |
+| 28-19-02 | 19 | 14 | REVN-04, REVN-05, REVN-06 | automated | pnpm eval:golden --all-candidates --diagnostic &amp;&amp; pnpm eval:golden --all-candidates --activation-evidence | executed | 🟥 11/11 live fixtures attempted; 3/8 pins passed, five failed closed; refs-only evidence written and registry unchanged |
 | 28-20-01 | 20 | 15 | REVN-04, REVN-05, REVN-06 | automated | pnpm eval:golden --all-candidates --activation-evidence &amp;&amp; node scripts/check-playbooks.mjs | planned | ⬜ pending |
 | 28-20-02 | 20 | 15 | REVN-04, REVN-05, REVN-06 | manual judgment | The owner names an approve/park decision for each exact eligible name@version pin. | external | ⬜ pending |
 | 28-20-03 | 20 | 15 | REVN-04, REVN-05, REVN-06 | automated | pnpm --filter @pikar/backend test -- skills &amp;&amp; pnpm --filter @pikar/contracts test -- skillBodies &amp;&amp; node scripts/check-playbooks.mjs | planned | ⬜ pending |

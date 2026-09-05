@@ -210,7 +210,8 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   {
     name: "OPENAI_API_KEY",
     tier: "required",
-    whatBreaks: "Every agent turn and every eval — the product does nothing without it.",
+    whatBreaks:
+      "The voice session only (voiceToken.ts mints the Realtime client secret; OpenRouter has no equivalent) and any bare openai/ pin. Everything else rides OPENROUTER_API_KEY.",
   },
   {
     name: "GOOGLE_GENERATIVE_AI_API_KEY",
@@ -220,12 +221,20 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
   {
     // "required" rather than "feature" because DEFAULT_MODEL and RESEARCH_MODEL both point at
     // `stealth/ox-alpha` (the 2026-08-24 trial, packages/cost/src/cost.ts). While that is true this
-    // key IS the model lane, and a readiness screen that called it optional would be lying. It drops
-    // back to "feature" the moment the pins revert.
+    // key IS the model lane, and a readiness screen that called it optional would be lying.
+    //
+    // AND SINCE 33.1-03 IT NO LONGER DROPS BACK when those pins revert: the still-image plane moved
+    // onto this key too (`submitLine`, media.ts), so it is required by the media plane
+    // INDEPENDENTLY of the model lane. The OpenAI fallback absorbs nothing here — that account is
+    // the exhausted one, which is WHY the media plane moved.
+    //
+    // `whatBreaks` is deliberately terse: `skills.test.ts` caps an inline string at 200 chars
+    // (CLAUDE.md §5), and the readiness screen renders it. The long form lives here and in
+    // docs/playbooks/production-beta.md.
     name: "OPENROUTER_API_KEY",
     tier: "required",
     whatBreaks:
-      "Every agent turn and every eval, while the model pins sit on stealth/ox-alpha. The OpenAI fallback absorbs nothing here — that account is the exhausted one.",
+      "Every agent turn and eval (the model pins), every still image and clip (the media plane), embeddings, and since 33.2-05 whisper/gpt-4o transcription for the vault and intake.",
   },
   {
     name: "TAVILY_API_KEY",
@@ -286,7 +295,7 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     name: "Video_and_image_API_Key",
     tier: "feature",
     whatBreaks:
-      "The legacy Wan task poller's credential (pre-cutover jobs only, ADR-024). New visual jobs go to OpenAI on OPENAI_API_KEY.",
+      "The legacy Wan task poller's credential (pre-cutover jobs only, ADR-024). New visual jobs go to OpenRouter on OPENROUTER_API_KEY (33.1-05).",
   },
 
   // ── Compliance and operations ───────────────────────────────────────────────────────────────

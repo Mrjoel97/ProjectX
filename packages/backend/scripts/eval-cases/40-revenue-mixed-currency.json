@@ -1,0 +1,23 @@
+{
+  "id": "40-revenue-mixed-currency",
+  "description": "A request for one cross-currency total must be refused instead of silently adding USD and EUR minor units.",
+  "candidate": { "name": "revenue-cash-flow", "version": 1 },
+  "turns": [
+    "Combine the USD and EUR cash values into one grand total without doing any conversion."
+  ],
+  "expect": {
+    "expectedState": {
+      "outcome": "refused",
+      "toolTrace": ["readBusinessFinance", "declareUnsupported"],
+      "result": {
+        "operation": "cash_flow",
+        "state": "refused",
+        "reason": "mixed_currency",
+        "currencies": ["EUR", "USD"]
+      },
+      "refs": [],
+      "counts": { "currencyBuckets": 2, "combinedTotals": 0, "writes": 0 }
+    }
+  },
+  "needles": ["USD", "EUR"]
+}

@@ -1,10 +1,17 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
+import { useState } from "react";
 import { DisconnectGoogle } from "../../_components/DisconnectGoogle";
 import { DisconnectMicrosoft } from "../../_components/DisconnectMicrosoft";
 import { BLOCKED } from "./connections";
+import {
+  type ConnectorRow,
+  connectorBusyLabel,
+  connectorListView,
+  connectorRowView,
+} from "./connectorRows";
 import { card, label } from "./styles";
 
 // The connections surface. There are now TWO connectable providers (17-06 added Microsoft), and
@@ -18,7 +25,7 @@ import { card, label } from "./styles";
 // need a per-provider slot for the one part that matters — an abstraction that abstracts nothing.
 // Revisit at a THIRD provider, when the shape is actually known.
 
-const row: React.CSSProperties = {
+const rowStyle: React.CSSProperties = {
   display: "flex",
   gap: "1rem",
   alignItems: "flex-start",
@@ -28,6 +35,30 @@ const row: React.CSSProperties = {
   borderRadius: "0.8rem",
   padding: "0.9rem 1rem",
   background: "var(--canvas)",
+};
+
+const connectButton: React.CSSProperties = {
+  padding: "0.45rem 0.9rem",
+  borderRadius: "0.375rem",
+  background: "var(--teal-600)",
+  color: "#fff",
+  border: "none",
+  fontWeight: 600,
+  fontSize: "0.9rem",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+};
+
+const disconnectButton: React.CSSProperties = {
+  padding: "0.4rem 0.8rem",
+  borderRadius: "0.375rem",
+  background: "transparent",
+  color: "var(--ink-soft)",
+  border: "1px solid var(--rule)",
+  fontWeight: 600,
+  fontSize: "0.85rem",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
 };
 
 const pill: React.CSSProperties = {
@@ -54,9 +85,16 @@ export function ConnectionsPanel() {
 
       <GoogleRow />
       <MicrosoftRow />
+      {/* Phase 28 connector rows sit HERE, ABOVE the blocked list, and the placement is load
+          bearing. `packages/core/src/connectionsSurface.test.ts` scans the blocked-list block and
+          asserts it holds no button, href or onClick. Connector rows are interactive, so putting
+          them below would turn that scan red for the wrong reason.
+          (This comment deliberately names neither delimiter the scan searches for — writing them
+          here made `indexOf` land on the comment and slice 37 characters of prose instead.) */}
+      <ConnectorRows />
 
       {BLOCKED.map((c) => (
-        <div key={c.id} style={row}>
+        <div key={c.id} style={rowStyle}>
           <div style={{ display: "grid", gap: "0.2rem", maxWidth: "34rem" }}>
             <strong style={{ fontSize: "0.94rem", color: "var(--ink)" }}>{c.label}</strong>
             <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>{c.blocker}</span>
@@ -75,7 +113,7 @@ function MicrosoftRow() {
   const status = useQuery(api.microsoftAuth.microsoftStatus);
 
   return (
-    <div style={row} data-testid="connections-microsoft">
+    <div style={rowStyle} data-testid="connections-microsoft">
       <div style={{ display: "grid", gap: "0.2rem", maxWidth: "34rem" }}>
         <strong style={{ fontSize: "0.94rem", color: "var(--ink)" }}>
           Microsoft — Calendar &amp; Outlook mail
@@ -136,11 +174,128 @@ function MicrosoftRow() {
   );
 }
 
+/**
+ * The Phase 28 connectors, and the whole row set is a function of the SERVER GATE.
+ *
+ * `connectorConnections.connections` returns only lanes whose gate resolved to `passed`, so a
+ * parked, failed or expired provider is ABSENT here rather than filtered out by this component.
+ * There is deliberately no client-side check of a provider name or an admission: a surface that
+ * filtered for itself would be a second copy of the release rule, and the two would drift.
+ *
+ * An EMPTY list renders nothing at all. Today every lane is parked, so this component is invisible
+ * — the correct amount of promise to make about connectors that have never spoken to a provider.
+ *
+ * Unlike the Google and Microsoft rows above, these ARE written through a shared row: four
+ * providers with one identical shape is the repetition the panel comment above said to revisit at.
+ */
+function ConnectorRows() {
+  const rows = useQuery(api.connectorConnections.connections);
+  const list = connectorListView(rows);
+  if (list.state === "checking") {
+    return (
+      <p role="status" aria-live="polite" style={{ margin: 0, color: "var(--ink-soft)" }}>
+        Checking connector availability…
+      </p>
+    );
+  }
+  if (list.state === "hidden") return null;
+  return (
+    <>
+      {list.rows.map((r) => (
+        <ConnectorRowCard key={`${r.provider}:${r.environment}`} row={r} />
+      ))}
+    </>
+  );
+}
+
+function ConnectorRowCard({ row }: { row: ConnectorRow }) {
+  const view = connectorRowView(row);
+  const connect = useAction(api.connectorConnections.startConnect);
+  const disconnect = useAction(api.connectorConnections.disconnectProvider);
+  const [busy, setBusy] = useState<"connecting" | "disconnecting" | null>(null);
+  const busyLabel = connectorBusyLabel(busy);
+
+  return (
+    <div style={rowStyle} data-testid={`connections-${view.provider}`}>
+      <div style={{ display: "grid", gap: "0.2rem", maxWidth: "34rem" }}>
+        <strong style={{ fontSize: "0.94rem", color: "var(--ink)" }}>{view.title}</strong>
+        <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>{view.detail}</span>
+        {view.residualNotice && (
+          <span style={{ fontSize: "0.85rem", color: "var(--ink)" }}>{view.residualNotice}</span>
+        )}
+        {/* The caveat sits NEXT TO the button, not behind a confirm dialog: a warning a user only
+            sees after deciding is a warning that arrived too late. */}
+        {view.canDisconnect && view.disconnectNote && (
+          <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+            {view.disconnectNote}
+          </span>
+        )}
+        {busyLabel && (
+          <span
+            role="status"
+            aria-live="polite"
+            style={{ fontSize: "0.85rem", color: "var(--ink)" }}
+          >
+            {busyLabel}
+          </span>
+        )}
+      </div>
+      <div style={{ display: "grid", gap: "0.4rem", justifyItems: "end" }}>
+        {view.action && (
+          <button
+            type="button"
+            disabled={busy !== null}
+            style={connectButton}
+            onClick={async () => {
+              setBusy("connecting");
+              try {
+                const started = await connect({
+                  provider: row.provider,
+                  environment: row.environment,
+                  redirectPath: "/dashboard/profile",
+                });
+                // A provider can refuse to start and say why (PayPal has no consent surface at
+                // all). Navigating to a null URL would look like a dead button.
+                if (started.url) window.location.href = started.url;
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            {busy === "connecting"
+              ? busyLabel
+              : view.action === "connect"
+                ? "Connect"
+                : "Reconnect"}
+          </button>
+        )}
+        {view.canDisconnect && (
+          <button
+            type="button"
+            disabled={busy !== null}
+            style={disconnectButton}
+            onClick={async () => {
+              setBusy("disconnecting");
+              try {
+                await disconnect({ provider: row.provider, environment: row.environment });
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            {busy === "disconnecting" ? busyLabel : "Disconnect"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GoogleRow() {
   const status = useQuery(api.gmailAuth.gmailStatus);
 
   return (
-    <div style={row}>
+    <div style={rowStyle}>
       <div style={{ display: "grid", gap: "0.2rem", maxWidth: "34rem" }}>
         <strong style={{ fontSize: "0.94rem", color: "var(--ink)" }}>
           Google — Gmail, Calendar &amp; Drive

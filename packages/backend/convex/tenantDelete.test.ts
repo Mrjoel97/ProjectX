@@ -1,7 +1,7 @@
 import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantData";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -20,10 +20,11 @@ const deleteTenantDataPage = makeFunctionReference<
   }
 >("tenantDelete:deleteTenantDataPage");
 type ProviderResult = {
-  provider: "google" | "microsoft";
+  provider: "google" | "microsoft" | "billing" | "hubspot" | "quickbooks" | "stripe" | "paypal";
   localRowDeleted: boolean;
   revokedAtProvider: boolean;
   failure: boolean;
+  revokeUpstream?: "confirmed" | "attempted_failed" | "unsupported" | "not_attempted";
 };
 const deleteTenantData = makeFunctionReference<
   "action",
@@ -203,6 +204,14 @@ describe("tenant deletion provider truth", () => {
         revokedAtProvider: false,
         failure: false,
       },
+      // 28.1-08 APPENDED a third arm. The two above keep their positions and their values, so
+      // this is the array growing rather than an assertion being re-baselined.
+      {
+        provider: "billing",
+        localRowDeleted: false,
+        revokedAtProvider: false,
+        failure: false,
+      },
     ]);
     expect(bytes).not.toMatch(/refreshToken|accessToken|CROWN_JEWEL/);
     await t.run(async (ctx) => {
@@ -379,5 +388,416 @@ describe("erasure removes the sign-in binding, not just the data", () => {
       expect(sessions.filter((r) => r.userId === seeded.survivor)).toHaveLength(1);
       expect(tokens).toHaveLength(1);
     });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+// 28.1-08 (BILL-06) — the BILLING arm. Before this, `tenantDelete.ts` said nothing about billing:
+// erasing a tenant left a live subscription charging a card belonging to nobody.
+//
+// ORDERING IS THE WHOLE TASK. `billingCustomers` is `tenant_owned`, so the page loop DELETES the
+// row holding the `subscriptionId` the cancellation needs. An arm added after the loop would find
+// nothing to cancel and would report `hadSubscription: false` — a silent, permanent leak that
+// looks exactly like a tenant who never subscribed.
+// ────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the billing arm cancels before the walk erases the row it needs", () => {
+  const SUB = "sub_SENTINELSUBSCRIPTION";
+
+  async function withSubscription(t: ReturnType<typeof convexTest>, tenantId: string) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("billingCustomers", {
+        tenantId,
+        stripeCustomerId: "cus_SENTINELCUSTOMER",
+        subscriptionId: SUB,
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("billingUnapplied", {
+        tenantId,
+        stripeObjectId: "cus_SENTINELCUSTOMER",
+        amountMinor: 2500,
+        currency: "USD",
+        observedAt: 1,
+        amountAt: 1,
+      });
+      // `audit_immutable`: EXCLUDED from the deletion walk by construction. The pair of assertions
+      // below is the whole privacy/accounting tradeoff, and it must be visible in a test.
+      await ctx.db.insert("billingCoverage", { tenantId, coverageStartedAt: 1 });
+      await ctx.db.insert("billingEvents", {
+        tenantId,
+        phase: "actual",
+        amountMinor: 4900,
+        currency: "USD",
+        correlationId: "billing/pi_SENTINEL",
+        kind: "invoice-paid",
+        stripeObjectId: "pi_SENTINEL",
+        createdAt: 1,
+      });
+    });
+  }
+
+  const arm = (result: { providers: ProviderResult[] }, provider: string) =>
+    result.providers.find((p) => p.provider === provider);
+
+  beforeEach(() => {
+    // The arm refuses with `billing_not_configured` when the key is absent — deliberately, so a
+    // no-op cancel can never read as done. These cases are about the CANCELLATION, so the rail is
+    // configured; the unconfigured refusal has its own test in `billing.test.ts`.
+    vi.stubEnv("BILLING_STRIPE_SECRET_KEY", "sk_test_SENTINEL");
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  test("the subscription is cancelled, and only reading it BEFORE the walk makes that possible", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await withSubscription(t, tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string) => {
+        if (String(input).includes("/v1/subscriptions/")) {
+          return new Response(JSON.stringify({ id: SUB, status: "canceled" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const result = await t
+      .withIdentity({ subject: `${tenantA}|delete-session` })
+      .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+
+    // THIS IS THE ORDERING PROOF, and it needs no call-sequence bookkeeping: the subscription id
+    // lives ONLY on the `billingCustomers` row, and the walk deletes that row. `revokedAtProvider`
+    // can only be true if the read happened while the row still existed.
+    expect(arm(result, "billing")).toEqual({
+      provider: "billing",
+      localRowDeleted: true,
+      revokedAtProvider: true,
+      failure: false,
+    });
+
+    await t.run(async (ctx) => {
+      const gone = async (table: "billingCustomers" | "billingUnapplied" | "billingPeriods") =>
+        (
+          await ctx.db
+            .query(table)
+            .withIndex("by_tenant", (q) => q.eq("tenantId", tenantA))
+            .collect()
+        ).length;
+      // `tenant_owned` — erased.
+      expect(await gone("billingCustomers")).toBe(0);
+      expect(await gone("billingUnapplied")).toBe(0);
+      expect(await gone("billingPeriods")).toBe(0);
+      // `audit_immutable` — SURVIVES. Erasing a tenant removes the mapping and the working rows;
+      // it does not rewrite Pikar's financial book. Deliberate, and asserted so it stays deliberate.
+      const events = await ctx.db.query("billingEvents").collect();
+      const coverage = await ctx.db.query("billingCoverage").collect();
+      expect(events.filter((r) => r.tenantId === tenantA)).toHaveLength(1);
+      expect(coverage.filter((r) => r.tenantId === tenantA)).toHaveLength(1);
+    });
+  });
+
+  test("a tenant with no billing customer reports the arm, no failure, and no Stripe call", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    // Typed param, so `mock.calls[n][0]` is a string rather than an empty tuple.
+    const fetchMock = vi.fn(async (_input: string) => new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await t
+      .withIdentity({ subject: `${tenantA}|delete-session` })
+      .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+
+    expect(arm(result, "billing")).toEqual({
+      provider: "billing",
+      localRowDeleted: false,
+      revokedAtProvider: false,
+      failure: false,
+    });
+    // Never subscribed is not a failure, and it must not provoke a request either.
+    for (const call of fetchMock.mock.calls) {
+      expect(String(call[0])).not.toContain("/v1/subscriptions/");
+    }
+  });
+
+  test("a Stripe cancel failure is recorded AND the erasure still completes", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await withSubscription(t, tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string) => {
+        if (String(input).includes("/v1/subscriptions/")) {
+          return new Response(JSON.stringify({ error: { code: "api_error" } }), {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(null, { status: 200 });
+      }),
+    );
+
+    const result = await t
+      .withIdentity({ subject: `${tenantA}|delete-session` })
+      .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+
+    expect(arm(result, "billing")).toMatchObject({ revokedAtProvider: false, failure: true });
+    // An erasure that stops because Stripe is down is a worse outcome than one that completes with
+    // a recorded failure. Every tenant_owned table is still empty.
+    await t.run(async (ctx) => {
+      expect(await ctx.db.query("billingCustomers").collect()).toHaveLength(0);
+      expect(
+        (await ctx.db.query("demoItems").collect()).filter((r) => r.tenantId === tenantA),
+      ).toHaveLength(0);
+    });
+  });
+
+  test("the tenant.deleted audit row carries the billing arm, ids and booleans ONLY", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await withSubscription(t, tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ id: SUB }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    await t
+      .withIdentity({ subject: `${tenantA}|delete-session` })
+      .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+
+    await t.run(async (ctx) => {
+      const audits = await ctx.db.query("audit").collect();
+      const completion = audits.filter((row) => row.eventType === "tenant.deleted");
+      expect(completion).toHaveLength(1);
+      expect(completion[0]?.payload).toMatchObject({
+        billingLocalRowDeleted: true,
+        billingRevokedAtProvider: true,
+        billingFailure: false,
+      });
+      // No Stripe object, no email, no name — the audit log must never become a PII honeypot
+      // (CLAUDE.md §4), and a customer id is exactly the kind of thing that rides in by accident.
+      const bytes = JSON.stringify(completion[0]);
+      expect(bytes).not.toContain("cus_");
+      expect(bytes).not.toContain("sub_");
+      expect(bytes).not.toMatch(/@/);
+    });
+  });
+
+  test("authorizeTenantDeletion reports billingActive beside the two connectors", async () => {
+    const { t, tenantA, tenantB } = await seedTwoTenants();
+    await withSubscription(t, tenantA);
+
+    const authorize = makeFunctionReference<
+      "mutation",
+      { tenantId: string; userId: Id<"users"> },
+      { googleConnected: boolean; microsoftConnected: boolean; billingActive: boolean }
+    >("tenantDelete:authorizeTenantDeletion");
+
+    expect(await t.mutation(authorize, { tenantId: tenantA, userId: tenantA })).toMatchObject({
+      billingActive: true,
+    });
+    expect(await t.mutation(authorize, { tenantId: tenantB, userId: tenantB })).toMatchObject({
+      billingActive: false,
+    });
+    // The self-check is UNCHANGED by this plan and stays the whole authorization.
+    await expect(t.mutation(authorize, { tenantId: tenantB, userId: tenantA })).rejects.toThrow(
+      /TENANT_SELF_REQUIRED/,
+    );
+  });
+});
+
+// ── THE CONNECTOR ARM (Phase 28) ─────────────────────────────────────────────────────────────
+//
+// Before this, `tenantDelete.ts` deleted the four providers' rows and never asked any of them to
+// revoke — an erasure that left up to four live grants into a business's CRM, books and payment
+// account, with nothing in the record to say so. The playbook had it as "Flagged, not fixed"; no
+// Phase 28 plan claimed it.
+//
+// SAME ORDERING CONSTRAINT AS BILLING. `connectorConnections` is `tenant_credential`, so the page
+// loop deletes the row holding the sealed blob the revocation needs.
+//
+// WHAT IS DIFFERENT FROM BILLING, and it is the whole design: Stripe cancels for real, whereas only
+// ONE of these four providers documents a revocation endpoint a platform can call. The arm must
+// report a documented absence WITHOUT calling it a failure and WITHOUT calling it a revocation.
+describe("the connector arm revokes what it can and refuses to overstate the rest", () => {
+  const connectorArm = (result: { providers: ProviderResult[] }, provider: string) =>
+    result.providers.find((p) => p.provider === provider);
+
+  async function seedGrant(
+    t: ReturnType<typeof convexTest>,
+    tenantId: string,
+    provider: "hubspot" | "quickbooks" | "stripe" | "paypal",
+    over: {
+      sealed?: boolean;
+      environment?: "sandbox" | "production";
+      /** Ciphertext present, IV absent: still `sealed` to the arm, but `revokeGrant` cannot open it
+       *  and returns WITHOUT throwing — the only way to get two different upstream answers for
+       *  one provider, which is what the collapse below has to be tested against. */
+      ivMissing?: boolean;
+    } = {},
+  ) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("connectorConnections", {
+        tenantId,
+        provider,
+        environment: over.environment ?? "production",
+        connectionId: `conn_${provider}_${over.environment ?? "production"}`,
+        status: "connected" as const,
+        keyVersion: "v1" as const,
+        revision: 1,
+        updatedAt: 1,
+        ...(over.sealed === false
+          ? {}
+          : {
+              // A SENTINEL: nothing below decrypts it, and the audit assertion searches for this
+              // exact string to prove no ciphertext reaches the log.
+              credentialCiphertextB64: "CIPHERTEXT_SENTINEL_NEVER_IN_A_LOG",
+              ...(over.ivMissing ? {} : { credentialIvB64: "IV_SENTINEL" }),
+            }),
+      });
+    });
+  }
+
+  const erase = (t: ReturnType<typeof convexTest>, tenantId: string) =>
+    t
+      .withIdentity({ subject: `${tenantId}|delete-session` })
+      .action(deleteTenantData, { confirmation: "DELETE MY DATA" });
+
+  // THE REGRESSION GUARD FOR EVERY EXISTING ASSERTION IN THIS FILE. The connector entries are
+  // appended and CONDITIONAL, so a tenant who never connected one still gets exactly three.
+  test("a tenant with no connector rows still reports exactly the three original arms", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    const result = await erase(t, tenantA);
+    expect(result.providers.map((p) => p.provider)).toEqual(["google", "microsoft", "billing"]);
+  });
+
+  // PayPal and Stripe make ZERO upstream requests by design — neither documents a revocation a
+  // platform can perform — so `unsupported` is the permanent, honest answer for both.
+  test.each([
+    "paypal",
+    "stripe",
+  ] as const)("%s: the local copy goes, the grant does NOT, and the record says exactly that", async (provider) => {
+    const { t, tenantA } = await seedTwoTenants();
+    await seedGrant(t, tenantA, provider);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await erase(t, tenantA);
+    const armed = connectorArm(result, provider);
+    expect(armed?.localRowDeleted).toBe(true);
+    // NOT revoked, and NOT a failure. Both halves matter: claiming a revocation would be a lie
+    // to the tenant, and calling a documented absence a failure on every erasure would train the
+    // reader to ignore the field — which is how a REAL failure goes unnoticed.
+    expect(armed?.revokedAtProvider).toBe(false);
+    expect(armed?.failure).toBe(false);
+    expect(armed?.revokeUpstream).toBe("unsupported");
+    // The distinction is legible only because the enum survives; a boolean could not carry it.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // ORDERING, PROVEN BY CONSEQUENCE — the 28.1-08 idiom, and there is no call-sequence bookkeeping
+  // to drift out of sync with the code.
+  //
+  // HUBSPOT IS THE ONLY LANE THAT CAN PROVE THIS, and picking the wrong one is how a vacuous
+  // ordering test gets written. PayPal and Stripe never read the row at all — they answer
+  // `unsupported` from a pure classifier — so a PayPal assertion here would pass with the arm on
+  // EITHER side of the loop. `hubspotAuth.revokeGrant` reads the credential row first and returns
+  // `not_attempted` immediately when it is absent; when it IS present it reaches decryption, which
+  // throws with no `CONNECTOR_CREDENTIAL_KEY_V1` stubbed and is caught as `attempted_failed`.
+  //
+  // So: arm ABOVE the loop -> `attempted_failed`. Arm BELOW it -> `not_attempted`. Two different
+  // observable values, and only one of them is reachable from the correct placement.
+  test("the sealed grant was read BEFORE the walk deleted the row holding it", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await seedGrant(t, tenantA, "hubspot");
+    const result = await erase(t, tenantA);
+    const armed = connectorArm(result, "hubspot");
+    // Reached the credential, so the row still existed when the arm ran.
+    expect(armed?.revokeUpstream).toBe("attempted_failed");
+    // The value an arm below the loop would have produced instead.
+    expect(armed?.revokeUpstream).not.toBe("not_attempted");
+    // And the erasure still completed.
+    const left = await t.run((ctx) => ctx.db.query("connectorConnections").collect());
+    expect(left.filter((r) => r.tenantId === tenantA)).toHaveLength(0);
+  });
+
+  // A row whose ciphertext was already cleared is a grant Pikar no longer holds. Re-revoking it
+  // would report a second revocation of a credential that is already gone.
+  test("an already-disconnected row is not revoked again", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await seedGrant(t, tenantA, "paypal", { sealed: false });
+    const result = await erase(t, tenantA);
+    const armed = connectorArm(result, "paypal");
+    expect(armed?.localRowDeleted).toBe(true);
+    expect(armed?.revokeUpstream).toBe("not_attempted");
+    expect(armed?.failure).toBe(false);
+  });
+
+  // QuickBooks reads its deployment configuration and throws BY NAME when it is absent. That is a
+  // real fault and must be recorded as one WITHOUT stopping the erasure: an erasure that halts
+  // because a vendor is unreachable is a worse outcome than one that completes with the failure on
+  // the record.
+  test("a throwing disconnect is recorded as attempted_failed AND the erasure still completes", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await seedGrant(t, tenantA, "quickbooks");
+    const result = await erase(t, tenantA);
+    const armed = connectorArm(result, "quickbooks");
+    expect(armed?.failure).toBe(true);
+    // NOT `unsupported`: we tried and do not know the grant is dead. Saying `unsupported` here
+    // would blame the vendor for our own missing configuration.
+    expect(armed?.revokeUpstream).toBe("attempted_failed");
+    expect(armed?.revokedAtProvider).toBe(false);
+    const survivors = await t.run((ctx) => ctx.db.query("demoItems").collect());
+    expect(survivors.every((row) => row.tenantId !== tenantA)).toBe(true);
+  });
+
+  // Two grants for ONE provider must collapse to one entry, and the entry must NOT round up.
+  //
+  // THE FIRST VERSION OF THIS TEST WAS VACUOUS AND A MUTATION CAUGHT IT. It paired a sealed grant
+  // with an UNSEALED one — but an unsealed grant is never called, so it contributes no upstream
+  // value and the list had exactly one element. `leastReassuring` degraded to "take the first"
+  // survives that happily. A real disagreement needs two grants that are both CALLED and answer
+  // DIFFERENTLY, which is what `ivMissing` buys: `revokeGrant` cannot open the blob, so it returns
+  // `not_attempted` (severity 1) instead of throwing into `attempted_failed` (severity 3).
+  //
+  // The mild one is seeded FIRST on purpose, so "take the first" and "take the worst" disagree.
+  test("sandbox and production disagreeing collapses to the LEAST reassuring answer", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await seedGrant(t, tenantA, "hubspot", { environment: "sandbox", ivMissing: true });
+    await seedGrant(t, tenantA, "hubspot", { environment: "production" });
+    const result = await erase(t, tenantA);
+    const entries = result.providers.filter((p) => p.provider === "hubspot");
+    // ONE entry, or the audit payload keys would be written twice and silently overwrite.
+    expect(entries).toHaveLength(1);
+    // `attempted_failed` beats `not_attempted`, even though `not_attempted` came first.
+    expect(entries[0]?.revokeUpstream).toBe("attempted_failed");
+    expect(entries[0]?.revokedAtProvider).toBe(false);
+  });
+
+  // §4, and the reason `revokeUpstream` had to reach the payload at all: after the walk deletes
+  // `connectorConnections`, this row is the ONLY surviving record of what happened upstream.
+  test("the tenant.deleted audit row carries the upstream truth and no ciphertext", async () => {
+    const { t, tenantA } = await seedTwoTenants();
+    await seedGrant(t, tenantA, "paypal");
+    await erase(t, tenantA);
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    const deleted = rows.find((r) => r.eventType === "tenant.deleted");
+    expect(deleted).toBeDefined();
+    const payload = deleted?.payload as Record<string, unknown>;
+    expect(payload.paypalLocalRowDeleted).toBe(true);
+    expect(payload.paypalRevokedAtProvider).toBe(false);
+    expect(payload.paypalRevokeUpstream).toBe("unsupported");
+    // A provider with no row contributes NO keys — the payload describes what happened, not a
+    // fixed template with blanks.
+    expect(payload.hubspotRevokeUpstream).toBeUndefined();
+    const serialized = JSON.stringify(deleted);
+    expect(serialized).not.toContain("CIPHERTEXT_SENTINEL_NEVER_IN_A_LOG");
+    expect(serialized).not.toContain("IV_SENTINEL");
   });
 });

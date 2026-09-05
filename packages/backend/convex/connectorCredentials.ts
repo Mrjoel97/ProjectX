@@ -23,6 +23,7 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+import { recordRevenueEvent } from "./revenueTelemetry";
 
 // ── Argument validators, spelled once ─────────────────────────────────────────────────────
 
@@ -132,10 +133,11 @@ export const upsertSealed = internalMutation({
       .unique();
 
     if (existing) {
+      const revision = existing.revision + 1;
       await ctx.db.patch(existing._id, {
         ...rest,
         status: "connected",
-        revision: existing.revision + 1,
+        revision,
         connectedAt: now,
         updatedAt: now,
         // A fresh consent retires the previous terminal state and the stale failure banner.
@@ -145,10 +147,17 @@ export const upsertSealed = internalMutation({
         refreshLeaseId: undefined,
         refreshLeaseExpiresAt: undefined,
       });
+      await recordRevenueEvent(ctx, {
+        tenantId,
+        runId: `rev:connection:${provider}:${String(existing._id)}:${revision}:connected`,
+        event: "connector_lifecycle",
+        provider,
+        status: "connected",
+      });
       return existing._id;
     }
 
-    return ctx.db.insert("connectorConnections", {
+    const id = await ctx.db.insert("connectorConnections", {
       tenantId,
       provider,
       environment,
@@ -158,6 +167,14 @@ export const upsertSealed = internalMutation({
       updatedAt: now,
       ...rest,
     });
+    await recordRevenueEvent(ctx, {
+      tenantId,
+      runId: `rev:connection:${provider}:${String(id)}:1:connected`,
+      event: "connector_lifecycle",
+      provider,
+      status: "connected",
+    });
+    return id;
   },
 });
 
@@ -299,6 +316,9 @@ export const recordRevocation = internalMutation({
       )
       .unique();
     if (!row) return { cleared: false };
+    // A duplicate or reordered disconnect is inert. In particular, it must not replace a
+    // confirmed revocation with the caller's later `not_attempted` observation.
+    if (row.status === "revoked") return { cleared: true };
 
     const now = Date.now();
     await ctx.db.patch(row._id, {
@@ -318,6 +338,14 @@ export const recordRevocation = internalMutation({
         residualAccessUntil,
       },
       updatedAt: now,
+    });
+    const status = upstream === "confirmed" ? "revoked" : "revoke_partial";
+    await recordRevenueEvent(ctx, {
+      tenantId,
+      runId: `rev:connection:${provider}:${String(row._id)}:${status}`,
+      event: "connector_lifecycle",
+      provider,
+      status,
     });
     return { cleared: true };
   },
@@ -364,6 +392,15 @@ export const recordReadOutcome = internalMutation({
       status: revoked ? row.status : failureClass === "reauth" ? "reauth_required" : row.status,
       updatedAt: now,
     });
+    if (!revoked && failureClass === "reauth") {
+      await recordRevenueEvent(ctx, {
+        tenantId,
+        runId: `rev:connection:${provider}:${String(row._id)}:${row.revision}:reauth`,
+        event: "connector_lifecycle",
+        provider,
+        status: "reauth_required",
+      });
+    }
   },
 });
 

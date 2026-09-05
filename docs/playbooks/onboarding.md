@@ -1,5 +1,139 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-05 (33.2-04 â€” blueprint.ts and onboarding.ts resolve their model through
+> `convex/lib/models.ts` now; their module-local `openai(id.replace(...))` copies had been sending
+> `or/openai/gpt-4o-mini` to api.openai.com since 2026-08-27 (404, see vault.md). No behaviour
+> change on a bare `openai/` id; the `or/` pin now actually reaches OpenRouter from here.)
+>
+
+> Last verified: 2026-09-03 (**THE PROFILE TABS ARE TWO LEVELS, SETTINGS MOVED IN, AND BOTH LEVELS
+> ARE DERIVED FROM THE URL.** Working tree, uncommitted. 670 web unit tests + typecheck green;
+> `next build` clean. Not verified in a live browser.)
+>
+> Top level is now `TABS = profile | connections | settings`; the former `shape | business |
+> blueprint` became `PROFILE_TABS`, nested inside Business Profile and addressed by `?section=`.
+> The `settings` tab mounts `<BillingPanel />` and `<DataControls />` from `../settings/`, and the
+> rail's "Settings" entry points here (`/dashboard/profile?tab=settings`).
+>
+> **`resolveProfileTabs(params)` is exported and is the whole navigation contract.** It is a PURE
+> function of the query string — no component state, no mount-time snapshot — because the rail now
+> aims a same-route `<Link>` at this page and a soft navigation does not remount it. See
+> `docs/playbooks/dashboard-pages.md` for the full rule; the short version is that a navigable
+> `?tab=` must be derived on every render, while the one-shot `window.location.search` read stays
+> correct for arrive-once values like `?checkout=`. `tabResolution.test.ts` pins every branch,
+> including the back-compat one below, and was mutation-checked.
+>
+> **Old deep links still resolve, deliberately.** `?tab=shape|business|blueprint` were top-level tab
+> ids before the consolidation; `resolveProfileTabs` maps them to `tab="profile"` plus that section,
+> and a legacy `?tab=` deliberately WINS over a disagreeing `?section=` (it is the whole address).
+> Default is now `profile`, not `shape`. Both levels keep the mounted-and-`hidden` idiom, so a
+> half-typed narrative survives a trip to Blueprint and back — do not "optimize" either level into
+> conditional rendering.
+>
+> **Two live hazards to carry forward:**
+>
+> 1. **`?checkout=` never reaches this copy of BillingPanel.** `convex/billing.ts` (~120-121)
+>    hardcodes `success_url`/`cancel_url` to `${origin}/dashboard/settings?checkout=...`, and
+>    `BillingPanel` reads the param at mount. Mounted here that param is absent, so the
+>    post-checkout acknowledgement silently never renders. **`/dashboard/settings` cannot be deleted
+>    until those Stripe URLs move** — and `billing.test.ts` (~185-186) asserts both literally.
+> 2. **The stale-documents badge moved** onto the INNER `PROFILE_TABS` strip, so it is invisible
+>    while the user is on Connections or Settings. Deliberate — it sits beside the Blueprint tab it
+>    refers to — but the count no longer nags from the page's top level.
+>
+> The page still admits idea-stage profiles: only `oneLineDescription` + persona are required and
+> nothing in this restructure tightened that.
+
+> Last verified: 2026-08-31 (28-09 Task 2 — **THE CONNECTOR ROWS ARE NOW WIRED AND ARE NO LONGER AN
+> ISLAND.** `ConnectionsPanel.tsx` renders `<ConnectorRows />`, which reads
+> `connectorConnections.connections` and maps each row through `connectorRowView`. The entry below,
+> written by the 33.1 lane from the working tree a few minutes earlier, correctly said the module
+> had ZERO callers; that is now false and is corrected here rather than left to mislead — a
+> playbook claim about another module is only as true as the moment it was checked.
+>
+> **THE PANEL STILL RENDERS NOTHING TODAY, and for a different reason than "unwired".** The row set
+> is a function of the SERVER GATE: `connections` returns only lanes that resolve to `passed`, and
+> every lane is `parked`. So `ConnectorRows` returns `null` and the section shows Google, Microsoft
+> and the blocked list exactly as before. That is the correct amount of promise to make about
+> connectors that have never spoken to a provider — and it flips on with no UI change the moment a
+> lane is sealed.
+>
+> **THE ROWS ARE MOUNTED ABOVE THE BLOCKED LIST, AND THE PLACEMENT IS LOAD BEARING.**
+> `connectionsSurface.test.ts` slices the blocked-list block and asserts it contains no button,
+> href or onClick. Connector rows are interactive, so mounting them below turns that scan red for a
+> reason that has nothing to do with the change. **Naming the scan delimiters in a comment breaks it
+> too** — the first draft of that comment quoted both literals, `indexOf` landed on the comment, and
+> the scan sliced 37 characters of prose instead of the block.
+>
+> **THE DISCONNECT BUTTON SAYS WHAT IT WILL ACTUALLY DO, BEFORE IT IS PRESSED.** For three of the
+> four lanes Pikar cannot revoke upstream, so `revokeSupport` drives a caveat rendered NEXT TO the
+> button — not behind a confirm dialog, because a warning a user sees only after deciding arrived
+> too late. The three classes produce three DIFFERENT sentences and a test pins that, since one
+> shared string would re-collapse the distinction `RevocationUpstream` exists to keep.
+> `connectorRows.test.ts` 17/17, plan-filtered `connections.test.ts` 4/4,
+> `connectionsSurface.test.ts` 30/30, web `tsc` 0.
+>
+> **Lifecycle follow-through (same plan):** query loading now renders a neutral live-region
+> "Checking connector availability…" rather than pretending the passed-provider projection is
+> empty. A server row in `connecting` stays `checking`; clean local disconnect and partial upstream
+> revoke are distinct `disconnected` / `revoke_partial` states. Button work is also named as
+> "Connecting…" or "Disconnecting…" while in flight, so a disabled control never looks inert.
+> The legacy "Databases & CRMs" blocked row is now "Other databases & CRMs": encrypted connector
+> storage exists, and the real boundary is a reviewed adapter plus an evidence-backed passed gate.
+>
+> Prior (28-09 — **THE PHASE 28 CONNECTOR ROWS ARRIVE ON THIS SURFACE AS A PURE
+> DERIVATION, AND THEY ARE NOT ON SCREEN YET.** `connectorRows.ts` + `connectorRows.test.ts` under
+> `dashboard/profile/`. Read from the working tree by the 33.1 lane, which does not own this
+> subsystem; recorded because §9 asks a change to travel with its playbook.
+>
+> **STATUS FIRST, because it is the thing a reader will get wrong: this module has ZERO callers.**
+> `grep -rn connectorRows apps/web --include=*.tsx` returns nothing. The server side is real —
+> `connectorConnections.connections` shipped in `514a19a` — but no `.tsx` renders these rows. It is
+> an ISLAND, in the same shape as `vaultGround` was: built, tested, and reaching no user. Do not
+> read the guarantees below as things the product currently does; read them as the contract the
+> wiring commit must honour. **The tests pass whether or not anything renders.**
+>
+> **Why it is a derivation and not a component.** This surface already tests presentation as pure
+> functions — `approvalsView.ts`, `financeView.ts`, `cashView.ts` — so what a row SAYS is testable
+> without rendering. The eventual `.tsx` keeps only markup.
+>
+> **Why it is a NEW FILE beside `connections.ts` rather than inside it, which is not arbitrary.**
+> `connections.ts` is source-scanned by `packages/core/src/connectionsSurface.test.ts`, which counts
+> `label:` and `blocker:` keys and requires one `ponytail:` comment per entry. Adding a second data
+> shape to that file silently breaks counts that are about something else entirely. **A future
+> reader tidying these two files together would re-break it.**
+>
+> **`checking` IS A STATE, NOT A DEFAULT — and this surface has been bitten twice.** `undefined`
+> from `useQuery` means "we do not know yet". Rendering "Not connected" during a query in flight
+> invites a user to reconnect an account that is already connected; the Google and Microsoft rows
+> above carry the same scar. The `ConnectorState` union names `checking` explicitly so the wiring
+> commit cannot collapse it into the not-connected branch by accident.
+>
+> **THE DISCONNECT BUTTON TELLS THE TRUTH BEFORE IT IS PRESSED, and this is the substantive claim
+> on this surface.** For three of the four lanes Pikar **cannot revoke the grant upstream**. A bare
+> "Disconnect" would promise something the code cannot deliver — the difference between deleting a
+> credential and telling someone their account is disconnected when it is not. So:
+>
+> - `revokeSupport: "confirmed"` — QuickBooks only, the one lane with a documented revocation
+>   endpoint a platform may call. No caveat.
+> - `"unproven"` — says access **may** persist, without claiming it will.
+> - `"unsupported"` — says the grant stays active until the user removes it in their own account.
+>
+> A test pins that the three classes produce three DIFFERENT sentences, which is what stops a future
+> edit from collapsing them into one reassuring string. And `residualNotice` keeps saying the grant
+> is live after a disconnect that could not revoke — the sentence the tenant is owed, on a row that
+> now reads "not connected".
+>
+> **§4 on a RENDERED string.** `lastFailureClass` is a CLOSED CLASS and never provider prose. Vendor
+> error text can carry account ids and customer names, and unlike an audit payload this string goes
+> on screen. A test asserts the closed class renders and that a missing one degrades to `unknown`
+> rather than to the provider's own words.
+>
+> **What the wiring commit still owes**, and none of it is proven today: that `undefined` maps to
+> `checking` at the call site; that `disconnectNote` is shown BEFORE the control rather than after
+> the click; and one browser check that a real row renders, since every guarantee above is currently
+> asserted against a hand-built object.)
+
 > Last verified: 2026-08-28 (**TWO DEFECTS IN LANDED CODE. (1) `deriveCandidates` WAS SENDING AN
 > UNKNOWN MODEL ID.** `blueprint.ts` and `onboarding.ts` each held a private
 > `resolveModel = id => openai(id.replace(/^openai\//, ""))`, whose regex is anchored on

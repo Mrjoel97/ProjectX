@@ -29,6 +29,47 @@ const PLAN_STATUS = v.union(
   v.literal("canceled"),
 );
 
+const recoveryCandidateArg = v.object({
+  subjectRef: v.string(),
+  status: v.union(v.literal("paid"), v.literal("resolved")),
+});
+
+/**
+ * Match only later observations against a bounded tenant-owned reminder history.
+ * The action caller supplies hashed provider-scoped refs; raw invoice ids never cross this seam.
+ */
+export const matchingStagedRevenueRecoveries = internalQuery({
+  args: {
+    tenantId: v.string(),
+    observedAt: v.number(),
+    candidates: v.array(recoveryCandidateArg),
+  },
+  handler: async (ctx, { tenantId, observedAt, candidates }) => {
+    if (candidates.length === 0) return [];
+    const wanted = new Set(candidates.map((candidate) => candidate.subjectRef));
+    const staged = new Set(
+      (
+        await ctx.db
+          .query("workflowPackEvents")
+          .withIndex("by_tenant_pack_createdAt", (q) =>
+            q.eq("tenantId", tenantId).eq("packId", "revenue"),
+          )
+          .order("desc")
+          .take(500)
+      )
+        .filter(
+          (row) =>
+            row.event === "reminder_staged" &&
+            row.subjectRef !== undefined &&
+            row.createdAt < observedAt &&
+            wanted.has(row.subjectRef),
+        )
+        .map((row) => row.subjectRef as string),
+    );
+    return candidates.filter((candidate) => staged.has(candidate.subjectRef));
+  },
+});
+
 // Mirrors plans.candidates in schema.ts (mirrors @pikar/core ContactMatch/NameCandidates, Plan 01).
 const CANDIDATES = v.array(
   v.object({
@@ -374,6 +415,27 @@ export const persistDeck = internalMutation({
         environment: v.string(),
         texture: v.string(),
         typography: v.optional(v.string()),
+        /**
+         * 33.1-01. **This object is a hand-maintained mirror of `plans.artDirection` in
+         * `schema.ts`, and `v.object` is CLOSED** — so a field the parser emits and the schema
+         * already stores is not a no-op here, it is a THROW at the write boundary. That is the
+         * failure class this comment exists for, not the field.
+         *
+         * `e2b281f` ("the music bed") widened the parser, the schema, the price table, the
+         * renderer, the assembler and the skill body, and not this. Live from then until
+         * 2026-08-30, EVERY storyboard carrying a `Music:` line died here — after
+         * `dispatchAndLand` had already landed the memo, so the plan row survived at
+         * `kind: "memo"` carrying the model's raw prose and nothing looked like a crash.
+         *
+         * Any future `artDirection` field lands in `schema.ts` AND here in the same commit.
+         *
+         * `v.string()`, matching `schema.ts` exactly — NOT a union of the four `MUSIC_MOODS`
+         * slugs. The closed set lives in `@pikar/core/storyboard` and is enforced by the parser
+         * that writes this; restating it in a package that cannot import it would be a third copy
+         * to keep in step, and the one that fails loudest — by refusing a row every other layer
+         * accepts. Same reasoning as the schema comment it mirrors.
+         */
+        music: v.optional(v.string()),
         references: v.array(v.string()),
         avoid: v.string(),
       }),
@@ -534,6 +596,33 @@ export const stageImagePlan = internalMutation({
 /** The ceiling on a stored refused body. Generous on purpose — the point is diagnosis, and a
  *  truncated body is a worse witness than a long one. Observed bodies run 1,007-6,331 characters. */
 const MAX_REFUSED_BODY_CHARS = 20_000;
+
+/**
+ * 33.1-06 — WHAT THE LAST STORYBOARD WAS REFUSED FOR, so the next attempt can be told.
+ *
+ * "Try again" is an ordinary chat message on the same thread (33-07), and the thread's plan row is
+ * unique (`by_thread`), so the refusal the canvas just showed the owner is sitting on that row.
+ * Until now it went to the owner and never to the model: the specialist got the same brief with no
+ * idea what had just failed, and repeated it — 17 of 27 storyboard failures in the audit log were
+ * the same code. `buildSpecialistPrompt` reads this for the media route and appends one line.
+ *
+ * Codes only (§4): the reason and the variation letter. The clause is rendered by
+ * `deckRefusalClause` at the caller from the same table the canvas uses, so the model and the
+ * owner are told the same thing in the same words.
+ */
+export const refusalForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, threadId },
+  ): Promise<{ reason: string; contract: string; variation?: string } | null> => {
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
+      .unique();
+    return plan?.proposalRefusal ?? null;
+  },
+});
 
 export const landStoryboardRefusal = internalMutation({
   args: {

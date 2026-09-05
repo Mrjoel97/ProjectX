@@ -290,6 +290,30 @@ describe("retryExtraction (EXTR-G retry mutation)", () => {
     expect(await extractionScheduled(t)).toHaveLength(0);
   });
 
+  // 33.2-05: a rendered reel has BOTH — the mp4 in storage and the transcript in `text`. The old
+  // `!storageId` test sent it to the extraction rail, which sniffed the mp4 under text/markdown and
+  // failed `unsupported_format` ("re-save it as PDF, DOCX, XLSX or plain text") on every reel.
+  test("a failed reel — bytes AND text — re-INGESTS its transcript, never re-extracts the mp4", async () => {
+    const t = setup();
+    const docId = await seedDoc(t, {
+      status: "failed",
+      failureReason: "ingest_failed",
+      source: "media",
+      kind: "reel",
+      mimeType: "text/markdown",
+      storageId: await t.run((ctx) => ctx.storage.store(new Blob(["not really an mp4"]))),
+      text: "Running your business alone is tough.",
+    });
+
+    const res = await asTenant(t).mutation(api.vaultSweep.retryExtraction, { vaultDocId: docId });
+    expect(res).toEqual({ ok: true });
+
+    const doc = await t.run(async (ctx) => ctx.db.get(docId));
+    expect(doc?.status).toBe("processing");
+    expect(doc?.failureReason).toBeUndefined();
+    expect(await extractionScheduled(t)).toHaveLength(0);
+  });
+
   test("a failed doc with neither bytes nor text is genuinely nothing to retry", async () => {
     const t = setup();
     const docId = await seedDoc(t, {

@@ -179,7 +179,7 @@ test("connected approvals: four kinds, schedule/cancel/discard/idempotency and s
   );
   await expect(page.getByRole("link", { name: /Review in Compliance/i })).toHaveAttribute(
     "href",
-    "/ops",
+    "/dashboard/approvals?tab=compliance",
   );
   await expect(
     page.getByText(/Exact counters are unavailable for this legacy plan/i),

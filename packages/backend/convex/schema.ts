@@ -34,7 +34,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 52 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 57 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -90,7 +90,8 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   providerGates                                                            │
 // │                                                                            │
 // │ ── Pikar's OWN billing (28.1-01) ───────────────────────── ~L3080          │
-// │   billingStripeEvents                                                      │
+// │   billingStripeEvents, billingCustomers, billingEvents, billingCoverage,   │
+// │   billingUnapplied, billingPeriods (28.1-05 … 28.1-07)                     │
 // └──────────────────────────────────────────────────────────────────────────────┘
 
 /**
@@ -279,11 +280,29 @@ export default defineSchema({
     // (no migration; OPSG-06 moot). Backs auditSince, which previously full-scanned.
     .index("by_ts", ["ts"]),
 
-  // Dead-letter queue populated by workflow onComplete on failure. Redaction-safe payload.
+  // Dead-letter queue. Redaction-safe payload.
+  //
+  // THIS TABLE IS `audit_immutable` (packages/core/src/tenantData.ts). It is EXCLUDED FROM BOTH
+  // the tenant deletion walk and the export walk BY CONSTRUCTION, not by an `if`. Two obligations
+  // ride with that: every writer is INSERT-ONLY (CLAUDE.md §3), and **nothing written here may
+  // ever become personal data** — an email or a name landing in `payload` would be beyond the
+  // reach of an erasure request forever. Refs, hashes, ids and counts ONLY (CLAUDE.md §4).
   deadLetters: defineTable({
     tenantId: v.string(),
     correlationId: v.string(),
-    workflowId: v.string(),
+    /**
+     * OPTIONAL since 28.1-05: a Stripe webhook has no workflow. Synthesizing a fake id like
+     * `billing:evt_…` would lie about what this field MEANS to every existing reader and to the
+     * compliance surface — the field is optional because the fact is optional. This is the WIDEN
+     * step and it terminates here: nothing narrows, so no backfill and no migration.
+     */
+    workflowId: v.optional(v.string()),
+    /**
+     * Which plane wrote the row. Set at the WRITE site rather than inferred from the shape (a
+     * future writer could have both a workflow and another source). Absent on every row written
+     * before 28.1-05; readers report absent as `"workflow"`, never as a missing value.
+     */
+    source: v.optional(v.union(v.literal("workflow"), v.literal("billing"))),
     payload: v.any(),
     error: v.string(),
     status: v.union(v.literal("new"), v.literal("replayed"), v.literal("resolved")),
@@ -1017,6 +1036,20 @@ export default defineSchema({
          *  the one that fails LOUDEST, by refusing to write a row that every other layer accepts.
          *  A slug outside the set prices as `unknown_model` and never reaches the assembler. */
         music: v.optional(v.string()),
+      }),
+    ),
+    /** 33.1-06: the bed that was actually laid under the reel and its licence obligation. Written
+     *  when the Openverse row lands; read by the vault document and the canvas so the owner has
+     *  a copy-ready credit for the post caption. CC BY is not free of duty — it is free of
+     *  charge. Public attribution data, not PII; refs-only rules do not apply to a licence line. */
+    musicCredit: v.optional(
+      v.object({
+        title: v.string(),
+        creator: v.string(),
+        license: v.string(),
+        licenseUrl: v.string(),
+        sourceUrl: v.string(),
+        attribution: v.string(),
       }),
     ),
     /** The narration script for the whole reel (D8 — voiceover has nothing to say without it). */
@@ -1974,6 +2007,11 @@ export default defineSchema({
     // read. The `by_tenant_kind` index named as the upgrade path now exists (added for the
     // onboarding profile read); this field may move onto it if freshness ever needs ranking.
     retrievedAt: v.optional(v.number()),
+    // 33.2 (PRD L5): `contentHash(question)` of the research QUESTION, written only by
+    // `research.persistFindings`, so `groundMediaBrief` can ask "was this exact brief researched on
+    // this tenant recently?" without a substring match on a truncated title. Optional → no
+    // backfill; a row without it never matches, which is the fail-CLOSED direction (research again).
+    researchQuestionHash: v.optional(v.string()),
     // Phase-26 Content provenance. Only authoritative write sites populate these; absence on
     // existing artifacts remains an explicit unknown and is never inferred by reverse scans.
     sourceThreadId: v.optional(v.string()),
@@ -2458,7 +2496,15 @@ export default defineSchema({
     // them or what they cost. A stock clip is a `video` and a stock still is an `image`, which is
     // why `renderReel` needed no stock case at all. A fifth member is a deliberate schema edit,
     // the `provider` precedent.
-    kind: v.union(v.literal("video"), v.literal("image"), v.literal("tts"), v.literal("stt")),
+    // 33.1-06: `audio` is the music bed as a STOCK row (Openverse) — landed bytes at blockIndex -2,
+    // priced $0 like a Pexels still. Widen-only: no existing row changes kind.
+    kind: v.union(
+      v.literal("video"),
+      v.literal("image"),
+      v.literal("tts"),
+      v.literal("stt"),
+      v.literal("audio"),
+    ),
     model: v.string(), // MUST be a key of the @pikar/cost/media price table (fail-closed at estimate)
     // Exactly what was SUBMITTED — never a provider default. fal's Wan 2.5 defaults to 1080p, so a
     // spec that omits its resolution is an estimate 3x below the invoice.
@@ -2748,6 +2794,8 @@ export default defineSchema({
       v.literal("sales-call-prep"),
       v.literal("process-sop"),
       v.literal("brand-review"),
+      // Measurement-only Phase 28 stream; not a discoverable Phase 27 workflow pack.
+      v.literal("revenue"),
     ),
     /** Server-minted per pack run — the join key across every event of one run. */
     runId: v.string(),
@@ -2766,6 +2814,13 @@ export default defineSchema({
       v.literal("artifact_created"),
       v.literal("run_completed"),
       v.literal("run_failed"),
+      v.literal("connector_lifecycle"),
+      v.literal("connector_read"),
+      v.literal("workflow_completed"),
+      v.literal("finance_computed"),
+      v.literal("reminder_staged"),
+      v.literal("plan_decided"),
+      v.literal("recovery_observed"),
     ),
     /** Terminal outcome, closed so a model can never relabel a refusal as success. */
     outcome: v.optional(
@@ -2792,6 +2847,62 @@ export default defineSchema({
     claimCount: v.optional(v.number()),
     citedClaimCount: v.optional(v.number()),
     unsupportedClaimCount: v.optional(v.number()),
+    // Phase 28's bounded, content-free extension. Cost and latency remain structurally absent.
+    provider: v.optional(
+      v.union(
+        v.literal("hubspot"),
+        v.literal("quickbooks"),
+        v.literal("stripe"),
+        v.literal("paypal"),
+      ),
+    ),
+    workflow: v.optional(
+      v.union(
+        v.literal("revenue-call-list"),
+        v.literal("revenue-lead-triage"),
+        v.literal("revenue-specialist"),
+        v.literal("revenue-cash-flow"),
+        v.literal("revenue-customer-pulse"),
+        v.literal("revenue-invoice-reminder"),
+        v.literal("revenue-payroll-confidence"),
+        v.literal("revenue-pipeline-review"),
+      ),
+    ),
+    status: v.optional(
+      v.union(
+        v.literal("connected"),
+        v.literal("reauth_required"),
+        v.literal("revoked"),
+        v.literal("revoke_partial"),
+        v.literal("ready"),
+        v.literal("partial"),
+        v.literal("unavailable"),
+        v.literal("staged"),
+        v.literal("approved"),
+        v.literal("edited"),
+        v.literal("rejected"),
+        v.literal("paid"),
+        v.literal("resolved"),
+      ),
+    ),
+    subjectRef: v.optional(v.string()),
+    itemCount: v.optional(v.number()),
+    pageCount: v.optional(v.number()),
+    retryCount: v.optional(v.number()),
+    evidenceCount: v.optional(v.number()),
+    unknownCount: v.optional(v.number()),
+    suppressedCount: v.optional(v.number()),
+    capped: v.optional(v.boolean()),
+    partial: v.optional(v.boolean()),
+    coverage: v.optional(
+      v.union(v.literal("complete"), v.literal("partial"), v.literal("unknown")),
+    ),
+    confidence: v.optional(
+      v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.literal("unknown")),
+    ),
+    hasGap: v.optional(v.boolean()),
+    /** Provider-reported observation time, not draft/approval/send time. */
+    observedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
@@ -3110,4 +3221,242 @@ export default defineSchema({
   })
     .index("by_event", ["eventId"])
     .index("by_object_type", ["objectId", "eventType"]),
+  /**
+   * Phase 28.1 (BILL-01) — THE tenant ↔ Stripe-customer mapping.
+   *
+   * The single row that says which Stripe customer belongs to which tenant, written only from
+   * `billingWebhook.receiveAndApply` and only for a tenant that already EXISTS. A Stripe customer
+   * with no matching tenant is dead-lettered by ref; nothing here is ever created from a webhook
+   * alone, because creating a tenant from a webhook is how a billing system invents users.
+   *
+   * TWO indexes because the mapping must resolve in BOTH directions, and that is the requirement
+   * rather than a convenience: `by_tenant` answers "what is this tenant's Stripe customer" (the
+   * Customer Portal and the status read), `by_customer` answers "whose is this" for a subscription
+   * event that carries no tenant thread at all.
+   *
+   * `tenant_owned` in `packages/core/src/tenantData.ts`: it holds no secret — a `cus_…` grants
+   * nothing without the API key — and a tenant erasure MUST remove it, or an orphaned link to a
+   * live merchant record survives the erasure. That is also why a future billing arm of the
+   * deletion walk has to run BEFORE the page loop: the loop deletes the row holding the id it
+   * needs to cancel the subscription with.
+   *
+   * CLAUDE.md §4: ids, enum tokens and timestamps only. No email, no name, no amount, no Stripe
+   * object — the extraction that fills it (`@pikar/billing`'s `eventFacts`) has nowhere to put one.
+   */
+  billingCustomers: defineTable({
+    /** The `users._id` string every other tenant table is keyed by. */
+    tenantId: v.string(),
+    /** Stripe's `cus_…`. Half of the mapping, and the id the Customer Portal is opened with. */
+    stripeCustomerId: v.string(),
+    /** `sub_…`, once a subscription exists. Absent between checkout and the subscription event. */
+    subscriptionId: v.optional(v.string()),
+    /** Stripe's SUBSCRIPTION status verbatim, or the `pending` sentinel a checkout writes before
+     *  any subscription event has been seen. A free string, not a union, for `billingStripeEvents`'
+     *  reason: Stripe adds statuses, and a union would make a new one a schema violation — i.e. a
+     *  500 and a retry storm. `subscriptionState()` is the closed set we ACT on, and it answers
+     *  `unknown` for anything it does not recognise rather than guessing. */
+    status: v.string(),
+    priceId: v.optional(v.string()),
+    trialEndsAt: v.optional(v.number()),
+    /** `event.created` of the delivery that last set `status`, in ms. THE ORDERING GUARD: Stripe
+     *  does not guarantee delivery order, so a late `customer.subscription.updated` arriving after
+     *  a `deleted` would otherwise resurrect a canceled subscription and hand back access. */
+    statusAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_customer", ["stripeCustomerId"]),
+  /**
+   * Phase 28.1 (BILL-03) — THE BOOK OF RECORD for Pikar's own merchant revenue.
+   *
+   * A SEPARATE table from `spendEvents`, by owner decision (2026-08-28), and the separation is the
+   * requirement rather than a preference: `SPEND_RAILS` is a CLOSED COST union ("A fourth is a
+   * deliberate schema edit, not a string" — `spend.ts:16`), `aggregateSpend` hard-codes all three
+   * rails in five places, and Phase 26 Finance renders those totals as *what Pikar SPENDS*, today.
+   * A `revenue` rail would silently add money-in to a money-out figure on a live screen.
+   *
+   * APPEND-ONLY, like `audit` and `spendEvents` (CLAUDE.md §3). `billingLedger.ts` is the only
+   * writer and exposes no `patch`/`replace`/`delete`; `billingLedger.test.ts` scans it. A
+   * correction is a new `refunded` or `adjustment` row, never an overwrite.
+   *
+   * CLAUDE.md §4: ids, code-owned tokens, an ISO 4217 code and integer minor units only. There is
+   * deliberately no description, no line-item text, no customer name and no email — everything
+   * written here comes through `@pikar/billing`'s `reconcileEvent`, whose output type has nowhere
+   * to put any of them.
+   */
+  billingEvents: defineTable({
+    tenantId: v.string(),
+    /** `SPEND_PHASES` VERBATIM (`@pikar/core`'s `spend.ts:25`). No phase name is invented for
+     *  billing: the vocabulary that describes money moving is the same vocabulary either way, and
+     *  a second one would be two answers to "what does `reserved` mean". */
+    phase: v.union(
+      v.literal("estimated"),
+      v.literal("reserved"),
+      v.literal("actual"),
+      v.literal("refunded"),
+      v.literal("adjustment"),
+    ),
+    /** ALWAYS POSITIVE, in the currency's MINOR units. Direction lives in the phase, never in the
+     *  sign (`spend.ts:25`), so no consumer has to guess whether a negative number is a credit or
+     *  a bug. Stripe is natively minor units, so nothing is converted on the way in. */
+    amountMinor: v.number(),
+    /** EXPLICIT, unlike `spendEvents` (which is USD cents by construction). Stripe can send any
+     *  currency, and an implicit currency is a fabricated one. Canonicalised uppercase by
+     *  `@pikar/revenue`'s `normalizeCurrency` before it reaches a row. */
+    currency: v.string(),
+    /** `billing/<stripe id>`. Identity is (tenantId, correlationId, phase) — NOT correlationId
+     *  alone, because a `reserved` arrival and its later `actual` collection SHARE one correlation
+     *  on purpose, and a correlation-only guard would swallow the collection. */
+    correlationId: v.string(),
+    /** The code-owned token naming which Stripe signal produced this row (`cash-applied`,
+     *  `invoice-paid-card`, ...). Never caller-supplied, never prose. */
+    kind: v.string(),
+    stripeObjectId: v.optional(v.string()),
+    /** Stripe's `taxability_reason` for the invoice, verbatim, when the delivery carried one.
+     *  A bare `Tax: 0.00` is never presentable — the reason travels with the number or there is
+     *  no number (`@pikar/billing`'s `taxPosture`). Absent means the delivery carried none. */
+    taxabilityReason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_tenant_createdAt", ["tenantId", "createdAt"])
+    .index("by_correlation", ["correlationId"]),
+  /**
+   * One durable start per tenant, opened by the first recorded billing movement. A missing row
+   * means the billing ledger has not begun watching this tenant; it NEVER means their revenue was
+   * zero. `spendCoverage` next door, same law, different book.
+   */
+  billingCoverage: defineTable({
+    tenantId: v.string(),
+    coverageStartedAt: v.number(),
+  }).index("by_tenant", ["tenantId"]),
+  /**
+   * Money we HOLD that is attached to nothing — bank-transfer funds left over after Stripe's
+   * automatic reconciliation, observed from `cash_balance.funds_available`.
+   *
+   * NOT an arrival signal, and getting that backwards is the trap the research flagged: under
+   * default automatic reconciliation this event fires only when a positive balance REMAINS. It
+   * therefore produces ZERO `billingEvents` rows and one row here.
+   *
+   * `observedAt` is the START OF THE CLOCK, not the last sighting: Stripe attempts to RETURN
+   * unreconciled funds to the customer's bank at 75 days and SWEEPS unreturnable funds to the
+   * account balance by 90 (`UNRECONCILED_RETURN_DAYS` / `UNRECONCILED_SWEEP_DAYS`). A re-observed
+   * balance updates the AMOUNT and leaves `observedAt` alone, or every notification would restart
+   * a clock that is actually running.
+   *
+   * MUTABLE by design — which is exactly why it is `tenant_owned` rather than `audit_immutable`.
+   */
+  billingUnapplied: defineTable({
+    tenantId: v.string(),
+    /** The `cus_…` whose cash balance holds it. Half of the re-observation key below. */
+    stripeObjectId: v.string(),
+    /** ZERO means the hold CLEARED. The row survives at zero rather than being deleted, because
+     *  deleting it would delete `amountAt` — and a Stripe redelivery of the pre-clear event would
+     *  then re-insert the old figure as a brand-new hold with nothing left to clear it. Readers
+     *  exclude zeros; this row is a guard, not a balance. */
+    amountMinor: v.number(),
+    currency: v.string(),
+    observedAt: v.number(),
+    /** `event.created` of the delivery that set `amountMinor`. Stripe does not guarantee delivery
+     *  order, so an older event arriving second must be ignored rather than believed. Distinct
+     *  from `observedAt`, which is the start of the 75/90 clock and does not move while the hold
+     *  lasts. */
+    amountAt: v.number(),
+  })
+    // `by_tenant`, NOT the `by_tenant_observedAt` 28.1-06's plan specified. `tenant_owned` puts
+    // this table on the erasure and export walks, and BOTH hard-code `.withIndex("by_tenant")`
+    // (`tenantDelete.ts:223`, `tenantExport.ts:108`) — a compound-only index makes the
+    // classification fail to typecheck. Nothing is lost: a tenant holds one Stripe customer, so
+    // this table is a handful of rows and the age travels on each row rather than in the ordering.
+    .index("by_tenant", ["tenantId"])
+    // The re-observation key. Currency is part of it because two currencies never combine into one
+    // figure (`@pikar/revenue`'s law), so a EUR balance is a different row from a USD one.
+    .index("by_tenant_object_currency", ["tenantId", "stripeObjectId", "currency"]),
+  /**
+   * Phase 28.1 (BILL-04) — THE DURABLE CLAIM ROW. One period, one invoice.
+   *
+   * THIS TABLE IS THE GUARD, AND THE `Idempotency-Key` HEADER IS NOT. Stripe prunes idempotency
+   * keys once they are ~24h old and then treats a reuse as a brand-new request, so a rollup
+   * retried a day later with the identical key mints a SECOND invoice and double-bills the
+   * customer. `billingApi.ts` carries the same contract at the transport; this row is what
+   * actually holds it, because it never expires.
+   *
+   * THE STATUS MACHINE, and every transition is a mutation (exactly-once) rather than an action
+   * (at-most-once, never auto-retried):
+   *   pending  ──tick──▶ claimed ──settlePeriod──▶ posted   (terminal)
+   *                         │                  └─▶ failed   (re-claimable, up to MAX_PERIOD_ATTEMPTS)
+   *                         └── stale past CLAIM_STALE_MS ──▶ re-claimed by a later tick
+   * A `claimed` row older than the stale threshold means the scheduler chain was SEVERED — the
+   * action died between the claim and the settle. The next tick recovers it; nothing is dropped.
+   *
+   * `charges` LIVES ON THE ROW ON PURPOSE. The invoice document is bounded by what this row says
+   * it contains, not by "whatever is pending in Stripe" — `POST /v1/invoices` would otherwise
+   * sweep in every unattached invoice item the customer has, including the leftovers of a failed
+   * earlier period. `billingRollup.postInvoice` creates the invoice FIRST with
+   * `pending_invoice_items_behavior=exclude` and attaches these items to it by id.
+   *
+   * CLAUDE.md §4: no prose reaches Stripe from here. A charge carries a code-owned `kind` from a
+   * CLOSED union, and the human-readable line description is looked up from that union in
+   * `billingRollup.ts`. A free-text description field would be the one door by which customer
+   * content could be written onto a document and mailed out.
+   *
+   * NO PRODUCER EXISTS YET. Nothing in this deployment writes a row here; the rollup is complete
+   * and its input is not. Said out loud so a green suite is not read as a running biller.
+   */
+  billingPeriods: defineTable({
+    tenantId: v.string(),
+    /** The UTC month, `YYYY-MM` (`periodKeyFor`). Ref-safe, because the Stripe idempotency key —
+     *  an HTTP HEADER VALUE — is derived from it and from the tenant id. */
+    periodKey: v.string(),
+    /** The billing window, half-open `[periodStart, periodEnd)`. A charge whose `occurredAt` falls
+     *  outside it is excluded from the document rather than smuggled onto the wrong month. */
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    /** When the rollup may claim this period. Before it, `tick` leaves the row alone. */
+    dueAt: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("claimed"),
+      v.literal("posted"),
+      v.literal("failed"),
+    ),
+    charges: v.array(
+      v.object({
+        /** Unique within the period and ref-safe: it is half of the PER-ITEM idempotency key, so a
+         *  same-day retry re-sends the same item rather than adding a second copy of it. */
+        ref: v.string(),
+        kind: v.union(v.literal("subscription"), v.literal("usage"), v.literal("adjustment")),
+        /** POSITIVE minor units, like `billingEvents`. A credit is a Stripe credit note, not a
+         *  negative invoice line — direction never lives in the sign. */
+        amountMinor: v.number(),
+        currency: v.string(),
+        occurredAt: v.number(),
+        /** WHO raised this charge, taken from `ctx` at `raiseAdjustment` and never from an
+         *  argument (28.1-10). Required, so a future writer of `subscription`/`usage` lines has to
+         *  state its provenance rather than inherit the owner's by omission. It stays in this
+         *  database: `periodForPost` strips it, so it never reaches Stripe. */
+        raisedBy: v.string(),
+      }),
+    ),
+    claimedAt: v.optional(v.number()),
+    postedAt: v.optional(v.number()),
+    stripeInvoiceId: v.optional(v.string()),
+    /** Stripe's `invoice.hosted_invoice_url`, validated to a `*.stripe.com` https origin before it
+     *  is stored. This is the ONLY payment surface: card or bank transfer, on Stripe's page. */
+    hostedInvoiceUrl: v.optional(v.string()),
+    /** Stripe's amount_due on the FINALIZED invoice, not our sum of `charges` — Stripe Tax adds
+     *  lines we did not send, and reporting our own subtotal as the bill would understate it. */
+    amountMinor: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    /** A code token (`stripe_http`, `no_stripe_customer`, ...). Never Stripe prose (§4). */
+    failureCode: v.optional(v.string()),
+    attempts: v.number(),
+  })
+    // `by_tenant`, leading with tenantId and carrying periodKey, so ONE index serves the erasure
+    // walk, the export walk (both hard-code `.withIndex("by_tenant")`) and the per-period lookup.
+    .index("by_tenant", ["tenantId", "periodKey"])
+    // The claim scan. Does NOT lead with tenantId — deliberately, and justified by name in
+    // `isolation.test.ts`: the rollup is deployment-wide and has no tenant in hand until it reads
+    // a row. Every consumer is an internalMutation reached only from the cron.
+    .index("by_status_dueAt", ["status", "dueAt"]),
 });

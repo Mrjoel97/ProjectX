@@ -1,0 +1,35 @@
+{
+  "id": "36-revenue-lead-triage",
+  "description": "A supported attention read must preserve the code-owned order and suppression result instead of inventing a narrative ranking.",
+  "candidate": { "name": "revenue-lead-triage", "version": 1 },
+  "turns": ["Rank the revenue contacts who need attention today."],
+  "expect": {
+    "expectedState": {
+      "outcome": "ready",
+      "toolTrace": ["readRevenueCrm"],
+      "result": {
+        "operation": "attention",
+        "coverage": "local",
+        "scanned": 3,
+        "capped": false,
+        "rows": [
+          {
+            "contactId": "contact-overdue",
+            "priority": 100,
+            "reasons": ["follow_up_overdue"],
+            "provenance": { "pikar": true, "provider": false }
+          },
+          {
+            "contactId": "contact-due",
+            "priority": 20,
+            "reasons": ["follow_up_due"],
+            "provenance": { "pikar": true, "provider": true }
+          }
+        ]
+      },
+      "refs": ["contact-overdue", "contact-due"],
+      "counts": { "scanned": 3, "ranked": 2, "suppressed": 1 }
+    }
+  },
+  "needles": ["contact-overdue", "contact-due"]
+}

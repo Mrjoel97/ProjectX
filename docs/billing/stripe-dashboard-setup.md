@@ -174,7 +174,8 @@ from the Dashboard — sending is what mints the customer's virtual bank account
 
 URL: `{CONVEX_SITE_URL}/billing/stripe/webhook` — the Convex **site** origin (`*.convex.site`), not
 the app origin. Subscribe to the locked event list: `invoice.paid`, `invoice.payment_failed`,
-`charge.refunded`, `credit_note.created`, `checkout.session.completed`,
+`refund.created` (NOT `charge.refunded` — see the playbook), `credit_note.created`,
+`checkout.session.completed`,
 `customer.subscription.created|updated|deleted`, `cash_balance.funds_available`,
 `customer_cash_balance_transaction.created`.
 

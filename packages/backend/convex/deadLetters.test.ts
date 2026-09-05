@@ -183,6 +183,10 @@ describe("D13: the owner can enumerate dead letters ACROSS tenants", () => {
         "id",
         "tenantId",
         "workflowId",
+        // 28.1-05 added `source` DELIBERATELY, which is the whole point of pinning the key set:
+        // it is a code-owned enum literal, not a join, and bumping this list is how a reviewer
+        // sees that. A field that arrived without this edit would still be red.
+        "source",
         "correlationId",
         "error",
         "status",
@@ -208,5 +212,88 @@ describe("D13: the owner can enumerate dead letters ACROSS tenants", () => {
     // `markResolved` stays TENANT-scoped: the caller can only ever resolve their own row.
     expect(src).toMatch(/export const markResolved = tenantMutation/);
     expect(src.match(/tenantMutation\(/g)).toHaveLength(1);
+  });
+});
+
+/**
+ * 28.1-05 relaxed `deadLetters.workflowId` to optional and added a `source` discriminator, because
+ * a Stripe webhook has no workflow. Synthesizing a fake `workflowId` like `billing:evt_…` would
+ * lie to every reader here and on the compliance surface — the field is optional because the FACT
+ * is optional.
+ *
+ * Widen-only: nothing narrows, so no backfill and no migration. These tests pin BOTH directions —
+ * a workflow-less row must read, and a row with no `source` (i.e. every row written before this
+ * plan) must be reported as `"workflow"` rather than as a missing value.
+ */
+describe("a dead letter with no workflow still reads (28.1-05)", () => {
+  test("a workflow-less billing row inserts and reaches newCount / listNew / markResolved", async () => {
+    const t = convexTest(schema, modules);
+    const id = await t.run((ctx) =>
+      ctx.db.insert("deadLetters", {
+        tenantId: "tenant_billing",
+        correlationId: "evt_ref",
+        source: "billing" as const,
+        payload: { stripeCustomerId: "cus_ref" },
+        error: "billing_unknown_tenant",
+        status: "new" as const,
+        createdAt: Date.now(),
+      }),
+    );
+    const asTenant = t.withIdentity({ subject: "tenant_billing" });
+    expect(await asTenant.query(api.deadLetters.newCount, {})).toBe(1);
+
+    const listed = await asTenant.query(api.deadLetters.listNew, {});
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.workflowId).toBeUndefined();
+    expect(listed[0]?.source).toBe("billing");
+
+    await asTenant.mutation(api.deadLetters.markResolved, { id });
+    expect(await asTenant.query(api.deadLetters.newCount, {})).toBe(0);
+  });
+
+  test("the owner listing renders a workflow-less row and defaults an absent source to `workflow`", async () => {
+    const t = convexTest(schema, modules);
+    const owner = await asOwner(t);
+    // No `source` at all — the shape of every row written before this plan.
+    await t.run((ctx) =>
+      ctx.db.insert("deadLetters", {
+        tenantId: "tenant_legacy",
+        correlationId: "cid-legacy",
+        workflowId: "wf-legacy",
+        payload: { requestId: "ref-only" },
+        error: "route_not_implemented",
+        status: "new" as const,
+        createdAt: Date.now(),
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("deadLetters", {
+        tenantId: "billing:unattributed",
+        correlationId: "evt_x",
+        source: "billing" as const,
+        payload: { stripeCustomerId: "cus_x" },
+        error: "billing_unknown_tenant",
+        status: "new" as const,
+        createdAt: Date.now() + 1,
+      }),
+    );
+
+    const { rows } = await owner.query(api.deadLetters.listAll, {});
+    const bySource = Object.fromEntries(rows.map((r) => [r.correlationId, r]));
+    // ABSENT is reported as "workflow", not as undefined: a reader that passed the field straight
+    // through would leave the operator screen blank for every historical row.
+    expect(bySource["cid-legacy"]?.source).toBe("workflow");
+    expect(bySource["cid-legacy"]?.workflowId).toBe("wf-legacy");
+    expect(bySource.evt_x?.source).toBe("billing");
+    expect(bySource.evt_x?.workflowId).toBeUndefined();
+  });
+
+  test("the pipeline writer stamps `workflow` at the write site rather than leaving it inferred", () => {
+    // Set at the WRITE site, not derived from "has a workflowId": the two are different claims and
+    // only one of them survives a future writer that has both a workflow and another source.
+    const src = readFileSync(new URL("./deadLetter.ts", import.meta.url), "utf8");
+    expect(src.match(/source: "workflow"/g)).toHaveLength(2);
+    // CLAUDE.md §3 / `audit_immutable`: insert-only. No mutating dead-letter or audit function.
+    expect(src).not.toMatch(/\.patch\(\s*["']deadLetters["']|db\.(replace|delete)\(/);
   });
 });

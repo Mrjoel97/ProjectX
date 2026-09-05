@@ -15,17 +15,64 @@
  * and styling stay in the component.
  */
 
-// The ONE import this module has, and it is a VALUE rather than a type for a reason: the length
-// chip's options must BE the closed set `media.editBrief` validates against, or the control can
-// produce an `illegal_duration` refusal the UI could have made unreachable. `@pikar/core` is a
-// pure-TS workspace package with no dependencies of its own (CLAUDE.md §1) — importing it does not
-// pull the backend's build graph in here, which is what the note below is about.
+// TWO imports, both VALUES rather than types, and both for the same reason: a sentence about a
+// closed set or about a price must be DERIVED from the thing it describes, or it goes stale
+// silently. The length chip's options must BE the closed set `media.editBrief` validates against,
+// or the control can produce an `illegal_duration` refusal the UI could have made unreachable.
+// `@pikar/core` and `@pikar/cost` are pure-TS workspace packages (CLAUDE.md §1) — `@pikar/cost`
+// depends only on `@pikar/core`, so importing it does not pull the backend's build graph in here,
+// which is what the note below is about.
+//
+// 33.1-04 ADDED `@pikar/cost`, and the reason is a defect that shipped three times: the
+// clip-vs-still ratio was written out in words at three sites here ("a tenth", then "a fortieth")
+// and RESTATED a number the price tables compute. Both restatements went stale, both times with a
+// green suite, because the tests pinned the stale word. See `CLIP_VS_STILL_RATIO` below.
 import {
   type DeckContract,
   deckRefusalClause,
   GENERATED_CLIP_SECONDS,
   TARGET_DURATIONS,
 } from "@pikar/core/storyboard";
+import { MEDIA_GENERATED_SECONDS_CAP, sceneVisualSpec } from "@pikar/cost/media";
+
+/**
+ * THE CLIP-VS-STILL LEVER, COMPUTED FROM THE PRICE TABLES AT RENDER — never typed out.
+ *
+ * The only cost lever this product tells anyone they have, and it has now moved three times:
+ * 10x, then 40x when the still's price was a guess, then 47x once 33.1-03 measured the still at
+ * $0.006 and 33.1-04 moved the clip to grok's $0.07/s. Each time it moved, three sentences on
+ * this screen kept the OLD word and three tests kept passing, because they asserted `/fortieth/`
+ * — a check that cannot fail, over a money claim. Deriving it is the fix: a price move now
+ * updates the copy instead of contradicting it.
+ *
+ * ponytail: one rounded number, three sentences. The ceiling is that it rounds (46.7 reads as 47),
+ * which is what "about" in each sentence is for; the upgrade path if a fraction ever matters is a
+ * second derived string, not a hand-written number.
+ */
+const usdAt4s = (visual: "generated_video" | "animated_image"): number => {
+  const priced = sceneVisualSpec(visual, 4);
+  return priced.ok && priced.value !== null ? priced.value.usd : 0;
+};
+export const CLIP_VS_STILL_RATIO = Math.round(
+  usdAt4s("generated_video") / usdAt4s("animated_image"),
+);
+
+/**
+ * The provider's legal clip lengths as a RANGE, from the SAME constant the parser snaps to.
+ *
+ * It was `GENERATED_CLIP_SECONDS.join(", ")` while the grid had three members. 33.1-04 widened it
+ * to fifteen, which would have printed
+ * "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 or 15 second clips" into two sentences a user
+ * reads. A range says the same thing and stays derived, so it still cannot name a set the repair
+ * does not use — which is the property the join was there for.
+ */
+export const GENERATED_LENGTH_RANGE = `${GENERATED_CLIP_SECONDS[0]} to ${
+  GENERATED_CLIP_SECONDS[GENERATED_CLIP_SECONDS.length - 1]
+}`;
+
+/** The clip line's note on the estimate, and the e2e spec's expected string — one export, so the
+ *  browser assertion cannot pin a number the module no longer prints. */
+export const CLIP_COST_LEVER_NOTE = `A generated clip costs about ${CLIP_VS_STILL_RATIO}× an animated still — switching one is the biggest lever here.`;
 
 /** The kinds a scene's picture can come from (`@pikar/core/storyboard`'s `VisualKind`). Typed
  *  structurally rather than imported so this module stays free of the backend's build graph; the
@@ -114,12 +161,13 @@ export const asVisualKind = (s: string | null | undefined): VisualKind | null =>
 /** What each kind costs, in the one word a tile has room for. `null` where nothing is bought — and
  *  the tile says so rather than leaving the question open.
  *
- *  33-06 corrected the still's ratio: it read "about a tenth of a clip", which understated the only
- *  cost lever a user has by 4x. The measured table (`storyboard.ts`, 20.2 wave 7 / ADR-019) is
- *  $0.40 for a 4 s generated clip and $0.01 for a still at ANY length — a FORTIETH. */
+ *  33-06 corrected the still's ratio once ("about a tenth" understated the lever by 4x) and 33.1-04
+ *  stopped correcting it: the number is DERIVED from the price tables now (`CLIP_VS_STILL_RATIO`),
+ *  because a sentence that restates a computed value goes stale every time the value moves — which
+ *  it has done three times in this product's life, twice behind a green suite. */
 export const KIND_COST_NOTE = {
   generated_video: "Bought as a clip at this scene's length.",
-  animated_image: "One still, panned in the render — about a fortieth of a clip.",
+  animated_image: `One still, panned in the render — about 1/${CLIP_VS_STILL_RATIO} of a clip.`,
   uploaded_video: "Your own file. Nothing is bought for this scene.",
   text_card: "Drawn in the render. Nothing is bought for this scene.",
   stock_video: "From a free library. Nothing is bought for this scene.",
@@ -215,9 +263,15 @@ export function refusalText(
   switch (refusal.reason) {
     case "over_job_cap":
       return `This reel would cost ${money(o.totalCents)}, over the ${money(o.capCents)} per-reel limit — cut a ${o.noun}, or swap a generated clip for an animated still.`;
+    // 33.1-04's generated-seconds ceiling. A DIFFERENT sentence from `over_job_cap` because it is a
+    // different lever: the reel is affordable, and cutting a scene is not the cure — swapping one
+    // for a still or stock is, because those cost the same at any length. The number is derived
+    // from the cap rather than typed out, for the reason `CLIP_VS_STILL_RATIO` exists.
+    case "over_generated_seconds":
+      return `This reel uses more than ${MEDIA_GENERATED_SECONDS_CAP} seconds of generated video, which is the most one reel may buy — swap a generated ${o.noun} for an animated still or for stock, which cost the same at any length.`;
     case "illegal_duration":
       return o.noun === "scene"
-        ? "The scenes don't add up to the reel's declared length, or a generated clip isn't 4, 8 or 12 seconds — the only lengths the model produces."
+        ? `The scenes don't add up to the reel's declared length, or a generated clip isn't ${GENERATED_LENGTH_RANGE} whole seconds — the only lengths the model produces.`
         : "Every block must be 5 or 10 seconds.";
     case "narration_too_long":
       return `${which}'s narration is ${refusal.chars} characters — trim it to ${o.maxChars} or fewer, or it runs into the next line.`;
@@ -285,7 +339,13 @@ export function failureText(reason: string, noun: "scene" | "block"): string {
     incomplete_blocks: `a ${noun} is missing its picture or its voice take`,
     // 20.2 wave 6. The one refusal whose cure is neither a retry nor an edit.
     stale_inputs: `some of the footage was bought before you reordered or trimmed the deck, so it belongs to ${noun}s that have moved — generate the reel again to re-buy it`,
-    speech_out_of_window: "a narration line runs into the next one — shorten it and generate again",
+    // 33.1-06: `speech_out_of_window` is gone — the assembler delays a colliding take now and no
+    // longer refuses on it. The ONE overrun it still refuses, and the cause the first live reel
+    // actually hit, are named instead; both had been collapsing into "no plainer word".
+    narration_overruns_reel:
+      "the last spoken line is still going when the reel ends — shorten it, or make the reel longer",
+    card_font_missing:
+      "the render environment has no font to draw a text card with — this is a setup problem, not the deck's",
     clip_too_short: "a generated clip was shorter than its window",
     missing_narration: "a window came out silent",
     duration_mismatch: "the finished file was not the expected length",
@@ -300,6 +360,17 @@ export function failureText(reason: string, noun: "scene" | "block"): string {
     // the request — they are the request never getting there — so neither is a rewrite lever.
     submit_canceled: "the request was canceled before the provider started it",
     submit_failed: "the request never reached the provider",
+    // ── 33.1-06: the codes that ACTUALLY happened in the audit log, none of which had words. 11
+    // of 58 media jobs failed on money and every one of them read "no plainer word". ──────────
+    http_402: "the media account is out of credit — top it up at OpenRouter and generate again",
+    credit_balance_exhausted:
+      "the media account is out of credit — top it up at OpenRouter and generate again",
+    media_not_configured:
+      "a media provider key is missing on this deployment — a setup problem, not the deck's",
+    submit_threw: "the request could not be built — a code fault on our side, not the deck's",
+    tts_no_audio: "the voice model answered with no sound at all — try again",
+    tts_not_verbatim:
+      "the voice model read the line differently from how it was written, so the take was refused rather than shipped with the wrong words",
     // The CAPTIONS plane. `maybeStartCaptions` refuses a transcript whose source takes are
     // missing; `submitCaptions` fails on the transcript itself.
     incomplete_takes: `a ${noun}'s voice take never landed, so there was nothing to transcribe`,
@@ -334,13 +405,19 @@ export const GENERIC_FAILURE_CLAUSE = "something went wrong that we have no plai
 export function failureClause(reason: string | null | undefined, noun: "scene" | "block"): string {
   if (!reason) return GENERIC_FAILURE_CLAUSE;
   const said = failureText(reason, noun);
-  return said === reason ? GENERIC_FAILURE_CLAUSE : said;
+  if (said !== reason) return said;
+  // 33.1-06: a provider HTTP status that has no dedicated entry is still a fact worth saying —
+  // "the provider refused with 429" beats "no plainer word", and the number is a code, not prose.
+  const http = /^http_(\d{3})$/.exec(reason);
+  if (http)
+    return `the media provider refused the request with HTTP ${http[1]} — try again shortly`;
+  return GENERIC_FAILURE_CLAUSE;
 }
 
 /**
  * THE VERDICT COPY, and this is a compliance statement rather than a style choice.
  *
- * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every Sora 2 video
+ * `none_reported` means the provider reported NOTHING — **it is not "clean"**. Every generated video
  * and every voice take lands there, and rendering it as a pass would make a safety claim the
  * provider never made. Never a green tick, and never colour alone (BRAND §6).
  */
@@ -621,10 +698,7 @@ export function estimateView(
       // The 40x lever, on the line it applies to. A blended "pictures" row hid it (wave 7's finding)
       // and so does an itemised one that says nothing: knowing WHICH line is expensive is only
       // useful next to knowing what the cheaper kind costs.
-      note:
-        line.label === "clips"
-          ? "A generated clip costs about 40× an animated still — switching one is the biggest lever here."
-          : null,
+      note: line.label === "clips" ? CLIP_COST_LEVER_NOTE : null,
     })),
     remaining: `${usd(est.remainingCents)} of today's media budget remains.`,
     refusalSentence,
@@ -644,7 +718,7 @@ export const pricedAsLine = (
   clipSeconds: number,
 ): string =>
   targetSeconds === null
-    ? `Priced at OpenAI Sora 2, 720p, ${clipSeconds} s per block`
+    ? `Priced at Grok Imagine on OpenRouter, 720p, ${clipSeconds} s per block`
     : `A ${targetSeconds}-second reel of ${sceneCount} scenes, priced per scene`;
 
 /** What the hero slot holds. A discriminated union rather than five booleans, because "playing the
@@ -1188,7 +1262,7 @@ const SWAP_ARMS = [
     arm: "animated_image" as const,
     label: "Switch it to an animated still",
     priceLabel: "free to switch",
-    note: "The still itself is bought when you regenerate — about a fortieth of a generated clip.",
+    note: `The still itself is bought when you regenerate — about 1/${CLIP_VS_STILL_RATIO} of a generated clip.`,
   },
   {
     // FIRST among the swaps, and the ordering is the point: this is the only arm that replaces a
@@ -1489,8 +1563,9 @@ export function adjustmentNotes(
 ): string[] {
   if (!adjustments || adjustments.length === 0) return [];
   // The legal lengths come from the SAME constant the parser snaps to, so this sentence cannot
-  // name a set the repair does not actually use.
-  const legal = GENERATED_CLIP_SECONDS.join(", ").replace(/, (\d+)$/, " or $1");
+  // name a set the repair does not actually use — as a RANGE since 33.1-04, because the grid is
+  // fifteen members wide now and a comma-separated list of all of them is not a sentence.
+  const legal = GENERATED_LENGTH_RANGE;
   return adjustments.map((a) => {
     const moved = `${a.fromSeconds}s to ${a.toSeconds}s`;
     const verb = a.toSeconds < a.fromSeconds ? "shortened" : "lengthened";

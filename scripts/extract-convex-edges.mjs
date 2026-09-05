@@ -35,6 +35,18 @@ const isNoise = (n) => {
     f.startsWith(".planning/") ||
     f === "CLAUDE.md" ||
     f.includes(".claude/") || // agent-tooling skills/config markdown, not product code
+    // Same category as .claude/: `.superpowers/sdd/` holds per-session agent briefs, progress
+    // notes and task reports. They describe work ABOUT the code rather than being code, and they
+    // accumulate one directory per session, so they grow without bound while never being a thing
+    // anyone needs to navigate TO. 760 nodes at the time this was added.
+    f.startsWith(".superpowers/") ||
+    // Playwright specs. NOT because e2e is unimportant — because graphify extracts a node per
+    // locator/expression in them, so ~40 spec files produced 25,886 of 36,394 nodes (71% of the
+    // graph) on the 0.9.11 rebuild, against 178 in the graph built by the older version. A graph
+    // that is mostly test locators defeats the one thing CLAUDE.md keeps it for: `graphify query`
+    // returning a SMALL scoped subgraph instead of raw grep. The specs stay perfectly readable —
+    // they are 40 files in one flat directory, found by Glob in one call.
+    /(^|\/)e2e\//.test(f) ||
     NOISE_BASENAME.test(f.split("/").pop())
   );
 };

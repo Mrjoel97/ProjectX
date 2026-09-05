@@ -290,7 +290,9 @@
     "apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx",
     "apps/web/app/(app)/dashboard/workspace/mediaCanvasView.ts",
     "apps/web/scripts/bake-sandbox-snapshot.mjs",
-    "apps/web/scripts/music/"
+    "apps/web/scripts/music/",
+    "packages/backend/scripts/run-storyboard-bakeoff.mjs",
+    "packages/backend/scripts/storyboard-briefs.json"
   ],
   "contacts-crm.md": [
     "packages/core/src/contacts.ts",
@@ -345,9 +347,11 @@
     "scripts/check-phase28-completion.mjs",
     "scripts/check-provider-lane.mjs",
     "docs/connectors/README.md",
-    "docs/connectors/phase28-readiness.md"
+    "docs/connectors/phase28-readiness.md",
+    "packages/backend/__fixtures__/providerGates.ts"
   ],
   "connector-hubspot.md": [
+    "apps/hubspot/",
     "packages/revenue/src/providers/hubspot",
     "packages/backend/convex/hubspot",
     "scripts/smoke-hubspot-read.mjs",
@@ -366,7 +370,12 @@
     "scripts/smoke-stripe-read.mjs",
     "docs/connectors/stripe-suitability.md"
   ],
-  "billing.md": ["packages/billing", "packages/backend/convex/billing", "docs/billing/"],
+  "billing.md": [
+    "packages/billing",
+    "packages/backend/convex/billing",
+    "docs/billing/",
+    "packages/backend/__fixtures__/sourceScan.ts"
+  ],
   "connector-paypal.md": [
     "packages/revenue/src/providers/paypal",
     "packages/backend/convex/paypalAuth",

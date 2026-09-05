@@ -1,6 +1,176 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
-> Last verified: 2026-08-28 against 28-07 (the read-only Stripe App lane, `postTokenForm`'s
+> Last verified: 2026-09-03 (**THE TYPECHECK GATE IS GREEN AGAIN — `reminders.test.ts` TYPE ONLY,
+> NO GUARD CHANGED.**)
+>
+> `pnpm typecheck` had been failing on `packages/revenue/src/reminders.test.ts` since `2b1e9ed`,
+> which meant CI stopped at its FIRST step and never reached Lint, Test or Build. The tests
+> themselves passed the whole time — the defect was purely at the type level, which is exactly why
+> it survived: a green suite says nothing about a red `tsc`.
+>
+> **Root cause, worth knowing because the shape recurs.** The `projection()` test helper was
+> annotated as returning `Projection<ReminderInvoice>` — the full three-variant union — while its
+> body only ever builds the `ready` variant. Tests reach the other states by spreading it and
+> overriding, e.g. `{ ...projection(), state: "partial", missing: "next page" }`. Spreading a UNION
+> distributes over every member, so that expression also produced an `unavailable`-shaped object
+> (`provider`/`because`, no `meta`/`items`) with `state: "partial"` stamped on it — assignable to no
+> variant at all. The fix narrows the helper's return type to `ReadyProjection =
+> Extract<Projection<ReminderInvoice>, { state: "ready" }>`, which is what it actually returns.
+> Narrowing a return type never breaks callers, and every call site passes it where the wide union
+> is accepted.
+>
+> **No runtime behaviour changed and none was allowed to.** `reminders.ts` is untouched. The
+> `partial` guard at `reminders.ts:67` was mutation-checked after the fix — deleting it turns
+> "rejects unavailable and partial reads" red — so the case this type error sat on top of is still
+> a live assertion and not a vacuous one.
+>
+> Verified: `tsc --noEmit` clean in `packages/revenue` (uncached), `pnpm typecheck` 12/12, 340
+> revenue tests, and `biome ci .` exits 0.
+
+> Last verified: 2026-09-02 — Plan 28-16's authenticated parked-lane gate is green on the local
+> stack with one real signed-in context across desktop (1440×960), tablet (820×1180), and mobile
+> (390×844). The spec waits for a positive server settle marker before asserting absence, then
+> proves HubSpot, QuickBooks, Stripe, and PayPal cards remain omitted from Connections and that no
+> PLAN/REPORT revenue offer is reconstructed in the workspace. Artifacts:
+> `output/playwright/revenue-pack/{desktop,tablet,mobile}-parked.png`. The single-context shape is
+> mandatory because Convex Auth rotates refresh tokens; parallel contexts restored from one
+> storageState race that token and turn a responsive gate into a sign-out test.
+>
+> Last verified: 2026-09-01 — Plan 28-16 made Phase 28 completion a strict, mechanically
+> derived matrix. `check-phase28-completion.mjs --self-test` exhausts all 16 pass/park
+> combinations and separately proves that parked, expired, failed and unreachable named lanes
+> cannot complete the phase. `--report` prints the current gate/exposure and REVN matrix without
+> changing exposure; `--verify-current` checks that every repository lane projection is reachable
+> and non-red; only `--strict` requires all four provider lanes to be passed. HubSpot controls
+> REVN-01, QuickBooks controls REVN-02, Stripe plus PayPal jointly control REVN-03, and the
+> provider-composed REVN-04..06 inherit all four. A subset remains useful and incomplete.
+>
+> Last verified: 2026-09-01 — Plan 28-16 added the server-owned revenue discovery projection.
+> `providerGates.revenueDiscovery` intersects current production `passedProviderGates` with the
+> exact active workflow row and active `revenue-specialist` row. The workspace renders only that
+> projection; it never infers readiness from a module, playbook or credential row. A parked,
+> failed, expired or missing provider, an inactive workflow pin, or an inactive runtime pin removes
+> only the affected offer. A later `recordLaneFailure` removes a formerly visible offer on the next
+> reactive read. No provider or deployment operation is part of discovery.
+>
+> Last verified: 2026-09-01 — Plan 28-29 grounded the reserved decision and recovery events at real
+> terminals. Reminder staging now records a provider-scoped one-way invoice ref; only later
+> normalized reads from passed QuickBooks, Stripe or PayPal lanes can match that tenant-owned ref
+> and emit one `recovery_observed`. Approve/edit/reject emit `plan_decided` only after their durable
+> transitions; drafting, refused approval, delivery and unavailable reads emit no recovery. Plan
+> 28-15 established the shared measurement-only `revenue` stream and bounded tenant projections.
+> Cost and latency remain owned by `spendEvents` and `agentSteps`.
+>
+> Last verified: 2026-09-01 — Plan 28-20 approved exactly `revenue-call-list@1`,
+> `revenue-lead-triage@1`, and `revenue-specialist@1` after their complete exact-pin runs passed.
+> The five failed exact pins (`revenue-cash-flow@1`, `revenue-customer-pulse@1`,
+> `revenue-invoice-reminder@1`, `revenue-payroll-confidence@1`, and
+> `revenue-pipeline-review@1`) are durably parked and remain undiscoverable. Offline registry tests
+> applied only the three approved transitions, proved their active bodies stayed byte-identical to
+> the lock, and proved every parked pin refused activation and active discovery. No deployment,
+> provider, or paid-evaluation call was made.
+>
+> Last verified: 2026-08-31 — Plan 28-09 is operationally closed across the serialized callback,
+> passed-only status surface, connect-start choke point and Connections UI. The four owner-judged
+> lanes remain parked in repository evidence and no deployment gate mutation was claimed by that
+> judgment wave. A missing deployment row and a parked/failed/expired row all project the same
+> tenant-safe result: absent. The callback remains admission-gated for owner evidence collection;
+> ordinary tenant connect-start, discovery and use require a passed lane. See “Callback, status and
+> UI operations” below for exact rollback and partial-revoke handling.
+>
+> Prior: `@pikar/revenue` now also exports `./crm` (28-10's pure ranking and
+> pulse); the package index is the only file of this playbook's that changed, and the rules live in
+> `revenue-crm.md`. Prior: **THE COMPLETION GATE EXISTS NOW.**
+> `scripts/check-phase28-completion.mjs` was cited by the release table and by 28-27 and had never
+> been written, so the strongest statement about phase completion in this repository was a
+> paragraph. It composes: the six REVN statements read from `.planning/REQUIREMENTS.md`, the
+> providers each one NAMES derived from its own words (never a hand-typed map — REVN-04..06 name
+> none and inherit all four, because a composition over an unproven lane is not complete either),
+> and each lane read by re-running `check-provider-lane.mjs` rather than re-implementing its rule.
+> **A requirement is complete only when every provider it names has a PASSED lane** — not
+> `consistent`, not `approved_production`, not "built and tested". It names `subset` as a first-class
+> outcome so partial value can ship without the word "complete" being used loosely, and an
+> UNREACHABLE lane gate is never a pass. `--self-test` now exhausts all 16 pass/park combinations,
+> then separately checks parked, expired, failed and unreachable refusals for every named lane.
+> Run against the tree today: **incomplete, all six REVN pending, `--strict` exits 1.**
+> A defect found in its own first draft, worth the line: the Windows entry-point comparison
+> (`file://` + a backslash path vs the real `file:///C:/…`) never matched, so the script exited 0
+> having done nothing — a gate that cannot fail, the class this repo keeps finding.
+> Prior: 2026-08-31 against the 28-09 CONNECT-START gate (`connectorOAuth.mintConnectState`,
+> `providerGates.connectStartAllowed` / `passedProviderGates`, `__fixtures__/providerGates.ts`) —
+> **STARTING a consent is now gated, not just completing one.** Read from the working diff by the
+> 33.1 lane, which does not own this subsystem; recorded because §9 asks a change to travel with its
+> playbook, and because the fixture below is newly registered to this file in `watch.json`. Verified
+> by reading the code and its tests — **no live grant was performed**, and the lanes' live status is
+> unchanged.
+>
+> **What was open, and it was reachable.** The 2026-08-30 entry above gated the CALLBACK. The
+> `beginConnect`/`hubspotConnectUrl` entry points were still ungated `tenantAction`s. So once the
+> owner sealed a `providerGates` row to start gathering evidence, **any tenant calling one directly
+> could complete a real OAuth grant against a provider whose lane had not passed** — a stored
+> credential on a connector nothing had proven. Gating the exit and leaving the entrance open.
+>
+> **ONE gate, in ONE place, and that placement is the load-bearing decision.** The check lives in
+> `mintConnectState` because every provider's connect flow mints its state there. One check covers
+> all four providers and **a fifth lane cannot forget it**. Do not add per-provider connect checks —
+> a second copy of this rule is how one of them eventually drifts.
+>
+> **`connectStartAllowed` returns three answers and the middle one is why it is not
+> `connectPermitted`:**
+> - `lane === "passed"` → **any tenant.** The provider proved itself; it is a product feature.
+> - admission permits, lane has not passed → **OWNER ONLY.** This is the evidence-gathering window:
+>   somebody must complete a real grant before the lane can be judged, and that somebody is the
+>   operator. Without this branch the phase deadlocks — the lane cannot pass without evidence, and
+>   evidence cannot be gathered without starting a consent.
+> - otherwise → refused.
+>
+> **But four conditions refuse OUTRIGHT, before that owner branch is ever reached** — read
+> the ladder in `connectStartAllowed`, not this summary: no row at all; `lane === "failed"`;
+> `reviewBy <= now`; or an admission that does not permit this environment.
+>
+> **The third of those is a hazard: an EXPIRED `reviewBy` locks out the OWNER too.** The
+> expiry check sits ABOVE `return isOwner`, so once a gate's review date passes the
+> evidence-gathering window closes on the operator as well as on tenants — and gathering that
+> evidence is exactly what renewing the gate needs. If an operator reports they cannot start a
+> consent on a lane they are supposed to be proving, check `reviewBy` FIRST. The fix is to
+> re-seal the row with a future date, never to loosen the gate.
+>
+> The refusal is the CODE `PROVIDER_NOT_CONNECTABLE` and never a reason. Which axis refused is
+> operator information and this throw reaches a browser.
+>
+> **`passedProviderGates` exists so there is ONE filter over these rows.** `availableProviders` is
+> the same answer wrapped for a browser; `connectorConnections.connections` calls this directly.
+> Two independent filters over the same table is how one of them eventually forgets an axis.
+>
+> **GATE BEFORE CONFIG — a rule for every provider's `beginConnect`, not just QuickBooks'.**
+> `quickbooksAuth.beginConnect` used to read the deployment config (`requireQbApp()`) and mint the
+> state second. That told an unauthorized caller **whether the provider is configured on this
+> deployment**, because a missing-config throw is distinguishable from a refusal. The order is now
+> mint-then-config. Accepted cost, written at the call site: an unconfigured deployment leaves one
+> state row that expires in 10 minutes. **Any new provider's connect action must be written in this
+> order**, and a reader tidying the config read back to the top of a handler is removing a security
+> property, not a temporary variable.
+>
+> **THE SHARED FIXTURE, and the vacuity trap that comes with it.**
+> `packages/backend/__fixtures__/providerGates.ts` is now registered to this playbook — it is
+> cross-provider, so it belongs here rather than under any one connector. Two things about it:
+>
+> - It builds `clearedConditions` from `PROVIDER_OPEN_CONDITIONS` rather than typing the ids. A row
+>   that sets `lane: "passed"` and stops **resolves to NOT passed, silently**, which reads in a test
+>   as "the gate refused" and sends you looking in the wrong place. Deriving from the source the
+>   resolver reads means a renamed condition breaks the seeder instead.
+> - It is ONE copy because the last duplicated fixture here took a repair that reached two of three
+>   copies, leaving the third defective.
+>
+> **The trap:** seeding every lane PASSED in a harness makes that suite's fail-closed tests
+> **unfalsifiable** — "no gate record means no request leaves" cannot fail once the harness wrote a
+> passing gate. `quickbooks.test.ts` handles this with an explicit `clearGates(t)` in the four tests
+> that are ABOUT the absence of a judgment. **Any suite adopting `allPassedGates()` must do the
+> same**, and a suite that IS about the gate should build its rows inline so the axis under test is
+> visible in the test body.
+
+> Last verified: 2026-08-30 against the 28-09 callback-route slice (`http.ts`,
+> `providerGates.connectPermitted`, `connectorCallbacks.test.ts`), on top of 28-07 (the read-only Stripe App lane, `postTokenForm`'s
 > `bearerAuth` input and `readPages`' Stripe version pin), 28-06 (QuickBooks) and 28-05 (HubSpot),
 > on top of 28-26's provider gate plane, 28-04's OAuth state and read transport and 28-03's
 > credential envelope and four tables
@@ -138,13 +308,16 @@ Phase 27's skill/pack registry (`skill-registry.md`), the cockpit tool loop (`co
   `connectorOAuthStates` are `tenant_credential`, `contactProviderRefs` is `tenant_owned`,
   `providerGates` is `global`. Bumped `audit-dead-letter.md` in the same commit.
 
-**[PLANNED] — Convex adapters (thin, per CLAUDE.md §1)**
+**Convex adapters (thin, per CLAUDE.md §1)**
 
 - `connectorOAuth.ts` — one-time `connectorOAuthStates` nonce, consumed atomically.
 - `connectorFetch.ts` — bounded outbound fetch: allow-listed host and path, timeout, page cap.
 - `connectorConnections.ts` — sanitized `ConnectionStatus` projection for the UI.
 - `providerGates.ts` — per-provider `passed` / `parked` lane status read by tools and UI.
-- `revenueTools.ts` — the read-only revenue tool surface exposed to the Executive Agent.
+- `revenueTools.ts` (+ `.test.ts`) — LANDED in 28-12: the bounded revenue specialist surface. The
+  exact immutable grant is `readRevenueCrm`, `readBusinessFinance`, `declareUnsupported`; the
+  runtime identity-checks that tuple before constructing the keys. Evidence contains closed enums,
+  opaque refs, counts and code-calculated numbers only, never provider free text.
 - `revenueTelemetry.ts` — refs, counts and status outcomes only.
 - `invoiceReminders.ts` — stages an ordinary plan. No provider write, no send.
 
@@ -211,6 +384,91 @@ Run `graphify query "revenue connectors"` for the current subgraph. Couplings gr
 8. Disconnect: provider revoke/deauthorize **first**, local encrypted row delete **second**. A
    network or 5xx failure yields an honest partial-revoke state and a retry path, never a silent
    success.
+
+### Revenue outcome measurement (28-15)
+
+Revenue outcomes use the existing append-only `workflowPackEvents` table and its sole insert
+primitive. `revenueTelemetry.ts` is an adapter to that primitive, not another analytics plane.
+The measurement-only stream id is `revenue`; it does not add a discoverable Phase 27 pack.
+
+The event vocabulary is closed:
+
+| Event | Required meaning | Required bounded fields |
+|---|---|---|
+| `connector_lifecycle` | A provider connection reached a lifecycle terminal. | `provider`; lifecycle `status`. |
+| `connector_read` | A bounded normalized read ended. | `provider`; `ready\|partial\|unavailable`; optional counts/coverage flags. |
+| `workflow_completed` | A revenue workflow reached a terminal. | closed `workflow`; closed `outcome`; optional evidence/source counts. |
+| `finance_computed` | Deterministic finance math completed. | closed `workflow`, `coverage`, `confidence`; counts and `hasGap` only. |
+| `reminder_staged` | An ordinary invoice-reminder plan was staged. | `revenue-invoice-reminder`; invoice-ref count only. |
+| `plan_decided` | A staged plan was approved, edited or rejected. | closed decision `status`; opaque plan/run refs. |
+| `recovery_observed` | A later normalized provider read observed an overdue item paid/resolved. | `provider`; opaque item ref; `paid\|resolved`; provider `observedAt`. |
+
+Allowed columns are tenant id; the measurement stream id; server/code-shaped opaque run, subject,
+plan, thread, artifact and recommendation refs; provider/workflow/status/outcome/coverage/confidence
+enums; skill version; non-negative integer counts capped at 10,000; booleans; and timestamps.
+Customer names, email/message text, subjects, descriptions, invoice amounts/currencies, credentials,
+tokens and raw provider payloads are refused by both the function and table validators. Event rows
+also structurally forbid cost and latency. The projection joins reasoning cost from `spendEvents`
+and wall-clock latency from complete `agentSteps`, always tenant-checking the joined rows.
+
+Recovery is an observation metric, not a causal claim. Drafting, approval and sending never emit
+`recovery_observed`; only a later provider read that reports `paid` or `resolved` may do so. The
+projection deduplicates `(runId,event)` and recovered opaque item refs, rejects backwards observation
+time for the recovery denominator, and never aggregates invoice value.
+
+The tenant report defaults to 30 days, clamps to 90-day retention, reads at most 500 events and
+joins at most 25 workflow runs. Every ratio includes its denominator. `no_data` means no measurable
+denominator; `retention_boundary`, `event_cap` and `join_cap` make an incomplete window explicit.
+An unmeasured run is unknown, never a zero-cost or zero-latency run. These measures indicate
+availability, completion and observed state change; they do not prove the workflow caused revenue.
+
+**Disable/rollback:** remove or feature-gate the production terminal calls that invoke
+`revenueTelemetry`; do not add a delete/patch path and do not rewrite old events. Existing immutable
+rows remain queryable until they age outside the 90-day projection. Do not narrow the schema/event
+union while such rows exist. Provider rollback remains the separate revoke-first procedure below;
+turning off telemetry neither revokes a grant nor proves one was revoked.
+
+### Governed revenue-tool boundary (28-12)
+
+- The `revenue` specialist receives exactly three local tools: `readRevenueCrm`,
+  `readBusinessFinance`, and `declareUnsupported`. Skill rows and provider responses cannot add a
+  fourth tool; value-equal copied arrays do not satisfy the grant identity check.
+- `readRevenueCrm` has closed `attention | customer_pulse` operations. It returns Phase 19 contact
+  ids, opaque HubSpot refs, code-owned priority/reason enums, counts and coverage only. Unknown and
+  cross-tenant refs return `unavailable`; no name, address, note, company or stage label crosses the
+  tool boundary.
+- `readBusinessFinance` has closed `cash_flow | payroll_confidence` operations and a code-owned
+  horizon. It explains the immutable 28-11 result without recalculating it. Amounts are copied from
+  typed pure results; currencies remain separate; missing free-text reasons are represented by
+  counts. `partial` never upgrades to `ready` in prose.
+- Every result is wrapped in `<revenue_evidence>` with the explicit rule that evidence values are
+  never instructions, tool calls or parameters. The structured refusal accepts only the closed
+  reasons `unavailable | partial | unsupported_operation`.
+- The grant structurally excludes generic HTTP/MCP, Gmail, `executePlan`, plan approval, provider
+  mutations, CRM/accounting writes, refund/credit/dispute operations, and paid generation. Tool
+  audits contain refs, counts, environments and closed statuses only.
+
+### Invoice-reminder containment (28-13)
+
+- `stageInvoiceReminder` is available to the executive tool set only. The `revenue` specialist's
+  exact grant remains the three read/refusal tools above and cannot stage a reminder.
+- Staging requires the closed intent `explicit_user_request`, a QuickBooks or Stripe invoice ref,
+  and an existing tenant-owned email plan with at least one recipient. The implementation re-fetches
+  the provider projection immediately before staging and refuses invoices that are missing, paid,
+  void, not outstanding, or changed since an earlier attempt.
+- The draft is code-owned and deterministic. The only persistence operation patches that existing
+  collecting plan to `proposed`; an exact retry is idempotent and conflicting proposed content is
+  never overwritten. No request, workflow, scheduler, provider mutation, audit event, or send is
+  created by the reminder module.
+- Ownership splits at the proposal boundary: Phase 28 chooses and stages the reminder; Phase 19's
+  plan, contact, approval, and delivery rails remain authoritative afterward. Immediate and
+  scheduled cockpit sends converge on `startFanout`; the legacy pipeline and that workflow both
+  reach `internal.delivery.send`, which routes Gmail or Microsoft through the shared
+  `prepareGovernedMessage` terminal.
+- Suppression and the required postal footer are re-checked at that terminal, so approval cannot
+  freeze stale consent. A comma-joined recipient row is split and normalized; if any member is
+  suppressed, the entire terminal send is refused. The approve-time per-address filter remains an
+  earlier defense, not a substitute for this send-time backstop.
 
 ## Invariants — what must never break
 
@@ -297,7 +555,7 @@ as a finished phase.
 | **lane `passed`** | One provider holds a current suitability decision **and** a controlled live read/revoke gate observed green. | `resolveProviderEligibility` over the `providerGates` row; `scripts/check-provider-lane.mjs` over the tree — LANDED, 28-26 | That provider may appear in the product. |
 | **lane `parked`** | Blocked, deferred, or evidence missing/expired. | same | Provider hidden; dependents report unknown coverage, not zero. |
 | **subset release** | At least one lane `passed` and its workflows shipped. | owner | Users get value. **This is NOT phase completion.** |
-| **phase complete** | REVN-01, REVN-02 and REVN-03 each require *every* provider they name to hold a current production-suitability decision and a `passed` live read/revoke gate. | `scripts/check-phase28-completion.mjs` [PLANNED] | Only then may Phase 28 be closed. |
+| **phase complete** | REVN-01, REVN-02 and REVN-03 each require *every* provider they name to hold a current production-suitability decision and a `passed` live read/revoke gate. | `scripts/check-phase28-completion.mjs` — LANDED 2026-08-31 | Only then may Phase 28 be closed. Today: `incomplete`, `--strict` exits 1. |
 
 A suitability record carries an owner, a review date, evidence links, a decision
 (`approved_beta` | `approved_production` | `blocked` | `deferred`) and an expiry/re-review trigger.
@@ -318,6 +576,103 @@ On 2026-08-27 all four providers were admitted `approved_production` and **not o
 run**; three of those four admissions rest on owner testimony rather than evidence. If the two ever
 collapsed into one flag, the wave-7 seals would be decorative and a provider would go discoverable on
 a say-so. **`approved_production` + `lane: parked` is the normal state for most of this phase.**
+
+### The OAuth callback gates on ADMISSION, not on the lane — and why it must
+
+`convex/http.ts` registers three callback routes (`connectorCallbacks.test.ts` owns their tests):
+
+| Route | Handler | Environment |
+|---|---|---|
+| `/connectors/hubspot/callback/<env>` | `hubspotAuth.completeHubSpotConnect` | last path segment |
+| `/connectors/quickbooks/callback/<env>` | `quickbooksAuth.handleCallback` | last path segment |
+| `/connectors/stripe/callback/<env>` | `stripeAuth.handleCallback` | last path segment |
+
+**PayPal has no route and must not be given one.** `paypalAuth.beginConnect` refuses by design
+(`PAYPAL_PARTNER_SURFACE_GAP`) and mints no state, because a state row implies a callback that is
+coming. There is nothing to call back.
+
+The gate is `providerGates.connectPermitted` — the **admission** axis plus liveness (a row exists,
+the lane is not `failed`, `reviewBy` is in the future). It is deliberately **not**
+`availableProviders`, and the reason is a deadlock:
+
+```
+lane `passed`  needs  live evidence
+live evidence  needs  a completed grant
+a completed grant needs  the callback route
+the callback route (if gated on `passed`)  needs  lane `passed`
+```
+
+Gate the callback on the lane and no provider can ever pass. Gate it on the admission and the loop
+opens exactly where the register says it should: `approved_production` means *permission to start*,
+which is precisely what an owner needs in order to produce the evidence wave 7 judges. A `parked`
+lane therefore accepts a callback while staying invisible to every tenant through
+`availableProviders`. **This is the two axes doing the job they were separated for.** Do not
+"simplify" the callback onto `availableProviders`; it re-closes the loop.
+
+Three properties the routes hold, all tested:
+
+- **The gate runs before the provider handler**, proven by consequence — after a refused callback the
+  one-time state is still UNBURNED, which can only be true if nothing consumed it. A forged,
+  replayed or out-of-gate callback costs zero code exchanges and zero writes.
+- **A callback always redirects.** `requireQbApp` and `requireStripeApp` read configuration *before*
+  consuming the state and throw by name; without the route's catch an unconfigured deployment
+  answers a provider redirect with a 500 on the Convex site origin and copies a provider message
+  into a log line. Both are refused as `unavailable` instead.
+- **The redirect carries a closed set only** — `?connect=<provider>&result=<CONNECT_RESULTS>`. No
+  `error_description`, no code, no token, no account name (CLAUDE.md §4).
+
+The environment is a **path segment**, not a query parameter: the redirect URI is registered with the
+provider and echoed back verbatim, so a query parameter would have to survive the provider's round
+trip and could be edited by whoever opens the link. `pathPrefix`, not a glob — Convex's router has
+no `*` syntax.
+
+### Callback, status and UI operations
+
+There are three different gates because they answer three different questions. Do not replace them
+with one aggregate provider flag:
+
+| Operation | Gate | Result when the lane is parked/failed/expired |
+|---|---|---|
+| Start consent as an ordinary tenant | `connectorOAuth.mintConnectState` -> `connectStartAllowed` | Refused as `PROVIDER_NOT_CONNECTABLE`; no state minted. |
+| Start/complete controlled owner evidence | admission + current review, owner-only until passed; callback uses `connectPermitted` | May proceed for an admitted parked lane so a future live proof is possible. The provider remains tenant-invisible. |
+| Discover, render or use a provider | `passedProviderGates` / `availableProviders` | Omitted entirely. Existing tenant credential rows do not make it visible. |
+
+**State cleanup after a callback:** successful, denied QuickBooks/Stripe, and terminally invalid
+provider handlers consume the one-time state. A wrong-provider/wrong-environment/gate refusal does
+not burn a legitimate in-flight consent. HubSpot denial has no code to give its code-required
+handler, so that state is left inert and expires at the ten-minute TTL. Never delete states in a
+separate preflight query: consume is the atomic replay boundary.
+
+The Connections panel renders only rows returned by `connectorConnections.connections`; it has no
+provider/admission filter of its own. Its user-visible meanings are closed and non-color-only:
+
+| Surface state | Meaning / control |
+|---|---|
+| Query loading | “Checking connector availability…” in a polite live region; no disconnected card is guessed. |
+| `connecting` row | “Checking this connection…”; no connect/disconnect race is offered. |
+| No sealed credential | Connect. A clean `revoked` row says “Disconnected here.” |
+| Sealed `connected` row | Ready/read-only; “Not read yet” is not rendered as zero history. |
+| `reauth_required` or failed read | Reconnect, while retaining an honest closed failure class and disconnect control. |
+| Revoked locally, upstream not confirmed | `revoke_partial`: say that Pikar's copy is deleted and the provider grant remains until the user removes it. |
+| Action in flight | Disable both controls and announce “Connecting…” or “Disconnecting…”. |
+
+**Per-provider disable/rollback procedure:**
+
+1. Record the provider lane as `failed` for an observed incident, or owner-seal it `parked` for a
+   reversible judgment. This immediately removes only that provider from passed discovery, tools,
+   workflows and tenant connect-start; other passed providers remain available.
+2. Inventory every live credential for that provider and run its own disconnect path. Revoke at
+   the provider first, then clear the local ciphertext and record the observed `upstream` enum.
+   Parking is not revocation. A hidden card must never be used as evidence that a grant died.
+3. For `attempted_failed`, retry the provider operation where the provider supports it. For
+   `unsupported`/`unproven`, direct the tenant to remove the grant in the provider account and keep
+   the residual notice until that is confirmed. Do not relabel either outcome `confirmed`.
+4. Leave terminal contact suppression and delivery history intact. Connector rollback removes read
+   capability; it does not re-authorize a suppressed recipient or erase the record that prevents a
+   later send.
+
+Re-enable only by a new evidence-backed owner seal with a current `reviewBy` and every open
+condition cleared. Admission alone is never a release signal.
 
 **The composite rule** (`resolveProviderEligibility`, and nothing else may re-derive it) — a provider
 is available only when EVERY one of these holds, and a refusal names each axis that refused:
@@ -673,9 +1028,9 @@ implying it happened.
 
 ## Rollback
 
-- **Per provider (fast, no deploy):** park the lane — set that provider's suitability decision to
-  `blocked` or `deferred`. `providerGates` hides the provider, its tools drop out of the grant, and
-  dependent workflows report unknown coverage. Other lanes are unaffected.
+- **Per provider (fast):** follow “Callback, status and UI operations” above. Park/fail the lane to
+  hide discovery and stop ordinary tenant connect-start, then separately revoke every live grant
+  before clearing local ciphertext. Parking is reversible feature gating; it is not revocation.
 - **Per tenant:** disconnect (provider revoke first, local clear second). A partial-revoke state is
   an honest terminal with a retry, not a retryable no-op — and for PayPal and Stripe Apps the
   honest terminal is `unsupported`, meaning the grant stays live at the provider. See
@@ -713,6 +1068,7 @@ implying it happened.
 | `cd packages/revenue && pnpm vitest run` | Contract, money, finance AND credential-envelope logic. 104 tests. | offline |
 | `cd packages/revenue && npx tsc --noEmit` | **Run this SEPARATELY.** Vitest transpiles without typechecking; 104 green tests sat over 4 real `ArrayBuffer`-generic errors here. | offline |
 | `cd packages/backend && pnpm vitest run connectorCredentials` | Two-tenant isolation, plaintext-sentinel scan, lease/CAS, revocation honesty. 30 tests. | offline |
+| `pnpm --filter @pikar/backend test -- revenueTools cockpitTools dispatch` | Exact grant identity, closed schemas, provider-text fence, partial semantics, cross-tenant refusal and governed-loop registration. | offline |
 | `cd packages/backend && npx vitest run convex/connectorOAuth.test.ts` | Replay, expiry, wrong-tenant, wrong-provider and wrong-environment states each perform zero exchange and zero store, observed refusing alone. 30 tests. | offline |
 | `cd packages/backend && npx vitest run convex/connectorFetch.test.ts` | The allow-list refuses relocation, each cap fires on its own, a later failure keeps earlier pages, and no token or vendor body escapes. 38 tests. | offline |
 | `cd packages/backend && pnpm vitest run isolation traceParity tenantDelete tenantExport` | The four derived gates a new table or a new tool literal must satisfy. | offline |
@@ -722,7 +1078,7 @@ implying it happened.
 | `node scripts/check-provider-lane.mjs --all` | No lane contradicts its record. Exit 0 today with 13 pending rows. **Consistent is not passed.** | offline |
 | `node scripts/check-provider-lane.mjs --self-test` | Every row observed going RED under a rename/substitution mutation, the real tree clean, and every seal combination — including the one that must resolve to `pass`. | offline |
 | `node scripts/check-provider-lane.mjs --verify-gate` | Runs the gate behaviour tests directly, rather than grepping for the branch. | offline |
-| `node scripts/check-phase28-completion.mjs` [PLANNED] | All lanes `passed` — the only proof of phase completion. | offline |
+| `node scripts/check-phase28-completion.mjs --report` (`--verify-current` checks the projection, `--strict` is the completion gate, `--self-test` exhausts all 16 pass/park combinations) | All lanes `passed` — the only proof of phase completion. | offline |
 
 ## Operational notes
 
@@ -784,11 +1140,23 @@ implying it happened.
   no Phase 28 plan asks for one; a speculative table with no reader is a migration nobody needed
   (CLAUDE.md §8 rung 1). If a lane later proves a bounded cache is required, it adds one table with
   an explicit freshness column — a cache without a visible retrieval time would break Invariant 6.
-- **`tenantDelete.ts` reports per-provider disconnect truth for Google/Microsoft and does not yet
-  know about connector connections.** Erasure DOES delete the rows (they are `tenant_credential`),
-  but the deletion report says nothing about whether the four provider grants were revoked upstream
-  — which, per Invariant 12, is often "we could not". `tenantDelete.ts` is owned by
-  `audit-dead-letter.md` and no Phase 28 plan currently claims it. Flagged, not fixed.
+- **CLOSED 2026-08-31 (Phase 28 gap audit): `tenantDelete.ts` now has a connector arm.** It used to
+  delete the four connector rows without asking any provider to revoke. The arm sits ABOVE the page
+  loop (`connectorConnections` is `tenant_credential`, so the loop deletes the sealed blob the
+  revocation needs) and reports per provider. Per Invariant 12 the honest answer is usually "we
+  could not": only QuickBooks documents a platform-callable revocation, so the result carries the
+  closed `RevocationUpstream` enum as `revokeUpstream` rather than a boolean, and a documented
+  absence is recorded as `unsupported` WITHOUT being counted as a failure. That enum reaching the
+  `tenant.deleted` audit payload matters because the walk then deletes the row carrying
+  `revocation.upstream` — the audit row is the only place the truth survives an erasure.
+  `tenantDelete.ts` is owned by `audit-dead-letter.md`; the details are there.
+- **CLOSED 2026-08-31 (28-09): connect-START is gated once at the shared mint choke point.**
+  `connectorOAuth.mintConnectState` calls `connectStartAllowed` before writing state. A passed lane
+  is open to tenants; an admitted but unpassed lane is owner-only for evidence collection; absent,
+  failed, expired or admission-incompatible rows refuse everyone. The three provider entry points
+  read configuration only after this gate, so a refused caller cannot probe deployment setup.
+- **No route exists for PayPal and none should be added** without first closing
+  `no-documented-revoke-endpoint` (28-25). `beginConnect` refusing is the tested branch.
 - Deferred by phase boundary: refunds, credits, PayPal invoice sends, CRM cleanup, journal entries,
   any accounting mutation, and the Canva/DocuSign/Slack/Square connector candidates.
 - Webhooks are out of scope for v1 (polling only). The suitability records still capture each

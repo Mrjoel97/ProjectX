@@ -19,6 +19,7 @@ import {
   minCharsFor,
   narrationCeilingSeconds,
   narrationChars,
+  narrationOverrunsReel,
   parseArtDirection,
   parseBlockDeck,
   parseBrief,
@@ -390,10 +391,14 @@ describe("media-director.md round trip — the body's worked answer survives its
   });
 
   it("no deck is all-generated, and at least one SPENDS a clip", () => {
-    // Not a style note. Every member of GENERATED_CLIP_SECONDS is a multiple of 4, so a deck of
-    // only generated clips cannot sum to 15 or 30, and a 60 costs $6.00 against a $3.50 job cap
-    // (ADR-019). The "at least one" half is per-ANSWER rather than per-deck now: a stills-and-cards
-    // concept costing a fortieth of its sibling is the cost lever the body teaches, not a gap.
+    // Not a style note — but the REASON changed on 2026-08-30 and the old one was arithmetic.
+    // It used to be that every member of GENERATED_CLIP_SECONDS was a multiple of 4, so an
+    // all-generated deck could not sum to 15 or 30 at all. On grok's 1..15 grid it can, and cheaply
+    // enough to pass the job cap ($2.10 at 30 s) — so what keeps this true is now
+    // `MEDIA_GENERATED_SECONDS_CAP` in `@pikar/cost`, a code-owned ceiling of 12 generated seconds
+    // per reservation, asserted there against this same body (ADR-027). The "at least one" half is
+    // per-ANSWER rather than per-deck: a stills-and-cards concept costing a fraction of its sibling
+    // is the cost lever the body teaches, not a gap.
     for (const r of decks())
       expect(r.scenes.some((s) => s.visual !== "generated_video")).toBe(true);
     expect(decks().some((r) => r.scenes.some((s) => s.visual === "generated_video"))).toBe(true);
@@ -843,22 +848,23 @@ describe("parseSceneDeck — the exact-length rule", () => {
 });
 
 describe("parseSceneDeck — the provider grid", () => {
-  it("REPAIRS a generated clip off the 4/8/12 grid rather than refusing the deck (33-12)", () => {
-    // A 6-second Sora request is still not a 6-second clip — but 33-12 stopped throwing the whole
-    // reel away over it. The clip snaps to 4 and the animated scene takes the 2 seconds back, so
-    // the reel is still 30s and nothing is bought against a length the provider would reject.
+  it("REPAIRS a generated clip off the 1..15 grid rather than refusing the deck (33-12)", () => {
+    // 33.1-04 MOVED THE EXAMPLE, not the rule. A 6-second clip is ordinary on grok's grid, so the
+    // off-grid case is now a clip LONGER than 15 — the only length left that the provider cannot
+    // make. The clip snaps to 15 and the animated scene takes the 3 seconds back, so the reel is
+    // still 30s and nothing is bought against a length the provider would reject.
     // The refusal survives only where no repair is safe — see the 33-12 describe block.
     const offGrid = [
-      `| 1 | generated_video | 6 | Founder at a desk | ${S2} | | |`,
-      `| 2 | animated_image | 24 | Mail icons | ${S4} | | |`,
+      `| 1 | generated_video | 18 | Founder at a desk | ${S2} | | |`,
+      `| 2 | animated_image | 12 | Mail icons | ${S4} | | |`,
     ];
     const r = parseSceneDeck(sceneDeck(offGrid));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([4, 26]);
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([15, 15]);
     expect(r.adjustments).toEqual([
-      { sceneIndex: 0, fromSeconds: 6, toSeconds: 4, why: "grid" },
-      { sceneIndex: 1, fromSeconds: 24, toSeconds: 26, why: "rebalance" },
+      { sceneIndex: 0, fromSeconds: 18, toSeconds: 15, why: "grid" },
+      { sceneIndex: 1, fromSeconds: 12, toSeconds: 15, why: "rebalance" },
     ]);
   });
 
@@ -911,18 +917,53 @@ describe("parseSceneDeck — narration has a ceiling and NO floor", () => {
     expect(parseSceneDeck(sceneDeck(rows)).ok).toBe(true);
   });
 
-  it("refuses a line that would run into the NEXT line, naming its window", () => {
-    const tooLong = `${S4} ${S4} ${S4}`; // 200+ chars against an 8-second, 112-character window
+  // ── 33.1-06: RUNNING INTO THE NEXT LINE IS NO LONGER A REFUSAL ────────────────────────────
+  //
+  // `assemble_final.sh` used to hard-error on it; it now DELAYS the later take by `TAKE_GAP_S`
+  // and keeps only one fatal case. Refusing a deck for a failure the renderer no longer has is a
+  // free refusal of a reel that would have rendered — which is what the owner kept hitting. The
+  // pair below is the whole contract: the first accepts, the second still refuses.
+  it("ACCEPTS a line that runs into the next line — the assembler pushes that take", () => {
+    const tooLong = `${S4} ${S4} ${S4}`; // 200+ chars against an 8-second scene
     const rows = [
       `| 1 | generated_video | 8 | Founder at a desk | ${tooLong} | | |`,
       `| 2 | animated_image | 22 | Mail icons | ${S2} | | |`,
     ];
+    // Scene 1 speaks for ~14.6s from 0; scene 2's line is displaced to ~14.7s and needs ~3.2s,
+    // ending well inside 30. Nothing overruns the REEL, so nothing is refused.
+    expect(parseSceneDeck(sceneDeck(rows)).ok).toBe(true);
+  });
+
+  it("STILL refuses a line that would still be speaking when the REEL ends", () => {
+    // The surviving fatal case, and the reason the check was narrowed rather than deleted: a take
+    // can be delayed, but there is nowhere to delay it TO once the picture track has ended. The
+    // renderer exits with "would be cut mid-word", and by then every picture has been bought.
+    const rows = [
+      `| 1 | animated_image | 4 | Mail icons | ${S2} | | |`,
+      `| 2 | animated_image | 26 | Founder at a desk | ${"y".repeat(600)}. | | |`,
+    ];
     expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
       reason: "narration_too_long",
-      sceneIndex: 0,
-      chars: tooLong.length,
-      availableSeconds: 8,
+      sceneIndex: 1,
     });
+  });
+
+  it("refuses on the CASCADE, not on any single line — three lines that each look fine", () => {
+    // NOT VACUOUS, and it is the reason `narrationOverrunsReel` carries a cursor instead of
+    // testing each line against its own window. Every line here fits its own scene comfortably;
+    // it is only the accumulated displacement of three of them that runs off the end. A per-line
+    // check — the shape this replaced — passes this deck and lets the renderer eat it.
+    const line = "y".repeat(150); // ~10.7s of speech in a 4-second scene
+    const rows = [
+      `| 1 | animated_image | 4 | one | ${line} | | |`,
+      `| 2 | animated_image | 4 | two | ${line} | | |`,
+      `| 3 | animated_image | 4 | three | ${line} | | |`,
+      `| 4 | animated_image | 3 | four | | | |`,
+    ];
+    const r = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe("narration_too_long");
   });
 
   it("lets a SILENT scene lend its whole duration to the line before it", () => {
@@ -987,20 +1028,58 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
   });
 
   it("refuses when the only slack is INSIDE the window — moving it would change nothing", () => {
-    // Scene 2 is silent and sits inside scene 1's window, so its 6 seconds are ALREADY counted in
-    // the 10-second ceiling. Spending them would shorten a scene and buy zero characters. Every
-    // scene outside the span is a generated clip, which may never be resized.
+    // Scene 2 is silent and sits inside scene 1's window, so its 7 seconds are ALREADY counted in
+    // the 11-second ceiling. Spending them would shorten a scene and buy zero characters. Every
+    // scene OUTSIDE the span sits on `MIN_DONOR_SECONDS`, so nothing out there can give either.
+    //
+    // 33.1: this used to park two untouchable generated clips outside the span instead. That made
+    // the test pass for the WRONG reason once clips became donatable — there was slack out there
+    // all along, and only the old ban hid it. The floor is the honest way to say "no slack".
     const rows = [
       `| 1 | animated_image | 4 | Founder at a desk | ${long} | | |`,
-      "| 2 | animated_image | 6 | Mail icons | | | |",
-      `| 3 | generated_video | 8 | The cockpit | ${S3} | | |`,
-      "| 4 | generated_video | 12 | The trail | | | |",
+      "| 2 | animated_image | 7 | Mail icons | | | |",
+      `| 3 | generated_video | 2 | The cockpit | ${S3} | | |`,
+      "| 4 | animated_image | 2 | One line of type | | | |",
     ];
-    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
+    // 33.1-06: the TRADE still cannot happen — that is what this test is about, and it is
+    // unchanged. The deck ALSO still refuses, but the reason moved and it is worth being exact
+    // about, because it is no longer "line 1 runs into line 3": scene 1 speaks for ~14.4s of a
+    // 15-second reel and scene 3's line needs ~2.3s more, so the LAST line is still talking after
+    // the picture has ended. Delaying a take cannot cure that; only a shorter line or a longer
+    // reel can. It is the surviving fatal case, arrived at through the cascade.
+    expect(parseSceneDeck(sceneDeck(rows, "Target duration: 15"))).toMatchObject({
       reason: "narration_too_long",
-      sceneIndex: 0,
-      availableSeconds: 10,
+      sceneIndex: 2,
     });
+  });
+
+  // THE DECK THE OWNER WAS REFUSED, LIVE, ON 2026-09-04 — verbatim narration and seconds. It is
+  // renderable and always was; `bestDonor` chose on LENGTH alone and never asked whether a donor
+  // still fit its OWN line. Scene 1 (52 chars in 4s) is already at its limit, so donating 2s to
+  // scene 3 makes scene 1 the next offender; the next pass takes them straight back, and the
+  // repair ping-pongs until its pass budget runs out. All the while the 7-second CLIP is carrying
+  // 40 characters -- 4 spare seconds -- and is never asked, because a still that merely looked
+  // slack is preferred first. The clip is the only donor that can actually pay.
+  it("asks the CLIP when every still is already at its own narration limit", () => {
+    const rows = [
+      "| 1 | text_card | 4 | Introduction to the service | Our service helps you manage your tasks efficiently. | MANAGE YOUR TASKS | |",
+      "| 2 | generated_video | 7 | A solopreneur using the service | See how easy it is to organize your day. | | |",
+      "| 3 | stock_image | 2 | A clutter-free workspace | Simplify your workload and focus on growth. | SIMPLIFY YOUR WORKLOAD | |",
+      "| 4 | text_card | 2 | A simple call to action | Join now and take the first step. | JOIN NOW | |",
+    ];
+    const r = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // The clip pays for both short scenes and lands at 4s. The reel is still exactly 15.
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([4, 4, 4, 3]);
+    expect(r.scenes.reduce((n, s) => n + s.durationMs, 0)).toBe(15_000);
+    // Shrinking a clip only ever LOWERS the generated total, so this cannot raise the price.
+    expect(r.adjustments.filter((a) => a.sceneIndex === 1)).toEqual([
+      { sceneIndex: 1, fromSeconds: 7, toSeconds: 5, why: "narration" },
+      { sceneIndex: 1, fromSeconds: 5, toSeconds: 4, why: "narration" },
+    ]);
+    // And the whole point: the reel it produces does NOT overrun, so the refusal was never real.
+    expect(narrationOverrunsReel(r.scenes, 15)).toBeNull();
   });
 
   it("takes from OUTSIDE the window even when a longer scene sits inside it", () => {
@@ -1026,19 +1105,70 @@ describe("parseSceneDeck — a long line buys seconds instead of losing the deck
   });
 
   it("refuses rather than cut a donor below the floor", () => {
-    // Scene 1 needs 7 more seconds. Scene 3 has 8 and scene 4 has 2 — donating 7 would leave a
-    // 1-second flash, so neither donor can cover it and the deck refuses as it did before.
+    // Scene 1 needs 7 more seconds. Every scene outside its window holds at most 6 above the floor
+    // — the clip included, now that clips can donate — so donating 7 would leave a 1-second flash
+    // and no donor can cover it. The deck refuses exactly as it did before.
     const rows = [
       `| 1 | animated_image | 8 | Founder at a desk | ${long} | | |`,
-      `| 2 | generated_video | 12 | The cockpit | ${S4} | | |`,
+      `| 2 | generated_video | 8 | The cockpit | ${S4} | | |`,
       "| 3 | animated_image | 8 | Mail icons | | | |",
+      "| 4 | animated_image | 6 | One line of type | | | |",
+    ];
+    // Same 33.1-06 change as above: the donor floor still refuses the TRADE, and the deck now
+    // survives it. The floor is the assertion; the refusal was never this function's to make.
+    const r = parseSceneDeck(sceneDeck(rows));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.adjustments).toEqual([]);
+    expect(r.scenes.map((x) => x.durationMs / 1000)).toEqual([8, 8, 8, 6]);
+  });
+
+  // ── 33.1: A CLIP MAY DONATE SECONDS. The shape below is the one that sent the owner back with
+  // `narration_too_long` on a live reel, twice: a 15-second deck whose generated clip takes 7 of
+  // the 15, leaving four scenes to share 8 — every one of them ON `MIN_DONOR_SECONDS`. The donor
+  // pool was empty while five spare seconds sat in the clip, unreachable because resizing one used
+  // to put it off the old 4/8/12 grid. `GENERATED_CLIP_SECONDS` is 1..15 now, so it does not.
+  it("takes the seconds from a generated CLIP when every still is already on the floor", () => {
+    const rows = [
+      `| 1 | animated_image | 2 | Founder at a desk | ${S1} | | |`,
+      `| 2 | generated_video | 7 | The cockpit | ${S3} | | |`,
+      "| 3 | animated_image | 2 | Mail icons | | | |",
+      "| 4 | animated_image | 2 | One line of type | | | |",
+      "| 5 | animated_image | 2 | The trail | | | |",
+    ];
+    expect(S1.length).toBe(53); // ceil(53/14) = 4s needed against a 2s window: a deficit of 2
+    const r = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([4, 5, 2, 2, 2]);
+    // The clip lands on 5 — inside 1..15, so it is still a length the provider can make — and the
+    // deck's generated total FELL from 7 to 5. A donating clip can only ever lower it, which is
+    // why it needs no sight of `MEDIA_GENERATED_SECONDS_CAP` over in @pikar/cost.
+    expect(r.scenes[1]?.visual).toBe("generated_video");
+    expect(GENERATED_CLIP_SECONDS).toContain(5);
+    expect(r.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 2, toSeconds: 4, why: "narration" },
+      { sceneIndex: 1, fromSeconds: 7, toSeconds: 5, why: "narration" },
+    ]);
+  });
+
+  it("leaves the clip alone when a still can cover the deficit", () => {
+    // Same deficit of 2, but scene 3 now has 2 seconds above the floor. A still costs the reel
+    // nothing to shrink; a clip costs it motion. The still is asked first and the clip is untouched.
+    const rows = [
+      `| 1 | animated_image | 2 | Founder at a desk | ${S1} | | |`,
+      `| 2 | generated_video | 7 | The cockpit | ${S3} | | |`,
+      "| 3 | animated_image | 4 | Mail icons | | | |",
       "| 4 | animated_image | 2 | One line of type | | | |",
     ];
-    expect(parseSceneDeck(sceneDeck(rows))).toMatchObject({
-      reason: "narration_too_long",
-      sceneIndex: 0,
-      availableSeconds: 8,
-    });
+    const r = parseSceneDeck(sceneDeck(rows, "Target duration: 15"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([4, 7, 2, 2]);
+    expect(r.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 2, toSeconds: 4, why: "narration" },
+      { sceneIndex: 2, fromSeconds: 4, toSeconds: 2, why: "narration" },
+    ]);
   });
 
   it("leaves a deck that already fits completely alone", () => {
@@ -1073,19 +1203,21 @@ describe("parseSceneDeck — shape and tolerance", () => {
     ]);
   });
 
-  it("migrates a legacy TYPE but not a legacy DURATION — an old Wan deck still refuses", () => {
-    // The block contract's clip lengths were 5 and 10 seconds; Sora's grid is 4/8/12. So the
-    // migration map alone does NOT make an old deck renderable, and pretending otherwise would
-    // move the failure from this parser into a paid submit. Six 5-second AI blocks = 30 s, a deck
-    // that sums perfectly and still cannot be generated.
+  it("migrates a legacy TYPE, and the 1..15 grid now migrates the legacy DURATION too", () => {
+    // INVERTED on 2026-08-30 (33.1-04), and the inversion is the point. The block contract's clip
+    // lengths were 5 and 10 seconds and Sora's grid was 4/8/12, so an old deck parsed its TYPES
+    // and then died on its SECONDS — six 5-second AI blocks summed perfectly to 30 and still could
+    // not be generated. On grok's 1..15 both legacy lengths are ordinary, so the same deck now
+    // parses whole. The grid did not get looser about SUBMISSION: 16 is still refused below.
     const oldWan = Array.from(
       { length: 6 },
       (_, i) => `| ${i + 1} | AI | 5 | Mail icons | ${S3} | | |`,
     );
-    expect(parseSceneDeck(sceneDeck(oldWan))).toMatchObject({
-      reason: "illegal_generated_duration",
-      sceneIndex: 0,
-    });
+    const r2 = parseSceneDeck(sceneDeck(oldWan));
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.scenes.map((s) => s.durationMs / 1000)).toEqual([5, 5, 5, 5, 5, 5]);
+    expect(r2.adjustments).toEqual([]);
   });
 
   it("tolerates the casing and separator styles a model actually produces", () => {
@@ -1305,12 +1437,15 @@ describe("parseSceneDeck — per-scene Source lines (33-01, document-level citat
 // length it declared, that is still `duration_mismatch`. Snapping a clip is fixing a fact about
 // the provider; rebalancing a deck that never summed correctly would be inventing a reel.
 describe("parseSceneDeck — off-grid generated clips are repaired (33-12)", () => {
-  // 10 + 6 + 2 + 12 = 30, exactly the declared length. Only the GRID is wrong.
+  // 18 + 6 + 2 + 4 = 30, exactly the declared length. Only the GRID is wrong.
+  // 33.1-04: was 10 + 6 + 2 + 12 against sora-2's [4, 8, 12]. Ten seconds is an ORDINARY length
+  // on grok's 1..15, so the fixture had to move above 15 to keep exercising the repair at all —
+  // an off-grid test whose clip is on the grid asserts nothing.
   const offGrid = sceneDeck([
-    `| 1 | generated_video | 10 | Founder at a desk | ${S1} | | |`,
+    `| 1 | generated_video | 18 | Founder at a desk | ${S1} | | |`,
     `| 2 | animated_image | 6 | Mail icons | ${S2} | | |`,
     "| 3 | text_card | 2 | A line of type | | YOU APPROVE | |",
-    `| 4 | generated_video | 12 | The cockpit | ${S4} | | |`,
+    `| 4 | generated_video | 4 | The cockpit | ${S3} | | |`,
   ]);
 
   it("snaps the off-grid clip DOWN and gives the seconds to the last non-generated scene", () => {
@@ -1318,21 +1453,21 @@ describe("parseSceneDeck — off-grid generated clips are repaired (33-12)", () 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const secs = r.scenes.map((s) => s.durationMs / 1000);
-    // Scene 1: 10 -> 8 (on the grid). Scene 3: 2 -> 4 (took the freed seconds).
-    expect(secs).toEqual([8, 6, 4, 12]);
+    // Scene 1: 18 -> 15 (the top of the grid). Scene 3: 2 -> 5 (took the freed seconds).
+    expect(secs).toEqual([15, 6, 5, 4]);
     // The reel is STILL exactly the length the user asked for.
     expect(secs.reduce((a, b) => a + b, 0)).toBe(30);
     expect(r.targetDurationSeconds).toBe(30);
     // Scene starts were recomputed, not left pointing at the old timeline.
-    expect(r.scenes.map((s) => s.startMs)).toEqual([0, 8000, 14000, 18000]);
+    expect(r.scenes.map((s) => s.startMs)).toEqual([0, 15000, 21000, 26000]);
   });
 
   it("REPORTS every second it moved — a silent rewrite of the user's reel is not allowed", () => {
     const r = parseSceneDeck(offGrid);
     if (!r.ok) return;
     expect(r.adjustments).toEqual([
-      { sceneIndex: 0, fromSeconds: 10, toSeconds: 8, why: "grid" },
-      { sceneIndex: 2, fromSeconds: 2, toSeconds: 4, why: "rebalance" },
+      { sceneIndex: 0, fromSeconds: 18, toSeconds: 15, why: "grid" },
+      { sceneIndex: 2, fromSeconds: 2, toSeconds: 5, why: "rebalance" },
     ]);
   });
 
@@ -1344,13 +1479,14 @@ describe("parseSceneDeck — off-grid generated clips are repaired (33-12)", () 
   });
 
   it("still refuses when the rows never summed to the declared length — grid, not arithmetic", () => {
-    // 10 + 6 + 4 + 12 = 32 against a declared 30. Snapping 10->8 would make it 30 by accident,
-    // which would be repairing a deck the model got wrong. That must stay a refusal.
+    // 18 + 6 + 4 + 4 = 32 against a declared 30. Snapping 18->15 would leave 29 and rebalancing
+    // would make it 30 by accident, which would be repairing a deck the model got wrong. That
+    // must stay a refusal.
     const alsoBadMath = sceneDeck([
-      `| 1 | generated_video | 10 | Founder at a desk | ${S1} | | |`,
+      `| 1 | generated_video | 18 | Founder at a desk | ${S1} | | |`,
       `| 2 | animated_image | 6 | Mail icons | ${S2} | | |`,
       "| 3 | text_card | 4 | A line of type | | YOU APPROVE | |",
-      `| 4 | generated_video | 12 | The cockpit | ${S4} | | |`,
+      `| 4 | generated_video | 4 | The cockpit | ${S4} | | |`,
     ]);
     // It reports the GRID violation — the first thing wrong with the row — and the point of the
     // assertion is the `ok: false`: no repair was attempted on a deck whose own sum was wrong.
@@ -1361,16 +1497,88 @@ describe("parseSceneDeck — off-grid generated clips are repaired (33-12)", () 
   });
 
   it("refuses when there is no non-generated scene to take the seconds back", () => {
-    // Every scene is a generated clip, so the freed seconds have nowhere safe to go.
+    // Every scene is a generated clip AND one is over the top of the grid, so the freed seconds
+    // have nowhere safe to go. 16 + 10 + 4 = 30 sums correctly; only the grid is wrong.
     const allGenerated = sceneDeck([
-      `| 1 | generated_video | 10 | Founder | ${S1} | | |`,
-      `| 2 | generated_video | 8 | Cockpit | ${S2} | | |`,
-      `| 3 | generated_video | 12 | Close | ${S4} | | |`,
+      `| 1 | generated_video | 16 | Founder | ${S1} | | |`,
+      `| 2 | generated_video | 10 | Cockpit | ${S2} | | |`,
+      `| 3 | generated_video | 4 | Close | ${S4} | | |`,
     ]);
     expect(parseSceneDeck(allGenerated)).toMatchObject({
       reason: "illegal_generated_duration",
       sceneIndex: 0,
     });
+  });
+});
+
+// ── 33.1-04: THE GRID IS 1..15, AND THE REFUSAL CLASS IT RETIRES ──────────────────────────────
+//
+// `illegal_generated_duration` was the SECOND of the two defects the owner hit live on
+// 2026-08-30: a deck of ordinary-looking scene lengths was refused at the write boundary because
+// sora-2 only made multiples of four. On grok's 1..15 grid that class is gone for every integer
+// length a scene sensibly has, and what is left fires only ABOVE 15.
+describe("parseSceneDeck — the 1..15 grid retires illegal_generated_duration (33.1-04)", () => {
+  it("a 5-SECOND and a 7-SECOND generated scene parse AT THEIR OWN LENGTHS, with NO adjustments", () => {
+    // 5 + 7 + 3 = 15. Asserting `adjustments: []` is what makes this non-vacuous: a test that
+    // only asserted `ok` would pass on a deck the repair had silently snapped to 4 s and 4 s.
+    const r = parseSceneDeck(
+      sceneDeck(
+        [
+          `| 1 | generated_video | 5 | Founder | ${S1} | | |`,
+          `| 2 | generated_video | 7 | Cockpit | ${S2} | | |`,
+          `| 3 | animated_image | 3 | Close | ${S3} | | |`,
+        ],
+        "Target duration: 15",
+      ),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([5, 7, 3]);
+    expect(r.adjustments).toEqual([]);
+  });
+
+  it("A DECK OF ONLY GENERATED SCENES NOW PARSES — the repair has nothing to absorb, and no longer needs one", () => {
+    // The exact shape that refused before: every scene is a generated clip, so
+    // `repairGeneratedGrid` has no non-generated absorber and returned null, and the row loop then
+    // refused. Nothing is off-grid now, so the repair never runs at all.
+    const r = parseSceneDeck(
+      sceneDeck(
+        [
+          `| 1 | generated_video | 5 | Founder | ${S1} | | |`,
+          `| 2 | generated_video | 7 | Cockpit | ${S2} | | |`,
+          `| 3 | generated_video | 3 | Close | ${S3} | | |`,
+        ],
+        "Target duration: 15",
+      ),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.scenes.map((s) => s.durationMs / 1000)).toEqual([5, 7, 3]);
+    expect(r.adjustments).toEqual([]);
+    // …and it is still refused by MONEY rather than by arithmetic — 15 generated seconds is over
+    // `MEDIA_GENERATED_SECONDS_CAP`. The parser's job is the contract; the cap's job is the spend.
+  });
+
+  it("the grid is WIDER, NOT OPEN: a 16-second scene is still snapped or refused", () => {
+    // With an absorber: 16 -> 15, and the freed second goes to the card.
+    const withAbsorber = parseSceneDeck(
+      sceneDeck([
+        `| 1 | generated_video | 16 | Founder | ${S1} | | |`,
+        `| 2 | animated_image | 10 | Mail icons | ${S2} | | |`,
+        "| 3 | text_card | 4 | A line of type | | YOU APPROVE | |",
+      ]),
+    );
+    expect(withAbsorber.ok).toBe(true);
+    if (!withAbsorber.ok) return;
+    expect(withAbsorber.scenes.map((s) => s.durationMs / 1000)).toEqual([15, 10, 5]);
+    expect(withAbsorber.adjustments).toEqual([
+      { sceneIndex: 0, fromSeconds: 16, toSeconds: 15, why: "grid" },
+      { sceneIndex: 2, fromSeconds: 4, toSeconds: 5, why: "rebalance" },
+    ]);
+    // Every integer 1..15 is legal, and 16 is the first that is not.
+    expect([...GENERATED_CLIP_SECONDS]).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    ]);
   });
 });
 
@@ -1420,12 +1628,15 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
   // non-generated scene to give the freed seconds back to and correctly declines to touch it.
   // (Injecting a merely off-grid clip no longer works as a failure — 33-12 repairs those, which
   // is the point of 33-12.)
+  // 33.1-04: the clip has to be ABOVE 15 now. It was 11 s, which was off sora-2's 4/8/12 grid and
+  // is an ordinary length on grok's 1..15 — leaving it would have made this deck parse and turned
+  // the three salvage tests below into assertions about nothing. 16 + 14 = 30, so the deck sums.
   const DECK_B_UNFIXABLE = sceneDeck(
     [
-      `| 1 | generated_video | 11 | A calendar filling itself | ${S1} | |`,
-      `| 2 | generated_video | 4 | Logo on black | ${S2} | |`,
+      `| 1 | generated_video | 16 | A calendar filling itself | ${S1} | |`,
+      `| 2 | generated_video | 14 | Logo on black | ${S2} | |`,
     ],
-    "Target duration: 15",
+    "Target duration: 30",
   );
   const twoUpBadB = [
     "## VARIATION A",
@@ -1452,7 +1663,10 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
   });
 
   it("salvages symmetrically — a bad A keeps B", () => {
-    const aIllegal = twoUp.replace("| 1 | generated_video | 8 |", "| 1 | generated_video | 7 |");
+    // 33.1-04: was 8 -> 7. Seven seconds is legal on grok's grid, so that edit now produces a
+    // `duration_mismatch` instead of a grid refusal — a different reason, and this test is about
+    // the SALVAGE, not about which code. 8 -> 16 keeps it an illegal generated duration.
+    const aIllegal = twoUp.replace("| 1 | generated_video | 8 |", "| 1 | generated_video | 16 |");
     expect(parseVariations(aIllegal)).toMatchObject({
       kind: "salvaged",
       keptVariation: "b",
@@ -1464,9 +1678,13 @@ describe("parseVariations — two-variation bodies (33-01)", () => {
   it("BOTH variations refusing still refuses the whole proposal", () => {
     // The salvage has something to salvage FROM. When nothing parses, the old contract stands and
     // the reported variation is the FIRST to fail, so the message names a real deck.
-    // A: 8 -> 7 makes the rows sum to 29 against a declared 30, so the repair declines (grid, not
-    // arithmetic) and the grid refusal stands. B is the all-generated deck above.
-    const bothBad = twoUpBadB.replace("| 1 | generated_video | 8 |", "| 1 | generated_video | 7 |");
+    // A: 8 -> 16 makes the rows sum to 38 against a declared 30, so the repair declines (grid,
+    // not arithmetic) and the grid refusal stands — 16 is above the top of the 1..15 grid. B is
+    // the all-generated deck above.
+    const bothBad = twoUpBadB.replace(
+      "| 1 | generated_video | 8 |",
+      "| 1 | generated_video | 16 |",
+    );
     expect(parseVariations(bothBad)).toMatchObject({
       kind: "refused",
       variation: "a",

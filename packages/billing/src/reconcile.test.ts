@@ -5,6 +5,7 @@ import {
   reconcileEvent,
   UNRECONCILED_RETURN_DAYS,
   UNRECONCILED_SWEEP_DAYS,
+  unappliedStage,
 } from "./reconcile";
 
 const DAY_MS = 86_400_000;
@@ -24,7 +25,12 @@ const invoice = (over: Record<string, unknown> = {}) => ({
   object: "invoice",
   currency: "usd",
   total: 1050,
-  amount_paid: 1050,
+  // DELIBERATELY different from `total` (28.1-11 #14). `reconcile.ts` chooses `amount_paid` —
+  // money COLLECTED — over `total` — money BILLED — and an invoice partly settled from a credit
+  // balance is exactly where they diverge. While both read 1050 the assertions below could not
+  // tell the two apart, so changing the source to `inv.total` kept the suite green over a ledger
+  // booking money we do not have.
+  amount_paid: 900,
   payment_intent: "pi_123",
   ...over,
 });
@@ -74,13 +80,30 @@ describe("invoice.finalized — what we EXPECT to collect", () => {
 });
 
 describe("invoice.paid — the central law of this phase", () => {
-  test("a CARD invoice IS collection: one actual movement", () => {
+  test("a CARD invoice IS collection: one actual movement for what was COLLECTED", () => {
     const { movements } = run("invoice.paid", invoice(CARD));
     expect(movements).toHaveLength(1);
     expect(movements[0]).toMatchObject({
       phase: "actual",
-      amount: { minor: 1050, currency: "USD" },
+      // 900 — `amount_paid`, not the 1050 `total`. The fixture separates them on purpose: an
+      // invoice partly settled from a credit balance bills 1050 and collects 900, and booking the
+      // total would put 150 minor units of money we never received into an append-only book that
+      // can only be corrected by a fabricated `refunded` row.
+      amount: { minor: 900, currency: "USD" },
       correlationId: "billing/in_123",
+    });
+  });
+
+  test("amount_paid BEATS total — the oracle for the collected-vs-billed choice", () => {
+    // The discriminating assertion #14 found missing. `reconcile.ts` reads `amount_paid` when it
+    // is a number and falls back to `total` only when it is absent; both halves are pinned here,
+    // so changing the source to `inv.total` fails and so does dropping the fallback.
+    expect(
+      run("invoice.paid", invoice({ ...CARD, total: 4900, amount_paid: 2900 })).movements[0],
+    ).toMatchObject({ amount: { minor: 2900, currency: "USD" } });
+    const { amount_paid: _dropped, ...noAmountPaid } = invoice(CARD);
+    expect(run("invoice.paid", noAmountPaid).movements[0]).toMatchObject({
+      amount: { minor: 1050, currency: "USD" },
     });
   });
 
@@ -146,7 +169,8 @@ describe("customer_cash_balance_transaction.created — where bank-transfer mone
       {
         phase: "reserved",
         amount: { minor: 1050, currency: "USD" },
-        correlationId: "billing/cus_1",
+        // The TRANSACTION, not the customer (28.1-11 #1). See the repeat-movement block below.
+        correlationId: "billing/ccsbtxn_1",
         kind: "cash-funded",
         stripeObjectId: "ccsbtxn_1",
       },
@@ -269,31 +293,51 @@ describe("cash_balance.funds_available — LEFTOVER money, not an arrival", () =
     expect(observations.map((o) => ("amount" in o ? o.amount : null))).toEqual([
       { minor: 1050, currency: "USD" },
       { minor: 900, currency: "JPY" },
+      // EUR at zero is CARRIED, not dropped (28.1-11 #8). Dropping it is how a hold that has
+      // actually cleared went on being reported, and went on aging, forever: the writer only ever
+      // learns a balance is gone from the notification that says it is gone.
+      { minor: 0, currency: "EUR" },
+    ]);
+  });
+
+  test("a balance that has gone to ZERO is an observation, because the clear IS the signal", () => {
+    const { movements, observations } = run("cash_balance.funds_available", balance({ usd: 0 }));
+    expect(movements).toEqual([]);
+    expect(observations).toEqual([
+      {
+        kind: "unapplied-funds",
+        amount: { minor: 0, currency: "USD" },
+        correlationId: "billing/cus_1",
+        stripeObjectId: "cus_1",
+        ageDays: 0,
+        stage: "held",
+      },
     ]);
   });
 });
 
 describe("refunds — direction lives in the phase, never in the sign", () => {
-  test("charge.refunded is a POSITIVE refunded movement", () => {
-    const charge = {
-      id: "ch_1",
-      object: "charge",
+  test("refund.created is a POSITIVE refunded movement", () => {
+    const ref = {
+      id: "re_1",
+      object: "refund",
       currency: "usd",
-      amount_refunded: 500,
+      amount: 500,
+      charge: "ch_1",
       payment_intent: "pi_123",
     };
-    expect(run("charge.refunded", charge).movements).toEqual([
+    expect(run("refund.created", ref).movements).toEqual([
       {
         phase: "refunded",
         amount: { minor: 500, currency: "USD" },
-        correlationId: "billing/pi_123",
-        kind: "charge-refunded",
-        stripeObjectId: "ch_1",
+        correlationId: "billing/re_1",
+        kind: "refund-created",
+        stripeObjectId: "re_1",
       },
     ]);
   });
 
-  test("credit_note.created is a POSITIVE refunded movement correlated on the invoice", () => {
+  test("credit_note.created is a POSITIVE refunded movement correlated on the CREDIT NOTE", () => {
     const note = {
       id: "cn_1",
       object: "credit_note",
@@ -304,7 +348,9 @@ describe("refunds — direction lives in the phase, never in the sign", () => {
     expect(run("credit_note.created", note).movements[0]).toMatchObject({
       phase: "refunded",
       amount: { minor: 500, currency: "USD" },
-      correlationId: "billing/in_123",
+      // The note is the movement; the invoice is the tie-back (28.1-11 #7).
+      correlationId: "billing/cn_1",
+      stripeObjectId: "in_123",
     });
   });
 });
@@ -393,5 +439,175 @@ describe("the money boundary — Stripe is natively minor units", () => {
     expect(json).not.toContain("someone@example.com");
     expect(json).not.toContain("A Person");
     expect(json).not.toContain("prose");
+  });
+});
+
+/**
+ * THE BOUNDARIES THEMSELVES, at the exact days — because deletion-style mutation is blind here.
+ * Deleting either `if` still leaves most ages classified correctly, and flipping `>=` to `>` moves
+ * the answer on ONE day only. These assert that day.
+ *
+ * The literals are written out for the third blind spot: a constant the test IMPORTS moves the
+ * oracle with the subject, so mutating `UNRECONCILED_RETURN_DAYS` would never be caught by a test
+ * that only compares against it.
+ */
+describe("Stripe's unreconciled-funds clock, at the day it turns", () => {
+  test("the two constants are 75 and 90", () => {
+    expect(UNRECONCILED_RETURN_DAYS).toBe(75);
+    expect(UNRECONCILED_SWEEP_DAYS).toBe(90);
+  });
+
+  test("day 74 is held, day 75 is return-attempted — the boundary is INCLUSIVE", () => {
+    expect(unappliedStage(74)).toBe("held");
+    expect(unappliedStage(75)).toBe("return-attempted");
+  });
+
+  test("day 89 is return-attempted, day 90 is swept — inclusive again", () => {
+    expect(unappliedStage(89)).toBe("return-attempted");
+    expect(unappliedStage(90)).toBe("swept");
+  });
+
+  test("fresh money is held and very old money stays swept", () => {
+    expect(unappliedStage(0)).toBe("held");
+    expect(unappliedStage(1)).toBe("held");
+    expect(unappliedStage(365)).toBe("swept");
+  });
+});
+
+/**
+ * 28.1-11 findings #1, #6, #7 — ONE root cause: a correlation built from an entity that REPEATS
+ * instead of from the movement that is unique.
+ *
+ * `recordBillingMovement` makes `(tenantId, correlationId, phase)` the identity and on a hit
+ * returns the stored row while IGNORING the replayed amount (`billingLedger.ts:142`). So a
+ * correlation shared by two genuinely different movements is not a duplicate-suppression win — it
+ * is the second movement silently never being booked, in an append-only table that cannot correct
+ * it. Every assertion below pins the POSITIVE correlation value, not merely that two differ, so a
+ * refactor that made both `undefined` could not read as a pass.
+ */
+describe("a correlation is built from the MOVEMENT, never from an entity that repeats", () => {
+  const cashRun = (over: Record<string, unknown>) =>
+    run("customer_cash_balance_transaction.created", cashTxn(over)).movements;
+
+  test("#1 a customer's SECOND bank transfer is its own reserved movement", () => {
+    const jan = cashRun({ id: "ccsbtxn_jan", type: "funded", net_amount: 4900 });
+    const feb = cashRun({ id: "ccsbtxn_feb", type: "funded", net_amount: 12000 });
+    expect(jan[0]).toMatchObject({
+      phase: "reserved",
+      amount: { minor: 4900, currency: "USD" },
+      correlationId: "billing/ccsbtxn_jan",
+      stripeObjectId: "ccsbtxn_jan",
+    });
+    expect(feb[0]).toMatchObject({
+      phase: "reserved",
+      amount: { minor: 12000, currency: "USD" },
+      correlationId: "billing/ccsbtxn_feb",
+      stripeObjectId: "ccsbtxn_feb",
+    });
+  });
+
+  test("#1 the SECOND funding_reversed for one customer is its own refunded movement", () => {
+    const first = cashRun({ id: "ccsbtxn_r1", type: "funding_reversed", net_amount: -4900 });
+    const second = cashRun({ id: "ccsbtxn_r2", type: "funding_reversed", net_amount: -12000 });
+    expect(first[0]).toMatchObject({
+      phase: "refunded",
+      amount: { minor: 4900, currency: "USD" },
+      correlationId: "billing/ccsbtxn_r1",
+    });
+    expect(second[0]).toMatchObject({
+      phase: "refunded",
+      amount: { minor: 12000, currency: "USD" },
+      correlationId: "billing/ccsbtxn_r2",
+    });
+  });
+
+  test("#1 the PaymentIntent fallbacks fall back to the TRANSACTION, never to the customer", () => {
+    // `unapplied_from_payment` / `refunded_from_payment` without an expanded PaymentIntent. The
+    // customer would collapse every one of them onto one `refunded` identity.
+    for (const type of ["unapplied_from_payment", "refunded_from_payment"]) {
+      const a = cashRun({ id: "ccsbtxn_a", type, net_amount: 100 })[0];
+      const b = cashRun({ id: "ccsbtxn_b", type, net_amount: 200 })[0];
+      expect(a?.correlationId).toBe("billing/ccsbtxn_a");
+      expect(b?.correlationId).toBe("billing/ccsbtxn_b");
+    }
+  });
+
+  test("#7 a SECOND credit note against ONE invoice is its own movement", () => {
+    const note = (id: string, total: number) =>
+      run("credit_note.created", {
+        id,
+        object: "credit_note",
+        currency: "usd",
+        total,
+        invoice: "in_123",
+      }).movements[0];
+    expect(note("cn_1", 3000)).toMatchObject({
+      phase: "refunded",
+      amount: { minor: 3000, currency: "USD" },
+      correlationId: "billing/cn_1",
+      // The invoice survives as the TIE-BACK, so nothing is lost by moving the correlation.
+      stripeObjectId: "in_123",
+    });
+    expect(note("cn_2", 4000)).toMatchObject({
+      amount: { minor: 4000, currency: "USD" },
+      correlationId: "billing/cn_2",
+      stripeObjectId: "in_123",
+    });
+  });
+});
+
+/**
+ * #6 — `charge.refunded` carries the CUMULATIVE `amount_refunded` on the charge and repeats on one
+ * `ch_`; `refund.created` carries this refund's own `amount` under a unique `re_`. Stripe's own
+ * documentation on `charge.refunded` says to listen to `refund.created` for the refund's detail.
+ */
+describe("refund.created — the DELTA, under an id that is unique per refund", () => {
+  const refund = (over: Record<string, unknown> = {}) => ({
+    id: "re_1",
+    object: "refund",
+    currency: "usd",
+    amount: 500,
+    charge: "ch_1",
+    payment_intent: "pi_123",
+    ...over,
+  });
+
+  test("books this refund's own amount, correlated on the refund", () => {
+    expect(run("refund.created", refund()).movements).toEqual([
+      {
+        phase: "refunded",
+        amount: { minor: 500, currency: "USD" },
+        correlationId: "billing/re_1",
+        kind: "refund-created",
+        stripeObjectId: "re_1",
+      },
+    ]);
+  });
+
+  test("a SECOND partial refund on ONE charge books its own DELTA, not a running total", () => {
+    const first = run("refund.created", refund({ id: "re_1", amount: 500 })).movements[0];
+    const second = run("refund.created", refund({ id: "re_2", amount: 1200 })).movements[0];
+    expect(first).toMatchObject({
+      amount: { minor: 500, currency: "USD" },
+      correlationId: "billing/re_1",
+    });
+    // 1200, the delta — NOT 1700, which is what the charge's `amount_refunded` would have said.
+    expect(second).toMatchObject({
+      amount: { minor: 1200, currency: "USD" },
+      correlationId: "billing/re_2",
+    });
+  });
+
+  test("charge.refunded books NOTHING — its amount_refunded is a cumulative total", () => {
+    // A guard against re-adding the arm, not decoration: this exact payload used to book 1700 as
+    // if it were a second $12 refund, on a correlation the first refund already owned.
+    const charge = {
+      id: "ch_1",
+      object: "charge",
+      currency: "usd",
+      amount_refunded: 1700,
+      payment_intent: "pi_123",
+    };
+    expect(run("charge.refunded", charge)).toEqual({ movements: [], observations: [] });
   });
 });

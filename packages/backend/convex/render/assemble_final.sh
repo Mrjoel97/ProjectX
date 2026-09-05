@@ -165,6 +165,7 @@ set -euo pipefail
 IN_DIR="in"; OUT="out/final.mp4"; CLIP=10; SFXVOL="0.12"; BLOCKS=""; TARGET=""
 KINDS=(); SECS=()
 MUSIC=""            # the requested mood slug, "" for a reel with no bed
+MUSIC_FILE=""       # 33.1-06: a track already in in/ (fetched from a public library); beats the library lookup
 MUSIC_USED="none"   # what actually made it into the mix — the sidecar reports THIS, not the ask
 # THE BED'S LEVEL, PINNED. Not a flag, unlike --sfx-vol: this number is half of the narration
 # assert's soundness (see the MUSIC BED notes above), so a caller must not be able to set it.
@@ -199,6 +200,7 @@ while [[ $# -gt 0 ]]; do
     # not be a thing this script can be asked. The caller validates against its own closed set too;
     # this is the half that does not depend on the caller being the one we think it is.
     --music) MUSIC="$2"; shift 2 ;;
+    --music-file) MUSIC_FILE="$2"; shift 2 ;;
     --card-bg) CARD_BG="$2"; shift 2 ;;
     --card-ink) CARD_INK="$2"; shift 2 ;;
     --in) IN_DIR="$2"; shift 2 ;;
@@ -318,9 +320,17 @@ fi
 MUSICWAV=""
 if [[ -n "$MUSIC" ]]; then
   MTRACK=""
+  # 33.1-06: a FETCHED track first. The runner has already written it beside the other inputs;
+  # the only name accepted is the one core's RENDER_MUSIC_NAME allows, under in/, so a caller
+  # cannot point this at anything else on the VM (the same charset discipline as --music above).
+  if [[ -n "$MUSIC_FILE" ]]; then
+    [[ "$MUSIC_FILE" =~ ^in/music\.(mp3|m4a|ogg|wav|flac)$ ]] || { echo "ERROR: --music-file must be in/music.<mp3|m4a|ogg|wav|flac>, got: $MUSIC_FILE" >&2; exit 2; }
+    [[ -f "$MUSIC_FILE" ]] && MTRACK="$MUSIC_FILE"
+  fi
   # Extension-agnostic: the library is a bake artifact, and pinning a container here would mean a
   # re-bake that switched to m4a silently produced bedless reels. The SLUG is the contract.
   for ext in mp3 m4a ogg wav flac; do
+    [[ -n "$MTRACK" ]] && break
     [[ -f "$MUSIC_DIR/$MUSIC.$ext" ]] && { MTRACK="$MUSIC_DIR/$MUSIC.$ext"; break; }
   done
   if [[ -z "$MTRACK" ]]; then
@@ -410,8 +420,38 @@ for ((i=0;i<SCENES;i++)); do
       # The fade is capped at a third of the scene so a 2-second card is not still arriving when
       # it should be landing. `awk` because SEC is an integer and the duration is not.
       CFADE="$(awk -v s="$SEC" 'BEGIN{d=s/3; if(d>0.4)d=0.4; printf "%.3f", d}')"
+      # WRAP THE WORDS FIRST. drawtext does not wrap: a card longer than the frame is drawn as ONE
+      # line and cropped at both edges — "AUTOMATE THE REPETITIVE" shipped as "UTOMATE THE REPETITIV"
+      # on the first reel ever rendered. The width is derived from the same numbers the filter uses
+      # (fontsize = H/22; an average glyph is ~0.55 em; 86% of W is the usable band), so a frame
+      # size change moves both together. `fold -s` breaks at spaces only, never inside a word, and
+      # the trailing blank each break leaves is stripped so centring is exact. `line_spacing` below
+      # is already there for the newlines this produces. A single word wider than the band is left
+      # whole — cropping one word is better than splitting it into nonsense.
+      MAXCH="$(awk -v w="$W" -v h="$H" 'BEGIN{n=int(0.86*w*22/(0.55*h)); if(n<8)n=8; print n}')"
+      # RELATIVE, beside the original, not under $TMP: `textfile=` sits INSIDE the filter string,
+      # where no path conversion ever reaches it, so on a developer's Windows box a `/tmp/...`
+      # value is a file a native ffmpeg cannot open. A relative name resolves from the cwd on
+      # every platform, which is exactly how the unwrapped `in/cardNN.txt` already worked.
+      wrapped="$IN_DIR/$(printf 'card%02d' "$n").wrapped.txt"
+      fold -s -w "$MAXCH" "$txt" | sed 's/[[:space:]]*$//' > "$wrapped"
+      # ONE drawtext PER LINE, and no newline in any text file. Two reasons, both observed on the
+      # first rendered reel: this ffmpeg lineage (BtbN master, gyan 8.x) shapes a LF as a .notdef
+      # box glyph at the end of the line — in every font tried — and a multi-line block is
+      # left-aligned inside its centred box, so the second line sits flush-left under the first.
+      # Each line is its own filter, centred on its own width, stacked from a computed top.
+      # FS/LH are the same numbers the single filter used (fontsize=H/22, line_spacing=14).
+      FS=$((H / 22)); LH=$((FS + 14))
+      NL="$(wc -l < "$wrapped")"; [[ "$(tail -c1 "$wrapped" | wc -l)" -eq 0 ]] && NL=$((NL + 1))
+      DT=""; k=0
+      while IFS= read -r ln || [[ -n "$ln" ]]; do
+        lf="$IN_DIR/$(printf 'card%02d' "$n").l$k.txt"
+        printf '%s' "$ln" > "$lf"
+        DT="${DT}drawtext=fontfile='${FONT}':textfile='${lf}':expansion=none:fontcolor=${CARD_INK}:fontsize=${FS}:shadowx=2:shadowy=2:shadowcolor=0x000000@0.35:x=(w-text_w)/2:y=(h-${NL}*${LH})/2+${k}*${LH},"
+        k=$((k + 1))
+      done < "$wrapped"
       ffmpeg -y -loglevel error -f lavfi -t "$SEC" -i "color=c=${CARD_BG}:s=${W}x${H}:r=${FPS}" \
-        -vf "drawtext=fontfile='${FONT}':textfile='${txt}':expansion=none:fontcolor=${CARD_INK}:fontsize=${H}/22:line_spacing=14:shadowx=2:shadowy=2:shadowcolor=0x000000@0.35:x=(w-text_w)/2:y=(h-text_h)/2,fade=t=in:st=0:d=${CFADE},${NORM}" \
+        -vf "${DT}fade=t=in:st=0:d=${CFADE},${NORM}" \
         -an -t "$SEC" -c:v libx264 -preset veryfast -crf 20 "$pic"
       ;;
   esac
@@ -419,7 +459,15 @@ for ((i=0;i<SCENES;i++)); do
   # THE DIEGETIC BED. A generated clip's own SFX has to come off the ORIGINAL file — the picture
   # built above is silent by construction — and it is lifted out here, at this scene's length, so
   # the master mix below is a list of wavs and offsets rather than a second pass over the inputs.
-  if [[ "$KIND" == "video" ]]; then
+  #
+  # ONLY FOR A SCENE NOBODY SPEAKS OVER. This bed was designed for Sora's ambient SFX. Grok returns
+  # a full soundtrack — the first rendered clip was a presenter TALKING, peaking at 0 dBFS, louder
+  # than the narration take — and at SFXVOL it was plainly a second voice under the user's script.
+  # The narration IS the reel's words; a clip's improvised speech never is. So a narrated scene
+  # takes NO bed from its clip, and a silent scene keeps its clip's sound as the design intended.
+  # Gating here, not by inspecting the audio for speech: deterministic, free, and it cannot be
+  # fooled by music with vocals or a crowd.
+  if [[ "$KIND" == "video" && ! -f "$voice" ]]; then
     src="$IN_DIR/$(printf 'block%02d.mp4' "$n")"
     if [[ "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "$src" | head -1)" == "audio" ]]; then
       dieg="$TMP/d_$(printf '%03d' "$i").wav"
@@ -516,18 +564,48 @@ for ((i=0;i<SCENES;i++)); do
 done
 
 # ── THE TIMELINE CHECKS, in place of the per-cell band ────────────────────────────────────────
-# These are the two ways speech can still be WRONG once a line is free to cross a scene boundary.
-# Both are hard errors for the same reason the band was: the fix is to rewrite the line upstream,
-# never to stretch, trim or pad audio here. 0.05s of slack absorbs silencedetect's own resolution.
+# ONE of the two ways speech can be wrong is still a hard error. The OTHER is now resolved here
+# instead, and the difference between them is who can still fix it:
+#
+#   * PAST THE END OF THE REEL — still fatal. There is nowhere to put those seconds. The reel has a
+#     fixed length that the picture track already is, and the only cures are a shorter line or a
+#     longer reel, both of them upstream. Never atempo, never a trim.
+#   * INTO THE NEXT LINE — no longer fatal. The later take is DELAYED until the earlier one has
+#     finished, plus TAKE_GAP_S. Two narrators at once is what had to be prevented; refusing the
+#     whole reel was one way to prevent it and moving a take is a cheaper one. A take was always
+#     free to run past its own scene (that is the master timeline's whole point), so a line that
+#     starts a fraction late is the same class of drift the design already accepts.
+#
+# WHY THIS CHANGED (2026-09-03): the deck-level `narration_too_long` refusal upstream is an
+# ESTIMATE at 14 chars/second, made before any audio exists; this is the MEASURED truth. The
+# estimate refused decks the measurement would have accepted, and the owner was hitting it
+# repeatedly on decks that were fine. With collisions resolved here, that refusal was removed —
+# see `storyboard.ts`. **If you restore the hard error, restore the refusal too, or a deck that
+# cannot render will be sold to a tenant before it fails.**
+#
+# 0.05s of slack absorbs silencedetect's own resolution.
+TAKE_GAP_S=0.12
 NTAKE=${#TAKE_FILE[@]}
 TAKE_END=()
 for ((k=0;k<NTAKE;k++)); do
+  # A take may have been pushed by the PREVIOUS iteration, so its end is computed from the
+  # possibly-updated TAKE_ABS rather than from the placement loop's original value.
   TAKE_END[k]="$(awk -v a="${TAKE_ABS[k]}" -v s="${TAKE_SPEECH[k]}" 'BEGIN{printf "%.3f", a+s}')"
   awk -v e="${TAKE_END[k]}" -v t="$TOT" 'BEGIN{exit (e > t+0.05) ? 0 : 1}' && {
     echo "ERROR: voice ${TAKE_SCENE[k]} is still speaking at ${TAKE_END[k]}s but the reel ends at ${TOT}s — the line would be cut mid-word. REWRITE it shorter or give the deck more seconds (never pad, atempo, or trim speech)." >&2; exit 1; }
   if [[ $((k+1)) -lt "$NTAKE" ]]; then
-    awk -v e="${TAKE_END[k]}" -v nx="${TAKE_ABS[k+1]}" 'BEGIN{exit (e > nx+0.05) ? 0 : 1}' && {
-      echo "ERROR: voice ${TAKE_SCENE[k]} runs to ${TAKE_END[k]}s but voice ${TAKE_SCENE[k+1]} starts at ${TAKE_ABS[k+1]}s — two narrators would speak at once. REWRITE one of the two lines shorter." >&2; exit 1; }
+    if awk -v e="${TAKE_END[k]}" -v nx="${TAKE_ABS[k+1]}" 'BEGIN{exit (e > nx+0.05) ? 0 : 1}'; then
+      # PUSH, do not abort. The delay is recomputed from the same PAD_MS/SPEECH_ABS identity the
+      # placement loop uses, so the captions sidecar keeps agreeing with the mix — `speech_abs_s`
+      # is what `rebaseWords` shifts by, and a mix that moved without it would caption the reel
+      # against timings that no longer exist.
+      NEWABS="$(awk -v e="${TAKE_END[k]}" -v g="$TAKE_GAP_S" 'BEGIN{printf "%.3f", e+g}')"
+      NEWPAD="$(awk -v na="$NEWABS" -v a="${TAKE_ABS[k+1]}" -v p="${TAKE_PAD[k+1]}" 'BEGIN{printf "%d", p + (na-a)*1000}')"
+      echo "  note: voice ${TAKE_SCENE[k+1]} pushed ${TAKE_ABS[k+1]}s -> ${NEWABS}s so it does not overlap voice ${TAKE_SCENE[k]}" >&2
+      TAKE_ABS[k+1]="$NEWABS"
+      TAKE_PAD[k+1]="$NEWPAD"
+      PUSHED=$((${PUSHED:-0}+1))
+    fi
   fi
 done
 

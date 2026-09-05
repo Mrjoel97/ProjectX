@@ -20,8 +20,8 @@
  * precedent). The tenant-facing canvas surface is plan 20-09's and uses the lib/functions.ts
  * wrappers (CLAUDE.md §2).
  */
-import { concatWavTakes } from "@pikar/core/captions";
-import { isRenderableCardText } from "@pikar/core/render";
+import { concatWavTakes, pcm16ToWav } from "@pikar/core/captions";
+import { isRenderableCardText, MUSIC_BLOCK_INDEX } from "@pikar/core/render";
 import type { Block, Scene, ShotType, VisualKind } from "@pikar/core/storyboard";
 import {
   hasAssetSource,
@@ -30,6 +30,7 @@ import {
   maxCharsFor,
   minCharsFor,
   narrationCeilingSeconds,
+  narrationOverrunsReel,
   SHOT_TYPES,
   TARGET_DURATIONS,
   VISUAL_KINDS,
@@ -44,7 +45,9 @@ import {
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
+  MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_JOB_CAP_USD,
+  MEDIA_MUSIC_STOCK,
   MEDIA_VIDEO_SECONDS,
   sceneVisualSpec,
 } from "@pikar/cost/media";
@@ -69,6 +72,12 @@ export type ReserveRefusal =
   | "unknown_model"
   | "over_job_cap"
   | "illegal_duration"
+  /** 33.1-04 — the reel is affordable but spends more than `MEDIA_GENERATED_SECONDS_CAP` on
+   *  generated video. A DIFFERENT lever from `over_job_cap`: the cure is not "cut a scene", it is
+   *  "swap a generated scene for an animated still or stock", which cost the same at any length.
+   *  It exists because grok's 1..15 grid made an all-generated reel composable and affordable for
+   *  the first time, removing an arithmetic guarantee this restores in code (ADR-027). */
+  | "over_generated_seconds"
   | "unrenderable_block"
   /** 20.2 wave 6 — regenerating a scene that BUYS NOTHING. A `text_card` is drawn by ffmpeg and an
    *  `uploaded_video`'s bytes are already the tenant's, so a silent one of either has no provider
@@ -102,7 +111,7 @@ type ProviderLine = {
  * NOT `CLIP_SECONDS`. That constant is the DISPLAY set — deliberately wide ([4,5,8,10,12]) so a
  * deck proposed under an older provider still renders on the canvas. What may be BOUGHT is
  * whatever the model this code is about to submit to supports, which after the OpenAI cutover is
- * `MEDIA_VIDEO_SECONDS["sora-2"]` = [4,8,12].
+ * `MEDIA_VIDEO_SECONDS` (the sora-2 grid then; the row left in 33.2-06) = [4,8,12].
  *
  * The two drifted apart at the cutover and nothing noticed, because a 10-second deck still failed
  * — just three checks later, inside `estimateMediaUsd`, with the same code. ONE predicate, asked of
@@ -227,7 +236,7 @@ export async function reserveJobInner(
   //
   //    This checked `CLIP_SECONDS` until 20.2 found the hole, and the hole was real rather than
   //    theoretical: `CLIP_SECONDS` is [4,5,8,10,12] — deliberately WIDE, so a historical Wan deck
-  //    still DISPLAYS — while `MEDIA_VIDEO_SECONDS["sora-2"]` is [4,8,12]. After the OpenAI
+  //    still DISPLAYS — while `MEDIA_VIDEO_SECONDS` (the sora-2 grid then; the row left in 33.2-06) is [4,8,12]. After the OpenAI
   //    cutover a 10-second deck therefore parsed free, cleared THIS check, and was refused deeper
   //    in by `estimateMediaUsd` with the same `illegal_duration` code. Same outcome, wrong place,
   //    and it made `cockpit.test.ts` red for a reason that read like a pricing bug.
@@ -485,6 +494,14 @@ export async function reserveSceneJobInner(
   );
   if (claim) return { ok: false, reason: "unconfirmed_claims" };
 
+  // THE ONE NARRATION GATE ON THE MONEY PATH, over the WHOLE deck rather than scene by scene.
+  // The only overrun the assembler still cannot resolve is speech that is still running when the
+  // reel ends, and reaching it requires a cascade of displaced takes — so it is a property of the
+  // deck, not of any one line. Same function the parser uses, deliberately: two gates with two
+  // models of the same renderer is how a deck gets accepted by one and refused by the other.
+  const overrun = narrationOverrunsReel(a.scenes, a.targetDurationSeconds);
+  if (overrun) return { ok: false, reason: overrun.reason };
+
   const now = Date.now();
   const batchId = crypto.randomUUID();
   const base = { tenantId: a.tenantId, planId: a.planId, batchId };
@@ -548,14 +565,19 @@ export async function reserveSceneJobInner(
     // the tenant's (resolved from the vault at render time) and a `text_card` is drawn by ffmpeg
     // inside a sandbox the flat render line already pays for.
 
-    // THE VOICE TAKE, only where there is a line. The ceiling runs to the next NARRATED scene, so
-    // a silent scene lends its window to the line before it — checked here, upstream of payment,
-    // because an overrun is otherwise only provable inside a sandbox that has already been bought.
+    // THE VOICE TAKE, only where there is a line.
+    //
+    // 33.1-06 moved this check OUT of the per-scene loop and up to `narrationOverrunsReel`, run
+    // once over the whole deck below-of-here in this same function. Two reasons, and the first is
+    // correctness rather than tidiness: the surviving failure — speech still running when the reel
+    // ends — is reachable only through a CASCADE of displaced takes, so it cannot be decided one
+    // scene at a time. The second is that this gate and `parseSceneDeck`'s now share ONE model of
+    // what the assembler does, and a reservation that refuses what the parser accepted would
+    // strand a deck between two gates that disagree.
+    //
+    // It stays upstream of payment for the reason it always was: an overrun is otherwise only
+    // provable inside a sandbox that has already been bought.
     if (scene.narration !== "") {
-      const availableSeconds = narrationCeilingSeconds(a.scenes, i);
-      if (scene.narration.length > maxCharsFor(availableSeconds)) {
-        return { ok: false, reason: "narration_too_long" };
-      }
       // Doubled for the same reason the block path doubles: ONE rewrite round is pre-paid, because
       // the provider returns no duration and a job that cannot afford its own cure strands a paid
       // deck. At $0.012 the doubling is free and the fail-closed direction is over-reserving.
@@ -586,6 +608,32 @@ export async function reserveSceneJobInner(
         },
       });
     }
+  }
+
+  // THE GENERATED-SECONDS CEILING, MEASURED OVER THE WHOLE DECK (33.1-04).
+  //
+  // `chooseMediaBatch` enforces it too, and on a FULL buy that is the same question asked twice.
+  // On a PARTIAL buy it is not: `lines` is narrowed to the chosen scene, so the specs the batch
+  // sees carry only that scene's seconds — and a deck spending 24 generated seconds, refused as a
+  // whole reel, could be bought one scene at a time through `regenerateBlock` (which requires no
+  // prior batch) until the entire deck had been paid for. Measured, not theorised: with only the
+  // batch check in place, scene 0 of a 12 + 12 + 6 deck reserved successfully.
+  //
+  // Deck-wide is the rule this function already states for every other refusal — "every refusal a
+  // full buy would raise, a partial buy raises too; only the LINES are narrowed" — so this is that
+  // rule applied to one more gate rather than a new kind of check.
+  //
+  // AFTER the scene loop, deliberately: a scene the provider cannot make at ANY price is
+  // `illegal_duration`, which names a different and more actionable lever. Every length above the
+  // grid is also above this ceiling, so checking the ceiling first would make `illegal_duration`
+  // unreachable for a generated scene and report "too much video" about a clip that cannot be
+  // bought at all. Nothing has been spent either way — both are free refusals.
+  const deckGeneratedSeconds = a.scenes.reduce(
+    (n, s) => n + (s.visual === "generated_video" ? s.durationMs / 1000 : 0),
+    0,
+  );
+  if (deckGeneratedSeconds > MEDIA_GENERATED_SECONDS_CAP) {
+    return { ok: false, reason: "over_generated_seconds" };
   }
 
   // A deck of nothing but free scenes and no narration has nothing to reserve and nothing to
@@ -639,6 +687,39 @@ export async function reserveSceneJobInner(
   // In practice the parser's closed set makes that unreachable; this is the gate that makes it
   // unreachable rather than merely unlikely.
   const music = musicSpecOf(planRow && planRow.tenantId === a.tenantId ? planRow : null);
+  // 33.1-06: THE BED'S BYTES. The $0 `music` line above still names the bed on the invoice; this
+  // is the stock ROW that fetches it (Openverse, `provider: "stock"`, `kind: "audio"`), exactly as
+  // a Pexels still is a row. It goes FIRST so `submitBatch` fetches it before the paid lines —
+  // seconds of work — and it has landed by the time the last take does. Deck-wide, so it sits at
+  // MUSIC_BLOCK_INDEX beside captions at -1, outside every scene index. Its `seconds` is the reel:
+  // the picker skips a track that would need a loop seam inside it.
+  if (music !== null) {
+    const bedSpec: MediaSpec = {
+      kind: "stock",
+      model: MEDIA_MUSIC_STOCK.model,
+      media: "audio",
+      seconds: a.targetDurationSeconds,
+    };
+    const priced = estimateMediaUsd(bedSpec);
+    if (!priced.ok) return { ok: false, reason: priced.error.code };
+    lines.unshift({
+      spec: bedSpec,
+      estUsd: priced.value,
+      row: {
+        ...base,
+        provider: "stock",
+        blockIndex: MUSIC_BLOCK_INDEX,
+        kind: "audio",
+        model: MEDIA_MUSIC_STOCK.model,
+        spec: { kind: "stock", media: "audio", seconds: a.targetDurationSeconds },
+        promptHash: await contentHash(music.mood),
+        status: "queued",
+        estUsd: priced.value,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+  }
   const specs: MediaSpec[] = [
     ...lines.map((l) => l.spec),
     ...(music === null ? [] : [music]),
@@ -873,9 +954,41 @@ export const listJobs = internalQuery({
 
 // ── Media provider adapters ────────────────────────────────────────────────────────────
 //
-// Submit new visual and audio lines to OpenAI. GPT Image 2 returns image bytes synchronously;
-// Sora returns a video id, so clips are polled and copied into Convex storage before their rows land.
-// The legacy Wan poller remains only for tasks submitted before the provider cutover.
+// Submit new visual and audio lines. As of 33.1-06 EVERY PAID PLANE IS ON OPENROUTER and reads
+// OPENROUTER_API_KEY. `OPENAI_API_KEY` survives for exactly one thing, named at the bottom of this
+// note, and nothing that submits work reads it:
+//   - image  -> OPENROUTER, `openrouter.ai/api/v1/images`, on OPENROUTER_API_KEY. Bytes come back
+//               synchronously in `data[0].b64_json`, byte-identically to the OpenAI shape it
+//               replaced (measured 2026-08-30, see 33.1-PRICE-EVIDENCE.md).
+//   - video  -> OPENROUTER, `openrouter.ai/api/v1/videos`, on OPENROUTER_API_KEY. Asynchronous:
+//               a 202 hands back an id, and `pollOpenRouterVideoTask` owns everything after it.
+//               Moved here by 33.1-05 because OpenAI WITHDRAWS its Videos API on 2026-09-24 — an
+//               ENDPOINT withdrawal, so there was no same-vendor row to move to (ADR-027).
+//   - tts    -> OPENROUTER, `openrouter.ai/api/v1/chat/completions`. NOT `/audio/speech`: that
+//               route exists on OpenRouter and accepts NO model at all (four probed 2026-09-03,
+//               including `openai/gpt-audio`, which IS in the catalogue). So the voice plane rides
+//               a chat model with an audio modality, `stream: true` is mandatory, and the take is
+//               refused unless the transcript matches the script — ADR-028.
+//   - stt    -> OPENROUTER, `openrouter.ai/api/v1/audio/transcriptions`, with full per-word
+//               timestamps at the same $0.0060/minute OpenAI charges. ADR-028 stated the OPPOSITE
+//               and ADR-029 corrects it: the `/models` catalogue lists CHAT models only, so a
+//               transcription model is absent from it while being perfectly serviceable at the
+//               endpoint. **Do not conclude from that catalogue that an audio route is missing.**
+// The OpenAI API hostname no longer appears in this file. 33.2-06 deleted the retained Sora poller: the
+// endpoint it polled is withdrawn on 2026-09-24, the only sora-2 row in any deployment is
+// `succeeded`, and the owner retired the model. `media.test.ts` holds a source scan against the
+// hostname coming back — and STILL asserts routing on the RESOLVED url handed to `fetch`, because a
+// scan proves spelling, not routing.
+//
+// ONE poller is retained beside the live one, for the reason it always was: `pollWanTask`
+// (pre-Sora cutover) lets a job submitted before a cutover still land. It is not a fallback and
+// no submit path reaches it.
+//
+// ponytail: two near-identical pollers, one per vendor generation — not a provider registry.
+// Upgrade path: extract a shared poller only when a THIRD arrives AND all three agree branch for
+// branch. OpenRouter's status vocabulary is `pending -> completed|failed`; a premature
+// generalisation over that difference is exactly how a poller lands `provider_failed` on a job
+// that was merely pending.
 
 /** The `gmailAuth.requireEnv` idiom with a media-worded message. Provider credentials are Convex
  *  deployment env vars (`npx convex env set`), never client-visible variables. */
@@ -914,13 +1027,44 @@ export type SubmittableSpec =
 export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<string, unknown> {
   switch (spec.kind) {
     case "video":
+      // OpenRouter's field names, MEASURED on 2026-08-30 (33.1-PRICE-EVIDENCE.md), not Sora's:
+      // `duration` (a NUMBER, not `String(seconds)`) and `resolution` (the tier, not a WxH `size`).
+      // All three priced dimensions — model, resolution, seconds — are here, per this function's
+      // contract above.
+      //
+      // `aspect_ratio` is a PINNED WIRE FIELD, the video twin of `voice` on the tts arm: the price
+      // table has no opinion about it, but the reel is 1080x1920 and a clip composed for any other
+      // ratio gets reshaped by the assembler. "9:16" reproduces exactly the geometry Sora's
+      // `720x1280` requested, so the migration changes the transport and not the picture.
+      //
+      // NOT sent: `generate_audio`, and NOT because Grok is silent — that earlier claim (also in
+      // ADR-027) was wrong. The first rendered clip came back with a stereo AAC track of a
+      // presenter SPEAKING, peaking at 0 dBFS and louder than the narration take, and the
+      // assembler mixed it in as a "diegetic bed" under the voice: two voices at once. The audio
+      // is unrequested, unpriced (the table sees model, resolution and seconds) and unwanted under
+      // a narrated scene, so `assemble_final.sh` now drops a clip's own audio wherever the deck
+      // speaks over it and keeps it only for a silent scene. Whether the route accepts an
+      // audio-off flag is unknown — `/models/.../endpoints` lists chat parameters only, the ADR-029
+      // lesson — and a paid probe is the only way to find out. Not sending one costs nothing.
       return {
         model: spec.model,
         prompt: text,
-        seconds: String(spec.seconds),
-        size: { "480p": "480x854", "720p": "720x1280", "1080p": "1080x1920" }[spec.resolution],
+        duration: spec.seconds,
+        resolution: spec.resolution,
+        aspect_ratio: "9:16",
       };
     case "image":
+      // NO `.replace(/^openai\//, "")` here, and that asymmetry with the `tts` arm below is the
+      // point: `tts` posts to OpenAI's OWN API, which does not know a route prefix, while this arm
+      // posts to OpenRouter, which does. Stripping here would send `gpt-image-2` to a gateway that
+      // has never heard of that id.
+      //
+      // `size` and NOT `aspect_ratio`, and never both. Measured 2026-08-30 (33.1-PRICE-EVIDENCE.md):
+      // they are NOT interchangeable — `aspect_ratio: "9:16"` returns 864x1536 at $0.003735, `size`
+      // returns 1024x1536 at $0.004875. `size` reproduces MEDIA_DEFAULT_IMAGE's exact geometry, so
+      // the migration changes the transport and not the picture. (The 9:16 option is both cheaper
+      // and better-composed for a 1080x1920 reel; it is deferred to its own phase because it changes
+      // what every generated still LOOKS like, and improvements do not ride in on a migration.)
       return {
         model: spec.model,
         prompt: text,
@@ -930,12 +1074,28 @@ export function buildSubmitBody(spec: SubmittableSpec, text: string): Record<str
         output_format: "png",
       };
     case "tts":
+      // 33.1 — THE CHAT-AUDIO ROUTE, NOT `/audio/speech`. OpenRouter accepts no model at all on
+      // that endpoint (probed), so the voice plane rides `/chat/completions` with an audio
+      // modality. Four consequences are wire facts rather than choices:
+      //   * `model` is UNSTRIPPED. OpenRouter routes on the `openai/` prefix; the old arm removed
+      //     it because it was posting to OpenAI's own host. Same lesson as `openai/gpt-image-2`.
+      //   * `stream: true` is MANDATORY — without it the API answers 400 "Audio output requires
+      //     stream: true". The reader in `generateOpenRouterVoice` exists for this reason alone.
+      //   * `pcm16` is HEADERLESS, so `pcm16ToWav` gives it the RIFF header everything downstream
+      //     expects. `wav` is not an option on this route.
+      //   * NO `speed`. There was a `speed: 1` here; a pace parameter is banned outright (a
+      //     time-stretch the assembler refuses), and this route has no such field to send anyway.
+      // The system line is what keeps a CHAT model reading instead of replying — see the prompt
+      // note in `generateOpenRouterVoice`, and the verbatim check that does not trust it.
       return {
-        model: spec.model.replace(/^openai\//, ""),
-        input: text,
-        voice: spec.voice,
-        response_format: "wav",
-        speed: 1,
+        model: spec.model,
+        stream: true,
+        modalities: ["text", "audio"],
+        audio: { voice: spec.voice, format: "pcm16" },
+        messages: [
+          { role: "system", content: TTS_VERBATIM_SYSTEM },
+          { role: "user", content: text },
+        ],
       };
     default: {
       const _never: never = spec;
@@ -966,8 +1126,25 @@ async function providerReasonCode(response: Response): Promise<string> {
 /** `blocked` is the 422 arm — a non-retryable input refusal, which is a `provider_blocked` VERDICT
  *  on the row rather than a failure. Everything else is a plain failure the retrier may re-run. */
 export type SubmitResult =
-  | { ok: true; requestId: string; asset?: { bytes: Uint8Array<ArrayBuffer>; mimeType: string } }
+  | {
+      ok: true;
+      requestId: string;
+      asset?: { bytes: Uint8Array<ArrayBuffer>; mimeType: string };
+      /** 33.1-06: the licence line a CC-licensed stock track carries. Only the music bed sets it —
+       *  Pexels assets need no credit; a CC BY track is not usable without one. Public attribution
+       *  data, written to the plan so the owner has it for the post caption. */
+      credit?: MusicCredit;
+    }
   | { ok: false; code: string; blocked: boolean };
+
+export type MusicCredit = {
+  title: string;
+  creator: string;
+  license: string;
+  licenseUrl: string;
+  sourceUrl: string;
+  attribution: string;
+};
 
 type VisualSpec = Extract<SubmittableSpec, { kind: "video" | "image" }>;
 
@@ -988,10 +1165,20 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-/** Submit one new visual line to OpenAI. Images return their bytes synchronously; Sora returns an
- *  asynchronous video id which `pollOpenAiVideoTask` owns. */
+/** Submit one new visual line. BOTH kinds go to OpenRouter as of 33.1-05: images return their bytes
+ *  synchronously in the same response, video returns an asynchronous id which
+ *  `pollOpenRouterVideoTask` owns. The credential follows the vendor, not the function — and with
+ *  one vendor for both visual kinds there is now one credential. */
 export async function submitLine(spec: VisualSpec, text: string): Promise<SubmitResult> {
-  const key = requireEnvMedia("OPENAI_API_KEY");
+  // Deliberately still ABOVE the fixture short-circuit: "fixture mode is free but still requires
+  // configured credentials" is an existing invariant with its own test, and an offline run that
+  // stops proving the credential exists is an offline run that stops catching the misconfiguration
+  // it was there to catch.
+  //
+  // 33.1-03 keyed this on `spec.kind` because the two visual kinds then had two vendors. 33.1-05
+  // moved the second one, so the ternary would now select the same value on both arms — a branch
+  // that cannot differ is a branch that hides the fact. One read, one vendor.
+  const key = requireEnvMedia("OPENROUTER_API_KEY");
 
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
     return spec.kind === "image"
@@ -1006,21 +1193,18 @@ export async function submitLine(spec: VisualSpec, text: string): Promise<Submit
   let response: Response;
   try {
     const body = buildSubmitBody(spec, text);
-    if (spec.kind === "video") {
-      const form = new FormData();
-      for (const [name, value] of Object.entries(body)) form.append(name, String(value));
-      response = await fetch("https://api.openai.com/v1/videos", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}` },
-        body: form,
-      });
-    } else {
-      response = await fetch("https://api.openai.com/v1/images/generations", {
+    // One host, two paths, both JSON. The `FormData` the video arm used to build is gone with the
+    // endpoint that wanted it: OpenAI's Videos API was multipart, OpenRouter's is not.
+    response = await fetch(
+      spec.kind === "video"
+        ? "https://openrouter.ai/api/v1/videos"
+        : "https://openrouter.ai/api/v1/images",
+      {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      });
-    }
+      },
+    );
   } catch {
     // The thrown error's message can carry the request URL and its auth context. A code only; the
     // exception itself is dropped on the floor.
@@ -1046,7 +1230,9 @@ export async function submitLine(spec: VisualSpec, text: string): Promise<Submit
     }
     return {
       ok: true,
-      requestId: response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`,
+      // The 2026-08-30 probe did NOT record whether OpenRouter returns `x-request-id`, so this
+      // fallback is load-bearing rather than decorative — and it must not name OpenAI.
+      requestId: response.headers.get("x-request-id") ?? `openrouter-${crypto.randomUUID()}`,
       asset: { bytes: decodeBase64(encoded), mimeType: "image/png" },
     };
   }
@@ -1054,7 +1240,7 @@ export async function submitLine(spec: VisualSpec, text: string): Promise<Submit
   if (typeof requestId !== "string" || requestId.length === 0) {
     return { ok: false, code: "no_request_id", blocked: false };
   }
-  // Returns holding a queue ticket; `pollOpenAiVideoTask` owns the later status requests.
+  // Returns holding a queue ticket; `pollOpenRouterVideoTask` owns the later status requests.
   return { ok: true, requestId };
 }
 
@@ -1135,6 +1321,8 @@ export const batchToSubmit = internalQuery({
     lines: SubmitLine[];
     shots: Array<{ index: number; prompt: string; narration: string }>;
     imagePrompt: string | null;
+    /** 33.1-06: the bed's mood — the music stock line's search text. */
+    musicMood: string | null;
   }> => {
     const rows = await ctx.db
       .query("mediaJobs")
@@ -1157,6 +1345,9 @@ export const batchToSubmit = internalQuery({
         narration: s.narration,
       })),
       imagePrompt: plan?.mediaMode === "image" ? (plan.imagePrompt ?? null) : null,
+      // 33.1-06: the bed's mood is the SEARCH for the music stock line, the way a stock scene's
+      // prompt is the search for its picture. Read here, beside the other submit-time text.
+      musicMood: plan?.artDirection?.music ?? null,
     };
   },
 });
@@ -1183,6 +1374,31 @@ export const claimLine = internalMutation({
 /** The submit outcome onto the row. A CODE reaches `failureReason` — never provider prose, never
  *  the prompt, never the narration (CLAUDE.md §4). No provider URL is stored: the poller re-derives
  *  everything it needs from the jobId and the stored request id, so there is nothing to leak. */
+/** 33.1-06: the bed's licence line onto its PLAN. Idempotent (a re-submit rewrites the same
+ *  fields), tenant-checked through the job row, and written BEFORE the bytes land so an action
+ *  that dies between the two leaves the obligation visible rather than a credited-nothing. */
+export const recordMusicCredit = internalMutation({
+  args: {
+    jobId: v.id("mediaJobs"),
+    credit: v.object({
+      title: v.string(),
+      creator: v.string(),
+      license: v.string(),
+      licenseUrl: v.string(),
+      sourceUrl: v.string(),
+      attribution: v.string(),
+    }),
+  },
+  handler: async (ctx, { jobId, credit }): Promise<null> => {
+    const job = await ctx.db.get(jobId);
+    if (!job) return null;
+    const plan = await ctx.db.get(job.planId);
+    if (!plan || plan.tenantId !== job.tenantId) return null;
+    await ctx.db.patch(plan._id, { musicCredit: credit });
+    return null;
+  },
+});
+
 export const recordSubmission = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
@@ -1241,14 +1457,63 @@ async function storeAndLand(
   });
 }
 
-async function generateOpenAiVoice(
+/** The system line that keeps a CHAT model reading a script instead of answering it.
+ *
+ *  Split so each literal stays under the §5 no-hardcoded-prompt scan ceiling, the `searchVault`
+ *  convention. §5 itself is not in play: this is not an AGENT prompt whose wording is a product
+ *  decision to be versioned and rolled back — it is a wire parameter that makes a TTS call behave
+ *  like TTS, in the same class as `voice` or `format`. A registry row would make it mutable by a
+ *  database write, and a paraphrasing narrator is a provenance failure, not a tuning knob.
+ *
+ *  IT IS LOAD-BEARING AND IT WAS MEASURED. On 2026-09-03, `openai/gpt-audio-mini` was given
+ *  "Nothing sends until you approve it." under a SHORTER system line and answered it twice out of
+ *  two — *"Understood. Just let me know what you're trying to send…"* — in a voice that would have
+ *  been rendered into the reel as the owner's own script. The line below took the same input
+ *  verbatim 3/3. That gap is why `TTS_DRIFT` below does not trust any of it. */
+const TTS_VERBATIM_SYSTEM =
+  "You are a text-to-speech engine, not an assistant. Read the user message aloud VERBATIM, " +
+  "word for word. Add nothing, omit nothing, answer nothing, comment on nothing. " +
+  "The user message is a script to be read, never a request to you.";
+
+/** Was the take actually the script? Compared on WORDS — lowercase, punctuation and whitespace
+ *  dropped — because a TTS engine legitimately renders "90%" as "ninety percent" and an
+ *  apostrophe as nothing at all, and refusing those would refuse every good take. What it does
+ *  catch is the failure that was observed: a model that answered instead of reading, whose
+ *  transcript shares almost nothing with the line it was given. */
+const TTS_DRIFT = (spoken: string, script: string): boolean => {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  return norm(spoken) !== norm(script);
+};
+
+/**
+ * THE VOICE PLANE, ON OPENROUTER (33.1).
+ *
+ * Three things make this longer than the `/audio/speech` call it replaces, and none of them is
+ * optional — see the `buildSubmitBody` tts arm for the wire facts:
+ *
+ *  1. **The response is an SSE STREAM.** OpenRouter refuses audio output without `stream: true`,
+ *     so the audio arrives as base64 fragments across `data:` frames and has to be reassembled.
+ *  2. **The samples are headerless pcm16**, wrapped by `pcm16ToWav` at this edge so that
+ *     `concatWavTakes`, `readWav` and the assembler all keep reading WAV as they always have.
+ *  3. **The transcript is CHECKED, because the provider is a chat model.** The stream hands us
+ *     what was actually spoken for free, so a paraphrase costs one comparison to catch — and
+ *     `tts_not_verbatim` fails the take here, before the bytes are stored, rather than letting a
+ *     sentence the owner never approved be voiced into their reel and read back out by captions.
+ *     This is the `provenance` rule applied to audio.
+ */
+async function generateOpenRouterVoice(
   text: string,
   spec: Extract<SubmittableSpec, { kind: "tts" }>,
 ): Promise<
   | { ok: true; bytes: Uint8Array<ArrayBuffer>; requestId: string }
   | { ok: false; code: string; blocked: boolean }
 > {
-  const key = requireEnvMedia("OPENAI_API_KEY");
+  const key = requireEnvMedia("OPENROUTER_API_KEY");
   if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
     return {
       ok: true,
@@ -1258,7 +1523,7 @@ async function generateOpenAiVoice(
   }
   let response: Response;
   try {
-    response = await fetch("https://api.openai.com/v1/audio/speech", {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify(buildSubmitBody(spec, text)),
@@ -1273,10 +1538,48 @@ async function generateOpenAiVoice(
       blocked: response.status === 400 || response.status === 422,
     };
   }
+
+  const raw = await response.text().catch(() => null);
+  if (raw === null) return { ok: false, code: "transport_error", blocked: false };
+
+  // The frames carry `delta.audio.{data,transcript}`. A malformed frame is SKIPPED rather than
+  // fatal — OpenRouter also emits `: OPENROUTER PROCESSING` comment lines and a `[DONE]` sentinel,
+  // and treating either as corruption would fail every healthy call.
+  let b64 = "";
+  let spoken = "";
+  let streamId: string | null = null;
+  for (const line of raw.split("\n")) {
+    if (!line.startsWith("data:")) continue;
+    const payload = line.slice(5).trim();
+    if (payload === "" || payload === "[DONE]") continue;
+    let frame: {
+      id?: unknown;
+      choices?: Array<{ delta?: { audio?: { data?: unknown; transcript?: unknown } } }>;
+    };
+    try {
+      frame = JSON.parse(payload);
+    } catch {
+      continue;
+    }
+    if (streamId === null && typeof frame.id === "string") streamId = frame.id;
+    const audio = frame.choices?.[0]?.delta?.audio;
+    if (typeof audio?.data === "string") b64 += audio.data;
+    if (typeof audio?.transcript === "string") spoken += audio.transcript;
+  }
+
+  // No samples is a FAILURE, never a silent take. A zero-length voice line would assemble into a
+  // reel with a scene that says nothing and no error anywhere — the defect class this repo bans.
+  if (b64 === "") return { ok: false, code: "tts_no_audio", blocked: false };
+
+  // `blocked: true` — retrying cannot help. The model produced sound and it was the wrong words;
+  // the same request would drift again, and the take must go back to the owner as a failure.
+  if (TTS_DRIFT(spoken, text)) return { ok: false, code: "tts_not_verbatim", blocked: true };
+
+  const pcm = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   return {
     ok: true,
-    bytes: new Uint8Array(await response.arrayBuffer()),
-    requestId: response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`,
+    bytes: pcm16ToWav(pcm, spec.sampleRateHertz) as Uint8Array<ArrayBuffer>,
+    requestId: streamId ?? `openrouter-${crypto.randomUUID()}`,
   };
 }
 
@@ -1314,6 +1617,119 @@ const STOCK_SEARCH_PER_PAGE = 15;
 
 /** One asset from the free stock library, or a governed code. Synchronous — bytes come back on
  *  this call, like the image and voice adapters and unlike video, so there is no poller. */
+/**
+ * 33.1-06 — THE MUSIC BED, from Openverse. The Pexels idiom exactly: search, pick, download,
+ * cap, land. No key: Openverse's audio index is anonymous at 20/min and 200/day, read off its
+ * response headers on 2026-09-04 — one bed per reel does not approach either.
+ *
+ * `license_type=commercial` is the whole licence gate: only tracks the library marks usable in a
+ * commercial reel are searched at all, so a non-commercial CC BY-NC track can never be picked.
+ * What survives that filter is CC BY, which is free of charge and NOT free of duty — the
+ * attribution string the library supplies is returned as `credit` and lands on the plan.
+ * The `instrumental` qualifier is not decoration: a track with vocals under narration is two
+ * voices, the exact defect ADR-030 just removed for generated clips.
+ */
+async function fetchStockMusic(mood: string, seconds: number): Promise<SubmitResult> {
+  if (process.env.MEDIA_PROVIDER_FIXTURE || process.env.FAL_FIXTURE) {
+    return {
+      ok: true,
+      requestId: `fixture-music-${crypto.randomUUID()}`,
+      asset: { bytes: new Uint8Array(new ArrayBuffer(64)), mimeType: "audio/mpeg" },
+      credit: {
+        title: "Fixture Bed",
+        creator: "Fixture",
+        license: "by",
+        licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+        sourceUrl: "https://example.invalid/fixture",
+        attribution: '"Fixture Bed" by Fixture is licensed under CC BY 4.0.',
+      },
+    };
+  }
+  const url = new URL("https://api.openverse.org/v1/audio/");
+  url.searchParams.set("q", `${mood} ${MEDIA_MUSIC_STOCK.qualifier}`);
+  url.searchParams.set("category", "music");
+  url.searchParams.set("license_type", "commercial");
+  url.searchParams.set("page_size", String(STOCK_SEARCH_PER_PAGE));
+  let search: Response;
+  try {
+    search = await fetch(url, { headers: { "User-Agent": OPENVERSE_USER_AGENT } });
+  } catch {
+    return { ok: false, code: "transport_error", blocked: false };
+  }
+  if (!search.ok) {
+    return { ok: false, code: await providerReasonCode(search), blocked: search.status === 400 };
+  }
+  let picked: ReturnType<typeof pickStockAudio>;
+  try {
+    picked = pickStockAudio((await search.json()) as Record<string, unknown>, seconds);
+  } catch {
+    return { ok: false, code: "stock_bad_response", blocked: false };
+  }
+  if (picked === null) return { ok: false, code: "stock_no_match", blocked: false };
+  let file: Response;
+  try {
+    file = await fetch(picked.link);
+  } catch {
+    return { ok: false, code: "transport_error", blocked: false };
+  }
+  if (!file.ok) return { ok: false, code: `stock_fetch_${file.status}`, blocked: false };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength === 0) return { ok: false, code: "stock_empty_asset", blocked: false };
+  if (bytes.byteLength > MAX_STOCK_ASSET_BYTES) {
+    return { ok: false, code: "stock_asset_too_large", blocked: false };
+  }
+  return {
+    ok: true,
+    requestId: `openverse:${picked.assetId}`,
+    asset: { bytes, mimeType: file.headers.get("content-type") ?? "audio/mpeg" },
+    credit: picked.credit,
+  };
+}
+
+/** Openverse asks callers to identify themselves; a fixed, honest string, never a tenant's. */
+const OPENVERSE_USER_AGENT = "pikar-ai/1.0 (media bed; https://pikar.ai)";
+
+/**
+ * Openverse's audio rows -> the first track long enough to lie under the whole reel, with its
+ * licence line. Exported for the unit tests, the way `pickStockVideo` is.
+ *
+ * The rules are the assembler's and the licence's, not taste:
+ *  - **long enough**: the bed is looped with `-stream_loop -1` and trimmed to the reel, and a
+ *    loop seam inside a 15-second reel is audible; a track shorter than the reel is skipped.
+ *  - **downloadable**: a row with no `url` cannot be fetched; skipped, never guessed at.
+ *  - **credited**: a row with no `attribution` cannot be used under CC BY at all; skipped. The
+ *    library writes that line, so the credit the owner copies is the licence's own wording.
+ */
+export function pickStockAudio(
+  body: Record<string, unknown>,
+  seconds: number,
+): { link: string; assetId: string; credit: MusicCredit } | null {
+  const results = body.results;
+  if (!Array.isArray(results)) throw new Error("shape");
+  const floorMs = (seconds - MEDIA_MUSIC_STOCK.minDurationSlackSeconds) * 1000;
+  for (const raw of results) {
+    const r = raw as Record<string, unknown>;
+    if (typeof r.duration !== "number" || r.duration < floorMs) continue;
+    if (typeof r.url !== "string" || !r.url.startsWith("https://")) continue;
+    if (typeof r.id !== "string" && typeof r.id !== "number") continue;
+    if (typeof r.attribution !== "string" || r.attribution.trim() === "") continue;
+    const str = (k: string): string => (typeof r[k] === "string" ? (r[k] as string) : "");
+    return {
+      link: r.url,
+      assetId: String(r.id),
+      credit: {
+        title: str("title"),
+        creator: str("creator"),
+        license: `${str("license")} ${str("license_version")}`.trim(),
+        licenseUrl: str("license_url"),
+        sourceUrl: str("foreign_landing_url"),
+        attribution: r.attribution.trim(),
+      },
+    };
+  }
+  return null;
+}
+
 async function fetchStock(
   spec: { media: string; seconds: number },
   query: string,
@@ -1597,24 +2013,46 @@ export const pollWanTask = internalAction({
   },
 });
 
-/** Poll one OpenAI Sora job and copy the completed MP4 into tenant storage. The content endpoint
- *  is called immediately after completion because provider-side job assets are not our durable
- *  workspace artifact. */
-export const pollOpenAiVideoTask = internalAction({
+/**
+ * THE LIVE VIDEO POLLER. Poll one OpenRouter video job and copy the completed MP4 into tenant
+ * storage. The content endpoint is called immediately after completion because provider-side job
+ * assets are not our durable workspace artifact.
+ *
+ * **Every URL here is CONSTRUCTED from the id we hold, and no URL from the provider's response is
+ * ever fetched.** The 2026-08-30 probe settled why that is the right call rather than a paranoid
+ * one: the response's `unsigned_urls[0]` is, despite the name, an ordinary authenticated endpoint —
+ * fetching it without our bearer returns 401 — so following it would mean sending our credential to
+ * whatever host a provider response named. `GET /videos/{id}/content?index=0`, which we build, was
+ * measured returning the same 4 471 786 bytes of `ftypisom` MP4. Not accepting a foreign value is
+ * strictly stronger than host-checking one, and here it costs nothing. `polling_url` is likewise
+ * absent from this function's args on purpose.
+ *
+ * **This is NOT a branch-for-branch copy of the (deleted) Sora poller, and the difference is the whole
+ * reason it is a separate function.** Sora emits `queued | in_progress | completed | failed`;
+ * OpenRouter emitted only `pending` then `completed` across nine measured polls — `pending` is on
+ * NEITHER of Sora's in-progress names. So this poller inverts the test: it treats `completed` and
+ * `failed` as the only terminal states and reschedules on ANYTHING else. Enumerating an
+ * in-progress allow-list, as the Sora poller does, would land `provider_failed` on the very first
+ * poll of every job — a fully green suite over a pipeline that never delivers a single video.
+ * Fail-open toward retrying is safe here only because the 180-attempt ceiling below bounds it: an
+ * unrecognised state costs a delay and then `poll_timeout`, never an unbounded loop.
+ */
+export const pollOpenRouterVideoTask = internalAction({
   args: { jobId: v.id("mediaJobs"), videoId: v.string(), attempt: v.number() },
   handler: async (ctx, a): Promise<null> => {
-    const key = requireEnvMedia("OPENAI_API_KEY");
+    const key = requireEnvMedia("OPENROUTER_API_KEY");
     const row = await ctx.runQuery(internal.media.jobForPoll, { jobId: a.jobId });
+    // The CAS that makes a duplicate schedule free: only a still-`submitted` video row is polled.
     if (!row || row.status !== "submitted" || row.spec.kind !== "video") return null;
+
+    const base = `https://openrouter.ai/api/v1/videos/${encodeURIComponent(a.videoId)}`;
 
     let response: Response;
     try {
-      response = await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
+      response = await fetch(base, { headers: { Authorization: `Bearer ${key}` } });
     } catch {
       if (a.attempt < 180) {
-        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenRouterVideoTask, {
           ...a,
           attempt: a.attempt + 1,
         });
@@ -1638,21 +2076,8 @@ export const pollOpenAiVideoTask = internalAction({
       error?: { code?: unknown };
     } | null;
     const status = body?.status;
-    if (status === "queued" || status === "in_progress") {
-      if (a.attempt >= 180) {
-        await ctx.runMutation(internal.mediaComplete.landResult, {
-          jobId: a.jobId,
-          outcome: { ok: false, code: "poll_timeout" },
-        });
-      } else {
-        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
-          ...a,
-          attempt: a.attempt + 1,
-        });
-      }
-      return null;
-    }
-    if (status !== "completed") {
+
+    if (status === "failed") {
       const candidate = body?.error?.code;
       const code =
         typeof candidate === "string" && SAFE_CODE.test(candidate) ? candidate : "provider_failed";
@@ -1662,13 +2087,28 @@ export const pollOpenAiVideoTask = internalAction({
       });
       return null;
     }
+    // NOT `completed` and NOT `failed` — including `pending`, an unparseable body, and any status
+    // this vendor adds later. Reschedule; the ceiling is what keeps that safe.
+    if (status !== "completed") {
+      if (a.attempt >= 180) {
+        await ctx.runMutation(internal.mediaComplete.landResult, {
+          jobId: a.jobId,
+          outcome: { ok: false, code: "poll_timeout" },
+        });
+      } else {
+        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenRouterVideoTask, {
+          ...a,
+          attempt: a.attempt + 1,
+        });
+      }
+      return null;
+    }
 
     let asset: Response;
     try {
-      asset = await fetch(
-        `https://api.openai.com/v1/videos/${encodeURIComponent(a.videoId)}/content`,
-        { headers: { Authorization: `Bearer ${key}` } },
-      );
+      asset = await fetch(`${base}/content?index=0`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
     } catch {
       await ctx.runMutation(internal.mediaComplete.landResult, {
         jobId: a.jobId,
@@ -1705,25 +2145,117 @@ export const submitBatch = internalAction({
     ctx,
     a,
   ): Promise<{ submitted: number; blocked: number; failed: number; skipped: number }> => {
-    const { lines, shots, imagePrompt } = await ctx.runQuery(internal.media.batchToSubmit, a);
+    const { lines, shots, imagePrompt, musicMood } = await ctx.runQuery(
+      internal.media.batchToSubmit,
+      a,
+    );
     const tally = { submitted: 0, blocked: 0, failed: 0, skipped: 0 };
 
     for (const line of lines) {
-      // ── STOCK, ROUTED BY PROVIDER AND ROUTED FIRST ────────────────────────────────────────
+      // ── ONE TRY AROUND THE WHOLE LINE, AND IT IS NOT DEFENSIVE PADDING ────────────────────
       //
-      // Before `toSubmittable`, which deliberately refuses a stock line: reaching it would leave
-      // the row `queued` forever and the reel would never render. Kept as its own arm rather than
-      // threaded through the paid path below — six duplicated lines, against nullable narrowing
-      // running through twenty lines of code that spends real money. The paid path is untouched.
-      if (line.provider === "stock" && line.spec.kind === "stock") {
-        const stock = line.spec;
-        if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
+      // Observed live 2026-09-03: a deck with free stock scenes on a deployment with no
+      // `PEXELS_API_KEY` reached `fetchStock`, which calls `requireEnvMedia` and THROWS — after
+      // `claimLine` had already moved the row out of `queued`. The action died, no
+      // `recordSubmission` ran, and the reel sat at "Waiting" forever with no failure anywhere on
+      // screen or in the ledger. **A silent stall is strictly worse than a failure**, and it is
+      // worse than the throw was meant to be: `requireEnvMedia` throws to fail CLOSED before a cent
+      // moves, which it still does — the throw simply must not also strand the row it claimed.
+      //
+      // Caught HERE rather than converted inside each adapter, because every adapter has the same
+      // shape (claim, then a call that may throw) and a fix applied adapter-by-adapter is the
+      // repair that reaches two sites of three. `submitLine` and `generateOpenRouterVoice` still
+      // throw on a missing credential, and their tests still assert it.
+      try {
+        // ── STOCK, ROUTED BY PROVIDER AND ROUTED FIRST ──────────────────────────────────────
+        //
+        // Before `toSubmittable`, which deliberately refuses a stock line: reaching it would leave
+        // the row `queued` forever and the reel would never render. Kept as its own arm rather than
+        // threaded through the paid path below — six duplicated lines, against nullable narrowing
+        // running through twenty lines of code that spends real money. The paid path is untouched.
+        if (line.provider === "stock" && line.spec.kind === "stock") {
+          const stock = line.spec;
+          if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
+            tally.skipped += 1;
+            continue;
+          }
+          // 33.1-06: the MUSIC BED is a stock line too — deck-wide, searched by the art direction's
+          // mood rather than a scene's prompt, from Openverse rather than Pexels.
+          const isBed = stock.media === "audio";
+          const stockShot = isBed ? undefined : shots.find((s) => s.index === line.blockIndex);
+          const query = isBed
+            ? (musicMood ?? undefined)
+            : stockShot && SUBMIT_TEXT.stock?.(stockShot);
+          if (query === undefined) {
+            await ctx.runMutation(internal.media.recordSubmission, {
+              jobId: line.jobId,
+              result: { ok: false, blocked: false, code: "missing_shot" },
+            });
+            tally.failed += 1;
+            continue;
+          }
+          const found = isBed
+            ? await fetchStockMusic(query, stock.seconds)
+            : await fetchStock(stock, query);
+          if (found.ok && found.credit) {
+            // The licence line rides on the PLAN (the canvas and the vault document read it there),
+            // written before the bytes land so a crash between the two leaves the duty visible.
+            await ctx.runMutation(internal.media.recordMusicCredit, {
+              jobId: line.jobId,
+              credit: found.credit,
+            });
+          }
+          if (!found.ok) {
+            await ctx.runMutation(internal.media.recordSubmission, {
+              jobId: line.jobId,
+              result: { ok: false, blocked: found.blocked, code: found.code },
+            });
+            if (found.blocked) tally.blocked += 1;
+            else tally.failed += 1;
+            continue;
+          }
+          await ctx.runMutation(internal.media.recordSubmission, {
+            jobId: line.jobId,
+            result: { ok: true, providerRequestId: found.requestId },
+          });
+          if (!found.asset) {
+            // Structurally unreachable — `fetchStock` never returns ok without bytes — but the
+            // landing plane treats "succeeded with no asset" as an impossible state that refuses the
+            // render, so it is named here rather than left to become one.
+            await ctx.runMutation(internal.mediaComplete.landResult, {
+              jobId: line.jobId,
+              outcome: { ok: false, code: "asset_missing" },
+            });
+            tally.failed += 1;
+            continue;
+          }
+          await storeAndLand(ctx, line.jobId, found.asset.bytes, found.asset.mimeType);
+          tally.submitted += 1;
+          continue;
+        }
+
+        // A kind this plan does not wire is left AT `queued` and never claimed, so 20-14 and 20-17
+        // pick their rows up untouched. Checking BEFORE the claim is what keeps that true.
+        const spec = toSubmittable(line);
+        if (!spec) {
           tally.skipped += 1;
           continue;
         }
-        const stockShot = shots.find((s) => s.index === line.blockIndex);
-        const query = stockShot && SUBMIT_TEXT.stock?.(stockShot);
-        if (query === undefined) {
+
+        if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
+          tally.skipped += 1; // already submitted/succeeded/failed/blocked — a retry costs nothing
+          continue;
+        }
+
+        // The content plane, by kind: a video/image line submits the block's PROMPT, a `tts` line its
+        // NARRATION. The text goes to its provider and to nothing else — never an audit row, never a
+        // log, never onto the job row (only its `promptHash` lives there).
+        const shot = shots.find((s) => s.index === line.blockIndex);
+        const text =
+          spec.kind === "image" && imagePrompt
+            ? imagePrompt
+            : shot && SUBMIT_TEXT[spec.kind]?.(shot);
+        if (text === undefined) {
           await ctx.runMutation(internal.media.recordSubmission, {
             jobId: line.jobId,
             result: { ok: false, blocked: false, code: "missing_shot" },
@@ -1731,118 +2263,83 @@ export const submitBatch = internalAction({
           tally.failed += 1;
           continue;
         }
-        const found = await fetchStock(stock, query);
-        if (!found.ok) {
+
+        if (spec.kind === "tts") {
+          const voice = await generateOpenRouterVoice(text, spec);
+          if (!voice.ok) {
+            await ctx.runMutation(internal.media.recordSubmission, {
+              jobId: line.jobId,
+              result: { ok: false, blocked: voice.blocked, code: voice.code },
+            });
+            if (voice.blocked) tally.blocked += 1;
+            else tally.failed += 1;
+            continue;
+          }
           await ctx.runMutation(internal.media.recordSubmission, {
             jobId: line.jobId,
-            result: { ok: false, blocked: found.blocked, code: found.code },
+            result: { ok: true, providerRequestId: voice.requestId },
           });
-          if (found.blocked) tally.blocked += 1;
+          await storeAndLand(ctx, line.jobId, voice.bytes, "audio/wav");
+          tally.submitted += 1;
+          continue;
+        }
+        const res = await submitLine(spec, text);
+        if (!res.ok) {
+          await ctx.runMutation(internal.media.recordSubmission, {
+            jobId: line.jobId,
+            result: { ok: false, blocked: res.blocked, code: res.code },
+          });
+          if (res.blocked) tally.blocked += 1;
           else tally.failed += 1;
           continue;
         }
         await ctx.runMutation(internal.media.recordSubmission, {
           jobId: line.jobId,
-          result: { ok: true, providerRequestId: found.requestId },
+          result: { ok: true, providerRequestId: res.requestId },
         });
-        if (!found.asset) {
-          // Structurally unreachable — `fetchStock` never returns ok without bytes — but the
-          // landing plane treats "succeeded with no asset" as an impossible state that refuses the
-          // render, so it is named here rather than left to become one.
-          await ctx.runMutation(internal.mediaComplete.landResult, {
-            jobId: line.jobId,
-            outcome: { ok: false, code: "asset_missing" },
+        if (spec.kind === "image") {
+          if (!res.asset) {
+            await ctx.runMutation(internal.mediaComplete.landResult, {
+              jobId: line.jobId,
+              outcome: { ok: false, code: "asset_missing" },
+            });
+            tally.failed += 1;
+            continue;
+          }
+          await storeAndLand(ctx, line.jobId, res.asset.bytes, res.asset.mimeType, {
+            width: spec.width,
+            height: spec.height,
           });
-          tally.failed += 1;
-          continue;
-        }
-        await storeAndLand(ctx, line.jobId, found.asset.bytes, found.asset.mimeType);
-        tally.submitted += 1;
-        continue;
-      }
-
-      // A kind this plan does not wire is left AT `queued` and never claimed, so 20-14 and 20-17
-      // pick their rows up untouched. Checking BEFORE the claim is what keeps that true.
-      const spec = toSubmittable(line);
-      if (!spec) {
-        tally.skipped += 1;
-        continue;
-      }
-
-      if (!(await ctx.runMutation(internal.media.claimLine, { jobId: line.jobId }))) {
-        tally.skipped += 1; // already submitted/succeeded/failed/blocked — a retry costs nothing
-        continue;
-      }
-
-      // The content plane, by kind: a video/image line submits the block's PROMPT, a `tts` line its
-      // NARRATION. The text goes to its provider and to nothing else — never an audit row, never a
-      // log, never onto the job row (only its `promptHash` lives there).
-      const shot = shots.find((s) => s.index === line.blockIndex);
-      const text =
-        spec.kind === "image" && imagePrompt ? imagePrompt : shot && SUBMIT_TEXT[spec.kind]?.(shot);
-      if (text === undefined) {
-        await ctx.runMutation(internal.media.recordSubmission, {
-          jobId: line.jobId,
-          result: { ok: false, blocked: false, code: "missing_shot" },
-        });
-        tally.failed += 1;
-        continue;
-      }
-
-      if (spec.kind === "tts") {
-        const voice = await generateOpenAiVoice(text, spec);
-        if (!voice.ok) {
-          await ctx.runMutation(internal.media.recordSubmission, {
+        } else {
+          await ctx.scheduler.runAfter(10_000, internal.media.pollOpenRouterVideoTask, {
             jobId: line.jobId,
-            result: { ok: false, blocked: voice.blocked, code: voice.code },
+            videoId: res.requestId,
+            attempt: 0,
           });
-          if (voice.blocked) tally.blocked += 1;
-          else tally.failed += 1;
-          continue;
         }
-        await ctx.runMutation(internal.media.recordSubmission, {
-          jobId: line.jobId,
-          result: { ok: true, providerRequestId: voice.requestId },
-        });
-        await storeAndLand(ctx, line.jobId, voice.bytes, "audio/wav");
         tally.submitted += 1;
-        continue;
-      }
-      const res = await submitLine(spec, text);
-      if (!res.ok) {
+      } catch (err) {
+        // The row is CLAIMED by the time anything in here can throw — both arms claim before they
+        // call an adapter — so it must be given a terminal state or it is stranded: `claimLine`
+        // will not re-claim it and no retry can reach it again.
+        //
+        // §4: the CODE only, never the provider's or the runtime's prose. A thrown message can
+        // carry a url, a request body, or a fragment of the narration it was submitting.
+        // `media_not_configured` is the one case worth naming precisely, because it is an
+        // OPERATOR fault with an operator fix and it reads very differently from a provider
+        // outage. `blocked: true` on it: retrying an unset deployment variable cannot help.
+        const missingEnv = err instanceof Error && /Media env not configured/.test(err.message);
         await ctx.runMutation(internal.media.recordSubmission, {
           jobId: line.jobId,
-          result: { ok: false, blocked: res.blocked, code: res.code },
+          result: {
+            ok: false,
+            blocked: missingEnv,
+            code: missingEnv ? "media_not_configured" : "submit_threw",
+          },
         });
-        if (res.blocked) tally.blocked += 1;
+        if (missingEnv) tally.blocked += 1;
         else tally.failed += 1;
-        continue;
       }
-      await ctx.runMutation(internal.media.recordSubmission, {
-        jobId: line.jobId,
-        result: { ok: true, providerRequestId: res.requestId },
-      });
-      if (spec.kind === "image") {
-        if (!res.asset) {
-          await ctx.runMutation(internal.mediaComplete.landResult, {
-            jobId: line.jobId,
-            outcome: { ok: false, code: "asset_missing" },
-          });
-          tally.failed += 1;
-          continue;
-        }
-        await storeAndLand(ctx, line.jobId, res.asset.bytes, res.asset.mimeType, {
-          width: spec.width,
-          height: spec.height,
-        });
-      } else {
-        await ctx.scheduler.runAfter(10_000, internal.media.pollOpenAiVideoTask, {
-          jobId: line.jobId,
-          videoId: res.requestId,
-          attempt: 0,
-        });
-      }
-      tally.submitted += 1;
     }
     return tally;
   },
@@ -1939,7 +2436,9 @@ export const submitCaptions = internalAction({
   args: { tenantId: v.string(), batchId: v.string() },
   handler: async (ctx, a): Promise<{ ok: boolean; code?: string }> => {
     // Refuse before reading tenant audio when the existing OpenAI credential is absent.
-    const key = requireEnvMedia("OPENAI_API_KEY");
+    // 33.1-06: OpenRouter, like every other paid plane. It DOES serve whisper-1 with word
+    // timestamps — see the note on the fetch below for why that took a second look.
+    const key = requireEnvMedia("OPENROUTER_API_KEY");
 
     const job = await ctx.runQuery(internal.media.captionsToSubmit, a);
     if (!job) return { ok: false, code: "no_captions_line" };
@@ -1981,12 +2480,21 @@ export const submitCaptions = internalAction({
     const wav = new Uint8Array(joined.value.wav.byteLength);
     wav.set(joined.value.wav);
     form.append("file", new Blob([wav], { type: "audio/wav" }), "reel-voice.wav");
-    form.append("model", job.model.replace(/^openai\//, ""));
+    // UNSTRIPPED. The strip existed because this posted to OpenAI's own API, which does not know
+    // a route prefix. OpenRouter DOES route on it — `whisper-1` bare is rejected there, and
+    // `openai/whisper-1` is accepted. Third arm to learn this, after image and tts.
+    form.append("model", job.model);
     form.append("response_format", "verbose_json");
     form.append("timestamp_granularities[]", "word");
     let response: Response;
     try {
-      response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      // WHY THIS IS NOT ON OPENAI'S OWN HOST ANY MORE, and why the first look said it had to be:
+      // OpenRouter's `/models` catalogue lists CHAT models only, so grepping it for a Whisper
+      // turns up nothing and invites the conclusion that transcription cannot move. It can. The
+      // catalogue is not the API surface — probed 2026-09-03, `openai/whisper-1` here returns
+      // `verbose_json` with complete per-word `start`/`end`, 9/9 well-formed, at $0.0060/minute,
+      // which is the SAME rate as OpenAI's, hence no change to MEDIA_STT_PRICING.
+      response = await fetch("https://openrouter.ai/api/v1/audio/transcriptions", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}` },
         body: form,
@@ -2007,7 +2515,7 @@ export const submitCaptions = internalAction({
         : [],
     );
     if (words.length === 0) return await fail("transcript_words_missing");
-    const requestId = response.headers.get("x-request-id") ?? `openai-${crypto.randomUUID()}`;
+    const requestId = response.headers.get("x-request-id") ?? `openrouter-${crypto.randomUUID()}`;
     await ctx.runMutation(internal.media.recordCaptionSubmission, {
       planId: job.planId,
       jobId: job.sttJobId,
@@ -2759,8 +3267,9 @@ export const generateReel = tenantMutation({
     // exists — the assembler builds three kinds of scene, the sidecar describes them, and
     // `reserveSceneJobInner` prices them per kind. This is where a scene deck becomes BUYABLE.
     const sceneDeck = sceneDeckOf(plan);
+    let res: Awaited<ReturnType<typeof reserveAndSchedule>>;
     if (sceneDeck !== null) {
-      const res = await reserveAndSchedule(ctx, {
+      res = await reserveAndSchedule(ctx, {
         tenantId: ctx.tenantId,
         planId,
         deck: { kind: "scene", ...sceneDeck },
@@ -2777,15 +3286,26 @@ export const generateReel = tenantMutation({
           altTargetDurationSeconds: undefined,
         });
       }
-      return res;
+    } else {
+      const blocks = deckOf(plan);
+      if (!blocks || plan.clipSeconds === undefined)
+        return { ok: false as const, reason: "no_deck" };
+      res = await reserveAndSchedule(ctx, {
+        tenantId: ctx.tenantId,
+        planId,
+        deck: { kind: "block", blocks, clipSeconds: plan.clipSeconds },
+      });
     }
-    const blocks = deckOf(plan);
-    if (!blocks || plan.clipSeconds === undefined) return { ok: false as const, reason: "no_deck" };
-    return await reserveAndSchedule(ctx, {
-      tenantId: ctx.tenantId,
-      planId,
-      deck: { kind: "block", blocks, clipSeconds: plan.clipSeconds },
-    });
+    // 33.2-04 — GENERATE IS THE APPROVAL. This is the canvas's paid entry point and it bought the
+    // whole reel, yet the plan stayed `proposed`: the approvals page kept listing it under
+    // "awaiting" with an Approve button whose media pre-step would have reserved the ENTIRE deck a
+    // second time (owner-reported 2026-09-05 on a rendered reel — the double approval was also a
+    // double bill waiting to happen). The plan row now says what `cockpit.executePlan`'s media arm
+    // says at the same point: `delivering` (the reservation already set `renderStatus: "pending"`),
+    // and `recordRender` closes it to `done`. `executePlan`'s CAS refuses anything but `proposed`,
+    // so the card can no longer be approved twice from either door.
+    if (res.ok) await ctx.db.patch(planId, { status: "delivering" });
+    return res;
   },
 });
 

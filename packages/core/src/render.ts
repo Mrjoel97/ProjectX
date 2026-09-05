@@ -129,7 +129,20 @@ export function renderInputName(
 /** Exactly the names `renderInputName` can produce. The runner validates every filename it is
  *  handed against this before writing a byte — a name from a request body reaching `writeFiles`
  *  unchecked is a path traversal into the VM's filesystem. */
-export const RENDER_INPUT_NAME = /^(?:block\d{2}\.(?:mp4|png)|voice\d{2}\.wav|card\d{2}\.txt)$/;
+export const RENDER_INPUT_NAME =
+  /^(?:block\d{2}\.(?:mp4|png)|voice\d{2}\.wav|card\d{2}\.txt|music\.(?:mp3|m4a|ogg|wav|flac))$/;
+
+/** 33.1-06: the ONE music bed, fetched from a public library and shipped as an input like any
+ *  stock still. The extension set is exactly what `assemble_final.sh` probes for in its baked
+ *  library, so a fetched track and a baked one are the same thing to the assembler. */
+export const RENDER_MUSIC_NAME = /^music\.(?:mp3|m4a|ogg|wav|flac)$/;
+/** The input name the bed is shipped under. Openverse serves `audio/mpeg`, hence mp3. */
+export const MUSIC_INPUT_NAME = "music.mp3";
+/** Where the bed's stock row sits among a plan's `mediaJobs`: captions (`stt`) are `-1`, the
+ *  deck's scenes are `0..n-1`, and the bed — deck-wide like captions — lives one below them. Both
+ *  the writer (`media.reserveSceneJobInner`) and the reader (`renderReel.batchToRender`) import
+ *  this rather than each spelling a number. */
+export const MUSIC_BLOCK_INDEX = -2;
 
 /** A card's name specifically, for the one input whose CONTENT travels in the request body rather
  *  than being resolved server-side from a job id. */
@@ -292,6 +305,10 @@ export type RenderReasonCode =
   | "decode_failed"
   | "sandbox_timeout"
   | "caption_track_empty"
+  // 33.1-06: the two refusals the first rendered reel actually hit, both of which had collapsed
+  // to `render_failed` — a clear ERROR line thrown away one hop before the person who needed it.
+  | "card_font_missing"
+  | "narration_overruns_reel"
   | "render_failed";
 
 /** Anchored on `assemble_final.sh`'s OWN error wording, in order. Each pattern matches the fixed
@@ -320,6 +337,12 @@ const STDERR_CODES: ReadonlyArray<readonly [RegExp, RenderReasonCode]> = [
   [/libfreetype is missing/, "missing_binary"],
   [/subtitle track is empty/, "caption_track_empty"],
   [/re-timed the video/, "duration_mismatch"],
+  // The card branch refuses before drawing when no TrueType font is reachable — the first live
+  // reel's actual cause. Environmental (an image/runner without the font), never the deck's.
+  [/needs a TrueType font/, "card_font_missing"],
+  // The ONE overrun the assembler still refuses (33.1-06): a take still speaking when the picture
+  // track has ended. Nothing can delay it further; only a shorter line or a longer reel cures it.
+  [/is still speaking at .* but the reel ends at/, "narration_overruns_reel"],
 ];
 
 /** Codes the RUNNER produces before or around the sandbox, as distinct from the ones ffmpeg
@@ -564,6 +587,12 @@ type RenderRequestBody =
        *  is a name the script resolves against its own library. That is why it is not in
        *  `RENDER_INPUT_NAME` and needs no path guard here beyond the closed set. */
       music?: MusicMood;
+      /** 33.1-06: the FETCHED bed's input name (`music.mp3`). Unlike `music`, this IS an input —
+       *  it must also appear in `inputs`, so its bytes are resolved server-side from a job row
+       *  like every stock still — and the assembler is told the track is already in `in/` rather
+       *  than left to probe a library the snapshot never had. The mood still travels in `music`
+       *  for the sidecar and the log line. */
+      musicFile?: string;
       /** The card palette, already resolved to two `0xRRGGBB` strings by `cardColorsOf`. Resolved
        *  UPSTREAM rather than sending the raw palette: the deck's palette is model-authored free
        *  text and these two values are interpolated into a filtergraph, so the narrowing happens
@@ -711,6 +740,15 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
   if (b.music !== undefined && (!isStr(b.music) || !MUSIC_MOOD_SET.has(b.music))) return null;
   const music = b.music as MusicMood | undefined;
 
+  // 33.1-06: the fetched bed. A closed name (no path characters, by regex), and it must be one of
+  // the inputs above — a `musicFile` that names a file nobody fetched would make the assembler
+  // fail on a missing track after every other input had landed. Refused here, before a VM.
+  if (b.musicFile !== undefined) {
+    if (!isStr(b.musicFile) || !RENDER_MUSIC_NAME.test(b.musicFile)) return null;
+    if (!inputs.some((i) => i.name === b.musicFile)) return null;
+  }
+  const musicFile = b.musicFile as string | undefined;
+
   // THE CARD PALETTE, and this is a TRUST BOUNDARY rather than a format check. Both values are
   // written into an ffmpeg filtergraph inside the VM, so the shape is re-asserted here even though
   // `cardColorsOf` can only produce it: this runner validates what it was SENT, never what it
@@ -741,6 +779,7 @@ function parseBody(raw: unknown, uploadOrigin: string): RenderRequestBody | null
     inputs,
     cards,
     ...(music === undefined ? {} : { music }),
+    ...(musicFile === undefined ? {} : { musicFile }),
     ...(card === undefined ? {} : { card }),
     uploadUrls: { mp4, sidecar },
   };
@@ -936,6 +975,9 @@ export async function handleRenderRequest(req: Request, deps: RenderDeps): Promi
       // The bed, by MOOD. No file was written for it above and none needs to be: the library is
       // baked into the snapshot, so this is a name the script looks up, not bytes we ship.
       ...(body.music === undefined ? [] : ["--music", body.music]),
+      // 33.1-06: the fetched bed sits in `in/` with the other inputs; the script takes it over
+      // its library lookup. Relative, like every other path the script is handed.
+      ...(body.musicFile === undefined ? [] : ["--music-file", `in/${body.musicFile}`]),
       ...(body.card === undefined ? [] : ["--card-bg", body.card.bg, "--card-ink", body.card.ink]),
     ]);
     if (run.exitCode !== 0) {

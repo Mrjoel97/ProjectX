@@ -23,6 +23,7 @@ import { CAPS, DECISION_SUPPORT_NOTICE, importCredentialKey, sealCredential } fr
 import { STRIPE_MAX_PAGES, STRIPE_READ_PATHS } from "@pikar/revenue/providers/stripe";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { allPassedGates } from "../__fixtures__/providerGates";
 import { api, internal } from "./_generated/api";
 import { isAllowedRead, PROVIDER_READ_PATHS } from "./connectorFetch";
 import { classifyRevokeOutcome, PROVIDER_REVOKE_SUPPORT } from "./connectorOAuth";
@@ -85,6 +86,12 @@ const APP = {
 
 async function harness() {
   const t = convexTest(schema, modules);
+  // `mintConnectState` gained a connect-start gate (28-09): a provider with no judged lane is not
+  // connectable by anyone. This suite is about bounded reads and OAuth mechanics, not the gate, so
+  // every lane is seeded PASSED here and `sealLane` below PATCHES rather than inserts.
+  await t.run(async (ctx) => {
+    for (const row of allPassedGates()) await ctx.db.insert("providerGates", row);
+  });
   const userA = await t.run((ctx) => ctx.db.insert("users", {}));
   const userB = await t.run((ctx) => ctx.db.insert("users", {}));
   return {
@@ -801,23 +808,44 @@ describe("caps are the contract module's, not retyped", () => {
 // ── The bounded read ──────────────────────────────────────────────────────────────────────
 
 /** Seal the gate straight into the DB. NOT `sealGate` — this is a fixture, not an owner judgment. */
+/**
+ * Remove every gate row. The harness seeds all four lanes PASSED so the connect-start gate is
+ * transparent here; a test that is ABOUT an UNSEALED lane has to undo that explicitly, or it
+ * asserts a refusal the seeding made unreachable.
+ */
+async function clearGates(t: Awaited<ReturnType<typeof harness>>["t"]) {
+  await t.run(async (ctx) => {
+    for (const row of await ctx.db.query("providerGates").collect()) await ctx.db.delete(row._id);
+  });
+}
+
 async function sealLane(
   t: Awaited<ReturnType<typeof harness>>["t"],
   over: { lane?: "passed" | "parked" | "failed"; cleared?: string[] } = {},
 ) {
-  await t.run((ctx) =>
-    ctx.db.insert("providerGates", {
-      provider: "stripe",
-      environment: "sandbox",
-      admission: "approved_production",
-      lane: over.lane ?? "passed",
+  // PATCH, not insert: the harness already seeded a row for stripe/sandbox, and a second one makes
+  // `rowFor`'s `.unique()` throw — which surfaces as an unrelated-looking failure.
+  await t.run(async (ctx) => {
+    const existing = await ctx.db
+      .query("providerGates")
+      .withIndex("by_provider_environment", (q) =>
+        q.eq("provider", "stripe").eq("environment", "sandbox"),
+      )
+      .unique();
+    const doc = {
+      provider: "stripe" as const,
+      environment: "sandbox" as const,
+      admission: "approved_production" as const,
+      lane: over.lane ?? ("passed" as const),
       evidenceRef: "test-fixture",
       reviewBy: Date.now() + 30 * 86_400_000,
       clearedConditions: over.cleared ?? ["platform-initiated-revocation"],
       revision: 1,
       updatedAt: Date.now(),
-    }),
-  );
+    };
+    if (existing) return ctx.db.patch(existing._id, doc);
+    return ctx.db.insert("providerGates", doc);
+  });
 }
 
 const listResponse = (data: unknown[], hasMore = false) =>
@@ -925,6 +953,7 @@ describe("the API version pin", () => {
 describe("the gate governs CONSUMPTION, and evidence has its own door", () => {
   test("an unsealed lane makes a tenant read unavailable", async () => {
     const h = await harness();
+    await clearGates(h.t);
     await seedConnection(h.t, h.tenantA);
     vi.stubGlobal(
       "fetch",
@@ -977,6 +1006,7 @@ describe("the gate governs CONSUMPTION, and evidence has its own door", () => {
     // The seal cannot be a prerequisite for the evidence behind it, or 28-24 could only ever seal
     // first and verify afterwards. Both doors, one unsealed state, opposite answers.
     const h = await harness();
+    await clearGates(h.t);
     await seedConnection(h.t, h.tenantA);
     vi.stubGlobal(
       "fetch",
@@ -1205,6 +1235,126 @@ describe("the derived figures come from finance.ts, never from here", () => {
       environment: "sandbox",
     });
     expect(result.notice).toBe(DECISION_SUPPORT_NOTICE);
+  });
+});
+
+/**
+ * `openInvoices` shipped in 28-07 with NO test of any kind — the only export in this module without
+ * one, found by scanning the connector plane for functions nothing calls. Its three siblings each
+ * pin the lane gate; this one pinned nothing, so the gate could have been dropped from it alone and
+ * every suite in the repo would still have been green.
+ */
+describe("openInvoices — the receivables read", () => {
+  const invoiceRow = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    object: "invoice",
+    status: "open",
+    total: 5000,
+    amount_remaining: 5000,
+    currency: "usd",
+    created: Math.floor(Date.now() / 1000) - 3600,
+    due_date: Math.floor(Date.now() / 1000) + 86_400,
+    customer: "cus_Test",
+    ...over,
+  });
+
+  // THE GATE, ON THIS DOOR TOO. A tenant read is gated on `lane === "passed"`; an ungated read here
+  // would publish a connected account's receivables on an admission nobody proved.
+  test.each([
+    ["an unsealed lane", undefined],
+    ["a PARKED lane", "parked" as const],
+    ["a FAILED lane", "failed" as const],
+  ])("%s makes the read unavailable", async (_name, lane) => {
+    const h = await harness();
+    // The harness seeds every lane PASSED for the connect-start gate, so "unsealed" has to be made
+    // true rather than assumed — otherwise this row asserts a refusal that cannot happen.
+    if (lane === undefined) await clearGates(h.t);
+    else await sealLane(h.t, { lane });
+    await seedConnection(h.t, h.tenantA);
+    const fetchMock = vi.fn(async () => listResponse([invoiceRow("in_1")]));
+    vi.stubGlobal("fetch", fetchMock);
+    const projection = await h.asA.action(api.stripeConnector.openInvoices, {
+      environment: "sandbox",
+    });
+    expect(projection.state).toBe("unavailable");
+    // Refused BEFORE the request: a gated read that still spends the call has only hidden the data.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test("a passed lane returns receivables with what is still OWED, not just what was billed", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        listResponse([invoiceRow("in_1"), invoiceRow("in_2", { amount_remaining: 1500 })]),
+      ),
+    );
+    const projection = await h.asA.action(api.stripeConnector.openInvoices, {
+      environment: "sandbox",
+    });
+    expect(projection.state).toBe("ready");
+    // The narrowing the suite already uses. Safe only because the assertion ABOVE fires first: an
+    // unavailable projection fails there rather than returning early past everything below.
+    if (projection.state === "unavailable") return;
+    expect(projection.items).toHaveLength(2);
+    // `total` is what was billed and `outstanding` is what is still owed. Collapsing them would
+    // report a fully-paid invoice as money still coming in.
+    expect(projection.items[1]?.total).toEqual({ minor: 5000, currency: "USD" });
+    expect(projection.items[1]?.outstanding).toEqual({ minor: 1500, currency: "USD" });
+  });
+
+  // The module comment says NO AGING IS COMPUTED HERE, because `finance.agingReport` needs one
+  // currency and Stripe hands back several — 28-12 owns that. This pins the decision so a later
+  // plan cannot quietly add a single-currency aging field to a multi-currency source.
+  test("it computes NO aging — the projection carries rows and coverage, nothing derived", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        listResponse([invoiceRow("in_1"), invoiceRow("in_2", { currency: "eur" })]),
+      ),
+    );
+    const projection = await h.asA.action(api.stripeConnector.openInvoices, {
+      environment: "sandbox",
+    });
+    expect(projection.state).toBe("ready");
+    if (projection.state === "unavailable") return;
+    const keys = Object.keys(projection);
+    expect(keys).not.toContain("aging");
+    expect(keys).not.toContain("buckets");
+    expect(keys).not.toContain("confidence");
+    // Both currencies survive as rows. A derived total here would have had to pick one.
+    expect(projection.items).toHaveLength(2);
+  });
+
+  // `RECEIVABLE_INVOICE_STATUSES` admits open and paid only. A draft is not a receivable, and
+  // counting one would invent revenue that was never billed.
+  test("a draft invoice is rejected VISIBLY — the read reports itself partial, not ready", async () => {
+    const h = await harness();
+    await sealLane(h.t);
+    await seedConnection(h.t, h.tenantA);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        listResponse([invoiceRow("in_1"), invoiceRow("in_draft", { status: "draft" })]),
+      ),
+    );
+    const projection = await h.asA.action(api.stripeConnector.openInvoices, {
+      environment: "sandbox",
+    });
+    // NOT `ready`. A dropped row degrades the read to `partial`, which is the honest answer: the
+    // caller is told the picture is incomplete rather than handed a short list that looks whole.
+    // Asserting `ready` here would have passed only if the drop were silent.
+    expect(projection.state).toBe("partial");
+    if (projection.state !== "partial") return;
+    expect(projection.items).toHaveLength(1);
+    expect(projection.items[0]?.ref.id).toBe("in_1");
+    // And it NAMES what it could not read, so the gap is actionable rather than merely flagged.
+    expect(projection.missing.length).toBeGreaterThan(0);
   });
 });
 

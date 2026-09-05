@@ -1,5 +1,22 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-09-03 (formatter sweep — **NO PACK BEHAVIOUR CHANGED.**)
+>
+> Reformatted under this playbook's watch: `convex/workflowPackEventLog.ts`,
+> `core/src/workflowPackMetrics.ts`, `core/src/workflowPacks.test.ts`. No pack definition, binding,
+> metric or event field was touched — only whitespace and import order. `workflowPacks.test.ts` and
+> the backend pack suites passed after the sweep.
+>
+> **This is a `Last verified` bump ONLY, and deliberately not a re-verification of the sections
+> below.** The change was `pnpm format` (commit 6335831): Biome's formatter and organizeImports,
+> applied repo-wide to clear a Lint gate that had been exiting 1 with 45 diagnostics — all from
+> files this branch touched, none on main. `ci.yml` runs Lint BEFORE Test and Build, so a red Lint
+> was stopping the pipeline rather than reporting anything about whether the code works.
+>
+> Mechanical only, and checked rather than assumed: every changed `.json` parses to a structure
+> identical to its previous content, and the full suites re-ran green afterwards (web 670, backend
+> 3378 across both shards, core 1239, contracts 113, revenue 340).
+
 > Last verified: 2026-08-31 (**THE TENANT PACK LANE HAS NOW BEEN EARNED, NOT MERELY MADE EARNABLE.**
 > Yesterday's entry said the three planes existed and that "nothing PRODUCES tenant pack evidence".
 > Both producers now exist and both have run against a real candidate row on a live deployment:
@@ -605,6 +622,9 @@
 > see "Phase 29 shares this registry" under Dependencies. Pack behaviour is unchanged.)
 >
 > Previously verified 2026-08-26 (**THE SIX PACKS ARE CERTIFIED ON PRODUCTION'S EVAL PLANE AND STILL
+
+> Last verified: 2026-08-26 (**THE SIX PACKS ARE CERTIFIED ON PRODUCTION'S EVAL PLANE AND STILL
+
 > DARK THERE.** Prod candidates seeded at v1 — note they are v1 while dev carries v4/v5/v10/v11:
 > versions are PER DEPLOYMENT and a version number is never a cross-deployment identifier. Six gates
 > run with `PIKAR_CONVEX_TARGET=prod`, 30/30, ~$0.41. `campaign-plan` passed FIRST TRY on prod after

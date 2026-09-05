@@ -1,5 +1,87 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-05 (release merge — `tenantData.test.ts`'s table count RE-DERIVED from the
+> merged `schema.ts`: main's 52 (with `knowledgeSearches`) + the billing lane's five = **57**; both
+> sides' figures were wrong for the merged tree, as that test's own comment predicted. The lane's
+> "TOLERATED, NOT OWNED" placeholder copy of `tenantSkills.templateId/…/browserEvidence` was deleted
+> when main's owned declaration landed beside it — biome `noDuplicateObjectKeys` caught the pair.)
+>
+> Last verified: 2026-09-01 (28-16 verification — the governance forward scan caught three
+> Phase 28 production audit events that were written but absent from `AUDIT_VIEWER_EVENTS`:
+> `revenue.crm_read`, `revenue.finance_read`, and `revenue.unsupported_declared`. The projection now
+> admits only their closed operation/provider/status labels, bounded refs, reason codes, and
+> aggregate counts. Raw CRM and finance content remains structurally absent; every string still
+> passes the viewer's `SAFE_REF` boundary before rendering.)
+>
+
+> Last verified: 2026-08-31 (Phase 28 gap audit — **THE ERASURE SEQUENCE NOW HAS A CONNECTOR ARM,
+> AND IT IS THE FIRST ONE THAT IS HONEST ABOUT NOT REVOKING.** `tenantDelete.ts` deleted the four
+> Phase 28 connector rows and never asked any provider to revoke, leaving up to four live grants
+> into a business CRM, books and payment account with nothing in the record to say so;
+> `revenue-connectors.md` carried it as "Flagged, not fixed" and no Phase 28 plan claimed it.
+>
+> Same ordering constraint as billing: `connectorConnections` is `tenant_credential`, so the arm
+> sits ABOVE the page loop that deletes the row holding the sealed blob. **Proven by consequence
+> with HubSpot specifically** — `revokeGrant` returns `not_attempted` when the row is absent and
+> reaches decryption when it is present, so the arm above the loop yields `attempted_failed` and
+> below it would yield `not_attempted`. PayPal and Stripe could NOT prove this: they answer
+> `unsupported` from a pure classifier without reading the row, so an assertion on them would pass
+> with the arm on either side. Picking the wrong provider is how this test would have been vacuous.
+>
+> **`ProviderDeletionResult` gained a fifth field, `revokeUpstream`, and it is the point of the
+> arm.** Only QuickBooks documents a platform-callable revocation; Stripe Apps have none documented,
+> PayPal none anywhere, and HubSpot cascade is unproven — so `revokedAtProvider: false` alone cannot
+> separate "we asked and failed" from "this vendor offers nothing". After the walk deletes
+> `connectorConnections`, the `tenant.deleted` payload is the ONLY surviving record of that, so the
+> closed `RevocationUpstream` enum is carried into it. **A documented absence is NOT a failure** —
+> reporting one on every erasure trains the reader to ignore the field, which is how a real failure
+> goes unnoticed. Entries are appended and CONDITIONAL, so a tenant with no connector rows still
+> produces exactly the original three and every assertion indexing them stays true.
+>
+> THREE closed shapes had to move together this time, not two: the TypeScript union, the Convex
+> `providerResultValidator`, AND the hand-written `makeFunctionReference` return type for
+> `authorizeTenantDeletion`, which does not follow the handler inference. `tsc` caught the third.
+> The 16 new `tenant.deleted` payload keys were added to `AUDIT_VIEWER_EVENTS` by hand for the same
+> reason as 28.1-08: they are built from a template at the write site, so no literal exists for a
+> forward scan to find. `tenantDelete.test.ts` 13 -> **21/21**, **7 mutations, 7 killed** — and the
+> mutation round caught a VACUOUS test of its own: the "sandbox and production disagree" case
+> originally paired a sealed grant with an unsealed one, but an unsealed grant is never called and
+> contributes no upstream value, so the list had ONE element and "take the first" survived. It now
+> uses two grants that are both called and answer differently. Prior: 2026-08-30, 28.1-08 — **THE ERASURE SEQUENCE HAS A THIRD PROVIDER ARM: BILLING.**
+>
+> `tenantDelete.ts` said nothing about billing, so erasing a tenant left a live Stripe subscription
+> charging a card belonging to nobody (BILL-06). The arm is a third block of the exact shape Google
+> and Microsoft already use — its own `try/catch`, recording `failure` rather than aborting — and it
+> sits **above the `deleteTenantDataPage` loop**. That position is the design, not a preference:
+> `billingCustomers` is `tenant_owned`, so the loop deletes the row holding the `subscriptionId`,
+> and an arm below it would find nothing to cancel and report `hadSubscription: false` —
+> indistinguishable from a tenant who never subscribed.
+>
+> **BOTH closed unions were widened**, the TypeScript `ProviderDeletionResult` and the Convex
+> `providerResultValidator`. Widening one and not the other is a runtime rejection under a green
+> typecheck. The arm is APPENDED to `providers`, so every assertion indexing `providers[0]`/`[1]`
+> stays true unchanged.
+>
+> **The `tenant.deleted` audit row** now carries `billingLocalRowDeleted` /
+> `billingRevokedAtProvider` / `billingFailure` through the existing
+> `payload[\`${provider.provider}…\`]` pattern — booleans only, no `cus_`, no `sub_`, no address,
+> asserted by a whole-row string scan (§4).
+>
+> **The erasure tradeoff is now asserted, not just commented:** `billingCustomers`, `billingPeriods`
+> and `billingUnapplied` are erased; `billingEvents` and `billingCoverage` are `audit_immutable` and
+> SURVIVE. A tenant erasure removes the mapping and the working rows; it does not rewrite Pikar's
+> financial book. `tenantDelete.test.ts` 13/13. Details in `billing.md`.
+>
+> **AND THE VIEWER PROJECTION MOVED WITH IT.** `AUDIT_VIEWER_EVENTS` in
+> `packages/contracts/src/auditProjection.ts` gained the three `billing*` keys on `tenant.deleted`
+> and a new `billing.adjustment.raised` row (28.1-10's owner-raised charge: `periodKey`, `ref`,
+> `kind`, `amountMinor`, `currency` and a line COUNT — no description field exists, because the
+> owner's reason for a charge belongs in their own records and not in an append-only log).
+> **`reportsGovernance.test.ts`'s forward scan is what caught the omission**, and it is worth saying
+> why the pair works: writing an audit row with a new `eventType` and NOT projecting it renders a
+> shell in the viewer, so the allowlist fails closed on any unaccounted literal. That guard has now
+> done its job on the first new event type since it was written.)
+
 > Last verified: 2026-08-30 (**ONE NEW AUDIT EVENT, CLASSIFIED: `agent.skill_loaded`.** Written by
 > the cockpit loop on a PINNED run only, carrying the skill name, the version that actually loaded, a
 > SHA-256 of the exact body string and a `pinned` flag — refs only (§4), and the body itself never
@@ -31,6 +113,48 @@
 >
 > `tenantData.test.ts` 4/4, `packages/core` 1476/1476 on the merged tree.)
 
+> Last verified: 2026-08-29 (28.1-05 — **`deadLetters.workflowId` IS NOW OPTIONAL, THE TABLE HAS A
+> `source` DISCRIMINATOR, AND `billingCustomers` IS CLASSIFIED `tenant_owned`.**
+>
+> Three changes, and the reasoning matters more than the diff.
+>
+> **1. `workflowId` became `v.optional(v.string())`.** A Stripe webhook has no workflow. The
+> alternative was synthesizing something like `billing:evt_…`, which would lie about what the
+> field MEANS to every existing reader and to this compliance surface. The field is optional
+> because the FACT is optional. This is the WIDEN step of widen→migrate→narrow and it terminates
+> here: nothing narrows, existing rows stay valid, no backfill, no migration.
+> `deadLetterRecipient` also stopped writing `workflowId: ""` — an empty string was only ever a
+> placeholder for a required column with no value to put in it.
+>
+> **2. `source: "workflow" | "billing"` is set at the WRITE site, never inferred.** "Has a
+> workflowId" and "was written by the pipeline" are different claims, and only one of them
+> survives a future writer that has both. Absent (every row before this plan) is reported as
+> `"workflow"` by `deadLetters.listAll`, which the `/ops` screen now renders — so a billing dead
+> letter is distinguishable from a pipeline one on the operator's screen rather than only in the
+> database. The `listAll` key-set pin was bumped DELIBERATELY, which is what that pin exists for.
+>
+> **3. THE TABLE IS STILL INSERT-ONLY AND MUST STILL NEVER HOLD PERSONAL DATA.** The billing
+> writer is a direct `ctx.db.insert` inside `billingWebhook.receiveAndApply`; no mutating
+> dead-letter or audit function was added (CLAUDE.md §3). Its payload is
+> `{stripeEventId, stripeEventType, stripeCustomerId, stripeObjectId}` — ids only — and a Stripe
+> `checkout.session.completed` carries an email, a name and a phone number, so this is the
+> sharpest §4 boundary in the repo. It is enforced structurally: `eventFacts` in
+> `@pikar/billing` names every id it lifts, and `receiveAndApply`'s validator has no argument
+> that could carry prose. Proven by mutation — adding a `customerEmail` field to that type and
+> to the payload reddens both a whole-object assertion in `events.test.ts` and a whole-ROW
+> assertion over the stored `deadLetters` and `audit` rows.
+>
+> **`billingCustomers` is `tenant_owned`, and the two categories it is NOT are the interesting
+> part.** Not `tenant_credential` like `connectorConnections`: that category holds the tenant's
+> GRANT (a refresh token, AES-256-GCM ciphertext), whereas a `cus_…` grants nothing without the
+> merchant's own API key — and `tenant_credential` would SUMMARISE the row out of the tenant's
+> export via `summarizeTenantCredential`, deleting the one fact they would want from it. Not
+> `audit_immutable` like `deadLetters`: this is mutable mapping state, and the erasure obligation
+> runs the other way — it is the ONLY row joining a person to a live merchant record, so an
+> erasure that left it behind would leave that link standing forever. The registry count moved
+> 51 → 52.)
+>
+> Previously verified: 2026-08-27 (28-03 — **FOUR PHASE-28 TABLES CLASSIFIED, AND ONE OF THEM DOES NOT
 
 > Last verified: 2026-08-28 (29-06 REMEDIATION — **A SECOND KNOWLEDGE EVENT, AND THE FIRST
 > KEY-ALLOWLIST TEST IN THIS TABLE.**
@@ -54,6 +178,7 @@
 > It is now RED. The other ~90 events remain hand-listed — only `knowledge.*` has an exported pure
 > projection to derive from, and the general fix is a write-site change, not a wider table.)
 >
+
 > Last verified: 2026-08-28 (29-06 — **ONE NEW AUDIT EVENT: `knowledge.searched`**, written by
 > `convex/knowledgeSearch.ts` and by nothing else. `actor: "system"`, `correlationId` = the
 > coordinator's own run uuid. The payload is `@pikar/core`'s `redactedSearchEvent` projection plus
@@ -71,11 +196,14 @@
 > search has no request row, so the measurement rides this audit event instead and that binding was
 > deliberately NOT loosened.)
 >
+
 > Last verified: 2026-08-28 (MERGE of the Phase 28 and Phase 29 lanes — both notes below stand;
 > five tables were classified between them, none of which changed the insert-only rule, the
 > dead-letter path or the WORM export.)
 >
+
 > Last verified: 2026-08-27 (28-03 — **FOUR PHASE-28 TABLES CLASSIFIED, AND ONE OF THEM DOES NOT
+
 > BEHAVE LIKE `gmailTokens`.** `TENANT_TABLE_CLASSIFICATION` gains `connectorConnections`
 > (`tenant_credential`), `connectorOAuthStates` (`tenant_credential`), `contactProviderRefs`
 > (`tenant_owned`) and `providerGates` (`global`). Registry-only — no export or deletion code

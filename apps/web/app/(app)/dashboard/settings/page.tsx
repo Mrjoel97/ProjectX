@@ -1,3 +1,4 @@
+import { BillingPanel } from "./BillingPanel";
 import { DataControls } from "./DataControls";
 
 export default function SettingsPage() {
@@ -31,13 +32,17 @@ export default function SettingsPage() {
             fontWeight: 700,
           }}
         >
-          Control your data
+          Your billing and your data
         </h1>
         <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-          Download a portable record of the data Pikar AI holds for your account.
+          What you pay Pikar, what Pikar is holding for you, and a portable record of everything it
+          knows about your account.
         </p>
       </header>
 
+      {/* Billing first: this page is also where Stripe Checkout sends you back to (`?checkout=`),
+          so the first thing a returning customer reads has to be about their subscription. */}
+      <BillingPanel />
       <DataControls />
     </div>
   );

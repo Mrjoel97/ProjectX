@@ -35,6 +35,7 @@ import { type ActionCtx, internalAction } from "./_generated/server";
 import { type ParsedPage, readPages } from "./connectorFetch";
 import { ensureHubSpotAccessToken } from "./hubspotAuth";
 import { tenantAction } from "./lib/functions";
+import { emitConnectorReadEvent } from "./revenueTelemetry";
 
 const PROVIDER = "hubspot" as const;
 const DAY_MS = 86_400_000;
@@ -170,19 +171,11 @@ export const hubspotRead = tenantAction({
     dataset: datasetArg,
     windowDays: v.optional(v.number()),
   },
-  handler: (ctx, args): Promise<HubSpotReadResult> =>
-    readHubSpotDataset(ctx, { ...args, tenantId: ctx.tenantId }),
-});
-
-/** The lane runner's read (`scripts/smoke-hubspot-read.mjs`). Internal, so no browser reaches it. */
-export const hubspotReadForTenant = internalAction({
-  args: {
-    tenantId: v.string(),
-    environment: environmentArg,
-    dataset: datasetArg,
-    windowDays: v.optional(v.number()),
+  handler: async (ctx, args): Promise<HubSpotReadResult> => {
+    const result = await readHubSpotDataset(ctx, { ...args, tenantId: ctx.tenantId });
+    await emitConnectorReadEvent(ctx, ctx.tenantId, "hubspot", result.projection);
+    return result;
   },
-  handler: (ctx, args): Promise<HubSpotReadResult> => readHubSpotDataset(ctx, args),
 });
 
 /**

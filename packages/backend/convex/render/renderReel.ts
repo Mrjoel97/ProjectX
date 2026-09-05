@@ -23,6 +23,8 @@ import {
   deckStillNeedsJob,
   isRenderableCardText,
   isTransientRenderCode,
+  MUSIC_BLOCK_INDEX,
+  MUSIC_INPUT_NAME,
   renderInputName,
 } from "@pikar/core/render";
 import type { MusicMood } from "@pikar/core/storyboard";
@@ -108,6 +110,11 @@ type RenderInputs = {
    *  the sandbox snapshot, so nothing is fetched, stored or written for it. It rides here because
    *  it is a fact about the REEL (deck-wide, off the art direction) rather than about a scene. */
   music?: MusicMood;
+  /** 33.1-06: the fetched bed's input name when its Openverse row landed — also pushed into
+   *  `inputs` so the runner resolves its bytes like any stock still. Absent when the deck names no
+   *  mood, or when the fetch failed or has not landed yet: the bed is OPTIONAL and a reel never
+   *  waits on it or refuses for it (the assembler's WARN path, unchanged). */
+  musicFile?: string;
   /** The card colours, resolved from the deck's own palette. Absent for a deck whose palette
    *  yields no usable hex — and for every BLOCK deck, which has no art direction at all. */
   card?: { bg: string; ink: string };
@@ -331,6 +338,29 @@ export const batchToRender = internalQuery({
     // would be a third copy whose only distinguishing behaviour is failing earlier and quieter.
     const music = plan.artDirection?.music as MusicMood | undefined;
 
+    // 33.1-06: THE BED'S BYTES, if its Openverse row has landed. Newest fresh `audio` row for this
+    // plan — it sits at MUSIC_BLOCK_INDEX, outside the deck, so the index guards above never see
+    // it. OPTIONAL by construction: absent, failed or still landing all mean "no bed", which is
+    // exactly the assembler's own WARN path and never a refusal. A reel is not held for its music.
+    const bed =
+      music === undefined
+        ? undefined
+        : landed
+            .filter(
+              (r) =>
+                r.kind === "audio" &&
+                r.blockIndex === MUSIC_BLOCK_INDEX &&
+                r.status === "succeeded" &&
+                r.assetStorageId !== undefined &&
+                fresh(r),
+            )
+            .sort((l, r) => r.createdAt - l.createdAt)[0];
+    let musicFile: string | undefined;
+    if (bed) {
+      musicFile = MUSIC_INPUT_NAME;
+      inputs.push({ name: MUSIC_INPUT_NAME, jobId: bed._id });
+    }
+
     // THE CARD PALETTE, read off the same approved row and for the same reason as the bed above.
     // `cardColorsOf` is the ONE place a model-authored palette becomes two filtergraph-safe
     // colours, so it is called here rather than at the POST — the value that crosses the
@@ -342,7 +372,19 @@ export const batchToRender = internalQuery({
     const cards_ = cards.length === 0 ? undefined : cardColorsOf(plan.artDirection?.palette);
     const card = cards_ === undefined || cards_.bg === CARD_DEFAULT_BG ? undefined : cards_;
 
-    return { ok: true, value: { planId, targetSeconds, scenes, inputs, cards, music, card } };
+    return {
+      ok: true,
+      value: {
+        planId,
+        targetSeconds,
+        scenes,
+        inputs,
+        cards,
+        music,
+        ...(musicFile === undefined ? {} : { musicFile }),
+        card,
+      },
+    };
   },
 });
 
@@ -496,6 +538,11 @@ export const recordRender = internalMutation({
     // after `parseAssemblySidecar` accepted the bytes. That co-location is what lets `media.reel`
     // treat their presence as proof the sidecar validated, without re-reading the blob.
     await ctx.db.patch(a.planId, {
+      // 33.2-04: the render IS the delivery. Neither door (canvas `generateReel`, approvals
+      // `executePlan`) ever closed the plan: approved reels sat under "in flight" for ever and
+      // canvas reels under "awaiting" (see generateReel). A plan the owner discarded while the
+      // render was in flight keeps `canceled` — the reel still lands, the row is not resurrected.
+      ...(before?.status === "canceled" ? {} : { status: "done" as const }),
       renderStatus: "rendered",
       renderStorageId: a.result.renderStorageId,
       sidecarStorageId: a.result.sidecarStorageId,
@@ -654,10 +701,17 @@ export async function saveReelToVault(
   // The transcript: the picked deck's narration lines, in scene order. Content plane — it lives
   // in `text` and NOWHERE else (never in reelMeta, never in an audit payload).
   const deck = [...(plan.shots ?? [])].sort((l, r) => l.index - r.index);
-  const text = deck
+  const narration = deck
     .map((s) => s.narration.trim())
     .filter((line) => line !== "")
     .join("\n\n");
+  // 33.1-06: the bed's licence line rides with the reel it was laid under. CC BY is free of
+  // charge, not free of duty — the owner's chosen home for the credit is the POST CAPTION, and
+  // this document is what they copy it from. Public attribution data, never PII.
+  const text =
+    plan.musicCredit === undefined
+      ? narration
+      : `${narration}${narration === "" ? "" : "\n\n"}Music: ${plan.musicCredit.attribution}`;
 
   // Citations: `shot.source.docId` is MODEL-AUTHORED text (the `asset.docId` rule), so ownership
   // is verified HERE, at the write — a malformed or foreign id is skipped, never persisted as if
@@ -826,7 +880,7 @@ export const renderReel = internalAction({
       });
       return { ok: false, reason: batch.reason };
     }
-    const { planId, targetSeconds, scenes, inputs, cards, music, card } = batch.value;
+    const { planId, targetSeconds, scenes, inputs, cards, music, musicFile, card } = batch.value;
 
     await ctx.runMutation(internal.render.renderReel.markRendering, { planId });
 
@@ -877,6 +931,7 @@ export const renderReel = internalAction({
           // list above is unchanged by it, which is why it is not a second exception alongside the
           // card's words.
           ...(music === undefined ? {} : { music }),
+          ...(musicFile === undefined ? {} : { musicFile }),
           ...(card === undefined ? {} : { card }),
           uploadUrls,
         }),

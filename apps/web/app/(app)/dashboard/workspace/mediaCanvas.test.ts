@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GENERIC_DECK_REFUSAL, TARGET_DURATIONS } from "@pikar/core/storyboard";
+import { MEDIA_GENERATED_SECONDS_CAP, sceneVisualSpec } from "@pikar/cost/media";
 import { describe, expect, test } from "vitest";
 import {
   adjustmentNotes,
@@ -11,6 +12,8 @@ import {
   briefChips,
   briefRefusalText,
   type Citation,
+  CLIP_COST_LEVER_NOTE,
+  CLIP_VS_STILL_RATIO,
   citationView,
   DECK_ADJUSTED_LEDE,
   DECK_STALE_NOTE,
@@ -22,7 +25,10 @@ import {
   type FailureFace,
   type FailureScene,
   failureCards,
+  failureClause,
   failureText,
+  GENERATED_LENGTH_RANGE,
+  GENERIC_FAILURE_CLAUSE,
   heroState,
   isPickableVideo,
   type JobEstimate,
@@ -45,6 +51,23 @@ import {
   voiceLine,
   windowLabel,
 } from "./mediaCanvasView";
+
+/**
+ * THE CLIP-VS-STILL LEVER, RE-DERIVED HERE FROM THE PRICE TABLES — never a literal.
+ *
+ * This number has been wrong on screen three times: "a tenth" until 33-06, "a fortieth" until
+ * 33.1-03 measured the still at $0.006, and again when 33.1-04 moved the clip to $0.07/s. Each
+ * time the tests were GREEN, because they pinned the stale word (`/fortieth/`) instead of the
+ * computed value — a check that cannot fail, over the only cost lever this product tells anyone
+ * they have. So the assertions below compute the ratio the same way the copy does, and a price
+ * move updates both together instead of putting them into silent disagreement.
+ */
+const usdAt4s = (visual: "generated_video" | "animated_image"): number => {
+  const r = sceneVisualSpec(visual, 4);
+  if (!r.ok || r.value === null) throw new Error("expected a priced scene line");
+  return r.value.usd;
+};
+const EXPECTED_RATIO = Math.round(usdAt4s("generated_video") / usdAt4s("animated_image"));
 
 const source = readFileSync(join(__dirname, "MediaCanvas.tsx"), "utf8");
 const imageCanvas = source.slice(
@@ -209,10 +232,29 @@ describe("the refusal names the lever, in the deck's own vocabulary", () => {
   });
 
   test("the duration refusal names the model's grid on a scene deck, and 5-or-10 on a block one", () => {
-    expect(refusalText({ reason: "illegal_duration" }, base)).toMatch(/4, 8 or 12 seconds/);
+    // A RANGE, derived from `GENERATED_CLIP_SECONDS` — not a second copy of the grid in prose.
+    // This sentence held `4, 8 or 12` until 33.1-04, which is the shape of defect that leaves the
+    // whole visible symptom standing behind a green backend.
+    expect(refusalText({ reason: "illegal_duration" }, base)).toContain(GENERATED_LENGTH_RANGE);
+    expect(refusalText({ reason: "illegal_duration" }, base)).not.toMatch(/4, 8 or 12/);
+    expect(GENERATED_LENGTH_RANGE).toBe("1 to 15");
     expect(refusalText({ reason: "illegal_duration" }, { ...base, noun: "block" })).toBe(
       "Every block must be 5 or 10 seconds.",
     );
+  });
+
+  test("the SECONDS ceiling gets its OWN sentence, naming its OWN lever", () => {
+    // `refusalText` has a default fall-through — the test below proves an unknown reason returns a
+    // generic string — so the compiler could NOT have caught a missing arm here. A governed code
+    // with no sentence reads to the user as "This reel can't be generated yet", which names no
+    // lever at all. The lever for this one is NOT "cut a scene": it is "swap a generated scene for
+    // a still or stock", which cost the same at any length.
+    const text = refusalText({ reason: "over_generated_seconds" }, base);
+    expect(text).not.toBe("This reel can't be generated yet.");
+    expect(text).toMatch(/generated video/);
+    expect(text).toMatch(/animated still|stock/);
+    // The NUMBER is derived from the cap, not typed out — the same rule as the cost ratio.
+    expect(text).toContain(`${MEDIA_GENERATED_SECONDS_CAP} seconds`);
   });
 
   test("the cap refusal offers the lever that is actually cheaper on a scene deck", () => {
@@ -273,17 +315,29 @@ describe("33-06: the estimate is ONE headline, and it is jobEstimate's own numbe
     expect(view.lines[0]?.detail).toBe("2 × 8s of 30s 720p");
   });
 
-  test("the clip line keeps the 40x lever discoverable — the whole point of itemising", () => {
+  test("the clip line keeps the cost lever discoverable — the whole point of itemising", () => {
     const view = estimateView(est, o);
-    expect(view.lines[0]?.note).toMatch(/40/);
+    expect(view.lines[0]?.note).toBe(CLIP_COST_LEVER_NOTE);
+    expect(view.lines[0]?.note).toContain(`${EXPECTED_RATIO}×`);
     expect(view.lines[1]?.note).toBeNull();
   });
 
-  test("a still is a FORTIETH of a clip, not a tenth — the tile note said the wrong number", () => {
-    // Measured at 20.2 wave 7 and written into `storyboard.ts`: a 4 s generated clip is $0.40 and a
-    // still is $0.01 at any length. "About a tenth" understated the only lever the user has by 4x.
-    expect(KIND_COST_NOTE.animated_image).toMatch(/fortieth/);
-    expect(KIND_COST_NOTE.animated_image).not.toMatch(/tenth/);
+  test("EVERY SENTENCE ABOUT THE LEVER DERIVES THE RATIO — no restated number anywhere", () => {
+    // The ratio is computed from the price tables at both ends (see EXPECTED_RATIO above), so this
+    // cannot rot the way "a tenth" and "a fortieth" both did. The sanity bounds are what stop the
+    // derivation from being vacuous: a broken table would give 0, 1 or Infinity and be caught here.
+    expect(Number.isFinite(EXPECTED_RATIO)).toBe(true);
+    expect(EXPECTED_RATIO).toBeGreaterThan(1);
+    expect(CLIP_VS_STILL_RATIO).toBe(EXPECTED_RATIO);
+    expect(KIND_COST_NOTE.animated_image).toContain(`1/${EXPECTED_RATIO}`);
+    // …and not one of the stale words or numbers, at any of the three sites.
+    for (const s of [
+      KIND_COST_NOTE.animated_image,
+      CLIP_COST_LEVER_NOTE,
+      String(estimateView(est, o).lines[0]?.note),
+    ]) {
+      expect(s).not.toMatch(/fortieth|tenth|40×/);
+    }
   });
 
   test("the remaining budget is named in money, beside the headline", () => {
@@ -358,6 +412,26 @@ describe("a failed render says what happened, and what to do about it", () => {
 
   test("an unknown code falls through to the code itself rather than being swallowed", () => {
     expect(failureText("brand_new_code", "scene")).toBe("brand_new_code");
+  });
+
+  // 33.1-06: the codes that actually happened in the audit log — 11 of 58 jobs failed on money —
+  // every one of which read "no plainer word". And the two render refusals the first live reel
+  // hit, which had collapsed into `render_failed`.
+  test("names the money failures and the two real render refusals in plain words", () => {
+    expect(failureClause("http_402", "scene")).toMatch(/out of credit/);
+    expect(failureClause("credit_balance_exhausted", "scene")).toMatch(/out of credit/);
+    expect(failureClause("card_font_missing", "scene")).toMatch(/font/);
+    expect(failureClause("narration_overruns_reel", "scene")).toMatch(
+      /still going when the reel ends/,
+    );
+    expect(failureClause("tts_not_verbatim", "scene")).toMatch(
+      /differently from how it was written/,
+    );
+    // A provider status with no dedicated entry still says the number rather than nothing.
+    expect(failureClause("http_429", "scene")).toMatch(/HTTP 429/);
+    expect(failureClause("http_5xx", "scene")).toBe(GENERIC_FAILURE_CLAUSE); // not a real status
+    // The assembler no longer refuses a colliding take, so the old sentence is gone, not stale.
+    expect(failureText("speech_out_of_window", "scene")).toBe("speech_out_of_window");
   });
 });
 
@@ -1041,9 +1115,11 @@ describe("a failure is a plain-language card with honest economics", () => {
     for (const arm of ["text_card", "animated_image", "stock_video", "uploaded_video"] as const) {
       expect(card?.fixes.find((f) => f.arm === arm)?.priceLabel).toMatch(/free/i);
     }
-    // A still is bought by the REGENERATE that follows, not by the switch — and the ratio is the
-    // measured one (a fortieth, not a tenth).
-    expect(card?.fixes.find((f) => f.arm === "animated_image")?.note).toMatch(/fortieth/);
+    // A still is bought by the REGENERATE that follows, not by the switch — and the ratio is
+    // DERIVED from the price tables rather than written out in words that go stale.
+    expect(card?.fixes.find((f) => f.arm === "animated_image")?.note).toContain(
+      `1/${EXPECTED_RATIO}`,
+    );
     // An animated-still scene is not offered "switch to an animated still".
     const still = sceneCard({
       visual: "animated_image",
@@ -1403,9 +1479,14 @@ describe("adjustmentNotes — every second the parser moved", () => {
     expect(notes[1]).not.toMatch(/lengthened .*22s.*20s/);
   });
 
-  test("the GRID reason names the only lengths the generator makes", () => {
+  test("the GRID reason names the generator's lengths as a RANGE, on the RENDERED string", () => {
     const note = adjustmentNotes([REPAIR[0] as (typeof REPAIR)[number]], 30)[0];
-    expect(note).toContain("4, 8 or 12");
+    // Asserted on what is RENDERED, not on the constant: `GENERATED_CLIP_SECONDS` went from three
+    // members to fifteen on 2026-08-30, and the old `join(", ")` would have printed
+    // "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 or 15 second clips" into the sentence.
+    expect(note).toContain(GENERATED_LENGTH_RANGE);
+    expect(note).not.toMatch(/\d+, \d+, \d+/);
+    expect(note).not.toContain("4, 8 or 12");
     expect(note).not.toContain("grid");
   });
 

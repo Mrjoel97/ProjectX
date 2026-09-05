@@ -18,6 +18,7 @@
 import { PROVIDERS, REVOCATION_UPSTREAM_STATES } from "@pikar/revenue";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import { allPassedGates } from "../__fixtures__/providerGates";
 import { api, internal } from "./_generated/api";
 import {
   CONNECT_RESULTS,
@@ -41,6 +42,13 @@ const rawSources = import.meta.glob("./**/*.ts", {
 
 async function harness() {
   const t = convexTest(schema, modules);
+  // `mintConnectState` gained a connect-start gate: a provider whose lane has not passed is
+  // startable by the OWNER only. Every case in this file is about state hygiene rather than the
+  // gate, so all four lanes are seeded passed and the gate is transparent here. The gate has its
+  // own tests in `connectorConnections.test.ts`.
+  await t.run(async (ctx) => {
+    for (const row of allPassedGates()) await ctx.db.insert("providerGates", row);
+  });
   const userA = await t.run((ctx) => ctx.db.insert("users", {}));
   const userB = await t.run((ctx) => ctx.db.insert("users", {}));
   return {

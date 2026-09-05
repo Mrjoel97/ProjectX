@@ -39,6 +39,7 @@ import {
 } from "@pikar/contracts/skills/knowledgeWorkProvenance";
 import { packBusinessPulseSkillBody } from "@pikar/contracts/skills/packBusinessPulse";
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
+import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
 import { packCustomizationFields, WORKFLOW_PACK_IDS, WORKFLOW_PACK_SKILL_NAMES } from "@pikar/core";
@@ -49,6 +50,7 @@ import { describe, expect, test } from "vitest";
 // package blocks the deep specifier) so the REAL audit path runs instead of throwing
 // "component not registered". The dispatch.test.ts / contacts.test.ts idiom, verbatim.
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import skillsLock from "../skills-lock.json";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { contentHash } from "./lib/hash";
@@ -70,6 +72,167 @@ const CLASSIFIER = "executive-agent.classifier";
 // Normalize line endings so a CRLF checkout of the .md never drifts from the
 // LF-authored .ts constant (and vice versa).
 const lf = (s: string) => s.replace(/\r\n/g, "\n");
+
+describe("Phase 28 revenue candidate publication", () => {
+  const manifest = skillsLock.revenueCandidates.candidates;
+  const rowsFor = (t: TestConvex<typeof schema>, name: string) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("skills")
+        .withIndex("by_name_status", (q) => q.eq("name", name))
+        .collect(),
+    );
+
+  test("publishes every exact lock pin as candidate-only and keeps it undiscoverable", async () => {
+    const t = convexTest(schema, modules);
+    const out = await t.mutation(internal.skills.seedRevenueCandidates, {});
+
+    expect(out).toHaveLength(manifest.length);
+    for (const pin of manifest) {
+      expect(out).toContainEqual({ name: pin.name, version: 1, inserted: true });
+      const rows = await rowsFor(t, pin.name);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        name: pin.name,
+        version: pin.version,
+        status: "candidate",
+        body: revenueSkillBodies[pin.name],
+      });
+      expect(await contentHash(rows[0]?.body ?? "")).toBe(pin.bodySha256);
+      await expect(t.run((ctx) => loadSkill(ctx, pin.name))).rejects.toThrow(/NO_ACTIVE_SKILL/);
+    }
+  });
+
+  test("is idempotent for exact duplicates and refuses version/body drift", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedRevenueCandidates, {});
+    const again = await t.mutation(internal.skills.seedRevenueCandidates, {});
+    expect(again.every((row) => row.version === 1 && row.inserted === false)).toBe(true);
+
+    const pin = manifest[0];
+    if (pin === undefined) throw new Error("revenue candidate manifest is empty");
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("skills")
+        .withIndex("by_name_version", (q) => q.eq("name", pin.name).eq("version", pin.version))
+        .unique();
+      if (row === null) throw new Error("candidate missing");
+      await ctx.db.patch(row._id, { body: `${row.body}\ndrift` });
+    });
+    await expect(t.mutation(internal.skills.seedRevenueCandidates, {})).rejects.toThrow(
+      /REVENUE_PIN_CONFLICT/,
+    );
+    expect(await rowsFor(t, pin.name)).toHaveLength(1);
+  });
+
+  test("does not enter SEEDS, grant tools, or activate without exact eval evidence", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+    for (const pin of manifest) expect(await rowsFor(t, pin.name)).toEqual([]);
+
+    await t.mutation(internal.skills.seedRevenueCandidates, {});
+    const pin = manifest[0];
+    if (pin === undefined) throw new Error("revenue candidate manifest is empty");
+    await expect(
+      t.mutation(internal.skills.activateSkill, { name: pin.name, version: pin.version }),
+    ).rejects.toThrow(/EVAL_GATE/);
+
+    const source = readFileSync(fileURLToPath(new URL("./skills.ts", import.meta.url)), "utf8");
+    const start = source.indexOf("export const seedRevenueCandidates");
+    expect(start).toBeGreaterThan(-1);
+    const region = source.slice(
+      start,
+      source.indexOf("export const inspectRevenueCandidates", start),
+    );
+    expect(region).not.toMatch(/tools?|grant|discover/i);
+    expect(region).not.toContain('status: "active"');
+    expect(region).not.toContain("activateSkill");
+  });
+
+  test("content-free read-back records exact refs without exposing bodies", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedRevenueCandidates, {});
+    const refs = await t.query(internal.skills.inspectRevenueCandidates, {});
+    expect(refs).toHaveLength(manifest.length);
+    for (const ref of refs) {
+      const pin = manifest.find((candidate) => candidate.name === ref.name);
+      expect(ref).toMatchObject({
+        present: true,
+        version: pin?.version,
+        status: "candidate",
+        bodyHash: pin?.bodySha256,
+        bodyBytes: pin?.bodyBytes,
+        provenanceValid: true,
+      });
+      expect(ref).not.toHaveProperty("body");
+      expect(ref).not.toHaveProperty("provenance");
+    }
+  });
+
+  test("applies only approved exact-pin decisions and keeps every parked body undiscoverable", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedRevenueCandidates, {});
+
+    const approved = manifest.filter((pin) => pin.activationDecision.decision === "approve");
+    const parked = manifest.filter((pin) => pin.activationDecision.decision === "park");
+    expect(approved.map((pin) => pin.name).sort()).toEqual([
+      "revenue-call-list",
+      "revenue-lead-triage",
+      "revenue-specialist",
+    ]);
+    expect(parked).toHaveLength(5);
+
+    for (const pin of approved) {
+      const evidence = JSON.stringify({
+        runner: "eval:golden:revenue-candidate",
+        runId: "revenue-diagnostic",
+        pass: true,
+        casesPassed: 1,
+        casesTotal: 1,
+        retriedCases: [],
+        costUsd: 0,
+        model: "test-model",
+        skillVersions: { [pin.name]: pin.version },
+        ts: 1,
+      });
+      await t.mutation(internal.skills.recordEvalEvidence, {
+        name: pin.name,
+        version: pin.version,
+        evidence,
+      });
+      await t.mutation(internal.skills.activateSkill, {
+        name: pin.name,
+        version: pin.version,
+      });
+    }
+
+    for (const pin of approved) {
+      const loaded = await t.run((ctx) => loadSkill(ctx, pin.name));
+      expect(loaded.version).toBe(pin.version);
+      expect(await contentHash(loaded.body)).toBe(pin.bodySha256);
+    }
+    for (const pin of parked) {
+      await expect(
+        t.mutation(internal.skills.activateSkill, {
+          name: pin.name,
+          version: pin.version,
+        }),
+      ).rejects.toThrow(/EVAL_GATE/);
+      await expect(t.run((ctx) => loadSkill(ctx, pin.name))).rejects.toThrow(/NO_ACTIVE_SKILL/);
+    }
+
+    const refs = await t.query(internal.skills.inspectRevenueCandidates, {});
+    for (const ref of refs) {
+      const pin = manifest.find((candidate) => candidate.name === ref.name);
+      expect(ref.status).toBe(
+        pin?.activationDecision.decision === "approve" ? "active" : "candidate",
+      );
+      expect(ref.bodyHash).toBe(pin?.bodySha256);
+      expect(ref.bodyBytes).toBe(pin?.bodyBytes);
+      expect(ref.provenanceValid).toBe(true);
+    }
+  });
+});
 
 describe("skills registry loader + activation", () => {
   test("seedSkills then loadSkill returns the active v1 body", async () => {

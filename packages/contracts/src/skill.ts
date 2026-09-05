@@ -143,6 +143,29 @@ export const RESEARCH_SPECIALIST_SKILL = "research-specialist" as const;
  */
 export const MEDIA_DIRECTOR_SKILL = "media-director" as const;
 
+/** Registry name of the read-only connector-backed revenue specialist (Phase 28, REVN-04/05/06). */
+export const REVENUE_SPECIALIST_SKILL = "revenue-specialist" as const;
+
+/** Registry names of the seven native revenue workflows. Bodies/candidates land in Plan 28-14. */
+export const REVENUE_LEAD_TRIAGE_SKILL = "revenue-lead-triage" as const;
+export const REVENUE_CALL_LIST_SKILL = "revenue-call-list" as const;
+export const REVENUE_PIPELINE_REVIEW_SKILL = "revenue-pipeline-review" as const;
+export const REVENUE_CUSTOMER_PULSE_SKILL = "revenue-customer-pulse" as const;
+export const REVENUE_CASH_FLOW_SKILL = "revenue-cash-flow" as const;
+export const REVENUE_PAYROLL_CONFIDENCE_SKILL = "revenue-payroll-confidence" as const;
+export const REVENUE_INVOICE_REMINDER_SKILL = "revenue-invoice-reminder" as const;
+
+/** The code-owned manifest identity for Phase 28's seven workflow rows. */
+export const REVENUE_WORKFLOW_SKILLS = [
+  REVENUE_LEAD_TRIAGE_SKILL,
+  REVENUE_CALL_LIST_SKILL,
+  REVENUE_PIPELINE_REVIEW_SKILL,
+  REVENUE_CUSTOMER_PULSE_SKILL,
+  REVENUE_CASH_FLOW_SKILL,
+  REVENUE_PAYROLL_CONFIDENCE_SKILL,
+  REVENUE_INVOICE_REMINDER_SKILL,
+] as const;
+
 /** Registry name of the conversational onboarding system prompt (ONBD-01 / 15.1, design §6). */
 export const ONBOARDING_AGENT_SKILL = "onboarding-agent" as const;
 

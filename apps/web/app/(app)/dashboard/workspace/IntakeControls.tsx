@@ -3,7 +3,7 @@
 import { api } from "@pikar/backend/api";
 import { useAction, useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
-import { useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { MicIcon, PaperclipIcon } from "../../../(auth)/icons";
 
 // The intake-specific composer controls (INTK-02 attach / INTK-03 one-shot dictate). Fully
@@ -39,181 +39,328 @@ type StorageId = FunctionArgs<typeof api.intake.attachToThread>["storageId"];
  * chat turn, same lift ChatPane already does) and renders no conversation output itself — the
  * merge happens server-side and the existing chat/card views pick it up reactively.
  */
-export function IntakeControls({ threadId }: { threadId: string }) {
-  const generateUploadUrl = useMutation(api.intakeDb.generateUploadUrl);
-  const attachToThread = useAction(api.intake.attachToThread);
-  const dictateToThread = useAction(api.intake.dictateToThread);
+/** A staged file plus the identity a File does not carry. See `nextStagedId`. */
+type StagedFile = { id: string; file: File };
 
-  const [busy, setBusy] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export type IntakeControlsHandle = {
+  /** Process everything the user staged on a fresh chat against its newly-created thread. */
+  flushToThread: (threadId: string) => Promise<void>;
+};
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dictationTestInputRef = useRef<HTMLInputElement>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+type IntakeControlsProps = {
+  threadId?: string;
+  onPendingChange?: (hasPending: boolean) => void;
+};
 
-  async function upload(file: Blob, mimeType: string): Promise<StorageId | null> {
-    const url = await generateUploadUrl();
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": mimeType },
-      body: file,
-    });
-    if (!res.ok) return null;
-    const { storageId } = (await res.json()) as { storageId: StorageId };
-    return storageId;
-  }
+/**
+ * Existing chats keep the original immediate upload/dictation behaviour. A fresh chat stages the
+ * exact same File/Blob objects locally until ChatPane's first ordinary send mints a governed
+ * thread, then `flushToThread` feeds them through the existing intake actions. Nothing is uploaded
+ * or processed merely because it was selected.
+ */
+export const IntakeControls = forwardRef<IntakeControlsHandle, IntakeControlsProps>(
+  function IntakeControls({ threadId, onPendingChange }, ref) {
+    const generateUploadUrl = useMutation(api.intakeDb.generateUploadUrl);
+    const attachToThread = useAction(api.intake.attachToThread);
+    const dictateToThread = useAction(api.intake.dictateToThread);
 
-  async function runAttach(file: File) {
-    if (busy) return;
-    if (file.size > INTAKE_UPLOAD_CAP_BYTES) {
-      setError(`${file.name}: over ${CAP_LABEL}.`);
-      return;
+    const [busy, setBusy] = useState(false);
+    const [recording, setRecording] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [pendingFiles, setPendingFiles] = useState<StagedFile[]>([]);
+    const [pendingDictation, setPendingDictation] = useState<Blob | null>(null);
+
+    // Monotonic, not crypto.randomUUID(): this id never leaves the component and only has to be
+    // unique within one composer session, so it needs no entropy and no secure-context assumption.
+    const nextStagedId = useRef(0);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const folderInputRef = useRef<HTMLInputElement>(null);
+    const dictationTestInputRef = useRef<HTMLInputElement>(null);
+    const recorderRef = useRef<MediaRecorder | null>(null);
+    const chunksRef = useRef<Blob[]>([]);
+
+    async function upload(file: Blob, mimeType: string): Promise<StorageId | null> {
+      const url = await generateUploadUrl();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": mimeType },
+        body: file,
+      });
+      if (!res.ok) return null;
+      const { storageId } = (await res.json()) as { storageId: StorageId };
+      return storageId;
     }
-    setBusy(true);
-    setError(null);
-    try {
-      const mimeType = file.type || "application/octet-stream";
-      const storageId = await upload(file, mimeType);
-      if (!storageId) {
-        setError(`${file.name}: upload failed.`);
+
+    async function runAttach(file: File, destinationThreadId = threadId): Promise<boolean> {
+      if (busy || !destinationThreadId) return false;
+      if (file.size > INTAKE_UPLOAD_CAP_BYTES) {
+        setError(`${file.name}: over ${CAP_LABEL}.`);
+        return false;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        const mimeType = file.type || "application/octet-stream";
+        const storageId = await upload(file, mimeType);
+        if (!storageId) {
+          setError(`${file.name}: upload failed.`);
+          return false;
+        }
+        await attachToThread({
+          threadId: destinationThreadId,
+          storageId,
+          filename: file.webkitRelativePath || file.name,
+          mimeType,
+          size: file.size,
+        });
+        return true;
+      } catch {
+        setError(`${file.name}: couldn't process that file. Please try again.`);
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function runDictate(blob: Blob, destinationThreadId = threadId): Promise<boolean> {
+      if (busy || !destinationThreadId) return false;
+      if (blob.size > INTAKE_UPLOAD_CAP_BYTES) {
+        setError(`Recording: over ${CAP_LABEL}.`);
+        return false;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        const storageId = await upload(blob, blob.type || "audio/webm");
+        if (!storageId) {
+          setError("Dictation upload failed.");
+          return false;
+        }
+        await dictateToThread({ threadId: destinationThreadId, storageId });
+        return true;
+      } catch {
+        setError("Couldn't process the dictation. Please try again.");
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function acceptFiles(files: File[]) {
+      if (files.length === 0) return;
+      setError(null);
+      if (threadId) {
+        void (async () => {
+          for (const file of files) await runAttach(file, threadId);
+        })();
         return;
       }
-      await attachToThread({ threadId, storageId, filename: file.name, mimeType, size: file.size });
-    } catch {
-      setError(`${file.name}: couldn't process that file. Please try again.`);
-    } finally {
-      setBusy(false);
+      setPendingFiles((current) => [
+        ...current,
+        ...files.map((file) => ({ id: (nextStagedId.current++).toString(), file })),
+      ]);
     }
-  }
 
-  async function runDictate(blob: Blob) {
-    if (busy) return;
-    if (blob.size > INTAKE_UPLOAD_CAP_BYTES) {
-      setError(`Recording: over ${CAP_LABEL}.`);
-      return;
+    function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+      const files = Array.from(e.target.files ?? []);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      acceptFiles(files);
     }
-    setBusy(true);
-    setError(null);
-    try {
-      const storageId = await upload(blob, blob.type || "audio/webm");
-      if (!storageId) {
-        setError("Dictation upload failed.");
+
+    function onPickFolder(e: React.ChangeEvent<HTMLInputElement>) {
+      const files = Array.from(e.target.files ?? []);
+      if (folderInputRef.current) folderInputRef.current.value = "";
+      acceptFiles(files);
+    }
+
+    // Headless-safe dictation seam: a headless Playwright run can't grant a real microphone, so
+    // this hidden test-only input drives the SAME upload -> dictateToThread path a real
+    // recording's onstop handler takes below (intake.spec.ts, Task 2). Never rendered for real use.
+    function onPickDictationTestFile(e: React.ChangeEvent<HTMLInputElement>) {
+      const file = e.target.files?.[0];
+      if (dictationTestInputRef.current) dictationTestInputRef.current.value = "";
+      if (file) void runDictate(file);
+    }
+
+    async function toggleRecord() {
+      if (busy) return;
+      if (recording) {
+        recorderRef.current?.stop();
         return;
       }
-      await dictateToThread({ threadId, storageId });
-    } catch {
-      setError("Couldn't process the dictation. Please try again.");
-    } finally {
-      setBusy(false);
+      setError(null);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const rec = new MediaRecorder(stream);
+        chunksRef.current = [];
+        rec.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksRef.current.push(e.data);
+        };
+        rec.onstop = () => {
+          for (const track of stream.getTracks()) track.stop();
+          setRecording(false);
+          const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+          if (threadId) void runDictate(blob, threadId);
+          else setPendingDictation(blob);
+        };
+        recorderRef.current = rec;
+        rec.start();
+        setRecording(true);
+      } catch {
+        setError("Microphone access was denied — dictation needs it to record.");
+      }
     }
-  }
 
-  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (file) void runAttach(file);
-  }
+    const locked = busy || recording;
+    const hasPending = pendingFiles.length > 0 || pendingDictation !== null;
 
-  // Headless-safe dictation seam: a headless Playwright run can't grant a real microphone, so
-  // this hidden test-only input drives the SAME upload -> dictateToThread path a real
-  // recording's onstop handler takes below (intake.spec.ts, Task 2). Never rendered for real use.
-  function onPickDictationTestFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (dictationTestInputRef.current) dictationTestInputRef.current.value = "";
-    if (file) void runDictate(file);
-  }
+    useEffect(() => onPendingChange?.(hasPending), [hasPending, onPendingChange]);
 
-  async function toggleRecord() {
-    if (busy) return;
-    if (recording) {
-      recorderRef.current?.stop();
-      return;
-    }
-    setError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
-      chunksRef.current = [];
-      rec.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      rec.onstop = () => {
-        for (const track of stream.getTracks()) track.stop();
-        setRecording(false);
-        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
-        void runDictate(blob);
-      };
-      recorderRef.current = rec;
-      rec.start();
-      setRecording(true);
-    } catch {
-      setError("Microphone access was denied — dictation needs it to record.");
-    }
-  }
+    useImperativeHandle(
+      ref,
+      () => ({
+        flushToThread: async (destinationThreadId: string) => {
+          // Each action is the established governed intake path. Keep failed items staged so the
+          // user can retry; remove only work the backend accepted.
+          for (const staged of pendingFiles) {
+            if (await runAttach(staged.file, destinationThreadId)) {
+              setPendingFiles((current) => current.filter((item) => item.id !== staged.id));
+            }
+          }
+          if (pendingDictation && (await runDictate(pendingDictation, destinationThreadId))) {
+            setPendingDictation(null);
+          }
+        },
+      }),
+      // DELIBERATELY NO DEPENDENCY ARRAY. The handle closes over runAttach/runDictate, which are
+      // re-created every render and in turn close over `busy`. Memoising it on
+      // [pendingDictation, pendingFiles] kept whichever copy existed when those last changed, so a
+      // stale `busy: true` made every flush return false and silently send nothing. Listing the two
+      // functions instead only moves the problem to useCallback chains. Rebuilding the handle on
+      // every render is correct by construction and costs one ref assignment.
+    );
 
-  const locked = busy || recording;
-
-  // display:contents — the paperclip/mic triggers sit inline in the composer's icon row
-  // (BRAND.md §5, same idiom as AttachmentPicker) while the error line wraps full-width below.
-  return (
-    <div style={{ display: "contents" }}>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={ATTACH_ACCEPT}
-        aria-label="Attach a file"
-        data-testid="attach-file-input"
-        disabled={locked}
-        onChange={onPickFile}
-        style={{ display: "none" }}
-      />
-      <button
-        type="button"
-        className="icon-btn"
-        aria-label="Attach a file"
-        title="Attach a file — its content joins the conversation"
-        disabled={locked}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <PaperclipIcon size={17} />
-      </button>
-      <button
-        type="button"
-        className="icon-btn"
-        aria-label={recording ? "Stop recording" : "Record dictation"}
-        aria-pressed={recording}
-        title={recording ? "Stop recording" : "Record dictation"}
-        disabled={busy && !recording}
-        onClick={() => void toggleRecord()}
-        style={recording ? { background: "var(--teal-600)", color: "#fff" } : undefined}
-      >
-        <MicIcon size={17} />
-      </button>
-      {recording && (
-        <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Recording…</span>
-      )}
-      {busy && !recording && (
-        <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Extracting…</span>
-      )}
-      {error && (
-        <p
-          role="alert"
-          style={{ color: "#dc2626", fontSize: "0.8rem", margin: 0, flexBasis: "100%" }}
+    // display:contents — the paperclip/mic triggers sit inline in the composer's icon row
+    // (BRAND.md §5, same idiom as AttachmentPicker) while the error line wraps full-width below.
+    return (
+      <div style={{ display: "contents" }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ATTACH_ACCEPT}
+          aria-label="Attach a file"
+          data-testid="attach-file-input"
+          disabled={locked}
+          onChange={onPickFile}
+          style={{ display: "none" }}
+        />
+        <input
+          ref={folderInputRef}
+          type="file"
+          accept={ATTACH_ACCEPT}
+          aria-label="Attach a folder"
+          data-testid="attach-folder-input"
+          disabled={locked}
+          onChange={onPickFolder}
+          style={{ display: "none" }}
+          {...({ directory: "", webkitdirectory: "" } as Record<string, string>)}
+        />
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Attach a file"
+          title="Attach a file — its content joins the conversation"
+          disabled={locked}
+          onClick={() => fileInputRef.current?.click()}
         >
-          {error}
-        </p>
-      )}
-      <input
-        ref={dictationTestInputRef}
-        type="file"
-        accept="audio/*"
-        data-testid="dictation-test-input"
-        disabled={locked}
-        onChange={onPickDictationTestFile}
-        style={{ display: "none" }}
-      />
-    </div>
-  );
-}
+          <PaperclipIcon size={17} />
+        </button>
+        <button
+          type="button"
+          className="composer-pill"
+          aria-label="Attach a folder"
+          title="Attach a folder — supported files join the conversation"
+          disabled={locked}
+          onClick={() => folderInputRef.current?.click()}
+          style={{ paddingInline: "0.55rem" }}
+        >
+          Folder
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label={recording ? "Stop recording" : "Record dictation"}
+          aria-pressed={recording}
+          title={recording ? "Stop recording" : "Record dictation"}
+          disabled={busy && !recording}
+          onClick={() => void toggleRecord()}
+          style={recording ? { background: "var(--teal-600)", color: "#fff" } : undefined}
+        >
+          <MicIcon size={17} />
+        </button>
+        {recording && (
+          <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Recording…</span>
+        )}
+        {busy && !recording && (
+          <span style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>Extracting…</span>
+        )}
+        {!threadId && hasPending && (
+          <div
+            data-testid="pending-intake"
+            role="status"
+            style={{ flexBasis: "100%", display: "grid", gap: "0.25rem" }}
+          >
+            <span style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+              Ready for your first message. Add instructions above, then Send.
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+              {pendingFiles.map(({ id, file }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="composer-pill"
+                  aria-label={`Remove ${file.webkitRelativePath || file.name}`}
+                  title="Remove this staged file"
+                  onClick={() =>
+                    setPendingFiles((current) => current.filter((item) => item.id !== id))
+                  }
+                  style={{ height: "auto", maxWidth: "100%", whiteSpace: "normal" }}
+                >
+                  {file.webkitRelativePath || file.name} ×
+                </button>
+              ))}
+              {pendingDictation && (
+                <button
+                  type="button"
+                  className="composer-pill"
+                  aria-label="Remove voice instruction"
+                  title="Remove this staged voice instruction"
+                  onClick={() => setPendingDictation(null)}
+                >
+                  Voice instruction ready ×
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {error && (
+          <p
+            role="alert"
+            style={{ color: "#dc2626", fontSize: "0.8rem", margin: 0, flexBasis: "100%" }}
+          >
+            {error}
+          </p>
+        )}
+        <input
+          ref={dictationTestInputRef}
+          type="file"
+          accept="audio/*"
+          data-testid="dictation-test-input"
+          disabled={locked}
+          onChange={onPickDictationTestFile}
+          style={{ display: "none" }}
+        />
+      </div>
+    );
+  },
+);

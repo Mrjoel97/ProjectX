@@ -100,7 +100,11 @@ function ledgerCorrelationIds(runId: string): string[] {
 
 /** Sum this run's `reasoning`-rail charges. Tenant-checked because `by_correlation` is keyed on the
  *  correlation id ALONE — a tenant-scoped read must never trust an index that is not. */
-async function costForRun(ctx: QueryCtx, tenantId: string, runId: string): Promise<number | null> {
+export async function costForRun(
+  ctx: QueryCtx,
+  tenantId: string,
+  runId: string,
+): Promise<number | null> {
   const rows: { tenantId: string; rail: string; amountCents: number }[] = [];
   for (const correlationId of ledgerCorrelationIds(runId)) {
     rows.push(
@@ -118,7 +122,7 @@ async function costForRun(ctx: QueryCtx, tenantId: string, runId: string): Promi
 
 /** Wall clock for one run: the span from its first step starting to its last step ending. A step
  *  still open (`endedAt` absent) makes the run unmeasured rather than artificially short. */
-async function latencyForRun(
+export async function latencyForRun(
   ctx: QueryCtx,
   tenantId: string,
   runId: string,

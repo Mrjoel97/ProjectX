@@ -3,21 +3,13 @@
 import { useThreadMessages } from "@convex-dev/agent/react";
 import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
-import {
-  BoltIcon,
-  BrainIcon,
-  ChevronDownIcon,
-  MicIcon,
-  PaperclipIcon,
-  SendIcon,
-  UserIcon,
-} from "../../../(auth)/icons";
+import { useRef, useState } from "react";
+import { BoltIcon, BrainIcon, ChevronDownIcon, SendIcon, UserIcon } from "../../../(auth)/icons";
 import { MarkdownDocument } from "../MarkdownDocument";
 // The verb map lives in exactly ONE module (cards.tsx) and both surfaces read it through
 // stepText — a second copy WILL drift, and a drifted verb is a surface disagreeing with itself.
 import { stepText, traceText } from "./cards";
-import { IntakeControls } from "./IntakeControls";
+import { IntakeControls, type IntakeControlsHandle } from "./IntakeControls";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // SC2 render: the left-pane conversation. The guided questions and the "review and Approve"
@@ -34,8 +26,8 @@ import { useSendCockpitMessage } from "./useSendCockpitMessage";
 // teal Send — with the brand-mandated §1 disclaimer below. Enter-to-send unchanged (the e2e
 // path). Model pill / brain are disabled until their capabilities exist (their titles say so).
 // Attach + mic are the Phase-4 IntakeControls (INTK-02/03 — upload/dictate → classify →
-// extract → redact → merge into this thread); they need a minted threadId, so before the
-// first send they render as disabled placeholders whose titles say to send a message first.
+// extract → redact → merge into this thread). On a fresh chat they stage local File/Blob objects;
+// the first ordinary send mints the thread and flushes those staged inputs through that same spine.
 //
 // ponytail: static message list (non-streaming). What DID land instead is the tool-step trace
 // (`agentSteps` — CKPT-05, below): the in-progress bubble lists the steps the agent is taking as
@@ -118,6 +110,8 @@ export function ChatPane({
   const savePrompt = useMutation(api.savedPrompts.save);
   const [pinned, setPinned] = useState<Record<string, PinState>>({});
   const [text, setText] = useState("");
+  const [hasPendingIntake, setHasPendingIntake] = useState(false);
+  const intakeRef = useRef<IntakeControlsHandle>(null);
   const busy = sending;
   const setBusy = onSending;
 
@@ -174,7 +168,12 @@ export function ChatPane({
     setText("");
     try {
       const res = await send({ threadId, text: t });
-      if (!threadId) onThread(res.threadId, t);
+      if (!threadId) {
+        onThread(res.threadId, t);
+        // Selection never bypasses governance: files and voice stay in the browser until this
+        // ordinary first message has created the plan-backed thread, then reuse intake.ts exactly.
+        await intakeRef.current?.flushToThread(res.threadId);
+      }
     } catch (err) {
       setText(t);
       throw err;
@@ -366,7 +365,19 @@ export function ChatPane({
       </div>
 
       {/* Composer — one rounded glass card: textarea, then Auto pill + brain/attach/mic + Send */}
-      <div style={{ display: "grid", gap: "0.4rem" }}>
+      <div
+        data-testid="chat-composer"
+        style={{
+          display: "grid",
+          gap: "0.4rem",
+          flex: "none",
+          minWidth: 0,
+          position: "sticky",
+          bottom: 0,
+          zIndex: 2,
+          background: "var(--card)",
+        }}
+      >
         <div
           style={{
             border: "1px solid var(--rule)",
@@ -432,28 +443,11 @@ export function ChatPane({
             >
               <BrainIcon size={17} />
             </button>
-            {threadId ? (
-              <IntakeControls threadId={threadId} />
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  disabled
-                  title="Send a message first — then attach files"
-                >
-                  <PaperclipIcon size={17} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  disabled
-                  title="Send a message first — then dictate"
-                >
-                  <MicIcon size={17} />
-                </button>
-              </>
-            )}
+            <IntakeControls
+              ref={intakeRef}
+              threadId={threadId}
+              onPendingChange={setHasPendingIntake}
+            />
             {/* Busy affordance (FIX 3): while a turn is in flight the button shows a spinning ring,
                 stays disabled, and says "Working…" (title + aria-label + aria-busy) — visible at a
                 glance and not colour-dependent (BRAND §6). Deliberately NOT red: BRAND reserves amber
@@ -484,6 +478,11 @@ export function ChatPane({
               {busy ? <span className="btn-spinner" aria-hidden="true" /> : <SendIcon size={16} />}
             </button>
           </div>
+          {!threadId && hasPendingIntake && text.trim() === "" && (
+            <p role="status" style={{ margin: 0, fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+              Add typed instructions for the staged file or voice note, then send them together.
+            </p>
+          )}
         </div>
         {/* Brand-mandated honesty line (BRAND.md §1) */}
         <p

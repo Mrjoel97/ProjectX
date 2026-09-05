@@ -1,5 +1,9 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-09-05 (33.2-04 â€” voiceDoc.ts resolves its model through `convex/lib/models.ts`;
+> its local resolver copy could not route an `or/` id (see vault.md). One-line import swap.)
+>
+
 > Last verified: 2026-08-28 (**WAVE-3 CLEANUP — THE SHARED PREDICATE GAINED A POSITIVE OPERATOR
 > OPT-IN, AND THIS MODULE IS THE REASON IT HAD TO.**
 >

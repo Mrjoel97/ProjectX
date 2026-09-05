@@ -1,5 +1,902 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-05 (33.2-06 — **SORA IS DELETED.** Owner: "we do not use this model anymore".
+> Gone: `pollOpenAiVideoTask` (the retained poller — its endpoint is withdrawn 2026-09-24 and the
+> only sora-2 row in any deployment is `succeeded`), the `sora-2` rows in `MEDIA_VIDEO_PRICING` /
+> `MEDIA_VIDEO_SECONDS`, the sora-2 succession record in `media.fixtures.json` (its job — proving
+> the replacement was wired — is done; A7 now asserts only that the video submit resolves to
+> openrouter.ai), the "OpenAI Sora task landing" tests and their fetch helper, and the block-deck
+> label ("Priced at Grok Imagine on OpenRouter"). `api.openai.com` no longer appears in media.ts
+> and a source scan in media.test.ts holds that; routing is STILL asserted on the resolved url.
+> `pollWanTask` stays (pre-Sora cutover jobs). OPENAI_API_KEY is down to the voice session.
+> Measured: cost suite green, media.test.ts green, reliabilitySweep green.)
+>
+> Last verified: 2026-09-05 (33.2-04 â€” **GENERATE IS THE APPROVAL, AND THE RENDER IS THE TERMINAL.**
+> Owner-reported on the first reel of the new pin: the approvals page kept the rendered reel under
+> "awaiting" with an Approve button. `generateReel` bought the deck and left the plan `proposed`;
+> `executePlan`'s media pre-step reserves the WHOLE deck before its CAS, so that Approve was a
+> second bill, not a no-op. Now: `generateReel` patches `status: "delivering"` on a successful
+> whole-deck reservation (both arms) â€” the same state `executePlan` leaves â€” and `recordRender`
+> closes the plan to `done` (a `canceled` row stays canceled). Before this, approved reels sat under
+> "in flight" for ever too (DB: 1 delivering/rendered, 1 proposed/rendered). The one legacy
+> proposed/rendered row (the owner's 2026-09-05 reel) is dismissed with Discard, not Approve.
+> Measured: media.test.ts generateReel + render-terminal tests carry the two assertions.)
+>
+> Last verified: 2026-09-05 (33.2-03 — **THE STORYBOARD PIN MOVED TO `gpt-4.1-mini`, BY THE RULE.**
+> `33.2-BAKEOFF.md` + ADR-032. On the 90 s media clock, executed model asserted per pass from
+> spend rows: gpt-4o-mini 14 clean of 24 (baseline), gpt-5.6-luna 11, gpt-4.1-mini 18 (+4, clears
+> the >= 3 threshold), claude-sonnet-5 and gpt-5.6-sol DISQUALIFIED — both blew the 90 s clock on
+> the production path (`llm.fallback` audit rows, `TimeoutError`; sol after three clean passes at
+> 64-90 s and $0.09 each, sonnet on pass 1 — it reasons by default on OpenRouter and the lane sets
+> no effort). Fallback is now gpt-4o-mini (a rollover must CHANGE the model; the baseline finished
+> inside 45 s on 24/24). Re-measure recipe: repoint `OR_MEDIA_MODEL`, let `convex dev` push, run
+> the runner — it aborts (exit 2) if the pin or the executed model differs. Two corpus facts for
+> the next corpus: the 12 s generated cap is NOT parser-enforced, and `45-illegal-duration` is a
+> refusal fixture (ceiling 22 not 24). Measured: cost 95/95, dispatch + runCockpitAgent 158/158,
+> tsc 0 outside the connector lane.)
+>
+> Last verified: 2026-09-04 (33.2-02 — **THE STORYBOARD BAKE-OFF RUNNER EXISTS:
+> `scripts/run-storyboard-bakeoff.mjs` + `scripts/storyboard-briefs.json`, registered here.**
+>
+> Which model writes the storyboard is now a MEASURED decision (33.2-PRD L2-L4). The runner drives
+> the PRODUCTION `dispatch:runMedia` — real prompt assembly, real `searchVault` grant, real step
+> budget, real clock — over twelve briefs about the seeded Northwind tenant, one candidate per
+> invocation, and reads the parser's verdict off the plan row through `smoke:storyboardFactsForPlan`
+> (counts and codes only; two tests hold that no model prose crosses it). The candidate is NOT an
+> argument: `--candidate` must equal `MEDIA_MODEL` resolved off cost.ts, and a pass whose returned
+> `modelId` differs aborts the invocation (exit 2). Each pass is a fresh plan row + thread, so no
+> pass sees another's refusal through the retry line; research is bought once per brief (33.2-01's
+> reuse) and reused by every later pass and candidate. `--self-check` is the offline gate: twelve
+> briefs, every legal duration covered, one illegal one, all under MAX_QUESTION_CHARS (it caught a
+> 519-char brief on first run), every validator rejection proven to fire, the alias-chain reader
+> proven on a synthetic chain. Reports land in `.tmp/storyboard-bakeoff/` (gitignored); the
+> decision rule — clean two-deck passes of 24, clock truncation disqualifies, repin only at >= 3
+> over the baseline — is written in the PRD BEFORE any run. Measured: self-check exit 0,
+> dispatch.test.ts facts 2/2, biome clean, tsc 0 outside the connector lane.)
+>
+> Last verified: 2026-09-04 (33.1-06 - **THE MUSIC BED IS FETCHED FROM OPENVERSE AND CREDITED
+> IN THE CAPTION (ADR-031). The "no `mediaJobs` row" section below is SUPERSEDED for the bed.**
+>
+> **What changed.** The baked library was empty (`LICENSES.md` + README, no track), so every reel
+> was bedless. The bed is now a $0 STOCK row -- `provider: "stock"`, `kind: "audio"`,
+> `model: "openverse/v1"`, at `MUSIC_BLOCK_INDEX` (-2, beside captions) -- written by
+> `reserveSceneJobInner` FIRST in the batch, fetched by `fetchStockMusic` (`<mood> instrumental`,
+> `license_type=commercial`, no key; anonymous 20/min, 200/day read off the headers), picked by
+> `pickStockAudio` (long enough for the reel, downloadable, CREDITED -- or skipped), landed like a
+> Pexels still. The $0 `music` invoice line is unchanged; the row is the mechanism.
+>
+> **Optional by construction.** `batchToRender` ships `music.mp3` + `musicFile` only when the row
+> has landed; failed/missing/landing = bedless reel via the assembler's WARN path. A reel never
+> waits on its music. `assemble_final.sh --music-file in/music.mp3` takes the fetched track over
+> the library; the flag's path is charset-guarded to that one name.
+>
+> **The licence duty.** What survives Openverse's commercial filter is CC BY -- free of charge, not
+> free of duty. The library's own `attribution` string lands on `plans.musicCredit` (BEFORE the
+> bytes, so a crash leaves the duty visible), is written into the reel's vault document as a
+> `Music:` line, and is shown beside the finished reel as a copy-ready caption credit
+> (`data-testid="media-music-credit"`). Owner's choice: caption, not an end card.
+>
+> **Invariants that moved:** `mediaJobs.kind` gained `audio` (widen-only); `RENDER_INPUT_NAME`
+> accepts `music.(mp3|m4a|ogg|wav|flac)`; `parseBody` refuses a `musicFile` not present in
+> `inputs` before a VM exists. The renderReel bed tests carry the "never waited on" property.
+>
+> Proven on the first rendered reel's own assets with a real Openverse track: `music bed: upbeat
+> -> 15s at I=-33`, `mix 3 take(s) + 0 diegetic bed(s) + music:upbeat`, decode-validated. core
+> render +4, backend media +7 (one rewritten: it asserted "no row" and would have gone green
+> vacuously over the new row), renderReel +3, cost 94/94, typecheck + biome clean.)
+
+
+> Last verified: 2026-09-04 (33.1-06 / audit Step 2 - **THE RETRY LOOP IS CLOSED, AND THE
+> FAILURES THAT ACTUALLY HAPPEN HAVE WORDS.**
+>
+> **Retry feedback.** "Try again" is a chat message on the same thread (33-07), and the thread's
+> plan row is unique (`by_thread`), so the refusal the canvas just showed is sitting on that row
+> as `proposalRefusal` -- and until now went to the owner, never to the model. The specialist got
+> the same brief blind and failed the same way: 9 of 17 outright refusals and 8 of 10 lost
+> variations in the audit log were one code. `plans.refusalForThread` reads the row;
+> `buildSpecialistPrompt` appends ONE driver-plane line for the media route (`mediaRetryLine`):
+> *"Your previous storyboard for this brief was refused -- variation A: <clause>. Fix exactly
+> that in this attempt and keep the rest of the direction."* The clause is `deckRefusalClause`'s
+> -- the same table the canvas reads -- so owner and model are told the same thing in the same
+> words, and the skill body is re-taught nothing (§5: driver-plane, short pieces). Tenant-scoped
+> by the index; asserted. Mutation-proven: silencing the line fails exactly the positive case.
+> **Scene numbers are NOT fed back** -- `parseVariations` does not carry them and widening three
+> layers for one number was not worth it; the code names the failure and the skill already teaches
+> the arithmetic.
+>
+> **Failure words.** `reasonCodeFor` matches the assembler's own `ERROR:` wording, and two lines
+> the first live reel printed had no pattern: *"needs a TrueType font"* -> `card_font_missing`,
+> *"is still speaking at ... but the reel ends at"* -> `narration_overruns_reel` (the ONE overrun
+> the assembler still refuses). Both had collapsed into `render_failed` -> "no plainer word". The
+> canvas now words those two plus the codes the audit log actually contains -- `http_402`,
+> `credit_balance_exhausted` (11 of 58 jobs), `media_not_configured`, `submit_threw`,
+> `tts_no_audio`, `tts_not_verbatim` -- and `failureClause` falls back to *"refused the request
+> with HTTP NNN"* for any other real status instead of the generic clause. `speech_out_of_window`'s
+> canvas sentence is deleted: the assembler delays a colliding take and never emits it. Its core
+> pattern stays (render.test.ts pins it; harmless).
+>
+> core render 145/145 (+2 rows), backend dispatch 116/116 (+3), web canvas 127/127 (+1), typecheck
+> clean on core/backend/web, biome clean.)
+
+
+> Last verified: 2026-09-04 (33.1-06 - **THE FIRST REEL RENDERED. WHAT THE OWNER SAW IN IT, AND
+> THE THREE FIXES -- TWO OF THEM PRODUCT DEFECTS THAT WOULD HAVE SHIPPED.**
+>
+> Plan `mh74cdsv…` rendered end to end (`media.rendered`, 10 gates, `media.reel_saved`). Frames
+> were pulled from the published mp4 and READ rather than described; the findings and their fixes:
+>
+> **1. Two voices.** The 7s Grok clip was a presenter speaking to camera, with a stereo AAC track
+> peaking at 0 dBFS -- louder than the narration take (-19.4 dB). `assemble_final.sh` mixed it as
+> the *diegetic bed* at `SFXVOL=0.12`, exactly as designed for Sora's ambient SFX. **ADR-027's "no
+> native audio" was false** (superseded on that claim by ADR-030). Fix: the bed is taken ONLY from a
+> scene with no voice take -- `[[ "$KIND" == "video" && ! -f "$voice" ]]`. The narration stays;
+> the clip's improvised speech goes. The owner's alternative (detect a voice, skip the take) is
+> declined in ADR-030: it would keep the words nobody approved and drop the ones the owner did.
+>
+> **2. The text card ran off both edges.** "AUTOMATE THE REPETITIVE" was drawn as ONE line at
+> `H/22` px -- drawtext does not wrap -- and shipped as "UTOMATE THE REPETITIV". Fix: the words are
+> folded first (`fold -s`, width derived from the same `W`/`H`/fontsize the filter uses), then
+> drawn **one `drawtext` per line**, each centred on its own width. Per-line rather than one
+> multi-line file because this ffmpeg lineage (BtbN master, gyan 8.x) shapes a LF as a .notdef
+> BOX glyph -- seen in two fonts -- and left-aligns a multi-line block inside its centred box.
+> The per-line files are written RELATIVELY beside the input: `textfile=` sits inside the filter
+> string where no path conversion reaches it, so a `$TMP` (POSIX) path is unopenable by a native
+> ffmpeg on a developer's machine. The `textfile=`/`expansion=none` trust boundary is unchanged and
+> the tripwire now pins the per-line `${lf}`.
+>
+> **3. Captions never burned, and would have overflowed when they did.** `captionStatus: failed`,
+> `captionReason: render_failed`: MSYS argument conversion rewrote `fontsdir=/usr/share/fonts`
+> INSIDE `burn_caps.sh`'s `-vf` string into `C:/Program Files/Git/...`, and the drive colon broke
+> the filtergraph -- the same conversion that SAVES the assembler's `mktemp` paths. The local runner
+> now sets `MSYS2_ARG_CONV_EXCL=subtitles=`, the narrowest exclusion; verified the burn exits 0 AND
+> the assembler still renders. Then the real defect: the shipped style is 64px DejaVu Sans,
+> margins 80/80 on a 1080-wide script, **`WrapStyle: 2` (no wrapping)**, cues up to 32 chars --
+> a 31-char cue touched BOTH frame edges even in the narrower fallback face. `WrapStyle: 0`
+> (smart wrap inside the margins) makes overflow impossible for any cue; asserted in
+> `captions.test.ts`.
+>
+> **Also confirmed, not fixed here:** the music library is EMPTY in the repo (`LICENSES.md` and a
+> README, no track), so every reel ever rendered has been bedless -- the assembler's WARN path,
+> correct behaviour. And a caption burn that fails writes `captionReason` on the plan but emits
+> NO audit row, which is why the audit log showed no caption event at all.
+>
+> All three fixes were proven on the SAME five landed assets: `3 take(s) + 0 diegetic bed(s)`,
+> the card wrapped and centred (frame read), 15.100000s decode-validated. core captions 35/35,
+> backend media+render 308/308 + script tripwires 29/29, web 688/688, biome clean.)
+
+
+> Last verified: 2026-09-04 (33.1-06 - **THE FIRST REEL TO REACH THE ASSEMBLER DIED FOR WANT OF A
+> FONT, AND THE CARD COULD ONLY SAY `render_failed`.**
+>
+> **The furthest any reel has ever got.** Plan `mh74cdsv…`: a 7-second Grok clip, a Pexels still,
+> a `text_card`, three voice takes and a landed transcript -- every purchase succeeded, the render
+> ran (twice: the automatic retry fired), and both attempts exited 1. The canvas said "the render
+> failed without a more specific cause". The route never logs stderr (§4), so the cause was
+> recovered by fetching the five blobs and running `assemble_final.sh` by hand with the plan's own
+> scene list: `ERROR: a 'card' scene needs a TrueType font and none was found`. The snapshot bakes
+> DejaVu Sans at `/usr/share/fonts/...`; this machine has nothing at any probed path.
+>
+> **Why the fix is a RELATIVE path and not `ASSEMBLE_FONT=C:\Windows\Fontsrial.ttf`.** Two
+> trials settled it rather than reasoning: an MSYS `/c/Windows/Fonts/arial.ttf` passes the
+> script's `-f` probe and then SIGSEGVs ffmpeg -- it is not a path a native binary can open, and
+> fontconfig has no config to fall back to. A Windows path with a drive colon cannot go into the
+> drawtext filtergraph at all, where `:` is the option separator. `createLocalSandbox` therefore
+> COPIES a font into the render root as `font.ttf` and sets `ASSEMBLE_FONT=font.ttf`: no drive
+> letter, resolved from the cwd drawtext already uses. With it the same five assets render:
+> exit 0, `out/final.mp4`, 15.100000s, decode-validated, card drawn.
+>
+> **The music bed is empty everywhere, not just locally.** `apps/web/scripts/music/` holds
+> `LICENSES.md` and `README.md` and no track, so every reel ever baked has rendered with
+> `music: none` -- the assembler's WARN path, which is correct behaviour and now identical locally
+> (`ASSEMBLE_MUSIC_DIR` points at that directory). A mood in the art direction is a request the
+> library cannot yet honour; nothing about the reel fails because of it.
+>
+> **The observability lesson is the bigger one.** `reasonCodeFor` now yields only
+> `ok | render_failed | sandbox_timeout | bad_invocation`, so EVERY assembler refusal -- the script
+> writes a dozen distinct, plain-English `ERROR:` lines -- collapses to the same unnamed code, and
+> the canvas still carries words for 19 codes nothing emits. A clear message existed and was
+> discarded one hop before the person who needed it. The fix belongs in the mapper (a closed set
+> of assembler codes the script prints as a token, §4-safe because they are codes, not prose), and
+> is Step 2 of the 2026-09-04 audit plan.
+>
+> Test carries the probe script the assembler would run and is mutation-proven (the font copy
+> deleted → fails). web render suite 10/10, biome clean, `next build` green.)
+
+
+> Last verified: 2026-09-04 (33.1-06 - **A RENDERABLE DECK WAS BEING REFUSED FOR FREE. THE DONOR
+> SEARCH IGNORED WHETHER THE DONOR STILL FIT ITS OWN LINE.**
+>
+> **The live deck** (owner, 2026-09-04, 15s): `text_card 4s/52ch`, `generated_video 7s/40ch`,
+> `stock_image 2s/43ch`, `text_card 2s/33ch`. Scene 3 needs ~3.1s in a 2s window, so
+> `repairNarrationWindows` looks for a donor. `bestDonor` scored candidates on
+> `duration - MIN_DONOR_SECONDS` ALONE, so it took 2s from scene 1 -- which was already at its own
+> limit (52 chars needs all 4s). Scene 1 became the next offender, the next pass took the seconds
+> straight back, and the repair ping-ponged until its pass budget ran out and the deck refused
+> `narration_too_long`. **The 7-second clip carrying 40 characters -- four spare seconds -- was
+> never asked**, because limit 2b prefers a still and scene 1 merely LOOKED slack.
+>
+> **The fix is one bound**: a donor's slack is now
+> `min(duration - MIN_DONOR_SECONDS, itsWindow - ceil(itsChars / MAX_CHARS_PER_SECOND))`. The
+> WINDOW, not the duration -- shrinking a scene shortens the window it speaks into by exactly what
+> it gives away. A silent scene owes its seconds to nobody and is unbounded. The deck above now
+> parses to `[4, 4, 4, 3]`, the clip paying twice (7->5->4), total still exactly 15s, and
+> `narrationOverrunsReel` returns null. **Shrinking a clip only ever LOWERS the generated total, so
+> this can never raise a price the user already approved.**
+>
+> **THE SENTENCE MOVED WITH THE CHECK.** `SCENE_REFUSAL_WHY.narration_too_long` still read "a spoken
+> line is too long to finish before the next line starts" -- a condition 33.1-06 had already
+> DELETED (the assembler delays a colliding take now). The card was describing an impossible failure
+> while the real one -- the lines summing past the reel -- went unnamed. It now reads "the spoken
+> lines add up to more than the reel is long". Grepped repo-wide: no second copy of the old
+> sentence survived in `apps/web`, which is the only reason one reason could not say two things.
+>
+> **`MAX_CHARS_PER_SECOND = 14` was re-derived against the NEW voice model, not assumed.** The
+> provider moved to `openai/gpt-audio-mini` this same phase, so the constant was measured rather
+> than trusted: a real take transcribed back at 37 chars / 2.70s = **13.7 chars/s**, 133 wpm. The
+> constant is right and the refusals it produces are arithmetic, not policy -- which is why the fix
+> had to be in the donor search and could NOT be "remove the constraint".
+>
+> The regression test carries the owner's deck verbatim and is mutation-proven: reverting the bound
+> to `floor` alone fails it. core 1247/1247, backend media+dispatch 399/399, web 687/687, typecheck
+> and biome clean.)
+
+
+> Last verified: 2026-09-04 (33.1-06 - **THE LOCAL RUNNER HAD NEVER RUN THE ASSEMBLER. IT
+> SHIPPED GREEN AND DIED `spawn sh ENOENT` ON THE FIRST REAL REQUEST.**
+>
+> **How a 9-test file missed the only command that matters.** `renderReel` issues exactly one
+> command: `sh assemble_final.sh ...`. Every test in `localSandbox.test.ts` spawned **`node`** --
+> present on PATH on every platform -- so the suite was fully green while the runner could not
+> execute the assembler at all on Windows. Coverage of the mechanism (spawn, cwd, argv, exit code)
+> is not coverage of the behaviour. The new case spawns `sh`.
+>
+> **Why `sh` is absent and why the substitute must be BASH.** The spawn is `shell: false`, so
+> there is no interpreter to fall back on; Windows has no `sh`. `assemble_final.sh` is
+> `#!/usr/bin/env bash` and leans on arrays (`TAKE_ABS`/`TAKE_PAD`), so a strict POSIX `sh` would
+> parse-fail. `resolveShell` substitutes Git for Windows' `bash.exe` -- `git` on PATH is already a
+> precondition for this repo -- with `MEDIA_RENDER_SH` as the override. **Only the literal `sh` is
+> substituted**, never a real binary; asserted for `ffmpeg`.
+>
+> **THE TEST THAT COULD NOT FAIL, AND HOW IT WAS CAUGHT.** The first version of the new case only
+> ran `sh` through the sandbox -- and it PASSED with `resolveShell` mutated to a no-op, because
+> vitest inherits the developer's Git Bash PATH where `/usr/bin/sh` exists, while the server that
+> serves the route is launched from `cmd.exe` and does not. The test was measuring the shell it was
+> started from, not the fix. The falsifiable assertion is on `resolveShell` ITSELF (`!== "sh"`, and
+> the path exists). Re-mutated afterwards: the no-op is now KILLED. A green run proves nothing
+> until a mutant has failed it.
+>
+> **MSYS PATH CONVERSION MUST STAY ON -- switching it off broke the render.** `MSYS_NO_PATHCONV=1`
+> + `MSYS2_ARG_CONV_EXCL=*` were added defensively, to stop a scene spec (`video:7`) being rewritten
+> as `video;7`. That mangling **does not happen** (the test now establishes it), and disabling the
+> conversion caused a real failure instead: `assemble_final.sh` builds scratch paths from
+> `mktemp -d`, which returns POSIX (`/tmp/tmp.XXXXXX`), while ffmpeg is a NATIVE Windows binary --
+> `Error opening output /tmp/tmp.VyOaHKI2hh/p_000.mp4: No such file or directory`. The conversion is
+> the bridge. **A guard added against a hypothesised failure broke the working path**; the env
+> override is gone and the spawn is plain again.
+>
+> **How this was found for $0.** Three assets from a part-paid batch were still in storage (a $0.49
+> 7s Grok clip, a Pexels still, one voice take), and `handleRenderRequest` touches NO plan row -- it
+> fetches blobs, renders, uploads to pre-minted URLs, returns JSON. So the route was exercised
+> directly with real bytes and deliberately-invalid upload URLs. Both defects surfaced before a
+> single new cent was spent. **Do this before paying for a fresh deck: the render step is the one
+> plane no offline test reaches.**
+>
+> web render suite 9/9 (was 8), typecheck and biome clean, `next build` green. Verified end to end
+> through the real spawn: exit 0, `out/final.mp4`, 15.100000s, decode-validated.)
+
+
+> Last verified: 2026-09-03 (33.1-06 — **THE RENDER STEP CAN NOW RUN ON A DEVELOPER'S MACHINE.
+> A SECOND `SandboxLike`, DEV-ONLY, BEHIND TWO GUARDS.**
+>
+> **The wall this removes.** `renderReel` hands the assembler to a Vercel Sandbox, whose
+> credentials come from OIDC — automatic on Vercel, unavailable anywhere else. So locally the reel
+> died at the LAST step with `Media env not configured: MEDIA_RENDER_SECRET`, having successfully
+> bought every picture and every voice take. Every other plane could be exercised locally; the one
+> criterion no offline test can reach could not. The alternative was a Vercel account whose
+> Active-CPU quota, per this file's own warning, PAUSES sandbox creation for 30 days when exhausted
+> on Hobby — an outage, not a bill — to verify one reel.
+>
+> **`SandboxLike` was already an interface with a swappable implementation**, five methods wide, so
+> this is a second implementation of an existing seam rather than a new seam. `apps/web/app/api/
+> media/render/localSandbox.ts` backs it with `node:child_process` and a temp dir.
+>
+> **IT IS NOT A SANDBOX, AND THE MODULE SAYS SO IN ITS OWN HEADER.** The real one is isolation:
+> `networkPolicy: "deny-all"`, `persistent: false`, a fresh VM, tenant bytes that never outlive it.
+> None of that holds here — it runs ffmpeg as the developer, on the developer's disk, on the
+> developer's network. It is acceptable ONLY because operator and tenant are the same person on a
+> local deployment.
+>
+> **TWO GUARDS, AND THE SECOND IS THE ONE THAT MATTERS.** `MEDIA_RENDER_LOCAL=1` is the opt-in —
+> but an env var is precisely the thing that gets copied between environments by accident, so an
+> opt-in alone is not a safety property. The route ALSO refuses when `VERCEL` is set, which the
+> platform sets on every deployment and nobody can forget. A stray `MEDIA_RENDER_LOCAL` in a
+> production project therefore downgrades nothing; it is ignored and logged.
+>
+> **What it still holds, because dropping these would make it a bad template to copy:**
+> - **Path containment.** Every path resolves under one temp root or throws — checked with
+>   `relative()`, not a `startsWith` on the joined string, which mis-answers for a sibling
+>   directory whose name merely begins with the root's. Core already guards filenames from a
+>   request body; this is the second enforcement, at the boundary where a traversal would reach a
+>   real disk.
+> - **NO SHELL.** `spawn` with an argv array. Tenant scene text reaches these scripts as file
+>   CONTENT and a card's words are drawn by ffmpeg, so a shell here would make a semicolon a
+>   command. A test hands `"; touch pwned.txt"` as an argument and asserts it comes back as one
+>   literal string with no file created.
+> - **Missing is `null`, never a throw** — the real sandbox's contract. A throw would surface as an
+>   unhandled route error with NO reason code on the plan row instead of the governed
+>   `mp4_missing` / `sidecar_missing`.
+> - **`stop()` deletes the root**, so tenant media does not accumulate in temp after the reel is
+>   stored.
+>
+> **CONFIGURATION on the local deployment** (none of it existed before, which is why this step had
+> never been reached): `MEDIA_RENDER_SECRET` — minted here, 32 random bytes, and it must MATCH on
+> both sides, Convex env and `apps/web/.env.local`; `MEDIA_RENDER_URL` =
+> `http://127.0.0.1:3111/api/media/render`; `MEDIA_RENDER_LOCAL=1` in the web env only.
+> **`next build` + a RESTART is required** — the route reads `process.env` at request time but the
+> web app bundles at build time, and a stale `next start` is the silent version of the clock-plane
+> defect. Verified after restart: the route answers **401** to an unauthenticated POST, so the
+> shared secret is genuinely enforced and not merely configured.
+>
+> web 686/686 including 8 new tests for the runner, typecheck and biome clean.)
+
+
+> Last verified: 2026-09-03 (33.1-06 — **"RUNS INTO THE NEXT LINE" IS NO LONGER A REFUSAL. THE
+> ASSEMBLER MOVES THE TAKE. The owner asked for this constraint removed twice; it was removed by
+> making the renderer stop needing it, not by deleting the guard in front of it.**
+>
+> **Why the obvious version was refused first, and why that was right.** `assemble_final.sh` had
+> TWO hard errors — speech past the end of the reel, and speech running into the next line — and
+> both `exit 1`. Deleting the parse-time check alone would have converted a FREE refusal into a
+> PAID one: every picture and voice take bought, then an ffmpeg abort. So the renderer changed
+> first.
+>
+> **THE ASSEMBLER NOW PUSHES.** A colliding take is delayed to `previousEnd + TAKE_GAP_S` (0.12s)
+> and the run continues. The property that mattered — never two narrators over each other — is
+> unchanged; only the remedy moved, from refusing a reel to moving a take. `TAKE_PAD` and
+> `TAKE_ABS` are both rewritten so the captions sidecar keeps agreeing with the mix: `speech_abs_s`
+> is what `rebaseWords` shifts by, and a mix that moved without it would caption the reel against
+> timings that no longer exist. **No atempo, no trim, no pad — the push is an OFFSET change and
+> nothing else**, which is why the no-time-stretch tripwire still passes untouched.
+>
+> **ONE hard error survives, and the distinction is the whole design: speech still running when
+> the reel ENDS.** There is nowhere to delay it to — the picture track is a fixed length. Only a
+> shorter line or a longer reel cures it, both upstream.
+>
+> **So the parse gate was NARROWED, not deleted, and it now SIMULATES the renderer.**
+> `narrationOverrunsReel` walks the deck with a cursor, reproducing all three placement rules:
+> a take that fits its scene is CENTRED (ending later than a left-aligned one, which a naive model
+> under-predicts), a take longer than its scene ANCHORS at the scene start, and a take that would
+> begin before the previous finished starts at `previousEnd + gap` **and that displacement
+> CASCADES**. The cascade is the only route to the surviving fatal case, which is exactly why a
+> per-line window test cannot decide it and a running cursor can.
+>
+> **IT WAS VALIDATED AGAINST REAL FFMPEG, NOT A SOURCE SCAN** — the standing lesson on this
+> subsystem, and it paid: the harness rendered a genuinely colliding deck, printed
+> `note: voice 4 pushed 18.200s -> 20.520s`, and then failed with *"still speaking at 32.120s but
+> the reel ends at 30s"*. `narrationOverrunsReel` predicts **32.12s** for that same deck. The model
+> agrees with the renderer to the millisecond. A second run with a shorter final take rendered end
+> to end: 30.016s, decode-validated, sidecar written, `no_overlapping_lines` still a declared gate
+> and still true.
+>
+> **THE SECOND GATE HAD TO MOVE TOO, and finding it is the "fixing one gate reveals the next"
+> pattern.** `reserveSceneJobInner` re-checked the identical rule per scene on the money path.
+> Narrowing only the parser would have left a deck accepted by one gate and refused by the other.
+> It now calls the SAME function, once, over the whole deck — a per-scene call could not see the
+> cascade anyway. A third site (`media.ts:~2600`) is the canvas character counter: display-only,
+> left alone, and now slightly conservative — it may show a line as over-long that will render.
+>
+> **THE TESTS THAT WENT RED DESERVED TO, AND TWO OF THEM TAUGHT SOMETHING.** Three storyboard
+> tests asserted the old refusal. One of them — "the only slack is INSIDE the window" — STILL
+> refuses, and the reason moved: 14.4s of speech plus a 2.3s line cannot fit a 15-second reel, so
+> it is the surviving end-of-reel case reached through the cascade, not a collision. The first
+> rewrite of that test asserted acceptance and was wrong; the renderer's own arithmetic settled it.
+> A new test pins the cascade specifically — three lines that each fit their own scene and only
+> overrun in aggregate — which is the case a per-line check passes and the renderer eats.
+>
+> The assembler tripwire was REPLACED, not deleted: it now asserts the push happens, that the gap
+> is non-zero, that the displacement is an offset change, and that the old abort sentence is GONE —
+> so a well-meaning revert cannot restore an abort the parse gate no longer backstops.
+>
+> core 1246/1246, backend media+render 337/337, dispatch+plans 141/141, cockpit 77/77, web 678/678,
+> typecheck and biome clean.)
+
+
+> Last verified: 2026-09-03 (33.1-06 — **A MISSING CREDENTIAL USED TO STRAND THE REEL SILENTLY.
+> IT NOW FAILS THE LINE. Found by a live reel that hung, not by a test.**
+>
+> **The symptom the owner reported was "the reel is taking too long".** There was no error on the
+> canvas, none in the ledger, and none on the job row. The backend log had it:
+>
+> ```
+> [CONVEX A(media:submitBatch)] Uncaught Error: Media env not configured: PEXELS_API_KEY
+> ```
+>
+> **The mechanism, and it is general — it was never about Pexels.** Both arms of `submitBatch`
+> claim the row and THEN call an adapter: stock claims at `claimLine` and calls `fetchStock`; the
+> paid path claims and calls `submitLine` / `generateOpenRouterVoice`. Every one of those adapters
+> opens with `requireEnvMedia`, which THROWS. So an unset variable killed the whole action after
+> the row had already left `queued` — no `recordSubmission` ran, and **`claimLine` will not
+> re-claim a claimed row, so no retry could ever reach it again.** The reel waits forever. The same
+> hole was one unset variable away on the image, video, voice and caption planes.
+>
+> **The fix is ONE try around the line body, not a repair per adapter.** Every adapter has the
+> identical shape, and a fix applied adapter-by-adapter is the repair that reaches two sites of
+> three — this playbook has that scar already. `requireEnvMedia` still throws, and the tests that
+> assert it still pass: throwing is how a paid plane fails CLOSED before a cent moves. What changed
+> is that the throw no longer strands the row it claimed. A missing variable is recorded as
+> `media_not_configured` with `blocked: true` (retrying an unset deployment variable cannot help);
+> anything else is `submit_threw`.
+>
+> **§4 on a thrown message.** The CODE is recorded, never the error text. A throw can carry a url,
+> a request body, or a fragment of the narration the line was submitting, and `failureReason` is
+> rendered on the canvas.
+>
+> **WHY THE WHOLE SUITE PASSED OVER THIS.** Every existing stock test sets `MEDIA_PROVIDER_FIXTURE`,
+> which short-circuits `fetchStock` **before the env read**. The one line that would have caught it
+> was unreachable in every test that touched it. The new test deliberately does NOT set the fixture
+> flag, and is mutation-proven: restoring the rethrow kills it and nothing else.
+>
+> **Operationally: `PEXELS_API_KEY` is not set on the local deployment**, so any deck containing a
+> `stock_video` or `stock_image` scene blocks until it is. It is a free key. The media planes now
+> need: `OPENROUTER_API_KEY` (images, video, voice, captions) and `PEXELS_API_KEY` (stock).
+>
+> backend media 286/286, typecheck and biome clean.)
+
+
+> Last verified: 2026-09-03 (33.1-06 — **CAPTIONS MOVED TOO. EVERY PAID MEDIA PLANE IS NOW ON ONE
+> CREDENTIAL, AND THE ENTRY BELOW THIS ONE IS WRONG ABOUT THAT. ADR-029 supersedes ADR-028's STT
+> half.**
+>
+> **The correction, first, because the stale claim is one entry down and a reader will hit it.**
+> The 2026-09-03 voice-plane record below says captions cannot leave OpenAI. They can:
+>
+> ```
+> POST openrouter.ai/api/v1/audio/transcriptions
+>   model=openai/whisper-1  response_format=verbose_json  timestamp_granularities[]=word
+> -> 200  {"duration":3.5,"usage":{"seconds":4,"cost":0.0004},
+>          "words":[{"word":"Founders","start":0,"end":0.6}, … 9 words, 0 malformed]}
+> ```
+>
+> Complete per-word `start`/`end`, in exactly the shape `submitCaptions` already parses, at
+> **$0.0060/minute** — computed as `usage.cost / usage.seconds x 60` and identical to OpenAI's
+> rate, so `MEDIA_STT_PRICING` does not move. That equality was CHECKED, not assumed: a migration
+> that changes a price quietly is what the media price table exists to prevent.
+>
+> **THE MISTAKE, NAMED, BECAUSE IT WILL BE MADE AGAIN: a `/models` catalogue is not an API
+> surface.** The "captions cannot move" claim came from filtering OpenRouter's 424-entry `/models`
+> list for anything audio-shaped and finding no Whisper. That list describes what the CHAT endpoint
+> routes to. The audio routes keep their own registries, and they are **uncorrelated** with it in
+> BOTH directions:
+>
+> - `openai/gpt-audio` **is** in the catalogue and is **refused** by `/audio/speech`.
+> - `openai/whisper-1` is **absent** from the catalogue and is **served** by `/audio/transcriptions`.
+>
+> So any claim of the form "OpenRouter cannot do X, X is not in `/models`" is unsound. **Probe the
+> endpoint.** A route answering `400` with a model-validation error EXISTS; one answering `404`
+> does not. The aggravating detail is that the same error had already been caught once that day —
+> `/audio/speech` was found by probing after the catalogue implied it was unusable — and the
+> catalogue was then consulted and believed a second time, an hour later, for a sibling route.
+>
+> **What changed in code, and it is small:** the STT fetch host, the credential
+> (`OPENROUTER_API_KEY`), and the model id is sent **UNSTRIPPED** — `openai/whisper-1`, not
+> `whisper-1`. That is the THIRD arm to learn the same prefix rule after image and tts; OpenRouter
+> routes on the vendor prefix and OpenAI's own API rejects it. Everything else — the multipart
+> form, `verbose_json`, the word granularity, the `transcript_words_missing` fail-closed — is
+> untouched.
+>
+> **`api.openai.com` now survives in `media.ts` for the RETAINED SORA POLLER ALONE**, which no
+> submit path reaches and which may be deleted after 2026-09-24. `requireEnvMedia("OPENAI_API_KEY")`
+> has exactly one caller. The adapter header used to say "tts/stt -> still OpenAI"; that sentence
+> was true when written and false twice over inside a day, and it has been replaced with the
+> catalogue warning above.
+>
+> **THE CAPTION ROUTING TEST NEVER ASSERTED WHERE THE REQUEST WENT.** It checked the multipart
+> fields and the stored transcript and nothing else, so it would have passed unchanged had the host
+> stayed on OpenAI — on a file whose OWN header warns that `api.openai.com` legitimately appears
+> here and that a source scan therefore proves spelling, not routing. It now asserts the resolved
+> hostname, the pathname and the Authorization header, the same discipline the image and video arms
+> already had. Renamed off "OpenAI caption submission" too.
+>
+> Suites after the move: backend media 285/285, typecheck and biome clean on both changed files.)
+
+
+> Last verified: 2026-09-03 (33.1-06 — **THE VOICE PLANE IS ON OPENROUTER TOO, AND IT IS A CHAT
+> MODEL THAT IS CHECKED RATHER THAN TRUSTED. ADR-028.**
+>
+> **Why this happened at all, because it was not a deprecation.** A3 landed on OpenRouter, the reel
+> then reached the voice step, and three attempts failed identically with
+> `credit_balance_exhausted` on `openai/tts-1` — an unfunded OpenAI account, on the one plane
+> ADR-027 deliberately left behind. The owner's instruction was to move it.
+>
+> **THERE IS NO LIKE-FOR-LIKE SWAP, and a reader who assumes one will waste an afternoon.**
+> `POST openrouter.ai/api/v1/audio/speech` is a REAL route — it answers 400 with a model-validation
+> error, not 404 — and it accepts **no model at all**. `openai/tts-1`, `openai/tts-1-hd`,
+> `openai/gpt-4o-mini-tts` and `openai/gpt-audio` were each probed on 2026-09-03 and each came back
+> `"Model … does not exist"`, the last of them **despite being in OpenRouter's own `/models`
+> catalogue**. The voice plane therefore rides `/chat/completions` with an audio modality.
+>
+> **Three wire facts, all measured:**
+> - **`stream: true` is MANDATORY** — without it the API answers `400 "Audio output requires
+>   stream: true"`. Audio arrives as base64 across SSE `data:` frames and is reassembled in
+>   `generateOpenRouterVoice`. That reader is not defensive coding; drop it and there is no voice.
+> - **The samples are headerless `pcm16`** (`wav` is not offered). `pcm16ToWav` in
+>   `packages/core/src/captions.ts` adds the 44-byte RIFF header at the arrival edge, using the
+>   byte layout `concatWavTakes` already writes. **Two RIFF writers in one file that disagree by a
+>   field produce silence nobody finds** — change one, change both.
+> - **24 kHz mono**, exactly `MEDIA_DEFAULT_VOICE.sampleRateHertz`, so nothing resamples. `nova`
+>   survives the move, probed 3/3.
+>
+> **THE DEFECT THIS PREVENTS, AND IT WAS OBSERVED, NOT FEARED.** Under a SHORTER system line,
+> `openai/gpt-audio-mini` was given the narration line "Nothing sends until you approve it." and
+> **answered it** — *"Understood. Just let me know what you are trying to send…"* — twice out of
+> two, in a synthetic voice, in a take that would have been mixed into the owner's reel as the
+> owner's own script and then transcribed back out by captions as if they had written it. That is
+> the **provenance** failure class, arriving through audio. The stronger system line took the same
+> input verbatim 3/3.
+>
+> So the prompt is load-bearing AND insufficient, and the code does not rely on it: the stream
+> returns what was actually SPOKEN, `generateOpenRouterVoice` compares it word-normalised against
+> what was SUBMITTED, and a mismatch fails the take as `tts_not_verbatim` with `blocked: true` —
+> no retry, no stored bytes. **A guarantee we cannot get from the model is taken from outside it.**
+> The comparison drops case and punctuation on purpose: a speech engine legitimately says "ninety
+> percent" for `90%`, and refusing that would refuse every good take.
+>
+> **CAPTIONS DID NOT MOVE AND CANNOT TODAY — the honest cost of this decision.** `whisper-1` is
+> asked for `verbose_json` + `timestamp_granularities[]=word` and the pipeline hard-fails
+> `transcript_words_missing` without per-word times. OpenRouter has no Whisper and nothing that
+> returns word timestamps (`gpt-audio` takes audio IN, it cannot emit timings). **With the OpenAI
+> account unfunded a reel now renders WITH ITS VOICE and fails at the caption burn**, which
+> degrades rather than blocks — a failed burn leaves the uncaptioned reel published.
+>
+> **Price, and it moved DOWN.** `gpt-audio-mini` bills per audio output TOKEN, but a reservation
+> exists before any token does, so the row is still priced per submitted character. Two probes:
+> 47 chars → $0.0002496 ($0.0053/1k), 104 chars → $0.0004344 ($0.0042/1k). The table carries
+> **$0.006/1k**, above both with ~13% headroom — the direction a reservation must err, since an
+> over-estimate refunds at landing and an under-estimate overspends the tenant's cap. 2.5x under
+> `tts-1`'s $0.015. The §4.1 reference reel is now **$1.7404** (was $1.762 after 33.1-04, $2.482 on
+> sora-2). **Do not re-attribute that whole drop to grok** — two rates moved.
+>
+> **`speed` is gone and that is a STRENGTHENING.** The old arm sent `speed: 1` to hold D8's
+> no-time-stretch rule. This route has no such field, so the rule is enforced by ABSENCE and the
+> test asserts no key matches `/tempo|setpts|stretch|pace|speed/`.
+>
+> **THREE TESTS WERE FIXED BY MAKING THEM READ THE PRICE TABLE, and that is the durable lesson.**
+> `media.test.ts`'s reference-job arithmetic called itself "derived from the price table" while
+> typing `0.015` as a literal; `media.test.ts` (cost) asserted `$0.018` and `$0.000015` for rules
+> that are about ROUNDING and about the CENTS FLOOR, not about any price. A rate move turned three
+> statements-of-principle into arithmetic failures that said nothing about their principle. They
+> now read `MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model]` and assert the PROPERTY — 1,200 chars
+> bills 1.2 rates and never 2. **A rate a test reads cannot rot; a rate it types always can.**
+> A duplicate `describe("OpenAI audio request bodies")` was DELETED rather than updated: it
+> asserted the submit body a second time, more weakly, and two copies of one assertion is how a
+> repair reaches one site and not the other.
+>
+> Suites: backend media 285/285, cost 94/94, core 1244/1244, contracts 113/113, typecheck and
+> biome clean on every changed file.)
+
+
+> Last verified: 2026-09-03 (33.1-06 — **A3 IS OBSERVED IN A BROWSER AND IN THE LEDGER. A6 IS NOT,
+> AND ONE LIVE DEFECT WAS FOUND AND FIXED ON THE WAY TO IT: A GENERATED CLIP MAY NOW DONATE
+> SECONDS TO AN OVERLONG NARRATION LINE.**
+>
+> **The seeded body: `media-director` version 5, read back rather than guessed** (the phase-10
+> lesson — a plan-authored version pin is not evidence). `skillId
+> kh7bg9chdc60njw0afj6pt0zs98defj9`, body byte-identical to `packages/contracts/skills/`'s source
+> at 26,881 bytes, carrying the 12-second generated cap and the `1..15` grid, with the old
+> "three or four generated scenes" rule absent and exactly ONE `N times` ratio figure. Note the
+> body's own heading reads `v6` while the row is `5` — two different counters, and the ROW is the
+> one that selects at runtime.
+>
+> **A3 — OBSERVED.** The owner asked for a standalone image and it appeared on the canvas. The
+> ledger is the stronger record and it is unambiguous about which vendor served it:
+>
+> - `media.landed` — `model: "openai/gpt-image-2"` (the OpenRouter-qualified id, NOT lane 29's bare
+>   `gpt-image-2` pin), `providerRequestId: "openrouter-4b2ff192-…"`, `estCents 1 / actualCents 1`,
+>   `reconciled: "repriced"`, `verdict: "none_reported"`.
+> - `media.image_saved` — docId + jobId + planId.
+>
+> An `openrouter-` request id cannot come from `api.openai.com`. **The four surviving
+> `api.openai.com` references in `media.ts` are TTS (`:1348`), STT (`:2206`) and the retained Sora
+> poller (`:1708`, `:1765`) — never the image or video submit path.**
+>
+> **THE A/B THE PLAN ASKED FOR IS UNFALSIFIABLE FOR THIS SKILL, AND WAS SKIPPED FOR THAT REASON
+> RATHER THAN FOR COST.** 33.1-06 step 2 wanted one fixture run against the previous body and the
+> new one, "comparing the tool arguments", guarding the repo memory where a body edit made a model
+> start passing an optional enum it had never passed. `media-director` is granted exactly ONE tool
+> and its schema is `{ query: string }`, `required: ["query"]`, `additionalProperties: false`
+> (`llm.ts:3862`). There is no optional field to newly populate and an invented one is rejected
+> before it reaches the loop, so that comparison could not have come out red. A green result there
+> would have been this repo's own "a check that cannot fail". The behavioural test of the new body
+> is A6 itself.
+>
+> **THE DEFECT, AND IT COST THE OWNER TWO LIVE DEAD-ENDS: `widenNarrationWindow` REFUSED TO RESIZE
+> A GENERATED CLIP BECAUSE OF THE 4/8/12 GRID THAT 33.1 HAD ALREADY DELETED.** A `narration_too_long`
+> refusal is repaired by trading seconds — lengthen a scene inside the offending line's window,
+> shrink one outside it. Both ends excluded `generated_video`, and the stated reason was that
+> resizing one puts it off the provider's 4/8/12 grid. 33.1-04 widened `GENERATED_CLIP_SECONDS` to
+> every integer `1..15`, which retired that reason — but only `repairGeneratedGrid` was updated.
+> **The sibling function kept the assumption in code**, which is this playbook's recurring shape:
+> the migration reached one gate and not the next.
+>
+> The cost was not theoretical. A 15-second reel whose clip takes 7 seconds leaves four scenes to
+> share 8 — every one of them ON `MIN_DONOR_SECONDS = 2`, so `slack` is 0 across the entire donor
+> pool while **five spare seconds sit in the clip, unreachable**. The deck refused whole. The owner
+> hit it twice and asked for the constraint to be removed; removing it would have been strictly
+> worse, because the check is what stops the pictures being BOUGHT and the render then hard-erroring
+> in `assemble_final.sh` — a free pre-spend refusal traded for a paid post-spend failure.
+>
+> **The fix is an asymmetry, and each half is forced:**
+> - **A clip may DONATE.** Safe on both counts that matter: `MIN_DONOR_SECONDS = 2` is itself inside
+>   `1..15`, so a shrunk clip always lands on a length the provider can make, and donating only ever
+>   LOWERS the deck's generated total and its price. That is why this needs no sight of
+>   `MEDIA_GENERATED_SECONDS_CAP`, which lives in `@pikar/cost` and is invisible from `@pikar/core`.
+> - **A clip may never RECEIVE.** Growing one spends money the owner has not approved yet and could
+>   breach that cap. Unchanged.
+> - **A still is asked BEFORE a clip**, which is why the donor search runs twice instead of taking
+>   the longest scene outright. Shrinking a still costs the reel nothing; shrinking a clip takes
+>   motion out of it. A single "most to give" pass would have preferred the clip in almost every
+>   deck, since the clip is usually the longest scene — the opposite of the intent.
+>
+> **Two existing tests went red, and both deserved to** — each parked untouchable clips outside the
+> window to manufacture "no slack". They were passing for the wrong reason: the slack was there all
+> along and only the ban hid it. Both were rewritten to say "no slack" honestly, with the outside
+> scenes on the floor. **Both new tests are mutation-proven:** restoring the clip ban kills
+> `takes the seconds from a generated CLIP …`; inverting the still-first preference kills
+> `leaves the clip alone when a still can cover the deficit` plus two older ones. `packages/core`
+> 1241/1241, `dispatch.test.ts` + `media.test.ts` green, `tsc --noEmit` clean.
+>
+> **A6 IS STILL OPEN and one thing about it is already proven:** the owner's deck carried a
+> **7-second** `generated_video`, which the pre-33.1 code could not have produced — it would have
+> been snapped to 4. What has NOT been seen is that reel rendering end to end, the clip surviving at
+> 7 seconds, and a `media.deck_persisted` audit row existing (`dispatch.ts:916` / `:1103`). The
+> 2026-08-30 signature to look for is the ABSENCE of any `media.deck_*` terminal, not an error.
+>
+> **AN OPEN FINDING, NOT FIXED HERE: every media job is still stamped `provider: "openai"`, and
+> that value becomes the AUDIT ACTOR of an insert-only table.** `mediaComplete.ts:425` writes
+> `actor: row.provider`; `schema.ts:2207` closes the union at `"fal" | "wan" | "openai" | "stock"`;
+> `media.ts` pins `"openai"` at seven submit sites. So A3's own row says the actor was `openai`
+> three fields away from an `openrouter-` request id that contradicts it. **No behavioural risk —
+> all four readers (`media.ts:1169`, `:1239`, `:1935`, `mediaComplete.ts:425`) only ever test
+> `=== "stock"`, and the field never reaches `MediaCanvas.tsx`.** But §3 makes the log
+> uncorrectable, so every landing from here records the wrong counterparty. Adding `"openrouter"`
+> to a closed union over existing rows is widen-migrate-narrow and was left for the owner to
+> schedule rather than smuggled into a verification task.)
+
+> Last verified: 2026-08-30 (33.1-05 — **THE VIDEO SUBMIT IS ON OPENROUTER AND
+> `succession.replacementWiredUp` IS FINALLY `true`.** The migration ADR-026 decided on 2026-08-27
+> and ADR-027 re-decided on 2026-08-30 is now WIRED, 25 days before OpenAI withdraws `/v1/videos`
+> on 2026-09-24 and 11 days before the runway tripwire would have reddened the cost suite.
+>
+> **The contract, as MEASURED and not as read from a docs page.** One live submit, nine polls and
+> one content fetch on 2026-08-30 (`33.1-PRICE-EVIDENCE.md` carries the transcript):
+> `POST openrouter.ai/api/v1/videos` with `{model, prompt, duration, resolution, aspect_ratio}` →
+> `202 {id, polling_url, status}` → `GET /videos/{id}` → `GET /videos/{id}/content?index=0`. JSON,
+> not the multipart FormData OpenAI's Videos API required. **`duration` is a NUMBER and
+> `resolution` is the tier** — Sora's `seconds: "4"` and `size: "720x1280"` are both gone.
+>
+> **`duration: 7` SUCCEEDED, and that is the whole reason a new counterparty was accepted.** Until
+> that call, the `1..15` grid was an unverified reading of a table. It now has a finished 7-second
+> MP4 behind it.
+>
+> **`usage.cost` came back `$0.49` against `7 × $0.07 = $0.49` predicted — exact to the cent.** The
+> price row plan 33.1-04 landed is confirmed against an invoice rather than a docs page, so the
+> reservation does not sit below the charge on a no-refunds rail. That is the condition the plan set
+> for flipping the flag, and it is why the flag moved.
+>
+> **THREE POLLERS NOW LIVE IN `media.ts`, AND ONLY ONE IS LIVE.** Read this before touching any of
+> them: `pollOpenRouterVideoTask` is the live one — `submitBatch` schedules it and nothing else.
+> `pollOpenAiVideoTask` and `pollWanTask` are RETAINED, not fallbacks, each kept so a job submitted
+> before its cutover can still land on a scheduled continuation that already names it. The Sora one
+> has an expiry: after **2026-09-24** the endpoint it polls does not exist, no in-flight job can
+> need it, and it may simply be deleted.
+>
+> **The new poller is NOT a branch-for-branch copy, and copying it would have shipped a dead
+> pipeline.** Sora emits `queued | in_progress | completed | failed`; OpenRouter emitted only
+> `pending` then `completed` across nine measured polls — and `pending` is on NEITHER of Sora's
+> in-progress names. A faithful copy would therefore have landed `provider_failed` on the *first*
+> poll of *every* job, with a fully green suite over a pipeline that never delivers a video. So the
+> live poller inverts the test: `completed` and `failed` are the only terminal states and
+> **anything else reschedules**, including an unparseable body and any status this vendor adds
+> later. Fail-open toward retrying is safe only because the 180-attempt ceiling bounds it — an
+> unrecognised state costs a delay and then `poll_timeout`, never an unbounded loop.
+>
+> **TRUST BOUNDARY: no provider-supplied URL is ever fetched.** Both the poll URL and the content
+> URL are built from the id we already hold. This is stronger than the host check the plan
+> anticipated, and the measurement is why it was available: the response's `unsigned_urls[0]` is,
+> despite its name, an ordinary authenticated endpoint — fetching it **without** our bearer returns
+> **401** — so following it would have meant sending our credential to whatever host a provider
+> response named. `polling_url` is deliberately absent from the poller's scheduler args. A test
+> feeds a response naming `evil.example.com` in both fields and asserts every resolved fetch host is
+> `openrouter.ai`, so the decision is falsifiable rather than merely commented.
+>
+> **THE FLAG AND THE ROUTING ARE ASSERTED IN ONE TEST BODY, ON PURPOSE — and here is the number
+> that proves why.** With `replacementWiredUp: true` and `submitLine`'s video arm reverted to
+> `api.openai.com`, **`packages/cost` reports 92/92 GREEN** while four backend tests go red. The
+> runway tripwire cannot see routing and never could; it stands down on a flag alone. Splitting the
+> A7 assertion into two tests would let the flag half pass over a dead endpoint — which is exactly
+> the failure `7012068` re-keyed that tripwire to close, reappearing one level up. That mutation was
+> run and restored before the flag was committed.
+>
+> **A8 is asserted on RESOLVED urls, never by grepping the source.** `api.openai.com` still appears
+> five times in `media.ts` and every one is legitimate: TTS (`/v1/audio/speech`), STT
+> (`/v1/audio/transcriptions`), and two in the retained Sora poller. A source scan proves spelling,
+> not routing. The runtime assertion loops over BOTH visual kinds so a third kind added without a
+> routing assertion is visibly missing.
+>
+> **The credential collapsed to one, and that is a deletion rather than a change.** 33.1-03 keyed
+> `submitLine`'s env read on `spec.kind` because the two visual kinds then had two vendors. Both are
+> now OpenRouter, so a ternary would select the same value on both arms — a branch that cannot
+> differ hides the fact that it cannot. `OPENROUTER_API_KEY` is read once, still ABOVE the fixture
+> short-circuit so offline runs keep catching a missing credential.
+>
+> **STILL UNVERIFIED, and stated plainly: A3 and A6.** Nothing here ran against a live stack. No
+> storyboard has become a rendered reel through this path, because that needs the seeded local
+> Convex DB in the main tree — plan 33.1-06, after an owner-timed merge. What is proven is the wire
+> contract against the real provider and the adapter against the measured shapes. What is not proven
+> is the end-to-end run.)
+
+> Last verified: 2026-08-30 (33.1-04 — **THE DURATION GRID IS `1..15, ANY INTEGER`, AND
+> `illegal_generated_duration` IS RETIRED FOR EVERY LENGTH BELOW 16.** Constants and arithmetic
+> only; the submit path is still 33.1-05's, and `succession.replacementWiredUp` is still `false`.
+>
+> **What a generated scene may now be.** `MEDIA_VIDEO_SECONDS["x-ai/grok-imagine-video"]` and
+> `@pikar/core`'s `GENERATED_CLIP_SECONDS` are both the fifteen integers `1..15`. A 5-second and a
+> 7-second scene parse, persist and price at their OWN lengths with **no** `deckAdjustments` — that
+> was the owner's second live defect on 2026-08-30. `repairGeneratedGrid` still exists and now fires
+> only ABOVE 15, snapping to 15 and giving the freed seconds to the last non-generated scene.
+>
+> **TWO COPIES OF ONE GRID, and they drifted at the last cutover.** `@pikar/core` deliberately does
+> not depend on `@pikar/cost`, so the list is written out in both. `media.test.ts` now asserts
+> `GENERATED_CLIP_SECONDS` equals `MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model]`. **Move both or
+> neither**, and the assertion is the only thing that makes that enforceable.
+>
+> **The price row is grok's published rate, corroborated by a paid call**: 480p $0.05/s, 720p
+> $0.07/s, and a live `{duration: 5, resolution: "480p"}` billed `usage.cost` 0.25 = exactly
+> 5 x $0.05, which also proves a NON-multiple-of-4 duration is accepted. **No 1080p key** — xAI
+> publishes none, so 1080p is `unknown_model`, never a downgrade (rule 2). Pin stays 720p / 4 s:
+> six clips are $1.68 against the unchanged $3.50 cap, where sora-2 cost $2.40.
+>
+> **The trap this plan walked into, and the fix.** Repinning `MEDIA_DEFAULT_VIDEO` DROPS `sora-2`
+> out of `PINNED_MODELS`, and all three shutdown tripwires `continue` past it — measured: with the
+> repin landed and the shutdown moved to five days out, the file was GREEN. They now key on
+> `inScope` = pinned OR carrying a succession OR `deprecated`. **The third arm was found by
+> mutation, not design**: under the plan's two-arm predicate, DELETING the succession block silenced
+> the alarm that asks for one. `RUNWAY_DAYS` is still 14 and a repin is not a migration.
+>
+> **NOTHING A HUMAN OR A MODEL READS MAY RESTATE A COMPUTED NUMBER.** The clip-vs-still lever has
+> now been wrong on screen three times (a tenth, then a fortieth, then 66.7x for one day) because
+> three sentences in `mediaCanvasView.ts` typed the ratio out and three tests pinned the stale word.
+> It is DERIVED now — `CLIP_VS_STILL_RATIO` = `round(sceneVisualSpec("generated_video", 4).usd /
+> sceneVisualSpec("animated_image", 4).usd)`, today **47** — and the tests compute the same
+> quotient. That is why `apps/web` gained a `@pikar/cost` dependency (pure TS, `@pikar/core` only;
+> also added to `next.config.ts`'s `transpilePackages`). The e2e spec IMPORTS the sentence rather
+> than retyping it. `mediaDirector.ts`'s four "forty times cheaper" sites are **still stale** and
+> belong to plan 33.1-06.
+>
+> **Two rendered sentences became RANGES**, from `GENERATED_LENGTH_RANGE` (derived from the same
+> constant the repair snaps to): the adjustment note and `refusalText`'s `illegal_duration` arm.
+> A `join(", ")` over the new grid would have printed fifteen comma-separated numbers at a user.
+>
+> ---
+>
+> **`MEDIA_GENERATED_SECONDS_CAP = 12` — THE GUARANTEE, RESTORED IN CODE.** The wider grid made an
+> all-generated reel composable AND affordable ($1.05 at 15 s, $2.10 at 30 s, both under the
+> unchanged $3.50 job cap), which destroyed the arithmetic that used to make kind-mixing
+> structural. The ceiling is a total on GENERATED VIDEO SECONDS per reservation, checked in
+> `chooseMediaBatch` — the one gate `reserveJobInner`, `reserveSceneJobInner`, `jobEstimate` and
+> `imageEstimate` all pass through, so the number on screen and the number that spends agree by
+> construction. The refusal is a governed code, `over_generated_seconds`, with its own sentence on
+> the canvas naming its own lever (swap a generated scene for a still or stock — never "cut a
+> scene", which is `over_job_cap`'s lever). **There is no silent trim.**
+>
+> **12 is derived, not chosen:** it is `4 + 8`, what `media-director.md`'s VARIATION A already
+> spends; it is `3 x 4`, what `media.fixtures.json`'s `reel30s.mixed` already spends; and it is
+> below `min(TARGET_DURATIONS) = 15`, which is what refuses an all-generated reel at EVERY target
+> rather than only at 60. At $0.07/s it ceilings generated spend at $0.84 (24% of the job cap).
+> **Both of those decks sit EXACTLY on the boundary with zero slack** — the boundary is inclusive,
+> and `media.test.ts` now parses the shipped skill body and prices the fixture's own deck through
+> `chooseMediaBatch`, so a one-second nudge to either goes red instead of going live.
+>
+> **THE CAP IS UNIFORM, INCLUDING THE BLOCK PATH.** `reserveJobInner` builds one video spec per
+> paid block, so a block deck is generated-video by construction and a 6-block reel at 4 s is 24
+> seconds — refused. Passing `Infinity` on the block path was REJECTED: a model emitting a block
+> deck would evade the ceiling entirely, and a money guard with a documented bypass reads as
+> protection while providing none. **§4.1's canonical six-block reel is therefore no longer a legal
+> reservation**, and `media.test.ts`'s reference job is three blocks with a named test asserting
+> the six-block one refuses.
+>
+> **A PARTIAL BUY IS MEASURED DECK-WIDE, and this was a REAL hole, not a theoretical one.**
+> `reserveSceneJobInner` narrows `lines` to one scene on a partial buy and builds the batch specs
+> FROM `lines`, so with only the `chooseMediaBatch` check in place a 12+12+6 deck — refused as a
+> whole reel — reserved successfully one scene at a time through `regenerateBlock`, which needs no
+> prior batch. Measured on the landed cap, then closed by summing the WHOLE deck's generated
+> scenes, which is the rule this function already states for every other refusal. The check sits
+> AFTER the scene loop so an unmakeable length still reports `illegal_duration`.
+>
+> **If you change the cap:** it is a POLICY, not an impossibility — read ADR-027 §"What the
+> mitigation is not". Raising it above 15 silently re-permits an all-generated reel at every
+> target. `MEDIA_JOB_CAP_USD` stays 3.50 and `RUNWAY_DAYS` stays 14.)
+
+> Last verified: 2026-08-30 (33.1-03 — **THE STILL PLANE IS ON OPENROUTER AND ITS PRICE ROW IS
+> MEASURED RATHER THAN GUESSED.** The block below decided both planes would move; this is the image
+> half, landed. Video has NOT moved yet — 33.1-05 owns it, and until then
+> `submitLine`/`pollOpenAiVideoTask` still post to `api.openai.com`.
+>
+> **What changed.** `submitLine`'s image arm posts to `https://openrouter.ai/api/v1/images` on
+> `OPENROUTER_API_KEY`. The video, TTS and STT arms still read `OPENAI_API_KEY` — the credential is
+> chosen from `spec.kind` on one line, so **grepping `media.ts` for `api.openai.com` tells you
+> nothing about where an image goes**; three legitimate other users of that host remain in the file.
+> The test asserts the RESOLVED url handed to `fetch`, and so must any future one.
+>
+> **The price row is a MEASUREMENT.** `MEDIA_IMAGE_PRICING["openai/gpt-image-2"] = 0.006`, from one
+> real call on 2026-08-30 that billed **$0.004875** for `(1024x1536, quality: low, n: 1)` —
+> $0.004740 fixed (`image_tokens: 158`, constant for that geometry) plus $0.000135 of prompt. The
+> row rounds UP by $0.001125 because it is a pre-request RESERVATION on a no-refunds rail; that
+> headroom is ~225 further prompt tokens. It replaces a self-described "conservative" $0.01 that was
+> **2x the real cost**. Raw response and the re-runnable command:
+> `.planning/phases/33.1-*/33.1-PRICE-EVIDENCE.md`. Deriving from a table again, rather than from a
+> call, is a regression.
+>
+> **`size`, NEVER `aspect_ratio`, and NEVER BOTH.** The same probe sent each. They are **not
+> interchangeable**: `aspect_ratio: "9:16"` returns **864x1536** at $0.003735 (120 image tokens),
+> `size: "1024x1536"` returns **1024x1536** at $0.004875 (158). `size` reproduces
+> `MEDIA_DEFAULT_IMAGE`'s exact geometry, so the migration changed the transport and not the
+> picture. **The deferred finding, with its evidence already in hand:** stills are 2:3 while the reel
+> is 1080x1920 (9:16), so every generated still is reshaped by the assembler to fit a frame it was
+> never composed for — and the correctly-composed option is also **23% cheaper**. That is its own
+> phase, because it changes what every still LOOKS like.
+>
+> **THREE COPIES OF ONE STRING.** `MEDIA_DEFAULT_IMAGE.model`, `MEDIA_IMAGE_PRICING`'s live key and
+> `media.fixtures.json`'s image `id` are all `openai/gpt-image-2` and **must move together** — the
+> fixture-parity test is what enforces it. Route-qualified deliberately: `buildSubmitBody`'s image
+> arm sends `spec.model` UNSTRIPPED, and OpenRouter does not know a bare `gpt-image-2`. (The `tts`
+> arm's `.replace(/^openai\//, "")` is correct for `tts` and would be a bug here.)
+>
+> **THE HISTORICAL ROWS STAY.** `"gpt-image-2": 0.01` and `"wan2.5-t2i-preview": 0.03` remain in
+> `MEDIA_IMAGE_PRICING` with no submit path, for the same reason the `wan2.5-*` video rows do:
+> `mediaJobs` rows written before a cutover carry the old id, and an unpriceable historical row is a
+> **refused read**, not a cheaper one. They are not fallbacks — rule 2 forbids falling back to
+> another row, and no code can select them.
+>
+> **DERIVED NUMBERS MOVED WITH IT** (`media.fixtures.json`'s `sceneKinds` is `_derived` and the test
+> recomputes it): `animated_image` $0.01 -> $0.006, the §2.3 mixed 30 s reel $1.24 -> $1.224, and
+> ADR-019's cost lever **40x -> 66.7x** — measuring the still made the lever bigger, not smaller.
+> `stockLeaning` did not move; it buys no still. Also fixed here, one plan early: the fixture-parity
+> helper used `entries.find`, so a SECOND entry of a kind was never checked at all. It now iterates
+> every entry and refuses an empty filter — 33.1-04 adds a second `video` entry and inherits a guard
+> that works. Mutation-verified both ways.
+>
+> **`succession.replacementWiredUp` IS STILL `false` AND MUST STAY SO.** Images do not earn it: the
+> flag stands the runway tripwire down for the VIDEO row, and no video submit path has landed.)
+
+> Last verified: 2026-08-30 (**THE SUCCESSOR CHANGED, AND SO DID THE TRANSPORT — `x-ai/grok-imagine-video`
+> ON OPENROUTER, [ADR-027](../decisions/027-grok-imagine-video-succeeds-sora-2-on-openrouter.md).**
+>
+> ADR-027 supersedes ADR-026's video half. The owner chose Grok over `veo-3.1-lite` for one
+> property: durations **1–15, any integer**, which retires the `illegal_generated_duration` failure
+> class outright where Veo's `4/6/8` only narrows it. It was bought with two costs the ADR states in
+> sections of their own — **xAI becomes a new data-transfer counterparty** (reversing ADR-026's
+> decisive argument, knowingly), and **the "no reel from generated video alone" guarantee stops being
+> structural**: at $0.07/s on a 1–15 grid, a 15 s all-generated reel is $1.05 and a 30 s is $2.10,
+> both under the $3.50 cap, both previously impossible. Mitigated by `MEDIA_GENERATED_SECONDS_CAP`
+> (12 s, enforced in `chooseMediaBatch`, governed refusal `over_generated_seconds`) — **which is a
+> ceiling somebody can raise, not an arithmetic impossibility. Read ADR-027 §"What the mitigation is
+> not" before touching it.**
+>
+> **BOTH MEDIA PLANES NOW GO THROUGH OPENROUTER**, images included (`openai/gpt-image-2`, same model,
+> new door). The trigger was not only the 2026-09-24 withdrawal: the OpenAI account read
+> `credit_balance_exhausted` on 2026-08-30 and **no media had generated since ~2026-08-17.**
+>
+> **A TRAP FOR ANYONE REPINNING A MEDIA MODEL:** `PINNED_MODELS` is derived from
+> `MEDIA_DEFAULT_VIDEO.model`, so repinning drops `sora-2` out of the set and all three shutdown
+> tripwires `continue` past it — green, with nothing wired. Re-keyed onto "carries an unretired
+> succession" in 33.1-04. Check this before you move a pin.
+>
+> ---
+>
+> **SUPERSEDED — kept because its lesson outlived its decision.** Recorded 2026-08-27 (**THE
+> SUCCESSOR IS CHOSEN — `veo-3.1-lite`, ADR-026 — AND RECORDING
+
 > **Formatting-only pass, 2026-08-29.** `biome format` + `organizeImports` ran across this
 > subsystem's files to clear a CI `Lint` red that had been blocking the `Test` and `Build`
 > steps behind it since 2026-08-27. Whitespace, line wrapping and import order ONLY — no
@@ -1641,17 +2538,23 @@ is priced per kind, by one table in the pure package that both money sites read.
 | Kind | Buys | USD at 4 s | Duration freedom |
 |---|---|---|---|
 | `generated_video` | one `sora-2` clip | $0.40 | 4 / 8 / 12 s only |
-| `animated_image` | one `gpt-image-2` still, panned by ffmpeg | $0.01 | any |
+| `animated_image` | one `gpt-image-2` still, panned by ffmpeg | $0.006 | any |
 | `uploaded_video` | nothing — a tenant vault asset | $0 | any |
 | `text_card` | nothing — `drawtext` in the sandbox | $0 | any |
 
 **NOT ONE TARGET DURATION IS REACHABLE WITH `generated_video` ALONE.** Every clip length the pinned
 model supports is a multiple of 4, so no sum of them is 15 or 30; 60 composes and costs $6.00 —
 over `MEDIA_JOB_CAP_USD`. The cheap kinds are what make the contract legal at all. A 30-second reel
-of 3 clips + 4 stills + 1 card costs **$1.24** in pictures; the nearest composable all-generated
+of 3 clips + 4 stills + 1 card costs **$1.224** in pictures; the nearest composable all-generated
 reel is **28 seconds** and costs $2.80.
 
-This is asserted, not written down: `media.test.ts` recomputes every figure above from the live
+**THIS SECTION ROTTED, AND THE SENTENCE THAT USED TO SIT HERE IS WHY IT WENT UNNOTICED.** It read
+"this is asserted, not written down — a price row moving turns the table red rather than making this
+section quietly wrong". That was FALSE for the prose: `media.test.ts` recomputes `media.fixtures.json`,
+not this markdown, so when 33.1-03 measured the still at $0.006 the fixture moved, the test stayed
+green, and every figure in this section stayed stale. Found by the 33.1 audit, not by a gate.
+
+The figures above are HAND-MAINTAINED against `packages/cost/src/media.ts`. `media.test.ts` recomputes every figure from the live
 tables against `media.fixtures.json`'s `sceneKinds` block, so a price row moving turns the table
 red rather than making this section quietly wrong. The test was observed RED (a 5-second entry
 added to the Sora grid makes 15 s and 30 s composable under the cap).
@@ -2983,7 +3886,7 @@ passed. One transaction, not two to keep in step.
 | Scene kind | Buys | Why |
 |---|---|---|
 | `generated_video` | one clip **at its own length** | the provider's duration grid still applies |
-| `animated_image` | one **still** | ~a FORTIETH of a clip ($0.01 vs $0.40 at 4 s — this row said "a tenth" until 33-06), frame-exact at any duration |
+| `animated_image` | one **still** | ~a SIXTY-SEVENTH of a clip ($0.006 vs $0.40 at 4 s — "a tenth" until 33-06, "a fortieth" until 33.1-03 MEASURED it), frame-exact at any duration |
 | `uploaded_video` | nothing | the tenant already owns the bytes |
 | `text_card` | nothing | `drawtext` in the sandbox |
 | any narrated scene | one voice take | silence is legal, so an empty line buys nothing |
@@ -4354,9 +5257,21 @@ npx convex run media:spendForPeriod \
 deployment-wide figure is the sum of per-tenant runs, never one unscoped query. The window is
 **half-open** `[sinceMs, untilMs)`, so consecutive periods partition rows exactly once.
 
-Compare the returned `actualCents` total against fal's billing page for the same window. A gap
-means the table is wrong, not that the meter is wrong — the meter records what the provider
+Compare the returned `actualCents` total against the PROVIDER's billing page for the same window.
+A gap means the table is wrong, not that the meter is wrong — the meter records what the provider
 reported.
+
+**WHICH billing page is now a per-kind question, and the text above is stale where it says "fal".**
+fal has not billed this product since the 20-series cutover. As of 33.1-05: **images AND video**
+reconcile against **openrouter.ai -> Activity** (each row carries the same `usage.cost` the price
+row was measured from, so this comparison is exact rather than approximate — the 7-second probe
+billed `$0.49` against `7 × $0.07` predicted); **voiceover and captions** reconcile against the
+**OpenAI** usage page, and those endpoints are not being withdrawn. Stock lines reserve $0 and
+appear on no bill at all.
+
+**A period spanning the 2026-08-30 cutover is split across TWO bills**, and no single page shows the
+whole of it: video jobs submitted before it were charged by OpenAI, after it by OpenRouter. Compare
+such a window against both, or pick window boundaries that do not straddle the cutover.
 
 **THREE CAVEATS TRAVEL WITH THAT NUMBER, and `spendForPeriod` puts each one in its own payload
 rather than relying on you to remember this page:**

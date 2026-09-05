@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { MUSIC_MOODS, TARGET_DURATIONS, type VisualKind } from "@pikar/core/storyboard";
+import {
+  GENERATED_CLIP_SECONDS,
+  MUSIC_MOODS,
+  parseVariations,
+  TARGET_DURATIONS,
+  type VisualKind,
+} from "@pikar/core/storyboard";
 import { describe, expect, it } from "vitest";
 import {
   chooseMediaBatch,
@@ -12,6 +18,7 @@ import {
   MEDIA_DEFAULT_STT,
   MEDIA_DEFAULT_VIDEO,
   MEDIA_DEFAULT_VOICE,
+  MEDIA_GENERATED_SECONDS_CAP,
   MEDIA_IMAGE_PRICING,
   MEDIA_JOB_CAP_USD,
   MEDIA_MUSIC_PRICING,
@@ -46,6 +53,12 @@ const voice = (characters: number): MediaSpec => ({
   model: MEDIA_DEFAULT_VOICE.model,
   characters,
 });
+/** The voice rate, READ from the table rather than typed. Several tests below used to assert
+ *  `openai/tts-1`'s $0.015/1k as a literal, so 33.1-06's move to `openai/gpt-audio-mini` at
+ *  $0.006/1k turned rules about ROUNDING and about the CENTS FLOOR into arithmetic failures that
+ *  said nothing about either. A rate a test reads cannot rot; a rate it types always can. */
+const ttsRate = MEDIA_TTS_PRICING[MEDIA_DEFAULT_VOICE.model] as number;
+
 const usd = (spec: MediaSpec) => {
   const r = estimateMediaUsd(spec);
   if (!r.ok) throw new Error(`expected ok, got ${r.error.code}`);
@@ -57,7 +70,26 @@ const codeOf = (spec: MediaSpec) => {
 };
 
 describe("estimateMediaUsd — video, priced per video-second", () => {
-  it("Sora 2 720p x 4 s = $0.40", () => expect(usd(clip())).toBeCloseTo(0.4, 10));
+  it("the PINNED video model is grok on OpenRouter, spelled out", () => {
+    // A LITERAL on one side, like the image pin's test: the default, the price key and the fixture
+    // id are three copies of one string, and comparing two of them proves only self-equality.
+    expect(MEDIA_DEFAULT_VIDEO.model).toBe("x-ai/grok-imagine-video");
+    // The superseded row stays PRICEABLE for historical `mediaJobs` rows, and is NOT the pin.
+  });
+  it("Grok 720p x 4 s = $0.28, and $0.07/s is under the $0.10/s it replaces", () => {
+    expect(usd(clip())).toBeCloseTo(0.28, 10);
+    expect(MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.["720p"]).toBe(0.07);
+    expect(MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.["480p"]).toBe(0.05);
+  });
+  it("a NON-multiple-of-4 length prices at ITS OWN length — the grid xAI publishes", () => {
+    // The defect this phase exists to kill: 5 and 7 were `illegal_duration` on the Sora grid.
+    for (const s of [1, 5, 6, 7, 10, 13, 15]) {
+      expect(usd(clip("720p", s))).toBeCloseTo(s * 0.07, 10);
+    }
+    // The 480p leg is the MEASURED one: a live paid call on 2026-08-30 for
+    // `{duration: 5, resolution: "480p"}` returned `usage.cost` 0.25 = exactly 5 x $0.05.
+    expect(usd(clip("480p", 5))).toBeCloseTo(0.25, 10);
+  });
   it("an unpriced model → unknown_model (a Veo-class endpoint is not in the table)", () => {
     expect(codeOf({ kind: "video", model: "fal-ai/veo3", resolution: "720p", seconds: 4 })).toBe(
       "unknown_model",
@@ -65,10 +97,14 @@ describe("estimateMediaUsd — video, priced per video-second", () => {
   });
   it("a resolution missing from the model's row → unknown_model, NEVER a tier fallback", () => {
     expect(codeOf(clip("4k" as VideoRes))).toBe("unknown_model");
+    // xAI publishes 480p and 720p and no 1080p, so a 1080p request is refused rather than
+    // silently downgraded to the tier below it (rule 2). The sora-2 row had no 480p and this is
+    // the same question asked of the new row.
+    expect(codeOf(clip("1080p", 4))).toBe("unknown_model");
   });
-  it("a Sora duration outside {4,8,12} → illegal_duration", () => {
-    for (const s of [3, 5, 10, 15, 0]) expect(codeOf(clip("720p", s))).toBe("illegal_duration");
-    for (const s of [4, 8, 12]) expect(codeOf(clip("720p", s))).toBe("ok");
+  it("the grid is WIDER, not OPEN: 16, 0 and a fraction are still illegal_duration", () => {
+    for (const s of [16, 20, 0, -4, 4.5]) expect(codeOf(clip("720p", s))).toBe("illegal_duration");
+    for (const s of [1, 4, 8, 12, 15]) expect(codeOf(clip("720p", s))).toBe("ok");
   });
   it("a non-finite duration is refused, never NaN dollars", () => {
     expect(codeOf(clip("480p", Number.NaN))).toBe("illegal_duration");
@@ -76,15 +112,23 @@ describe("estimateMediaUsd — video, priced per video-second", () => {
 });
 
 describe("estimateMediaUsd — the billing units differ, and the tests sit side by side", () => {
-  it("GPT Image 2 low portrait reserves one cent including prompt allowance", () => {
+  it("GPT Image 2 low portrait reserves the MEASURED $0.006, not the guessed $0.01", () => {
+    // The number is the reservation, not the invoice: OpenRouter billed $0.004875 for exactly this
+    // request on 2026-08-30 (33.1-PRICE-EVIDENCE.md) and the row rounds UP, because a reservation on
+    // a no-refunds rail may never come in under the charge.
     const { model, width, height } = MEDIA_DEFAULT_IMAGE;
-    expect(usd({ kind: "image", model, width, height })).toBeCloseTo(0.01, 10);
+    expect(usd({ kind: "image", model, width, height })).toBeCloseTo(0.006, 10);
+    // …and it is strictly above the measured floor. This is what "rounded up" MEANS, asserted.
+    expect(usd({ kind: "image", model, width, height })).toBeGreaterThan(0.004875);
   });
-  it("TTS does NOT round its thousands: 1,200 chars → $0.018 exactly", () => {
-    expect(usd(voice(1200))).toBeCloseTo(0.018, 10);
+  // 33.1-06 restated these two AS THE PROPERTY they were always about — see `ttsRate` above.
+  it("TTS does NOT round its thousands: 1,200 chars bills 1.2 rates, never 2", () => {
+    expect(usd(voice(1200))).toBeCloseTo(ttsRate * 1.2, 10);
+    expect(usd(voice(1200))).toBeLessThan(ttsRate * 2); // the rounding this forbids, named
   });
   it("…and 1 char is a fraction of a cent, not a whole thousand", () => {
-    expect(usd(voice(1))).toBeCloseTo(0.000015, 12);
+    expect(usd(voice(1))).toBeCloseTo(ttsRate / 1000, 12);
+    expect(usd(voice(1))).toBeLessThan(0.00001); // still a fraction of a cent at the new rate
   });
   it("STT bills whole INPUT audio minutes: 1 min → $0.006, 30 s still buys one", () => {
     const stt = (audioMinutes: number): MediaSpec => ({
@@ -109,38 +153,89 @@ describe("estimateMediaUsd — the billing units differ, and the tests sit side 
   });
 });
 
-// The §4.1 job, as data. This is the reel the phase is budgeted around.
+// The §4.1 job, as data. This is the reel the phase was budgeted around.
 const JOB_4_1: MediaSpec[] = [
-  ...Array.from({ length: 6 }, () => clip()), // 6 x 720p x 4 s = $2.400
-  voice(1200), //                                voice            = $0.018
-  voice(1200), //                                retry allowance  = $0.018
+  ...Array.from({ length: 6 }, () => clip()), // 6 x 720p x 4 s = $1.680 (was $2.400 on sora-2)
+  voice(1200), //                                voice            = $0.0072 (was $0.018)
+  voice(1200), //                                retry allowance  = $0.0072
   { kind: "stt", model: MEDIA_DEFAULT_STT.model, audioMinutes: 1 }, // captions = $0.006
   { kind: "render" }, //     render, incl. the one auto-retry sandbox (33-04)  = $0.040
 ];
 
 describe("estimateBatchUsd + the job cap", () => {
-  it("the six-block Sora job totals $2.482 and PASSES the $3.50 cap", () => {
+  it("the six-block job PRICES at $1.7404 — 30% under sora-2, on TWO rate moves", () => {
+    // Was $2.482 when the clips were sora-2's $0.10/s and the voice was tts-1's $0.015/1k. Both
+    // moved to OpenRouter in this phase and both moved DOWN: $1.762 after the clips (33.1-04),
+    // $1.7404 after the voice (33.1-06). Attributing the whole 30% to grok would now be wrong by
+    // 2.2 cents, which is exactly the kind of stale sentence the playbook rule exists to stop.
+    // A successor cheaper than what it replaces is the test ADR-026 sets for a migration, and the
+    // reason MEDIA_JOB_CAP_USD does not move.
     const total = estimateBatchUsd(JOB_4_1);
     expect(total.ok).toBe(true);
-    // 33-04: was 2.462 — the render line doubled at its source to reserve the one auto retry.
-    if (total.ok) expect(total.value).toBeCloseTo(2.482, 10);
-    const chosen = chooseMediaBatch(JOB_4_1, MEDIA_JOB_CAP_USD);
-    expect(chosen.ok).toBe(true);
-    if (chosen.ok) expect(chosen.value.estCents).toBe(249);
+    if (total.ok) expect(total.value).toBeCloseTo(1.7404, 10);
   });
-  it("9 Sora blocks at 720p ($3.60+) → over_job_cap", () => {
-    const job = [...Array.from({ length: 9 }, () => clip()), { kind: "render" } as MediaSpec];
-    const r = chooseMediaBatch(job, MEDIA_JOB_CAP_USD);
+  it("...and the SAME six-block job is now REFUSED — 24 generated seconds is over the ceiling", () => {
+    // The §4.1 reel was six four-second clips, which is 24 s of generated video: double the cap.
+    // Stated plainly rather than deleted, because it is the cost the decision spends — a reel that
+    // used to be the phase's canonical job is now illegal, and the cure is a mixed deck, which is
+    // exactly the behaviour the ceiling exists to force (ADR-027).
+    const r = chooseMediaBatch(JOB_4_1, MEDIA_JOB_CAP_USD);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe("over_generated_seconds");
+  });
+  it("MEDIA_JOB_CAP_USD IS STILL $3.50 — a successor needing a bigger cap is a worse outcome", () => {
+    // Asserted on its own, against a literal, because this is the phase where it would slip:
+    // ADR-026 is explicit that a replacement that needs the ceiling raised is a regression
+    // wearing a migration's clothes. Grok is CHEAPER, so nothing here has to move.
+    expect(MEDIA_JOB_CAP_USD).toBe(3.5);
+  });
+  it("THE TWO COPIES OF THE PROVIDER GRID AGREE — the drift that went unnoticed last cutover", () => {
+    // `@pikar/core` deliberately does not depend on `@pikar/cost` (the dependency runs the other
+    // way), so the pinned model's duration grid is written out in both packages. They drifted at
+    // the OpenAI cutover and nothing noticed — `isBuyableClipLength`'s comment in
+    // `packages/backend/convex/media.ts` records what that cost. This one line is what makes
+    // "keep them in step" enforceable rather than aspirational.
+    expect([...GENERATED_CLIP_SECONDS]).toEqual([...(MEDIA_VIDEO_SECONDS[VIDEO_MODEL] ?? [])]);
+  });
+  it("13 and 20 grok blocks are refused by the SECONDS cap, which now binds before the job cap", () => {
+    // THESE TWO TESTS WERE `over_job_cap` UNTIL 33.1-04, and the change of code is the honest
+    // record of what the cap did: 13 clips are $3.64 and 20 are $5.60, both still over the $3.50
+    // ceiling — but at 52 and 80 generated seconds they never reach the price check, because
+    // `MEDIA_GENERATED_SECONDS_CAP` refuses them first. Asserted rather than quietly re-keyed.
+    for (const count of [13, 20]) {
+      const job = [...Array.from({ length: count }, () => clip()), { kind: "render" } as MediaSpec];
+      const r = chooseMediaBatch(job, MEDIA_JOB_CAP_USD);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe("over_generated_seconds");
+    }
+  });
+  it("over_job_cap IS STILL REACHABLE — through the kinds the seconds cap does not bound", () => {
+    // The cap ceilings generated video at $0.84, so video alone can no longer reach $3.50. That
+    // does NOT retire `over_job_cap`: stills, voice and captions are unbounded by scene COUNT, and
+    // 600 stills at $0.006 is $3.60. If this ever goes red because the code stopped checking the
+    // price at all, the seconds cap has quietly replaced the money cap rather than joining it.
+    const stills: MediaSpec[] = Array.from({ length: 600 }, () => ({
+      kind: "image",
+      model: MEDIA_DEFAULT_IMAGE.model,
+      width: MEDIA_DEFAULT_IMAGE.width,
+      height: MEDIA_DEFAULT_IMAGE.height,
+    }));
+    const r = chooseMediaBatch(stills, MEDIA_JOB_CAP_USD);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("over_job_cap");
   });
-  it("12 Sora blocks at 720p ($4.80+) → over_job_cap", () => {
-    const r = chooseMediaBatch(
-      Array.from({ length: 12 }, () => clip()),
-      MEDIA_JOB_CAP_USD,
-    );
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.code).toBe("over_job_cap");
+  it("A 30-SECOND ALL-GENERATED REEL NOW PRICES AT $2.10, UNDER THE $3.50 JOB CAP", () => {
+    // The fact the generated-seconds cap exists to answer, asserted rather than skipped past.
+    // On the Sora grid this deck was not composable at all (every length a multiple of 4); on
+    // grok's 1..15 it is two 15-second clips at $0.07/s, and the ARITHMETIC no longer refuses it.
+    // If this is the only thing that changed, kind-mixing has dropped from structural to advisory.
+    const thirty = [clip("720p", 15), clip("720p", 15)];
+    const total = estimateBatchUsd(thirty);
+    expect(total.ok && total.value).toBeCloseTo(2.1, 10);
+    const r = chooseMediaBatch(thirty, MEDIA_JOB_CAP_USD);
+    expect(r.ok ? "ok" : r.error.code).not.toBe("over_job_cap");
+    // ...and what DOES refuse it is the ceiling Task 4 added, named on its own return value.
+    expect(r.ok ? "ok" : r.error.code).toBe("over_generated_seconds");
   });
   it("ANY member's Err propagates — one unpriceable line refuses the whole job", () => {
     const r = estimateBatchUsd([
@@ -153,7 +248,7 @@ describe("estimateBatchUsd + the job cap", () => {
   it("free line items contribute 0 and never make a job unknown_model", () => {
     const r = estimateBatchUsd([clip(), { kind: "free" }, { kind: "free" }]);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value).toBeCloseTo(0.4, 10);
+    if (r.ok) expect(r.value).toBeCloseTo(0.28, 10);
   });
   it("a non-positive cap refuses rather than passing everything", () => {
     for (const cap of [0, -1, Number.NaN]) {
@@ -166,16 +261,17 @@ describe("estimateBatchUsd + the job cap", () => {
 // D12(a) — THE reason this module exists. The cents floor is a fail-closed bias that is correct
 // ONCE and catastrophic per line item.
 describe("chooseMediaBatch — the cents floor is applied ONCE, on the total", () => {
-  it("6 lines of $0.003 reserve 2 cents ($0.018 → ceil 1.8), NOT 6", () => {
-    // NB: the plan wrote "1 cent, not 6". $0.012 is 1.2 cents, so the fail-closed ceiling is 2.
-    // The number that matters is the CONTRAST: per-line flooring reserves 6 — 3x this, 5x the
-    // true cost. Corrected here rather than asserted wrong.
+  it("6 lines of $0.0012 reserve 1 cent ($0.0072 → ceil 0.72), NOT 6", () => {
+    // The plan wrote "1 cent, not 6"; at tts-1's rate the honest answer was 2 and this test said
+    // so. 33.1-06's cheaper voice rate brings it back to 1 — the plan's number, arrived at by
+    // arithmetic rather than by restoring it. The number that matters is unchanged and is now
+    // starker: per-line flooring reserves 6, which is 6x this and 8x the true cost.
     const six = Array.from({ length: 6 }, () => voice(200));
     const r = chooseMediaBatch(six, MEDIA_JOB_CAP_USD);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.value.estUsd).toBeCloseTo(0.018, 10);
-    expect(r.value.estCents).toBe(2);
+    expect(r.value.estUsd).toBeCloseTo(6 * 200 * (ttsRate / 1000), 10);
+    expect(r.value.estCents).toBe(1);
     // what per-line flooring would have reserved, spelled out so the regression is legible:
     expect(six.reduce((c, s) => c + Math.max(1, Math.ceil(usd(s) * 100)), 0)).toBe(6);
   });
@@ -188,7 +284,7 @@ describe("chooseMediaBatch — the cents floor is applied ONCE, on the total", (
   it("estUsd stays FRACTIONAL — the row stores USD, only the reservation is cents", () => {
     const r = chooseMediaBatch([voice(1200)], MEDIA_JOB_CAP_USD);
     if (!r.ok) throw new Error("expected ok");
-    expect(r.value.estUsd).toBeCloseTo(0.018, 10);
+    expect(r.value.estUsd).toBeCloseTo(1200 * (ttsRate / 1000), 10);
     expect(Number.isInteger(r.value.estUsd)).toBe(false);
   });
 });
@@ -212,26 +308,40 @@ const FIXTURES = JSON.parse(read("./media.fixtures.json")) as {
       usdAt4s: number;
       durations: number[] | "any";
     }[];
-    reel30s: { mixed: { pictureUsd: number } };
+    reel30s: { mixed: { pictureUsd: number; generatedSeconds: number } };
     targetsUnreachableByGeneratedVideoAlone: number[];
   };
 };
 
 describe("the price tables agree with the committed vendor fixture", () => {
-  const byKind = (k: string) => {
-    const e = FIXTURES.entries.find((x) => x.kind === k);
-    if (!e) throw new Error(`no fixture entry for ${k}`);
-    return e;
+  // WAS `entries.find(...)` — FIRST MATCH ONLY, so a SECOND fixture entry of the same kind was
+  // never checked against its table row at all. That held while every kind was a singleton and
+  // stops holding the moment one is not (33.1-04 adds a second `video` entry), which is why the
+  // helper is fixed HERE rather than there: a guard inherited already working beats a guard
+  // somebody has to remember to widen.
+  const allOfKind = (k: string) => {
+    const es = FIXTURES.entries.filter((x) => x.kind === k);
+    // …and the loops below cannot pass VACUOUSLY on an empty filter.
+    if (es.length === 0) throw new Error(`no fixture entry for ${k}`);
+    return es;
   };
 
-  it("video rates match, per resolution", () => {
-    const e = byKind("video");
-    expect(MEDIA_VIDEO_PRICING[e.id]).toEqual(e.rates);
+  it("EVERY fixture entry of a kind matches its table row, not just the first", () => {
+    for (const e of allOfKind("video")) expect(MEDIA_VIDEO_PRICING[e.id]).toEqual(e.rates);
+    for (const e of allOfKind("image")) expect(MEDIA_IMAGE_PRICING[e.id]).toBe(e.rate);
+    for (const e of allOfKind("tts")) expect(MEDIA_TTS_PRICING[e.id]).toBe(e.rate);
+    for (const e of allOfKind("stt")) expect(MEDIA_STT_PRICING[e.id]).toBe(e.rate);
   });
-  it("image, tts and stt rates match", () => {
-    expect(MEDIA_IMAGE_PRICING[byKind("image").id]).toBe(byKind("image").rate);
-    expect(MEDIA_TTS_PRICING[byKind("tts").id]).toBe(byKind("tts").rate);
-    expect(MEDIA_STT_PRICING[byKind("stt").id]).toBe(byKind("stt").rate);
+
+  it("the PINNED image id is the route-qualified one, spelled out", () => {
+    // A LITERAL, not `MEDIA_DEFAULT_IMAGE.model` on both sides. The pin, the price key and the
+    // fixture id are three copies of one string; comparing two of them to each other proves only
+    // that they are equal to themselves. `openai/gpt-image-2` and not `gpt-image-2`, because
+    // `buildSubmitBody` sends this value to OpenRouter UNSTRIPPED and the gateway keys on the route.
+    expect(MEDIA_DEFAULT_IMAGE.model).toBe("openai/gpt-image-2");
+    expect(allOfKind("image").map((e) => e.id)).toContain("openai/gpt-image-2");
+    // The superseded bare id stays PRICEABLE for historical rows, and is NOT the pin.
+    expect(MEDIA_IMAGE_PRICING["gpt-image-2"]).toBe(0.01);
   });
   it("every fixture entry records a live endpoint and any deprecation has a shutdown date", () => {
     for (const e of FIXTURES.entries) {
@@ -252,18 +362,47 @@ describe("the price tables agree with the committed vendor fixture", () => {
   // only break on the day the vendor breaks it has no warning value at all. Each failure below
   // names the decision it wants, so a red build here is actionable rather than merely alarming.
   const PINNED_MODELS = new Set<string>([MEDIA_DEFAULT_VIDEO.model, MEDIA_DEFAULT_IMAGE.model]);
+  /**
+   * IN SCOPE = every PINNED model, PLUS every entry still carrying an unretired `succession`.
+   *
+   * Keying on `PINNED_MODELS` alone was a hole, and 33.1-04 walked straight into it: repinning
+   * `MEDIA_DEFAULT_VIDEO` to the successor drops the DYING model out of the set, so all three
+   * alarms below `continue` past `sora-2` and go green **while the submit path still posts to the
+   * endpoint being withdrawn**. Measured, not theorised: with the repin landed and `sora-2`'s
+   * shutdown moved to five days out, this file was green.
+   *
+   * That is the same self-certification shape commit 7012068 closed one level up, where keying on
+   * `status !== "decision_pending"` meant that WRITING THE ADR disarmed the alarm. A decision is
+   * not a migration, and NEITHER IS A REPIN. The exit condition is unchanged and is still the only
+   * one: `replacementWiredUp === true`, which plan 33.1-05 sets beside the landed submit path.
+   *
+   * **`deprecated` is the THIRD arm, and it was added by mutation rather than by design.** The
+   * plan proposed `pinned || succession !== undefined`; mutation 3 (delete `sora-2`'s succession
+   * block outright) came back GREEN under it, because an unpinned entry with no succession falls
+   * out of scope — so the alarm "a deprecated model carries a written succession decision" could
+   * be silenced by DELETING the thing it asks for. Fixed in the predicate, not in the fixture.
+   *
+   * ponytail: one predicate, three call sites. Not a fixture-scanning helper module — this is a
+   * test file and the whole mechanism is one line.
+   */
+  const inScope = (e: {
+    id: string;
+    succession?: unknown;
+    vendor: Record<string, unknown>;
+  }): boolean =>
+    PINNED_MODELS.has(e.id) || e.succession !== undefined || e.vendor.deprecated === true;
   const daysUntil = (iso: string): number =>
     Math.floor((Date.parse(`${iso}T00:00:00Z`) - Date.now()) / 86_400_000);
 
-  it("A PINNED MODEL THAT IS DEPRECATED CARRIES A WRITTEN SUCCESSION DECISION", () => {
+  it("A DEPRECATED MODEL IN SCOPE CARRIES A WRITTEN SUCCESSION DECISION", () => {
     // The point is that "we know" has to become "it is written down". A deprecation with nobody
     // named as its replacement is how a dependency dies quietly.
     for (const e of FIXTURES.entries) {
-      if (!e.vendor.deprecated || !PINNED_MODELS.has(e.id)) continue;
+      if (!e.vendor.deprecated || !inScope(e)) continue;
       const succession = (e as { succession?: { status?: string; why?: string } }).succession;
       expect(
         succession,
-        `${e.id} is deprecated and PINNED, but no \`succession\` is recorded in media.fixtures.json`,
+        `${e.id} is deprecated and IN SCOPE, but no \`succession\` is recorded in media.fixtures.json`,
       ).toBeDefined();
       expect(succession?.status).toMatch(/^(decision_pending|decided|migrated)$/);
       expect(
@@ -273,11 +412,11 @@ describe("the price tables agree with the committed vendor fixture", () => {
     }
   });
 
-  it("A PINNED MODEL IS NOT ALREADY PAST ITS SHUTDOWN DATE", () => {
+  it("A MODEL IN SCOPE IS NOT ALREADY PAST ITS SHUTDOWN DATE", () => {
     // The last line of defence. If this is red, the product is shipping requests to an endpoint the
     // vendor has withdrawn — every `generated_video` scene is failing right now.
     for (const e of FIXTURES.entries) {
-      if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
+      if (!e.vendor.shutdown || !inScope(e)) continue;
       expect(
         daysUntil(String(e.vendor.shutdown)),
         `${e.id} SHUT DOWN on ${e.vendor.shutdown}. It is still pinned. Migrate it now.`,
@@ -297,6 +436,9 @@ describe("the price tables agree with the committed vendor fixture", () => {
     // the cheap half; the submit path is the half that keeps reels rendering. Keyed that way, the
     // ONLY surviving alarm was "the shutdown must not have passed", which fires the day after
     // production breaks. A decision is not a migration, and the tripwire now says so.
+    //
+    // 33.1-04 widened the SCOPE for the same reason (see `inScope`): a REPIN is not a migration
+    // either, and keying on `PINNED_MODELS` alone let the repin disarm this.
     const RUNWAY_DAYS = 14;
     for (const e of FIXTURES.entries) {
       const succession = (
@@ -304,7 +446,7 @@ describe("the price tables agree with the committed vendor fixture", () => {
           succession?: { status?: string; replacementWiredUp?: boolean };
         }
       ).succession;
-      if (!e.vendor.shutdown || !PINNED_MODELS.has(e.id)) continue;
+      if (!e.vendor.shutdown || !inScope(e)) continue;
       // Only a WIRED replacement stands the tripwire down. `migrated` means the code moved;
       // anything else — undecided, or decided-but-unwired — still needs runway.
       if (succession?.status === "migrated" || succession?.replacementWiredUp === true) continue;
@@ -364,47 +506,222 @@ describe("the scene-kind price table — §2.3, and why the cheap kinds are not 
 
   it("a still costs the same at 12 s as at 2 s — duration freedom IS the lever", () => {
     expect(sceneUsd("animated_image", 12)).toBe(sceneUsd("animated_image", 2));
-    // 40x, at 4 s. The block contract had no way to express this and bought a clip every time.
-    expect(sceneUsd("generated_video", 4) / sceneUsd("animated_image", 4)).toBeCloseTo(40, 10);
+    // 46.7x at 4 s ($0.28 / $0.006) — `140 / 3`, written as the arithmetic rather than as a
+    // decimal so the numerator and denominator are both legible.
+    //
+    // THIS NUMBER HAS MOVED TWICE IN ONE DAY: 40x (a $0.40 clip over a GUESSED $0.01 still), then
+    // 66.7x when 33.1-03 measured the still at $0.006, then 46.7x when 33.1-04 moved the clip to
+    // grok's $0.07/s. That is precisely why nothing a user or a model reads may RESTATE it: since
+    // 33.1-04 every sentence about the lever DERIVES it from this table (`mediaCanvasView.ts`'s
+    // `CLIP_VS_STILL_RATIO`), so a price move updates the copy instead of contradicting it.
+    expect(sceneUsd("generated_video", 4) / sceneUsd("animated_image", 4)).toBeCloseTo(140 / 3, 10);
   });
 
-  it("a generated clip is priced at ITS OWN length, and one off the provider grid is refused", () => {
-    expect(sceneUsd("generated_video", 8)).toBeCloseTo(0.8, 10);
-    expect(sceneUsd("generated_video", 12)).toBeCloseTo(1.2, 10);
-    for (const seconds of [5, 6, 10, 15]) {
+  it("a generated clip is priced at ITS OWN length, and the grid is WIDER — not absent", () => {
+    // INVERTED on 2026-08-30 (33.1-04), not deleted. 5, 6, 10 and 15 were `illegal_duration` on
+    // the sora-2 grid and are now ordinary lengths — that inversion IS the phase.
+    for (const seconds of [5, 6, 7, 10, 15]) {
+      expect(sceneUsd("generated_video", seconds)).toBeCloseTo(seconds * 0.07, 10);
+    }
+    expect(sceneUsd("generated_video", 8)).toBeCloseTo(0.56, 10);
+    expect(sceneUsd("generated_video", 12)).toBeCloseTo(0.84, 10);
+    // The grid is wider, not open. A scene the provider cannot make is still refused HERE, at the
+    // free gate, rather than inside a sandbox that has already been bought.
+    for (const seconds of [16, 0]) {
       const r = sceneVisualSpec("generated_video", seconds);
       expect(r.ok ? "ok" : r.error.code).toBe("illegal_duration");
     }
   });
 
-  it("the §2.3 30-second reel costs what the ADR claims", () => {
+  it("the §2.3 30-second reel costs what the ADR claims — AND is still buyable", () => {
     const pictures =
       3 * sceneUsd("generated_video", 4) +
       4 * sceneUsd("animated_image", 4) +
       sceneUsd("text_card", 2);
     expect(pictures).toBeCloseTo(SCENE.reel30s.mixed.pictureUsd, 10);
+    // 33.1-04: the ADR's worked deck sits EXACTLY on `MEDIA_GENERATED_SECONDS_CAP` with zero
+    // slack, and nothing checked that until this line. A one-second nudge to any of its three
+    // generated scenes makes the deck the ADR is argued from illegal, which would be a silent
+    // contradiction between the record and the rail. Asserted through `chooseMediaBatch` rather
+    // than by comparing two numbers, so it is the shipped gate that answers.
+    const generatedSeconds = SCENE.reel30s.mixed.generatedSeconds;
+    const deck: MediaSpec[] = [
+      ...Array.from({ length: generatedSeconds / 4 }, () => clip("720p", 4)),
+      ...Array.from(
+        { length: 4 },
+        (): MediaSpec => ({
+          kind: "image",
+          model: MEDIA_DEFAULT_IMAGE.model,
+          width: MEDIA_DEFAULT_IMAGE.width,
+          height: MEDIA_DEFAULT_IMAGE.height,
+        }),
+      ),
+      { kind: "render" },
+    ];
+    const bought = chooseMediaBatch(deck, MEDIA_JOB_CAP_USD);
+    expect(bought.ok, bought.ok ? "" : `the ADR's own deck is refused: ${bought.error.code}`).toBe(
+      true,
+    );
+    expect(generatedSeconds).toBe(3 * 4);
   });
 
   it("NOT ONE target duration is reachable with generated video alone", () => {
-    const grid = MEDIA_VIDEO_SECONDS[MEDIA_DEFAULT_VIDEO.model] ?? [];
-    /** Can `t` seconds be filled EXACTLY with the pinned model's own clip lengths? */
-    const fillable = (t: number): boolean => {
-      const reached = Array.from({ length: t + 1 }, () => false);
-      reached[0] = true;
-      for (let i = 1; i <= t; i++) reached[i] = grid.some((g) => g <= i && reached[i - g]);
-      return reached[t] ?? false;
-    };
-    const perSecond =
-      MEDIA_VIDEO_PRICING[MEDIA_DEFAULT_VIDEO.model]?.[MEDIA_DEFAULT_VIDEO.resolution];
+    // THE PROPERTY IS UNCHANGED; THE MECHANISM MOVED, on 2026-08-30 (33.1-04, ADR-027).
+    //
+    // It used to hold through TWO different mechanisms without saying so: 15 and 30 failed the
+    // ARITHMETIC (every sora-2 clip length was a multiple of 4, so no sum of them was 15 or 30)
+    // and 60 failed the JOB CAP ($6.00 > $3.50). On grok's 1..15 grid every target is composable,
+    // and 15 s ($1.05) and 30 s ($2.10) are both under the job cap, so the arithmetic half is gone.
+    //
+    // What holds it now is `MEDIA_GENERATED_SECONDS_CAP` — a code-owned ceiling at the same money
+    // boundary every other refusal passes through. All three targets are refused for ONE stated
+    // reason, and the assertion is made through `chooseMediaBatch`'s own return value rather than
+    // by arithmetic over a fixture array, so it reads the shipped check instead of restating it.
+    // ADR-027 §"What the mitigation is not": a ceiling somebody can raise is not the same thing as
+    // an impossibility, and that is a cost the Grok decision spends.
     for (const target of TARGET_DURATIONS) {
-      // Video is priced per SECOND, so every composition of `target` costs the same — the cap check
-      // needs the length, not the arrangement. 15 and 30 fail the arithmetic (every supported clip
-      // length is a multiple of 4); 60 is composable and costs $6.00, over the $3.50 job cap.
-      const usd = target * (perSecond ?? 0);
-      expect(fillable(target) && usd <= MEDIA_JOB_CAP_USD).toBe(false);
+      // The whole target, bought as generated video however it is arranged — video is priced per
+      // SECOND, so the arrangement never mattered, only the total.
+      const allGenerated = Array.from({ length: Math.ceil(target / 15) }, (_, i) =>
+        clip("720p", Math.min(15, target - i * 15)),
+      );
+      const r = chooseMediaBatch(allGenerated, MEDIA_JOB_CAP_USD);
+      expect(r.ok, `an all-generated ${target}s reel must be refused`).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe("over_generated_seconds");
     }
     expect([...TARGET_DURATIONS]).toEqual(SCENE.targetsUnreachableByGeneratedVideoAlone);
-    expect(fillable(28)).toBe(true); // the grid itself works — 28 s is buildable, 30 s is not
+    // THE ONE-LINE PROPERTY, which is what makes the loop above true for a target duration nobody
+    // has added yet rather than only for these three.
+    expect(MEDIA_GENERATED_SECONDS_CAP).toBeLessThan(Math.min(...TARGET_DURATIONS));
+  });
+
+  it("the boundary is INCLUSIVE — a deck spending exactly the cap is bought", () => {
+    // Both decks the cap was sized against sit EXACTLY on it, with zero slack: the skill body's
+    // VARIATION A spends 4 + 8 and `media.fixtures.json`'s reel30s.mixed spends 3 x 4. An
+    // exclusive boundary would make both illegal without a word of warning anywhere.
+    const atCap = [clip("720p", 4), clip("720p", 8)];
+    const r = chooseMediaBatch(atCap, MEDIA_JOB_CAP_USD);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.estUsd).toBeCloseTo(MEDIA_GENERATED_SECONDS_CAP * 0.07, 10);
+    // ...and one second more is not.
+    const over = chooseMediaBatch([clip("720p", 4), clip("720p", 9)], MEDIA_JOB_CAP_USD);
+    expect(over.ok ? "ok" : over.error.code).toBe("over_generated_seconds");
+  });
+
+  it("a batch with NO video at all is untouched by the ceiling", () => {
+    // A standalone image, and a whole deck of stills. The cap is about generated video; a ceiling
+    // that refused a $0.006 still would be a bug wearing a guard's clothes.
+    const image: MediaSpec = {
+      kind: "image",
+      model: MEDIA_DEFAULT_IMAGE.model,
+      width: MEDIA_DEFAULT_IMAGE.width,
+      height: MEDIA_DEFAULT_IMAGE.height,
+    };
+    expect(chooseMediaBatch([image], MEDIA_JOB_CAP_USD).ok).toBe(true);
+    const stillsDeck: MediaSpec[] = [
+      ...Array.from({ length: 8 }, () => image),
+      { kind: "free" },
+      { kind: "render" },
+    ];
+    expect(chooseMediaBatch(stillsDeck, MEDIA_JOB_CAP_USD).ok).toBe(true);
+  });
+
+  it("THE SKILL BODY'S OWN WORKED ANSWER STAYS LEGAL — the gap nothing checked", () => {
+    // `media-director.md` teaches by example, and `seedSkills` publishes it straight to ACTIVE with
+    // no eval gate in front of it (the body is not a GATED skill). So the only thing between "the
+    // body teaches a deck the money boundary refuses" and a live dead end is a check like this.
+    // VARIATION A spends 4 + 8 = 12 generated seconds — EXACTLY the cap, with zero slack, which is
+    // why the cap is 12 and why this assertion ships in the same commit as the cap.
+    //
+    // Read off DISK by relative path, the way `storyboard.test.ts` reads the same file:
+    // `@pikar/cost` does not depend on `@pikar/contracts` and must not start to.
+    const body = read("../../contracts/skills/media-director.md");
+    const v = parseVariations(body);
+    expect(v.kind, `the body's worked answer did not parse: ${JSON.stringify(v)}`).toBe("two");
+    if (v.kind !== "two") return;
+    for (const [name, slice] of [
+      ["A", v.a],
+      ["B", v.b],
+    ] as const) {
+      const generatedSeconds = slice.deck.scenes
+        .filter((sc) => sc.visual === "generated_video")
+        .reduce((n, sc) => n + sc.durationMs / 1000, 0);
+      expect(
+        generatedSeconds,
+        `the worked answer's VARIATION ${name} spends ${generatedSeconds}s of generated video, ` +
+          `over MEDIA_GENERATED_SECONDS_CAP (${MEDIA_GENERATED_SECONDS_CAP}). The body teaches a ` +
+          "deck the money boundary refuses - fix the body or the cap, not this assertion.",
+      ).toBeLessThanOrEqual(MEDIA_GENERATED_SECONDS_CAP);
+      // ...and the same deck is genuinely BUYABLE, not merely under one number.
+      const specs = slice.deck.scenes.flatMap((sc) => {
+        const line = sceneVisualSpec(sc.visual, sc.durationMs / 1000);
+        if (!line.ok) throw new Error(`worked answer scene refused: ${line.error.code}`);
+        return line.value === null ? [] : [line.value.spec];
+      });
+      expect(chooseMediaBatch([...specs, { kind: "render" }], MEDIA_JOB_CAP_USD).ok).toBe(true);
+    }
+  });
+
+  it("THE BODY'S STATED COST MULTIPLE IS THE DERIVED ONE — the fourth rot of the same literal", () => {
+    // This literal has now gone stale THREE times: `media.md` records it as "a tenth" until 33-06,
+    // then "a fortieth", and 33.1-03's reprice made that wrong again while four surfaces kept
+    // saying forty. The audit's fix was "derive, don't restate" — and 33.1-04 did exactly that for
+    // the screen (`CLIP_VS_STILL_RATIO` is computed at render).
+    //
+    // A SKILL BODY CANNOT DERIVE ANYTHING. It is a static string handed to a model, so the number
+    // has to be written out. What is available instead is this: state it in exactly ONE place, and
+    // put a test over that place which computes what it must say. The prose still restates; the
+    // restatement is no longer unfalsifiable.
+    //
+    // 33.1-06 reduced the body from FOUR numeric ratio claims to one for this reason. The other
+    // three now say "a small fraction" / "dramatically cheaper" and point at this one — qualitative
+    // prose cannot go stale, and a claim that cannot go stale needs no guard.
+    const body = read("../../contracts/skills/media-director.md");
+    const clip = sceneVisualSpec("generated_video", 4);
+    const still = sceneVisualSpec("animated_image", 4);
+    if (!clip.ok || !still.ok || clip.value === null || still.value === null) {
+      throw new Error("the two kinds the body compares must both price");
+    }
+    const derived = Math.round(clip.value.usd / still.value.usd);
+
+    // EXACTLY ONE numeric "N times" in the whole body. Not "at least one": a second numeric claim
+    // is a second thing to rot, and the count is what stops one being added back silently. The
+    // word-number forms elsewhere ("a hundred times before", "three times a week") are narration
+    // and example prose, carry no cost claim, and are deliberately not matched.
+    const stated = [...body.matchAll(/(\d+) times/g)].map((m) => Number(m[1]));
+    expect(
+      stated,
+      "the body must state its cost multiple exactly once, as digits. Found: " +
+        JSON.stringify(stated),
+    ).toHaveLength(1);
+    expect(
+      stated[0],
+      `media-director.md says a clip costs ${stated[0]}x a still; the price tables now say ` +
+        `${derived}x. Fix the BODY (packages/contracts/skills/media-director.md, the SCENE DECK ` +
+        "rules) and regenerate mediaDirector.ts — never this assertion.",
+    ).toBe(derived);
+
+    // The two historical spellings, named explicitly. This is a regression guard on the exact rot
+    // that happened, not a blocklist over an open vocabulary — those cannot fail usefully.
+    expect(body).not.toMatch(/fortieth|forty times/);
+  });
+
+  it("THE BODY TEACHES THE GENERATED-SECONDS CAP, and teaches the number the code enforces", () => {
+    // Before 33.1-06 the body said "at most three or four `generated_video` scenes in a reel" and
+    // said nothing about a seconds total. Under `MEDIA_GENERATED_SECONDS_CAP` that advice PRODUCES
+    // REFUSED DECKS: four 4-second clips is 16 generated seconds, three 5-second clips is 15, and
+    // both are rejected whole. A code-owned refusal the prose never learned about is this repo's
+    // "a backend fix that never reaches the renderer", one layer up — the renderer here being the
+    // model that reads the body.
+    const body = read("../../contracts/skills/media-director.md");
+    expect(
+      body,
+      `the body must state the ${MEDIA_GENERATED_SECONDS_CAP}-second generated total, or it ` +
+        "teaches decks the reservation refuses",
+    ).toContain(`at most ${MEDIA_GENERATED_SECONDS_CAP} seconds of \`generated_video\` IN TOTAL`);
+    // And the old scene-COUNT advice must be gone, not merely supplemented: a body carrying both
+    // gives the model two rules that disagree, and it will follow the one that is easier to satisfy.
+    expect(body).not.toMatch(/at most three or four `generated_video` scenes/);
   });
 });
 
