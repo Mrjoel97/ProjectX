@@ -71,7 +71,7 @@ export default function Home() {
       <div className="shell">
         <header className="hero">
           <div>
-            <p className="eyebrow">Human approval required</p>
+            <p className="eyebrow">Private beta · by invitation · human approval required</p>
             <h1>
               It plans and executes. <em>You</em> hold the gate.
             </h1>
@@ -83,7 +83,9 @@ export default function Home() {
               <a className="cta" href="/signin">
                 Sign in
               </a>
-              <a className="cta cta-ghost" href={`mailto:${CONTACT}?subject=Pikar%20AI%20access`}>
+              {/* 25.2 (G16): admission is invite-only by owner decision; strangers go to the
+                  waitlist door /signup already serves, not to a mail client. */}
+              <a className="cta cta-ghost" href="/signup">
                 Request access
               </a>
               <a className="cta cta-ghost" href="#how">
