@@ -1,5 +1,14 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-09-05 (25.3-01 — **THE WEEKLY REVIEW FAN-OUT IS A BATCH JOB, NOT A TABLE
+> COLLECT.** `runWeekly` (the cron target, name unchanged) kicks `enumerateWeeklyReview`, a
+> `@convex-dev/migrations` walk over `users` (one row per tenant; tenantId = String(userId)). Per
+> user: one indexed `by_tenant_kind` `.first()` for a business_profile, one
+> `deploymentSpendCents` check (a spent day schedules NOTHING instead of 10k refusals), then
+> `reviewOne` at a random point in the next 30 minutes. `reviewOne`'s catch now logs the error's
+> class with the tenantId (never the message). Tests seed a `users` row per tenant and run one
+> synchronous batch; the tenant-scope guard's `by_kind` count is 0 — every read is tenant-first.)
+>
 > Last verified: 2026-08-23 (FORMATTING ONLY — **no engine behaviour, contract or invariant
 > changed.** `evaluations.test.ts` was reformatted by `biome format --write` as part of the Phase 26
 > merge gate: nine committed files differed from Biome's formatting output, which reddened

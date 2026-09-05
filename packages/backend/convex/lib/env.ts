@@ -242,6 +242,28 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
     whatBreaks: "Web research; the cockpit falls back to asking the user.",
   },
 
+  // ── Budgets (25.3, G17) ─────────────────────────────────────────────────────────────────────
+  // The deployment-wide daily ceilings in cents. Unset = the compiled default in guardrails.ts.
+  // Under the free beta these three numbers are the whole cost control; move them here, not in code.
+  {
+    name: "DEPLOYMENT_BUDGET_CENTS",
+    tier: "feature",
+    whatBreaks:
+      "Nothing while unset — the compiled $50/day deployment-wide LLM ceiling applies. A positive integer here replaces it at the next deploy or restart.",
+  },
+  {
+    name: "DEPLOYMENT_MEDIA_BUDGET_CENTS",
+    tier: "feature",
+    whatBreaks:
+      "Nothing while unset — the compiled $100/day deployment-wide media ceiling applies. A positive integer here replaces it.",
+  },
+  {
+    name: "DEPLOYMENT_INGEST_BUDGET_CENTS",
+    tier: "feature",
+    whatBreaks:
+      "Nothing while unset — the compiled $250/day deployment-wide ingest ceiling applies. A positive integer here replaces it.",
+  },
+
   // ── Reliability ─────────────────────────────────────────────────────────────────────────────
   {
     // The arming gate on `reliabilitySweep.runSweep`, added for the 2026-08-21 production

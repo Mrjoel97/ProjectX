@@ -183,6 +183,22 @@ describe("WORM real export — advance only after a durable PutObject (OPSG-03)"
     expect(String(put.Body).trimEnd().split("\n")).toHaveLength(3);
   });
 
+  test("25.3: a backlog drains in ONE run — pageSize 2 over 3 rows is two objects and the cursor at the newest ts", async () => {
+    s3Send.mockResolvedValue({});
+    const t = convexTest(schema, modules);
+    await seedAudit(t, [10, 20, 30]);
+    const res = await t.action(internal.worm.exportAudit, { pageSize: 2 });
+    expect(res).toMatchObject({ exported: 3, maxTs: 30, pages: 2 });
+    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(30);
+    expect(s3Send).toHaveBeenCalledTimes(2);
+    const keys = s3Send.mock.calls.map((c) => c[0].input.Key);
+    expect(new Set(keys).size).toBe(2); // two distinct objects, never one overwritten
+    const bodies = s3Send.mock.calls.map(
+      (c) => String(c[0].input.Body).trimEnd().split("\n").length,
+    );
+    expect(bodies).toEqual([2, 1]);
+  });
+
   test("PutObject throw → cursor is NOT advanced (next cron retries the same window)", async () => {
     s3Send.mockRejectedValue(new Error("s3 down"));
     const t = convexTest(schema, modules);

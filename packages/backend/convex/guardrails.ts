@@ -40,7 +40,15 @@ import { ensureCoverage, recordMovement } from "./spendLedger";
 // KEYLESS — and both windows are checked and consumed. The tighter one wins. Owner decision,
 // 2026-08-01.
 export const DAILY_BUDGET_CENTS = 500; // ≈ $5/day PER TENANT.
-export const DEPLOYMENT_BUDGET_CENTS = 5_000; // ≈ $50/day across ALL tenants — the hard cap.
+// 25.3 (G17): the deployment-wide ceilings are read from env at module load, with the compiled
+// values as the fallbacks. Under the free-beta decision these ARE the spend ceiling, and moving one
+// must not need a deploy. Literal `process.env.X` reads on purpose — `env.test.ts`'s manifest scan
+// sees literals only. A value that is not a positive integer is ignored, never treated as zero.
+export const envCents = (raw: string | undefined, fallback: number): number => {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+};
+export const DEPLOYMENT_BUDGET_CENTS = envCents(process.env.DEPLOYMENT_BUDGET_CENTS, 5_000); // ≈ $50/day across ALL tenants — the hard cap.
 
 // ── The MEDIA rail (Phase 20, D10) ────────────────────────────────────────────────────
 //
@@ -57,7 +65,10 @@ export const MEDIA_DAILY_BUDGET_CENTS = 1_000; // $10/day PER TENANT.
 // stop. 10,000 keeps the SAME 10x ratio the LLM ceiling holds over its per-tenant window — one
 // ratio to remember across both rails. Worst-case daily exposure is now $100 media + $50 LLM,
 // across four windows that never share. DO NOT remove this as redundant.
-export const DEPLOYMENT_MEDIA_BUDGET_CENTS = 10_000; // $100/day across ALL tenants.
+export const DEPLOYMENT_MEDIA_BUDGET_CENTS = envCents(
+  process.env.DEPLOYMENT_MEDIA_BUDGET_CENTS,
+  10_000,
+); // $100/day across ALL tenants.
 
 // ── The FOLDER-INGEST rail (Phase 15.3, VALT-06) ──────────────────────────────────────
 //
@@ -75,7 +86,10 @@ export const DEPLOYMENT_MEDIA_BUDGET_CENTS = 10_000; // $100/day across ALL tena
 export const INGEST_DAILY_BUDGET_CENTS = 2_500; // $25/day PER TENANT.
 // KEYLESS, for the third time and for the same reason: per-tenant keying alone makes exposure
 // N x $25, unbounded in N. 25,000 holds the SAME 10x ratio both existing rails hold.
-export const DEPLOYMENT_INGEST_BUDGET_CENTS = 25_000; // $250/day across ALL tenants.
+export const DEPLOYMENT_INGEST_BUDGET_CENTS = envCents(
+  process.env.DEPLOYMENT_INGEST_BUDGET_CENTS,
+  25_000,
+); // $250/day across ALL tenants.
 
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Per-tenant submit rate (keyed by tenantId): steady 20/hr with a small burst of 5.
@@ -85,6 +99,9 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   dailySpendCents: { kind: "fixed window", rate: DAILY_BUDGET_CENTS, period: 24 * HOUR },
   // Deployment-wide ceiling. KEYLESS ON PURPOSE — this is the one bucket everybody shares, and
   // it is what stops N invited beta users from multiplying the bill.
+  // ponytail: the three deployment windows are UNSHARDED. One counter row per window is honest to
+  // ~10k users; past that, add `shards` here (@convex-dev/rate-limiter 0.3 supports it) knowing a
+  // sharded fixed window is approximate — one hot tenant can be refused at cap/shards.
   deploymentSpendCents: { kind: "fixed window", rate: DEPLOYMENT_BUDGET_CENTS, period: 24 * HOUR },
   // The media pair, same shapes, same keying rules, DIFFERENT money. `media.reserveJob` consumes
   // both with `reserve: true` BEFORE any fal request exists.

@@ -1,5 +1,11 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-09-05 (25.3-01 — three `feature`-tier manifest rows for the deployment
+> ceilings (`DEPLOYMENT_*_BUDGET_CENTS`, see guardrails.md); unset means the compiled default. To arm
+> the reliability sweep on production (G1) run, from the owner's terminal:
+> `cd packages/backend && npx convex env set --prod RELIABILITY_SWEEP_ARMED 1` — after one real
+> render has been watched end to end.)
+>
 > Last verified: 2026-09-05 (**RELEASE MERGE — Phases 28, 28.1, 29, 33.1 (01-05) and 33.2 promoted to
 > production in ONE `[deploy]` push; see `docs/releases/2026-09-05-promotion.md` for the per-change
 > manifest.** Production had sat at `860e3f5` (2026-08-27) while 428 commits accumulated across main

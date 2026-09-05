@@ -1,3 +1,8 @@
+> Last verified: 2026-09-05 (25.3-01 — `vaultIngest.retryStuckIngests` (name unchanged) kicks
+> `retryStuckIngestsBatch`, a 20-row batch walk over `vaultDocuments` (rows carry their text), with
+> the same processing / no-ragEntryId / older-than-60s guard and the same rail derivation. The
+> `olderThanMs` argument is gone — nothing passed it.)
+>
 > Last verified: 2026-09-05 (33.2-06 — the PDF/image hosted-extraction rail (`extractHosted`, and
 > `fanOutPages` through it) calls `resolveModel(DEFAULT_MODEL)` — `or/openai/gpt-4o-mini` at
 > OpenRouter — instead of a literal direct `openai("gpt-4o-mini")`. Probed 2026-09-05 through the

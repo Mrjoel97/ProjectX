@@ -1,5 +1,14 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-09-05 (25.3-01 — **THE THREE DEPLOYMENT-WIDE CEILINGS ARE ENV-DRIVEN (G17).**
+> `DEPLOYMENT_BUDGET_CENTS`, `DEPLOYMENT_MEDIA_BUDGET_CENTS`, `DEPLOYMENT_INGEST_BUDGET_CENTS` are read
+> at module load through `envCents(raw, fallback)` — a positive integer replaces the compiled $50 /
+> $100 / $250 per day; anything else (unset, "0", "12.5", a word) keeps the fallback and never reads as
+> zero. The rate-limiter windows, the Finance rails view and the ingest refusal all take the same
+> value. Under the free-beta decision these ARE the spend ceiling, set from the deployment env.
+> Sharding the three deployment counters is deferred with the ceiling named in a `ponytail:` comment
+> (a sharded fixed window is approximate; ~10k users is honest unsharded).)
+>
 > Last verified: 2026-09-05 (33.2-05 — two routed transcription pins beside TRANSCRIPTION_PRICING:
 > `OR_TRANSCRIPTION_MODEL` (whisper-1) and `OR_INTAKE_TRANSCRIPTION_MODEL` (gpt-4o-transcribe). No
 > PRICING rows — transcription is billed per second/minute, and OpenRouter's body carries the

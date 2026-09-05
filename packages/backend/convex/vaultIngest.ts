@@ -19,6 +19,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { workflow } from "./index";
+import { migrations } from "./migrations";
 
 /**
  * The SOLE way to start an ingest workflow. Wraps `workflow.start` with the `onComplete` that marks
@@ -92,14 +93,16 @@ export const onIngestComplete = internalMutation({
  * docs whose ingest may still be legitimately in flight. Operational recovery + the retry primitive.
  * ponytail: full table scan (no by_status index) — fine for an occasional ops sweep, not a hot path.
  */
-export const retryStuckIngests = internalMutation({
-  args: { olderThanMs: v.optional(v.number()) },
-  handler: async (ctx, { olderThanMs }): Promise<{ requeued: number }> => {
-    const cutoff = Date.now() - (olderThanMs ?? 60_000);
-    const docs = await ctx.db.query("vaultDocuments").collect();
-    let requeued = 0;
-    for (const d of docs) {
-      if (d.status !== "processing" || d.ragEntryId || d.createdAt > cutoff) continue;
+// 25.3 (G17): a BATCH JOB (20 rows per batch — a vaultDocuments row carries its text) behind the
+// same name, not a `.collect()` of the table. `retryStuckIngests` below kicks it.
+export const STUCK_INGEST_MS = 60_000;
+export const retryStuckIngestsBatch = migrations.define({
+  table: "vaultDocuments",
+  batchSize: 20,
+  migrateOne: async (ctx, d) => {
+    const cutoff = Date.now() - STUCK_INGEST_MS;
+    {
+      if (d.status !== "processing" || d.ragEntryId || d.createdAt > cutoff) return;
       // A folder member re-started by this sweep must NOT go back to spending the cockpit's
       // budget — the rail is derived from the row, because the sweep has no other context.
       // 15.3-04: RESOLVE the id, never test it for truthiness. Cancel DELETES the folder row and
@@ -128,9 +131,14 @@ export const retryStuckIngests = internalMutation({
         correlationId: crypto.randomUUID(),
         ...railFor,
       });
-      requeued++;
     }
-    return { requeued };
+  },
+});
+
+export const retryStuckIngests = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    await migrations.runOne(ctx, internal.vaultIngest.retryStuckIngestsBatch, { reset: true });
   },
 });
 

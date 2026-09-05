@@ -10,8 +10,10 @@
 // CLAUDE.md rule 4). Redaction must happen BEFORE calling log().
 import type { AuditPayload } from "@pikar/contracts/audit";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { auditCounts } from "./aggregates";
+import { migrations } from "./migrations";
 
 export const log = internalMutation({
   args: {
@@ -102,12 +104,21 @@ export const recentByType = internalQuery({
 
 // One-time reconciliation for pre-existing dev rows the aggregate never saw: clear
 // then re-insert every audit row so counts match the table. Idempotent.
+// 25.3 (G17): the re-insert is a BATCH JOB over `audit`, not a `.collect()` of the whole log. Note
+// the window: counts are cleared at once and rebuilt over the following batches, so `count` reads
+// are LOW until the walk finishes. This is an operator backfill, run deliberately, never on a cron.
+export const reinsertAuditCounts = migrations.define({
+  table: "audit",
+  batchSize: 200,
+  migrateOne: async (ctx, row) => {
+    await auditCounts.insert(ctx, row);
+  },
+});
+
 export const backfillAuditCounts = internalMutation({
   args: {},
   handler: async (ctx) => {
     await auditCounts.clearAll(ctx);
-    const rows = await ctx.db.query("audit").collect();
-    for (const row of rows) await auditCounts.insert(ctx, row);
-    return { reinserted: rows.length };
+    await migrations.runOne(ctx, internal.audit.reinsertAuditCounts, { reset: true });
   },
 });

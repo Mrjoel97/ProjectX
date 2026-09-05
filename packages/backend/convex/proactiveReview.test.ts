@@ -6,11 +6,13 @@
 // idiom needs no `node` environment, so a second file would buy nothing but a second harness.
 import { NOTIFICATION_KINDS, REVIEW_THREAD_ID, serializeProfile } from "@pikar/core";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) or the REAL audit path
 // throws "component not registered" (the evaluations.test.ts idiom, copied verbatim).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import migrationsSchema from "../node_modules/@convex-dev/migrations/src/component/schema.js";
+import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
@@ -18,12 +20,25 @@ const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
+const migrationsModules = import.meta.glob(
+  "../node_modules/@convex-dev/migrations/src/component/**/!(*.test).ts",
+);
+const rateLimiterModules = import.meta.glob(
+  "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 
 /** convex-test instance with the auditCounts aggregate component registered. */
 function newTest(): ReturnType<typeof convexTest> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  t.registerComponent("migrations", migrationsSchema, migrationsModules);
+  t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
   return t;
+}
+
+/** 25.3: a tenant IS a users row (tenantId = String(userId)); the weekly walk enumerates users. */
+async function newTenant(t: ReturnType<typeof convexTest>): Promise<string> {
+  return String(await t.run((ctx) => ctx.db.insert("users", {})));
 }
 
 /** A committed business-profile markdown body (round-trips through deserializeProfile). */
@@ -74,9 +89,20 @@ async function seedDoc(
  * dynamic imports that fake timers never let settle.)
  */
 async function runCron(t: ReturnType<typeof convexTest>): Promise<void> {
-  await t.mutation(internal.proactiveReview.runWeekly, {});
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await t.finishInProgressScheduledFunctions();
+  // 25.3: the enumeration is a batch job; one synchronous batch (vaultSweep.test.ts idiom) and
+  // then drain the randomly-spread reviewOne jobs under fake timers.
+  vi.useFakeTimers();
+  try {
+    await t.mutation(internal.proactiveReview.enumerateWeeklyReview, {
+      cursor: null,
+      batchSize: 100,
+      dryRun: false,
+      oneBatchOnly: true,
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 // `t.run`'s ctx is a GENERIC data model (convex-test does not thread the schema through it), so
@@ -105,52 +131,56 @@ async function notifications(t: ReturnType<typeof convexTest>, tenantId: string)
 describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in-app card)", () => {
   test("enumerates only tenants with a business_profile doc (deduped, one review each)", async () => {
     const t = newTest();
+    const A = await newTenant(t);
+    const C = await newTenant(t);
     await t.mutation(internal.skills.seedSkills, {});
     // Tenant A is onboarded TWICE over (an enrichment re-commit leaves a second profile doc).
-    await seedDoc(t, "tenant_a", "business_profile", profileText("Acme Dog Training"));
-    await seedDoc(t, "tenant_a", "business_profile", profileText("Acme Dog Training"));
+    await seedDoc(t, A, "business_profile", profileText("Acme Dog Training"));
+    await seedDoc(t, A, "business_profile", profileText("Acme Dog Training"));
     // Tenant C has vault content but never onboarded — it must not be reviewed.
-    await seedDoc(t, "tenant_c", "upload", "Some uploaded reference material.");
+    await seedDoc(t, C, "upload", "Some uploaded reference material.");
 
     await runCron(t);
 
-    expect(await reviewRows(t, "tenant_a")).toHaveLength(1); // deduped: one review per tenant
-    expect(await reviewRows(t, "tenant_c")).toHaveLength(0);
+    expect(await reviewRows(t, A)).toHaveLength(1); // deduped: one review per tenant
+    expect(await reviewRows(t, C)).toHaveLength(0);
   });
 
   test("writes a review card and a notification", async () => {
     const t = newTest();
+    const A = await newTenant(t);
     await t.mutation(internal.skills.seedSkills, {});
-    await seedDoc(t, "tenant_a", "business_profile", profileText("Acme Dog Training"));
+    await seedDoc(t, A, "business_profile", profileText("Acme Dog Training"));
 
     await runCron(t);
 
-    const rows = await reviewRows(t, "tenant_a");
+    const rows = await reviewRows(t, A);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.findings.length).toBeGreaterThanOrEqual(1); // the card has something to say
 
-    const notes = await notifications(t, "tenant_a");
+    const notes = await notifications(t, A);
     expect(notes.map((n) => n.kind)).toEqual(["weekly_review"]);
     expect(notes[0]?.read).toBe(false);
   });
 
   test("notifies only on change (a second identical week stays silent)", async () => {
     const t = newTest();
+    const A = await newTenant(t);
     await t.mutation(internal.skills.seedSkills, {});
-    await seedDoc(t, "tenant_a", "business_profile", profileText("Acme Dog Training"));
+    await seedDoc(t, A, "business_profile", profileText("Acme Dog Training"));
 
     await runCron(t);
     await runCron(t);
 
     // The card refreshes every week regardless — it is the notification that is conditional.
-    expect(await reviewRows(t, "tenant_a")).toHaveLength(2);
-    const notes = await notifications(t, "tenant_a");
+    expect(await reviewRows(t, A)).toHaveLength(2);
+    const notes = await notifications(t, A);
     expect(notes.map((n) => n.kind)).toEqual(["weekly_review"]);
 
     // The second run must be a genuine no-op diff, not merely an unnotified one: same verdict,
     // same finding count, empty delta. (This is the regression guard for the repeat-run
     // provenance collapse — without stable re-citation, findings shrink week over week.)
-    const rows = await reviewRows(t, "tenant_a");
+    const rows = await reviewRows(t, A);
     expect(rows[1]?.verdict).toBe(rows[0]?.verdict);
     expect(rows[1]?.findings.length).toBe(rows[0]?.findings.length);
     expect(rows[1]?.delta).toEqual({ newFindings: 0, gapsClosed: [], gapsOpened: [] });
@@ -158,15 +188,17 @@ describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in
 
   test("cross-tenant isolation: each review carries only its own tenantId", async () => {
     const t = newTest();
+    const A = await newTenant(t);
+    const B = await newTenant(t);
     await t.mutation(internal.skills.seedSkills, {});
-    await seedDoc(t, "tenant_a", "business_profile", profileText("Acme Dog Training"));
-    await seedDoc(t, "tenant_b", "business_profile", profileText("Beta Bakery"));
+    await seedDoc(t, A, "business_profile", profileText("Acme Dog Training"));
+    await seedDoc(t, B, "business_profile", profileText("Beta Bakery"));
 
     await runCron(t);
 
     for (const [tenantId, other] of [
-      ["tenant_a", "tenant_b"],
-      ["tenant_b", "tenant_a"],
+      [A, B],
+      [B, A],
     ] as const) {
       const rows = await reviewRows(t, tenantId);
       expect(rows).toHaveLength(1);
@@ -184,15 +216,16 @@ describe("proactive weekly review (BEVL-03 — cron → per-tenant review → in
 
   test("audit stays the existing evaluation.ran row (no new review.* eventType)", async () => {
     const t = newTest();
+    const A = await newTenant(t);
     await t.mutation(internal.skills.seedSkills, {});
-    await seedDoc(t, "tenant_a", "business_profile", profileText("Acme Dog Training"));
+    await seedDoc(t, A, "business_profile", profileText("Acme Dog Training"));
 
     await runCron(t);
 
     const events = await t.run(async (ctx) =>
       ctx.db
         .query("audit")
-        .filter((q) => q.eq(q.field("tenantId"), "tenant_a"))
+        .filter((q) => q.eq(q.field("tenantId"), A))
         .collect(),
     );
     expect(events.map((e) => e.eventType)).toEqual(["evaluation.ran"]);
@@ -267,7 +300,8 @@ describe("proactive review guards (SC#2 no mailbox token, SC#3 tenant-scoped)", 
       }
     }
     // Pinned so a SECOND unscoped scan cannot be added silently.
-    expect(byKindCount).toBe(1);
+    // 25.3: the enumeration walks `users` as a batch job; every remaining read is tenant-first.
+    expect(byKindCount).toBe(0);
 
     // Every insert carries a tenantId in its object literal.
     for (const m of code.matchAll(/ctx\.db\.insert\(\s*["'](\w+)["']\s*,\s*\{/g)) {

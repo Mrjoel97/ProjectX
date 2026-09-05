@@ -13,6 +13,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantAction, tenantQuery } from "./lib/functions";
+import { migrations } from "./migrations";
 
 const GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 // Revocation takes the token ALONE — no client_id/client_secret, unlike the refresh grant
@@ -269,21 +270,37 @@ export const getForDelivery = internalQuery({
  * expiry warning through the dying mailbox is the loop `audit-dead-letter.md` sanctions this
  * direct insert to avoid. Route through notify only once notify can pick a non-mail channel.
  */
+// 25.3 (G17): a BATCH JOB over `gmailTokens`, not a `.collect()` of the table, and ONE unread
+// reconnect notice per tenant — yesterday's scan may already have raised it, and a second identical
+// banner is noise the user learns to dismiss. The dedupe reads the tenant's unread notifications
+// through `by_tenant_read` with a bounded take; `read: true` (the user reconnected or dismissed)
+// re-arms it, which is the behaviour the 7-day refresh window needs.
+export const scanExpiringTokens = migrations.define({
+  table: "gmailTokens",
+  batchSize: 100,
+  migrateOne: async (ctx, row) => {
+    const now = Date.now();
+    if (!isExpiringSoon(row._creationTime + REFRESH_TOKEN_TTL_MS, now)) return;
+    const unread = await ctx.db
+      .query("notifications")
+      .withIndex("by_tenant_read", (q) => q.eq("tenantId", row.tenantId).eq("read", false))
+      .take(50);
+    if (unread.some((n) => n.kind === "gmail_reconnect")) return;
+    await ctx.db.insert("notifications", {
+      tenantId: row.tenantId,
+      kind: "gmail_reconnect",
+      message: "Your Gmail connection is about to expire — reconnect to keep delivery running.",
+      read: false,
+      createdAt: now,
+    });
+  },
+});
+
+/** The cron target (name unchanged). Kicks the batch walk above. */
 export const flagExpiringTokens = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const now = Date.now();
-    for (const row of await ctx.db.query("gmailTokens").collect()) {
-      const refreshExpiresAt = row._creationTime + REFRESH_TOKEN_TTL_MS;
-      if (!isExpiringSoon(refreshExpiresAt, now)) continue;
-      await ctx.db.insert("notifications", {
-        tenantId: row.tenantId,
-        kind: "gmail_reconnect",
-        message: "Your Gmail connection is about to expire — reconnect to keep delivery running.",
-        read: false,
-        createdAt: now,
-      });
-    }
+    await migrations.runOne(ctx, internal.gmailAuth.scanExpiringTokens, { reset: true });
   },
 });
 

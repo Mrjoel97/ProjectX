@@ -1,5 +1,13 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-05 (25.3-01 — (1) `worm.exportAudit` drains a BACKLOG: it loops pages
+> (`WORM_PAGE_SIZE` 10k, `pageSize` arg for tests) until a short page or `WORM_RUN_BUDGET_MS` (8 min);
+> each page is its own Object-Lock object and its own cursor advance, so a mid-run failure loses
+> nothing confirmed. worm.test.ts: pageSize 2 over 3 rows → two distinct objects, cursor at 30.
+> (2) `audit.backfillAuditCounts` clears the aggregate and re-inserts through
+> `reinsertAuditCounts`, a batch job over `audit` — counts read LOW until the walk finishes; it is an
+> operator backfill, never a cron. Insert-only discipline on the `audit` table is untouched.)
+>
 > Last verified: 2026-09-05 (release merge — `tenantData.test.ts`'s table count RE-DERIVED from the
 > merged `schema.ts`: main's 52 (with `knowledgeSearches`) + the billing lane's five = **57**; both
 > sides' figures were wrong for the merged tree, as that test's own comment predicted. The lane's

@@ -13,6 +13,8 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { internalAction, internalMutation } from "./_generated/server";
+import { rateLimiter } from "./guardrails";
+import { migrations } from "./migrations";
 
 /**
  * The weekly entry point: enumerate onboarded tenants and fan out one review each.
@@ -34,20 +36,45 @@ import { internalAction, internalMutation } from "./_generated/server";
  * while profiles are a few KB each; if beta scale makes this transaction heavy, add a dedicated
  * `onboarded` marker table rather than widening the read.
  */
+// 25.3 (G17): the fan-out is a BATCH JOB over `users` — one row per tenant (tenantId is the user
+// id, lib/functions.ts:49) — not a `.collect()` of every business_profile document with its full
+// text in one mutation. Per user: one indexed `.first()`, one deployment-budget check, one review
+// scheduled at a random point in the next WEEKLY_REVIEW_SPREAD_MS. A day whose deployment window
+// is already spent schedules NOTHING, instead of 10k reviews that each get refused and each write
+// a "failed" card.
+// ponytail: a 30-minute spread is sized for ~10k tenants (≈6 reviews/s). At 100k, scale the spread
+// with the user count or move the review behind a queue.
+export const WEEKLY_REVIEW_SPREAD_MS = 30 * 60 * 1000;
+/** What one review is expected to cost; the deployment window must have room for it. */
+export const WEEKLY_REVIEW_EST_CENTS = 5;
+
+export const enumerateWeeklyReview = migrations.define({
+  table: "users",
+  batchSize: 100,
+  migrateOne: async (ctx, user) => {
+    const tenantId = String(user._id);
+    const profile = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant_kind", (q) => q.eq("tenantId", tenantId).eq("kind", "business_profile"))
+      .first();
+    if (!profile) return;
+    const deployment = await rateLimiter.check(ctx, "deploymentSpendCents", {
+      count: WEEKLY_REVIEW_EST_CENTS,
+    });
+    if (!deployment.ok) return;
+    await ctx.scheduler.runAfter(
+      Math.floor(Math.random() * WEEKLY_REVIEW_SPREAD_MS),
+      internal.proactiveReview.reviewOne,
+      { tenantId },
+    );
+  },
+});
+
+/** The cron target. Kicks the resumable batch walk above; `reset: true` so every Monday starts over. */
 export const runWeekly = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const seen = new Set<string>();
-    for (const doc of await ctx.db
-      .query("vaultDocuments")
-      .withIndex("by_kind", (q) => q.eq("kind", "business_profile"))
-      .collect()) {
-      if (seen.has(doc.tenantId)) continue;
-      seen.add(doc.tenantId);
-      await ctx.scheduler.runAfter(0, internal.proactiveReview.reviewOne, {
-        tenantId: doc.tenantId,
-      });
-    }
+    await migrations.runOne(ctx, internal.proactiveReview.enumerateWeeklyReview, { reset: true });
   },
 });
 
@@ -100,10 +127,16 @@ export const reviewOne = internalAction({
           kind: "weekly_review",
         });
       }
-    } catch {
+    } catch (error) {
       // runEvaluation itself FAILS OPEN (a thin-data verdict is a result, not a failure) — this
       // catches the transaction/scheduler level. Surface it: silence would look identical to a
       // healthy quiet week. The REASON never reaches the notification plane (§4).
+      // 25.3: name the failure in the log (the error's class only — a message may quote content);
+      // the user still gets the honest "failed" card below.
+      console.error("[proactiveReview] weekly review failed", {
+        tenantId,
+        error: error instanceof Error ? error.name : "unknown",
+      });
       await ctx.runMutation(internal.proactiveReview.insertReviewNotification, {
         tenantId,
         kind: "weekly_review_failed",

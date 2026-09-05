@@ -1,3 +1,8 @@
+> Last verified: 2026-09-05 (25.3-01 — `gmailAuth.flagExpiringTokens` (cron target, name unchanged)
+> kicks `scanExpiringTokens`, a batch walk over `gmailTokens`; an expiring grant raises ONE unread
+> `gmail_reconnect` notice (dedupe through `by_tenant_read`, bounded take) and a read/dismissed one
+> re-arms it. `scaleConstants.test.ts` proves two runs → one notice, and a fresh grant is left alone.)
+>
 > Last verified: 2026-09-05 (25.2-02 — **THE COCKPIT WORKS ON A PHONE (G15).** Below 48rem
 > `SplitPane` shows ONE pane at a time — chat first, the work behind a "Show work" / "Back to chat"
 > toggle (`aria-pressed`). `paneLayout(narrow, showWork, pct)` is the pure decision; `narrow` is a
