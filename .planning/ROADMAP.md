@@ -234,11 +234,11 @@ Plans:
 **Goal:** The product says what it does and hands an idea-stage user a finished thing. Half A: the landing page and the Command Center in outcome language (no tool-connection or end-to-end promise; no operator vocabulary on a tenant surface). Half B: a seventh workflow pack, `offer-and-lead-plan`, that lands ONE document (the offer + the 30-day lead plan), started from a Command Center card when the diagnosis cannot run yet, shipped through the pack gate. Source: G23 (Track B step 8).
 **Requirements**: none minted.
 **Depends on:** 25.2 (surfaces), 34 (the agenda read the card keys off), Phase 27's pack machinery.
-**Plans:** 1/2 — plan 01 **COMPLETE 2026-09-06**; plan 02 planned (handoff in 35-01-SUMMARY.md). Research in `.planning/phases/35-outcome-language-and-the-idea-stage-artifact/`.
+**Plans:** 2/2 — **BOTH COMPLETE 2026-09-06**. Half B's pack is a CANDIDATE on deploy by construction; going live is the owner's gate run (35-02-SUMMARY.md, five steps). Research in `.planning/phases/35-outcome-language-and-the-idea-stage-artifact/`.
 
 Plans:
 - [x] 35-01-PLAN.md — Outcome language: landing page + Command Center vocabulary, pins moved (Wave 1)
-- [ ] 35-02-PLAN.md — The `offer-and-lead-plan` pack through the pack gate + the Command Center entry card (Wave 2)
+- [x] 35-02-PLAN.md — The `offer-and-lead-plan` pack through the pack gate + the Command Center entry card (Wave 2) — **complete 2026-09-06.** Seventh pack, first original body (ADR-034 in-house provenance), five fixtures, `plan_days` dial, `first-thing` Command Center card; dark until the owner runs the gate.
 
 ### Phase 29: Unified Knowledge and Routines
 
@@ -1537,7 +1537,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 28. Connector-Backed Revenue Pack | 28/29 | In progress — 28-16 now gives server-owned gated discovery, authenticated desktop/tablet/mobile parked-state evidence, and an exhaustive strict provider/REVN completion matrix. Privacy-safe revenue telemetry and three activated pins are ready, but all four provider lanes remain parked/hidden; REVN-01..06 remain pending and only 28-27's owner subset/strict seal remains | - |
 | 28.1 Stripe Billing, Invoicing and Tax for Pikar's OWN merchant account (INSERTED) | 11/11 | **Code complete and SEALED 2026-08-30** — every plan landed, a 15-defect adversarial audit fixed, the rollup has a producer and the erasure arm cancels before the walk. **NOTHING IN IT HAS EVER SPOKEN TO STRIPE**: `requirements-completed: []`, BILL-01..06 all PENDING | 2026-08-30 |
 | 28.2 Unpark ONE connector + invoice reminders (INSERTED) | 1/1 | **Code complete 2026-09-06** — the owner-connect evidence window landed (admitted-but-unproven lanes visible to the OWNER only, marked unproven); the invoice-reminder offer lists open invoices and drafts from a picked one; QuickBooks chosen. **The lane pass is an owner runbook** (`revenue-connectors.md`); REVN-02 pending until sealed | 2026-09-06 |
-| 35. Outcome language + idea-stage artifact (INSERTED) | 1/2 | **Half A complete 2026-09-06** — landing page and Command Center rewritten in outcome language; every copy pin moved. Half B (the `offer-and-lead-plan` pack via the pack gate, Command Center entry) planned, handoff in 35-01-SUMMARY | 2026-09-06 |
+| 35. Outcome language + idea-stage artifact (INSERTED) | 2/2 | **Complete 2026-09-06** — Half A: landing page and Command Center in outcome language. Half B: `offer-and-lead-plan`, the seventh pack and the first original body (ADR-034), through the pack gate with five fixtures + a Command Center first-thing card; CANDIDATE on deploy, owner gate run to go live (35-02-SUMMARY) | 2026-09-06 |
 | **Milestone: Marketing (pulled pre-beta 2026-08-07, ADR-015)** | | | |
 | 31. Marketing Surface & Funnel v0 (tranche A) | 0/TBD | Not started — schedulable; depends on Phase 19 | - |
 | 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — legal entity not started.** Do not plan | - |
