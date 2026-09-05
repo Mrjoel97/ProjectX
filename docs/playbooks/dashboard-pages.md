@@ -1,5 +1,14 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-05 (25.2-01 — **DELETE-FIRST UX PASS, items 1-4 (G14).** The rail loses the
+> "Join Community · Soon" placeholder (every NAV entry now has an href; the `is-soon` branch is gone)
+> and "Compliance" is `ownerOnly` — filtered on `api.owner.viewer` in the Shell, the same flag the
+> admin page and Finance tabs use; the URL still resolves for the owner and `/ops` still answers
+> bookmarks. Approvals copy no longer says tenant / deployment / scheduler, and an unmapped refusal
+> code renders as words (`refusalMessage` humanises the token). The delivery report shows
+> `deliveryStatusLabel(status)` — the enum keeps the badge colour, the reader gets a sentence. Pinned
+> by `apps/web/app/(app)/deleteFirst.test.ts` (source scans, approvalsView.test.ts idiom).)
+>
 > Last verified: 2026-09-03 (**COMPLIANCE IS A TAB ON `/dashboard/approvals`, THE RAIL POINTS AT
 > IT, AND `?tab=` IS NOW A REAL NAVIGATION TARGET.** Working tree, uncommitted. 670 web unit tests
 > and `tsc --noEmit` green; `next build` clean. Not verified in a live browser.)

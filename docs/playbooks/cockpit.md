@@ -1,3 +1,8 @@
+> Last verified: 2026-09-05 (25.2-01 — items 6-7 of the delete-first pass: the composer's disabled
+> "Auto" model pill is deleted (it promised a dial that does not exist), and "Adapt a business skill"
+> in the chat options menu renders only for the owner (`viewer?.isOwner === true`, the query the page
+> already held). The authoring panel itself is unchanged. Pinned by `deleteFirst.test.ts`.)
+>
 > Last verified: 2026-09-05 (release merge — `lib/models.ts` existed on BOTH sides as an add/add
 > conflict: main's (seven copies converted, `offlineSeamAvailable`, `stealth/` settings, `google/`
 > fails closed) and the media lane's (`transcriptionModel` / `transcriptionUsage`, exported

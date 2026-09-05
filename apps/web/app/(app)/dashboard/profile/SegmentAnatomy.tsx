@@ -16,8 +16,7 @@ import type { FunctionArgs } from "convex/server";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useSendCockpitMessage } from "../workspace/useSendCockpitMessage";
-import { BLOCKED } from "./connections";
-import { joinPhrases, SEGMENT_BLOCKED, SEGMENT_COPY } from "./segmentCopy";
+import { joinPhrases, SEGMENT_COPY } from "./segmentCopy";
 import { label } from "./styles";
 
 const soft: React.CSSProperties = { margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" };
@@ -131,7 +130,6 @@ function ToolsBand({ segment }: { segment: BlueprintSegment }) {
     return <ToolRow name="Your profile & vault documents" state="Built in" />;
   }
 
-  const blocked = BLOCKED.filter((b) => (SEGMENT_BLOCKED[segment.id] ?? []).includes(b.id));
   const grant = SPECIALISTS[segment.specialist];
   return (
     <div style={{ display: "grid", gap: "0.4rem" }}>
@@ -144,9 +142,6 @@ function ToolsBand({ segment }: { segment: BlueprintSegment }) {
         state={gmail === undefined ? "Checking…" : gmail.connected ? "Connected" : "Not connected"}
         detail="How approved work leaves the building."
       />
-      {blocked.map((b) => (
-        <ToolRow key={b.id} name={b.label} state="Not available" detail={b.blocker} />
-      ))}
     </div>
   );
 }

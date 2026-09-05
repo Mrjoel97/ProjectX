@@ -129,8 +129,9 @@ export function refusalMessage(reason: string): string {
       "Add your postal address on your profile before sending — the law requires it in every email's footer. Nothing was sent.",
     all_recipients_suppressed:
       "Nobody on this list can be emailed: every recipient has unsubscribed. Nothing was sent.",
-    daily_budget_exhausted: "This tenant’s daily budget is exhausted. Nothing was generated.",
-    deployment_budget_exhausted: "The deployment budget is paused. Nothing was generated.",
+    daily_budget_exhausted: "Your daily budget is used up for today. Nothing was generated.",
+    deployment_budget_exhausted:
+      "Pikar’s shared daily budget is paused for today. Nothing was generated.",
     media_budget_exhausted: "The media budget is exhausted. Nothing was generated.",
     // 2026-08-10: `applyFinanceClaims`'s two refusals, delivered as a return instead of a throw
     // Convex would redact in production — see the function's doc comment in cash.ts.
@@ -139,7 +140,11 @@ export function refusalMessage(reason: string): string {
     malformed_figure_claim:
       "This figure update was malformed and was not applied. Nothing changed.",
   };
-  return messages[reason] ?? `The governed action refused (${reason}). Nothing was sent.`;
+  // 25.2: an unmapped code is shown as words, never as the raw token.
+  return (
+    messages[reason] ??
+    `This action was refused (${reason.replaceAll("_", " ")}). Nothing was sent.`
+  );
 }
 
 /**
@@ -882,7 +887,7 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
         response.result === "moved"
           ? `Schedule moved to ${formatAbsoluteInstant(epochMs, browserTimeZone())}. Replaying the same instant is idempotent.`
           : response.result === "already_fired"
-            ? "The scheduler won the race. Delivery is already in flight; this was not reported as moved."
+            ? "This email had already started sending, so its time could not be moved."
             : "This plan no longer has a live schedule.",
       );
     } catch (error) {

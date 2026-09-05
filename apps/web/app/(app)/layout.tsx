@@ -12,7 +12,6 @@ import {
   BrainIcon,
   ChevronLeftIcon,
   FileIcon,
-  GlobeIcon,
   GridIcon,
   MailIcon,
   MicIcon,
@@ -37,7 +36,9 @@ import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
 // Knowledge Vault went LIVE with Phase 5 (lane-c merge): /dashboard/vault.
 // The retired /submit and /review links are gone (cockpit supersession, Phase 3.1);
 // the pages stay on disk and reachable by URL.
-const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean }> = [
+// 25.2: every entry has an href (the "Soon" placeholder is gone) and `ownerOnly` hides the
+// operator surfaces from tenants — the URL still resolves for the owner.
+const NAV: Array<{ label: string; icon: ReactNode; href: string; ownerOnly?: boolean }> = [
   { label: "Command Center", href: "/dashboard", icon: <GridIcon /> },
   { label: "Approvals", href: "/dashboard/approvals", icon: <BellIcon /> },
   // Activated 26-10 Task 3 on owner direction, 2026-08-09. The branch below keys off `href`, not
@@ -64,6 +65,9 @@ const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean
     label: "Compliance",
     href: "/dashboard/approvals?tab=compliance",
     icon: <ShieldIcon size={18} />,
+    // 25.2 (G14): eval signals and dead letters are the OPERATOR's read. `ComplianceView` gates
+    // only its optimizer panel on the owner, so the rail entry itself carries the gate.
+    ownerOnly: true,
   },
   { label: "My Workspace", href: "/dashboard/workspace", icon: <BoltIcon size={18} /> },
   { label: "Live Voice", href: "/dashboard/voice", icon: <MicIcon size={18} /> },
@@ -72,7 +76,6 @@ const NAV: Array<{ label: string; icon: ReactNode; href?: string; soon?: boolean
   // generated board pack is an ordinary vault row, and nothing on that rail rewrites one.
   { label: "Reports", href: "/dashboard/reports", icon: <PieIcon /> },
   { label: "Knowledge Vault", href: "/dashboard/vault", icon: <VaultIcon /> },
-  { label: "Join Community", icon: <GlobeIcon />, soon: true },
 ];
 
 const RAIL_KEY = "pikar:rail-collapsed";
@@ -126,6 +129,9 @@ function Shell({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const onboarding = useQuery(api.onboarding.status);
+  // 25.2: the one client owner flag (admin, finance tabs and the workspace menu use the same query).
+  const viewer = useQuery(api.owner.viewer, {});
+  const isOwner = viewer?.isOwner === true;
   const onOnboarding = pathname === ONBOARDING_PATH;
   useEffect(() => {
     if (onboarding?.needsOnboarding && !onOnboarding) router.replace(ONBOARDING_PATH);
@@ -177,27 +183,19 @@ function Shell({ children }: { children: ReactNode }) {
         </Link>
 
         <div className="rail-nav">
-          {NAV.map((item) =>
-            item.href ? (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={`rail-item${isActive(item.href) ? " is-active" : ""}`}
-                title={collapsed ? item.label : undefined}
-              >
-                {item.icon}
-                <span className="rail-label">{item.label}</span>
-                {item.href === "/dashboard/approvals?tab=compliance" && <DeadLetterBadge />}
-                {item.href === "/dashboard/approvals" && <ApprovalsBadge />}
-              </Link>
-            ) : (
-              <span key={item.label} className="rail-item is-soon" aria-disabled="true">
-                {item.icon}
-                <span className="rail-label">{item.label}</span>
-                <span className="rail-soon">Soon</span>
-              </span>
-            ),
-          )}
+          {NAV.filter((item) => !item.ownerOnly || isOwner).map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={`rail-item${isActive(item.href) ? " is-active" : ""}`}
+              title={collapsed ? item.label : undefined}
+            >
+              {item.icon}
+              <span className="rail-label">{item.label}</span>
+              {item.href === "/dashboard/approvals?tab=compliance" && <DeadLetterBadge />}
+              {item.href === "/dashboard/approvals" && <ApprovalsBadge />}
+            </Link>
+          ))}
         </div>
 
         <div className="rail-foot">

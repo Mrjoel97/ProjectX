@@ -608,17 +608,20 @@ export default function WorkspacePage() {
                       >
                         + New chat
                       </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="head-menu-item"
-                        onClick={() => {
-                          setAuthoring((a) => !a);
-                          close();
-                        }}
-                      >
-                        Adapt a business skill
-                      </button>
+                      {/* 25.2 (G14): skill authoring ends in an owner review; the entry is owner-only. */}
+                      {viewer?.isOwner === true && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="head-menu-item"
+                          onClick={() => {
+                            setAuthoring((a) => !a);
+                            close();
+                          }}
+                        >
+                          Adapt a business skill
+                        </button>
+                      )}
                       <button
                         type="button"
                         role="menuitem"

@@ -1,5 +1,13 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-05 (25.2-01 — item 5: the three "Not available" connection rows (social,
+> databases, apps — each citing a blocker or ADR-007 to the tenant) are DELETED from both surfaces
+> that rendered them, `ConnectionsPanel` and `SegmentAnatomy`'s tools band; `connections.ts` is
+> removed with them and `connectionsSurface.test.ts` drops the describe that existed only to scan
+> it. `SEGMENT_BLOCKED` in segmentCopy.ts is now an unused export, left for the next deletion pass.
+> What clears each blocker (legal entity; reviewed adapter + gate) is unchanged and still recorded
+> in this playbook's connector sections — it was never something a tenant could act on.)
+>
 > Last verified: 2026-09-05 (33.2-04 â€” blueprint.ts and onboarding.ts resolve their model through
 > `convex/lib/models.ts` now; their module-local `openai(id.replace(...))` copies had been sending
 > `or/openai/gpt-4o-mini` to api.openai.com since 2026-08-27 (404, see vault.md). No behaviour

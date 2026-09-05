@@ -4,7 +4,7 @@ import { useThreadMessages } from "@convex-dev/agent/react";
 import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
 import { useRef, useState } from "react";
-import { BoltIcon, BrainIcon, ChevronDownIcon, SendIcon, UserIcon } from "../../../(auth)/icons";
+import { BrainIcon, SendIcon, UserIcon } from "../../../(auth)/icons";
 import { MarkdownDocument } from "../MarkdownDocument";
 // The verb map lives in exactly ONE module (cards.tsx) and both surfaces read it through
 // stepText — a second copy WILL drift, and a drifted verb is a surface disagreeing with itself.
@@ -412,14 +412,6 @@ export function ChatPane({
             }}
           />
           <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              className="composer-pill"
-              disabled
-              title="Model routing is automatic"
-            >
-              <BoltIcon size={13} /> Auto <ChevronDownIcon size={12} />
-            </button>
             <span style={{ flex: 1 }} />
             {/* This phase IS the feature this button was waiting for, so its title no longer
                 promises a future one — shipping the trace while the button still called it

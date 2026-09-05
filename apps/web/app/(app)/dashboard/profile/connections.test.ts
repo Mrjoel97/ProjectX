@@ -4,7 +4,6 @@
 // plan's `connections` name so the plan-mandated `vitest ... connections` command cannot succeed
 // without exercising the actual Phase 28 surface.
 import { describe, expect, test } from "vitest";
-import { BLOCKED } from "./connections";
 import { connectorBusyLabel, connectorListView } from "./connectorRows";
 
 describe("connector list loading and omission", () => {
@@ -22,12 +21,5 @@ describe("interactive lifecycle copy", () => {
     expect(connectorBusyLabel("connecting")).toBe("Connecting…");
     expect(connectorBusyLabel("disconnecting")).toBe("Disconnecting…");
     expect(connectorBusyLabel(null)).toBeNull();
-  });
-
-  test("the legacy blocked list no longer claims encrypted connector storage is missing", () => {
-    const databaseRow = BLOCKED.find((row) => row.id === "databases");
-    expect(databaseRow?.label).toBe("Other databases & CRMs");
-    expect(databaseRow?.blocker).not.toMatch(/encrypted credential storage/i);
-    expect(databaseRow?.blocker).toMatch(/reviewed adapter/i);
   });
 });

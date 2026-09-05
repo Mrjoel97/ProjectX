@@ -106,6 +106,23 @@ export function describeCrmOperations(raw: unknown): string[] {
 
 // Live REPORT status → badge colour. Fan-out rows seed at "approved" and move
 // delivering → sent | awaiting_reauth | failed (requests.status, schema.ts).
+// 25.2 (G14): the status is an enum for the badge COLOUR and a sentence for the reader. A status the
+// map has not met is shown with its underscores turned into spaces, never raw.
+const DELIVERY_STATUS: Record<string, string> = {
+  proposed: "Proposed",
+  approved: "Approved",
+  scheduled: "Scheduled",
+  delivering: "Sending…",
+  sent: "Sent",
+  failed: "Failed",
+  blocked: "Blocked",
+  rejected: "Rejected",
+  expired: "Expired",
+  awaiting_reauth: "Waiting for you to reconnect Gmail",
+};
+export const deliveryStatusLabel = (status: string): string =>
+  DELIVERY_STATUS[status] ?? status.replaceAll("_", " ");
+
 function badge(status: string) {
   const map: Record<string, { bg: string; fg: string }> = {
     sent: { bg: "#dcfce7", fg: "#166534" },
@@ -1382,7 +1399,7 @@ function ReportCard({ planId }: { planId: PlanId }) {
               key={r.correlationId}
               style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}
             >
-              <span style={badge(r.status)}>{r.status}</span>
+              <span style={badge(r.status)}>{deliveryStatusLabel(r.status)}</span>
               <span style={{ fontWeight: 600 }}>{r.recipient}</span>
               {r.messageId && <span style={dim}>msg {r.messageId}</span>}
               {/* Delivered-with-attachment: re-download the EXACT sent bytes (immutable per storage

@@ -5,7 +5,6 @@ import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
 import { DisconnectGoogle } from "../../_components/DisconnectGoogle";
 import { DisconnectMicrosoft } from "../../_components/DisconnectMicrosoft";
-import { BLOCKED } from "./connections";
 import {
   type ConnectorRow,
   connectorBusyLabel,
@@ -61,18 +60,6 @@ const disconnectButton: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const pill: React.CSSProperties = {
-  fontSize: "0.72rem",
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "var(--ink-soft)",
-  border: "1px solid var(--rule)",
-  borderRadius: "999px",
-  padding: "0.2rem 0.6rem",
-  whiteSpace: "nowrap",
-};
-
 export function ConnectionsPanel() {
   return (
     <section style={card} aria-label="Connections">
@@ -85,23 +72,7 @@ export function ConnectionsPanel() {
 
       <GoogleRow />
       <MicrosoftRow />
-      {/* Phase 28 connector rows sit HERE, ABOVE the blocked list, and the placement is load
-          bearing. `packages/core/src/connectionsSurface.test.ts` scans the blocked-list block and
-          asserts it holds no button, href or onClick. Connector rows are interactive, so putting
-          them below would turn that scan red for the wrong reason.
-          (This comment deliberately names neither delimiter the scan searches for — writing them
-          here made `indexOf` land on the comment and slice 37 characters of prose instead.) */}
       <ConnectorRows />
-
-      {BLOCKED.map((c) => (
-        <div key={c.id} style={rowStyle}>
-          <div style={{ display: "grid", gap: "0.2rem", maxWidth: "34rem" }}>
-            <strong style={{ fontSize: "0.94rem", color: "var(--ink)" }}>{c.label}</strong>
-            <span style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>{c.blocker}</span>
-          </div>
-          <span style={pill}>Not available</span>
-        </div>
-      ))}
     </section>
   );
 }
