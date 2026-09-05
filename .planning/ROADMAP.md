@@ -470,7 +470,12 @@ Plans:
 **Goal:** A non-technical invitee reaches one tangible outcome without a tour — fewer concepts on screen, a cockpit that works on a phone, an entry path that says invite-only and uses the existing waitlist form. Source: rev 5 system audit G14 / G15 / G16 (`.planning/design/system-audit-2026-09-03-merged.md` §4, Track A step 3; the ten named items are the scope).
 **Requirements**: none minted — inserted from the audit, like 25.1.
 **Depends on:** the 2026-09-05 production promotion (`docs/releases/2026-09-05-promotion.md`) — the pass is judged on production, not locally.
-**Plans:** 0/TBD — not planned.
+**Plans:** 3/3 — **COMPLETE 2026-09-05.** Research + plans + summaries in `.planning/phases/25.2-delete-first-ux-pass/`.
+
+Plans:
+- [x] 25.2-01-PLAN.md — Items 1-7: deletions and copy (Wave 1) — `1ead554`
+- [x] 25.2-02-PLAN.md — Items 8-9: one-pane cockpit and four-tab bar below 48rem (Wave 2) — `319badb`
+- [x] 25.2-03-PLAN.md — Item 10: home page entry path (Wave 3) — `623fab3`
 
 ### Phase 25.3: Scale constants and the armed reliability sweep (INSERTED 2026-09-05)
 
@@ -1498,7 +1503,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 23. Agent-Authored Skills | 0/TBD | Not started | - |
 | 24. ISO 9001 Conformance Map | 0/TBD | Not started | - |
 | 25. Private Beta Productionization | 0/14 | Planned — execution blocked on 25-00 prerequisite evidence; two lanes (19, 31) run ahead of it | - |
-| 25.2 Delete-first UX pass (INSERTED) | 0/TBD | Not started — inserted 2026-09-05 from the rev 5 audit (G14/G15/G16); first after the 2026-09-05 promotion | - |
+| 25.2 Delete-first UX pass (INSERTED) | 3/3 | **Complete 2026-09-05** — ten items shipped (`1ead554`, `319badb`, `623fab3`): rail trimmed and Compliance owner-only, plain-word copy, dead rows and pill deleted, one-pane cockpit + four-tab bar on phones, invite-only entry path | 2026-09-05 |
 | 25.3 Scale constants + armed sweep (INSERTED) | 0/TBD | Not started — inserted 2026-09-05 (G17/G1); before the first invite | - |
 | 34. Goal Engine v0 (INSERTED) | 0/TBD | Not started — inserted 2026-09-05 (G13); after 25.2 | - |
 | 26. Connected Product Pages | 21/21 | **Complete — deployed to production** (`8f76aac`; CI green, `deploy-production` succeeded, www.pikar-ai.com 200) | 2026-08-23 |

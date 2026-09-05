@@ -1,5 +1,10 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-09-05 (25.2-03 — the public home page (`apps/web/app/page.tsx`) is now WATCHED
+> by this playbook: it is the front door of admission. Its eyebrow says "Private beta · by
+> invitation" and "Request access" links to `/signup`'s waitlist door instead of a mailto
+> (owner decision 3, invite-only). `homeEntry.test.ts` pins it. Admission logic is unchanged.)
+>
 > Last verified: 2026-08-30 (**/admin NOW NAMES THE AGENTS THAT HAVE NO PROMPT ROW, AND THE
 > HEADLINE STOPPED LYING BY OMISSION.** `AdminView` renders `envCheck.unseededSkills` with the
 > exact remedy on screen (`npx convex run skills:seedSkills '{}'` from `packages/backend`) rather

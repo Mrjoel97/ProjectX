@@ -1,6 +1,11 @@
 {
-  "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
-  "tracing.md": ["packages/backend/convex/lib/foglamp.ts"],
+  "_unassigned": [
+    "packages/backend/vitest.diag.setup.ts",
+    "packages/backend/convex/schema.ts"
+  ],
+  "tracing.md": [
+    "packages/backend/convex/lib/foglamp.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -13,7 +18,9 @@
     "packages/backend/convex/invites.test.ts",
     "packages/backend/convex/auth.ts",
     "apps/web/app/(auth)/signup/",
-    "apps/web/app/(app)/admin/"
+    "apps/web/app/(app)/admin/",
+    "apps/web/app/page.tsx",
+    "apps/web/app/homeEntry.test.ts"
   ],
   "authorization.md": [
     "packages/backend/convex/lib/functions.ts",
@@ -123,7 +130,8 @@
     "apps/web/e2e/reports.spec.ts",
     "apps/web/e2e/command-center.spec.ts",
     "apps/web/app/privacy/",
-    "packages/core/src/connectionsSurface.test.ts"
+    "packages/core/src/connectionsSurface.test.ts",
+    "apps/web/app/(app)/deleteFirst.test.ts"
   ],
   "cockpit.md": [
     "apps/web/app/(app)/dashboard/workspace/",
@@ -397,7 +405,10 @@
     "packages/backend/scripts/collect-recurrence-evidence",
     "packages/backend/convex/schema.test.ts"
   ],
-  "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
+  "revenue-crm.md": [
+    "packages/revenue/src/crm",
+    "packages/backend/convex/revenueCrm"
+  ],
   "revenue-finance.md": [
     "packages/revenue/src/money",
     "packages/revenue/src/finance",
