@@ -6,6 +6,9 @@
 > mutation, no send from the panel. `RevenuePackPanel.test.tsx` 11/11. Owner runbook for passing the lane:
 > revenue-connectors.md.)
 
+> Last verified: 2026-09-06 (35-01 — co-owner bump only: `e2e/command-center.spec.ts` ladder labels and the
+> stat label follow the Command Center's new words (dashboard-pages.md). No cockpit behaviour changed.)
+
 > Last verified: 2026-09-05 (25.3-01 — `gmailAuth.flagExpiringTokens` (cron target, name unchanged)
 > kicks `scanExpiringTokens`, a batch walk over `gmailTokens`; an expiring grant raises ONE unread
 > `gmail_reconnect` notice (dedupe through `by_tenant_read`, bounded take) and a read/dismissed one

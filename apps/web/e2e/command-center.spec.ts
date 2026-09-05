@@ -148,13 +148,17 @@ const nextMove = (page: Page) => page.locator(".next-move");
  * that never reaches the renderer fails here instead of passing against its own constant.
  */
 const LADDER = [
-  { code: "unresolved-dead-letters", label: "Clear the blocked work", route: "/ops" },
+  { code: "unresolved-dead-letters", label: "Finish the work that stopped", route: "/ops" },
   { code: "stale-approval", label: "Answer the waiting approval", route: "/dashboard/approvals" },
   { code: "scheduled-risk", label: "Check the scheduled sends", route: "/dashboard/approvals" },
-  { code: "diagnostic-blocker", label: "Fix the failing gate", route: "/dashboard/reports" },
+  {
+    code: "diagnostic-blocker",
+    label: "Fix the first thing blocking growth",
+    route: "/dashboard/reports",
+  },
   {
     code: "binding-constraint",
-    label: "Name your binding constraint",
+    label: "Name what is holding you back",
     route: "/dashboard/profile",
   },
   // SIXTH, not first. Business work outranks the email channel — see `HOME_PRIORITY_ORDER`.
@@ -356,7 +360,7 @@ test("the Command Center is the mounted surface and every section renders its ow
     "Awaiting approval",
     "Content artifacts",
     "Emails delivered",
-    "Blocked work",
+    "Work that stopped",
   ]) {
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   }

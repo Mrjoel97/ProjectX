@@ -25,14 +25,14 @@ const EXPECTED_COPY: Record<HomePriorityCode, { label: string; reason: string; r
     route: "/connect-gmail",
   },
   "unresolved-dead-letters": {
-    label: "Clear the blocked work",
+    label: "Finish the work that stopped",
     reason:
-      "Work stopped part-way and is waiting in the blocked queue. Nothing retries on its own.",
+      "A piece of work stopped part-way and is waiting for you. Nothing retries on its own until you look.",
     route: "/ops",
   },
   "stale-approval": {
     label: "Answer the waiting approval",
-    reason: "A plan is waiting on your decision. It will not send until you approve or reject it.",
+    reason: "A plan is waiting on your decision. Nothing goes out until you approve or reject it.",
     route: "/dashboard/approvals",
   },
   "scheduled-risk": {
@@ -41,15 +41,15 @@ const EXPECTED_COPY: Record<HomePriorityCode, { label: string; reason: string; r
     route: "/dashboard/approvals",
   },
   "diagnostic-blocker": {
-    label: "Fix the failing gate",
+    label: "Fix the first thing blocking growth",
     reason:
-      "The diagnostic found a failing gate. Fixing that one first is what moves the business.",
+      "Your weekly review found the one thing holding revenue back. Fixing that first is what moves the business.",
     route: "/dashboard/reports",
   },
   "binding-constraint": {
-    label: "Name your binding constraint",
+    label: "Name what is holding you back",
     reason:
-      "Your blueprint has no binding constraint on record, so nothing here is ranked against your real bottleneck.",
+      "Your business profile does not yet say what is holding you back, so nothing here can be ranked against your real bottleneck.",
     route: "/dashboard/profile",
   },
   workspace: {
@@ -114,7 +114,7 @@ describe("recommendNextMove", () => {
     expect(HOME_PRIORITY_COPY).toEqual(EXPECTED_COPY);
     // spot-check two exact renderings so a wholesale table swap cannot pass silently
     expect(recommendNextMove([triggered("unresolved-dead-letters")]).reason).toBe(
-      "Work stopped part-way and is waiting in the blocked queue. Nothing retries on its own.",
+      "A piece of work stopped part-way and is waiting for you. Nothing retries on its own until you look.",
     );
     expect(recommendNextMove([triggered("connection-failure")]).route).toBe("/connect-gmail");
   });
@@ -232,7 +232,7 @@ describe("recommendNextMove", () => {
 
     expect(rec.label).toBe("Answer the waiting approval");
     expect(rec.reason).toBe(
-      "A plan is waiting on your decision. It will not send until you approve or reject it.",
+      "A plan is waiting on your decision. Nothing goes out until you approve or reject it.",
     );
     expect(rec.route).toBe("/dashboard/approvals");
     expect(rec.count).toBeNull();

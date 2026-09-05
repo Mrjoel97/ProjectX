@@ -110,14 +110,14 @@ export const HOME_PRIORITY_COPY: Record<
     route: "/connect-gmail",
   },
   "unresolved-dead-letters": {
-    label: "Clear the blocked work",
+    label: "Finish the work that stopped",
     reason:
-      "Work stopped part-way and is waiting in the blocked queue. Nothing retries on its own.",
+      "A piece of work stopped part-way and is waiting for you. Nothing retries on its own until you look.",
     route: "/ops",
   },
   "stale-approval": {
     label: "Answer the waiting approval",
-    reason: "A plan is waiting on your decision. It will not send until you approve or reject it.",
+    reason: "A plan is waiting on your decision. Nothing goes out until you approve or reject it.",
     route: "/dashboard/approvals",
   },
   "scheduled-risk": {
@@ -126,15 +126,15 @@ export const HOME_PRIORITY_COPY: Record<
     route: "/dashboard/approvals",
   },
   "diagnostic-blocker": {
-    label: "Fix the failing gate",
+    label: "Fix the first thing blocking growth",
     reason:
-      "The diagnostic found a failing gate. Fixing that one first is what moves the business.",
+      "Your weekly review found the one thing holding revenue back. Fixing that first is what moves the business.",
     route: "/dashboard/reports",
   },
   "binding-constraint": {
-    label: "Name your binding constraint",
+    label: "Name what is holding you back",
     reason:
-      "Your blueprint has no binding constraint on record, so nothing here is ranked against your real bottleneck.",
+      "Your business profile does not yet say what is holding you back, so nothing here can be ranked against your real bottleneck.",
     route: "/dashboard/profile",
   },
   workspace: {
@@ -166,11 +166,11 @@ export const HOME_UNCERTAIN_COPY: { label: string; reason: string; route: string
  */
 export const HOME_SIGNAL_LABEL: Record<HomePriorityCode, string> = {
   "connection-failure": "Mailbox connection",
-  "unresolved-dead-letters": "Blocked work queue",
+  "unresolved-dead-letters": "Work that stopped",
   "stale-approval": "Approvals waiting",
   "scheduled-risk": "Scheduled sends",
-  "diagnostic-blocker": "Diagnostic gates",
-  "binding-constraint": "Binding constraint",
+  "diagnostic-blocker": "Weekly review",
+  "binding-constraint": "What is holding you back",
   workspace: "Workspace",
 };
 

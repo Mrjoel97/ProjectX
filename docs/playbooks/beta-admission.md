@@ -1,5 +1,12 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-09-06 (35-01, G23 — **THE PUBLIC PAGE SELLS WHAT SHIPS.** `page.tsx` metadata, JSON-LD
+> and hero no longer say "connecting to your tools", "end to end" or "executes it autonomously"; a new
+> "What you get" section (replies sent; meetings and documents done; the next move every week) precedes
+> "How it works", itself rewritten as outcomes. Invoice reminders are NOT promised until the QuickBooks lane
+> passes. Entry path unchanged (eyebrow, /signin, /signup, #how). `homeEntry.test.ts` 4/4 now scans for the
+> three retired promises.)
+
 > Last verified: 2026-09-05 (25.2-03 — the public home page (`apps/web/app/page.tsx`) is now WATCHED
 > by this playbook: it is the front door of admission. Its eyebrow says "Private beta · by
 > invitation" and "Request access" links to `/signup`'s waitlist door instead of a mailto

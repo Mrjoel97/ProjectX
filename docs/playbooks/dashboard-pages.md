@@ -1,5 +1,15 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-06 (35-01, G23 — **THE COMMAND CENTER SPEAKS TO A BUSINESS OWNER.** Words only;
+> no query, order, route or rule moved. `HOME_PRIORITY_COPY`: "Finish the work that stopped" (was Clear the
+> blocked work), "Fix the first thing blocking growth" (was Fix the failing gate), "Name what is holding
+> you back" (was Name your binding constraint), reasons rewritten to match. `HOME_SIGNAL_LABEL`: "Work that
+> stopped", "Weekly review", "What is holding you back". `CommandCenter.tsx`: the constraint card's label and
+> three headings, the health word "Needs attention" (was Degraded), the stat tile "Work that stopped", the
+> lede. The h1 "Run the next revenue move", "Nothing is blocked." and the locked priority order stay.
+> `home.test.ts` 27/27 (byte-identical table), `commandCenter.test.ts` 61/61 (retyped table + literals),
+> `e2e/command-center.spec.ts` ladder kept in sync.)
+
 > Last verified: 2026-09-05 (34-01 — **THE COMMAND CENTER HAS AN AGENDA (Goal Engine v0, ADR-033).** A
 > sixth section, `data-cc-section="agenda"`, between the hero and the binding constraint, on its own
 > `SectionBoundary` and its own subscription (`api.agenda.current`) — the page's independence rule holds.

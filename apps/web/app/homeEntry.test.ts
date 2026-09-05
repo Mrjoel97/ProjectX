@@ -25,4 +25,13 @@ describe("the home page entry path", () => {
   test("the footer contact mailto stays — it is contact, not admission", () => {
     expect(src.slice(src.indexOf("<footer"))).toContain("mailto:");
   });
+  // 35-01 (G23): the page sells what ships. The actuators are Gmail send, Calendar create, vault
+  // documents and a weekly proposal — not "connecting to your tools", not "end to end".
+  test("the page promises outcomes it delivers, never tools it has not connected", () => {
+    for (const promise of ["connecting to your tools", "end to end", "executes it autonomously"]) {
+      expect(src.toLowerCase(), promise).not.toContain(promise);
+    }
+    expect(src).toContain("<h2>What you get</h2>");
+    expect(src).toContain("The next move, every week");
+  });
 });

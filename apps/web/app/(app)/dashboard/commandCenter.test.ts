@@ -193,14 +193,14 @@ const EXPECTED = {
     route: "/connect-gmail",
   },
   "unresolved-dead-letters": {
-    label: "Clear the blocked work",
+    label: "Finish the work that stopped",
     reason:
-      "Work stopped part-way and is waiting in the blocked queue. Nothing retries on its own.",
+      "A piece of work stopped part-way and is waiting for you. Nothing retries on its own until you look.",
     route: "/ops",
   },
   "stale-approval": {
     label: "Answer the waiting approval",
-    reason: "A plan is waiting on your decision. It will not send until you approve or reject it.",
+    reason: "A plan is waiting on your decision. Nothing goes out until you approve or reject it.",
     route: "/dashboard/approvals",
   },
   "scheduled-risk": {
@@ -209,15 +209,15 @@ const EXPECTED = {
     route: "/dashboard/approvals",
   },
   "diagnostic-blocker": {
-    label: "Fix the failing gate",
+    label: "Fix the first thing blocking growth",
     reason:
-      "The diagnostic found a failing gate. Fixing that one first is what moves the business.",
+      "Your weekly review found the one thing holding revenue back. Fixing that first is what moves the business.",
     route: "/dashboard/reports",
   },
   "binding-constraint": {
-    label: "Name your binding constraint",
+    label: "Name what is holding you back",
     reason:
-      "Your blueprint has no binding constraint on record, so nothing here is ranked against your real bottleneck.",
+      "Your business profile does not yet say what is holding you back, so nothing here can be ranked against your real bottleneck.",
     route: "/dashboard/profile",
   },
   workspace: {
@@ -437,7 +437,7 @@ describe("the binding constraint says insufficient when nothing types it", () =>
     });
     expect(html).toContain('data-cc-constraint="insufficient"');
     expect(html).toContain("Not enough information");
-    expect(html).toContain("Nothing on record types your binding constraint yet");
+    expect(html).toContain("Nothing on record says what is holding you back yet");
     expect(html).not.toContain("is on record");
   });
 
@@ -457,9 +457,9 @@ describe("the binding constraint says insufficient when nothing types it", () =>
   test("an ok signal says it is on record, and claims nothing this page cannot do", () => {
     const html = render(ConstraintCard, { health: allClear() });
     expect(html).toContain('data-cc-constraint="ok"');
-    expect(html).toContain("Your binding constraint is on record");
+    expect(html).toContain("What is holding you back is on record");
     expect(html).toContain(
-      "It is recorded in your blueprint. This page ranks what is blocked or waiting, not the constraint itself.",
+      "It is recorded in your business profile. This page ranks what is blocked or waiting, not the bottleneck itself.",
     );
     // The old body promised a capability nothing implements: the ranking is the fixed
     // `HOME_PRIORITY_ORDER`, and the signal carries a state — the constraint text never crosses.
@@ -483,11 +483,11 @@ describe("the binding constraint says insufficient when nothing types it", () =>
   test("the card states the FACT; only the hero issues the imperative", () => {
     // Two identical <h2>s at the last rung made heading navigation ambiguous (WCAG 2.4.6).
     const health = withTriggered("binding-constraint");
-    expect(render(RecommendationCard, { health })).toContain("Name your binding constraint");
+    expect(render(RecommendationCard, { health })).toContain("Name what is holding you back");
     const constraint = render(ConstraintCard, { health });
     expect(constraint).toContain('data-cc-constraint="triggered"');
-    expect(constraint).toContain("No binding constraint on record");
-    expect(constraint).not.toContain("Name your binding constraint");
+    expect(constraint).toContain("Nothing on record about what is holding you back");
+    expect(constraint).not.toContain("Name what is holding you back");
   });
 });
 
@@ -514,7 +514,7 @@ describe("source stats render real numbers and never turn a failure into a zero"
     expect(html).toContain(">38<");
     expect(html).toContain("Emails delivered");
     expect(html).toContain(">45<");
-    expect(html).toContain("Blocked work");
+    expect(html).toContain("Work that stopped");
     expect(html).toContain(">2<");
 
     const pipeline = pipelineOf(html);
@@ -860,11 +860,11 @@ describe("health is fail-closed: the all-clear is unreachable from unknown", () 
  *  rename, including one the renderer never picks up. These are the words a person must see. */
 const ROW_LABEL = {
   "connection-failure": "Mailbox connection",
-  "unresolved-dead-letters": "Blocked work queue",
+  "unresolved-dead-letters": "Work that stopped",
   "stale-approval": "Approvals waiting",
   "scheduled-risk": "Scheduled sends",
-  "diagnostic-blocker": "Diagnostic gates",
-  "binding-constraint": "Binding constraint",
+  "diagnostic-blocker": "Weekly review",
+  "binding-constraint": "What is holding you back",
 } as const;
 
 /** The state word of ONE health row, scoped to that row's own element. */
@@ -1031,7 +1031,7 @@ describe("one subscription failing or loading never blanks the others", () => {
     };
     for (const [id, visible] of Object.entries({
       "cc-agenda-label": "Your agenda",
-      "cc-constraint-label": "Your binding constraint",
+      "cc-constraint-label": "What is holding you back",
       "cc-stats-label": "Key numbers",
       "cc-briefing-label": "Latest briefing",
       "cc-health-label": "System health",
@@ -1051,10 +1051,10 @@ describe("one subscription failing or loading never blanks the others", () => {
       briefing: BRIEFING,
     });
     // Was three: the hero <h2>, the constraint card's <h2>, and a health status row.
-    expect(html.split("Name your binding constraint").length - 1).toBe(1);
+    expect(html.split("Name what is holding you back").length - 1).toBe(1);
     expect(html).toContain('data-cc-priority="binding-constraint"');
-    expect(html).toContain("No binding constraint on record");
-    expect(html).toContain("Binding constraint</span>");
+    expect(html).toContain("Nothing on record about what is holding you back");
+    expect(html).toContain("What is holding you back</span>");
   });
 });
 

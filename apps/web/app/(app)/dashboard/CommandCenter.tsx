@@ -111,19 +111,19 @@ const CONSTRAINT_COPY = {
     // NOT `HOME_PRIORITY_COPY["binding-constraint"].label`: when this code is also the top signal
     // the hero renders that imperative as an <h2>, and a second identical <h2> makes heading
     // navigation ambiguous (WCAG 2.4.6). This card states the FACT; the hero issues the move.
-    heading: "No binding constraint on record",
+    heading: "Nothing on record about what is holding you back",
     body: HOME_PRIORITY_COPY["binding-constraint"].reason,
   },
   ok: {
-    heading: "Your binding constraint is on record",
+    heading: "What is holding you back is on record",
     // Says only what is true. Nothing on this page reads the constraint: the ranking is the fixed
     // `HOME_PRIORITY_ORDER`, and the signal carries a state and nothing else — no bottleneck text
     // ever crosses the wire, so no ranking can be "against" it.
-    body: "It is recorded in your blueprint. This page ranks what is blocked or waiting, not the constraint itself.",
+    body: "It is recorded in your business profile. This page ranks what is blocked or waiting, not the bottleneck itself.",
   },
   insufficient: {
     heading: "Not enough information",
-    body: "Nothing on record types your binding constraint yet, so this page cannot rank against it.",
+    body: "Nothing on record says what is holding you back yet, so this page cannot rank against it.",
   },
 } as const;
 
@@ -147,7 +147,7 @@ const PARTIAL_REASON_COPY: Record<DashboardPartialReason, string> = {
  */
 const CTA_DESTINATION: Record<HomePriorityCode, string> = {
   "connection-failure": "Open mailbox connection",
-  "unresolved-dead-letters": "Open blocked work",
+  "unresolved-dead-letters": "Open the work that stopped",
   "stale-approval": "Open approvals",
   "scheduled-risk": "Open scheduled sends",
   "diagnostic-blocker": "Open reports",
@@ -166,7 +166,7 @@ const UNCERTAIN_CAVEAT =
 const HEALTH_COPY: Record<HomeHealthState, { word: string; body: string }> = {
   // The ONLY all-clear sentence in this file, reachable from exactly one state.
   healthy: { word: "Healthy", body: "Nothing is blocked." },
-  degraded: { word: "Degraded", body: "At least one source is reporting a problem." },
+  degraded: { word: "Needs attention", body: "At least one thing needs you." },
   unknown: {
     word: "Unknown",
     body: "At least one source did not report, so Pikar cannot tell you whether anything is blocked.",
@@ -495,7 +495,7 @@ export function ConstraintCard({ health }: { health: HomeHealth | Loading | null
     // other section announced its own title twice.
     <section style={card} aria-labelledby="cc-constraint-label" data-cc-section="constraint">
       <p className="caps-label" id="cc-constraint-label">
-        Your binding constraint
+        What is holding you back
       </p>
       {health === undefined ? (
         <CommandCenterState state="loading" />
@@ -587,7 +587,7 @@ export function SourceStats({ summary }: { summary: HomeSummary | Loading | null
           }
         />
         <StatTile
-          label="Blocked work"
+          label="Work that stopped"
           icon={<ShieldIcon size={16} />}
           text={isUnavailable(deadLetters)}
           value={isUnavailable(deadLetters) ? "Unavailable" : String(deadLetters.newCount)}
@@ -860,7 +860,7 @@ export default function CommandCenter() {
           <p className="caps-label">Solopreneur • {dateLabel}</p>
           <h1>Run the next revenue move</h1>
           <p className="cc-lede">
-            One ranked next move, the numbers behind it, and an honest answer about what is broken.
+            Your next move, the numbers behind it, and a straight answer on what needs you.
           </p>
         </div>
         <SectionBoundary section="recommendation">

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { CONTACT, SITE } from "./legal";
 
 export const metadata: Metadata = {
-  title: "Pikar AI — nothing sends without your approval",
+  title: "Pikar AI — your work done, nothing sent without your approval",
   description:
-    "Speak or type a goal. Pikar AI plans it, holds it for your approval, then executes it autonomously under cost and privacy guardrails — reporting every stage and writing each step to a log it cannot edit.",
+    "Tell Pikar what you need done. It drafts the reply, books the meeting or writes the document, shows you first, and sends only what you approve. Every week it reads your business and proposes the next move.",
   alternates: { canonical: SITE },
 };
 
@@ -20,7 +20,7 @@ const structuredData = {
       "@type": "Organization",
       name: "Pikar AI",
       url: SITE,
-      description: "Builder of Pikar AI, a governed agentic AI operating layer.",
+      description: "Builder of Pikar AI, an AI chief of staff for solo operators.",
       email: CONTACT,
       contactPoint: {
         "@type": "ContactPoint",
@@ -43,7 +43,7 @@ const structuredData = {
       operatingSystem: "Web",
       url: SITE,
       description:
-        "Turns a spoken or typed goal into a planned, guardrailed workflow that you approve once and Pikar then executes autonomously — connecting to your tools, reporting each stage, and writing every action to an append-only audit log.",
+        "An AI chief of staff for solo operators: drafts replies, books meetings, writes documents and proposes the week's next move from your own numbers. Nothing is sent without your approval, and every action is written to a log that cannot be edited.",
       author: { "@type": "Organization", name: "Pikar AI" },
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     },
@@ -73,11 +73,12 @@ export default function Home() {
           <div>
             <p className="eyebrow">Private beta · by invitation · human approval required</p>
             <h1>
-              It plans and executes. <em>You</em> hold the gate.
+              It does the work. <em>You</em> approve it.
             </h1>
             <p className="lede">
-              Say what you want done. Pikar plans it, shows you the plan, and runs it end to end
-              once you approve — reporting every step, and stopping the moment you say so.
+              Tell Pikar what you need: a reply, a meeting, a document. It prepares it from your own
+              files and figures, shows you first, and sends only what you approve. Every Monday it
+              reads your business and proposes the next move.
             </p>
             <div className="cta-row">
               <a className="cta" href="/signin">
@@ -119,45 +120,69 @@ export default function Home() {
           </section>
         </header>
 
+        <section className="section">
+          <h2>What you get</h2>
+          <div className="grid-3">
+            <div>
+              <h3>Replies, sent</h3>
+              <p>
+                Pikar reads your inbox, drafts the reply in your voice, and sends it when you say
+                so. Your morning briefing tells you what still needs an answer.
+              </p>
+            </div>
+            <div>
+              <h3>Meetings and documents, done</h3>
+              <p>
+                A calendar invite created, a proposal or one-pager written and filed to your vault,
+                grounded in what you have already told it.
+              </p>
+            </div>
+            <div>
+              <h3>The next move, every week</h3>
+              <p>
+                Each Monday Pikar reads your business from your own numbers, names the one thing
+                holding revenue back, and stages the next step for your approval.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <section className="section" id="how">
           <h2>How it works</h2>
           <ol className="steps">
             <li>
               <div>
-                <strong>State a goal</strong>
-                <p>Speak it or type it, in plain language. No prompt craft.</p>
+                <strong>Say what you need</strong>
+                <p>A reply, a meeting, a document, a decision. Plain language, spoken or typed.</p>
               </div>
             </li>
             <li>
               <div>
-                <strong>Pikar plans it</strong>
-                <p>The goal becomes concrete, ordered steps you can inspect.</p>
+                <strong>Pikar prepares it</strong>
+                <p>The draft, the invite or the document, built from your own files and figures.</p>
               </div>
             </li>
             <li>
               <div>
-                <strong>Guardrails run first</strong>
+                <strong>Checks run first</strong>
                 <p>
-                  Cost ceilings, quality checks, and PII redaction apply before anything is prepared
-                  for sending — not after.
+                  Cost limits, quality checks and PII redaction apply before anything is ready to
+                  send — not after.
                 </p>
               </div>
             </li>
             <li>
               <div>
-                <strong>It stops at the gate</strong>
-                <p>
-                  You see the plan before it runs. Approve, edit, or reject — nothing executes
-                  without your explicit sign-off.
-                </p>
+                <strong>You approve, edit or reject</strong>
+                <p>Nothing is sent, booked or filed until you say so.</p>
               </div>
             </li>
             <li>
               <div>
-                <strong>Pikar runs it, and reports</strong>
+                <strong>It goes out, and you see the record</strong>
                 <p>
-                  Approved steps execute on your behalf. You are notified as each completes, every
-                  action is written to an append-only log, and you can halt it at any time.
+                  You are told when each step completes, every action lands in a log that cannot be
+                  edited, and you can stop it at any time.
                 </p>
               </div>
             </li>
