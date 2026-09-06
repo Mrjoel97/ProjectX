@@ -372,6 +372,11 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
     narration: b.narration,
     clip: b.clip,
     voice: b.voice,
+    // `hasAssetSource`'s inputs. Without them the cards cannot see the second thing that holds a
+    // reel, and a scene naming no source gets no card at all.
+    overlay: b.overlay,
+    asset: b.asset,
+    prompt: b.prompt,
   }));
   const tracker = trackerView(
     trackerScenes,

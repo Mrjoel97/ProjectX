@@ -1,5 +1,39 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-07 (**THE TWO WAYS A REEL HOLDS, AND THE CANVAS ONLY EVER KNEW ONE.**
+> Follow-on to the tracker fix below, from the same held reel. `evaluateRenderTrigger` refuses a
+> render on TWO conditions -- a needed job that did not succeed, AND `deckReady`, which demands every
+> scene name its asset source -- and both land the same `incomplete_batch` code. `failureCards` knew
+> only the first, and knew it too loosely.
+>
+> DEFECT 1 -- a failed row the deck no longer wants was still a card. The 2026-08-16 entry below
+> records that the trigger and `batchToRender` judge a terminal row by `deckStillNeedsJob` (*"a failed
+> clip whose scene became a card/upload is history, not a hold"*). The canvas never learned that rule,
+> so after the fix menu's own repair -- swap a failed clip to a card or to your own footage, which
+> leaves the failed row in place DELIBERATELY -- the hero went on naming that scene and its card went
+> on reporting the provider's stale reason. `failedScenes` now filters on the canvas half of the same
+> predicate (`landsPictureRow` for the picture, non-empty narration for the take), and `pictureFailed`
+> / `voiceFailed` inside the card use it too.
+>
+> DEFECT 2 -- a scene naming no source had NO CARD AT ALL. `setSceneVisual` permits a switch to
+> `uploaded_video` with no asset yet, and says so in its own comment: *"the re-arm below keeps the reel
+> held, IN WORDS, until `setSceneAsset` names the footage"*. Those words did not exist. `FailureScene`
+> carried no `overlay`/`asset`/`prompt`, so the cards could not evaluate `hasAssetSource`; the hold
+> named no scene, pushed no card, and the hero said *"never produced its picture or its voice"* over a
+> deck whose every job had succeeded. **A backend comment asserting the UI says something is not the
+> UI saying it** -- the same shape as the tracker bug one entry down, and it is reachable through the
+> repair flow for that very bug. Now: `FailureScene` carries the three fields, `missingSource()` names
+> the missing thing per kind, the hero falls back to the first sourceless scene and derives its clause
+> from what is ACTUALLY wrong rather than from the reason code, and each such scene gets a card with
+> the swap arms. One scene never gets two cards.
+>
+> Measured: web 898 + 2 skipped (133 in mediaCanvas.test.ts, 4 new), tsc clean, biome clean.
+> BOTH fixes mutation-verified separately -- restoring the bare `FAILED(s.clip)` filter reddens the
+> stale-row test; disabling the sourceless fallback and loop reddens the other two. NOT CHANGED: the
+> backend still returns one `incomplete_batch` for both causes. A second reason code would let the
+> hero read the cause off the row instead of re-deriving it; not done, because the canvas has the deck
+> and can tell them apart without a schema change.)
+>
 > Last verified: 2026-09-07 (**THE TRACKER ASKED THE MONEY QUESTION AND ANSWERED THE PIPELINE ONE.**
 > Owner-reported: a five-scene reel held at `incomplete_batch` whose hero said "Fix Scene 1" while
 > Scene 1's own row said `nothing to buy` and Pictures read `Done - All 2 ready`. Nothing was stuck;

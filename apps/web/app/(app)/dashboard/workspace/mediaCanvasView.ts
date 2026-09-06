@@ -32,6 +32,7 @@ import {
   type DeckContract,
   deckRefusalClause,
   GENERATED_CLIP_SECONDS,
+  hasAssetSource,
   TARGET_DURATIONS,
 } from "@pikar/core/storyboard";
 import { MEDIA_GENERATED_SECONDS_CAP, sceneVisualSpec } from "@pikar/cost/media";
@@ -1193,6 +1194,12 @@ export type FailureFace = {
 export type FailureScene = Omit<TrackerScene, "clip" | "voice"> & {
   clip: FailureFace | null;
   voice: FailureFace | null;
+  /** What `hasAssetSource` reads. Carried so the cards can see the OTHER thing that holds a reel:
+   *  a scene naming no source is `deckReady: false` at `evaluateRenderTrigger`, which lands the
+   *  same `incomplete_batch` code as a failed job and had no card at all. */
+  overlay?: string | null;
+  asset?: unknown;
+  prompt?: string | null;
 };
 
 export type FixArm =
@@ -1233,6 +1240,36 @@ export type FailureCard = {
 
 const FAILED = (f: FailureFace | null): boolean =>
   f !== null && (f.status === "failed" || f.status === "blocked");
+
+/**
+ * A failed row holds the reel ONLY while the deck still wants what it was buying — the canvas half
+ * of `deckStillNeedsJob` (`@pikar/core/render`), which both `evaluateRenderTrigger` and
+ * `batchToRender` already apply and this file did not.
+ *
+ * The gap was reachable through the fix menu's own repair flow: swapping a failed clip to a card or
+ * to your own footage leaves the failed row in place deliberately (the fix changes the DECK, never
+ * the batch), so the backend calls that row history while the canvas went on naming its scene and
+ * reporting the provider's stale reason.
+ */
+const wantedPictureFailed = (s: FailureScene): boolean =>
+  FAILED(s.clip) && landsPictureRow(s.visual);
+const wantedVoiceFailed = (s: FailureScene): boolean =>
+  FAILED(s.voice) && s.narration.trim() !== "";
+
+/** What a scene that names no source is missing, in the words of the thing it needs. `null` when
+ *  the scene names its source, which is every scene on a deck that was bought normally. */
+function missingSource(s: FailureScene): string | null {
+  const named = hasAssetSource({
+    visual: s.visual ?? undefined,
+    overlay: s.overlay ?? undefined,
+    asset: s.asset ?? undefined,
+    prompt: s.prompt ?? undefined,
+  });
+  if (named) return null;
+  if (s.visual === "uploaded_video") return "names no footage — pick a video from your vault";
+  if (s.visual === "text_card") return "has no words to draw";
+  return "has no search prompt, so there is nothing to look for";
+}
 
 /**
  * WHAT THIS FACE HAS ALREADY COST, and the branch is the no-refunds rule.
@@ -1320,20 +1357,37 @@ export function failureCards(
 
   const failedScenes = scenes
     .map((s, position) => ({ s, position }))
-    .filter(({ s }) => FAILED(s.clip) || FAILED(s.voice));
+    .filter(({ s }) => wantedPictureFailed(s) || wantedVoiceFailed(s));
+  // The OTHER thing that holds a reel at `incomplete_batch`: `evaluateRenderTrigger` also demands
+  // every scene name its asset source, and `setSceneVisual` deliberately allows a switch to
+  // `uploaded_video` with no asset yet — "the re-arm keeps the reel held, in words, until
+  // setSceneAsset names the footage", in its own comment. Those words did not exist here.
+  const sourcelessScenes = scenes
+    .map((s, position) => ({ s, position }))
+    .filter(({ s }) => missingSource(s) !== null);
 
   // ── THE REEL'S OWN CARDS ────────────────────────────────────────────────────────────────────
   if (plan.renderStatus === "failed") {
     const reason = plan.renderReason ?? null;
     const clause = failureClause(reason, noun);
     if (reason !== null && HELD_REASONS.has(reason)) {
-      const first = failedScenes[0];
+      // A failed job first (it is the more specific cause), then a scene that names no source.
+      // Before this, a hold with no failed job named no scene at all and pushed no card — the
+      // dead end the fix menu's own repair flow walks into.
+      const first = failedScenes[0] ?? sourcelessScenes[0];
       const ref = first ? `${word} ${first.position + 1}` : null;
       cards.push({
         key: "hero-held",
         where: "hero",
         sceneIndex: first?.s.blockIndex ?? null,
-        headline: `The reel is held — ${clause}. ${
+        headline: `The reel is held — ${
+          // The reason CODE cannot tell the two causes apart, so the sentence is derived from what
+          // is actually wrong. Saying "never produced its picture or its voice" over a deck whose
+          // jobs all succeeded sends the user looking for a failure that is not there.
+          failedScenes.length === 0 && first
+            ? `${word} ${first.position + 1} ${missingSource(first.s)}`
+            : clause
+        }. ${
           ref
             ? `Fix ${ref} below and it picks up where it stopped.`
             : `Fix the ${noun} below and it picks up where it stopped.`
@@ -1386,8 +1440,8 @@ export function failureCards(
 
   // ── THE PER-SCENE CARDS ─────────────────────────────────────────────────────────────────────
   for (const { s, position } of failedScenes) {
-    const pictureFailed = FAILED(s.clip);
-    const voiceFailed = FAILED(s.voice);
+    const pictureFailed = wantedPictureFailed(s);
+    const voiceFailed = wantedVoiceFailed(s);
     const pictureWord = s.visual === "animated_image" ? "still" : "picture";
     const said = (f: FailureFace | null, what: string): string =>
       f?.status === "blocked"
@@ -1434,6 +1488,27 @@ export function failureCards(
         ]
           .filter(Boolean)
           .join(" · ") || null,
+    });
+  }
+
+  // ── THE SCENE THAT NAMES NO SOURCE ──────────────────────────────────────────────────────────
+  // Not a failure — nothing was bought and nothing broke — but it holds the reel exactly as a
+  // failed job does, and it had no card. Skipped when the scene already has a failure card above,
+  // so one scene never gets two.
+  const carded = new Set(failedScenes.map(({ position }) => position));
+  for (const { s, position } of sourcelessScenes) {
+    if (carded.has(position)) continue;
+    cards.push({
+      key: `scene-source-${s.blockIndex}`,
+      where: "scene",
+      sceneIndex: s.blockIndex,
+      headline: `${word} ${position + 1} ${missingSource(s)}.`,
+      sceneRef: `${word} ${position + 1}`,
+      sunkLine: null,
+      // The swap arms are real levers here: a kind that names its own source ends the hold. The
+      // control for supplying THIS kind's missing piece lives on the scene's own tile.
+      fixes: SWAP_ARMS.filter((a) => a.arm !== s.visual),
+      detailCode: null,
     });
   }
 

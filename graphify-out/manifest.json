@@ -255,13 +255,13 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1788722978.3599882,
-    "ast_hash": "1d909961900a7a18de4ef6f5cfe0b595",
+    "mtime": 1788734736.756459,
+    "ast_hash": "2d4dd5cc4f4fb2c7473ecc57acc5f2d4",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1788722978.3599882,
-    "ast_hash": "d7eba8eb55f1c1fd43a42af710bc7e12",
+    "mtime": 1788734806.5646567,
+    "ast_hash": "3a8d4276e5f4273e2abb1916d4d8fb03",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -23642,6 +23642,21 @@
   "apps/web/e2e/.auth/chrome-profile/Default/Extensions/jelniggicmclhfgnlapbkgfibmgelfnp/0.1.6_0/static/media/know_know.7425021031697d62d483.mp3": {
     "mtime": 1781752252.0,
     "ast_hash": "e26b3213368afb768cad99004357c079",
+    "semantic_hash": ""
+  },
+  ".planning/phases/41-plan-row-adr/41-01-SUMMARY.md": {
+    "mtime": 1788734773.2241437,
+    "ast_hash": "27fb75d228f248f79f838a8753f858c4",
+    "semantic_hash": ""
+  },
+  ".planning/phases/41-plan-row-adr/41-RESEARCH.md": {
+    "mtime": 1788734524.4207878,
+    "ast_hash": "d397bd09738d9301b06785f353a9dd15",
+    "semantic_hash": ""
+  },
+  "docs/decisions/037-a-root-is-an-artifact-a-child-is-a-worker.md": {
+    "mtime": 1788734680.1254165,
+    "ast_hash": "97be5063d1f6b9c7b0856e895ed6b104",
     "semantic_hash": ""
   }
 }

@@ -1,3 +1,13 @@
+> Last verified: 2026-09-07 (second media-canvas fix under this playbook's `dashboard/workspace/`
+> watch path; the subsystem entry is in **media.md** and this is the cross-reference. `failureCards`
+> never applied `deckStillNeedsJob`, so a failed row the deck had stopped wanting still named its
+> scene; and `FailureScene` carried no `overlay`/`asset`/`prompt`, so a scene naming no picture source
+> -- the state `setSceneVisual` deliberately creates when you swap to your own footage -- produced no
+> card and a hero sentence claiming a job had failed when none had. NOTHING IN THE COCKPIT'S OWN PLANE
+> CHANGED. The transferable lesson, and the reason it is worth a line here: **a backend comment that
+> says the UI tells the user something is not the UI telling them**. Two such comments in two days,
+> both on this directory, both true about the hold and false about the words.)
+>
 > Last verified: 2026-09-07 (media-canvas fix under this playbook's `dashboard/workspace/` watch path;
 > the subsystem entry is in **media.md**, and this is the cross-reference rather than a second copy of
 > it. `trackerView`'s `buysPicture` (`mediaCanvasView.ts`) answered the PAID question where the render

@@ -1234,6 +1234,80 @@ describe("a failure is a plain-language card with honest economics", () => {
     expect(failureCards({}, [fscene()], anEstimate())).toEqual([]);
     expect(failureCards({ renderStatus: "rendered" }, [fscene()], anEstimate())).toEqual([]);
   });
+
+  test("a failed row the DECK NO LONGER WANTS is history, not a card", () => {
+    // The fix menu's own repair flow: a clip failed, the user swapped the scene to a text card.
+    // `setSceneVisual` leaves the failed row in place deliberately — the fix changes the DECK,
+    // never the batch — and `evaluateRenderTrigger`/`batchToRender` both ignore it via
+    // `deckStillNeedsJob`. This file did not, so it went on naming the scene and reporting the
+    // provider's stale reason over a picture the deck had stopped wanting.
+    // MUTATION that turns this red: filter `failedScenes` on bare `FAILED(s.clip)` again.
+    const swapped = fscene({
+      visual: "text_card",
+      overlay: "ONE WEEK A MONTH",
+      clip: face({ status: "failed" }),
+    });
+    expect(failureCards({}, [swapped], anEstimate()).filter((c) => c.where === "scene")).toEqual(
+      [],
+    );
+
+    // ...and a hold no longer points the user at it.
+    const held = failureCards(
+      { renderStatus: "failed", renderReason: "incomplete_batch" },
+      [swapped],
+      anEstimate(),
+    );
+    expect(held.find((c) => c.key === "hero-held")?.sceneRef).toBeNull();
+  });
+
+  test("a still-wanted failed row IS a card — the filter must not swallow real failures", () => {
+    // The other half of the same predicate, so the fix above cannot be "return nothing".
+    const stock = fscene({
+      visual: "stock_image",
+      prompt: "city street at dawn",
+      clip: face({ status: "failed" }),
+    });
+    const card = failureCards({}, [stock], anEstimate()).find((c) => c.where === "scene");
+    expect(card).toBeDefined();
+    expect(card?.sceneRef).toBe("Scene 1");
+  });
+
+  test("a scene that NAMES NO SOURCE gets a card and a true sentence", () => {
+    // The second way a reel holds at `incomplete_batch`: `evaluateRenderTrigger` also demands every
+    // scene name its asset source, and `setSceneVisual` deliberately permits a switch to
+    // `uploaded_video` with no asset yet ("the re-arm keeps the reel held, in words, until
+    // setSceneAsset names the footage"). Those words did not exist — no card, no scene named, and a
+    // headline claiming a picture or voice had failed when every job succeeded.
+    // MUTATION that turns this red: drop `sourcelessScenes` from the hero fallback and the loop.
+    const cards = failureCards(
+      { renderStatus: "failed", renderReason: "incomplete_batch" },
+      [fscene({ visual: "uploaded_video", asset: null }), fscene({ blockIndex: 1 })],
+      anEstimate(),
+    );
+
+    const hero = cards.find((c) => c.key === "hero-held");
+    expect(hero?.sceneRef).toBe("Scene 1");
+    expect(hero?.headline).toMatch(/names no footage/);
+    // The reason code's own words are FALSE for this cause and must not be used.
+    expect(hero?.headline).not.toMatch(/never produced its picture or its voice/);
+
+    const scene = cards.find((c) => c.where === "scene");
+    expect(scene?.headline).toMatch(/Scene 1 names no footage/);
+    // A real lever, not just a diagnosis: a kind that names its own source ends the hold.
+    expect(scene?.fixes.length).toBeGreaterThan(0);
+    expect(scene?.fixes.map((f) => f.arm)).not.toContain("uploaded_video");
+  });
+
+  test("one scene never gets two cards — a failure and a missing source are one card", () => {
+    // The compound state the repair flow actually produces: the clip failed AND the user swapped to
+    // their own footage without picking it yet. Two pushes here would read as two problems.
+    const cards = failureCards(
+      { renderStatus: "failed", renderReason: "incomplete_batch" },
+      [fscene({ visual: "uploaded_video", asset: null, clip: face({ status: "failed" }) })],
+      anEstimate(),
+    );
+    expect(cards.filter((c) => c.where === "scene")).toHaveLength(1);
+  });
 });
 
 describe("the reel's own failures: retry, hold, and the degraded deliverable", () => {
