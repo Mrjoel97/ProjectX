@@ -44,7 +44,7 @@ import {
 } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
-import { offlineSeamAvailable, resolveModel } from "./lib/models";
+import { fixtureSeamFor, resolveModel } from "./lib/models";
 import { startIngest } from "./vaultIngest";
 
 // Per-call wall-clock ceiling + one retry budget (mirrors llm.ts / vaultLlm.ts).
@@ -393,7 +393,7 @@ export const buildFolderDigest = internalAction({
     // absence of both keys alone, which turned a misconfiguration into a fabricated digest for
     // EVERY completed folder, with no error and no retry (the fixture RETURNS where the model call
     // THREW). A loud failure is the correct behaviour for a backend that cannot synthesise.
-    if (offlineSeamAvailable()) {
+    if (fixtureSeamFor(tenantId)) {
       markdown = smokeDigestFixture(folder.name, members);
     } else {
       // `generateText`, not `generateObject`: the contract's three sections ARE markdown headings,

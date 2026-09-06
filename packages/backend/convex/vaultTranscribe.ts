@@ -17,7 +17,7 @@ import { experimental_transcribe as transcribe } from "ai";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-import { transcriptionModel, transcriptionUsage } from "./lib/models";
+import { fixtureSeamFor, transcriptionModel, transcriptionUsage } from "./lib/models";
 
 // Per-call wall-clock ceiling. NOT intake.ts's 45s (that's tuned for seconds-long mic clips):
 // a vault video runs up to 25 MB ≈ many minutes of audio, and the call = upload + transcription —
@@ -95,7 +95,7 @@ export const transcribeDoc = internalAction({
       const sniffed = decodeUtf8(bytes);
       let rawText: string;
       let durationSeconds = 0;
-      if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX)) {
+      if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX) && fixtureSeamFor(tenantId)) {
         rawText = sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
       } else if (!TRANSCRIBABLE_CONTAINER_MIME.has(doc.mimeType)) {
         return fail("unsupported_video_container");

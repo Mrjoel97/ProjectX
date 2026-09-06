@@ -76,7 +76,7 @@ import { generateObject, type JSONSchema7, jsonSchema } from "ai";
 import { type VLiteral, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-import { offlineSeamAvailable, resolveModel } from "./lib/models";
+import { fixtureSeamFor, resolveModel } from "./lib/models";
 
 const CALL_TIMEOUT_MS = 45_000;
 
@@ -341,7 +341,7 @@ export const planKnowledgeSearch = internalAction({
     // other shape first; a mutation that emptied the fallback left the whole suite green.)
     try {
       let raw: readonly unknown[];
-      if (offlineSeamAvailable() && question.includes(SMOKE_PLAN_PREFIX)) {
+      if (fixtureSeamFor(tenantId) && question.includes(SMOKE_PLAN_PREFIX)) {
         const fixture = smokePlanFixture(question, question);
         if (fixture === "fail") throw new Error("knowledgeLlm: SMOKE planner failure");
         raw = fixture;
@@ -654,7 +654,7 @@ export const synthesizeKnowledge = internalAction({
     const safePrompt = scan.value.safeText;
 
     let raw: SearchSynthesis;
-    if (offlineSeamAvailable() && question.includes(SMOKE_SYNTH_PREFIX)) {
+    if (fixtureSeamFor(tenantId) && question.includes(SMOKE_SYNTH_PREFIX)) {
       raw = smokeSynthesisFixture(question, question, evidence);
     } else {
       // THE PROVIDER'S ERROR NEVER LEAVES THIS FUNCTION, and this is the call that needed it most.

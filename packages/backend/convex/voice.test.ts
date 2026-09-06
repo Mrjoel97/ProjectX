@@ -63,10 +63,17 @@ function stubFetch200() {
 }
 
 beforeEach(() => {
-  process.env.OPENAI_API_KEY = FAKE_KEY;
+  // A KEYED deployment (the Realtime mint needs the key present). Under 36-01 (ADR-035) a key
+  // closes the keyless opt-in, so the brief's `SMOKE::route=` transcript is honoured only because
+  // this tenant is ALLOW-LISTED — exactly the dev deployment's shape, and exercised here on purpose.
+  // `vi.stubEnv`, not a raw assignment: the previous `process.env.OPENAI_API_KEY = FAKE_KEY` had no
+  // cleanup and leaked into every later file in the worker (the 29-FIN-06 finding).
+  vi.stubEnv("OPENAI_API_KEY", FAKE_KEY);
+  vi.stubEnv("PIKAR_FIXTURE_TENANT_IDS", TENANT);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 // ── Task 1: startSession + parallel guard + arm watchdog + endSessionClean (CAS) ────────────────

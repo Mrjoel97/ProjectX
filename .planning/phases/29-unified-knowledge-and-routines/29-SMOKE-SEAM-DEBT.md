@@ -322,3 +322,15 @@ can pin a gate it can SEE, and this register now holds five worked examples of g
 `if (safeText.startsWith(SMOKE_PREFIX)) return { entryId: \`smoke::${doc.contentHash}\`, costUsd: 0 };`
 with `SMOKE_PREFIX = "SMOKE::"` defined at `:368`, and `vaultRag.ts` contains no reference to
 `offlineSeamAvailable` or `PIKAR_OFFLINE_FIXTURES`. Instance #3 above is accurate and remains **LIVE**.
+
+---
+
+## CLOSED — 2026-09-06, Phase 36 (G24, ADR-035)
+
+Every instance above (#1–#4, the vault `vaultSearch` sibling, and the tenant-typed grammars this register
+listed as "not classified") is now `prefix && fixtureSeamFor(tenantId)`. The "separate, flag-only
+predicate" this document asked the future plan to justify is `PIKAR_FIXTURE_TENANT_IDS`: an operator fact
+about WHO, not about content, which is why it may coexist with credentials — no payload can add a tenant id
+to a deployment's environment. Dev lists the e2e user and `"smoke"`; production lists nothing and reports
+NOT ready if it ever does. Census, design and the per-site proof: `36-RESEARCH.md`, `36-01-SUMMARY.md`,
+`packages/backend/convex/fixtureSeam.test.ts`. The second debt below (route-table copy drift) is untouched.

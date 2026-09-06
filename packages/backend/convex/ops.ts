@@ -67,10 +67,14 @@ export const envCheck = ownerQuery({
       // with no prompt row is a BROKEN deployment, and collapsing those with features would make
       // this screen unactionable. An unseeded skill is not "a feature off" — it is a surface that
       // throws when a user touches it.
+      // 36-01 (owner decision, ADR-035): a deployment with ANY fixture seam active is NOT
+      // production-ready — a faked provider reads as success everywhere else, so the one screen
+      // that knows must say so in the headline, not in a line of text under it.
       ready:
         result.missingRequired.length === 0 &&
         nonDurableOrigins.length === 0 &&
-        unseededSkills.length === 0,
+        unseededSkills.length === 0 &&
+        result.fixturesActive.length === 0,
       ...result,
       nonDurableOrigins,
       unseededSkills,

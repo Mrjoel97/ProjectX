@@ -29,7 +29,7 @@ import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
-import { offlineSeamAvailable } from "./lib/models";
+import { fixtureSeamFor } from "./lib/models";
 import { rag } from "./vaultRag";
 
 const SMOKE_PREFIX = "SMOKE::";
@@ -55,7 +55,7 @@ async function runVaultGround(
   // matched chunk and still fall back to the doc-text slice.
   const matchedByDoc: Record<string, string> = {};
 
-  if (offlineSeamAvailable() && query.startsWith(SMOKE_PREFIX)) {
+  if (fixtureSeamFor(tenantId) && query.startsWith(SMOKE_PREFIX)) {
     // Offline: the seed doc ids ride in the sentinel; resolve them tenant-scoped (a cross-tenant
     // seed drops out exactly as namespace scoping would exclude it — no embedding call).
     //

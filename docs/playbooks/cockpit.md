@@ -1,3 +1,14 @@
+> Last verified: 2026-09-06 (36-01, G24 — **THE COCKPIT GRAMMARS AND THE MODEL-COMPOSED TOOL ARGUMENTS
+> ARE GATED ON THE OPERATOR FACT.** Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. In `llm.ts`: `parseSmoke(text, tenantId)` and
+> `parseAgentSmoke(text, tenantId)` return `null` without it (the check is INSIDE the parser so no caller can
+> forget; eight `parseSmoke` and one `parseAgentSmoke` call sites pass the tenant; `draftCockpit` and
+> `draftDocument` now destructure `tenantId`), the forced agent timeout, and the two Drive tools
+> (`listDriveFolders` / `findInDrive`, whose `SMOKE::` arguments the MODEL composes inside a loop carrying
+> retrieved content). `gmail.search`'s `name` gate (the worst site in the 29 register: fabricated mailbox
+> evidence from a model-composed argument) and both `send` arms' `SMOKE::fail` are gated the same way. The
+> `SMOKE::agent::` / `SMOKE::route=` payloads in the eleven `cockpit-*` specs are unchanged;
+> `cockpitTools.test.ts`'s parser round-trips pass a tenant. `lib/models.ts` gained `fixtureSeamFor`.)
+
 > Last verified: 2026-09-06 (35-02, G23 half B — **THE WORKSPACE DEEP LINK CARRIES A LABEL, AND THE PACK
 > BROWSER SPEC KNOWS THE SEVENTH TITLE.** `/dashboard/workspace?thread=<id>&label=<text>` opens the thread
 > tab under `label` (falls back to "Voice brief", the VOIC-04 caller); `openThread` caps it at 24 chars and

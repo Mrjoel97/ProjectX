@@ -39,7 +39,7 @@ import { internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { fogIntegration } from "./lib/foglamp";
-import { resolveModel } from "./lib/models";
+import { fixtureSeamFor, resolveModel } from "./lib/models";
 
 // Pitfall 1: unpdf bundles pdf.js 5.x, which needs Promise.withResolvers (Node >= 22); Convex
 // node actions default to Node 20. Local Node 24 masks the bug — ONLY the live smoke proves it
@@ -388,7 +388,7 @@ export const extractDoc = internalAction({
       // the rail dispatch — then dispatch by rail.
       const sniffed = decodeUtf8(bytes);
       let extracted: Extracted;
-      if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX)) {
+      if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX) && fixtureSeamFor(tenantId)) {
         extracted = { text: sniffed.slice(SMOKE_EXTRACT_PREFIX.length), path: "smoke" };
       } else if (rail === "pdf") {
         extracted = await extractPdf(ctx, tenantId, bytes, correlation, spendRail);

@@ -57,10 +57,14 @@ function sessionOf(i: number): Record<string, unknown> {
 }
 
 beforeEach(() => {
-  process.env.OPENAI_API_KEY = FAKE_KEY;
+  // `vi.stubEnv`, never a raw assignment. The raw form had no cleanup and LEAKED into every later
+  // file in the worker; under 36-01 a leaked key closes every `SMOKE::` gate downstream, which
+  // surfaced as proactiveReview.test.ts hitting the timer-pump ceiling only in a full-suite run.
+  vi.stubEnv("OPENAI_API_KEY", FAKE_KEY);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 const asTenant = (t: ReturnType<typeof convexTest>) => t.withIdentity({ subject: TENANT });

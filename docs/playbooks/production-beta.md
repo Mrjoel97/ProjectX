@@ -1,5 +1,14 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-09-06 (36-01, G24 / ADR-035 — **ONE NEW `fixture`-TIER NAME, AND A FIXTURE SEAM NOW
+> FAILS READINESS.** `PIKAR_FIXTURE_TENANT_IDS` joins `ENV_MANIFEST` (`lib/env.ts`, with `isFixtureTenant`);
+> `ops.envCheck`'s `ready` additionally requires `fixturesActive.length === 0` (owner decision: a faked
+> provider reads as success everywhere else, so the headline says NOT ready rather than a line under it).
+> `env.test.ts`: the three `ready === true` tests clear the suite-wide `PIKAR_OFFLINE_FIXTURES` first, and a
+> new test pins `fixturesActive: ["PIKAR_FIXTURE_TENANT_IDS"] ⇒ ready: false`. Production posture: BOTH
+> `PIKAR_OFFLINE_FIXTURES` and `PIKAR_FIXTURE_TENANT_IDS` unset; `/admin` must show nothing under "Fixture
+> seams ACTIVE". `fixtureSeam.test.ts` is registered under this playbook in `watch.json`.)
+
 > Last verified: 2026-09-05 (25.3-01 — three `feature`-tier manifest rows for the deployment
 > ceilings (`DEPLOYMENT_*_BUDGET_CENTS`, see guardrails.md); unset means the compiled default. To arm
 > the reliability sweep on production (G1) run, from the owner's terminal:

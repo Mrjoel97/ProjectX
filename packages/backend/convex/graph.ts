@@ -20,6 +20,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { prepareGovernedMessage } from "./gmail";
+import { fixtureSeamFor } from "./lib/models";
 import { freshGraphToken } from "./microsoftCalendar";
 
 const GRAPH_SEND_ENDPOINT = "https://graph.microsoft.com/v1.0/me/sendMail";
@@ -56,7 +57,7 @@ export const send = internalAction({
 
     // Same offline smoke seam as the Google arm, so a fan-out isolation smoke behaves identically
     // whichever provider a row carries.
-    if (req.subject.startsWith("SMOKE::fail")) {
+    if (req.subject.startsWith("SMOKE::fail") && fixtureSeamFor(req.tenantId)) {
       throw new Error("SMOKE_FAILURE: forced fan-out send failure");
     }
 

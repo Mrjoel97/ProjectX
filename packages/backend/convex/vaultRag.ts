@@ -24,6 +24,7 @@ import { scanText } from "@pikar/pii";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
+import { fixtureSeamFor } from "./lib/models";
 
 // TWO EMBEDDING PROVIDERS, SELECTED BY ONE CONSTANT — the same shape `resolveModel` (llm.ts) uses
 // to route chat, reused here rather than invented. Flipping providers is a one-line change to
@@ -387,7 +388,9 @@ export const embedDoc = internalAction({
     const safeText = scan.value.safeText;
 
     // Offline deterministic path: NO network call, a fixed fake entryId keyed to the content hash.
-    if (safeText.startsWith(SMOKE_PREFIX))
+    // 36-01 (ADR-035): content alone never selects it — a `ready` row with a fake entry id and no
+    // vector was reachable from any ingested document that began with the prefix.
+    if (safeText.startsWith(SMOKE_PREFIX) && fixtureSeamFor(tenantId))
       return { entryId: `smoke::${doc.contentHash}`, costUsd: 0 };
 
     // Dedup precheck (query-safe): a second ingest of identical content reuses the existing entry.

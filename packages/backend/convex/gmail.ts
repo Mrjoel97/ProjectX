@@ -16,6 +16,7 @@ import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { internalAction } from "./_generated/server";
 import { contentHash } from "./lib/hash";
+import { fixtureSeamFor } from "./lib/models";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 // Exported so notifyExternal.ts reuses the GOVERNED send endpoint (OPSG-05) — the external
@@ -260,7 +261,7 @@ export const send = internalAction({
     // ponytail: SMOKE::fail sentinel — deterministic offline terminal throw for the fan-out
     // isolation smoke (mirrors llm.ts's fail=primary). The message carries no PII, and real
     // rows never start with it. Remove with the other SMOKE seams once a mock-Gmail smoke exists.
-    if (req.subject.startsWith("SMOKE::fail")) {
+    if (req.subject.startsWith("SMOKE::fail") && fixtureSeamFor(req.tenantId)) {
       throw new Error("SMOKE_FAILURE: forced fan-out send failure");
     }
 
@@ -367,7 +368,9 @@ export const search = internalAction({
 
     // Deterministic offline fixture — real names never start with the sentinel, so this carries
     // no real PII. Lets the resolution E2E/smoke run with no live mailbox (Plan 04/05 drive it).
-    if (name.startsWith("SMOKE::")) {
+    // 36-01 (ADR-035): `name` is a TOOL ARGUMENT THE MODEL COMPOSES inside a loop whose context
+    // carries retrieved documents — where injection lives. The prefix alone never selects it.
+    if (name.startsWith("SMOKE::") && fixtureSeamFor(tenantId)) {
       const records: HeaderRecord[] = [
         {
           from: "Sarah Smoke <sarah@example.com>",

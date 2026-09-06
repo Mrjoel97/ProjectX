@@ -53,7 +53,7 @@
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
-import { isOfflineFixtureConsent } from "./env";
+import { isFixtureTenant, isOfflineFixtureConsent } from "./env";
 
 // OpenRouter, through its OWN provider — and the second SDK is EARNED, not a convenience.
 //
@@ -167,6 +167,24 @@ export const offlineSeamAvailable = (): boolean =>
   isOfflineFixtureConsent(process.env.PIKAR_OFFLINE_FIXTURES) &&
   !process.env.OPENAI_API_KEY &&
   !process.env.OPENROUTER_API_KEY;
+
+/**
+ * THE WHO HALF (36-01, ADR-035): may THIS tenant's `SMOKE::`-prefixed content select an offline
+ * fixture? True on a keyless deployment with the opt-in (everyone), or when the operator listed
+ * this tenant in `PIKAR_FIXTURE_TENANT_IDS` — which is how the browser and smoke suites keep
+ * running against the KEYED dev deployment, where `offlineSeamAvailable()` is false by
+ * construction. Every `SMOKE::` gate on a production path is `prefix && fixtureSeamFor(tenantId)`:
+ * the string only picks WHICH fixture; this predicate decides WHETHER one may run.
+ *
+ * Why an allowlist is acceptable beside real credentials: it is a statement about identity, set
+ * only through `convex env set`. No payload can add an id to it. Production leaves it unset, and
+ * the readiness screen reports NOT ready while any fixture-tier name is set.
+ *
+ * The literal `process.env.PIKAR_FIXTURE_TENANT_IDS` read stays HERE (not behind a helper) for the
+ * same reason `PIKAR_OFFLINE_FIXTURES`'s does: `env.test.ts`'s dead-entry scan sees literal reads.
+ */
+export const fixtureSeamFor = (tenantId: string): boolean =>
+  offlineSeamAvailable() || isFixtureTenant(process.env.PIKAR_FIXTURE_TENANT_IDS, tenantId);
 
 export const resolveModel = (id: string): LanguageModel => {
   // `.chat(...)`, NOT the bare callable — MEASURED 2026-08-25 and this is the load-bearing half.

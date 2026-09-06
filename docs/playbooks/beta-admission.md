@@ -1,5 +1,9 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-09-06 (36-01 — `AdminView`'s not-ready headline gains "N fixture seam(s) active — a
+> provider is being faked." when `fixturesActive` is non-empty, matching `ops.envCheck`'s new `ready`
+> conjunct (production-beta.md). `adminPresentation.test.ts` 10/10.)
+
 > Last verified: 2026-09-06 (35-01, G23 — **THE PUBLIC PAGE SELLS WHAT SHIPS.** `page.tsx` metadata, JSON-LD
 > and hero no longer say "connecting to your tools", "end to end" or "executes it autonomously"; a new
 > "What you get" section (replies sent; meetings and documents done; the next move every week) precedes

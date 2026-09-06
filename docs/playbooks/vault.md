@@ -1,3 +1,14 @@
+> Last verified: 2026-09-06 (36-01, G24 — **THE VAULT INGEST CHAIN NO LONGER SELECTS A FIXTURE FROM
+> CONTENT.** Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. Sites here: `vaultLlm.extractGraph` (a Drive file a stranger shared in could WRITE
+> the tenant's entity graph by starting with `SMOKE::graph::`), `vaultLlm.classifyDoc` (attacker-chosen
+> classification + identity line), `vaultRag.embedDoc` (a `ready` row with a fake entry id and no vector),
+> `vaultExtract.extractDoc` / `vaultTranscribe.transcribeDoc` (bytes a Drive import wrote), `vault.vaultSearch`
+> (the browse box), and the two already-gated sites `vaultGround` / `vaultDigest` moved from
+> `offlineSeamAvailable()` to the WHO predicate. `fixtureSeam.test.ts` proves BOTH directions on #1/#2/#3/#9:
+> keyed + unlisted reaches the real model/embedding step; keyed + LISTED returns the fixture. The sentinel
+> grammars, fixture bodies, `vault.spec.ts` / `vault-redesign.spec.ts` payloads and `smoke:vault` are
+> unchanged; dev needs `PIKAR_FIXTURE_TENANT_IDS=<e2e user id>,smoke`.)
+
 > Last verified: 2026-09-05 (25.3-01 — `vaultIngest.retryStuckIngests` (name unchanged) kicks
 > `retryStuckIngestsBatch`, a 20-row batch walk over `vaultDocuments` (rows carry their text), with
 > the same processing / no-ragEntryId / older-than-60s guard and the same rail derivation. The

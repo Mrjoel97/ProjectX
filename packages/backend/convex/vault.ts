@@ -42,6 +42,7 @@ import {
 import { vaultIngestPool } from "./index";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { fixtureSeamFor } from "./lib/models";
 import schema from "./schema";
 import { bumpFolder } from "./vaultFolders";
 import { startIngest } from "./vaultIngest";
@@ -726,7 +727,8 @@ export const vaultSearch = tenantAction({
     { query, category, folderId },
   ): Promise<{ _id: Id<"vaultDocuments">; title: string; category: string }[]> => {
     let candidateIds: Id<"vaultDocuments">[];
-    if (query.startsWith("SMOKE::")) {
+    // 36-01 (ADR-035): the browse-box sentinel is honoured only for a fixture tenant.
+    if (query.startsWith("SMOKE::") && fixtureSeamFor(ctx.tenantId)) {
       candidateIds = query
         .slice("SMOKE::".length)
         .split(",")

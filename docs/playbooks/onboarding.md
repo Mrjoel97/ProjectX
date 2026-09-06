@@ -1,5 +1,9 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-06 (36-01, G24 — `onboarding.ts`'s `SMOKE::profile::` and `SMOKE::onboard::`
+> gates are now `&& fixtureSeamFor(ctx.tenantId)`. Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. `onboarding.test.ts` runs under the suite-wide
+> keyless opt-in and is unchanged.)
+
 > Last verified: 2026-09-06 (28.2-01 — **THE CONNECTIONS PANEL SHOWS THE OWNER AN UNPROVEN LANE, MARKED.**
 > `connectorRows` rows carry `unproven`; every state's detail is prefixed with the "Not yet verified…" sentence
 > when set. The server sends such rows to the OWNER only (`connectableProviderGates`), so this is the operator

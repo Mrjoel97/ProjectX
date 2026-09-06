@@ -51,6 +51,8 @@ function EnvReadiness() {
               env.unseededSkills.length > 0 &&
                 `${env.unseededSkills.length} agent(s) have no prompt row — those surfaces throw when used.`,
               env.nonDurableOrigins.length > 0 && "An origin will stop resolving.",
+              env.fixturesActive.length > 0 &&
+                `${env.fixturesActive.length} fixture seam(s) active — a provider is being faked.`,
             ]
               .filter(Boolean)
               .join(" ")}

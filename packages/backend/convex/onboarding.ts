@@ -51,7 +51,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
-import { resolveModel } from "./lib/models";
+import { fixtureSeamFor, resolveModel } from "./lib/models";
 import schema from "./schema";
 import { startIngest } from "./vaultIngest";
 import { rag } from "./vaultRag";
@@ -179,7 +179,8 @@ export const extractProfile = tenantAction({
       { name: BUSINESS_PROFILE_SKILL },
     );
 
-    if (intakeText.startsWith(SMOKE_PROFILE_PREFIX)) return smokeProfileFixture();
+    if (intakeText.startsWith(SMOKE_PROFILE_PREFIX) && fixtureSeamFor(ctx.tenantId))
+      return smokeProfileFixture();
 
     const { object } = await generateObject({
       model: resolveModel(DEFAULT_MODEL),
@@ -406,18 +407,19 @@ export const converse = tenantAction({
     const nextSlot = missingBefore[0];
     const prompt = turnPrompt(a.slots, a.userMessage, a.history ?? [], nextSlot);
 
-    const object = a.userMessage.startsWith(SMOKE_ONBOARD_PREFIX)
-      ? smokeTurnFixture(a.userMessage)
-      : (
-          await generateObject({
-            model: resolveModel(DEFAULT_MODEL),
-            schema: turnSchema,
-            system: skill.body,
-            prompt,
-            abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-            maxRetries: 1,
-          })
-        ).object;
+    const object =
+      a.userMessage.startsWith(SMOKE_ONBOARD_PREFIX) && fixtureSeamFor(ctx.tenantId)
+        ? smokeTurnFixture(a.userMessage)
+        : (
+            await generateObject({
+              model: resolveModel(DEFAULT_MODEL),
+              schema: turnSchema,
+              system: skill.body,
+              prompt,
+              abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+              maxRetries: 1,
+            })
+          ).object;
 
     const slots = mergeSlots(a.slots, object.slotUpdates);
     const missing = missingSlots(slots);

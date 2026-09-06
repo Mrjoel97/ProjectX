@@ -811,8 +811,10 @@ describe("knowledgeLlm.ts is structurally toolless and code-owned", () => {
         seam,
         `${marker} selects its offline seam from something other than the question`,
       ).toContain("question.includes(");
-      expect(seam, `${marker} reaches its offline seam without the operator opt-in`).toContain(
-        "offlineSeamAvailable() &&",
+      // 36-01 (ADR-035): the operator fact is now the WHO predicate — keyless opt-in OR the tenant
+      // allow-listed — and it must still be the first conjunct.
+      expect(seam, `${marker} reaches its offline seam without the operator fact`).toContain(
+        "fixtureSeamFor(tenantId) &&",
       );
       expect(body, `${marker} still tests the assembled prompt for the sentinel`).not.toContain(
         "safePrompt.includes(",

@@ -1,5 +1,10 @@
 # Playbook: Live Voice Sessions
 
+> Last verified: 2026-09-06 (36-01, G24 — `voiceDoc.ts`'s review seam moved from `offlineSeamAvailable()`
+> to `fixtureSeamFor(tenantId)`, and `draftVoiceBrief`'s `SMOKE::route=` transcript sentinel goes through
+> `parseSmoke(text, tenantId)`. Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. `voice.test.ts` plants its Realtime key with `vi.stubEnv` now (the
+> raw assignment leaked across files) and allow-lists its tenant — the dev deployment's exact shape.)
+
 > Last verified: 2026-09-05 (33.2-04 â€” voiceDoc.ts resolves its model through `convex/lib/models.ts`;
 > its local resolver copy could not route an `or/` id (see vault.md). One-line import swap.)
 >

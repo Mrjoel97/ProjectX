@@ -328,6 +328,7 @@
   "production-beta.md": [
     "packages/backend/convex/lib/env.ts",
     "packages/backend/convex/env.test.ts",
+    "packages/backend/convex/fixtureSeam.test.ts",
     "packages/backend/convex/ops.ts",
     ".github/workflows/deploy-production.yml"
   ],

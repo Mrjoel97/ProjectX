@@ -215,6 +215,9 @@ describe("envCheck is owner-only and leaks nothing", () => {
     vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
     vi.stubEnv("CONVEX_SITE_URL", "https://woozy-wren-368.convex.site");
     vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://woozy-wren-368.convex.site/gmail/callback");
+    // 36-01: `ready` also requires NO active fixture seam, and the unit suite runs with the
+    // keyless opt-in set (`vitest.config.mts`) — clear it, since this test is about FEATURES.
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "");
     const t = convexTest(schema, modules);
     // SEED THE REGISTRY FIRST. As of 2026-08-30 `ready` also turns on the skill registry, and a
     // fresh convexTest database has no rows — so without this the assertion below would be false
@@ -269,6 +272,7 @@ describe("an UNSEEDED SKILL REGISTRY is a broken deployment, and this screen now
 
   test("seeding clears it — so the check tracks the registry, not a constant", async () => {
     setEnvGreen();
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", ""); // 36-01: this test is about the REGISTRY dimension
     const t = convexTest(schema, modules);
     const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
     await t.mutation(internal.skills.seedSkills, {});
@@ -338,6 +342,7 @@ describe("ADR-022: a SET but EPHEMERAL origin is caught, which missingRequired c
     vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
     vi.stubEnv("CONVEX_SITE_URL", "https://woozy-wren-368.convex.site");
     vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://woozy-wren-368.convex.site/gmail/callback");
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", ""); // 36-01: this test is about ORIGINS, not fixtures
 
     const t = convexTest(schema, modules);
     // Seed the registry: `ready` also turns on the skill rows now, and this test is about ORIGINS.
@@ -349,6 +354,27 @@ describe("ADR-022: a SET but EPHEMERAL origin is caught, which missingRequired c
 
     expect(result.nonDurableOrigins).toEqual([]);
     expect(result.ready).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
+  // 36-01 (owner decision, ADR-035). A deployment running ANY fixture seam fakes a provider, so the
+  // headline must say NOT ready — not merely list the name under it. MUTATION that must turn this
+  // RED: drop `result.fixturesActive.length === 0` from `ready` in ops.ts.
+  test("an ACTIVE fixture seam makes the deployment NOT ready, and is named", async () => {
+    for (const name of REQUIRED_ENV) vi.stubEnv(name, "set");
+    vi.stubEnv("SITE_URL", "https://www.pikar-ai.com");
+    vi.stubEnv("CONVEX_SITE_URL", "https://woozy-wren-368.convex.site");
+    vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", "https://woozy-wren-368.convex.site/gmail/callback");
+    vi.stubEnv("PIKAR_OFFLINE_FIXTURES", "");
+    vi.stubEnv("PIKAR_FIXTURE_TENANT_IDS", "e2e_user,smoke");
+
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.skills.seedSkills, {});
+    const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
+    const result = await t.withIdentity({ subject: `${ownerId}|s` }).query(api.ops.envCheck, {});
+
+    expect(result.fixturesActive).toEqual(["PIKAR_FIXTURE_TENANT_IDS"]);
+    expect(result.ready).toBe(false);
     vi.unstubAllEnvs();
   });
 

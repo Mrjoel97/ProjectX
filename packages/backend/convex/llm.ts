@@ -128,7 +128,11 @@ import {
 import { buildInvoiceReminderTool } from "./invoiceReminders";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
-import { NODE_ONLY_MODEL_PREFIX, resolveModel as resolveSharedModel } from "./lib/models";
+import {
+  fixtureSeamFor,
+  NODE_ONLY_MODEL_PREFIX,
+  resolveModel as resolveSharedModel,
+} from "./lib/models";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
 import { buildRevenueTools, isRevenueToolGrant } from "./revenueTools";
 
@@ -867,12 +871,14 @@ export const probeGemini = internalAction({
 //   cache=1     — flow through preCall + the action cache (exercise the cache path)
 //   fail=primary — force the primary model to throw so the real fallback path runs
 // It degrades only the caller's OWN request; no cross-tenant effect.
-// ponytail: content sentinel, not an env flag — keeps the seam per-request and out of
-// shared deployment config. Remove once a mock-gateway smoke exists.
+// 36-01 (ADR-035): the sentinel only SELECTS the fixture. WHETHER one may run is the operator
+// fact `fixtureSeamFor(tenantId)`, checked inside the parser so no caller can forget it. Remove
+// the grammar altogether once a mock-gateway smoke exists.
 type Route = RoutingDecision["route"];
 const SMOKE_ROUTES: readonly Route[] = ["direct_llm", "direct_tool", "sub_agent"];
 type Smoke = { route: Route | "unknown"; cache: boolean; failPrimary: boolean };
-function parseSmoke(text: string): Smoke | null {
+export function parseSmoke(text: string, tenantId: string): Smoke | null {
+  if (!fixtureSeamFor(tenantId)) return null;
   const m = text.match(/^SMOKE::route=([a-z_]+)::/);
   if (!m) return null;
   return {
@@ -955,7 +961,7 @@ export const routeUncached = internalAction({
         payload: { model: m, skillVersion, stage: "route" },
       });
 
-    const smoke = parseSmoke(safeText);
+    const smoke = parseSmoke(safeText, tenantId);
     if (smoke) {
       await auditCalled(model);
       if (smoke.route === "unknown") throw new Error("unknown_route");
@@ -1054,7 +1060,7 @@ export const draftUncached = internalAction({
     const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
       name: EMAIL_DRAFTER_SKILL,
     });
-    const smoke = parseSmoke(safeText);
+    const smoke = parseSmoke(safeText, tenantId);
     const prompt =
       lastInstruction && instructionHash
         ? `${safeText}\n\nRevision instruction: ${lastInstruction}`
@@ -1146,7 +1152,7 @@ export const draftCockpit = internalAction({
   },
   handler: async (
     ctx,
-    { safeText, safeTextHash, greetingName },
+    { tenantId, safeText, safeTextHash, greetingName },
   ): Promise<{ subject: string; body: string }> => {
     // Load the drafter FIRST (no hardcoded prompt — CLAUDE.md §5); fails closed
     // (throws NO_ACTIVE_SKILL) when unseeded, so a hardcoded fallback can never sneak in.
@@ -1154,7 +1160,7 @@ export const draftCockpit = internalAction({
       internal.skills.getActiveSkill,
       { name: EMAIL_DRAFTER_SKILL },
     );
-    const smoke = parseSmoke(safeText);
+    const smoke = parseSmoke(safeText, tenantId);
     // Prepend the greeting instruction (name only) so the body opens "Hi <name>,".
     const prompt = greetingName
       ? `Open the email body with the greeting "Hi ${greetingName},".\n\n${safeText}`
@@ -2093,7 +2099,9 @@ export function buildCockpitTools(
     }
     const others = existing.filter((_, j) => j !== replaceIndex);
     // Pin the date offline so SMOKE fixtures stay byte-deterministic; real time otherwise.
-    const today = parseSmoke(safeText) ? "1970-01-01" : new Date().toISOString().slice(0, 10);
+    const today = parseSmoke(safeText, tenantId)
+      ? "1970-01-01"
+      : new Date().toISOString().slice(0, 10);
     const filename = buildDocFilename(
       topic,
       today,
@@ -3749,7 +3757,8 @@ export function buildCockpitTools(
         additionalProperties: false,
       }),
       execute: async ({ parentId }): Promise<string> => {
-        if (parentId?.startsWith("SMOKE::"))
+        // 36-01 (ADR-035): a model-composed argument never selects a fixture on its own.
+        if (parentId?.startsWith("SMOKE::") && fixtureSeamFor(tenantId))
           return "Drive folder: Smoke folder [id: smoke-folder]. No files at this level.";
         try {
           const result = await ctx.runAction(api.vaultDrive.listDriveFolders, { parentId });
@@ -3787,7 +3796,7 @@ export function buildCockpitTools(
         additionalProperties: false,
       }),
       execute: async ({ query }): Promise<string> => {
-        if (query.startsWith("SMOKE::"))
+        if (query.startsWith("SMOKE::") && fixtureSeamFor(tenantId))
           return "Drive search found 1 item: Smoke result (file, readable) [id: smoke-file].";
         try {
           const result = await ctx.runAction(api.vaultDrive.findInDrive, { query });
@@ -5364,7 +5373,8 @@ type AgentSmokeOp =
 
 // Exported for the round-trip test only (the callTimeoutMsFor precedent): the `create=` grammar is
 // what plan 18-07's e2e depends on, and asserting it against the real parser beats re-typing it.
-export function parseAgentSmoke(text: string): AgentSmokeOp | null {
+export function parseAgentSmoke(text: string, tenantId: string): AgentSmokeOp | null {
+  if (!fixtureSeamFor(tenantId)) return null; // 36-01 (ADR-035): the operator fact comes first
   const m = text.match(/^SMOKE::agent::([\s\S]+)$/);
   if (!m?.[1]) return null;
   const spec = m[1].trim();
@@ -5699,7 +5709,7 @@ export const runCockpitAgent = internalAction({
 
     // 4. Offline sentinel path (Plan 05 E2E): one op → one governed tool call, no generateText. The
     //    SMOKE path pins a deterministic clock so sendTime= resolves offline (§2-D — never the model).
-    const smokeOp = parseAgentSmoke(text);
+    const smokeOp = parseAgentSmoke(text, tenantId);
     // Code-owned intent routing determines whether this turn may see the Gmail rail. A genuine
     // email action with no grant gets a just-in-time connection request; every other capability
     // continues without Gmail. SMOKE remains the deterministic offline tool harness.
@@ -5834,7 +5844,7 @@ export const runCockpitAgent = internalAction({
     // REAL runAgentLoop (no gateway), so the driver's agent.timeout path is exercisable end-to-end.
     // Never a production input — a real turn never carries this exact text (parseAgentSmoke returns
     // null for it, so it falls through here rather than a tool op).
-    const forceTimeout = text.trim() === "SMOKE::agent::timeout";
+    const forceTimeout = fixtureSeamFor(tenantId) && text.trim() === "SMOKE::agent::timeout";
     const timeoutModel = (): LanguageModel =>
       new MockLanguageModelV4({
         doGenerate: async () => {
@@ -6075,7 +6085,7 @@ export const route = internalAction({
       tenantId,
       safeTextHash,
     });
-    const smoke = parseSmoke(safeText);
+    const smoke = parseSmoke(safeText, tenantId);
     if (smoke && !smoke.cache) {
       if (smoke.route === "unknown") throw new Error("unknown_route");
       return {
@@ -6136,7 +6146,7 @@ export const draft = internalAction({
       tenantId,
       safeTextHash,
     });
-    const smoke = parseSmoke(safeText);
+    const smoke = parseSmoke(safeText, tenantId);
     if (smoke && !smoke.cache) {
       return {
         blocked: null,
@@ -6226,7 +6236,7 @@ export const draftDocument = internalAction({
   },
   handler: async (
     ctx,
-    { safeText, safeTextHash, skillVersion, skillName },
+    { tenantId, safeText, safeTextHash, skillVersion, skillName },
   ): Promise<{ title: string; markdown: string }> => {
     // Load the drafter FIRST (no hardcoded prompt — §5); fails closed (throws NO_ACTIVE_SKILL
     // unseeded / NO_SUCH_SKILL_VERSION on a missing pin), so a hardcoded fallback can never sneak
@@ -6236,7 +6246,7 @@ export const draftDocument = internalAction({
       skillVersion !== undefined
         ? await ctx.runQuery(internal.skills.getSkillVersion, { name, version: skillVersion })
         : await ctx.runQuery(internal.skills.getActiveSkill, { name });
-    const smoke = parseSmoke(safeText);
+    const smoke = parseSmoke(safeText, tenantId);
 
     try {
       if (smoke) {
@@ -6511,7 +6521,7 @@ export const draftReply = internalAction({
     const original = originalBody.slice(0, BODY_TRUNCATE_CHARS);
     const prompt = [safeText, "--- ORIGINAL MESSAGE (context only) ---", original].join("\n\n");
 
-    const smoke = parseSmoke(safeText);
+    const smoke = parseSmoke(safeText, tenantId);
     if (smoke) {
       // failPrimary throws INTO the catch so the real fallback path runs; else a deterministic
       // offline body (no model call, no spend) — the E2E/eval path.
@@ -6621,7 +6631,7 @@ export const draftVoiceBrief = internalAction({
 
     // SMOKE:: sentinel on the first turn → deterministic offline brief, NO model call, NO spend.
     // The FULL passed transcript is welded verbatim (never model-authored), exactly as the live path.
-    if (parseSmoke(transcript[0]?.text ?? "")) {
+    if (parseSmoke(transcript[0]?.text ?? "", tenantId)) {
       return buildBriefMarkdown(SMOKE_BRIEF_SECTIONS, transcript, language);
     }
 

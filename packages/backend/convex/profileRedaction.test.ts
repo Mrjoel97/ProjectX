@@ -10,7 +10,7 @@
 import type { ProfileInput } from "@pikar/core";
 import { serializeProfile } from "@pikar/core";
 import { convexTest, type TestConvex } from "convex-test";
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/schema.js";
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
@@ -30,8 +30,12 @@ const workpoolModules = import.meta.glob(
 
 const TENANT = "tenant_redaction";
 
+// 36-01: a stub, not a raw assignment — the raw form leaked the key into later files in the worker,
+// and a leaked key now closes every `SMOKE::` gate downstream (`fixtureSeamFor`).
+afterEach(() => vi.unstubAllEnvs());
+
 function setup(): TestConvex<typeof schema> {
-  process.env.OPENAI_API_KEY = "sk-redaction-test-key";
+  vi.stubEnv("OPENAI_API_KEY", "sk-redaction-test-key");
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("workflow", workflowSchema, workflowModules);

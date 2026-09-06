@@ -29,7 +29,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { internalAction, internalQuery } from "./_generated/server";
-import { resolveModel } from "./lib/models";
+import { fixtureSeamFor, resolveModel } from "./lib/models";
 
 // Per-call wall-clock ceiling (mirrors llm.ts). One retry budget: SDK maxRetries:1.
 const CALL_TIMEOUT_MS = 45_000;
@@ -132,7 +132,10 @@ export const extractGraph = internalAction({
 
     // Offline deterministic path (Pitfall 4): a SMOKE:: sentinel returns a fixed graph, NO model call.
     // Stays ABOVE the cap so the offline fixture path is unaffected by it.
-    if (safeText.startsWith(SMOKE_GRAPH_PREFIX)) return smokeGraphFixture(safeText);
+    // 36-01 (ADR-035): the sentinel SELECTS the fixture; the operator fact decides WHETHER. A Drive
+    // file a stranger shared in used to be able to write this tenant's graph by starting with it.
+    if (safeText.startsWith(SMOKE_GRAPH_PREFIX) && fixtureSeamFor(tenantId))
+      return smokeGraphFixture(safeText);
 
     // REDACT-THEN-CAP, never cap-then-redact: the scan above must see the WHOLE document, or PII
     // living in the tail escapes both the scan and its audit counts. The cap only bounds what is
@@ -262,7 +265,8 @@ export const classifyDoc = internalAction({
       const safeText = scan.value.safeText;
 
       // Offline deterministic path, ABOVE the cap so the fixture is unaffected by it.
-      if (safeText.startsWith(SMOKE_PREFIX)) return smokeIdentityFixture(safeText);
+      if (safeText.startsWith(SMOKE_PREFIX) && fixtureSeamFor(tenantId))
+        return smokeIdentityFixture(safeText);
 
       // A doc with no text has nothing to identify. `getDocText` returns "" for a missing or
       // foreign row as well, so this also stops a tenant mismatch from buying an empty prompt.

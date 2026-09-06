@@ -2108,19 +2108,21 @@ test("parseAgentSmoke: create=<form>:<topic> splits on the FIRST colon, nested S
   // The nested SMOKE::route prefix is LOAD-BEARING and part of the TOPIC: `create=` only picks the
   // tool, it does not keep the model out of the loop. parseSmoke is ^-anchored on the safeText
   // draftDocument receives, so the prefix must be handed through unstripped.
-  expect(parseAgentSmoke(`SMOKE::agent::create=long:${SMOKE} Quarterly one-pager`)).toEqual({
+  expect(
+    parseAgentSmoke(`SMOKE::agent::create=long:${SMOKE} Quarterly one-pager`, "tenant_parser"),
+  ).toEqual({
     kind: "create",
     form: "long",
     topic: `${SMOKE} Quarterly one-pager`,
   });
-  expect(parseAgentSmoke("SMOKE::agent::create=short:a LinkedIn post")).toEqual({
+  expect(parseAgentSmoke("SMOKE::agent::create=short:a LinkedIn post", "tenant_parser")).toEqual({
     kind: "create",
     form: "short",
     topic: "a LinkedIn post",
   });
   // Malformed drives NOTHING — exactly like a malformed regenerate=.
-  expect(parseAgentSmoke("SMOKE::agent::create=long")).toBeNull(); // no colon
-  expect(parseAgentSmoke("SMOKE::agent::create=medium:x")).toBeNull(); // outside the closed enum
+  expect(parseAgentSmoke("SMOKE::agent::create=long", "tenant_parser")).toBeNull(); // no colon
+  expect(parseAgentSmoke("SMOKE::agent::create=medium:x", "tenant_parser")).toBeNull(); // outside the closed enum
 });
 
 test("SMOKE::agent::create drives ONE governed createDocument OFFLINE and records tool: createDocument", async () => {
@@ -2216,16 +2218,18 @@ test("an UNPINNED turn writes no attribution row — production does not pay for
 });
 
 test("parseAgentSmoke accepts only the closed Drive list/find grammar", () => {
-  expect(parseAgentSmoke("SMOKE::agent::drive=list:SMOKE::folder-1")).toEqual({
+  expect(parseAgentSmoke("SMOKE::agent::drive=list:SMOKE::folder-1", "tenant_parser")).toEqual({
     kind: "driveList",
     parentId: "SMOKE::folder-1",
   });
-  expect(parseAgentSmoke("SMOKE::agent::drive=find:SMOKE::quarterly plan")).toEqual({
+  expect(
+    parseAgentSmoke("SMOKE::agent::drive=find:SMOKE::quarterly plan", "tenant_parser"),
+  ).toEqual({
     kind: "driveFind",
     query: "SMOKE::quarterly plan",
   });
-  expect(parseAgentSmoke("SMOKE::agent::drive=import:folder-1")).toBeNull();
-  expect(parseAgentSmoke("SMOKE::agent::drive=find:")).toBeNull();
+  expect(parseAgentSmoke("SMOKE::agent::drive=import:folder-1", "tenant_parser")).toBeNull();
+  expect(parseAgentSmoke("SMOKE::agent::drive=find:", "tenant_parser")).toBeNull();
 });
 
 test("SMOKE Drive list/find round-trip offline at $0 with truthful tool traces", async () => {
@@ -2640,17 +2644,19 @@ test("stageCrmWrite cannot complete or cancel a follow-up — only the human clo
 });
 
 test("parseAgentSmoke: crm=<email>[:<note>] and its op→tool mapping", () => {
-  expect(parseAgentSmoke("SMOKE::agent::crm=new@example.com")).toEqual({
+  expect(parseAgentSmoke("SMOKE::agent::crm=new@example.com", "tenant_parser")).toEqual({
     kind: "crm",
     email: "new@example.com",
     note: undefined,
   });
-  expect(parseAgentSmoke("SMOKE::agent::crm=new@example.com:send the quote")).toEqual({
+  expect(
+    parseAgentSmoke("SMOKE::agent::crm=new@example.com:send the quote", "tenant_parser"),
+  ).toEqual({
     kind: "crm",
     email: "new@example.com",
     note: "send the quote",
   });
-  expect(parseAgentSmoke("SMOKE::agent::crm=")).toBeNull(); // no address drives nothing
+  expect(parseAgentSmoke("SMOKE::agent::crm=", "tenant_parser")).toBeNull(); // no address drives nothing
 });
 
 test("SMOKE::agent::crm drives ONE governed stageCrmWrite OFFLINE at $0 and traces it", async () => {

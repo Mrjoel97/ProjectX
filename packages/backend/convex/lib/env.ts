@@ -400,6 +400,18 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
       'Nothing. Set to "1" ON A KEYLESS deployment = folder digests and voice-doc review are FAKED from a local fixture with no model call. Ignored while either model key is set.',
   },
   {
+    // `lib/models.fixtureSeamFor(tenantId)` — the WHO half of the offline-fixture rule (36-01,
+    // ADR-035). A comma-separated allowlist of tenant ids whose `SMOKE::`-prefixed content may
+    // select an offline fixture ON A KEYED deployment — the browser and smoke suites run against
+    // one. It names WHO, never what: no document, email, folder name, upload or model-composed
+    // argument can add an id here. A healthy production has it unset, and `ops.envCheck` reports
+    // the deployment NOT ready while it (or any fixture-tier name) is set.
+    name: "PIKAR_FIXTURE_TENANT_IDS",
+    tier: "fixture",
+    whatBreaks:
+      "Nothing. Set = the listed tenants' `SMOKE::` content is answered from local fixtures with no provider call, even on a keyed deployment.",
+  },
+  {
     name: "PHASE17_ALLOW_DISPOSABLE_GRAPH_PROBE",
     tier: "fixture",
     whatBreaks: "Nothing. Set = the Graph concurrency probe may run against a disposable account.",
@@ -446,6 +458,22 @@ export const FEATURE_ENV = ENV_MANIFEST.filter((e) => e.tier === "feature").map(
 export const OFFLINE_FIXTURES_ENV = "PIKAR_OFFLINE_FIXTURES";
 export const isOfflineFixtureConsent = (value: string | undefined): boolean =>
   value?.trim() === "1";
+
+export const FIXTURE_TENANTS_ENV = "PIKAR_FIXTURE_TENANT_IDS";
+/**
+ * Is `tenantId` one of the operator-listed fixture tenants? (36-01, ADR-035.) Exact, trimmed,
+ * comma-separated membership — never a prefix or a pattern, so a real tenant id can only match by
+ * being written into the deployment's environment on purpose. An empty tenant id is never listed.
+ */
+export const isFixtureTenant = (value: string | undefined, tenantId: string): boolean => {
+  const id = tenantId.trim();
+  if (id === "") return false;
+  return (value ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "")
+    .includes(id);
+};
 
 /**
  * Which manifest names are unset, by tier. NAMES ONLY — never a value, never a length, never a

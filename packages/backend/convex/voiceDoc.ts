@@ -43,7 +43,7 @@ import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { tenantAction, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
-import { offlineSeamAvailable, resolveModel } from "./lib/models";
+import { fixtureSeamFor, resolveModel } from "./lib/models";
 
 /**
  * Collect the passages of THIS session's document that match `query`. Returns `[]` — never
@@ -477,7 +477,7 @@ export const reviewDocument = internalAction({
     // and takes the model path (which throws if there is no key, rather than fabricating).
     const first = transcript[0]?.text ?? "";
     const raw: RawDocReview =
-      offlineSeamAvailable() && first.startsWith(SMOKE_REVIEW_PREFIX)
+      fixtureSeamFor(tenantId) && first.startsWith(SMOKE_REVIEW_PREFIX)
         ? smokeDocReview(first.slice(SMOKE_REVIEW_PREFIX.length).trim(), docText)
         : await modelDocReview(ctx, tenantId, sessionId, transcript, doc);
 

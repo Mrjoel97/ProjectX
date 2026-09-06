@@ -30,7 +30,7 @@ import { api, internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import { fogIntegration } from "./lib/foglamp";
 import { tenantAction } from "./lib/functions";
-import { resolveModel, transcriptionModel, transcriptionUsage } from "./lib/models";
+import { fixtureSeamFor, resolveModel, transcriptionModel, transcriptionUsage } from "./lib/models";
 
 // Per-call wall-clock ceiling (mirrors llm.ts's CALL_TIMEOUT_MS).
 const CALL_TIMEOUT_MS = 45_000;
@@ -71,7 +71,7 @@ async function transcribeAudio(
   artifactId: Id<"intakeArtifacts">,
 ): Promise<string> {
   const sniffed = decodeUtf8(bytes);
-  if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX))
+  if (sniffed.startsWith(SMOKE_TRANSCRIBE_PREFIX) && fixtureSeamFor(tenantId))
     return sniffed.slice(SMOKE_TRANSCRIBE_PREFIX.length);
 
   // 33.2-05: through OpenRouter (lib/models.ts); the provider's own bill first — see vaultTranscribe.
@@ -118,7 +118,8 @@ async function extractVisual(
   artifactId: Id<"intakeArtifacts">,
 ): Promise<string> {
   const sniffed = decodeUtf8(bytes);
-  if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX)) return sniffed.slice(SMOKE_EXTRACT_PREFIX.length);
+  if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX) && fixtureSeamFor(tenantId))
+    return sniffed.slice(SMOKE_EXTRACT_PREFIX.length);
 
   const skill: { body: string } = await ctx.runQuery(internal.skills.getActiveSkill, {
     name: ATTACHMENT_EXTRACTOR_SKILL,
