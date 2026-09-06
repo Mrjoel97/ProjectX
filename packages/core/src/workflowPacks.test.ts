@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { KNOWLEDGE_SOURCES, renderSourceGap } from "./knowledgeSearch";
+import { grantsFor } from "./toolGrants";
 import { WORKFLOW_EVENT_STREAM_IDS } from "./workflowPackMetrics";
 import {
   hasPassingPackBrowserEvidence,
@@ -405,18 +406,28 @@ describe("the grant is code-owned and exact", () => {
 });
 
 describe("packs are leaf agents — structurally, not by wording", () => {
-  // Owner decision B. `runAgentLoop` derives BOTH executive-only grants from `toolNames ===
-  // undefined`, and a pack always supplies an array — so dispatch and skill authoring are not
-  // "withheld", they are never built. This scan is what stops that from silently becoming untrue.
-  test("llm.ts still derives dispatch and skill authoring from `toolNames === undefined`", () => {
+  // Owner decision B. BOTH executive-only grants derive from `toolNames === undefined` — since
+  // Phase 38 in ONE place, `grantsFor` (./toolGrants.ts), which `runAgentLoop` calls — and a pack
+  // always supplies an array, so dispatch and skill authoring are not "withheld", they are never
+  // built. The behavioural half is the guard; the source half stops the derivation drifting back
+  // into the node module where this package cannot see it.
+  test("dispatch and skill authoring derive from the ABSENCE of an allow-list (grantsFor)", () => {
+    for (const toolNames of [[], ["dispatchResearch", "authorSkillCandidate", "proposeImage"]]) {
+      const g = grantsFor({ toolNames });
+      expect(g.dispatch, `dispatch granted to an allow-list ${JSON.stringify(toolNames)}`).toBe(
+        false,
+      );
+      expect(g.skillAuthoring, "skill authoring granted to an allow-list").toBe(false);
+    }
+    expect(grantsFor({}).dispatch).toBe(true);
+    const grants = readFileSync(new URL("./toolGrants.ts", import.meta.url), "utf8");
+    expect(grants).toContain("const executive = toolNames === undefined");
+    expect(grants).toContain("dispatch: executive,");
+    expect(grants).toContain("skillAuthoring: executive,");
     const src = llmSource();
-    expect(src, "grantDispatch is no longer derived from the absence of an allow-list").toContain(
-      "grantDispatch: toolNames === undefined",
+    expect(src, "runAgentLoop no longer derives its grants through grantsFor").toContain(
+      "const grants = grantsFor({",
     );
-    expect(
-      src,
-      "grantSkillAuthoring is no longer derived from the absence of an allow-list",
-    ).toContain("grantSkillAuthoring: toolNames === undefined");
     // …and the filter must stay an EXACT-NAME filter over the built record. A truthiness test would
     // hand a zero-tool pack the full set; an `activeTools`-style filter would leave the withheld
     // tool's execute closure reachable.

@@ -70,6 +70,7 @@ import type * as lib_foglamp from "../lib/foglamp.js";
 import type * as lib_functions from "../lib/functions.js";
 import type * as lib_hash from "../lib/hash.js";
 import type * as lib_models from "../lib/models.js";
+import type * as lib_toolContextArgs from "../lib/toolContextArgs.js";
 import type * as llm from "../llm.js";
 import type * as media from "../media.js";
 import type * as mediaComplete from "../mediaComplete.js";
@@ -215,6 +216,7 @@ declare const fullApi: ApiFromModules<{
   "lib/functions": typeof lib_functions;
   "lib/hash": typeof lib_hash;
   "lib/models": typeof lib_models;
+  "lib/toolContextArgs": typeof lib_toolContextArgs;
   llm: typeof llm;
   media: typeof media;
   mediaComplete: typeof mediaComplete;

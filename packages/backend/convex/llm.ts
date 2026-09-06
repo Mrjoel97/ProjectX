@@ -65,6 +65,7 @@ import {
   exceedsByteCap,
   type FigureClaim,
   formatSpec,
+  grantsFor,
   type InboxMessageMeta,
   type InlineRun,
   inlineRuns,
@@ -72,6 +73,7 @@ import {
   isNeedsYou,
   isWorkflowPackSkill,
   joinDigest,
+  NO_GRANTS,
   packOutputIsDocument,
   parseAddress,
   parseCalendarProvider,
@@ -83,6 +85,7 @@ import {
   renderHtmlDocument,
   SPECIALISTS,
   selectForDigest,
+  type ToolGrants,
   tokenizeMarkdown,
   toWinAnsi,
   validateFigureClaim,
@@ -133,8 +136,9 @@ import {
   NODE_ONLY_MODEL_PREFIX,
   resolveModel as resolveSharedModel,
 } from "./lib/models";
+import { TOOL_CONTEXT_ARGS } from "./lib/toolContextArgs";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
-import { buildRevenueTools, isRevenueToolGrant } from "./revenueTools";
+import { buildRevenueTools } from "./revenueTools";
 
 // Per-call wall-clock ceiling. Retry budget lives in ONE layer: SDK maxRetries:1 on the
 // primary + one CHEAP_MODEL fallback (the pipeline runs these steps with retry:false).
@@ -1737,81 +1741,65 @@ const DECLARED_UNSUPPORTED_REPLY =
   "not the thing asked about, and what would settle it.";
 
 /**
+ * The TRUSTED inputs a cockpit tool closure may read (Phase 38). Every field arrives from code — a
+ * validator-checked internalAction arg, a driver-minted id, the eval runner — never from the model.
+ * A new input the tools need is a new optional field HERE, added once; the eight-positional
+ * signature this replaced grew one append-only arg per phase and each one was threaded to some
+ * doors and silently dropped at others (the 19-11 clock, the 21-03 tenant pin).
+ *
+ *   clientContext — the client's clock + IANA zone (§2-D): setSendTime reads nowMs/ianaTz from
+ *     HERE. Absent (and not the SMOKE path) → setSendTime defers to the plan-card date picker.
+ *   skillVersions — EVAL-01 pin: the eval runner pins the CANDIDATE skill row, so a pinned
+ *     document-drafter is what renderAndStore's draftDocument loads. Absent = the active skill.
+ *   tenantSkillIds — 21-03 (SKILL-01), `skillVersions`' twin one scope down: an EXACT `tenantSkills`
+ *     row id per skill name. Both ride to the specialists this record dispatches — a dispatched
+ *     specialist that loads the ACTIVE row while the evidence claims the pin is the 16-09 defect.
+ *   threadId/rootRequestId — DISPATCH LINEAGE (16-06, ADR-008) for the scheduled dispatch and
+ *     authoring tools, and the turn `refuse` rows key on. Not an emission channel: no tool emits a
+ *     step row, the SDK does (see the CKPT-05 note at runAgentLoop).
+ *   evalRevenueFixtureId — Phase 28 eval-only fixture selector, set only by runRevenueCandidateEval
+ *     after its throwaway-tenant and closed-corpus checks; absent keeps production unchanged.
+ */
+export type ToolContext = {
+  ctx: GenericActionCtx<DataModel>;
+  tenantId: string;
+  planId: Id<"plans">;
+  clientContext?: { tz: string; nowMs: number };
+  skillVersions?: Record<string, number>;
+  tenantSkillIds?: Record<string, Id<"tenantSkills">>;
+  threadId?: string;
+  rootRequestId?: string;
+  evalRevenueFixtureId?: string;
+};
+
+/**
  * Build the governed tool set for one plan (AGNT-01/02). Each tool wraps its primitive and
  * preserves that primitive's governance; nothing trusts a structural fact from the model. Plan
  * 04 hands this set to generateText — Plan 03 ships them as independently testable wrappers.
+ *
+ * `grants` (`ToolGrants`, @pikar/core) decides which CONDITIONAL keys are BUILT — structural
+ * absence, never a filter after the fact: a filtered record still holds the closure and stays
+ * reachable via invokeTool. It is computed by `grantsFor` at the door that has the allow-list in
+ * scope (`runAgentLoop`), and is NEVER derived from `toolNames` inside this function: an allow-list
+ * is a REQUEST from the caller, and reading it here would let a specialist ask for an executive
+ * capability by name and receive it (ADR-007). Default `NO_GRANTS` = the bare shims' record.
+ * History, one line each: UAT-F2 `recipientEdits` (the post-pick continue turn withholds
+ * addRecipients/setRecipients/removeRecipient; resolveContacts stays — it writes candidates);
+ * 16-06/ACTN-03 `webResearch` + `dispatch`; SKILL-02 `skillAuthoring`, kept SEPARATE from dispatch
+ * because a future context that needs one must not silently receive both; Phase 28 `revenueReads`
+ * (tuple identity) + REVN-06 `invoiceReminderStage`; 27-10 `documentIsDeliverable` (from the skill
+ * NAME in runSpecialistTurn); `gmail` (an explicit email route backed by a live grant).
  */
-export function buildCockpitTools(
-  ctx: GenericActionCtx<DataModel>,
-  tenantId: string,
-  planId: Id<"plans">,
-  // The TRUSTED client's clock + IANA zone (§2-D): setSendTime reads nowMs/ianaTz from HERE, never
-  // from the model. Append-only 4th arg — every existing caller keeps working. Absent (and not the
-  // SMOKE path) → setSendTime defers to the plan-card date picker (Wave 3's confirm source-of-truth).
-  clientContext?: { tz: string; nowMs: number },
-  // EVAL-01 version pin (append-only 5th arg, internal-only — never model-suppliable): the eval
-  // runner pins the CANDIDATE skill row it is evaluating, so a pinned document-drafter version is
-  // what renderAndStore's draftDocument call loads. Absent = active skill, byte-identical to today.
-  skillVersions?: Record<string, number>,
-  // UAT-F2 STRUCTURAL guard (append-only 6th arg): on the resolveRecipients post-pick re-invoke
-  // the panel picks are the ONLY legitimate recipient source, so the recipient-mutating tools
-  // (addRecipients/setRecipients/removeRecipient) are ABSENT from the returned record — a
-  // fabricated overwrite is impossible by construction, not skill wording. ONLY the
-  // resolveRecipients continue turn passes true; every other caller (sendCockpitMessage, the eval
-  // runner, the test shims) keeps the full set byte-identically. resolveContacts stays — it writes
-  // candidates, not recipients, and proposePlan's pending-pick gate covers it.
-  omitRecipientEdits?: boolean,
-  // Phase-16 (DISP-02/ACTN-03). Append-only 7th arg — every existing caller keeps working and
-  // gets a byte-identical record. Two orthogonal things ride it:
-  //   grantWebResearch — the hosted-search key is BUILT only when granted (structural absence,
-  //     the omitRecipientEdits precedent at :619-626). Unconditional construction would hand the
-  //     EXECUTIVE agent web search on every cockpit turn, because runAgentLoop returns the FULL
-  //     record when toolNames === undefined (:1704).
-  //   threadId/rootRequestId — DISPATCH LINEAGE for the SCHEDULED research tool (16-06): the tool
-  //     stages a plan row and schedules the run, it does not run a loop inline. Not an emission
-  //     channel. See the amended CKPT-05 note at runAgentLoop.
-  //   grantDispatch — the EXECUTIVE-ONLY flag (16-06). Derived in runAgentLoop from
-  //     `toolNames === undefined`, never read here: `toolNames` is simply not in scope in this
-  //     function (the call site applies the filter to the RETURNED record).
-  agentContext?: {
-    grantWebResearch?: boolean;
-    grantDispatch?: boolean;
-    /**
-     * SKILL-02 (Phase 23). The EXECUTIVE-ONLY skill-authoring grant. Derived in `runAgentLoop`
-     * from `toolNames === undefined`, never read from `toolNames` here — `toolNames` is simply not
-     * in scope in this function. Kept SEPARATE from `grantDispatch` even though both derive from
-     * the same expression today: they are different capabilities, and collapsing them would mean
-     * a future context that legitimately needs one silently receives both.
-     */
-    grantSkillAuthoring?: boolean;
-    /** Phase 28: the exact revenue specialist tuple opens only the two bounded read tools. */
-    grantRevenueReads?: boolean;
-    /** REVN-06: executive-only staging; never derived from a specialist allow-list. */
-    grantInvoiceReminderStage?: boolean;
-    /** Phase 28 eval-only fixture selector. Set only by runRevenueCandidateEval after its
-     * throwaway-tenant and closed-corpus checks; absent keeps production construction unchanged. */
-    evalRevenueFixtureId?: string;
-    /**
-     * 27-10. True only for a workflow pack whose `output` contract IS a saved document, derived in
-     * `runSpecialistTurn` from the SKILL NAME (`packOutputIsDocument`). It BUILDS `saveAsDocument`
-     * and nothing else — see that tool for the measurement behind it. Never derived from
-     * `toolNames`: an allow-list is a request from the caller.
-     */
-    documentIsDeliverable?: boolean;
-    threadId?: string;
-    rootRequestId?: string;
-    /** True only for an explicit email route backed by a live Gmail grant. */
-    gmailEnabled?: boolean;
-  },
-  // 21-03 (SKILL-01). Append-only 8th arg, `skillVersions`' orthogonal twin one scope down: an
-  // EXACT `tenantSkills` row id per skill name, where `skillVersions` names a GLOBAL `<name>@<n>`.
-  // Both must ride to the specialists this record dispatches, for the identical reason 16-09
-  // recorded for `skillVersions`: a dispatched specialist that silently loads the ACTIVE row while
-  // the evidence claims the pin certifies a body that never executed. Accepting a pin here and not
-  // forwarding it would be exactly that defect — which is the one this argument's absence at
-  // `runCockpitAgent` already caused once (run `6e021dce`, 0/41).
-  tenantSkillIds?: Record<string, Id<"tenantSkills">>,
-) {
+export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_GRANTS) {
+  const {
+    ctx,
+    tenantId,
+    planId,
+    clientContext,
+    skillVersions,
+    tenantSkillIds,
+    evalRevenueFixtureId,
+  } = toolCtx;
   const webResearchTool = buildWebResearchTool();
   const saveAsDocumentTool = buildSaveAsDocumentTool();
 
@@ -1890,8 +1878,8 @@ export function buildCockpitTools(
       }),
       execute: async ({ question }): Promise<string> => {
         // Non-null asserted: the whole record key is absent unless both are present (the gate below).
-        const threadId = agentContext?.threadId as string;
-        const rootRequestId = agentContext?.rootRequestId as string;
+        const threadId = toolCtx.threadId as string;
+        const rootRequestId = toolCtx.rootRequestId as string;
         const staged = await ctx.runMutation(internal.plans.stageResearchPlan, {
           tenantId,
           threadId,
@@ -1953,8 +1941,8 @@ export function buildCockpitTools(
       }),
       execute: async ({ brief }): Promise<string> => {
         // Non-null asserted: the whole record key is absent unless both are present (the gate below).
-        const threadId = agentContext?.threadId as string;
-        const rootRequestId = agentContext?.rootRequestId as string;
+        const threadId = toolCtx.threadId as string;
+        const rootRequestId = toolCtx.rootRequestId as string;
         const staged = await ctx.runMutation(internal.plans.stageMediaPlan, {
           tenantId,
           threadId,
@@ -1998,7 +1986,7 @@ export function buildCockpitTools(
         additionalProperties: false,
       }),
       execute: async ({ prompt }): Promise<string> => {
-        const threadId = agentContext?.threadId as string;
+        const threadId = toolCtx.threadId as string;
         const staged = await ctx.runMutation(internal.plans.stageImagePlan, {
           tenantId,
           threadId,
@@ -2235,8 +2223,8 @@ export function buildCockpitTools(
       execute: async ({ name, authoredBody }): Promise<string> => {
         // Non-null asserted: the whole record key is absent unless both are present (the gate
         // below), exactly as dispatchResearch does it.
-        const threadId = agentContext?.threadId as string;
-        const rootRequestId = agentContext?.rootRequestId as string;
+        const threadId = toolCtx.threadId as string;
+        const rootRequestId = toolCtx.rootRequestId as string;
         try {
           const res = await ctx.runMutation(internal.skills.publishAgentCandidate, {
             tenantId,
@@ -2376,14 +2364,14 @@ export function buildCockpitTools(
         return `Found ${matches.length} contact(s) for "${name}": ${labels}. The user will pick one — do not guess the address.`;
       },
     }),
-    // Conditional spread (UAT-F2): under omitRecipientEdits the three recipient-mutating keys are
-    // NOT PRESENT at runtime — a hallucinated call throws NoSuchToolError before execute (the
+    // Conditional spread (UAT-F2): without `grants.recipientEdits` the three recipient-mutating keys
+    // are NOT PRESENT at runtime — a hallucinated call throws NoSuchToolError before execute (the
     // driver's catch saves a non-dead-ending error turn; still no write, still safe).
     // ponytail: the `as typeof` cast keeps the members REQUIRED in the static type — optional
     // members flip ai@7's onToolExecution* event types into a Dynamic/Static union the narrow
     // §4 destructures at the loop cannot read. The runtime truth (keys absent under the flag) is
     // unit-proven in cockpitTools.test.ts; the type states the full set every normal turn has.
-    ...(omitRecipientEdits ? ({} as typeof recipientEditTools) : recipientEditTools),
+    ...(grants.recipientEdits ? recipientEditTools : ({} as typeof recipientEditTools)),
     // ACTN-03. ONE more key of the ONE record — not a second generateText. A separate search-only
     // loop would carry `tools:` and FAIL dispatchGuard's "exactly one tool-bearing call site", and
     // it is the nested-loop hazard that test documents.
@@ -2404,9 +2392,9 @@ export function buildCockpitTools(
     // in turn degrades ai@7's onToolExecution* event types to a variant without `toolCall`. Same
     // type, different runtime presence — which is exactly the structural-absence property we want.
     // 22.1b: ONE flag, ONE spread — granting search without the declaration channel is structurally
-    // impossible, so the two can never drift apart. `grantWebResearch` is false when
+    // impossible, so the two can never drift apart. `grants.webResearch` is false when
     // `toolNames === undefined`, so the EXECUTIVE never sees `declareUnsupported` either.
-    ...(agentContext?.grantWebResearch
+    ...(grants.webResearch
       ? { ...webResearchTool, ...declareUnsupportedTool }
       : ({} as typeof webResearchTool & typeof declareUnsupportedTool)),
     // 27-10: BUILT only for a caller whose output contract is a saved document, the same structural
@@ -2414,29 +2402,27 @@ export function buildCockpitTools(
     // when `toolNames === undefined`, so unconditional construction would hand the EXECUTIVE agent a
     // second, content-free save channel it has no contract for. Derived in `runSpecialistTurn` from
     // the trusted skill NAME, never from `toolNames`: an allow-list is a request from the caller.
-    ...(agentContext?.documentIsDeliverable
-      ? saveAsDocumentTool
-      : ({} as typeof saveAsDocumentTool)),
+    ...(grants.documentIsDeliverable ? saveAsDocumentTool : ({} as typeof saveAsDocumentTool)),
     // DISP-02: present ONLY for the executive, and only when it has a turn identity to dispatch
     // under (no lineage ⇒ nothing to correlate the async run to). Same one-type-both-branches trick.
     // 20-08: ONE flag, ONE spread, both dispatch tools — the `webResearch`/`declareUnsupported`
     // precedent above. Media can never become reachable in a context where research is not.
-    ...(agentContext?.grantDispatch && agentContext.threadId && agentContext.rootRequestId
+    ...(grants.dispatch && toolCtx.threadId && toolCtx.rootRequestId
       ? { ...dispatchResearchTool, ...dispatchMediaTool, ...proposeImageTool }
       : ({} as typeof dispatchResearchTool & typeof dispatchMediaTool & typeof proposeImageTool)),
-    // SKILL-02: a SEPARATE flag from `grantDispatch`, deliberately. Both are derived from
-    // `toolNames === undefined` today, but they are different capabilities — dispatching a
-    // specialist spends money, authoring a skill changes what every future turn is told to be —
-    // and one flag would mean the next context that legitimately needs one silently gets both.
-    // Same one-type-both-branches trick as every gate above.
-    ...(agentContext?.grantSkillAuthoring && agentContext.threadId && agentContext.rootRequestId
+    // SKILL-02: a SEPARATE flag from `grants.dispatch`, deliberately. Both are derived from
+    // `toolNames === undefined` today (grantsFor), but they are different capabilities —
+    // dispatching a specialist spends money, authoring a skill changes what every future turn is
+    // told to be — and one flag would mean the next context that legitimately needs one silently
+    // gets both. Same one-type-both-branches trick as every gate above.
+    ...(grants.skillAuthoring && toolCtx.threadId && toolCtx.rootRequestId
       ? skillAuthoringTool
       : ({} as typeof skillAuthoringTool)),
-    ...(agentContext?.grantRevenueReads
-      ? buildRevenueTools(ctx, tenantId, planId, agentContext.evalRevenueFixtureId)
+    ...(grants.revenueReads
+      ? buildRevenueTools(ctx, tenantId, planId, evalRevenueFixtureId)
       : ({} as ReturnType<typeof buildRevenueTools>)),
-    ...(agentContext?.grantInvoiceReminderStage
-      ? buildInvoiceReminderTool(ctx, tenantId, planId, agentContext.evalRevenueFixtureId)
+    ...(grants.invoiceReminderStage
+      ? buildInvoiceReminderTool(ctx, tenantId, planId, evalRevenueFixtureId)
       : ({} as ReturnType<typeof buildInvoiceReminderTool>)),
     setSubject: tool({
       description: "Set the email subject line.",
@@ -3472,7 +3458,7 @@ export function buildCockpitTools(
             | "invalid_claim",
           sentence: string,
         ): Promise<string> => {
-          const turnId = agentContext?.rootRequestId;
+          const turnId = toolCtx.rootRequestId;
           if (turnId) {
             await ctx.runMutation(internal.agentSteps.refuse, {
               tenantId,
@@ -4412,7 +4398,7 @@ export function buildCockpitTools(
       },
     }),
   };
-  return applyGmailCapability(allTools, agentContext?.gmailEnabled ?? true);
+  return applyGmailCapability(allTools, grants.gmail);
 }
 
 // ── The governed Executive-Agent tool-loop (AGNT-01/02) ──────────────────────
@@ -4514,19 +4500,17 @@ async function runAgentLoop(
     fallback: PricedModel;
     // EVAL-01 pin — threads to buildCockpitTools so a pinned document-drafter rides the tool calls.
     skillVersions?: Record<string, number>;
-    // Activity trace (CKPT-05). Append-only optional args — the codebase's signature-evolution
-    // convention (buildCockpitTools' 4th `clientContext` / 5th `skillVersions`): every existing
-    // caller keeps working. A caller that supplies neither simply emits nothing (see the guard in
-    // the callbacks) rather than writing a malformed row.
+    // Activity trace (CKPT-05). Append-only optional args: every existing caller keeps working. A
+    // caller that supplies neither simply emits nothing (see the guard in the callbacks) rather
+    // than writing a malformed row.
     //
     // AMENDED Phase-16: this note used to end "They do NOT reach buildCockpitTools: the tools
     // don't emit, the SDK does — keep it that way (zero tool-wrapper edits)." Half of that still
     // holds and is the part worth protecting: **no tool emits a step row — the SDK does.** That
     // invariant stands. But `threadId`/`rootRequestId` DO now reach buildCockpitTools, as
-    // DISPATCH LINEAGE on the 7th `agentContext` arg (ADR-008: lineage travels as
-    // validator-checked call args), so the scheduled research tool can correlate its async run.
-    // Lineage in, emission still out. Left stale, this comment would document a rule the code
-    // violates.
+    // DISPATCH LINEAGE on its `ToolContext` (ADR-008: lineage travels as validator-checked call
+    // args), so the scheduled research tool can correlate its async run. Lineage in, emission
+    // still out. Left stale, this comment would document a rule the code violates.
     turnId?: string;
     threadId?: string;
     // 19-11 (§2-D, the ACTN-05 root cause). THE LOOP BUILDS ITS OWN TOOL SET, so every input
@@ -4541,6 +4525,11 @@ async function runAgentLoop(
     // UAT-F2: the loop builds its OWN tool set below, so the withholding flag must ride these args
     // too (append-only optional — every existing caller keeps working; absent = full set).
     omitRecipientEdits?: boolean;
+    // 21-03 tenant pin (Phase 38). The executive's dispatch tools forward it to the specialists they
+    // stage (dispatchResearch/dispatchMedia read it off the ToolContext), so it must ride the loop's
+    // args like every other input the loop's OWN tool build needs. Before Phase 38 only the SMOKE
+    // path forwarded it and the model-driven loop dropped it — the 21-03 class, one door short.
+    tenantSkillIds?: Record<string, Id<"tenantSkills">>;
     // Executive-only capability containment. Gmail tools are present only when this turn's
     // deterministic route selected email and the tenant has a live grant.
     gmailEnabled?: boolean;
@@ -4600,6 +4589,7 @@ async function runAgentLoop(
     threadId,
     clientContext,
     omitRecipientEdits,
+    tenantSkillIds,
     gmailEnabled,
     toolNames,
     evalRevenueFixtureId,
@@ -4608,40 +4598,30 @@ async function runAgentLoop(
     timeoutMs,
     softCutoffMs,
   } = args;
-  const built = buildCockpitTools(
-    ctx,
-    tenantId,
-    planId,
-    clientContext,
-    skillVersions,
+  // This is the ONE place `toolNames` is in scope, so this is where the grants are derived — by
+  // `grantsFor` (@pikar/core, ADR-007), never by buildCockpitTools: an allow-list is a REQUEST from
+  // the caller, the executive-only capabilities derive from its ABSENCE, and a listed-but-ungranted
+  // name is simply absent from the record (structural absence, then the filter below).
+  const grants = grantsFor({
+    toolNames,
+    evalRevenueFixtureId,
     omitRecipientEdits,
-    // ACTN-03: the hosted-search key is BUILT only for an agent whose grant names it. A
-    // listed-but-ungranted name is simply absent from the record; a granted-and-listed one
-    // survives the filter below unchanged.
-    //
-    // DISP-02: the SAME mechanism pointed the opposite way — grant the specialist hosted search,
-    // withhold dispatch FROM it. This is the ONE place `toolNames` is in scope, which is exactly
-    // why buildCockpitTools' gate reads a derived flag rather than the expression.
+    gmailEnabled,
+    documentIsDeliverable,
+  });
+  const built = buildCockpitTools(
     {
-      grantWebResearch: toolNames?.includes("webResearch") ?? false,
-      grantDispatch: toolNames === undefined,
-      // SKILL-02: the executive is the only agent that may author a skill, for the same reason it
-      // is the only one that dispatches — and derived from `toolNames === undefined`, NEVER from
-      // `toolNames.includes("authorSkillCandidate")`. An allow-list is a REQUEST from the caller;
-      // reading one here would let a specialist ask for the capability by name and receive it.
-      grantSkillAuthoring: toolNames === undefined,
-      // REVN-04/05: identity-check the immutable code-owned tuple. A copied or model-authored list
-      // with the same strings is still not the grant.
-      grantRevenueReads: isRevenueToolGrant(toolNames) || evalRevenueFixtureId !== undefined,
-      grantInvoiceReminderStage: toolNames === undefined || evalRevenueFixtureId !== undefined,
-      evalRevenueFixtureId,
-      // 27-10: passed through, NEVER derived here. `toolNames.includes("createDocument")` would let
-      // any specialist granted the tool relax its own trigger rule by holding it.
-      documentIsDeliverable,
+      ctx,
+      tenantId,
+      planId,
+      clientContext,
+      skillVersions,
+      tenantSkillIds,
       threadId,
       rootRequestId: turnId,
-      gmailEnabled,
+      evalRevenueFixtureId,
     },
+    grants,
   );
   // `=== undefined`, never a truthiness test: an EMPTY allow-list must yield an EMPTY record. A
   // `toolNames ? … : built` would hand a zero-tool specialist the full 20-key set.
@@ -5576,28 +5556,19 @@ export const runCockpitAgent = internalAction({
     // The trusted client's clock+zone for setSendTime (§2-D). Optional — a turn without it simply
     // cannot call setSendTime (it defers to the picker). The SMOKE path pins its own below.
     clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
-    // EVAL-01 version pin (internal-only surface — this is an internalAction, so the model can
-    // never supply it, §2-D analog): the eval runner pins the CANDIDATE row it evaluates. A missing
-    // (name, version) FAILS CLOSED (getSkillVersion throws) — never silently falls back to active.
-    skillVersions: v.optional(v.record(v.string(), v.number())),
-    // 21-03 (SKILL-01): the harness's EXACT tenant-candidate pins, name → `tenantSkills` row id.
-    // `dispatchArgs` in dispatch.ts declares the identical validator — the same pair of scopes,
-    // stated the same way, so neither entry point can drift from the other.
+    // EVAL-01 `skillVersions` + 21-03 `tenantSkillIds` (internal-only surface — this is an
+    // internalAction, so the model can never supply them, §2-D analog). ONE validator shared with
+    // `dispatchArgs` in dispatch.ts (Phase 38), so the two doors cannot drift: `tenantSkillIds` WAS
+    // MISSING HERE UNTIL 2026-08-17 AND IT COST A WHOLE GOLDEN RUN — `d2374bf` proved the pin
+    // through scheduled dispatch, but the eval runner reaches the system through THIS action, and
+    // run `6e021dce` died 0/41 at the door with `ArgumentValidationError: extra field
+    // tenantSkillIds`. A pin now lands at every door or at none; see lib/toolContextArgs.ts.
     //
-    // THIS FIELD WAS MISSING UNTIL 2026-08-17 AND IT COST A WHOLE GOLDEN RUN. `d2374bf` threaded
-    // the pin through SCHEDULED DISPATCH and proved it there (`dispatch.test.ts`), but the eval
-    // runner reaches the system through THIS action. In Convex the `args` validator is the runtime
-    // contract, so an extra field is refused BEFORE the handler — run `6e021dce` died 0/41 at the
-    // door with `ArgumentValidationError: extra field tenantSkillIds`, having never called a model.
-    // The internal loop's type (`runSpecialistTurn`, :4211) had declared it the whole time; only
-    // the door was shut. Do not remove it, and do not add a caller-facing pin anywhere without
-    // adding it to EVERY entry point that caller can reach.
-    //
-    // The cockpit's OWN body is deliberately not resolved from this: `cockpit-agent` is not in
-    // USER_AUTHORABLE_SKILLS (see :4273), so there can be no tenant candidate for it. This action
+    // The cockpit's OWN body is deliberately not resolved from the tenant pin: `cockpit-agent` is
+    // not in USER_AUTHORABLE_SKILLS, so there can be no tenant candidate for it. This action
     // ACCEPTS the pin to FORWARD it to the specialists it dispatches — nothing here reads it for
     // itself.
-    tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
+    ...TOOL_CONTEXT_ARGS,
     // Activity trace (CKPT-05): the turn identity the DRIVER mints (cockpit.ts) and owns. Optional
     // so every existing caller keeps working; absent ⇒ this turn emits no step rows.
     turnId: v.optional(v.string()),
@@ -5741,19 +5712,22 @@ export const runCockpitAgent = internalAction({
     // a record without `dispatchMedia` and then immediately tried to invoke that missing key,
     // turning every direct video request into the driver's generic "nothing was sent" reply.
     const directVideo = !smokeOp && !gmailRequired && isExplicitVideoCreationRequest(text);
-    // The flag rides here too — harmless (no SMOKE op is a continue turn), and uniform.
+    // A driver-only record: NO_GRANTS plus the two bits this path decides itself. Not `grantsFor`
+    // — there is no allow-list here, and the executive's grants would open authoring/reminder
+    // staging on a record whose only consumer is the SMOKE op or the direct video dispatch.
     const tools = buildCockpitTools(
-      ctx,
-      tenantId,
-      planId,
-      effectiveClientContext,
-      skillVersions,
-      omitRecipientEdits,
       {
-        gmailEnabled: smokeOp ? true : gmailEnabled,
+        ctx,
+        tenantId,
+        planId,
+        clientContext: effectiveClientContext,
+        skillVersions,
+        // 21-03: forward the tenant pin the eval runner sent. Nothing here reads it for the
+        // cockpit's own body (`cockpit-agent` is not authorable) — it reaches dispatched specialists.
+        tenantSkillIds,
+        // Lineage ONLY under directVideo: the dispatch tools are built only with both ids present.
         ...(directVideo
           ? {
-              grantDispatch: true,
               threadId,
               // The cockpit driver normally supplies turnId. Keep internal callers functional too:
               // a fresh refs-only lineage id is sufficient when they do not need a visible trace.
@@ -5761,9 +5735,13 @@ export const runCockpitAgent = internalAction({
             }
           : {}),
       },
-      // 21-03: forward the tenant pin the eval runner sent. Nothing here reads it for the cockpit's
-      // own body (`cockpit-agent` is not authorable) — it exists to reach dispatched specialists.
-      tenantSkillIds,
+      {
+        ...NO_GRANTS,
+        gmail: smokeOp ? true : gmailEnabled,
+        dispatch: directVideo,
+        // The flag rides here too — harmless (no SMOKE op is a continue turn), and uniform.
+        recipientEdits: !omitRecipientEdits,
+      },
     );
     // The direct call stages only the FREE media-director proposal. Paid clip/voice/render work is
     // still unreachable until the human approves the resulting card. Keep mixed email requests in
@@ -5892,6 +5870,7 @@ export const runCockpitAgent = internalAction({
             id: CHEAP_MODEL,
           },
           skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
+          tenantSkillIds, // …and so must the tenant pin (21-03), for the specialists it dispatches
           turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
           threadId,
           // 19-11: the trusted clock (§2-D). `effectiveClientContext`, not `clientContext`, so the
@@ -5929,7 +5908,7 @@ export const __invokeCockpitTool = internalAction({
     { tenantId, planId, toolName, input, clientContext, skillVersions },
   ): Promise<string> =>
     invokeTool(
-      buildCockpitTools(ctx, tenantId, planId, clientContext, skillVersions),
+      buildCockpitTools({ ctx, tenantId, planId, clientContext, skillVersions }),
       toolName,
       input,
     ),

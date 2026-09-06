@@ -156,6 +156,7 @@ const CONVEX_MODULES = [
   "lib/functions.ts",
   "lib/hash.ts",
   "lib/models.ts",
+  "lib/toolContextArgs.ts",
   "llm.ts",
   "media.ts",
   "mediaComplete.ts",

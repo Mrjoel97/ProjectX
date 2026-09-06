@@ -11,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { INCOMPLETE_MARKER, serializeProfile } from "@pikar/core";
+import { INCOMPLETE_MARKER, NO_GRANTS, serializeProfile, type ToolGrants } from "@pikar/core";
 import { TARGET_DURATIONS } from "@pikar/core/storyboard";
 import {
   CHEAP_MODEL,
@@ -43,7 +43,7 @@ import {
   MEDIA_TASK_LINE,
 } from "./dispatch";
 import { contentHash } from "./lib/hash";
-import { buildCockpitTools, runSpecialistTurn } from "./llm";
+import { buildCockpitTools, runSpecialistTurn, type ToolContext } from "./llm";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -1917,26 +1917,22 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
   });
 
   test("a SPECIALIST turn never CONSTRUCTS dispatchResearch — unreachable, not merely filtered", () => {
-    const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
-    const build = (agentContext: Record<string, unknown>) =>
+    const stubCtx = {} as ToolContext["ctx"];
+    const build = (
+      grants: Partial<ToolGrants>,
+      lineage: Pick<ToolContext, "threadId" | "rootRequestId"> = {},
+    ) =>
       Object.keys(
         buildCockpitTools(
-          stubCtx,
-          TENANT,
-          "plan_stub" as Id<"plans">,
-          undefined,
-          undefined,
-          undefined,
-          agentContext as never,
+          { ctx: stubCtx, tenantId: TENANT, planId: "plan_stub" as Id<"plans">, ...lineage },
+          { ...NO_GRANTS, ...grants },
         ),
       );
 
-    const specialist = build({
-      grantWebResearch: true,
-      grantDispatch: false,
-      threadId: THREAD,
-      rootRequestId: ROOT,
-    });
+    const specialist = build(
+      { webResearch: true, dispatch: false },
+      { threadId: THREAD, rootRequestId: ROOT },
+    );
     // POSITIVE half first, so this cannot pass against an empty record.
     expect(specialist).toContain("webResearch");
     expect(specialist).toContain("declareUnsupported");
@@ -1951,11 +1947,11 @@ describe("the dispatchResearch tool — stage, schedule, return (16-06 Task 3)",
       "proposeImage",
     );
 
-    const executive = build({ grantDispatch: true, threadId: THREAD, rootRequestId: ROOT });
+    const executive = build({ dispatch: true }, { threadId: THREAD, rootRequestId: ROOT });
     expect(executive).toContain("dispatchResearch");
     expect(executive).toContain("proposeImage");
     // No turn identity ⇒ no lineage to dispatch under ⇒ structurally absent.
-    expect(build({ grantDispatch: true })).not.toContain("dispatchResearch");
+    expect(build({ dispatch: true })).not.toContain("dispatchResearch");
   });
 
   test("THE MODEL PIN: research bills its own pair, every other route the default", async () => {

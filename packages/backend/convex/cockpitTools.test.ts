@@ -14,10 +14,12 @@ import {
   ACTION_TYPES,
   type ActionType,
   CALENDAR_HORIZON_MS,
+  NO_GRANTS,
   PLAN_ATTACHMENT_CAP_BYTES,
   packOutputIsDocument,
   parseSendTime,
   SPECIALISTS,
+  type ToolGrants,
 } from "@pikar/core";
 import { convexTest } from "convex-test";
 import { expect, test, vi } from "vitest";
@@ -38,6 +40,7 @@ import {
   parseAgentSmoke,
   parseWebResults,
   sourcesFromToolOutput,
+  type ToolContext,
   WEB_RESULT_MIN_SCORE,
 } from "./llm";
 import schema from "./schema";
@@ -574,16 +577,19 @@ test("buildAgentContext falls back to the placeholder when no pick named the add
 test("buildCockpitTools withholds addRecipients/setRecipients/removeRecipient ONLY under omitRecipientEdits (UAT-F2)", () => {
   // Building the record never touches the ctx (the tools only close over it), so a bare stub is
   // enough to prove the STRUCTURAL invariant: the keys are absent, not merely discouraged.
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const stubCtx = {} as ToolContext["ctx"];
   const planId = "plan-stub" as Id<"plans">;
   const RECIPIENT_TOOLS = ["addRecipients", "setRecipients", "removeRecipient"];
 
-  const full = Object.keys(buildCockpitTools(stubCtx, "t1", planId));
+  const full = Object.keys(buildCockpitTools({ ctx: stubCtx, tenantId: "t1", planId }));
   for (const name of RECIPIENT_TOOLS)
     expect(full, `${name} missing from the normal set`).toContain(name);
 
   const withheld = Object.keys(
-    buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, true),
+    buildCockpitTools(
+      { ctx: stubCtx, tenantId: "t1", planId },
+      { ...NO_GRANTS, recipientEdits: false },
+    ),
   );
   for (const name of RECIPIENT_TOOLS)
     expect(withheld, `${name} present on the post-pick continue turn`).not.toContain(name);
@@ -598,13 +604,14 @@ test("saveAsDocument is BUILT only when the document is the deliverable (27-10)"
   // when `toolNames === undefined`, so a save channel built unconditionally is one the EXECUTIVE
   // agent acquires on every cockpit turn. Keys, not wording — a filtered record still holds the
   // closure and stays reachable through invokeTool.
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const stubCtx = {} as ToolContext["ctx"];
   const planId = "plan-stub" as Id<"plans">;
-  const keys = (documentIsDeliverable?: boolean) =>
+  const keys = (documentIsDeliverable = false) =>
     Object.keys(
-      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, {
-        ...(documentIsDeliverable === undefined ? {} : { documentIsDeliverable }),
-      }),
+      buildCockpitTools(
+        { ctx: stubCtx, tenantId: "t1", planId },
+        { ...NO_GRANTS, documentIsDeliverable },
+      ),
     );
 
   expect(keys()).not.toContain("saveAsDocument");
@@ -621,9 +628,10 @@ test("saveAsDocument is BUILT only when the document is the deliverable (27-10)"
   // Indexed, not dotted: the record's STATIC type is the executive's (the `{} as typeof` trick that
   // keeps ai@7's event types narrow), so the conditional key exists at runtime and not in the type.
   const tool = (
-    buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, {
-      documentIsDeliverable: true,
-    }) as unknown as Record<string, { inputSchema?: { jsonSchema?: { properties?: object } } }>
+    buildCockpitTools(
+      { ctx: stubCtx, tenantId: "t1", planId },
+      { ...NO_GRANTS, documentIsDeliverable: true },
+    ) as unknown as Record<string, { inputSchema?: { jsonSchema?: { properties?: object } } }>
   ).saveAsDocument;
   expect(Object.keys(tool?.inputSchema?.jsonSchema?.properties ?? {})).toEqual(["title"]);
 });
@@ -646,18 +654,20 @@ test("packOutputIsDocument is what selects it, and only for document-output pack
 test("buildCockpitTools registers BOTH evaluateBusiness (read) and recordScorecardAnswer (write)", () => {
   // The suite has no generic snapshot of tool keys, so without this line a dropped registration
   // would ship silently. A bare stub ctx is enough — the tools only CLOSE over ctx here.
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
-  const keys = Object.keys(buildCockpitTools(stubCtx, "t1", "plan-stub" as Id<"plans">));
+  const stubCtx = {} as ToolContext["ctx"];
+  const keys = Object.keys(
+    buildCockpitTools({ ctx: stubCtx, tenantId: "t1", planId: "plan-stub" as Id<"plans"> }),
+  );
   expect(keys).toContain("evaluateBusiness");
   expect(keys).toContain("recordScorecardAnswer");
 });
 
 test("buildCockpitTools registers tenant-derived Drive reads without a tenantId input", () => {
-  const tools = buildCockpitTools(
-    {} as Parameters<typeof buildCockpitTools>[0],
-    "t1",
-    "plan-stub" as Id<"plans">,
-  );
+  const tools = buildCockpitTools({
+    ctx: {} as ToolContext["ctx"],
+    tenantId: "t1",
+    planId: "plan-stub" as Id<"plans">,
+  });
   for (const name of ["listDriveFolders", "findInDrive"] as const) {
     expect(Object.keys(tools)).toContain(name);
     const schema = tools[name].inputSchema as unknown as {
@@ -677,20 +687,22 @@ test("buildCockpitTools registers tenant-derived Drive reads without a tenantId 
 // MUTATION that turns this RED: remove `declareUnsupportedTool` from the grantWebResearch spread
 // in llm.ts while leaving it in RESEARCH_TOOLS.
 test("every tool the research specialist is granted is actually built under its grant", () => {
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const stubCtx = {} as ToolContext["ctx"];
   const planId = "plan-stub" as Id<"plans">;
   const built = Object.keys(
-    buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, {
-      grantWebResearch: true,
-      grantDispatch: false,
-    }),
+    buildCockpitTools(
+      { ctx: stubCtx, tenantId: "t1", planId },
+      { ...NO_GRANTS, webResearch: true, dispatch: false },
+    ),
   );
   for (const name of SPECIALISTS.research.tools) {
     expect(built, `research lists "${name}" but nothing builds it`).toContain(name);
   }
   // …and it stays OFF the executive's set: `grantWebResearch` is false whenever `toolNames` is
   // undefined, so the cockpit agent can never reach the specialist's refusal channel.
-  expect(Object.keys(buildCockpitTools(stubCtx, "t1", planId))).not.toContain("declareUnsupported");
+  expect(Object.keys(buildCockpitTools({ ctx: stubCtx, tenantId: "t1", planId }))).not.toContain(
+    "declareUnsupported",
+  );
 });
 
 // ── `webResearch` is a LOCAL tool now, and the whole plane depends on that ────────────────────
@@ -2579,7 +2591,12 @@ test("a REFUSED turn-2 op leaves turn-1's staged follow-up intact — a refusal 
 // and the schema's minimum valid emission (`required: ["op","email"]`), so it was reachable
 // without the model having chosen it at all. A follow-up's date is now structurally required.
 test("stageCrmWrite's schema puts the follow-up arm FIRST and requires its date", async () => {
-  const tools = buildCockpitTools({} as never, "t1", "plan1" as unknown as Id<"plans">, PIN_CLOCK);
+  const tools = buildCockpitTools({
+    ctx: {} as never,
+    tenantId: "t1",
+    planId: "plan1" as unknown as Id<"plans">,
+    clientContext: PIN_CLOCK,
+  });
   const schema = (
     tools.stageCrmWrite.inputSchema as unknown as {
       jsonSchema: {
@@ -2680,7 +2697,12 @@ test("SMOKE::agent::crm drives ONE governed stageCrmWrite OFFLINE at $0 and trac
 });
 
 test("readFinance takes no arguments — the tenant is never model-supplied", async () => {
-  const tools = buildCockpitTools({} as never, "t1", "plan1" as unknown as Id<"plans">, PIN_CLOCK);
+  const tools = buildCockpitTools({
+    ctx: {} as never,
+    tenantId: "t1",
+    planId: "plan1" as unknown as Id<"plans">,
+    clientContext: PIN_CLOCK,
+  });
   const schema = (
     tools.readFinance.inputSchema as unknown as {
       jsonSchema: { properties: Record<string, unknown> };
@@ -3039,65 +3061,69 @@ test("buildAgentContext describes a finance_write plan as figures, NEVER as an e
 // Executive turn — and absence is asserted on the RETURNED RECORD, because that record is what
 // `invokeTool` can reach. A withheld-but-constructed closure would still be callable.
 
-const authoringGrant = (over?: Record<string, unknown>) => ({
-  grantWebResearch: false,
-  grantDispatch: false,
-  grantSkillAuthoring: true,
-  threadId: "thread1",
-  rootRequestId: "turn1",
-  ...over,
-});
+type Lineage = Pick<ToolContext, "threadId" | "rootRequestId">;
+
+/** The executive's authoring shape: the grant plus a turn identity, split across the two Phase 38
+ *  arguments. `over` spreads LAST, so an explicit `threadId: undefined` REMOVES the lineage (a
+ *  spread keeps explicit undefineds — a destructuring default would silently restore it). */
+const authoringGrant = (over: Partial<ToolGrants & Lineage> = {}) => {
+  const { threadId, rootRequestId, ...grants } = {
+    threadId: "thread1",
+    rootRequestId: "turn1",
+    ...over,
+  };
+  return {
+    lineage: { threadId, rootRequestId } as Lineage,
+    grants: { ...NO_GRANTS, skillAuthoring: true, ...grants } as ToolGrants,
+  };
+};
 
 test("authorSkillCandidate is ABSENT without the grant, and absent with the grant but no lineage", () => {
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const stubCtx = {} as ToolContext["ctx"];
   const planId = "plan-stub" as Id<"plans">;
-  const keys = (agentContext?: Parameters<typeof buildCockpitTools>[6]) =>
+  const keys = (shape?: ReturnType<typeof authoringGrant>) =>
     Object.keys(
-      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, agentContext),
+      buildCockpitTools({ ctx: stubCtx, tenantId: "t1", planId, ...shape?.lineage }, shape?.grants),
     );
 
-  // No agentContext at all — the default every legacy caller gets.
+  // No grants at all — the NO_GRANTS default every bare caller gets.
   expect(keys()).not.toContain("authorSkillCandidate");
   // Granted, but with no turn identity to attribute the authorship to. A row whose provenance
   // cannot name the turn that produced it is exactly what 23-01's index exists to prevent.
   expect(keys(authoringGrant({ threadId: undefined }))).not.toContain("authorSkillCandidate");
   expect(keys(authoringGrant({ rootRequestId: undefined }))).not.toContain("authorSkillCandidate");
   // Lineage present but the grant withheld — the specialist's shape.
-  expect(keys(authoringGrant({ grantSkillAuthoring: false }))).not.toContain(
-    "authorSkillCandidate",
-  );
+  expect(keys(authoringGrant({ skillAuthoring: false }))).not.toContain("authorSkillCandidate");
   // All three present: the Executive's shape, and the ONLY shape that yields the key.
   expect(keys(authoringGrant())).toContain("authorSkillCandidate");
 });
 
 test("the authoring grant is SEPARATE from the dispatch grant in both directions", () => {
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const stubCtx = {} as ToolContext["ctx"];
   const planId = "plan-stub" as Id<"plans">;
-  const keys = (agentContext: Parameters<typeof buildCockpitTools>[6]) =>
+  const keys = (shape: ReturnType<typeof authoringGrant>) =>
     Object.keys(
-      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, agentContext),
+      buildCockpitTools({ ctx: stubCtx, tenantId: "t1", planId, ...shape.lineage }, shape.grants),
     );
 
   // Dispatch without authoring: the tool is absent, dispatchResearch is present.
-  const dispatchOnly = keys(authoringGrant({ grantDispatch: true, grantSkillAuthoring: false }));
+  const dispatchOnly = keys(authoringGrant({ dispatch: true, skillAuthoring: false }));
   expect(dispatchOnly).toContain("dispatchResearch");
   expect(dispatchOnly).not.toContain("authorSkillCandidate");
 
   // Authoring without dispatch: the mirror. One flag can never imply the other — dispatching a
   // specialist spends money, authoring a skill changes what every future turn is told to be.
-  const authoringOnly = keys(authoringGrant({ grantDispatch: false }));
+  const authoringOnly = keys(authoringGrant({ dispatch: false }));
   expect(authoringOnly).toContain("authorSkillCandidate");
   expect(authoringOnly).not.toContain("dispatchResearch");
 });
 
 test("revenue read tools are structurally absent unless the code-owned grant is resolved", () => {
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const stubCtx = {} as ToolContext["ctx"];
   const planId = "plan-stub" as Id<"plans">;
-  const keys = (grantRevenueReads?: boolean) =>
+  const keys = (revenueReads = false) =>
     Object.keys(
-      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, {
-        grantRevenueReads,
-      }),
+      buildCockpitTools({ ctx: stubCtx, tenantId: "t1", planId }, { ...NO_GRANTS, revenueReads }),
     );
 
   expect(keys()).not.toContain("readRevenueCrm");
@@ -3108,28 +3134,29 @@ test("revenue read tools are structurally absent unless the code-owned grant is 
 });
 
 test("invoice reminder staging is executive-only and absent from the revenue specialist grant", () => {
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const stubCtx = {} as ToolContext["ctx"];
   const planId = "plan-stub" as Id<"plans">;
-  const keys = (agentContext?: Parameters<typeof buildCockpitTools>[6]) =>
+  const keys = (grants?: Partial<ToolGrants>) =>
     Object.keys(
-      buildCockpitTools(stubCtx, "t1", planId, undefined, undefined, undefined, agentContext),
+      buildCockpitTools({ ctx: stubCtx, tenantId: "t1", planId }, { ...NO_GRANTS, ...grants }),
     );
 
   expect(keys()).not.toContain("stageInvoiceReminder");
-  expect(keys({ grantRevenueReads: true })).not.toContain("stageInvoiceReminder");
-  expect(keys({ grantInvoiceReminderStage: true })).toContain("stageInvoiceReminder");
+  expect(keys({ revenueReads: true })).not.toContain("stageInvoiceReminder");
+  expect(keys({ invoiceReminderStage: true })).toContain("stageInvoiceReminder");
   expect(SPECIALISTS.revenue.tools).not.toContain("stageInvoiceReminder");
 });
 
 test("authorSkillCandidate exposes EXACTLY {name, authoredBody} over the closed agent set", () => {
+  const shape = authoringGrant();
   const tools = buildCockpitTools(
-    {} as Parameters<typeof buildCockpitTools>[0],
-    "t1",
-    "plan-stub" as Id<"plans">,
-    undefined,
-    undefined,
-    undefined,
-    authoringGrant(),
+    {
+      ctx: {} as ToolContext["ctx"],
+      tenantId: "t1",
+      planId: "plan-stub" as Id<"plans">,
+      ...shape.lineage,
+    },
+    shape.grants,
   );
   const schema = tools.authorSkillCandidate.inputSchema as unknown as {
     jsonSchema: {

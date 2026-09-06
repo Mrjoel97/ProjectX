@@ -1,5 +1,8 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-06 (38-01 — `routines.test.ts`'s Convex module inventory gained `lib/toolContextArgs.ts`, the shared `TOOL_CONTEXT_ARGS` validator both agent doors spread since Phase 38; nothing in the routines/knowledge-search behaviour changed.)
+>
+
 > Last verified: 2026-09-06 (36-01, G24 — `knowledgeLlm.ts`'s planner and synthesizer seams moved from
 > `offlineSeamAvailable() && question.includes(…)` to `fixtureSeamFor(tenantId) && question.includes(…)`;
 > the source scan in `knowledgeLlm.test.ts` pins the new first conjunct. Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. Consequence for

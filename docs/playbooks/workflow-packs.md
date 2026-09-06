@@ -1,5 +1,8 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-09-06 (38-01 — the "packs are leaf agents" scan in `workflowPacks.test.ts` no longer quotes `grantDispatch: toolNames === undefined` out of `llm.ts`: the derivation lives in `packages/core/src/toolGrants.ts` (`grantsFor`) since Phase 38, so the test now asserts it BEHAVIOURALLY — an allow-list that names `dispatchResearch`/`authorSkillCandidate` still receives neither bit — and scans `toolGrants.ts` + `runAgentLoop`'s `grantsFor` call. Pack grants (`toolsForWorkflowPack`) are unchanged; the 23-class `toolRegistrySnapshot.test.ts` pins every pack's built and model-visible key set.)
+>
+
 > Last verified: 2026-09-06 (35-02, G23 half B — **THE SEVENTH PACK, AND THE FIRST ORIGINAL ONE:
 > `offer-and-lead-plan`.** ONE saved document — the offer (niche + market check, dream outcome, the
 > problem→solution stack, guarantee + reason to act, name, and the price/terms/30-day-cash as QUESTIONS

@@ -47,6 +47,7 @@ import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
+import { TOOL_CONTEXT_ARGS } from "./lib/toolContextArgs";
 import { runSpecialistTurn } from "./llm";
 
 /** Depth 1 = executive → specialist. A specialist can never dispatch anything, which makes
@@ -278,11 +279,9 @@ const dispatchArgs = {
   envelopeCents: v.number(),
   spentCents: v.number(),
   question: v.optional(v.string()),
-  skillVersions: v.optional(v.record(v.string(), v.number())),
-  // 21-03: `v.id("tenantSkills")`, never a string — the validator itself refuses anything that is
-  // not a real row id of that table. And deliberately NOT a body or a registry tenant: the only
-  // thing a caller may name is WHICH ROW, and even that arrives on an internalAction (ADR-008).
-  tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
+  // 16-09 / 21-03: `skillVersions` + `tenantSkillIds`, the pins every agent door accepts — ONE
+  // shared validator (Phase 38), so this door and `runCockpitAgent` cannot drift from each other.
+  ...TOOL_CONTEXT_ARGS,
 };
 
 /** Compile-time bind: every registered specialist's `stepTool` is a real agentSteps.tool literal.

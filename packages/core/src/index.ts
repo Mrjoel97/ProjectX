@@ -32,6 +32,7 @@ export * from "./retention";
 export * from "./reviewThreshold";
 export * from "./specialists";
 export * from "./spend";
+export * from "./toolGrants";
 export * from "./validateSubmit";
 export * from "./workflowCustomization";
 export * from "./workflowPackMetrics";

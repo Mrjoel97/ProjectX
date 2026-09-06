@@ -1,3 +1,23 @@
+> Last verified: 2026-09-06 (38-01, Track C step 10 — **one tool context, one grant derivation, one
+> validator.** `buildCockpitTools` takes `(toolCtx: ToolContext, grants: ToolGrants = NO_GRANTS)` instead
+> of eight append-only positionals; `grantsFor` (`@pikar/core`, `toolGrants.ts`) is the ONE place the
+> executive-only bits (`dispatch`, `skillAuthoring`, `invoiceReminderStage`) derive from the ABSENCE of an
+> allow-list, `revenueReads` from the frozen tuple's identity, `webResearch` from the list; `runAgentLoop`
+> calls it at the one door that has `toolNames` in scope and still applies the exact-name filter LAST.
+> `NO_GRANTS` is the bare shims' record (recipient + Gmail tools present, nothing granted) — NOT the
+> executive; the SMOKE path grants `dispatch` alone on the direct-video route. `TOOL_CONTEXT_ARGS`
+> (`lib/toolContextArgs.ts`) is spread into `runCockpitAgent.args` and `dispatchArgs`, so the 21-03 class
+> (a pin declared at one door and refused at the other) cannot recur; `toolContextArgs.test.ts` scans both
+> doors. **Byte-identical by construction:** `toolRegistrySnapshot.test.ts` (23 caller classes — bare,
+> continue turn, Gmail off, executive ±lineage, six specialists, seven packs, the revenue eval seam, both
+> SMOKE paths) was written against the OLD signature and passes unchanged with only its helper rewritten.
+> One real gap the refactor surfaced and closed: the executive loop never forwarded `tenantSkillIds` to
+> the specialists its dispatch tools stage (only the SMOKE path did) — it now rides `runAgentLoop`'s args
+> like every other input the loop's own tool build needs. Not done (owner: scope A): the declared registry
+> table, extracting tool bodies out of `llm.ts`, the mock model provider. Verified: backend 68/68 files ×2
+> shards (2057 + 1956), core 48/48 on the two touched files, web 47/49 (the two jsdom artifacts),
+> typecheck clean, lint exit 0; live on the local deployment — see cockpit.md's block.)
+>
 > Last verified: 2026-09-06 (36-01 re-drive — **the smoke tenants now carry a postal address, seeded by
 > the one smoke seeder.** `ensureSmokePostalAddress` (smoke.ts) upserts a `tenantProfiles` row for the
 > tenant `seedPipeline`/`seedFanout` are about to send from. Why: 19-05 made the CAN-SPAM footer a
@@ -1518,7 +1538,7 @@ like ~12 red cases and is not one).
 
 **Adding a tool to an existing agent (checklist):**
 1. Pure internals in `packages/core` (with unit tests).
-2. Wrapper in `buildCockpitTools`: closes over `(ctx, tenantId, planId)`, re-reads and tenant-guards the state row, `inputSchema` via `jsonSchema` (zod stays out of the node module).
+2. Wrapper in `buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants)` (Phase 38): closes over the `ToolContext` (`ctx`, `tenantId`, `planId`, the clock, the pins, the lineage — a new trusted input is a new optional field on that type, added ONCE, and it reaches every door because `runAgentLoop` builds the context from its own args), re-reads and tenant-guards the state row, `inputSchema` via `jsonSchema` (zod stays out of the node module). A tool that only SOME agents may hold is built under a `grants.<bit>` conditional spread — the bit is added to `ToolGrants` and derived in `grantsFor` (`packages/core/src/toolGrants.ts`), never from `toolNames` inside the builder (ADR-007). Then add the key to the `toolRegistrySnapshot.test.ts` literals for exactly the caller classes that should see it — a key appearing anywhere else is the review question.
 3. Validate every structural fact server-side; invalid input bounces a structured error back to the model (conversational recovery, never a throw out of the loop).
 4. Refs-only audit event if the tool touches external data (pattern: `mailbox.searched`).
 5. Unit test: happy path + validation bounce + tenant guard.

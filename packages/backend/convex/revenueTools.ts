@@ -6,7 +6,6 @@
  * the model explicitly that the payload is evidence, never an instruction or a tool request.
  */
 
-import { SPECIALISTS } from "@pikar/core";
 import {
   customerPulse,
   type Invoice,
@@ -61,10 +60,10 @@ const auditLog = makeFunctionReference<
   null
 >("audit:log");
 
-/** Identity, not value equality: only the code-owned tuple may open this structural grant. */
-export function isRevenueToolGrant(toolNames: readonly string[] | undefined): boolean {
-  return toolNames === SPECIALISTS.revenue.tools;
-}
+/** Identity, not value equality: only the code-owned tuple may open this structural grant. Phase 38
+ *  moved the ONE definition into `@pikar/core` (`grantsFor` reads it there); re-exported so the
+ *  existing importers of this module keep working. */
+export { isRevenueToolGrant } from "@pikar/core";
 
 const fence = (state: "ready" | "partial" | "unavailable", value: unknown): string =>
   `<revenue_evidence state="${state}">\n${JSON.stringify(value)}\n</revenue_evidence>\n` +

@@ -1,3 +1,16 @@
+> Last verified: 2026-09-06 (38-01 — **`buildCockpitTools` is `(ToolContext, ToolGrants)` now; the tool
+> bodies did not move.** What changed for this playbook's readers: every caller of the builder passes ONE
+> context object (`ctx`, `tenantId`, `planId`, `clientContext`, `skillVersions`, `tenantSkillIds`,
+> `threadId`, `rootRequestId`, `evalRevenueFixtureId`) and ONE grants object; `runAgentLoop` derives the
+> grants with `grantsFor` (`@pikar/core`) and the SMOKE path in `runCockpitAgent` passes `NO_GRANTS` plus
+> `gmail`/`dispatch`/`recipientEdits` decided on that path; `__invokeCockpitTool` builds bare. The
+> `applyGmailCapability` post-filter and the exact-name `toolNames` filter are unchanged and still LAST.
+> Static scans that anchor on `llm.ts` were untouched except the one in `workflowPacks.test.ts` that
+> quoted the old derivation text — it now asserts `grantsFor` behaviourally and scans `toolGrants.ts`.
+> Live check on the local deployment after the push: `cockpit-activity` (the SMOKE path),
+> `cockpit-schedule` (the pinned clock + `awaiting_reauth`), `cockpit-created-document` (a real model turn
+> through the loop's own tool build) — results in 38-01-SUMMARY.md.)
+>
 > Last verified: 2026-09-06 (36-01 re-drive — **the cockpit E2E specs sequence turns on the busy state,
 > not on the empty composer.** `ChatPane.onSend` has cleared the box the moment a turn is SENT since 03.9-04
 > and DROPS a second Enter while `busy` (the send button reads "Working…", `aria-busy`), so a spec's

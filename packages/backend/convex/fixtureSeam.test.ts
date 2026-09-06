@@ -22,7 +22,7 @@ import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { isFixtureTenant } from "./lib/env";
 import { fixtureSeamFor } from "./lib/models";
-import { buildCockpitTools, parseAgentSmoke, parseSmoke } from "./llm";
+import { buildCockpitTools, parseAgentSmoke, parseSmoke, type ToolContext } from "./llm";
 import schema from "./schema";
 
 vi.mock("./lib/models", async (importOriginal) => ({
@@ -274,9 +274,10 @@ describe("#9 vault.vaultSearch — the typed browse query", () => {
 // ── #7/#8 the Drive tools — model-composed arguments ──────────────────────────
 
 describe("#7/#8 the Drive tools inside buildCockpitTools", () => {
-  const stubCtx = {} as Parameters<typeof buildCockpitTools>[0];
+  const stubCtx = {} as ToolContext["ctx"];
   const opts = { toolCallId: "call-1", messages: [] } as never;
-  const tools = () => buildCockpitTools(stubCtx, "t_drive", "plan-stub" as Id<"plans">);
+  const tools = () =>
+    buildCockpitTools({ ctx: stubCtx, tenantId: "t_drive", planId: "plan-stub" as Id<"plans"> });
 
   test("keyed + unlisted: neither Drive fixture is served for a `SMOKE::` argument", async () => {
     keyed();

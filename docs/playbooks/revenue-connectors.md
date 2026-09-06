@@ -1,5 +1,8 @@
 # Playbook: Revenue connectors — shared lifecycle, gates and release semantics
 
+> Last verified: 2026-09-06 (38-01 — `isRevenueToolGrant` (the IDENTITY check on `SPECIALISTS.revenue.tools`) moved to `packages/core/src/toolGrants.ts`, where `grantsFor` reads it; `revenueTools.ts` re-exports it so its importers and `revenueTools.test.ts` are unchanged. The revenue read tools and reminder staging are built under `grants.revenueReads` / `grants.invoiceReminderStage` now; the snapshot test pins the revenue specialist and both eval-seam variants.)
+>
+
 > Last verified: 2026-09-06 (28.2-01, G22 — **THE EVIDENCE WINDOW IS REACHABLE, AND AN INVOICE CAN BE PICKED.**
 > Two changes, one carried over. **(1) Carried over from the shared tree's uncommitted work:** `providerGates.
 > connectableProviderGates` is the ONE connect-start predicate (`startAllowedFor`), shared by the gate

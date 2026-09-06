@@ -1,5 +1,8 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-09-06 (38-01 — `fixtureSeam.test.ts`'s Drive-tool block builds through the new `buildCockpitTools({ ctx, tenantId, planId })` signature; the seam behaviour it proves is unchanged. See agent-runtime.md's 38-01 block.)
+>
+
 > Last verified: 2026-09-06 (36-01, G24 / ADR-035 — **ONE NEW `fixture`-TIER NAME, AND A FIXTURE SEAM NOW
 > FAILS READINESS.** `PIKAR_FIXTURE_TENANT_IDS` joins `ENV_MANIFEST` (`lib/env.ts`, with `isFixtureTenant`);
 > `ops.envCheck`'s `ready` additionally requires `fixturesActive.length === 0` (owner decision: a faked
