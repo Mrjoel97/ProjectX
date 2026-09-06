@@ -36,7 +36,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **REVW-02**: Edit and reject retry counters enforce thresholds; breaches escalate, notify, and terminate the request safely
 - [x] **REVW-03**: Review inactivity timeout triggers an escalation notification (scheduled-event race on the review gate)
 - [x] **DLVR-01**: Approved responses can be delivered via Gmail through the provider-agnostic email adapter
-- [ ] **DLVR-02**: Approved responses can be delivered via Microsoft Graph (Outlook) through the same adapter
+- [ ] **DLVR-02**: Approved responses can be delivered via Microsoft Graph (Outlook) through the same adapter *(open: the Graph send arm shipped in 25-05, but Microsoft is env-gated and its 2026-08-16 concurrency probe failed — no live delivery)*
 - [x] **DLVR-03**: OAuth token lifecycle is managed (Google testing-mode 7-day refresh expiry handled; user prompted to re-auth before tokens break)
 
 ### Email Cockpit
@@ -70,9 +70,9 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **VALT-10**: Digest staleness is surfaced with a one-click rebuild, and no model call fires until the user asks
 - [x] **VALT-11**: User can drill into a folder and browse its documents rather than one flat grid
 - [x] **VALT-12**: Documents carry a machine-derived type and identity line that the user can correct, and a user correction is never overwritten
-- [ ] **VALT-13**: User can import a Google Drive folder once and re-import on demand, bounded by the same budget rail
+- [ ] **VALT-13**: User can import a Google Drive folder once and re-import on demand, bounded by the same budget rail *(open: 15.3-VERIFICATION is `human_needed`; the owner UAT of folder import/re-import is not recorded)*
 - [x] **VALT-14**: The vault read surfaces remain within Convex's per-transaction read cap at folder-scale document counts
-- [ ] **VALT-15**: The Executive Agent can browse and search the user's Google Drive to answer "which folder has X", WITHOUT any path to importing it or to the ingest budget
+- [ ] **VALT-15**: The Executive Agent can browse and search the user's Google Drive to answer "which folder has X", WITHOUT any path to importing it or to the ingest budget *(open: 20.1-01 defers closure to 20.1-02, which has not run)*
 - [x] **VALT-16**: The Knowledge Vault matches the approved Nord Edge browse, folder, preview, and empty-state designs without regressing upload, Drive import, synthesis, metadata correction, citations, download, or delete; search is scoped to the current folder and the UI never fabricates exact counts the backend does not provide
 
 ### Live Voice Sessions
@@ -112,7 +112,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 
 ### Private Beta
 
-- [ ] **BETA-01**: New users can sign up only with a valid invite code (Convex Auth)
+- [ ] **BETA-01**: New users can sign up only with a valid invite code (Convex Auth) *(open: 25-01/25-02 shipped invite-gated signup and decline to certify; the proof is one invited non-owner signup)*
   — **KNOWINGLY UNMET IN LIVE PRODUCTION as of 2026-08-15.** `www.pikar-ai.com` is deployed with
   signup fully OPEN; anyone can sign in with Google, get a tenant, and spend the owner's
   `OPENAI_API_KEY`. Owner was shown the exposure twice and chose to ship and stay open. See
@@ -120,8 +120,8 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
   risk AND the implementation finding: the gate belongs in `requireScope`
   (`packages/backend/convex/lib/functions.ts`), because `tenantId` IS the auth user id and there
   is no tenant-creation event to guard.
-- [ ] **BETA-02**: All data — requests, vault, cache, audit, telemetry — is isolated per user across every table and index
-- [ ] **BETA-03**: A new user reaches their first delivered result within minutes via a guided conversational onboarding
+- [ ] **BETA-02**: All data — requests, vault, cache, audit, telemetry — is isolated per user across every table and index *(open: the `requireTenant` wrapper scopes every table; the two-user proof (BETA-05) has not run)*
+- [ ] **BETA-03**: A new user reaches their first delivered result within minutes via a guided conversational onboarding *(open: measured by the merged order's item 9 (time-to-first-outcome), not yet measured)*
 - [x] **BETA-04**: User sees live pipeline status and their review queue update in real time (Convex subscriptions)
 
 ## v2.0 Platform Requirements
@@ -148,23 +148,23 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 - [x] **DISP-01**: Real sub-agent dispatch — specialized sub-agents are swappable (skill body, tool-set) pairs run by the single governed loop, with a depth cap, a shared root cost budget, cycle refusal, and recorded lineage (no nested loops, no agents-spawning-agents)
 - [x] **ACTN-01**: A generalized governed action executor lets an approved plan execute actions beyond `gmail.send` (the approve→execute spine becomes action-agnostic)
 - [x] **DISP-02**: A first exemplar specialist sub-agent (Research) is dispatched through DISP-01
-- [ ] **ACTN-02**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions
+- [ ] **ACTN-02**: The agent can schedule and manage calendar events (Google / Microsoft) as governed actions *(open: the Google half is live (17-VERIFICATION `gaps_found`); the Microsoft half is blocked by the 2026-08-16 probe (If-Match ignored on DELETE))*
 - [x] **ACTN-03**: The agent can perform web research through a grounded, injection/SSRF-hardened tool, storing findings in the vault
-- [ ] **ACTN-04**: The agent can create standalone documents/content artifacts (beyond email attachments)
+- [ ] **ACTN-04**: The agent can create standalone documents/content artifacts (beyond email attachments) *(open: Phase 18 is 8/10 — 18-09 and 18-10 open)*
 - [x] **ACTN-05**: The agent can track contacts / CRM state and follow-ups scoped to the user
 
 ### S3 — Creation & Self-Extension
 
-- [ ] **MEDIA-01**: A media-creation canvas produces images and video — a finished short-form reel assembled from clips of ≤15 s each, capped at 60 s by BUDGET rather than by capability — via a server-to-server provider API (fal.ai) behind a deployment secret, as async governed jobs with a separate capped budget; generation is wrapped, not rebuilt. **Corrected 2026-08-03 (plan 20-11).** The original wording carried two premises the Phase-20 spike refuted: no model generates 3 minutes (the ceiling is 15 s across 28 models from eight labs), and the Pikar-Ai MCP is a claude.ai CLIENT-side account connector, structurally unreachable from a Convex action (ADR-011). The re-scope then PARTLY UN-REFUTED the first: a 12-block reel IS two minutes and is refused only by `MEDIA_JOB_CAP_USD`, not by the models (ADR-012). So the honest line is neither the original nor a flat "5 or 10 seconds"
+- [ ] **MEDIA-01**: A media-creation canvas produces images and video — a finished short-form reel assembled from clips of ≤15 s each, capped at 60 s by BUDGET rather than by capability — via a server-to-server provider API (fal.ai) behind a deployment secret, as async governed jobs with a separate capped budget; generation is wrapped, not rebuilt. **Corrected 2026-08-03 (plan 20-11).** The original wording carried two premises the Phase-20 spike refuted: no model generates 3 minutes (the ceiling is 15 s across 28 models from eight labs), and the Pikar-Ai MCP is a claude.ai CLIENT-side account connector, structurally unreachable from a Convex action (ADR-011). The re-scope then PARTLY UN-REFUTED the first: a 12-block reel IS two minutes and is refused only by `MEDIA_JOB_CAP_USD`, not by the models (ADR-012). So the honest line is neither the original nor a flat "5 or 10 seconds" *(open: 20.2 pending; media audit 2026-09-04: no reel has completed on the current rail)*
 - [x] **SKILL-01**: The user can author skills adapted to their business through the eval-gated skills registry
-- [ ] **SKILL-02**: The agent can author skills as candidates only — structurally unable to self-activate; activation requires the eval gate plus owner approval
+- [ ] **SKILL-02**: The agent can author skills as candidates only — structurally unable to self-activate; activation requires the eval gate plus owner approval *(open: Phase 23 is 5/9 — the candidate-only invariant shipped in 23-01..05, 23-06..09 open)*
 
 ### S4 — Governance & Open the Beta
 
 - [x] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
-- [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater
+- [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater *(open: 24-01 closed with Clause 10.2 Partial until 24-02, which has not run)*
 - [x] **GOVN-03**: Every user-exercisable data and connection control the published privacy policy promises actually exists in the product and does what the policy says — the policy is the specification, not the marketing. Covers in-app disconnection of a connected account WITH revocation at the provider (not merely a local token delete), and tenant data deletion and export. Minted 2026-08-01 after `apps/web/app/privacy/page.tsx:312` was found promising an in-app Google disconnect that had no implementation anywhere in the repo.
-- [ ] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index
+- [ ] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index *(open: the two-user isolation test needs a second tenant via the invite path; not run end to end)*
 
 *(S4 also consumes the carried-in BETA-01 invite/waitlist, BETA-02 isolation, BETA-03 fast onboarding, and DLVR-02 Outlook — the productionization detailed in `09-CONTEXT.md`, executed as the milestone's final phase.)*
 
@@ -173,15 +173,15 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 *Added 2026-08-05 from the approved `pending-pages.html` integration map. Phase 26 is no longer
 blanket-blocked by Phase 25; each surface carries only its real dependency.*
 
-- [ ] **DASH-01**: Every new dashboard route uses tenant-safe or owner-safe public projections, bounded pagination/time windows, honest loading/empty/partial/error/refusal states, named IANA timezone formatting, USD cost semantics, refs/counts-only audit for mutations, and remains disabled in navigation until connected browser verification passes
-- [ ] **APRV-01**: The user can review a tenant-wide approvals queue covering awaiting, scheduled, in-flight, decided and cleared work; approve, schedule, cancel, discard and revise actions have explicit server-side state guards, idempotent outcomes and scheduler-race handling, with calendar revisions returning to the originating cockpit until a safe inline availability/CAS contract exists
-- [ ] **FIN-01**: The user can inspect truthful reasoning, media and ingest spend as estimated, reserved, actual, refunded and unlanded movements from an append-only ledger with an explicit coverage start; tenant rails and owner-only deployment rails remain distinct, and missing history is shown as unknown rather than zero
-- [ ] **CONT-01**: The user can browse a bounded unified library of Vault artifacts (documents, approved memos, research briefs) and rendered media with stable provenance, ownership-checked signed downloads and processing states; reuse opens/prefills the cockpit and never silently duplicates or sends an artifact
+- [x] **DASH-01**: Every new dashboard route uses tenant-safe or owner-safe public projections, bounded pagination/time windows, honest loading/empty/partial/error/refusal states, named IANA timezone formatting, USD cost semantics, refs/counts-only audit for mutations, and remains disabled in navigation until connected browser verification passes
+- [x] **APRV-01**: The user can review a tenant-wide approvals queue covering awaiting, scheduled, in-flight, decided and cleared work; approve, schedule, cancel, discard and revise actions have explicit server-side state guards, idempotent outcomes and scheduler-race handling, with calendar revisions returning to the originating cockpit until a safe inline availability/CAS contract exists
+- [x] **FIN-01**: The user can inspect truthful reasoning, media and ingest spend as estimated, reserved, actual, refunded and unlanded movements from an append-only ledger with an explicit coverage start; tenant rails and owner-only deployment rails remain distinct, and missing history is shown as unknown rather than zero
+- [x] **CONT-01**: The user can browse a bounded unified library of Vault artifacts (documents, approved memos, research briefs) and rendered media with stable provenance, ownership-checked signed downloads and processing states; reuse opens/prefills the cockpit and never silently duplicates or sends an artifact
   - _AMENDED 2026-08-22 (plan 26-11, owner decision): **"and sent mail" removed from the lane and reassigned to RPRT-01.** As ratified this requirement could never be checked off -- plans 26-11, 26-12 and 26-13 all exclude a sent-mail lane from Content, so the requirement's own text named a surface the whole chain declines to build. Amended rather than recorded as a deviation, because the narrowing is deliberate and permanent, not a slip._
-- [ ] **RPRT-01**: The user can view bounded business, operations and governance reports for a selected half-open time window, including a server-sanitized audit projection and the SENT-MAIL record; WORM, active-skill and deployment-budget facts remain owner-only, and board-pack generation lands as a governed downloadable artifact
+- [x] **RPRT-01**: The user can view bounded business, operations and governance reports for a selected half-open time window, including a server-sanitized audit projection and the SENT-MAIL record; WORM, active-skill and deployment-budget facts remain owner-only, and board-pack generation lands as a governed downloadable artifact
   - _AMENDED 2026-08-22 (plan 26-11, owner decision): sent mail moved here from CONT-01. Delivery is a reporting fact, not a reusable artifact -- a sent message cannot be "reused" without re-sending it, which is the one thing CONT-01 forbids._
 - [x] **PIPE-01** *(Phase 19 companion)*: The user can use a pipeline view over Phase 19's single tenant-scoped contacts/follow-up/consent/suppression substrate without creating a second CRM store; suppressed recipients are still refused in every product-email terminal and the first release does not invent opportunities, deal stages or monetary pipeline values
-- [ ] **HOME-01**: Command Center v2 composes stable bounded summaries from the landed Approvals, Finance, Content, Reports and Pipeline surfaces, produces a deterministic recommended next move and binding constraint with explainable inputs, and shows generic health to tenants while owner-only operational facts remain restricted
+- [x] **HOME-01**: Command Center v2 composes stable bounded summaries from the landed Approvals, Finance, Content, Reports and Pipeline surfaces, produces a deterministic recommended next move and binding constraint with explainable inputs, and shows generic health to tenants while owner-only operational facts remain restricted
 
 ## Post-Beta Knowledge-Work Pack Requirements
 
@@ -192,19 +192,19 @@ boundary inside Pikar.*
 
 ### Curated Pack Pilot
 
-- [ ] **PACK-01**: Every adapted upstream workflow pins an exact source commit and file set, retains Apache-2.0 attribution and modification notices, records a source hash/provenance manifest, and can update only through an explicit reviewed diff — never an automatic production sync
-- [ ] **PACK-02**: Business Pulse, Campaign Plan, Customer Complaint Response, Sales Call Prep, Process/SOP Builder and Brand Review run as native Pikar workflows over the existing Executive Agent, Business Blueprint, Vault, research, document/content, calendar, inbox and approval surfaces; no second router, memory store, plugin runtime or duplicate output plane is introduced
-- [ ] **PACK-03**: Each pilot workflow has a complete operation-to-tool matrix; skill bodies remain registry-owned while every capability grant is code-owned and structurally absent when not allowed; connector content is fenced as untrusted, writes remain behind the plan gate, and each skill publishes as a candidate that must pass outcome-state evals plus an authenticated browser gate before exposure
-- [ ] **PACK-04**: Workflow-pack telemetry measures time-to-first-useful-outcome, recommendation acceptance, plan approve/edit/reject, missing-connector surprise rate, citation/unsupported-claim rate, completion outcome, cost and latency without placing raw content or PII in telemetry
+- [x] **PACK-01**: Every adapted upstream workflow pins an exact source commit and file set, retains Apache-2.0 attribution and modification notices, records a source hash/provenance manifest, and can update only through an explicit reviewed diff — never an automatic production sync
+- [x] **PACK-02**: Business Pulse, Campaign Plan, Customer Complaint Response, Sales Call Prep, Process/SOP Builder and Brand Review run as native Pikar workflows over the existing Executive Agent, Business Blueprint, Vault, research, document/content, calendar, inbox and approval surfaces; no second router, memory store, plugin runtime or duplicate output plane is introduced
+- [x] **PACK-03**: Each pilot workflow has a complete operation-to-tool matrix; skill bodies remain registry-owned while every capability grant is code-owned and structurally absent when not allowed; connector content is fenced as untrusted, writes remain behind the plan gate, and each skill publishes as a candidate that must pass outcome-state evals plus an authenticated browser gate before exposure
+- [x] **PACK-04**: Workflow-pack telemetry measures time-to-first-useful-outcome, recommendation acceptance, plan approve/edit/reject, missing-connector surprise rate, citation/unsupported-claim rate, completion outcome, cost and latency without placing raw content or PII in telemetry
 
 ### Connector-Backed Revenue Pack
 
 - [ ] **REVN-01**: A server-side HubSpot adapter provides tenant-scoped read-only account, contact and pipeline projections after endpoint, OAuth, data-processing, rate-limit and commercial-terms review; no generic tenant-supplied MCP client is introduced
 - [ ] **REVN-02**: A server-side QuickBooks adapter provides tenant-scoped read-only reports required for cash, receivables, payables and revenue analysis after the same suitability and terms gate
 - [ ] **REVN-03**: Server-side Stripe and PayPal adapters provide tenant-scoped read-only payments, invoices, settlements and dispute context; tokens use revocable provider grants and encrypted storage, with honest partial/unavailable states
-- [ ] **REVN-04**: Lead triage, call lists, pipeline review and customer pulse consume the Phase 19 person/consent/suppression substrate plus read-only connector projections without creating a second CRM or fabricating deal values/stages
-- [ ] **REVN-05**: Cash-flow and payroll-confidence results are computed in deterministic, tested pure TypeScript over validated normalized financial inputs with explicit provenance, coverage windows, confidence semantics and accountant-review disclaimers — never by LLM arithmetic
-- [ ] **REVN-06**: Invoice reminders are drafts until a user approves a governed plan; sending, refunds, credits, CRM mutations and financial writes are unreachable from read-only revenue specialists
+- [ ] **REVN-04**: Lead triage, call lists, pipeline review and customer pulse consume the Phase 19 person/consent/suppression substrate plus read-only connector projections without creating a second CRM or fabricating deal values/stages *(open: Phase 28 claims it in code; the revenue lane is parked by owner choice 2026-08-31)*
+- [ ] **REVN-05**: Cash-flow and payroll-confidence results are computed in deterministic, tested pure TypeScript over validated normalized financial inputs with explicit provenance, coverage windows, confidence semantics and accountant-review disclaimers — never by LLM arithmetic *(open: Phase 28 claims it in code; the revenue lane is parked by owner choice 2026-08-31)*
+- [ ] **REVN-06**: Invoice reminders are drafts until a user approves a governed plan; sending, refunds, credits, CRM mutations and financial writes are unreachable from read-only revenue specialists *(open: Phase 28 claims it in code; the revenue lane is parked by owner choice 2026-08-31 (28.2 unparked one connector's code half))*
 
 ### Pikar Billing, Invoicing and Tax (minted 2026-08-28 — Phase 28.1)
 
@@ -212,19 +212,19 @@ Pikar charging for ITSELF, from its OWN Stripe merchant account. Distinct from R
 a TENANT’s Stripe account read-only. Opposite direction, opposite trust boundary, separate names
 (`billing*` / `BILLING_STRIPE_*` here; `stripe*` / `STRIPE_APP_*` there).
 
-- [ ] **BILL-01**: A tenant subscribes through Stripe-hosted Checkout with a free trial and a card on file that auto-converts; the tenant↔Stripe-customer mapping is stored on both sides and neither a Stripe customer without a tenant nor a tenant without a customer can be silently invented — an unmatched customer is dead-lettered by ref, never auto-provisioned
-- [ ] **BILL-02**: The webhook receiver verifies Stripe signatures before parsing, and is idempotent by construction — a `stripeEvents` row keyed on `event.id` is inserted before any side effect, so a Stripe retry or a Convex action retry cannot double-apply; every outbound mutating Stripe call carries an idempotency key
-- [ ] **BILL-03**: Billing outcomes reconcile into the existing append-only ledger, which remains the book of record; bank-transfer revenue is NOT recorded as `actual` on `invoice.paid` alone, because those funds land in the customer cash balance and settle later — cash-balance and funding-reversal events are handled, and unapplied funds are visible rather than assumed collected
-- [ ] **BILL-04**: Invoices are created programmatically on a schedule (accumulated invoice items rolled into one document), branded, and payable by card or bank transfer through the Stripe-hosted invoice page; no custom 3DS or card-data handling exists anywhere in the codebase
-- [ ] **BILL-05**: Tax posture is honest by construction. Every zero-tax outcome we store or render carries Stripe’s `taxability_reason`, so "no tax owed" (`not_collecting`) is distinguishable from "calculated as zero" (`zero_rated`, `not_subject_to_tax`) — a bare `Tax: 0.00` is never presented as a calculation. The product tax category is set to a real code (never the untaxed default `txcd_00000000`) and the head-office address is configured, because `not_collecting` is ambiguous between "unregistered" and "product coded untaxed" and only those two settings disambiguate it.
+- [ ] **BILL-01**: A tenant subscribes through Stripe-hosted Checkout with a free trial and a card on file that auto-converts; the tenant↔Stripe-customer mapping is stored on both sides and neither a Stripe customer without a tenant nor a tenant without a customer can be silently invented — an unmatched customer is dead-lettered by ref, never auto-provisioned *(open: 28.1 is 11/11 in code; nothing has spoken to Stripe on a billing path (STATE 2026-08-29) and the tax country is unset pending the entity)*
+- [ ] **BILL-02**: The webhook receiver verifies Stripe signatures before parsing, and is idempotent by construction — a `stripeEvents` row keyed on `event.id` is inserted before any side effect, so a Stripe retry or a Convex action retry cannot double-apply; every outbound mutating Stripe call carries an idempotency key *(open: 28.1 is 11/11 in code; nothing has spoken to Stripe on a billing path (STATE 2026-08-29) and the tax country is unset pending the entity)*
+- [ ] **BILL-03**: Billing outcomes reconcile into the existing append-only ledger, which remains the book of record; bank-transfer revenue is NOT recorded as `actual` on `invoice.paid` alone, because those funds land in the customer cash balance and settle later — cash-balance and funding-reversal events are handled, and unapplied funds are visible rather than assumed collected *(open: 28.1 is 11/11 in code; nothing has spoken to Stripe on a billing path (STATE 2026-08-29) and the tax country is unset pending the entity)*
+- [ ] **BILL-04**: Invoices are created programmatically on a schedule (accumulated invoice items rolled into one document), branded, and payable by card or bank transfer through the Stripe-hosted invoice page; no custom 3DS or card-data handling exists anywhere in the codebase *(open: 28.1 is 11/11 in code; nothing has spoken to Stripe on a billing path (STATE 2026-08-29) and the tax country is unset pending the entity)*
+- [ ] **BILL-05**: Tax posture is honest by construction. Every zero-tax outcome we store or render carries Stripe’s `taxability_reason`, so "no tax owed" (`not_collecting`) is distinguishable from "calculated as zero" (`zero_rated`, `not_subject_to_tax`) — a bare `Tax: 0.00` is never presented as a calculation. The product tax category is set to a real code (never the untaxed default `txcd_00000000`) and the head-office address is configured, because `not_collecting` is ambiguous between "unregistered" and "product coded untaxed" and only those two settings disambiguate it. *(open: 28.1 is 11/11 in code; nothing has spoken to Stripe on a billing path (STATE 2026-08-29) and the tax country is unset pending the entity)*
   - **CORRECTED 2026-08-28, before any plan was written.** This requirement originally also demanded that "crossing a monitored threshold surfaces as an explicit alert". **That is not buildable and no plan may claim it.** Verified against Stripe’s own docs: threshold notifications are **email + Dashboard only — there is no `tax.threshold.*` webhook event**; they are **live-mode only**; and they require **10,000 USD of revenue in the previous year**, which this merchant does not have. A threshold monitor written in code today could never fire. Threshold monitoring is therefore an **operational/Dashboard control, not a code surface**, and belongs in the playbook as an owner duty with its preconditions stated. Writing it as code would have shipped a monitor that reads as protection and is structurally silent.
-- [ ] **BILL-06**: Deleting a tenant terminates its billing relationship (no subscription keeps charging a deleted tenant), and all billing secrets live in the Convex deployment env, classified in `ENV_MANIFEST`, with no development fallback
+- [ ] **BILL-06**: Deleting a tenant terminates its billing relationship (no subscription keeps charging a deleted tenant), and all billing secrets live in the Convex deployment env, classified in `ENV_MANIFEST`, with no development fallback *(open: 28.1 is 11/11 in code; nothing has spoken to Stripe on a billing path (STATE 2026-08-29) and the tax country is unset pending the entity)*
 
 ### Unified Knowledge and Routines
 
-- [ ] **KNOW-01**: One tenant-scoped search experience decomposes a query across native Pikar sources (Vault, Drive, Gmail and landed CRM/support sources), returns cited and deduplicated answers with source authority/freshness/confidence, and names unavailable or partial sources honestly
-- [ ] **ROUT-01**: Phase 21's authoring seam becomes a user-facing workflow-pack authoring layer: users customize approved native templates and publish immutable tenant-scoped candidates through the existing eval gate, never arbitrary tool grants or executable code
-- [ ] **ROUT-02**: Recurring routines ship only after the standing-instruction approval model, OAuth lifetime/re-auth behavior, missed-run semantics, timezone/DST handling, idempotency and pause/revoke controls are explicitly decided and tested; until then the safe deliverable remains a manually re-runnable pinned workflow
+- [x] **KNOW-01**: One tenant-scoped search experience decomposes a query across native Pikar sources (Vault, Drive, Gmail and landed CRM/support sources), returns cited and deduplicated answers with source authority/freshness/confidence, and names unavailable or partial sources honestly
+- [x] **ROUT-01**: Phase 21's authoring seam becomes a user-facing workflow-pack authoring layer: users customize approved native templates and publish immutable tenant-scoped candidates through the existing eval gate, never arbitrary tool grants or executable code
+- [ ] **ROUT-02**: Recurring routines ship only after the standing-instruction approval model, OAuth lifetime/re-auth behavior, missed-run semantics, timezone/DST handling, idempotency and pause/revoke controls are explicitly decided and tested; until then the safe deliverable remains a manually re-runnable pinned workflow *(open: 29 closed it as `defer`; 34 lists it pending — fail-closed until the standing-instruction approval model exists)*
 
 ### Optional Vertical Packs
 
@@ -369,17 +369,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GOVN-02 | Phase 24 | Pending |
 | GOVN-03 | Phase 22.1 | Complete (2026-08-16) — export `22.1-04`, erasure `22.1-05`, both live-proven on production SHA `1ca7c6f`. Erasure request `a73023088f58ea6e`: 1,538 rows across 24 tables removed, `audit:countAudit` still **304** for that tenant — the §3 audit-immutability invariant proven on real data, not fixtures. **SCOPE NOTE, read before reopening:** the clause "disconnection WITH revocation at the provider" is met by IMPLEMENTATION for Google (`status: 200`) and by HONEST DISCLOSURE for Microsoft. Microsoft offers no per-application revocation an app can call for its own grant — `DELETE /oauth2PermissionGrants/{id}` needs admin-consent permissions we refuse to hold, and `revokeSignInSessions` would revoke every application's tokens. Both are deliberately declined; the policy and the erasure card state the limit and link Microsoft's own consent surface. The requirement's own test is "the policy is the specification, not the marketing", and the policy now describes exactly what happens. **Plan 25-06 Task 2 owns any change to that posture.** Not verified: the post-erasure re-export (the `users` row is deleted last, so the account cannot authenticate afterwards) |
 | BETA-05 | Phase 25 | Pending |
-| DASH-01 | Phase 26 | Pending |
-| APRV-01 | Phase 26 | Pending |
-| FIN-01 | Phase 26 | Pending |
-| CONT-01 | Phase 26 | Pending |
-| RPRT-01 | Phase 26 | Pending |
+| DASH-01 | Phase 26 | Complete (2026-09-06, Phase 37 repair) — 26-01..26-06 (`requirements-completed: [DASH-01]`), 21/21 closed, deployed 2026-08-23 |
+| APRV-01 | Phase 26 | Complete (2026-09-06, Phase 37 repair) — 26 summaries claim it (`requirements-completed: [APRV-01]`), deployed 2026-08-23 |
+| FIN-01 | Phase 26 | Complete (2026-09-06, Phase 37 repair) — 26 summaries claim it (`requirements-completed: [FIN-01]`), deployed 2026-08-23 |
+| CONT-01 | Phase 26 | Complete (2026-09-06, Phase 37 repair) — 26-11/12/13 (`requirements: [CONT-01]`, as amended — sent mail moved to RPRT-01) |
+| RPRT-01 | Phase 26 | Complete (2026-09-06, Phase 37 repair) — 26-14/15/16 (`requirements: [RPRT-01]`), deployed 2026-08-23 |
 | PIPE-01 | Phase 19 (consumed by Phase 26 nav/integration gate) | Complete (2026-08-10) |
-| HOME-01 | Phase 26 | Pending |
-| PACK-01 | Phase 27 | Pending |
-| PACK-02 | Phase 27 | Pending |
-| PACK-03 | Phase 27 | Pending |
-| PACK-04 | Phase 27 | Pending |
+| HOME-01 | Phase 26 | Complete (2026-09-06, Phase 37 repair) — 26 summaries claim it (`[HOME-01 backend]`, `[HOME-01]`), deployed 2026-08-23 |
+| PACK-01 | Phase 27 | Complete (2026-09-06, Phase 37 repair) — 27 summaries (`requirements-completed: [PACK-01, …]`), 9/9 closed; live on dev, candidate on prod |
+| PACK-02 | Phase 27 | Complete (2026-09-06, Phase 37 repair) — 27 summaries (`[PACK-02, PACK-03]`), 9/9 closed |
+| PACK-03 | Phase 27 | Complete (2026-09-06, Phase 37 repair) — 27 summaries (`[PACK-02, PACK-03]`), 9/9 closed |
+| PACK-04 | Phase 27 | Complete (2026-09-06, Phase 37 repair) — 27 summaries (`[PACK-04]`), 9/9 closed |
 | BILL-01 | Phase 28.1 | Pending |
 | BILL-02 | Phase 28.1 | Pending |
 | BILL-03 | Phase 28.1 | Pending |
@@ -392,8 +392,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REVN-04 | Phase 28 | Pending |
 | REVN-05 | Phase 28 | Pending |
 | REVN-06 | Phase 28 | Pending |
-| KNOW-01 | Phase 29 | Pending |
-| ROUT-01 | Phase 29 | Pending |
+| KNOW-01 | Phase 29 | Complete (2026-09-06, Phase 37 repair) — 29 summaries (`[KNOW-01]`), 29-VERIFICATION present |
+| ROUT-01 | Phase 29 | Complete (2026-09-06, Phase 37 repair) — 29 summaries (`[ROUT-01]`), 29-VERIFICATION present |
 | ROUT-02 | Phase 29 | Pending |
 | VERT-01 | Phase 30 | Pending |
 | VERT-02 | Phase 30 | Pending |

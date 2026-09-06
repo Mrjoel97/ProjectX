@@ -6,7 +6,9 @@
     "package.json",
     "turbo.json",
     "biome.json",
-    "tsconfig.base.json"
+    "tsconfig.base.json",
+    "scripts/check-playbooks.mjs",
+    "scripts/check-planning.mjs"
   ],
   "beta-admission.md": [
     "packages/backend/convex/invites.ts",

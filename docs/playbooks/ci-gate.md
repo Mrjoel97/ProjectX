@@ -1,5 +1,16 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-09-06 (37-01, G26 — **a second Stop hook, `scripts/check-planning.mjs`, guards the
+> planning corpus** the way `check-playbooks.mjs` guards the playbooks: STATE.md must start with `---
+` and
+> hold ONE frontmatter block (gsd-tools' writer prepends a block whenever byte 0 is not a dash — 36 had
+> stacked), every `### Phase` heading needs a progress-table row, a fully-summarised phase directory may not
+> sit behind a non-Complete row (gsd `phase complete` never writes ROADMAP.md), and a Complete row's
+> REQUIREMENTS traceability rows must be Complete or carry an `(open: …)` note on the checkbox line. Both hook
+> scripts are now registered under this playbook in `watch.json`. Neither runs in CI: a docs drift must never
+> hold a deploy. Run by hand with `echo '{}' | node scripts/check-planning.mjs [--exit-code]` — bare, it
+> blocks on stdin like its sibling.)
+>
 > Last verified: 2026-08-16 (25-01 — **`biome.json` `overrides[].includes` gained a SECOND entry,
 > `packages/backend/convex/invites.ts`**, and that exposed a trap worth naming here because it fails
 > in CI and nowhere else.)
