@@ -1,6 +1,38 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
-> Last verified: 2026-09-05 (release CI — `localSandbox.ts` `resolveShell` now substitutes `/bin/bash` for
+> Last verified: 2026-09-07 (**THE TRACKER ASKED THE MONEY QUESTION AND ANSWERED THE PIPELINE ONE.**
+> Owner-reported: a five-scene reel held at `incomplete_batch` whose hero said "Fix Scene 1" while
+> Scene 1's own row said `nothing to buy` and Pictures read `Done - All 2 ready`. Nothing was stuck;
+> a STOCK scene's picture job had FAILED and the tracker could not draw it. `trackerView`'s
+> `buysPicture` was a local `||` chain over the two PAID kinds, so a stock scene was forced to
+> `skipped` -- its clip face masked, and the scene dropped out of `pictureStates` entirely, which is
+> why the stage rolled up `done` over a hole and why the count's denominator was 2 rather than 5.
+> `evaluateRenderTrigger`, reading `@pikar/core`'s `WANTS_VIDEO_ROW`/`WANTS_IMAGE_ROW`, correctly
+> refused to buy a sandbox for a reel with a missing block. A held reel whose named scene looks
+> healthy is the worst state this canvas can reach: the user is told to fix something the screen
+> says is fine.
+>
+> THE ROOT CAUSE IS THIS FILE'S OWN 2026-08-26 ENTRY. That entry closed "TWO compile-silent holes"
+> -- `deckStillNeedsJob` and "the canvas's `buysPicture`" -- and there were THREE. `MediaCanvas.tsx`
+> got the stock kinds (and the paragraph at "How a scene becomes stock" mandating them);
+> `mediaCanvasView.ts` held a SECOND `buysPicture`, in the same directory, that nobody knew was
+> there. Two answers to one question. The distinction both copies exist to make is the one that
+> entry named and this one missed a copy of: **"costs nothing" and "buys nothing" came apart** at
+> stock, and `PAID_VISUAL` is not `WANTS_*_ROW`.
+>
+> FIXED: `landsPictureRow(visual)` is exported from `@pikar/core/render`, DERIVED from the same two
+> sets `deckStillNeedsJob` reads, and both canvas copies now call it. The tile BORDER at
+> `MediaCanvas.tsx:210` deliberately does NOT -- it asks the paid question, and its own comment says
+> so. The new test iterates `VISUAL_KINDS` asserting the tracker's picture face agrees with
+> `deckStillNeedsJob` on every kind, so the next `VisualKind` cannot re-open this; mutation-verified
+> (restoring the two-kind chain reddens it, naming the kinds). Measured: web 894 + 2 skipped, core
+> 1518, both typechecks clean, biome clean. UNFIXED and named here rather than claimed away:
+> `incomplete_batch` is ALSO set when `deckReady` is false (a scene names no asset source) and the
+> hero copy then says "never produced its picture or its voice", which is untrue for that cause --
+> and `failedScenes` is empty there, so no scene is named and no per-scene card is pushed. Guarded
+> upstream by `unrenderable_block` and `no_overlay`, so unobserved; a second reason code is the fix
+> if it is ever seen.)
+>> Last verified: 2026-09-05 (release CI — `localSandbox.ts` `resolveShell` now substitutes `/bin/bash` for
 > `sh` on Linux too: Debian/Ubuntu link `/bin/sh` to dash, which has no arrays, and the first Linux run of
 > the dev-only sandbox test (CI on `5d3f7b4`) died at `a=(x y z)`. The snapshot's `sh` is bash, so this
 > makes the dev runner parse what the image parses. `MEDIA_RENDER_SH` now overrides on every platform.)
@@ -3074,8 +3106,12 @@ whose model is `pexels/v1` could be POSTed to OpenAI as a paid generation.
   `regenerateBlock`, the identical two-step the "animated still" arm already used. No new mutation
   and no new write path.
 
-`buysPicture` in `MediaCanvas.tsx` **must** include both stock kinds or the second click has no
-button. It is a string-comparison list, so widening `VISUAL_KINDS` does not make it red.
+Both canvas copies of `buysPicture` **must** include the stock kinds, or the second click has no
+button and the tracker hides the scene. They are no longer lists: both call
+`landsPictureRow` (`@pikar/core/render`), derived from the same two sets `deckStillNeedsJob`
+reads. Widening `VISUAL_KINDS` used to make neither red -- and on 2026-09-07 the tracker's copy
+was found still holding the pre-stock list, months after this paragraph was written about the
+other one. The tile BORDER (`MediaCanvas.tsx:210`) stays a PAID-set test on purpose.
 
 ### The prompt IS the search
 
@@ -4646,7 +4682,10 @@ defect class). 59 tests in `mediaCanvas.test.ts`, all by calling.
 → captions`, each `{ label, state, detail }`, plus one landing row per scene.
 
 - **`skipped` is a first-class state, not a rounding of `pending`.** A deck of cards and uploads
-  buys no picture; a silent deck records no take and is never transcribed. A stage that says
+  lands no picture row; a silent deck records no take and is never transcribed. It is the
+  PIPELINE question -- `landsPictureRow`, shared with the render trigger -- and never the money
+  one: stock is free AND lands a row, and answering with the paid set is what let a failed stock
+  fetch draw as `nothing to buy` under a stage that read `Done`. A stage that says
   "waiting" about a job that will never be requested is the same defect as a spinner that never
   resolves — the exact bug `pictureLine` was written to kill at the tile level.
 - **The two job faces stay independent** all the way up: the picture column and the voice column

@@ -27,6 +27,7 @@
 // clip-vs-still ratio was written out in words at three sites here ("a tenth", then "a fortieth")
 // and RESTATED a number the price tables compute. Both restatements went stale, both times with a
 // green suite, because the tests pinned the stale word. See `CLIP_VS_STILL_RATIO` below.
+import { landsPictureRow } from "@pikar/core/render";
 import {
   type DeckContract,
   deckRefusalClause,
@@ -474,12 +475,16 @@ export type TrackerRow = {
 
 export type TrackerView = { stages: TrackerStage[]; scenes: TrackerRow[] };
 
-/** Does this scene BUY a picture? Only two of the four kinds do — a card is drawn by ffmpeg at
- *  render time and an upload is the tenant's own file — which is what makes "skipped" a real state
- *  rather than a rounding of "pending". A `null` visual is a block-contract row, and those always
- *  bought one. */
-const buysPicture = (visual: VisualKind | null): boolean =>
-  visual === null || visual === "generated_video" || visual === "animated_image";
+/** Does this scene land a picture job? A card is drawn by ffmpeg at render time and an upload is
+ *  the tenant's own file, which is what makes "skipped" a real state rather than a rounding of
+ *  "pending"; a `null` visual is a block-contract row, and those always land one.
+ *
+ *  IMPORTED, never re-listed. This was a local `||` chain naming the two PAID kinds, and stock is
+ *  the kind that is free AND still lands a row — so a failed stock fetch was drawn as "nothing to
+ *  buy", dropped out of `pictureStates`, and left the Pictures stage reading `Done` while the
+ *  render trigger held the reel at `incomplete_batch` over that same scene. The trigger reads
+ *  `@pikar/core`'s sets; so, now, does this. */
+const buysPicture = (visual: VisualKind | null): boolean => landsPictureRow(visual);
 
 /** One job face → its state. `null` is "not requested yet", not "missing": the reserve has not run.
  *  A `queued` job HAS been reserved, so the stage it belongs to is genuinely underway. An unknown

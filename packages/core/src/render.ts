@@ -446,6 +446,32 @@ export function deckStillNeedsJob(
 const WANTS_VIDEO_ROW = new Set(["generated_video", "stock_video"]);
 const WANTS_IMAGE_ROW = new Set(["animated_image", "stock_image"]);
 
+/**
+ * Does this scene land a `mediaJobs` picture row AT ALL — of either kind?
+ *
+ * `deckStillNeedsJob` asks this per row kind because the render trigger holds a row at a time; the
+ * canvas tracker asks it per SCENE, to decide whether a scene's picture face is a real state or the
+ * words "nothing to buy". Same question, and it must have the same answer — so it is derived from
+ * the same two sets rather than re-listed, which is the mistake this exists to close.
+ *
+ * **It is the PIPELINE question, deliberately not the money one.** `PAID_VISUAL`
+ * (`storyboard.ts`) says stock is free, and stock still lands a row — "'Unpaid' and 'no provider
+ * line' came apart here", in that table's own words. The tracker used to answer with a re-listed
+ * copy of the PAID set, so a stock scene whose fetch FAILED was drawn as "nothing to buy", was left
+ * out of the Pictures count entirely, and the stage read `Done — All 2 ready` over a hole. The
+ * render trigger, reading the sets below, correctly refused to buy a sandbox and held the reel at
+ * `incomplete_batch` — so the screen named a scene to fix whose own row said there was nothing
+ * wrong with it. A held reel with no visible lever is the worst state this canvas can reach.
+ *
+ * `undefined`/`null` is a block-contract row, which is a video by construction — the same reading
+ * `deckStillNeedsJob` and `assemblerKindOf` give it.
+ */
+export const landsPictureRow = (visual: string | null | undefined): boolean =>
+  visual === undefined ||
+  visual === null ||
+  WANTS_VIDEO_ROW.has(visual) ||
+  WANTS_IMAGE_ROW.has(visual);
+
 /* ── TEXT-CARD COLOUR (the deck's own palette, finally reaching the frame) ──────────────────────
  *
  * A card was black-and-white until this existed, while the deck it belongs to carried a palette

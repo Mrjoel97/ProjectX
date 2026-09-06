@@ -1,4 +1,14 @@
-> Last verified: 2026-09-06 (40-02/40-03, DOC-01 — **`DocFormat` IS NOW `pdf | html | xlsx`, AND THE
+> Last verified: 2026-09-07 (media-canvas fix under this playbook's `dashboard/workspace/` watch path;
+> the subsystem entry is in **media.md**, and this is the cross-reference rather than a second copy of
+> it. `trackerView`'s `buysPicture` (`mediaCanvasView.ts`) answered the PAID question where the render
+> trigger asks the PIPELINE one, so a stock scene whose picture job FAILED was drawn `nothing to buy`,
+> left out of the count, and its stage rolled up `Done` while the reel sat held at `incomplete_batch`.
+> Both canvas copies now call `landsPictureRow` (`@pikar/core/render`). NOTHING IN THE COCKPIT'S OWN
+> PLANE CHANGED: no tool, no skill body, no plan field, no approval path, no `llm.ts` refusal. The one
+> thing worth carrying here is the shape of the defect, because this playbook watches a directory it
+> does not own the invariants of -- two `buysPicture` definitions sat in that directory disagreeing,
+> and the newer one had a comment explaining exactly why the older one was wrong.)
+>> Last verified: 2026-09-06 (40-02/40-03, DOC-01 — **`DocFormat` IS NOW `pdf | html | xlsx`, AND THE
 > DOCUMENT A TURN PRODUCED IS VISIBLE IN THE CARD.** ADR-036 fixes that set as CLOSED: there is no DOCX or
 > PPTX output and there is not going to be one.
 >

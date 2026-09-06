@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
+import { landsPictureRow } from "@pikar/core/render";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import {
@@ -1625,12 +1626,11 @@ function SceneTile({
   // the fix menu's own "Swap it for free stock footage" arm actually produce a picture — set the
   // kind, then offer no way to land it. `uploaded_video` and `text_card` stay out because they
   // genuinely buy nothing: the vault already holds one, and ffmpeg draws the other.
-  const buysPicture =
-    block.visual === null ||
-    block.visual === "generated_video" ||
-    block.visual === "animated_image" ||
-    block.visual === "stock_video" ||
-    block.visual === "stock_image";
+  // IMPORTED rather than listed, and the reason is the defect that shipped: the tracker in
+  // `mediaCanvasView.ts` held a SECOND copy of this predicate that never learned the paragraph
+  // above, so a failed stock fetch drew there as "nothing to buy" and its stage read `Done` while
+  // the render trigger held the reel. Two answers to one question, in one directory.
+  const buysPicture = landsPictureRow(block.visual);
   const buysSomething = buysPicture || block.narration.trim() !== "";
 
   async function run(fn: () => Promise<unknown>) {

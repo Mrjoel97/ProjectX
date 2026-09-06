@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { GENERIC_DECK_REFUSAL, TARGET_DURATIONS } from "@pikar/core/storyboard";
+import { deckStillNeedsJob } from "@pikar/core/render";
+import { GENERIC_DECK_REFUSAL, TARGET_DURATIONS, VISUAL_KINDS } from "@pikar/core/storyboard";
 import { MEDIA_GENERATED_SECONDS_CAP, sceneVisualSpec } from "@pikar/cost/media";
 import { describe, expect, test } from "vitest";
 import {
@@ -455,6 +456,13 @@ const stageOf = (view: ReturnType<typeof trackerView>, key: string) => {
   if (!found) throw new Error(`no ${key} stage`);
   return found;
 };
+/** Throws rather than returning `undefined`, so a missing row fails LOUDLY instead of turning a
+ *  `.not.toBe(...)` assertion below into one that passes on nothing. */
+const sceneOf = (view: ReturnType<typeof trackerView>, i: number) => {
+  const found = view.scenes[i];
+  if (!found) throw new Error(`no scene row ${i}`);
+  return found;
+};
 
 describe("the tracker is the four-stage spine, folded from the two job faces", () => {
   test("a fresh deck is pending everywhere — never 'active' before a cent moves", () => {
@@ -474,6 +482,51 @@ describe("the tracker is the four-stage spine, folded from the two job faces", (
     );
     expect(stageOf(view, "generate").state).toBe("skipped");
     expect(stageOf(view, "generate").detail).toMatch(/own footage or a text card/);
+  });
+
+  test("the picture face agrees with the RENDER TRIGGER on every visual kind", () => {
+    // THE CHECK THAT WAS MISSING, and the reason a reel sat held with no visible lever. The
+    // tracker asked a MONEY question (`generated_video`/`animated_image`, a local `||` chain over
+    // the PAID kinds) to answer a PIPELINE one. Stock is free AND lands a `mediaJobs` row, so a
+    // failed stock fetch drew as "nothing to buy", dropped out of `pictureStates` entirely, and
+    // left Pictures reading `Done — All 2 ready` while `evaluateRenderTrigger` — reading
+    // `@pikar/core`'s sets — held the reel at `incomplete_batch` over that same scene.
+    //
+    // Derived from `deckStillNeedsJob` rather than from a second list here, so the next
+    // `VisualKind` cannot re-open this gap. MUTATION that turns it red: put the two stock kinds
+    // back outside `landsPictureRow`.
+    const disagreements = VISUAL_KINDS.filter((visual) => {
+      const shot = { visual, narration: "Say this." };
+      const wantsRow = deckStillNeedsJob(shot, "video") || deckStillNeedsJob(shot, "image");
+      const view = trackerView(
+        [scene({ visual, clip: { status: "failed" } })],
+        "pending",
+        undefined,
+        undefined,
+      );
+      return (sceneOf(view, 0).picture.state === "skipped") === wantsRow;
+    });
+    expect(disagreements).toEqual([]);
+  });
+
+  test("a FAILED stock picture is SHOWN, not drawn as 'nothing to buy'", () => {
+    // The reported state, reduced: a five-scene reel held at `incomplete_batch` whose hero said
+    // "Fix Scene 1" while Scene 1's own row said there was nothing to buy and the Pictures stage
+    // said Done. A held reel whose named scene looks healthy leaves the user no lever at all.
+    const view = trackerView(
+      [
+        scene({ visual: "stock_image", clip: { status: "failed" } }),
+        scene({ blockIndex: 1, clip: { status: "succeeded" } }),
+      ],
+      "failed",
+      undefined,
+      undefined,
+    );
+    expect(sceneOf(view, 0).picture.text).not.toBe("nothing to buy");
+    expect(sceneOf(view, 0).picture.state).toBe("failed");
+    // The stage may not read `done` over a hole — the count now has a denominator of 2, not 1.
+    expect(stageOf(view, "generate").state).toBe("failed");
+    expect(stageOf(view, "generate").detail).toMatch(/1 of 2 failed/);
   });
 
   test("a SILENT deck skips voice AND captions — there is nothing to record or transcribe", () => {
