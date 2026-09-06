@@ -511,6 +511,10 @@ describe("vault read plane (VALT-04 browse / stats / download / detail / search)
     expect(await asTenant(t).query(api.vault.vaultDocText, { vaultDocId: mine })).toEqual({
       text: "my private words",
       status: "ready",
+      // Phase 40 (DOC-01): metadata riding the same subscription, so the cockpit's Output card can
+      // tell a PDF twin from a markdown-only artifact without a second query. Deep-equal here on
+      // purpose — a new field on this query's shape must be declared, not slipped in.
+      storedMimeType: null,
     });
     // Fail-closed as null, never a throw — a throw would distinguish "not yours" from "no such
     // document" (an ownership oracle), the `docContext` rule.

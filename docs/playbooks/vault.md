@@ -1,3 +1,35 @@
+> Last verified: 2026-09-06 (40-01, DOC-01 — **A WORKBOOK IS NOW READ TWICE: AS TEXT, AND AS ROWS.**
+> The text projection is unchanged and is still the artifact of record (search, grounding, digest all read
+> `vaultDocuments.text`, and its exact shape — tab cells, newline rows, `Sheet N` BY FILE NUMBER — stays
+> pinned by `officeText.test.ts`). Beside it, `packages/vault/src/sheets.ts` (`sheetRows`, subpath-only,
+> STATIC SheetJS import per Pitfall 9) writes a CAPPED grid into a NEW `vaultSheets` table: 200 rows, 30
+> columns, 10 sheets, 256 KiB of JSON at WHOLE-SHEET granularity, plus `totalRows` and `sheetCount` so the
+> reader is told in words what is not shown.
+>
+> **Why a separate table and not a field on `vaultDocuments`:** the vault grid's read bound
+> (`VAULT_GRID_READ_BUDGET_BYTES`) counts `vaultDocuments.text` bytes to stay under Convex's 16 MiB
+> per-transaction cap. A second large blob on that row slips straight past a bound that cannot see it. The
+> grid is read by exactly ONE query (`vault.vaultDocSheets`, one document at a time) and never by the list
+> projection.
+>
+> **The three invariants:** (1) the grid is a VIEW — no row means "no grid", never "no document", and a
+> failed structured read is caught in its own try in `vaultExtract` so it can never fail an ingest that
+> already produced text; (2) `upsertSheets` REPLACES by doc (Retry re-runs the whole rail, so idempotence
+> is by construction) and zero sheets DELETES the row rather than storing an empty grid — one empty state,
+> not two; (3) the row dies with its document (`deleteVaultDoc`), and being classified `tenant_owned` it
+> exports and deletes with the tenant, which is why it carries `by_tenant` as well as `by_doc`.
+>
+> Which rail knows it is a workbook: `extractOfficeText` now returns `{ text, kind }` (additive — every
+> caller reads `.text`), so the decision comes from the walker that read the archive, never guessed from
+> the text it produced (a workbook's text happens to start with `Sheet 1`, which would have been a
+> discriminator nobody promised). `legacy_xls` sets it too.
+>
+> UI: `SheetGrid.tsx` reuses `MarkdownDocument`'s table markup and CSS, so BRAND §4's "never dense
+> tables-on-white" holds the way §5 defines it. `PreviewModal` asks for a grid via `isSpreadsheet(mime)`,
+> which lives BESIDE `binaryMediaKind` and never inside it — that function answers "can the browser display
+> these bytes", and for a workbook the answer is still no. Widening it would put an .xlsx in an `<iframe>`
+> and show an empty frame, which is what its own comment warns about.)
+>
 > Last verified: 2026-09-06 (36-01, G24 — **THE VAULT INGEST CHAIN NO LONGER SELECTS A FIXTURE FROM
 > CONTENT.** Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. Sites here: `vaultLlm.extractGraph` (a Drive file a stranger shared in could WRITE
 > the tenant's entity graph by starting with `SMOKE::graph::`), `vaultLlm.classifyDoc` (attacker-chosen

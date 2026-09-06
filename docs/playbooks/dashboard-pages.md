@@ -1,5 +1,18 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-06 (40-02/40-03, DOC-01 — two small changes here, both consequences of
+> `DocFormat` gaining `xlsx`. (1) `ContentView`'s `bytesLabel` maps the OOXML spreadsheet MIME to `"XLSX"`;
+> without it the badge fell through to `mimeType.split("/").pop()?.toUpperCase()` and printed
+> `VND.OPENXMLFORMATS-OFFICEDOCUMENT.SPREADSHEETML.SHEET`. Every badge in the app now derives from the
+> closed `DocFormat` set (ADR-036), so a new format is a change in `@pikar/core` and here, together.
+> (2) `content.ts`'s boundary comment — the written home of the bearer-URL rule — was rewritten to the
+> property rather than its old shape: a storage URL is minted only for a row the user is LOOKING AT (a card
+> they clicked, or the open thread's selected created artifact), never sitting in a subscription for a row
+> nobody is viewing. `contentView.test.ts`'s pin (exactly one `vaultDownloadUrl` in `ContentView.tsx`,
+> inside `ImageThumb`) is unchanged and still the shelf's half of that rule.
+> `MarkdownDocument` is untouched: the sheet grid reuses its table MARKUP and CSS from a new component
+> rather than teaching the shared renderer about workbooks.)
+>
 > Last verified: 2026-09-06 (35-02, G23 half B — **THE COMMAND CENTER OFFERS AN IDEA-STAGE USER THEIR
 > FIRST FINISHED THING.** A seventh section, `data-cc-section="first-thing"` in its OWN boundary, reads
 > `workflowPackDiscovery.listPacks` (ACTIVE-only) and `agenda.current`, and renders ONLY when both facts

@@ -65,9 +65,15 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   // Phase 40: the structured grid, asked for ONLY when the row is a workbook (its own
   // subscription — cell text must never ride the vault list projection). `null` = no grid was
   // written (an unreadable or empty workbook), and the tab-separated text still renders below.
+  // The FILENAME is part of the gate, not decoration: ingest decides a workbook by sniffing the
+  // archive, so a .xlsx uploaded from a machine that reported no MIME is stored as
+  // `application/octet-stream` and HAS a grid this query would otherwise never ask for. Same
+  // mime-first, extension-fallback shape the extraction rail already uses.
+  const looksLikeWorkbook =
+    isSpreadsheet(displayMime) || /\.(xlsx|xlsm|xls|xlsb|ods)$/i.test(doc.title);
   const sheets = useQuery(
     api.vault.vaultDocSheets,
-    isSpreadsheet(displayMime) ? { vaultDocId: doc._id } : "skip",
+    looksLikeWorkbook ? { vaultDocId: doc._id } : "skip",
   );
   const text = docText === undefined ? undefined : (docText?.text ?? null);
   const preview = derivePreviewState({
@@ -283,12 +289,15 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
           </p>
           {preview.content.kind === "ready-text" ? (
             <>
-              {sheets ? (
-                // The workbook as rows. The text projection stays reachable underneath through the
-                // same "Show full text" control — the grid is a view of the same document, not a
-                // replacement for the artifact of record.
-                <SheetGrid sheets={sheets.sheets} sheetCount={sheets.sheetCount} />
-              ) : doc.mimeType === "text/markdown" ? (
+              {/* The workbook as rows, ABOVE the text rather than instead of it — the text
+                  projection is the artifact of record and stays reachable through the same
+                  "Show full text" control, which would otherwise render beside nothing it
+                  controls. */}
+              {sheets ? <SheetGrid sheets={sheets.sheets} sheetCount={sheets.sheetCount} /> : null}
+              {/* With a grid on screen the tab-separated projection is redundant noise, so it waits
+                  behind the expand control the modal already has — which is what gives that button
+                  something to control for a workbook. Without a grid, nothing changes. */}
+              {sheets && !expanded ? null : doc.mimeType === "text/markdown" ? (
                 <MarkdownDocument
                   markdown={expanded ? preview.content.text : preview.content.excerpt}
                 />

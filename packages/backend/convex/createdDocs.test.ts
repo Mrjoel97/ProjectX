@@ -392,6 +392,61 @@ test("no stored bytes ⇒ no storedMimeType — absence means 'the bytes are wha
   expect(row?.mimeType).toBe("text/markdown");
 });
 
+test("a revise REWRITES what the bytes are — long→short drops it, long→sheet makes it a workbook", async () => {
+  // `patchCreatedDoc` never revised `storedMimeType`, so a long→short rewrite left a stored type
+  // with no bytes beneath it and a long→sheet rewrite would have framed a workbook in the PDF
+  // viewer. MUTATION that turns this RED: drop storedMimeFor from the patch.
+  const t = convexTest(schema, modules);
+  const storageId = await storePdf(t);
+  const docId = await t.mutation(internal.vault.insertCreatedDoc, {
+    tenantId: "tenant_a",
+    title: "One-pager",
+    form: "long",
+    markdown: "# body",
+    contentHash: "hash_rev",
+    storageId,
+    sourceThreadId: "thread_rev",
+  });
+  await t.mutation(internal.vaultSources.insert, {
+    tenantId: "tenant_a",
+    threadId: "thread_rev",
+    docIds: [docId],
+    titles: ["One-pager"],
+    count: 1,
+    role: "created",
+    form: "long",
+    createdAt: Date.now(),
+  });
+
+  await t.mutation(internal.vault.patchCreatedDoc, {
+    tenantId: "tenant_a",
+    threadId: "thread_rev",
+    index: 1,
+    title: "A post",
+    form: "short",
+    markdown: "just a paragraph",
+    contentHash: "hash_rev2",
+  });
+  expect((await t.run((ctx) => ctx.db.get(docId)))?.storedMimeType).toBeUndefined();
+
+  const sheetBytes = await t.run((ctx) => ctx.storage.store(new Blob(["x"])));
+  await t.mutation(internal.vault.patchCreatedDoc, {
+    tenantId: "tenant_a",
+    threadId: "thread_rev",
+    index: 1,
+    title: "A tracker",
+    form: "sheet",
+    markdown: "| A |\n| --- |\n| 1 |",
+    contentHash: "hash_rev3",
+    storageId: sheetBytes,
+  });
+  const row = await t.run((ctx) => ctx.db.get(docId));
+  expect(row?.storedMimeType).toBe(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  expect(row?.kind).toBe("created_document");
+});
+
 test("the projection carries storedMimeType to the browser — the preview cannot read the raw row", async () => {
   // listVaultDocs projects a fixed field list; a field missing from it is invisible to the UI no
   // matter what the row holds. That projection is exactly where this feature would silently die.
@@ -410,6 +465,12 @@ test("the projection carries storedMimeType to the browser — the preview canno
   const docs = await asTenant(t, "tenant_a").query(api.vault.listVaultDocs, {});
   const row = docs.find((d) => d._id === docId);
   expect(row?.storedMimeType).toBe("application/pdf");
+
+  // Phase 40: the cockpit's inline-PDF branch reads `storedMimeType` off vaultDocText, NOT off the
+  // list -- the Output card never queries the list. Without this assertion the whole inline-PDF
+  // feature is pinned only by regexes over cards.tsx, which a change on the data side sails through.
+  const text = await asTenant(t, "tenant_a").query(api.vault.vaultDocText, { vaultDocId: docId });
+  expect(text?.storedMimeType).toBe("application/pdf");
 });
 
 // 26-11 (CONT-01): the artifact shelf must be able to say WHICH conversation produced a document.

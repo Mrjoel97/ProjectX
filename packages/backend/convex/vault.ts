@@ -17,7 +17,7 @@
 // attaches the failure-handling `onComplete`, so a dead run can never strand a doc at `processing`
 // (the vault plane's zero-embed-before-accept invariant, mirroring executePlan for delivery).
 import type { EntryId } from "@convex-dev/rag";
-import { XLSX_MIME } from "@pikar/core";
+import { formatSpec } from "@pikar/core";
 import {
   capMB,
   categoryFor,
@@ -590,9 +590,15 @@ const SHEETS_ARG = v.array(
     name: v.string(),
     rows: v.array(v.array(v.string())),
     totalRows: v.number(),
+    totalCols: v.optional(v.number()),
   }),
 );
-type SheetRowsShape = { name: string; rows: string[][]; totalRows: number };
+type SheetRowsShape = {
+  name: string;
+  rows: string[][];
+  totalRows: number;
+  totalCols?: number;
+};
 /**
  * Phase 40 (DOC-01): the capped grid for ONE workbook. Replace-by-doc, so a Retry (which re-runs
  * the whole extraction rail) leaves one row, not two — the write is idempotent by construction.
@@ -609,6 +615,12 @@ export const upsertSheets = internalMutation({
     sheetCount: v.number(),
   },
   handler: async (ctx, { tenantId, docId, sheets, sheetCount }): Promise<null> => {
+    // The document must still EXIST. The grid is written after a full SheetJS parse, seconds after
+    // the text landed, and Delete is armed on the card that whole time — without this guard a
+    // delete inside that window leaves a grid row keyed to a dead id that nothing can reach or
+    // clean up. `ingestExtractedText` guards the same window the same way.
+    const doc = await ctx.db.get(docId);
+    if (!doc || doc.tenantId !== tenantId) return null;
     const existing = await ctx.db
       .query("vaultSheets")
       .withIndex("by_doc", (q) => q.eq("tenantId", tenantId).eq("docId", docId))
@@ -1393,7 +1405,7 @@ const storedMimeFor = (
   storageId: Id<"_storage"> | undefined,
 ): string | undefined => {
   if (!storageId) return undefined;
-  return form === "sheet" ? XLSX_MIME : "application/pdf";
+  return formatSpec(form === "sheet" ? "xlsx" : "pdf").mimeType;
 };
 
 export const insertCreatedDoc = internalMutation({

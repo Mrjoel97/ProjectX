@@ -34,11 +34,18 @@ export const SHEET_COUNT_CAP = 10;
  *  grid reads as data, and that would be a lie. */
 export const SHEETS_BYTES_CAP = 256 * 1024;
 
-/** One sheet, capped. `totalRows` is the honesty field: rows.length may be less. */
-export type SheetRows = { name: string; rows: string[][]; totalRows: number };
+/** One sheet, capped. `totalRows` and `totalCols` are the honesty fields: the rendered `rows` may
+ *  be shorter AND narrower than the sheet, and a grid that hides either without saying so is the
+ *  same lie in two directions. */
+export type SheetRows = { name: string; rows: string[][]; totalRows: number; totalCols: number };
 /** `sheetCount` is the workbook's TOTAL sheet count, so the renderer can say how many it is not
  *  showing. `sheets.length <= sheetCount` always. */
 export type SheetPreview = { sheets: SheetRows[]; sheetCount: number };
+
+/** NOTE on row 0: this reader does no header DETECTION. Row 0 is simply the sheet's first non-blank
+ *  row, which the renderer presents as the header because that is what row 1 of a spreadsheet means
+ *  to a reader. A workbook whose first row is a title banner will render that banner as headings —
+ *  honest (it is what the file says) but not a promise that row 0 IS a header. */
 
 /**
  * An uploaded workbook (.xlsx/.xlsm OOXML, or legacy .xls/.xlsb BIFF) as capped rows of display
@@ -62,7 +69,17 @@ export function sheetRows(bytes: Uint8Array): SheetPreview {
 
   let wb: ReturnType<typeof read>;
   try {
-    wb = read(bytes, { type: "array" });
+    // `nodim: true` is NOT a tuning knob — it is the only thing bounding the WORK.
+    //
+    // A sheet's `<dimension ref>` is a self-declared range that SheetJS trusts: without this flag
+    // it sets `!ref` from that header and `sheet_to_json` then walks every declared row, so the
+    // caps below (which bound the OUTPUT) never fire — `blankrows: false` drops the phantom rows
+    // and the result looks tiny. MEASURED on one 5.7 KB two-row workbook whose header was rewritten
+    // by hand: A1:B2 = 25 ms, A1:XFD100 = 1.2 s, A1:XFD400 = 5.8 s, linear — so Excel's routine
+    // used-range bloat (A1:XFD1048576) extrapolates to HOURS inside the extraction action, where
+    // the caller's try/catch cannot catch a hang. With the flag the same file is 3 ms and `!ref`
+    // falls back to the range SheetJS derives from the cells that actually exist.
+    wb = read(bytes, { type: "array", nodim: true });
   } catch {
     throw new Error("sheets_parse_failed: unreadable workbook");
   }
@@ -85,11 +102,16 @@ export function sheetRows(bytes: Uint8Array): SheetPreview {
       continue; // one unreadable sheet never costs the others
     }
     if (grid.length === 0) continue;
+    // Width BEFORE the slice — a 45-column CRM export must be able to say what it dropped.
+    const totalCols = grid.reduce((w, row) => Math.max(w, row.length), 0);
     const rows = grid
       .slice(0, SHEET_ROWS_CAP)
       .map((row) => row.slice(0, SHEET_COLS_CAP).map((cell) => String(cell ?? "")));
-    const sheet: SheetRows = { name, rows, totalRows: grid.length };
-    const cost = JSON.stringify(sheet).length;
+    const sheet: SheetRows = { name, rows, totalRows: grid.length, totalCols };
+    // UTF-8 BYTES, because the constant says bytes and the row is stored as UTF-8: `String.length`
+    // is UTF-16 code units, and JSON.stringify does not escape non-ASCII, so a CJK workbook would
+    // have been admitted at roughly three times the documented bound.
+    const cost = new TextEncoder().encode(JSON.stringify(sheet)).length;
     if (bytesUsed + cost > SHEETS_BYTES_CAP) break; // whole-sheet granularity, and stop here
     bytesUsed += cost;
     sheets.push(sheet);
@@ -98,19 +120,26 @@ export function sheetRows(bytes: Uint8Array): SheetPreview {
   return { sheets, sheetCount: wb.SheetNames.length };
 }
 
-/** Excel's own sheet-name rules: ≤ 31 chars, none of `[ ] : * ? / \`, non-empty, unique in the
- *  workbook. A name from a markdown heading satisfies none of them by construction. */
+/** Excel's own sheet-name rules, as SheetJS ENFORCES them (`check_ws_name`): ≤ 31 chars, none of
+ *  `[ ] : * ? / \`, no leading or trailing apostrophe, not the reserved name "History", non-empty,
+ *  unique in the workbook. A name from a markdown heading satisfies none of them by construction,
+ *  and the last two are not theoretical: `book_append_sheet` THROWS on them, which would fail the
+ *  whole deliverable — and "## History" above an order-history table is exactly what this format
+ *  is advertised for. */
 const safeSheetName = (raw: string, index: number, taken: Set<string>): string => {
-  const base =
-    raw
+  const clean = (s: string): string =>
+    s
       .replace(/[[\]:*?/\\]/g, " ")
       .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 31) || `Sheet ${index + 1}`;
+      .replace(/^'+|'+$/g, "")
+      .trim();
+  let base = clean(raw).slice(0, 31);
+  base = clean(base) || `Sheet ${index + 1}`; // the slice can land on a fresh trailing apostrophe
+  if (/^history$/i.test(base)) base = "History sheet"; // SheetJS reserves it outright
   let name = base;
   for (let n = 2; taken.has(name.toLowerCase()); n++) {
     const suffix = ` ${n}`;
-    name = `${base.slice(0, 31 - suffix.length)}${suffix}`;
+    name = `${clean(base.slice(0, 31 - suffix.length))}${suffix}`;
   }
   taken.add(name.toLowerCase());
   return name;
@@ -121,8 +150,11 @@ const safeSheetName = (raw: string, index: number, taken: Set<string>): string =
  * as the reader is concerned; this function writes values and NOTHING else: no formulas, no styles,
  * no widths. What the drafter wrote is what the workbook contains.
  *
- * Byte-stable like `markdownToPdf`: the workbook's timestamps are pinned to the epoch, so the same
- * rows produce the same bytes and a fixture can be compared without a clock in the loop.
+ * Byte-stable: the same rows produce the same bytes, so a fixture can be compared without a clock
+ * in the loop. MEASURED: SheetJS 0.20.3 writes an EMPTY `docProps/core.xml` and stamps no time of
+ * its own, so the determinism is the library's; `wb.Props` is pinned to the epoch anyway as a guard
+ * against a future version that starts stamping one — it is belt, not braces, and the test asserts
+ * the determinism rather than the Props line.
  */
 export function sheetsToXlsx(sheets: readonly { name: string; rows: string[][] }[]): Uint8Array {
   if (sheets.length === 0) throw new Error("xlsx_write_failed: no sheets");

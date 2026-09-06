@@ -92,7 +92,6 @@ import {
   tokenizeMarkdown,
   toWinAnsi,
   validateFigureClaim,
-  XLSX_MIME,
 } from "@pikar/core";
 import {
   CHEAP_MODEL,
@@ -670,7 +669,9 @@ export async function saveMarkdownDocument(
   // `long` is the whole point: a pack deliverable is a document the owner opens, so it gets the
   // derived PDF the Download button reads.
   const bytes = (await markdownToPdf(title, markdown)) as BlobPart;
-  const storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
+  const storageId = await ctx.storage.store(
+    new Blob([bytes], { type: formatSpec("pdf").mimeType }),
+  );
   const hash = await contentHash(markdown);
   const docId = await ctx.runMutation(internal.vault.insertCreatedDoc, {
     tenantId,
@@ -2180,6 +2181,16 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         skillVersion: skillVersions?.[drafter],
       },
     );
+    // The tool schema's `enum` is advertising, not enforcement: the AI SDK's `jsonSchema()` carries
+    // no validator, so an out-of-enum `format` would fall through the render ternary to the HTML
+    // branch and then die in `formatSpec(format)`. Refuse it in the tool's own voice instead.
+    if (format !== "pdf" && format !== "html" && format !== "xlsx") {
+      return {
+        ok: false,
+        message:
+          "I couldn't generate the attachment — that format isn't available. Offer a PDF, a web page (html) or a spreadsheet (xlsx).",
+      };
+    }
     const setError = async (message: string): Promise<{ ok: false; message: string }> => {
       // Render-fail / over-cap → mark the plan not-proposable, add NO ref (block-on-render-fail).
       await ctx.runMutation(internal.plans.recordAttachments, {
@@ -4122,6 +4133,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
               : DOCUMENT_DRAFTER_SKILL;
         let draft: { title: string; markdown: string };
         let storageId: Id<"_storage"> | undefined;
+        let sheetRows: { name: string; rows: string[][] }[] = [];
         try {
           draft = await ctx.runAction(internal.llm.draftDocument, {
             tenantId,
@@ -4134,12 +4146,22 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             // ponytail: cast — a Uint8Array IS a valid BlobPart at runtime; the DOM lib types
             // Uint8Array<ArrayBufferLike> too strictly (it may be SharedArrayBuffer-backed).
             const bytes = (await markdownToPdf(draft.title, draft.markdown)) as BlobPart;
-            storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
+            storageId = await ctx.storage.store(
+              new Blob([bytes], { type: formatSpec("pdf").mimeType }),
+            );
           } else if (form === "sheet") {
-            // Phase 40 (DOC-01): the vault plane's workbook. `sheetsToXlsx` throws on zero sheets,
-            // which lands in the same catch as a failed PDF render — one refusal path, one sentence.
-            const bytes = sheetsToXlsx(markdownToSheets(draft.markdown)) as BlobPart;
-            storageId = await ctx.storage.store(new Blob([bytes], { type: XLSX_MIME }));
+            // Phase 40 (DOC-01): the vault plane's workbook. The no-table case is refused HERE with
+            // its own sentence, exactly as `renderAndStore` does on the attachment plane — letting
+            // `sheetsToXlsx` throw into the generic catch below would tell the model "drafting or
+            // rendering failed" and send it round the same loop with the same prose draft.
+            sheetRows = markdownToSheets(draft.markdown);
+            if (sheetRows.length === 0) {
+              return "I couldn't build the spreadsheet — the draft came back with no table in it. Tell the user and ask which columns they want.";
+            }
+            const bytes = sheetsToXlsx(sheetRows) as BlobPart;
+            storageId = await ctx.storage.store(
+              new Blob([bytes], { type: formatSpec("xlsx").mimeType }),
+            );
           }
         } catch (error) {
           // LOG THE REASON. A bare `catch` here returns a plausible sentence, the tool step records
@@ -4226,7 +4248,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             topicHash: await contentHash(topic),
             form,
             vaultDocId: String(vaultDocId),
-            hasPdf: storageId !== undefined,
+            // A `sheet` stores .xlsx bytes, so `hasPdf` must not read true for one — this row is
+            // append-only and `auditProjection` surfaces the field.
+            hasPdf: form === "long" && storageId !== undefined,
           },
         });
         // Append-only content-plane card: titles=labels-to-UI, docIds=PreviewModal targets, and

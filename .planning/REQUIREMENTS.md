@@ -230,6 +230,10 @@ a TENANT’s Stripe account read-only. Opposite direction, opposite trust bounda
 
 - [x] **RSCH-01**: The research specialist reads the pages it cites — a `readPage` tool bounded to URLs its own search returned, a per-run read cap, page-read vs snippet-only labels on every claim, a shared staleness window on stored findings, and a limits footer that states what the system did and did not do
 
+### Document canvas (minted 2026-09-06 — Phase 40, Track C step 11 / G5)
+
+- [x] **DOC-01**: Documents render in their true form wherever the browser can — the PDF a turn produced is framed inline in the workspace card for the thread the user is viewing, and an uploaded workbook shows as a capped grid of real rows and named sheets with its ceilings stated in words — the agent can deliver a real `.xlsx` on both the email and vault planes from a registry-owned spreadsheet drafter, and Office fidelity is a recorded decision (ADR-036: `pdf | html | xlsx` out, PDF twin at creation, text projection plus original download in, never DOCX/PPTX) rather than an accident
+
 ### Optional Vertical Packs
 
 - [ ] **VERT-01**: Legal, HR, Product, Design, Engineering and Data packs are discoverable only when tenant tier, business profile and connected capabilities make them relevant; selection changes guidance and templates, never tool authority
@@ -400,6 +404,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ROUT-01 | Phase 29 | Complete (2026-09-06, Phase 37 repair) — 29 summaries (`[ROUT-01]`), 29-VERIFICATION present |
 | ROUT-02 | Phase 29 | Pending |
 | RSCH-01 | Phase 39 | Complete (2026-09-06) — 39-01-SUMMARY: readPage tool + containment tests, eval gate 46/46 on research-specialist@10 with readPage ×20 observed, footer + labels + staleness shipped |
+| DOC-01 | Phase 40 | Complete (2026-09-06) — 40-01/02/03 summaries: `vaultSheets` grid at ingest + SheetGrid in the vault preview, `.xlsx` on both planes through `spreadsheet-drafter` (v1, ungated) with bytes read back as a workbook in test, inline PDF in OutputCard under the restated URL rule, ADR-036 accepted |
 | VERT-01 | Phase 30 | Pending |
 | VERT-02 | Phase 30 | Pending |
 | VERT-03 | Phase 30 | Pending |

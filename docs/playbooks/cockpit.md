@@ -1,3 +1,44 @@
+> Last verified: 2026-09-06 (40-02/40-03, DOC-01 — **`DocFormat` IS NOW `pdf | html | xlsx`, AND THE
+> DOCUMENT A TURN PRODUCED IS VISIBLE IN THE CARD.** ADR-036 fixes that set as CLOSED: there is no DOCX or
+> PPTX output and there is not going to be one.
+>
+> **The attachment chain, updated.** `renderAndStore` picks the drafter BY FORMAT
+> (`spreadsheet-drafter` for xlsx, `document-drafter` otherwise), then renders three ways: pdf →
+> `markdownToPdf`, xlsx → `sheetsToXlsx(markdownToSheets(md))` (@pikar/vault subpath, static import), html →
+> `renderHtmlDocument`. A draft with NO TABLE is refused BEFORE the render with its own sentence, because
+> the generic render-fail message sends the model round the same loop with the same prose draft.
+> `regenerateAttachment` now passes `formatForMime(old.mimeType)` — it used to pass nothing, so revising an
+> html attachment silently returned a PDF. Delivery is untouched: `buildMime` passes `mimeType` through
+> verbatim, so a spreadsheet part needs no mail change (the Graph arm's 3 MiB raw-MIME refusal still sits
+> below the 8 MiB plan cap — a large workbook approves, delivers on Gmail and returns `too_large` on
+> Microsoft, unchanged and pre-existing).
+>
+> **`createDocument` gained `form: "sheet"`.** `insertCreatedDoc`/`patchCreatedDoc` share one
+> `CREATED_FORM` validator and derive `storedMimeType` through `storedMimeFor(form, storageId)`. That
+> helper also fixed a latent bug the new form made visible: `patchCreatedDoc` never revised
+> `storedMimeType`, so a long→short rewrite left a stored type with no bytes beneath it and a long→sheet
+> rewrite would have framed a workbook in the PDF viewer. `vaultSources.form` widened with it, and
+> `FORM_LABEL.sheet = "SPREADSHEET"`.
+>
+> **The Output card frames the PDF (40-03).** One branch in its preview section: when the SELECTED created
+> document's bytes are `application/pdf`, the browser's own viewer in a BARE `<iframe>` at
+> `min(70vh, 32rem)` — no `sandbox` (it disables the viewer plugin and frames nothing, ADR-036 §4), and one
+> scroll region so a phone under 48rem does not nest two. NOT in `CanvasPane`: that is keyed on
+> `plans.byThread` and a closed `plan.kind` with no document member, and a `createDocument` turn writes no
+> plan row at all.
+>
+> **THE BEARER-URL RULE, RESTATED.** A Convex storage URL has no expiry, so where one is minted is a
+> security property. The rule is now: minted only for a row the user is LOOKING AT — a card they clicked,
+> or the selected created artifact of the thread open in front of them — and never sitting in a
+> subscription for a row nobody is viewing. "Only on click" was the shape; this is the property.
+> `outputCard.test.ts` pins that `api.vault.vaultDownloadUrl` appears EXACTLY ONCE in `cards.tsx`, inside
+> `OutputCard`, gated on both the selected id and the bytes being a PDF.
+>
+> `vaultDocText` now also returns `storedMimeType` — metadata riding the existing subscription for the same
+> reason `status` does, so the card can tell a PDF twin from a markdown-only artifact without a second
+> query. The tool KEY sets are unchanged, so `toolRegistrySnapshot`'s 23 literals are untouched: widening
+> an existing tool's enum is not a new tool.)
+>
 > Last verified: 2026-09-06 (39-01, RSCH-01 — **the research specialist reads the pages it cites.**
 > `buildWebResearchTool` now returns `webResearch` + `readPage` from ONE record: the search adds every parsed
 > result URL to a Set the record owns, and `readPage({ url, focus })` refuses — before any network call —

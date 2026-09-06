@@ -2204,8 +2204,9 @@ export default defineSchema({
     sheets: v.array(
       v.object({
         name: v.string(), // the workbook's own sheet name — the text projection loses it
-        rows: v.array(v.array(v.string())), // display text, row 0 = the header row
-        totalRows: v.number(), // the honesty field: rows.length may be smaller (SHEET_ROWS_CAP)
+        rows: v.array(v.array(v.string())), // display text; row 0 is the sheet's first non-blank row
+        totalRows: v.number(), // honesty field: rows.length may be smaller (SHEET_ROWS_CAP)
+        totalCols: v.optional(v.number()), // honesty field: rows are narrower when SHEET_COLS_CAP cut
       }),
     ),
     sheetCount: v.number(), // the workbook's TOTAL sheets, so the card can say what it is not showing

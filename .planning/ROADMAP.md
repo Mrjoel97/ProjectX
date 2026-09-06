@@ -266,6 +266,14 @@ Plans:
 **Depends on:** Phase 37 (the hook that keeps this record honest).
 **Plans:** 1/1 — plan 01 complete 2026-09-06 (see 38-01-SUMMARY.md).
 
+### Phase 40: Document Canvas — documents in their true form (INSERTED 2026-09-06)
+
+**Goal:** Close G5: the PDF a turn produced is framed inline in the workspace Output card for the thread the user is viewing; an uploaded workbook shows as a capped grid of real rows and named sheets, read from a structured copy written at ingest; the agent can deliver a real `.xlsx` on BOTH planes (`generateAttachment({format:"xlsx"})` and `createDocument({form:"sheet"})`) from a new ungated `spreadsheet-drafter` body; Office fidelity becomes a recorded decision (ADR-036) instead of a source comment.
+**Source:** rev 5 audit §5 Track C step 11 (G5), the 08-21 audit's three cheap-first steps. Research: `.planning/phases/40-document-canvas/40-RESEARCH.md` (measured 2026-09-06 at `4b8fe5b` by a five-agent pass; §2 corrects four claims the older notes carried).
+**Requirements**: DOC-01 (minted 2026-09-06). Owner decisions 2026-09-06: BOTH planes get `.xlsx`; the inline PDF may mint its URL eagerly for the open thread's selected artifact; the cockpit-agent body bumps through the local eval gate; structured rows at ingest (not the text projection, not a re-parse).
+**Depends on:** Phase 39 (closed), and BRAND.md §§2–6/8 read first.
+**Plans:** 3/3 — 40-01 the grid at ingest, 40-02 `.xlsx` on both planes + body v3, 40-03 inline PDF + ADR-036 + close (see the 40-0N-SUMMARY files).
+
 ### Phase 39: Research engine — the specialist reads the pages it cites (INSERTED 2026-09-06)
 
 **Goal:** Close the research depth ceiling (G4): a `readPage` tool on the research grant, structurally bounded to URLs the run's own search returned, with a per-run cap and a per-page char cap; page-read vs snippet-only labels in the findings; one shared staleness window on stored findings (reuse + the card stamp); the limits footer rewritten to what the system now does; skill body v4 through the eval gate.
@@ -1581,6 +1589,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 36. SMOKE sentinels out of band (INSERTED) | 1/1 | **Complete 2026-09-06 (code + full local re-drive 13/13 specs, 4/4 smokes)** — fixture selection is an operator fact about WHO (`fixtureSeamFor`, `PIKAR_FIXTURE_TENANT_IDS`, ADR-035); every `SMOKE::` gate gated; readiness fails on any active fixture seam; `fixtureSeam.test.ts` proves both directions | 2026-09-06 |
 | 37. Planning-corpus repair (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — STATE.md collapsed to one frontmatter block (history archived), progress table regenerated from the phase directories (63 rows), REQUIREMENTS ticked where a closed phase certifies them and annotated `(open: …)` elsewhere, loose planning files archived, `scripts/check-planning.mjs` Stop hook refuses a stale corpus | 2026-09-06 |
 | 38. Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — scope A: `buildCockpitTools(ToolContext, ToolGrants)`, `grantsFor` in `@pikar/core` (the one derivation), shared `TOOL_CONTEXT_ARGS` validator at both doors, 23-class byte-identical snapshot held; the executive loop now forwards the tenant pin to dispatched specialists; live 8/8 on the local deployment | 2026-09-06 |
+| 40. Document Canvas — documents in their true form (INSERTED 2026-09-06) | 3/3 | **Complete 2026-09-06** — `vaultSheets` (capped grid written at ingest by SheetJS, tenant-owned, cascades) + `SheetGrid` in the vault preview; `.xlsx` on both planes via `markdownToSheets` + `sheetsToXlsx` and a new ungated `spreadsheet-drafter@1`, with the stored bytes read BACK as a workbook in test; `regenerateAttachment` keeps its format; inline PDF in `OutputCard` under the restated bearer-URL rule; ADR-036 accepted; cockpit-agent body v3 pending the local gate | 2026-09-06 |
 | 39. Research engine — reads the pages it cites (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — `readPage` (Tavily /extract, only URLs the run's own search returned, 6 reads × 6k chars), page-read/snippet-only labels, `RESEARCH_STALE_AFTER_MS` shared by reuse + card stamp, footer rewritten, skill v4 = research-specialist@10 through the gate 46/46 ($0.80) and ACTIVE on the local deployment (readPage ×20 across 7 runs); prod activation = owner G19 step | 2026-09-06 |
 
 ### Phase 25.1: Consistency and Reliability Hardening (INSERTED)

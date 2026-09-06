@@ -1,8 +1,16 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { strFromU8, unzipSync, zipSync } from "fflate";
 import { describe, expect, test } from "vitest";
-import { SHEET_COLS_CAP, SHEET_COUNT_CAP, SHEET_ROWS_CAP, sheetRows, sheetsToXlsx } from "./sheets";
+import {
+  SHEET_COLS_CAP,
+  SHEET_COUNT_CAP,
+  SHEET_ROWS_CAP,
+  SHEETS_BYTES_CAP,
+  sheetRows,
+  sheetsToXlsx,
+} from "./sheets";
 
 /**
  * The two functions are each other's fixture: `sheetsToXlsx` writes a REAL .xlsx and `sheetRows`
@@ -34,6 +42,7 @@ describe("sheetRows", () => {
     expect(sheetCount).toBe(2);
     expect(sheets.map((s) => s.name)).toEqual(["Sales", "Costs"]);
     expect(sheets[0]?.rows[0]).toEqual(["Region", "Revenue", "Margin"]); // row 0 IS the header
+    expect(sheets[0]?.totalCols).toBe(3); // the width, so a cut one can be announced
     expect(sheets[0]?.rows[1]).toEqual(["North", "152340.5", "0.31"]);
     expect(sheets[0]?.totalRows).toBe(3);
     // Every cell is a string: the grid renders display text, never a typed value (the ceiling).
@@ -56,12 +65,40 @@ describe("sheetRows", () => {
       rows: [["a"]],
     }));
 
-    expect(roundTrip([{ name: "Wide", rows: wide }]).sheets[0]?.rows[0]).toHaveLength(
-      SHEET_COLS_CAP,
-    );
+    const cut = roundTrip([{ name: "Wide", rows: wide }]).sheets[0];
+    expect(cut?.rows[0]).toHaveLength(SHEET_COLS_CAP);
+    // The honesty field for the OTHER axis: without it the grid announces a row cap and implies
+    // the columns are whole.
+    expect(cut?.totalCols).toBe(SHEET_COLS_CAP + 10);
     const capped = roundTrip(many);
     expect(capped.sheets).toHaveLength(SHEET_COUNT_CAP);
     expect(capped.sheetCount).toBe(SHEET_COUNT_CAP + 3); // the workbook's real total, uncapped
+  });
+
+  test("a LYING <dimension> cannot make the read walk a range the file does not have", () => {
+    // THE ONE THAT BOUNDS THE WORK, not the output. Excel routinely writes a used-range far larger
+    // than the cells present; SheetJS trusts that header unless `nodim` is set, and then walks every
+    // declared row. `blankrows: false` hides the damage — the RESULT stays two rows while the read
+    // takes seconds and, at Excel's full 1,048,576-row range, hours inside an action whose
+    // try/catch cannot catch a hang. MUTATION that turns this RED: drop `nodim: true` in sheets.ts.
+    const bytes = sheetsToXlsx([{ name: "Sales", rows: SALES }]);
+    const entries = unzipSync(bytes);
+    const sheetPath = Object.keys(entries).find((k) => /^xl\/worksheets\/sheet1\.xml$/.test(k));
+    expect(sheetPath, "fixture shape changed").toBeTruthy();
+    const xml = strFromU8(entries[sheetPath as string] as Uint8Array);
+    expect(xml, "fixture has no dimension to lie with").toMatch(/<dimension ref="[^"]+"/);
+    const lied = new TextEncoder().encode(
+      xml.replace(/<dimension ref="[^"]+"/, '<dimension ref="A1:XFD400"'),
+    );
+    entries[sheetPath as string] = lied;
+
+    const doctored = zipSync(entries);
+    const started = Date.now();
+    const { sheets } = sheetRows(doctored);
+    const elapsed = Date.now() - started;
+
+    expect(sheets[0]?.totalRows).toBe(3); // the cells that EXIST, not the range that was claimed
+    expect(elapsed, `walked the declared range (${elapsed} ms)`).toBeLessThan(1000);
   });
 
   test("a container SheetJS should never be handed throws instead of inventing a sheet", () => {
@@ -72,6 +109,25 @@ describe("sheetRows", () => {
     expect(() => sheetRows(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]))).toThrow(
       /not a workbook container \(pdf\)/,
     );
+  });
+
+  test("the byte cap drops whole sheets and counts UTF-8, not UTF-16 units", () => {
+    // A cap named in BYTES that counted String.length admitted ~3x its bound for non-Latin text.
+    // Two fat sheets of CJK: the first fits, the rest are dropped WHOLE, and sheetCount still
+    // reports the workbook's real total.
+    const fat = () =>
+      Array.from({ length: 60 }, () => Array.from({ length: 20 }, () => "会計データ".repeat(20)));
+    const { sheets, sheetCount } = roundTrip([
+      { name: "A", rows: fat() },
+      { name: "B", rows: fat() },
+      { name: "C", rows: fat() },
+    ]);
+
+    expect(sheetCount).toBe(3); // the truth about the workbook
+    expect(sheets.length).toBeLessThan(3); // ...and less than that was kept
+    const stored = new TextEncoder().encode(JSON.stringify(sheets)).length;
+    expect(stored).toBeLessThanOrEqual(SHEETS_BYTES_CAP);
+    for (const s of sheets) expect(s.rows.length).toBe(60); // whole sheets, never a half one
   });
 
   test("an empty workbook is a preview with no sheets, NOT an error", () => {
@@ -104,6 +160,23 @@ describe("sheetsToXlsx", () => {
     expect(names[3]).toBe("Prices 2"); // the duplicate gets a suffix, never a lost sheet
     expect(names[4]).toBe("Sheet 5"); // a blank name falls back to its position
     expect(new Set(names.map((n) => n.toLowerCase())).size).toBe(names.length);
+  });
+
+  test("names SheetJS itself REFUSES are rewritten, not passed through", () => {
+    // `book_append_sheet` THROWS on the reserved name and on an outer apostrophe, and a throw here
+    // fails the whole deliverable. "## History" above an order table is exactly what this format is
+    // advertised for. MUTATION: drop either rule from safeSheetName and this goes red.
+    const { sheets } = roundTrip([
+      { name: "History", rows: [["a"]] },
+      { name: "'23 Results'", rows: [["b"]] },
+      { name: "Summary: 'top line'", rows: [["c"]] },
+    ]);
+    expect(sheets).toHaveLength(3);
+    for (const s of sheets) {
+      expect(s.name.toLowerCase()).not.toBe("history");
+      expect(s.name.startsWith("'")).toBe(false);
+      expect(s.name.endsWith("'")).toBe(false);
+    }
   });
 
   test("no sheets is a refusal, and the bytes are byte-stable across calls", () => {

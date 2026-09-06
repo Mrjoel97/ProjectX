@@ -3506,5 +3506,49 @@ describe("createDocument({ form: 'sheet' }) — the vault plane's workbook (Phas
       (await ctx.db.query("vaultSources").collect()).find((r) => r.role === "created"),
     );
     expect(card?.form).toBe("sheet");
+
+    // And the BYTES are a workbook. Every assertion above is derived from `form`, so a PDF stored
+    // under the .xlsx type would satisfy all of them — this is the one that cannot be faked.
+    const buf = await t.run(
+      async (ctx) => await (await ctx.storage.get(doc!.storageId!))!.arrayBuffer(),
+    );
+    expect(sheetRows(new Uint8Array(buf)).sheets.length).toBeGreaterThan(0);
+
+    // §4: the append-only audit row must not claim a PDF was produced.
+    const created = await t.run(async (ctx) =>
+      (await ctx.db.query("audit").collect()).find((r) => r.eventType === "document.created"),
+    );
+    expect((created?.payload as { hasPdf?: boolean } | undefined)?.hasPdf).toBe(false);
+  });
+
+  test("a sheet draft with no table refuses in the tool's OWN words, not the generic render failure", async () => {
+    // The attachment plane refuses before the render for a stated reason; the vault plane used to
+    // let sheetsToXlsx throw into the catch and say "drafting or rendering it failed", which sends
+    // the model round the same loop with the same prose draft.
+    // MUTATION that turns this RED: drop the length check in createDocument's sheet branch.
+    const { t, planId } = await setup();
+    const res = await call(t, planId, "createDocument", {
+      topic: "SMOKE::route=direct_llm::no-table:: just prose please",
+      form: "sheet",
+    });
+
+    expect(res).toMatch(/no table/i);
+    expect(res).toMatch(/columns/i);
+    expect(res).not.toMatch(/drafting or rendering/i);
+    const docs = await t.run(async (ctx) => await ctx.db.query("vaultDocuments").collect());
+    expect(docs.filter((d) => d.origin === "agent")).toEqual([]); // nothing half-saved
+  });
+
+  test("an out-of-enum format is refused by name — the tool schema's enum is not enforcement", async () => {
+    // `jsonSchema()` carries no validator, so an out-of-enum value reached the render ternary and
+    // died in formatSpec. MUTATION: remove the guard at the top of renderAndStore.
+    const { t, planId } = await setup();
+    const res = await call(t, planId, "generateAttachment", {
+      topic: `${ATTACH} quarterly`,
+      format: "docx",
+    });
+
+    expect(res).toMatch(/isn't available|not available/i);
+    expect((await readPlan(t, planId))?.attachments ?? []).toEqual([]);
   });
 });

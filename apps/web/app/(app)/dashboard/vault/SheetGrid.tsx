@@ -20,7 +20,12 @@
  * showing of how many, and a capped workbook says how many sheets it is not showing. Amber is the
  * approval gate's alone and appears nowhere here.
  */
-export type SheetRowsView = { name: string; rows: string[][]; totalRows: number };
+export type SheetRowsView = {
+  name: string;
+  rows: string[][];
+  totalRows: number;
+  totalCols?: number;
+};
 
 const count = (n: number): string => n.toLocaleString();
 
@@ -61,10 +66,16 @@ export function SheetGrid({ sheets, sheetCount }: { sheets: SheetRowsView[]; she
                 </tbody>
               </table>
             </div>
-            {sheet.rows.length < sheet.totalRows && (
+            {/* Both ceilings, in words. A row cap that is announced while a COLUMN cap is not
+                implies the columns are whole, which is the same lie one axis over. */}
+            {(sheet.rows.length < sheet.totalRows ||
+              (sheet.totalCols !== undefined && columns < sheet.totalCols)) && (
               <p style={{ marginTop: "0.4rem", color: "var(--ink-soft)", fontSize: "0.85rem" }}>
-                Showing the first {count(sheet.rows.length)} of {count(sheet.totalRows)} rows —
-                download the original for the rest.
+                Showing the first {count(sheet.rows.length)} of {count(sheet.totalRows)} rows
+                {sheet.totalCols !== undefined && columns < sheet.totalCols
+                  ? ` and the first ${count(columns)} of ${count(sheet.totalCols)} columns`
+                  : ""}{" "}
+                — download the original for the rest.
               </p>
             )}
           </section>

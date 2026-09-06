@@ -985,6 +985,25 @@ describe("vaultDocSheets + the delete cascade (Phase 40)", () => {
     ).toBeNull();
   });
 
+  test("a grid written after its document was deleted is dropped, not orphaned", async () => {
+    // The real window: the grid is written seconds after the text, following a full SheetJS parse,
+    // and Delete is armed on the card that whole time. Without the existence guard the insert
+    // succeeds against a dead id and nothing can ever reach or clean it.
+    // MUTATION that turns this RED: drop the ctx.db.get guard in upsertSheets.
+    const t = convexTest(schema, modules);
+    const docId = await seedGrid(t, "tenant_a");
+    await asTenant(t, "tenant_a").mutation(api.vault.deleteVaultDoc, { vaultDocId: docId });
+
+    await t.mutation(internal.vault.upsertSheets, {
+      tenantId: "tenant_a",
+      docId,
+      sheets: [{ name: "Late", rows: [["x"]], totalRows: 1 }],
+      sheetCount: 1,
+    });
+
+    expect(await t.run((ctx) => ctx.db.query("vaultSheets").collect())).toEqual([]);
+  });
+
   test("deleting the document deletes its grid — no cell text survives its document", async () => {
     // MUTATION that turns this RED: drop the vaultSheets delete from deleteVaultDoc.
     const t = convexTest(schema, modules);

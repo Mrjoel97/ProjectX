@@ -1,5 +1,29 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-06 (40-02, DOC-01 — **A NEW UNGATED ROW, `spreadsheet-drafter@1`, AND
+> `cockpit-agent` BODY v3.**
+>
+> `spreadsheet-drafter` is a NEW registry name rather than a wider `document-drafter`, for the
+> `content-drafter` reason recorded in `skill.ts` and now proven twice: `run-eval-golden.mjs`'s
+> `SKILL_NAMES` is DERIVED from `GATED_SKILLS`, and no golden fixture reaches the drafting path, so gating
+> it would mint a candidate no eval run could ever certify and strand the row at v1 on its first body edit.
+> A new name takes `seedSkills`' `rows.length === 0` branch and lands at v1 `active` with no eval cycle and
+> no paid run. `document-drafter` — which IS gated, and whose body tells the model the opposite of what a
+> spreadsheet needs ("keep tables to 2–4 columns so they fit the page") — stays byte-unchanged.
+>
+> The body carries the rules code cannot enforce: the first table row is the header, plain numbers with the
+> unit in the column header, `YYYY-MM-DD` dates, one fact per cell, NO formulas (this system writes values,
+> so `=SUM(...)` would arrive as literal text), ≤12 columns, and an EMPTY cell rather than an invented
+> figure. Registered in `skillBodies.test.ts`'s md↔ts no-drift list — there is no generator, so that row is
+> the only thing that turns an edit to one side into a failure instead of a silently stale seeded prompt.
+>
+> **`cockpit-agent` v3** teaches the third format (ADR-007: a granted capability must be TAUGHT — a body
+> that contradicts its tool set is a recorded failure class). It is GATED, so `seedSkills` publishes it as a
+> CANDIDATE and it needs `pnpm eval:golden --skill cockpit-agent@<v>` (46 cases, ~$0.80) then
+> `activateSkill` — per deployment, so the prod run is the owner's G19 step. **As of this commit that gate
+> has NOT been run**: the local deployment still executes v2 against the new tool set, which works (the
+> enum and tool description carry xlsx) but does not advertise it.)
+>
 > Last verified: 2026-09-06 (39-01, RSCH-01 — `research-specialist.md` → v4: three tools (`webResearch`, `readPage`, `declareUnsupported`), a "Read before you cite" section with the **page-read** / **snippet-only** labels, and the limit section rewritten (the "executed by the provider" sentence had been false since the Tavily move). The `.ts` constant was regenerated from the `.md` (LF-normalised, `skillBodies.test.ts` holds the byte identity). Published as a candidate by `seedSkills` on the local deployment and gated by `pnpm eval:golden --skill research-specialist@<v>` there; production activation is the owner's G19 step — see 39-01-SUMMARY.md for the run.)
 >
 

@@ -1,5 +1,16 @@
 # Playbook: Production Beta Readiness (25-10)
 
+> Last verified: 2026-09-06 (40-02, DOC-01 — one new in-band switch on the fixture seam, declared here
+> and in `fixtureSeam.test.ts`. `parseSmoke` gains `noTable`, which makes the spreadsheet drafter's offline
+> fixture answer with PROSE instead of a table, so the no-table refusal is reachable without a paid call.
+> It is gated by `fixtureSeamFor(tenantId)` with the rest of that parser (ADR-035), and
+> `fixtureSeam.test.ts` deep-equals the parser's whole return shape ON PURPOSE — a new sentinel on this
+> parser has to be declared in that test rather than added quietly. Production carries no fixture vars, so
+> none of this is reachable there.
+> **Owner list (G19), now with a third gate:** the pack, revenue and `research-specialist` v4 activations,
+> plus `cockpit-agent` **v3** (Phase 40) — `seedSkills` → `pnpm eval:golden --skill cockpit-agent@<prod v>`
+> → `activateSkill`. Until each runs, prod executes the older body against the newer tool set.)
+>
 > Last verified: 2026-09-06 (38-01 — `fixtureSeam.test.ts`'s Drive-tool block builds through the new `buildCockpitTools({ ctx, tenantId, planId })` signature; the seam behaviour it proves is unchanged. See agent-runtime.md's 38-01 block.)
 >
 

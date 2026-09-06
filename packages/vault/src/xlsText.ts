@@ -16,8 +16,10 @@
 // it is the shape that was actually PROVEN, it costs nothing, and a version bump could drop the
 // ESM build without a single test going red. `xlsText.test.ts` scans this file to enforce it.
 //
-// ponytail: only the READ path is used. SheetJS's writer ships in the same module and cannot be
-// dropped without contortions; the tests use it to build fixtures, production never does.
+// ponytail: only the READ path is used HERE. SheetJS's writer ships in the same module; this file
+// never calls it, and its tests use it only to build fixtures. Since Phase 40 the writer DOES have
+// production callers — `sheets.ts` `sheetsToXlsx`, reached from `renderAndStore` and
+// `createDocument` — so "production never writes a workbook" is no longer true of the package.
 import { read, utils } from "xlsx";
 import { sniffContainer } from "./sniff";
 

@@ -48,6 +48,21 @@ describe("SheetGrid", () => {
     expect(html.match(/Showing the first/g)).toHaveLength(1); // never on an uncapped sheet
   });
 
+  it("announces a cut WIDTH too — a rows-only caption implies the columns are whole", () => {
+    // MUTATION that turns this RED: drop the totalCols clause from SheetGrid's caption.
+    const wide = {
+      name: "CRM export",
+      rows: [Array.from({ length: 30 }, (_, i) => `c${i}`), Array.from({ length: 30 }, () => "x")],
+      totalRows: 2,
+      totalCols: 45,
+    };
+    const html = render([wide], 1);
+
+    expect(html).toMatch(/the first 30 of 45 columns/);
+    // The sheet is not row-capped, so the sentence must still be about what WAS cut.
+    expect(html).toMatch(/Showing the first 2 of 2 rows and the first 30 of 45 columns/);
+  });
+
   it("says how many sheets are missing, with the plural right, and nothing when none are", () => {
     expect(render([PRICES], 4)).toMatch(/3 more sheets are not shown/);
     expect(render([PRICES], 2)).toMatch(/1 more sheet is not shown/);

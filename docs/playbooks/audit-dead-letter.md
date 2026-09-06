@@ -1,5 +1,16 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-06 (40-01, DOC-01 — one registry line, and the reason it is load-bearing.
+> `TENANT_TABLE_CLASSIFICATION` gains `vaultSheets: "tenant_owned"` — a workbook's capped grid is cell
+> text, so it is tenant data in the fullest sense. That classification is a PROMISE the tenant can export
+> and delete it, and both walkers (`tenantExport`, `tenantDelete`) reach every owned table through
+> `by_tenant`: adding the classification WITHOUT that index broke both files' typecheck immediately, which
+> is how the promise stays true rather than becoming a comment.
+> The table count in `tenantData.test.ts` moved 58 → 59 and was **RE-DERIVED, not bumped** — it and
+> `schema.ts`'s own header index (asserted independently by `schema.test.ts` against the same source) are
+> two readers of one file that now agree. The extraction audit row is unchanged: it still carries the rail,
+> the path, PII counts and a char count. No cell value reaches the log plane (§4).)
+>
 > Last verified: 2026-09-05 (34-01 — **A THIRD REVIEW-FAMILY NOTIFICATION KIND, `agenda_proposal`, OUTSIDE
 > `NOTIFICATION_KINDS`.** `AGENDA_PROPOSAL_MESSAGE` sits beside the two review messages in
 > `notificationTemplates.ts`; the kind is inserted directly by `proactiveReview.insertReviewNotification`

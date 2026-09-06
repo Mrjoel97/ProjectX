@@ -2713,7 +2713,10 @@ function OutputCard({ threadId }: { threadId?: string }) {
         aria-label="Created artifact preview"
         style={{ ...snippetSheet, color: "var(--ink)" }}
       >
-        {artifact === undefined ? (
+        {/* `pdfBytes && pdfUrl === undefined` is still LOADING: the URL query cannot even be
+            registered until `artifact` resolves, so without this the card renders the extracted
+            markdown for one round trip and then swaps it for the frame. */}
+        {artifact === undefined || (pdfBytes && pdfUrl === undefined) ? (
           "Loading document…"
         ) : pdfUrl ? (
           // The document AS IT WILL BE READ. The browser's own PDF viewer, the same bare iframe the

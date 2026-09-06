@@ -264,7 +264,12 @@ export function extractOfficeText(bytes: Uint8Array): { text: string; kind: Offi
   if (mimetype && strFromU8(mimetype).trim().startsWith(ODF_MIME_PREFIX)) {
     const content = entries["content.xml"];
     if (!content) throw new Error("office_parse_failed: missing content.xml");
-    return { text: odfText(content), kind: "odf" };
+    // An .ods is a SPREADSHEET, and saying only "odf" here is what would deny it a grid — the
+    // preview already lists the ODS mime as one, and SheetJS reads the format.
+    return {
+      text: odfText(content),
+      kind: strFromU8(mimetype).trim().endsWith(".spreadsheet") ? "spreadsheet" : "odf",
+    };
   }
   if (entries["META-INF/container.xml"]) return { text: epubText(entries), kind: "epub" }; // EPUB
   throw new Error("office_parse_failed: unrecognized zip");
