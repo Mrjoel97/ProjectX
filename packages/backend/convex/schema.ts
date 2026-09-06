@@ -1606,6 +1606,12 @@ export default defineSchema({
       // and evaluateBusiness. Still no text field: §4 on this path stays enforced by the ABSENCE of
       // anywhere to put a query string or a retrieved URL.
       v.literal("webResearch"),
+      // Phase 39 (RSCH-01): the page READ inside a research run (llm.ts `readPage`, Tavily
+      // /extract over a URL the run's own search returned). Same swallow trap as `webResearch`:
+      // a local executable tool fires `onToolExecutionStart`, so the literal must exist or the
+      // insert throws inside a callback the AI SDK swallows. Still no text field — the URL and
+      // the page never have anywhere to land on this row (§4).
+      v.literal("readPage"),
       // Phase-17 (ACTN-02): the in-loop availability READ and the plan-staging WRITE. Two literals,
       // no text field — §4 on this path stays enforced by the ABSENCE of anywhere to put an event
       // title or an attendee address. Without these literals the step insert throws and the AI SDK

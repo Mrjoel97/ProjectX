@@ -106,7 +106,17 @@ const SPECIALIST_TOOLS = ["searchVault"] as const;
  * induces a declaration costs the tenant a real finding labelled uncertain (denial of utility),
  * and SUPPRESSING a declaration gains an attacker nothing — not calling the tool is the default.
  */
-const RESEARCH_TOOLS = ["webResearch", "declareUnsupported"] as const;
+const RESEARCH_TOOLS = ["webResearch", "readPage", "declareUnsupported"] as const;
+
+/**
+ * Phase 39 (RSCH-01): how long a research finding counts as current. ONE constant, two readers —
+ * `research.recentFindingsForQuestion` (skip re-buying research for the same question inside the
+ * window; the 33.2 storyboard retry case) and the memo card's retrieval stamp ("may be out of
+ * date" past it). `vaultDocuments.retrievedAt` is the stored, queryable stamp it is measured
+ * against. ponytail: one window for every question; upgrade path is a per-question freshness
+ * class (a price moves daily, a regulation yearly) when a consumer can name one.
+ */
+export const RESEARCH_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Phase 28's connector-backed revenue grant. Runtime-frozen as well as readonly-by-type: a skill

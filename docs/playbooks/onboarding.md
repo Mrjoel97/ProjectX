@@ -1,5 +1,8 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-06 (39-01 — `SegmentAnatomy.tsx`'s tool label map gains `readPage: "reading the pages it cites"`; nothing else on the profile surface changed.)
+>
+
 > Last verified: 2026-09-06 (36-01, G24 — `onboarding.ts`'s `SMOKE::profile::` and `SMOKE::onboard::`
 > gates are now `&& fixtureSeamFor(ctx.tenantId)`. Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. `onboarding.test.ts` runs under the suite-wide
 > keyless opt-in and is unchanged.)

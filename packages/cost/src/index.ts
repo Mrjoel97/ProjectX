@@ -20,6 +20,7 @@ export {
   PACK_FALLBACK_MODEL,
   PACK_MODEL,
   PRICING,
+  pageReadFeeUsd,
   priceRealtime,
   priceTranscription,
   priceUsage,

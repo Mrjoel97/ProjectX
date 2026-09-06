@@ -1,5 +1,8 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-09-06 (39-01, RSCH-01 — `RESEARCH_TOOLS` in `specialists.ts` gains `readPage` (the research specialist reads a page its own search returned; ADR-007 still holds: a read, code-owned, taught in the body) and `RESEARCH_STALE_AFTER_MS` lives beside the research constants; the equality test names the three-tool grant. The growth specialists' grant (`searchVault`) is unchanged.)
+>
+
 > Last verified: 2026-08-31 (28-12 — **A FOURTH SPECIALIST ROUTE, `revenue`, AND ITS GRANT IS
 > FROZEN AND READ-ONLY.** Read from the committed RED tests (`f3f361a`) by the 33.1 lane, which does
 > not own this subsystem; recorded because §9 asks a change to travel with its playbook.

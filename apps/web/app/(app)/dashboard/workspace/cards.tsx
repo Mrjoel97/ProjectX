@@ -7,6 +7,7 @@ import { api } from "@pikar/backend/api";
 // can tell "this is the weekly review" from "someone asked for an evaluation in a chat".
 import {
   parseCrmOperations,
+  RESEARCH_STALE_AFTER_MS,
   REVIEW_THREAD_ID,
   SEND_TIME_HORIZON_MS,
   withheldNote,
@@ -481,8 +482,12 @@ type MemoSource = NonNullable<Plan["sources"]>[number];
 
 /** The retrieval stamp, in the card's own words. Mirrored by `memoCard.test.ts` — changing the
  *  format is a deliberate act, not a silent one. */
+// Phase 39: past the shared staleness window the stamp SAYS so — words, not colour (BRAND §6; amber
+// is reserved for the approval gate). The same constant decides when research is re-bought.
 const retrievedLabel = (ms: number) =>
-  `Retrieved ${new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+  `Retrieved ${new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}${
+    Date.now() - ms > RESEARCH_STALE_AFTER_MS ? " — may be out of date" : ""
+  }`;
 
 /**
  * The memo card's READABLE half: the specialist's document, rendered, and the pages it read.
@@ -2130,6 +2135,8 @@ const VERB: Record<string, [running: string, done: string]> = {
   // since 2026-08-07, when it stopped being a provider-executed hosted tool and became a local
   // Tavily call — a hosted tool never fired onToolExecutionStart, so there was nothing to label.
   webResearch: ["Searching the web…", "Search finished"],
+  // Phase 39: the page read inside a research run (llm.ts `readPage`).
+  readPage: ["Reading a page…", "Read the page"],
   checkAvailability: ["Checking your calendar…", "Checked your calendar"],
   proposeCalendarEvent: ["Putting the event together…", "Event ready to approve"],
   // 17-05 (ACTN-02 gap closure): the two management trace verbs, RESERVED here in the same commit

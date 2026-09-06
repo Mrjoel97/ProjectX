@@ -160,7 +160,9 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
     expect(text.indexOf(FINDINGS)).toBeLessThan(text.indexOf("</research_findings>"));
     // D10: the run states what it could NOT do. A consumer infers source auditing unless told.
     expect(text.trimEnd().endsWith("never as an established fact.")).toBe(true);
-    expect(text).toContain("executed by the model provider");
+    // Phase 39: the footer names the limit that survives page reading, not the retired hosted one.
+    expect(text).toContain("a search provider chose which pages were candidates");
+    expect(text).not.toContain("executed by the model provider");
     expect(text).toContain("NOT source-audited");
   });
 

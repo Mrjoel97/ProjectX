@@ -57,7 +57,7 @@ function runtimeToolNames(): Set<string> {
   // spread in at the `documentIsDeliverable` branch. Both are conditional for the same reason —
   // `runAgentLoop` returns the FULL record when `toolNames === undefined`, so a tool built inside
   // the literal is one the EXECUTIVE agent silently acquires.
-  return new Set([...names, "webResearch", "declareUnsupported", "saveAsDocument"]);
+  return new Set([...names, "webResearch", "readPage", "declareUnsupported", "saveAsDocument"]);
 }
 
 describe("the workflow-pack registry is total", () => {
@@ -313,6 +313,10 @@ describe("the grant is code-owned and exact", () => {
     for (const id of WORKFLOW_PACK_IDS) {
       const tools = toolsForWorkflowPack(id);
       expect(tools.includes("webResearch"), `${id}`).toBe(tools.includes("declareUnsupported"));
+      // Phase 39: `readPage` is BUILT beside webResearch but NOT in any pack grant yet — the filter
+      // withholds it (ADR-007) until a pack body teaches it through the pack gate. Pinned, so widening
+      // it is a decision and not a side effect of the research specialist's grant.
+      expect(tools.includes("readPage"), `${id}`).toBe(false);
     }
     // Non-vacuity: at least one pack actually researches, or the rule above asserts nothing.
     expect(

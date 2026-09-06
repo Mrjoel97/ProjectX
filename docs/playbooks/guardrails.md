@@ -1,5 +1,8 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-09-06 (39-01 — `@pikar/cost` gains `WEB_PAGE_READ_USD_TAVILY` = a fifth of the search proxy (Tavily /extract bills 1 credit per 5 URLs) and `pageReadFeeUsd()`; `runAgentLoop` adds `pageReads × pageReadFeeUsd()` to the SAME `web_search_fee` row as the searches, charged per call (over-count is the fail-safe direction). No new rail, no new kind.)
+>
+
 > Last verified: 2026-09-05 (25.3-01 — **THE THREE DEPLOYMENT-WIDE CEILINGS ARE ENV-DRIVEN (G17).**
 > `DEPLOYMENT_BUDGET_CENTS`, `DEPLOYMENT_MEDIA_BUDGET_CENTS`, `DEPLOYMENT_INGEST_BUDGET_CENTS` are read
 > at module load through `envCents(raw, fallback)` — a positive integer replaces the compiled $50 /

@@ -363,6 +363,9 @@ const researchTheWeb = (summary: string) =>
     state: "existing",
     summary,
     reads: "web",
+    // Phase 39: `readPage` is NOT granted to packs yet — a pack body must TEACH a tool it holds (the
+    // test below), and a pack body edit mints three candidates behind the pack gate. The research
+    // specialist reads pages; packs get it when their bodies are next revised through that gate.
     tools: ["webResearch", "declareUnsupported"],
   }) as const satisfies PackOperation;
 

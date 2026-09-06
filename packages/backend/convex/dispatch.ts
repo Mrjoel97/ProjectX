@@ -16,6 +16,7 @@
 // and the progress indicator is the CKPT-05 agentSteps trace.
 import {
   PRESET_SKILL,
+  RESEARCH_STALE_AFTER_MS,
   resolveSpecialist,
   SPECIALIST_ROUTES,
   SPECIALISTS,
@@ -182,7 +183,8 @@ const MAX_QUESTION_CHARS = 500;
 /** 33.2 (PRD L5): how long research findings for the SAME brief on the SAME tenant are reused
  *  before `groundMediaBrief` buys them again. A day: long enough that every "Try again" and every
  *  re-ask in a fresh chat reuses, short enough that a brief revisited next week gets fresh figures. */
-const FINDINGS_REUSE_MS = 24 * 60 * 60 * 1000;
+// Phase 39: ONE window, shared with the memo card's stamp — see RESEARCH_STALE_AFTER_MS in core.
+const FINDINGS_REUSE_MS = RESEARCH_STALE_AFTER_MS;
 const cap = (s: string, limit = MAX_LABEL_CHARS): string =>
   s.length > limit ? `${s.slice(0, limit)}…` : s;
 

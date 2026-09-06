@@ -98,6 +98,7 @@ import {
   MEDIA_MODEL,
   PACK_FALLBACK_MODEL,
   PACK_MODEL,
+  pageReadFeeUsd,
   priceUsage,
   RESEARCH_FALLBACK_MODEL,
   RESEARCH_MODEL,
@@ -380,6 +381,35 @@ export const parseWebResults = (payload: unknown): WebResult[] => {
   return out;
 };
 
+/** Phase 39 (RSCH-01): how many pages one research run may READ. Each read is a step and ~6k chars
+ *  of input on every later step, so this is the second cost lever beside `WEB_RESULTS_PER_SEARCH`. */
+export const PAGE_READS_PER_RUN = 6;
+/** The char cap on one read page. `/extract` with a `query` returns the top-ranked chunks joined by
+ *  `[...]`, so the cap trims the tail of an already-focused excerpt, not the middle of an argument. */
+export const PAGE_READ_CHARS = 6000;
+
+/** Tavily `/extract`'s response, reduced to the one page asked for. Exported for the unit test. */
+export const parseExtractResult = (
+  payload: unknown,
+  url: string,
+): { content: string; truncated: boolean } | { error: string } => {
+  const p = payload as {
+    results?: { url?: unknown; raw_content?: unknown }[];
+    failed_results?: { url?: unknown; error?: unknown }[];
+  };
+  const hit = Array.isArray(p?.results)
+    ? p.results.find((r) => r?.url === url && typeof r?.raw_content === "string")
+    : undefined;
+  if (hit) {
+    const raw = hit.raw_content as string;
+    return { content: raw.slice(0, PAGE_READ_CHARS), truncated: raw.length > PAGE_READ_CHARS };
+  }
+  const failed = Array.isArray(p?.failed_results)
+    ? p.failed_results.find((r) => r?.url === url)
+    : undefined;
+  return { error: String(failed?.error ?? "no content returned for that page") };
+};
+
 /**
  * The sources carried by ONE `webResearch` tool-result part.
  *
@@ -436,54 +466,120 @@ export const sourcesFromToolOutput = (output: unknown): { url: string; title: st
  * research loop does — a probe that builds its own tool proves a fiction (the 15.3 `classifyOne`
  * lesson).
  */
-export const buildWebResearchTool = (): ToolSet => ({
-  webResearch: tool({
-    description:
-      "Search the live web and get back real pages with their URLs. Use it for anything you " +
-      "cannot answer from the conversation or the vault — recent events, external companies, " +
-      "prices, published figures. Search ONCE PER SUB-QUESTION rather than once per run: each " +
-      "call is a fresh independent query. Every claim you make from a result must cite that " +
-      "result's URL.",
-    inputSchema: jsonSchema<{ query: string }>({
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "A focused natural-language search query for ONE sub-question.",
+export const buildWebResearchTool = (): ToolSet => {
+  // Phase 39 (RSCH-01). THE CONTAINMENT for page reads, and it is structural: `readPage` accepts
+  // ONLY a URL that `webResearch` returned in THIS record's lifetime (one build = one run). An
+  // injected page cannot steer the specialist to an arbitrary host, because the model never gets to
+  // name a host — it can only pick from what the search provider returned. `reads` caps the count.
+  const returned = new Set<string>();
+  let reads = 0;
+  return {
+    webResearch: tool({
+      description:
+        "Search the live web and get back real pages with their URLs. Use it for anything you " +
+        "cannot answer from the conversation or the vault — recent events, external companies, " +
+        "prices, published figures. Search ONCE PER SUB-QUESTION rather than once per run: each " +
+        "call is a fresh independent query. Every claim you make from a result must cite that " +
+        "result's URL.",
+      inputSchema: jsonSchema<{ query: string }>({
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "A focused natural-language search query for ONE sub-question.",
+          },
         },
+        required: ["query"],
+        additionalProperties: false,
+      }),
+      execute: async ({ query }): Promise<{ results: WebResult[]; note?: string }> => {
+        const apiKey = process.env.TAVILY_API_KEY;
+        // Structural absence beats a thrown error here: a missing key is an OPERATOR fault, and a
+        // throw inside a tool ends the specialist's whole run. Returning an empty result set lets the
+        // model finish and say it found nothing — which the evidence verdict then reports honestly.
+        if (!apiKey) return { results: [], note: "web search unavailable: TAVILY_API_KEY unset" };
+        // §4 REDACT-BEFORE-EGRESS. This is a NEW third-party boundary — the query is model-authored
+        // and could echo tenant content from the prompt. The hosted tools had the same exposure to
+        // their own vendor; Tavily is one more party, so the same rule that governs every other
+        // outbound call governs this one. Fail CLOSED: an unscannable query is not sent.
+        const scan = scanText(query);
+        if (!scan.ok)
+          return { results: [], note: "web search skipped: query failed redaction scan" };
+        const res = await fetch("https://api.tavily.com/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            query: scan.value.safeText,
+            max_results: WEB_RESULTS_PER_SEARCH,
+            search_depth: "basic",
+          }),
+          signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        });
+        // Same reasoning as the missing key: a 429 (monthly credits gone) or a 5xx must not kill the
+        // run. The model is told plainly, and `sources: []` makes the verdict honest downstream.
+        if (!res.ok) return { results: [], note: `web search failed: HTTP ${res.status}` };
+        const results = parseWebResults(await res.json());
+        for (const r of results) returned.add(r.url);
+        return { results };
       },
-      required: ["query"],
-      additionalProperties: false,
     }),
-    execute: async ({ query }): Promise<{ results: WebResult[]; note?: string }> => {
-      const apiKey = process.env.TAVILY_API_KEY;
-      // Structural absence beats a thrown error here: a missing key is an OPERATOR fault, and a
-      // throw inside a tool ends the specialist's whole run. Returning an empty result set lets the
-      // model finish and say it found nothing — which the evidence verdict then reports honestly.
-      if (!apiKey) return { results: [], note: "web search unavailable: TAVILY_API_KEY unset" };
-      // §4 REDACT-BEFORE-EGRESS. This is a NEW third-party boundary — the query is model-authored
-      // and could echo tenant content from the prompt. The hosted tools had the same exposure to
-      // their own vendor; Tavily is one more party, so the same rule that governs every other
-      // outbound call governs this one. Fail CLOSED: an unscannable query is not sent.
-      const scan = scanText(query);
-      if (!scan.ok) return { results: [], note: "web search skipped: query failed redaction scan" };
-      const res = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          query: scan.value.safeText,
-          max_results: WEB_RESULTS_PER_SEARCH,
-          search_depth: "basic",
-        }),
-        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-      });
-      // Same reasoning as the missing key: a 429 (monthly credits gone) or a 5xx must not kill the
-      // run. The model is told plainly, and `sources: []` makes the verdict honest downstream.
-      if (!res.ok) return { results: [], note: `web search failed: HTTP ${res.status}` };
-      return { results: parseWebResults(await res.json()) };
-    },
-  }),
-});
+    readPage: tool({
+      description:
+        "Read one page that a webResearch call returned, focused on what you need from it. Use it " +
+        "before you cite a result for a claim that matters — a snippet is a lead, the page is the " +
+        "evidence. Only URLs returned by your own searches in this run can be read; each read " +
+        "costs a step, so read the two or three pages that carry the answer, not every result.",
+      inputSchema: jsonSchema<{ url: string; focus: string }>({
+        type: "object",
+        properties: {
+          url: { type: "string", description: "A URL exactly as a webResearch result gave it." },
+          focus: {
+            type: "string",
+            description: "What you are looking for on this page, in one line (ranks the excerpt).",
+          },
+        },
+        required: ["url", "focus"],
+        additionalProperties: false,
+      }),
+      execute: async ({
+        url,
+        focus,
+      }): Promise<{ url: string; content: string; truncated?: boolean; note?: string }> => {
+        const refused = (note: string) => ({ url, content: "", note });
+        // Structural absence of a path to an arbitrary host: not a returned URL ⇒ not fetched.
+        if (!returned.has(url))
+          return refused("readPage refused: that URL was not returned by a search in this run");
+        if (reads >= PAGE_READS_PER_RUN)
+          return refused(`readPage refused: this run has read its ${PAGE_READS_PER_RUN} pages`);
+        const apiKey = process.env.TAVILY_API_KEY;
+        if (!apiKey) return refused("page read unavailable: TAVILY_API_KEY unset");
+        // §4 REDACT-BEFORE-EGRESS, the webResearch rule: `focus` is model-authored and could echo
+        // tenant content; an unscannable focus is not sent. The URL itself came from the provider.
+        const scan = scanText(focus);
+        if (!scan.ok) return refused("page read skipped: focus failed redaction scan");
+        reads += 1;
+        const res = await fetch("https://api.tavily.com/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            urls: [url],
+            extract_depth: "basic",
+            format: "markdown",
+            query: scan.value.safeText,
+            chunks_per_source: 3,
+          }),
+          signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+        });
+        // A failed read must not kill the run (the webResearch rule): the model is told, and the
+        // claim stays snippet-backed, which the skill body tells it to say.
+        if (!res.ok) return refused(`page read failed: HTTP ${res.status}`);
+        const parsed = parseExtractResult(await res.json(), url);
+        if ("error" in parsed) return refused(`page read failed: ${parsed.error}`);
+        return { url, content: parsed.content, truncated: parsed.truncated };
+      },
+    }),
+  };
+};
 
 /**
  * 27-10. The workflow-pack save channel — **the DECISION, never the content.**
@@ -4856,7 +4952,10 @@ async function runAgentLoop(
     // rate. Charging the wrong vendor's rate under-draws the rail — the silent failure this file
     // guards against everywhere else. `searchFeeUsd` fails safe to the higher rate on any id it
     // does not recognise.
-    const feeUsd = webSearchCalls * searchFeeUsd(m.id);
+    // Phase 39: the page reads ride the SAME fee row — one "web fee" money movement per attempt,
+    // charged per call like the searches (over-count is the fail-safe direction, cost.ts).
+    const pageReads = toolCalls.filter((p) => p.toolName === "readPage").length;
+    const feeUsd = webSearchCalls * searchFeeUsd(m.id) + pageReads * pageReadFeeUsd();
     // FIN-01: `:search` is not decoration. This is a SECOND, INDEPENDENT money movement in the
     // SAME attempt as the token cost recorded above — bare `agentloop:${loopId}:a${attempt}` would
     // be that row's identity, so the fee would return the token row and be silently dropped,

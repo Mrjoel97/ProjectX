@@ -355,6 +355,15 @@ export const WEB_SEARCH_CALL_USD_TAVILY = 0.01;
  *  The hosted rates above are kept for the revert path. */
 export const searchFeeUsd = (_model: string): number => WEB_SEARCH_CALL_USD_TAVILY;
 
+// Phase 39 (RSCH-01): the page READ beside the search. Tavily /extract bills 1 credit per 5
+// successful URLs at `basic` depth, so one read is a fifth of a search on the same quota proxy
+// above ($0.01 per credit). Charged per CALL, not per successful extraction — the over-count is
+// the fail-safe direction this file uses everywhere (a refused or failed read still cost a
+// round-trip and a step). Replace with the published rate on a paid plan, together with the
+// search constant.
+export const WEB_PAGE_READ_USD_TAVILY = WEB_SEARCH_CALL_USD_TAVILY / 5;
+export const pageReadFeeUsd = (): number => WEB_PAGE_READ_USD_TAVILY;
+
 // Vercel AI Gateway per-MTok pricing, verified 2026-07-12.
 // gpt-4.1-mini row added 2026-07-27 (16-02) — published OpenAI rate at the time of the probe.
 //

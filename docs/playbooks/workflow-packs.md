@@ -1,5 +1,8 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-09-06 (39-01 — the research specialist gained `readPage`; **packs did NOT**: `researchTheWeb`'s tools stay `webResearch` + `declareUnsupported` because a pack body must TEACH every tool it holds (the "taught in its body" test) and a pack body edit mints three candidates behind the pack gate. `readPage` IS built in the record beside `webResearch`, so the pack's `toolNames` filter withholds it (ADR-007) — pinned by a test that expects no pack to be granted `readPage`. Widen it when the three research-bearing pack bodies are next revised through the gate.)
+>
+
 > Last verified: 2026-09-06 (38-01 — the "packs are leaf agents" scan in `workflowPacks.test.ts` no longer quotes `grantDispatch: toolNames === undefined` out of `llm.ts`: the derivation lives in `packages/core/src/toolGrants.ts` (`grantsFor`) since Phase 38, so the test now asserts it BEHAVIOURALLY — an allow-list that names `dispatchResearch`/`authorSkillCandidate` still receives neither bit — and scans `toolGrants.ts` + `runAgentLoop`'s `grantsFor` call. Pack grants (`toolsForWorkflowPack`) are unchanged; the 23-class `toolRegistrySnapshot.test.ts` pins every pack's built and model-visible key set.)
 >
 

@@ -37,7 +37,10 @@ import {
   buildCockpitTools,
   buildHistoryBlock,
   buildWebResearchTool,
+  PAGE_READ_CHARS,
+  PAGE_READS_PER_RUN,
   parseAgentSmoke,
+  parseExtractResult,
   parseWebResults,
   sourcesFromToolOutput,
   type ToolContext,
@@ -718,11 +721,13 @@ test("every tool the research specialist is granted is actually built under its 
 //
 // MUTATION that turns this RED: drop `execute` from the tool in llm.ts — it silently reverts to a
 // non-executable descriptor and every web search returns nothing.
-test("buildWebResearchTool exposes exactly `webResearch`, and it is LOCALLY executable", () => {
+test("buildWebResearchTool exposes exactly `webResearch` + `readPage`, and both are LOCALLY executable", () => {
   const built = buildWebResearchTool();
   // The key is OURS and `SPECIALISTS.research.tools` filters on it. Unlike the hosted era, it is
   // ALSO the name the SDK emits on the tool-call part — which is what makes the by-name count safe.
-  expect(Object.keys(built)).toEqual(["webResearch"]);
+  // Phase 39: `readPage` rides the same record — one flag builds both, so a search-granted agent
+  // can always read what it found and nothing else can read anything.
+  expect(Object.keys(built)).toEqual(["webResearch", "readPage"]);
   // The load-bearing bit: a local tool HAS an execute. Without it nothing is called, and the tool
   // silently degrades to a no-op the model still believes it invoked.
   expect(typeof (built.webResearch as { execute?: unknown }).execute).toBe("function");
@@ -734,6 +739,120 @@ test("buildWebResearchTool exposes exactly `webResearch`, and it is LOCALLY exec
 // The pure mapper is where the mistakes live — the network half needs a key, this half does not.
 // Anything without a parseable absolute URL is dropped: a source the reader cannot open is not
 // evidence, and `sources.length` is half of the honesty verdict.
+
+// ── Phase 39 (RSCH-01): `readPage` reads ONLY what the run's own search returned ──────────────
+//
+// The containment is a Set inside the tool record: `webResearch` adds every parsed result URL,
+// `readPage` refuses anything else BEFORE any network call. That is what keeps an injected page from
+// steering the specialist to an arbitrary host — the model never names a host, it picks from what
+// the provider returned. Fetch is stubbed per request URL so one test can drive both tools.
+// MUTATION that turns this RED: drop the `returned.has(url)` guard in llm.ts.
+const extractOpts = { toolCallId: "call-1", messages: [] } as never;
+const PAGE_URL = "https://vendor.example/pricing";
+const searchPayload = {
+  results: [{ url: PAGE_URL, title: "Pricing", content: "snippet", score: 0.9 }],
+};
+const extractPayload = (raw: string) => ({ results: [{ url: PAGE_URL, raw_content: raw }] });
+const tavilyFetch = (extract: unknown) =>
+  vi.fn(async (input: unknown, _init?: RequestInit) => {
+    const url = String(input);
+    const body = url.endsWith("/extract") ? extract : searchPayload;
+    return { ok: true, status: 200, json: async () => body } as Response;
+  });
+type Exec = (input: unknown, opts: unknown) => Promise<Record<string, unknown>>;
+const execs = () => {
+  const built = buildWebResearchTool() as unknown as {
+    webResearch: { execute: Exec };
+    readPage: { execute: Exec };
+  };
+  return { search: built.webResearch.execute, read: built.readPage.execute };
+};
+
+test("readPage refuses a URL no search in this run returned — before any network call", async () => {
+  vi.stubEnv("TAVILY_API_KEY", "k");
+  const fetchMock = tavilyFetch(extractPayload("page"));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    const { read } = execs();
+    const out = await read({ url: PAGE_URL, focus: "the price" }, extractOpts);
+    expect(out.content).toBe("");
+    expect(String(out.note)).toMatch(/not returned by a search/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
+test("readPage reads a page its own search returned, sends the focus as the rerank query, and bills a step", async () => {
+  vi.stubEnv("TAVILY_API_KEY", "k");
+  const fetchMock = tavilyFetch(extractPayload("The plan costs $49 a month."));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    const { search, read } = execs();
+    await search({ query: "vendor pricing" }, extractOpts);
+    const out = await read({ url: PAGE_URL, focus: "monthly price" }, extractOpts);
+    expect(out).toEqual({
+      url: PAGE_URL,
+      content: "The plan costs $49 a month.",
+      truncated: false,
+    });
+    const extractCall = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/extract"));
+    expect(extractCall).toBeDefined();
+    const sent = JSON.parse(String(extractCall?.[1]?.body));
+    expect(sent).toMatchObject({
+      urls: [PAGE_URL],
+      extract_depth: "basic",
+      query: "monthly price",
+    });
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
+test("readPage caps the reads per run and reports a failed extraction as a note, never a throw", async () => {
+  vi.stubEnv("TAVILY_API_KEY", "k");
+  const fetchMock = tavilyFetch({ results: [], failed_results: [{ url: PAGE_URL, error: "403" }] });
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    const { search, read } = execs();
+    await search({ query: "vendor pricing" }, extractOpts);
+    for (let i = 0; i < PAGE_READS_PER_RUN; i++) {
+      const out = await read({ url: PAGE_URL, focus: "price" }, extractOpts);
+      expect(String(out.note)).toMatch(/page read failed: 403/);
+    }
+    const capped = await read({ url: PAGE_URL, focus: "price" }, extractOpts);
+    expect(String(capped.note)).toMatch(new RegExp(`read its ${PAGE_READS_PER_RUN} pages`));
+    // The cap counts CALLS: exactly PAGE_READS_PER_RUN extract requests went out, not one more.
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/extract"))).toHaveLength(
+      PAGE_READS_PER_RUN,
+    );
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
+test("parseExtractResult caps the excerpt at PAGE_READ_CHARS and surfaces the provider's failure reason", () => {
+  const long = "x".repeat(PAGE_READ_CHARS + 10);
+  expect(parseExtractResult(extractPayload(long), PAGE_URL)).toEqual({
+    content: "x".repeat(PAGE_READ_CHARS),
+    truncated: true,
+  });
+  expect(
+    parseExtractResult({ failed_results: [{ url: PAGE_URL, error: "timeout" }] }, PAGE_URL),
+  ).toEqual({
+    error: "timeout",
+  });
+  // A payload about some OTHER url is not this page's content.
+  expect(
+    parseExtractResult({ results: [{ url: "https://other", raw_content: "z" }] }, PAGE_URL),
+  ).toEqual({
+    error: "no content returned for that page",
+  });
+});
+
 test("parseWebResults keeps parseable URLs, drops the rest, and never invents fields", () => {
   const rows = parseWebResults({
     results: [

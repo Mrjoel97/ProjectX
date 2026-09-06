@@ -1,3 +1,22 @@
+> Last verified: 2026-09-06 (39-01, RSCH-01 — **the research specialist reads the pages it cites.**
+> `buildWebResearchTool` now returns `webResearch` + `readPage` from ONE record: the search adds every parsed
+> result URL to a Set the record owns, and `readPage({ url, focus })` refuses — before any network call —
+> any URL not in that Set, so an injected page can never steer the specialist to a host the provider did not
+> return (the D1 property survives). It POSTs Tavily `/extract` (`basic`, markdown, `query: focus` so the
+> top-ranked chunks come back), caps `PAGE_READS_PER_RUN` (6) and `PAGE_READ_CHARS` (6k), scans `focus`
+> before egress, and returns a NOTE on a missing key / HTTP error / `failed_results` — never a throw (the
+> webResearch rule). The loop bills `pageReads × pageReadFeeUsd()` on the same web-fee row. `agentSteps.tool`
+> gained the `readPage` literal (the swallowed-step trap) and the card verbs `Reading a page… / Read the
+> page`. `RESEARCH_STALE_AFTER_MS` (core, 24 h) is now BOTH the reuse window `groundMediaBrief` checks and the
+> memo card's stamp (`Retrieved … — may be out of date` past it; words, not colour). `LIMITS_FOOTER` in
+> research.ts was rewritten — it had said the search "was executed by the model provider", false since the
+> Tavily move. Grants: `RESEARCH_TOOLS` gains `readPage`; packs do not (pinned — see workflow-packs.md).
+> Tests: `cockpitTools.test.ts` (refuses an un-returned URL with fetch never called; reads a returned one
+> sending `focus` as the rerank query; caps the count; a failed extraction is a note; `parseExtractResult`
+> caps and surfaces the reason), the snapshot literals for the research route + three packs' `built` sets,
+> `research.test.ts` on the new footer. Skill v4 through the eval gate on the local deployment — results in
+> 39-01-SUMMARY.md.)
+>
 > Last verified: 2026-09-06 (38-01 — **`buildCockpitTools` is `(ToolContext, ToolGrants)` now; the tool
 > bodies did not move.** What changed for this playbook's readers: every caller of the builder passes ONE
 > context object (`ctx`, `tenantId`, `planId`, `clientContext`, `skillVersions`, `tenantSkillIds`,

@@ -94,7 +94,9 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
       // calls and ZERO web searches on a question about two EXTERNAL vendors' public pricing.
       // MUTATION that must turn this RED: put "searchVault" back — fixture 32 can then score
       // `webSearchCalls === 0` again while every other test stays green.
-      ["research", ["webResearch", "declareUnsupported"]],
+      // Phase 39 (RSCH-01): `readPage` reads ONLY a URL the run's own search returned (the set is
+      // kept inside the tool record, llm.ts) — a read, never a write, and never an arbitrary host.
+      ["research", ["webResearch", "readPage", "declareUnsupported"]],
       // Phase 20 (20-08): `SPECIALIST_TOOLS` VERBATIM — read the tenant's corpus, return prose and
       // a block deck, spend nothing but tokens. There are FOUR paid capabilities in this phase
       // (clip generation, TTS, captions STT, the sandbox render) and none is granted here.
@@ -166,7 +168,7 @@ describe("resolveSpecialist (DISP-01 fail-closed route lookup)", () => {
     // tool is in neither list's spirit, it writes/sends/moves nothing at all.
     // ACTN-03: `searchVault` left the grant (see the equality test above for why), which also
     // retires the injected-page steering residual `specialists.ts` used to accept.
-    expect(granted).toEqual(["webResearch", "declareUnsupported"]);
+    expect(granted).toEqual(["webResearch", "readPage", "declareUnsupported"]);
   });
 
   test("research resolves to its own skill body and trace literal", () => {

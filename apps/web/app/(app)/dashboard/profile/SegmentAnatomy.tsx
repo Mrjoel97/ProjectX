@@ -76,6 +76,7 @@ function Band({ title, children }: { title: string; children: React.ReactNode })
 const TOOL_LABELS: Record<string, string> = {
   searchVault: "your vault documents",
   webResearch: "live web research",
+  readPage: "reading the pages it cites",
 };
 
 /** "3 minutes" / "40 seconds" — durations are typical-run scale, so two units suffice. */

@@ -1,5 +1,8 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-06 (39-01, RSCH-01 — `research-specialist.md` → v4: three tools (`webResearch`, `readPage`, `declareUnsupported`), a "Read before you cite" section with the **page-read** / **snippet-only** labels, and the limit section rewritten (the "executed by the provider" sentence had been false since the Tavily move). The `.ts` constant was regenerated from the `.md` (LF-normalised, `skillBodies.test.ts` holds the byte identity). Published as a candidate by `seedSkills` on the local deployment and gated by `pnpm eval:golden --skill research-specialist@<v>` there; production activation is the owner's G19 step — see 39-01-SUMMARY.md for the run.)
+>
+
 > Last verified: 2026-09-06 (35-02, G23 half B — **AN ORIGINAL PACK BODY ENTERS THE REGISTRY THROUGH THE
 > SAME DOOR AS THE ADAPTED SIX.** `pack-offer-and-lead-plan` (`packages/contracts/skills/pack-offer-and-lead-
 > plan.md`, mirrored to `packOfferAndLeadPlan.ts`, row added to `skillBodies.test.ts`'s md↔ts table) is in

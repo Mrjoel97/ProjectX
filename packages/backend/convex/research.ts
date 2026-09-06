@@ -48,11 +48,17 @@ const TITLE_PREFIX = "Web research: ";
  * these documents; "the model searched the web" reads as "sources were checked" to everyone who did
  * not build it.
  */
+// Phase 39 (RSCH-01) rewrote this. Until then it said the search "was executed by the model
+// provider" — true of the hosted-tool era, false since the Tavily move (the system issues every
+// query and sees every result) and doubly false once the specialist reads pages. The limit that
+// remains is real and is stated instead: a search provider chose the candidate pages, an extractor
+// chose the excerpt, and nothing here audited a source's own reliability.
 const LIMITS_FOOTER =
-  "**Limits of this research.** The search was executed by the model provider, not by this system:" +
-  " we cannot pin or choose which sources were consulted, cannot control how faithfully their pages" +
-  " were read, and cannot see what was discarded. These findings are NOT source-audited — treat" +
-  " them as a lead to verify, never as an established fact.";
+  "**Limits of this research.** The queries were chosen and run by this system and the pages it" +
+  " cites were read by it, but a search provider chose which pages were candidates, an extractor" +
+  " chose the excerpt of each page that was read, and no source was audited for its own" +
+  " reliability. A claim marked snippet-only rests on a search result, not a read page. These" +
+  " findings are NOT source-audited — treat them as a lead to verify, never as an established fact.";
 
 const isoDate = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
