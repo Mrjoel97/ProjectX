@@ -226,6 +226,10 @@ a TENANT’s Stripe account read-only. Opposite direction, opposite trust bounda
 - [x] **ROUT-01**: Phase 21's authoring seam becomes a user-facing workflow-pack authoring layer: users customize approved native templates and publish immutable tenant-scoped candidates through the existing eval gate, never arbitrary tool grants or executable code
 - [ ] **ROUT-02**: Recurring routines ship only after the standing-instruction approval model, OAuth lifetime/re-auth behavior, missed-run semantics, timezone/DST handling, idempotency and pause/revoke controls are explicitly decided and tested; until then the safe deliverable remains a manually re-runnable pinned workflow *(open: 29 closed it as `defer`; 34 lists it pending — fail-closed until the standing-instruction approval model exists)*
 
+### Research depth (minted 2026-09-06 — Phase 39, Track C step 11 / G4)
+
+- [x] **RSCH-01**: The research specialist reads the pages it cites — a `readPage` tool bounded to URLs its own search returned, a per-run read cap, page-read vs snippet-only labels on every claim, a shared staleness window on stored findings, and a limits footer that states what the system did and did not do
+
 ### Optional Vertical Packs
 
 - [ ] **VERT-01**: Legal, HR, Product, Design, Engineering and Data packs are discoverable only when tenant tier, business profile and connected capabilities make them relevant; selection changes guidance and templates, never tool authority
@@ -395,6 +399,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | KNOW-01 | Phase 29 | Complete (2026-09-06, Phase 37 repair) — 29 summaries (`[KNOW-01]`), 29-VERIFICATION present |
 | ROUT-01 | Phase 29 | Complete (2026-09-06, Phase 37 repair) — 29 summaries (`[ROUT-01]`), 29-VERIFICATION present |
 | ROUT-02 | Phase 29 | Pending |
+| RSCH-01 | Phase 39 | Complete (2026-09-06) — 39-01-SUMMARY: readPage tool + containment tests, eval gate 46/46 on research-specialist@10 with readPage ×20 observed, footer + labels + staleness shipped |
 | VERT-01 | Phase 30 | Pending |
 | VERT-02 | Phase 30 | Pending |
 | VERT-03 | Phase 30 | Pending |

@@ -266,6 +266,14 @@ Plans:
 **Depends on:** Phase 37 (the hook that keeps this record honest).
 **Plans:** 1/1 — plan 01 complete 2026-09-06 (see 38-01-SUMMARY.md).
 
+### Phase 39: Research engine — the specialist reads the pages it cites (INSERTED 2026-09-06)
+
+**Goal:** Close the research depth ceiling (G4): a `readPage` tool on the research grant, structurally bounded to URLs the run's own search returned, with a per-run cap and a per-page char cap; page-read vs snippet-only labels in the findings; one shared staleness window on stored findings (reuse + the card stamp); the limits footer rewritten to what the system now does; skill body v4 through the eval gate.
+**Source:** rev 5 audit §5 Track C step 11 (G4), the 08-21 audit R1 and the 08-24 note §3 Research. Research: `.planning/phases/39-research-engine/39-RESEARCH.md` (covers the whole of step 11: 39 research engine → 40 Document Canvas → 41 plan-row ADR → 42/43 durable runs and batches).
+**Requirements**: RSCH-01 (minted 2026-09-06). Owner decisions 2026-09-06: G4 first; `readPage` + staleness + skill v4; no bake-off.
+**Depends on:** Phase 38 (tools ride `ToolContext`/`ToolGrants` + the snapshot literals).
+**Plans:** 1/1 — plan 01 complete 2026-09-06 (see 39-01-SUMMARY.md).
+
 ### Phase 29: Unified Knowledge and Routines
 
 **Goal:** Turn connected Pikar knowledge into one cited cross-source search experience and turn Phase 21 from a generic prompt editor into safe workflow-pack customization and repeatable routines.
@@ -1573,6 +1581,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 36. SMOKE sentinels out of band (INSERTED) | 1/1 | **Complete 2026-09-06 (code + full local re-drive 13/13 specs, 4/4 smokes)** — fixture selection is an operator fact about WHO (`fixtureSeamFor`, `PIKAR_FIXTURE_TENANT_IDS`, ADR-035); every `SMOKE::` gate gated; readiness fails on any active fixture seam; `fixtureSeam.test.ts` proves both directions | 2026-09-06 |
 | 37. Planning-corpus repair (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — STATE.md collapsed to one frontmatter block (history archived), progress table regenerated from the phase directories (63 rows), REQUIREMENTS ticked where a closed phase certifies them and annotated `(open: …)` elsewhere, loose planning files archived, `scripts/check-planning.mjs` Stop hook refuses a stale corpus | 2026-09-06 |
 | 38. Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — scope A: `buildCockpitTools(ToolContext, ToolGrants)`, `grantsFor` in `@pikar/core` (the one derivation), shared `TOOL_CONTEXT_ARGS` validator at both doors, 23-class byte-identical snapshot held; the executive loop now forwards the tenant pin to dispatched specialists; live 8/8 on the local deployment | 2026-09-06 |
+| 39. Research engine — reads the pages it cites (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — `readPage` (Tavily /extract, only URLs the run's own search returned, 6 reads × 6k chars), page-read/snippet-only labels, `RESEARCH_STALE_AFTER_MS` shared by reuse + card stamp, footer rewritten, skill v4 = research-specialist@10 through the gate 46/46 ($0.80) and ACTIVE on the local deployment (readPage ×20 across 7 runs); prod activation = owner G19 step | 2026-09-06 |
 
 ### Phase 25.1: Consistency and Reliability Hardening (INSERTED)
 
