@@ -40,6 +40,9 @@ test("chat → createDocument → the Output card names the artifact", async ({ 
   await composer.fill(CREATE);
   await composer.press("Enter");
   await expect(composer).toHaveValue("", { timeout: 20_000 });
+  // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+  // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+  await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, { timeout: 90_000 });
 
   const workspace = page.getByTestId("workspace-pane");
   const card = workspace.getByTestId("output-card");
@@ -66,6 +69,9 @@ test("a turn that creates nothing renders no Output card", async ({ page }) => {
   await composer.fill("SMOKE::agent::add=alice@example.com");
   await composer.press("Enter");
   await expect(composer).toHaveValue("", { timeout: 20_000 });
+  // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+  // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+  await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, { timeout: 90_000 });
 
   await expect(page.getByTestId("workspace-pane").getByTestId("output-card")).toHaveCount(0);
 });

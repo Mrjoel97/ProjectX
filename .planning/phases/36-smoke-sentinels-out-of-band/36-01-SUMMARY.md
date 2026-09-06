@@ -1,7 +1,7 @@
 ---
 phase: 36-smoke-sentinels-out-of-band
 plan: 01
-status: complete (code + unit proof); re-drive status in §Re-drive
+status: complete (code + unit proof + full local re-drive, 13/13 specs + 4/4 smokes)
 completed: 2026-09-06
 commits: [see the phase-close commit's parent — feat(36-01)]
 requirements-completed: [G24 — in-band fixture sentinels out of band]
@@ -78,30 +78,49 @@ The local deployment holds BOTH model keys, so this is exactly the keyed-deploym
   now names all four smoke tenants. It also confirms the debt register's warning: converting the seam moves
   every consumer, including scripts nobody had re-run.
 
-**Pass results (`scratchpad/redrive/*.log`):** vault 4/4 · cockpit-activity 2/2 · cockpit-created-document 3/3
-· vault-redesign 0/1 (needs `NEXT_PUBLIC_CONVEX_URL` in the runner env — fixed in the runner, not re-run) ·
-intake 0/2, cockpit-attachment 0/2 (composer placeholder drift — the seven specs are repointed to "What
-business outcome should we work on?", not re-run) · knowledge-search 0/4 (unseeded planner — seeded, not
-re-run) · cockpit-briefing 0/1, cockpit-personalize 0/1, cockpit-report 0/1, cockpit-resolve 0/2,
-cockpit-schedule 0/2, skill-authoring 0/1 (NOT triaged; no backend error and no model spend during any of
-them, so they read as workspace-UI drift since the specs were last run, but that is inference) · smoke
-pipeline and smoke fanout: the review gate and the forced failure worked, but the non-fail deliveries for
-tenant `smoke` ended `failed` instead of `awaiting_reauth`, with no dead letter and no backend error line —
-**NOT triaged, and it sits on the delivery path**; smoke guardrails: stopped mid-run (real spend, see
-above); smoke vault: not run.
+**Pass results — FINAL (2026-09-06, second session; logs under `scratchpad/redrive/*.{c,e,f,g,h}.log`):**
+vault 4/4 · vault-redesign 2/2 · intake 3/3 · knowledge-search 6/6 (+2 skipped: `PIKAR_E2E_KNOWLEDGE_MODE` live-only cases)
+· cockpit-activity 2/2 · cockpit-attachment 3/3 · cockpit-briefing 2/2 · cockpit-created-document 3/3 ·
+cockpit-personalize 2/2 · cockpit-report 2/2 · cockpit-resolve 4/4 · cockpit-schedule 3/3 · skill-authoring 3/3
+(+1 skipped: `PHASE21_LIVE_RESULT_PATH` live checkpoint) · smoke:pipeline PASSED (3 legs) · smoke:fanout PASSED ·
+smoke:guardrails PASSED (7/7) · smoke:vault PASSED. **13/13 specs + 4/4 smokes.**
 
-**Spec repairs landed (drift, not seam):** `vault.spec.ts` — serial mode (`fullyParallel` reordered a
-shared-tenant file), the profile document now counts as a vault file (zero-state moved to the category's),
-folder-picker inputs, the disabled voice-action button sharing the card's name, dialog title, "Entities &
-citations", chip text "<name> <type>", two-step removal, search term persisting after the modal; seven
-cockpit/intake specs — the composer placeholder.
+**What the second session found and fixed (none of it the seam — every failure was a consumer that had
+drifted since it was last run, which is exactly the debt register's warning):**
+- `smoke:pipeline` / `smoke:fanout` `failed` terminal: the dead letter WAS there (`convex data`'s default row limit
+  had hidden it) — `send: no unsubscribe footer could be built`. 19-05 made the CAN-SPAM footer a precondition of
+  every send, ordered BEFORE the token check, and seeded the e2e tenant's postal address at its one seeder; the
+  smoke tenants never got one, so both smokes had been red since 19-05. Fixed at the one smoke seeder
+  (`ensureSmokePostalAddress`, smoke.ts), a real tenant's row is never touched.
+- `smoke:guardrails` step 5 `at "blocked"`: the first pass was stopped mid-step and its `finally` reset never ran,
+  leaving `smokeBudget` drained; `smoke:resetDailySpend` by hand, then 7/7.
+- Composer sequencing (16 sites, 10 specs): `ChatPane.onSend` clears the box on SEND (03.9-04) and drops a second
+  Enter while busy, so `toHaveValue("")` no longer meant "turn settled" — the second op sat in the box with no
+  backend error. Every site now also waits for the "Working…" button to have count 0.
+- Tenant-id key: five specs passed the FULL JWT `sub` to the fixture seeders; `requireTenant` keys on the part
+  before `|` (2026-07-21), so the seeded inbox/calendar fixtures were unreachable (`briefInbox` → "mailbox isn't
+  reachable"). Nine other specs already split; the five now do.
+- `cockpit-report`: still written against the guided slot-filling FSM retired at 3.2.1 (a plain first turn now goes
+  to the REAL model); moved onto the `SMOKE::agent::` ops and onto the rendered `awaiting_reauth` label.
+- `cockpit-resolve`: single-match sections PRE-SELECT their chip; the spec's click un-picked it. The chip gained
+  `aria-pressed` (its picked state was colour-only — BRAND §6) and the spec asserts the pick through it.
+- `cockpit-schedule`: 2035 is beyond the SCHD-01 7-day horizon (`send_time_too_far`); now +2 days.
+- `cockpit-briefing`: SC-4 control count rescoped to `briefing-body` (the masthead toggle is view chrome, 03.10-04).
+- `intake` dictate: the transcript renders with its address REDACTED (`[EMAIL_1]`); the regex matched the raw address.
+- Strict-mode duplicates (`.first()`): addresses/subject on the plan and report cards, the draft's `<p>` + `<pre>`,
+  the CANCELED heading + sentence.
 
-**Status: the re-drive is PARTIAL.** Definition of done (full green) is NOT met. Next session, in order:
-(1) triage `smoke:pipeline`'s `failed` terminal on local (`requests` row for the cid, `deliverApprovedPlan`
-run, `gmail.send` path with no token) before anything is promoted; (2) re-run `vault-redesign`, `intake`,
-`knowledge-search`, `cockpit-attachment` with the fixed runner (`scratchpad/redrive36b.sh`); (3) triage the
-remaining cockpit specs against the current workspace UI; (4) `smoke:guardrails` and `smoke:vault` with the
-widened allowlist. Nothing from this phase has been pushed.
+**Local-run facts that were NOT defects (recorded for the next re-drive):** the four smoke scripts are `convex run`
+loops and break `auth.setup` when run CONCURRENTLY with a browser pass (run smokes first); `awaiting_reauth` and the
+SCHEDULED path need a synthetic `gmailTokens` row staged BEFORE the browser session (`gmailAuth:store` from the CLI)
+and that same row must be ABSENT for `knowledge-search`'s offline gap states and `cockpit-briefing` (delete it with
+`gmailAuth:deleteTokens` between the two groups); `skill-authoring` needs the harness user provisioned as OWNER
+(`PIKAR_E2E_PROVISION=1`). A mid-session `convex run` did NOT end the browser session on this stack (the earlier
+note was overstated). Seven orphan `inboxFixtures` rows keyed by full-`sub` ids remain in the LOCAL dev DB from the
+pre-fix seeds; no reader matches them.
+
+**Status: the re-drive is COMPLETE — definition of done (code + full re-drive on dev) met.** Promoted in the
+phase-close commit that follows.
 
 ## Owner steps
 

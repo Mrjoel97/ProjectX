@@ -32,6 +32,11 @@ test("chat → attach → PLAN(filename+download) → Approve → REPORT(deliver
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
 
   const workspace = page.getByTestId("workspace-pane");
@@ -78,6 +83,11 @@ test("remove-attachment variant: the attachment row disappears pre-approval (reg
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
   const workspace = page.getByTestId("workspace-pane");
 

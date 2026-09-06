@@ -27,6 +27,7 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
 import type { InspectOutcome } from "./calendar";
@@ -147,6 +148,31 @@ export const startReviewGate = internalMutation({
 //   route=unknown  → llm.route throws unknown_route → DLQ (AGNT-03).
 // Both DLQ paths exercise the failed-terminal wiring (status=failed + failed telemetry).
 
+/** 19-05 made the CAN-SPAM footer a precondition of EVERY send (`prepareGovernedMessage` runs
+ *  before the token check, so a tenant with no postal address ends `failed`, not `awaiting_reauth`)
+ *  and seeded the e2e tenant's address at its one seeder. The smoke tenants never got one, so both
+ *  delivery smokes had ended `failed` ("no unsubscribe footer") ever since — found by the 36-01
+ *  re-drive. Same fix in the same place: the one smoke seeder, never a real tenant's row. */
+const SMOKE_POSTAL_ADDRESS = "Pikar AI smoke fixture, 1 Sentinel Street, Nowhere 00000";
+async function ensureSmokePostalAddress(ctx: MutationCtx, tenantId: string): Promise<void> {
+  const row = await ctx.db
+    .query("tenantProfiles")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .unique();
+  if (row) {
+    if (!row.postalAddress?.trim())
+      await ctx.db.patch(row._id, { postalAddress: SMOKE_POSTAL_ADDRESS });
+    return;
+  }
+  await ctx.db.insert("tenantProfiles", {
+    tenantId,
+    tier: "solopreneur",
+    tierSource: "legacy",
+    derivedAt: Date.now(),
+    postalAddress: SMOKE_POSTAL_ADDRESS,
+  });
+}
+
 export const seedPipeline = internalMutation({
   args: {
     correlationId: v.string(),
@@ -167,6 +193,7 @@ export const seedPipeline = internalMutation({
     { correlationId, route, tenant, goal },
   ): Promise<{ requestId: Id<"requests"> }> => {
     const tenantId = tenant ?? "smoke";
+    await ensureSmokePostalAddress(ctx, tenantId);
     const requestId = await ctx.db.insert("requests", {
       tenantId,
       correlationId,
@@ -297,6 +324,7 @@ export const seedFanout = internalMutation({
     if (recipients.length !== correlationIds.length) {
       throw new Error("seedFanout: recipients/correlationIds length mismatch");
     }
+    await ensureSmokePostalAddress(ctx, "smoke");
     if (recipientBodies && recipientBodies.length !== correlationIds.length) {
       throw new Error("seedFanout: recipientBodies/correlationIds length mismatch");
     }

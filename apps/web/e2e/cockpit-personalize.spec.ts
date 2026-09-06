@@ -33,9 +33,16 @@ test("chat → 2 recipients → subject → body → personalize #1 → PLAN(2 d
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
 
   const workspace = page.getByTestId("workspace-pane");
+  // `.first()` on addresses/subject below: each renders in more than one place (recipient chip,
+  // per-recipient body or REPORT row, transcript echo), which is a strict-mode violation otherwise.
 
   // Compose: TWO literal recipients + a shared subject + a shared base body (offline sentinel) +
   // individual mode (personalization requires individual sends), then tailor recipient #1 only.
@@ -57,8 +64,8 @@ test("chat → 2 recipients → subject → body → personalize #1 → PLAN(2 d
   // when at least one recipient is tailored; a same-content plan shows nothing here).
   await expect(workspace.getByText("PLAN", { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(workspace.getByText("PER-RECIPIENT BODY", { exact: true })).toBeVisible();
-  await expect(workspace.getByText("alice@example.com")).toBeVisible();
-  await expect(workspace.getByText("bob@example.com")).toBeVisible();
+  await expect(workspace.getByText("alice@example.com").first()).toBeVisible();
+  await expect(workspace.getByText("bob@example.com").first()).toBeVisible();
   await expect(workspace.getByText("tailored", { exact: true })).toBeVisible(); // recipient #1 differs
   await expect(workspace.getByText("shared body", { exact: true })).toBeVisible(); // recipient #2 shared
 
@@ -73,8 +80,8 @@ test("chat → 2 recipients → subject → body → personalize #1 → PLAN(2 d
 
   // REPORT card: both recipient rows fill live (offline they settle at awaiting_reauth).
   await expect(workspace.getByText("REPORT", { exact: true })).toBeVisible({ timeout: 20_000 });
-  await expect(workspace.getByText("alice@example.com")).toBeVisible();
-  await expect(workspace.getByText("bob@example.com")).toBeVisible();
+  await expect(workspace.getByText("alice@example.com").first()).toBeVisible();
+  await expect(workspace.getByText("bob@example.com").first()).toBeVisible();
 
   // Single-approve gate held: once delivering starts the PlanCard (with its Approve) unmounts.
   await expect(approve).toHaveCount(0);

@@ -154,6 +154,9 @@ async function say(page: Page, text: string): Promise<void> {
   await composer.fill(text);
   await composer.press("Enter");
   await expect(composer).toHaveValue("", { timeout: 180_000 });
+  // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+  // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+  await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, { timeout: 90_000 });
 }
 
 /** Seed a proposed EMAIL plan for a tenant — $0, the approvals.spec.ts idiom. */

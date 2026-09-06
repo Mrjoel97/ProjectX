@@ -33,6 +33,11 @@ test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::ag
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 15_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
 
   const workspace = page.getByTestId("workspace-pane");
@@ -49,7 +54,9 @@ test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::ag
   // 2. pick the contact + confirm → resolveRecipients folds the address in and wipes candidates
   //    (the card disappears — the model never saw the address, §2-D).
   const msgsBeforePick = await page.getByTestId("chat-message").count();
-  await sarahChip.click();
+  // A single-match section PRE-SELECTS its one chip (the chips are toggles, `aria-pressed`), so a
+  // click here would UN-pick it and leave "Use these contacts" disabled — assert the pick instead.
+  await expect(sarahChip).toHaveAttribute("aria-pressed", "true");
   await workspace.getByRole("button", { name: /use these contacts/i }).click();
   await expect(workspace.getByText("PICK A CONTACT", { exact: true })).toHaveCount(0, {
     timeout: 15_000,
@@ -76,7 +83,8 @@ test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::ag
   // personalized greeting from the resolved display name (SC3).
   await expect(workspace.getByText("PLAN", { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(workspace.getByText("sarah@example.com")).toBeVisible();
-  await expect(workspace.getByText(/Hi Sarah/)).toBeVisible();
+  // `.first()`: the draft renders as the card's paragraph AND its <pre> preview.
+  await expect(workspace.getByText(/Hi Sarah/).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /approve/i })).toHaveCount(1);
 
   // READING/composing phase: nothing sends. Do NOT click Approve. No REPORT card appears.
@@ -128,7 +136,9 @@ async function resolveTenantId(page: Page): Promise<string> {
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: string };
   if (!claims.sub)
     throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
-  return claims.sub;
+  // The tenant id is the subject BEFORE the '|' (requireTenant, 2026-07-21): the full `sub` carries a
+  // per-session suffix, and a fixture seeded under it is a row no backend read ever finds.
+  return claims.sub.split("|")[0] ?? claims.sub;
 }
 
 test("demotion: brief primary → candidates park → picker precedes the demoted brief (UAT-A)", async ({
@@ -147,6 +157,11 @@ test("demotion: brief primary → candidates park → picker precedes the demote
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
 
   const workspace = page.getByTestId("workspace-pane");
@@ -220,6 +235,11 @@ test("proposed + parked candidates: the picker survives, no '#1 (no name)' PlanC
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
 
   const workspace = page.getByTestId("workspace-pane");

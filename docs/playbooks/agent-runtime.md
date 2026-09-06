@@ -1,3 +1,15 @@
+> Last verified: 2026-09-06 (36-01 re-drive — **the smoke tenants now carry a postal address, seeded by
+> the one smoke seeder.** `ensureSmokePostalAddress` (smoke.ts) upserts a `tenantProfiles` row for the
+> tenant `seedPipeline`/`seedFanout` are about to send from. Why: 19-05 made the CAN-SPAM footer a
+> precondition of EVERY send — `prepareGovernedMessage` (gmail.ts) runs BEFORE the token check, so a tenant
+> with no `postalAddress` dead-letters `send: no unsubscribe footer could be built` and ends `failed`, never
+> `awaiting_reauth` — and seeded the e2e tenant's address at `__seedOnboardedTenant`, but the smoke tenants
+> never got one. `smoke:pipeline` and `smoke:fanout` had therefore been red since 19-05 and nobody had
+> re-run them; the 36-01 re-drive found it (the dead letter was there — `convex data deadLetters` had hidden
+> it behind the default row limit). Same fix in the same place as 19-05: the seeder, never a real tenant's
+> row (`existing.postalAddress` is kept when set). Verified: `smoke:pipeline` 3/3 legs + `smoke:fanout`
+> PASSED on the keyed local deployment with `PIKAR_FIXTURE_TENANT_IDS` listing `smoke`.)
+>
 > Last verified: 2026-08-31 (`smoke.seedPackEvalTenant` no longer owns its own copy of the
 > pack-eval tenant shape. It imports `isPackEvalSandboxTenant` from `@pikar/core`, which
 > `runPackTurn` now also uses to decide whether a foreign candidate pin may execute. Two guards,

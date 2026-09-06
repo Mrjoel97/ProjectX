@@ -1,3 +1,30 @@
+> Last verified: 2026-09-06 (36-01 re-drive — **the cockpit E2E specs sequence turns on the busy state,
+> not on the empty composer.** `ChatPane.onSend` has cleared the box the moment a turn is SENT since 03.9-04
+> and DROPS a second Enter while `busy` (the send button reads "Working…", `aria-busy`), so a spec's
+> `say()` that waited only for `toHaveValue("")` could type its next op into a busy turn and lose it —
+> measured live: `cockpit-personalize`/`cockpit-schedule` stalled with the SECOND op still in the box and no
+> backend error. Every sequencing site (16, across 10 specs) now also waits for
+> `getByRole("button", { name: "Working…" })` to have count 0. `cockpit-report.spec.ts` was still written
+> against the guided slot-filling FSM retired at 3.2.1 (a plain first turn now goes to the REAL model);
+> its four turns moved onto the `SMOKE::agent::` ops and its REPORT assertion onto the rendered label
+> ("Waiting for you to reconnect Gmail"), and locally it needs a synthetic `gmailTokens` row staged
+> BEFORE the browser session (`gmailAuth:store` from the CLI, as `pipeline-uat.spec.ts` does). The
+> ResolutionCard's address chips gained `aria-pressed` (they are toggles whose picked state was colour-only,
+> BRAND §6; the resolve spec asserts the single-match PRE-SELECT through it instead of clicking, which
+> un-picked the chip and left "Use these contacts" disabled — the first-pass failure). Two
+> local-only limits stand: a spec that runs `npx convex run` MID-session (`cockpit-briefing`, the later
+> `cockpit-resolve` tests) ends the LOCAL anonymous deployment's browser session, and
+> `skill-authoring.spec.ts` needs the harness user to be an OWNER (`PIKAR_E2E_PROVISION=1`). Neither is
+> a product defect. Three more spec-side drifts fell out of the same re-drive: `cockpit-activity`, `cockpit-briefing`,
+> `cockpit-resolve`, `voice` and `voice-doc` handed `smoke:seed*` the FULL JWT `sub` (`userId|sessionId`) as the
+> tenant id, but `requireTenant` has keyed tenants on the part before the `|` since 2026-07-21 — every fixture
+> they seeded (inbox, calendar) sat under a key no backend read ever hits, and `briefInbox` honestly answered
+> "mailbox isn't reachable"; all five now split. `cockpit-schedule` filled the picker with 2035, which the
+> SCHD-01 horizon (`SEND_TIME_HORIZON_MS`, 7 days) refuses as `send_time_too_far`; it now picks +2 days.
+> `cockpit-briefing`'s SC-4 control count moved to `briefing-body`, the rescope `cockpit-resolve` already had.
+> Final re-drive: 13/13 sentinel specs green (skips are env-gated modes only) + 4/4 smokes on the keyed local
+> deployment. Pass results are in `.planning/phases/36-smoke-sentinels-out-of-band/36-01-SUMMARY.md`.)
+>
 > Last verified: 2026-09-06 (36-01, G24 — **THE COCKPIT GRAMMARS AND THE MODEL-COMPOSED TOOL ARGUMENTS
 > ARE GATED ON THE OPERATOR FACT.** Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. In `llm.ts`: `parseSmoke(text, tenantId)` and
 > `parseAgentSmoke(text, tenantId)` return `null` without it (the check is INSIDE the parser so no caller can

@@ -1494,6 +1494,7 @@ function ResolutionCard({ plan, threadId }: { plan: Plan; threadId: string }) {
                 <button
                   key={m.address}
                   type="button"
+                  aria-pressed={sel}
                   onClick={() =>
                     setPicked((p) => {
                       const cur = p[c.name] ?? [];

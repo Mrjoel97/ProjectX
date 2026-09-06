@@ -58,7 +58,9 @@ async function resolveTenantId(page: Page): Promise<string> {
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: string };
   if (!claims.sub)
     throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
-  return claims.sub;
+  // The tenant id is the subject BEFORE the '|' (requireTenant, 2026-07-21): the full `sub` carries a
+  // per-session suffix, and a fixture seeded under it is a row no backend read ever finds.
+  return claims.sub.split("|")[0] ?? claims.sub;
 }
 
 test("dropped-session brief surfaces on next open → 'Turn into a plan' reaches the cockpit gate, nothing sent", async ({

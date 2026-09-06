@@ -278,6 +278,9 @@ test("candidate-only authoring and pinned prompt run use exact response and a fr
   await composer.fill(prompt);
   await composer.press("Enter");
   await expect(composer).toHaveValue("", { timeout: 20_000 });
+  // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+  // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+  await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, { timeout: 90_000 });
   const sourceThreadId = await waitForNewThread(auth, beforeSource);
   await expect(
     fetchQuery(api.plans.byThread, { threadId: sourceThreadId }, auth),

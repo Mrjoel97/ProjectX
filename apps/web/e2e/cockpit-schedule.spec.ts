@@ -38,6 +38,11 @@ test("compose → sendTime resolves an absolute time → picker future time → 
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
 
   const workspace = page.getByTestId("workspace-pane");
@@ -62,8 +67,14 @@ test("compose → sendTime resolves an absolute time → picker future time → 
 
   // The SMOKE clock pins the resolved instant to 2020 (real past) — the picker is the confirm
   // source-of-truth, so set a real-FUTURE time to actually schedule (setPlanSendTime, no past-guard).
-  await picker.fill("2035-06-01T10:00");
-  await expect(picker).toHaveValue("2035-06-01T10:00");
+  // Inside the 7-day horizon (SCHD-01, `SEND_TIME_HORIZON_MS`): a far-future value such as 2035 makes
+  // executePlan refuse with `send_time_too_far` and no SCHEDULED card ever appears.
+  const soon = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  soon.setSeconds(0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const futureLocal = `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}T${pad(soon.getHours())}:${pad(soon.getMinutes())}`;
+  await picker.fill(futureLocal);
+  await expect(picker).toHaveValue(futureLocal);
   await expect(scheduleBtn).toHaveCount(1); // still a deferred send
 
   // ONE Approve → executePlan SCHEDULES the frozen fan-out via ctx.scheduler.runAt (status scheduled).
@@ -81,7 +92,8 @@ test("compose → sendTime resolves an absolute time → picker future time → 
   // Cancel BEFORE fire → cancelScheduledPlan (CAS-guarded, refs-only audit) → CanceledCard, no send.
   await cancel.click();
   await expect(workspace.getByText("CANCELED", { exact: true })).toBeVisible({ timeout: 20_000 });
-  await expect(workspace.getByText(/canceled/i)).toBeVisible();
+  // `.first()`: the state renders as the CANCELED heading AND its explanatory sentence.
+  await expect(workspace.getByText(/canceled/i).first()).toBeVisible();
   await expect(workspace.getByText("REPORT", { exact: true })).toHaveCount(0); // never sent
 });
 
@@ -98,6 +110,11 @@ test("no send time → Approve → immediate REPORT (default unchanged)", async 
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
 
   const workspace = page.getByTestId("workspace-pane");

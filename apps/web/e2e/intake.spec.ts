@@ -39,6 +39,11 @@ test("attach a file -> classified content appears in the conversation (INTK-02)"
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
   await say("SMOKE::agent::add=alice@example.com");
 
@@ -67,6 +72,11 @@ test("dictate -> transcript enters as a request turn (INTK-03, one-shot)", async
     await composer.fill(text);
     await composer.press("Enter");
     await expect(composer).toHaveValue("", { timeout: 20_000 });
+    // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+    // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+    await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, {
+      timeout: 90_000,
+    });
   };
   await say("SMOKE::agent::add=bob@example.com");
 
@@ -82,7 +92,9 @@ test("dictate -> transcript enters as a request turn (INTK-03, one-shot)", async
     buffer: smokeBlob("SMOKE::transcribe::", "send an email to bob@example.com about lunch"),
   });
 
-  await expect(chat.getByText(/send an email to bob@example\.com about lunch/)).toBeVisible({
+  // The transcript enters as a request turn with its PII REDACTED in the rendered bubble
+  // ("send an email to [EMAIL_1] about lunch"), so match the sentence, not the raw address.
+  await expect(chat.getByText(/send an email to \S+ about lunch/)).toBeVisible({
     timeout: 20_000,
   });
 });

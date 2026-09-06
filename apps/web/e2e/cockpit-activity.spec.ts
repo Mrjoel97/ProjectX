@@ -101,7 +101,9 @@ async function resolveTenantId(page: Page): Promise<string> {
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: string };
   if (!claims.sub)
     throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
-  return claims.sub;
+  // The tenant id is the subject BEFORE the '|' (requireTenant, 2026-07-21): the full `sub` carries a
+  // per-session suffix, and a fixture seeded under it is a row no backend read ever finds.
+  return claims.sub.split("|")[0] ?? claims.sub;
 }
 
 test("SMOKE brief=today → LATEST TRACE renders step rows on both surfaces, carrying no mail content", async ({
@@ -120,6 +122,9 @@ test("SMOKE brief=today → LATEST TRACE renders step rows on both surfaces, car
   await composer.fill("SMOKE::agent::brief=today");
   await composer.press("Enter");
   await expect(composer).toHaveValue("", { timeout: 20_000 });
+  // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+  // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+  await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, { timeout: 90_000 });
 
   // ── Surface 1: the workspace card (BRAND §3 tracked-caps label; §4 "content is cards") ──
   const workspace = page.getByTestId("workspace-pane");

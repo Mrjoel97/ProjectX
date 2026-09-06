@@ -76,7 +76,9 @@ async function resolveTenantId(page: Page): Promise<string> {
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: string };
   if (!claims.sub)
     throw new Error("Convex Auth JWT carries no `sub` claim — cannot resolve the tenant.");
-  return claims.sub;
+  // The tenant id is the subject BEFORE the '|' (requireTenant, 2026-07-21): the full `sub` carries a
+  // per-session suffix, and a fixture seeded under it is a row no backend read ever finds.
+  return claims.sub.split("|")[0] ?? claims.sub;
 }
 
 test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is suggestions only)", async ({
@@ -96,6 +98,9 @@ test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is
   await composer.fill("SMOKE::agent::brief=today");
   await composer.press("Enter");
   await expect(composer).toHaveValue("", { timeout: 20_000 });
+  // The composer clears the moment a turn is SENT (03.9-04), not when it settles, and a second
+  // Enter while the turn is still busy is dropped by onSend — so wait for the "Working…" state to end.
+  await expect(page.getByRole("button", { name: "Working…" })).toHaveCount(0, { timeout: 90_000 });
 
   const workspace = page.getByTestId("workspace-pane");
   const card = workspace.getByTestId("briefing-card");
@@ -153,8 +158,11 @@ test("seeded inbox → SMOKE brief=today → grouped BRIEFING card (Needs-you is
   // briefing-seeded action can only re-enter the conversation → PLAN → Approve gate.
   await expect(needsYou.locator("button")).toHaveCount(0);
   await expect(needsYou.locator("a")).toHaveCount(0);
-  await expect(card.locator("button")).toHaveCount(0);
-  await expect(card.locator("a")).toHaveCount(0);
+  // SC-4 holds on the CONTENT region: the masthead carries a collapse toggle (view chrome, the
+  // 03.10-04 exception) — the same rescope `cockpit-resolve.spec.ts` already made.
+  const body = card.getByTestId("briefing-body");
+  await expect(body.locator("button")).toHaveCount(0);
+  await expect(body.locator("a")).toHaveCount(0);
 
   // SC-2, loop-visible half: the reply is the counts-only template. Neither a body needle nor a
   // gist reaches the model's context — the card is the only place the contents exist.
