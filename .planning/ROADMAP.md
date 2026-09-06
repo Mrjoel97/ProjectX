@@ -258,6 +258,14 @@ Plans:
 **Depends on:** nothing — docs and one hook script.
 **Plans:** 1/1 — plan 01 complete 2026-09-06 (see 37-01-SUMMARY.md).
 
+### Phase 38: Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06)
+
+**Goal:** `buildCockpitTools` takes one `ToolContext` and one `ToolGrants` instead of eight append-only positionals; the grants derive ONCE (`grantsFor`, `@pikar/core`) instead of three copies of `toolNames === undefined` in the loop; the pins every agent door must accept are one shared validator — so the "input threaded through the loop but not the web caller" defect class (clock plane 19-11, `tenantSkillIds` 21-03) cannot recur. Byte-identical tool key sets for every caller class, pinned by a snapshot test written before the refactor.
+**Source:** rev 5 audit §5 Track C step 10 (08-24 note §3 "tool registry"), sequenced before the next heavy `llm.ts` phase (Track C step 11). Research: `.planning/phases/38-tool-registry/38-RESEARCH.md`.
+**Requirements**: none minted (a structural refactor); owner decisions 2026-09-06: scope A, keep ADR-007's agent-side name lists, mock model provider out.
+**Depends on:** Phase 37 (the hook that keeps this record honest).
+**Plans:** 1/1 — plan 01 complete 2026-09-06 (see 38-01-SUMMARY.md).
+
 ### Phase 29: Unified Knowledge and Routines
 
 **Goal:** Turn connected Pikar knowledge into one cited cross-source search experience and turn Phase 21 from a generic prompt editor into safe workflow-pack customization and repeatable routines.
@@ -1564,6 +1572,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 35. Outcome language + idea-stage artifact (INSERTED) | 2/2 | **Complete 2026-09-06** — Half A: landing page and Command Center in outcome language. Half B: `offer-and-lead-plan`, the seventh pack and the first original body (ADR-034), through the pack gate with five fixtures + a Command Center first-thing card; CANDIDATE on deploy, owner gate run to go live (35-02-SUMMARY) | 2026-09-06 |
 | 36. SMOKE sentinels out of band (INSERTED) | 1/1 | **Complete 2026-09-06 (code + full local re-drive 13/13 specs, 4/4 smokes)** — fixture selection is an operator fact about WHO (`fixtureSeamFor`, `PIKAR_FIXTURE_TENANT_IDS`, ADR-035); every `SMOKE::` gate gated; readiness fails on any active fixture seam; `fixtureSeam.test.ts` proves both directions | 2026-09-06 |
 | 37. Planning-corpus repair (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — STATE.md collapsed to one frontmatter block (history archived), progress table regenerated from the phase directories (63 rows), REQUIREMENTS ticked where a closed phase certifies them and annotated `(open: …)` elsewhere, loose planning files archived, `scripts/check-planning.mjs` Stop hook refuses a stale corpus | 2026-09-06 |
+| 38. Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — scope A: `buildCockpitTools(ToolContext, ToolGrants)`, `grantsFor` in `@pikar/core` (the one derivation), shared `TOOL_CONTEXT_ARGS` validator at both doors, 23-class byte-identical snapshot held; the executive loop now forwards the tenant pin to dispatched specialists; live 8/8 on the local deployment | 2026-09-06 |
 
 ### Phase 25.1: Consistency and Reliability Hardening (INSERTED)
 
