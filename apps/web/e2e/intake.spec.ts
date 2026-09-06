@@ -30,7 +30,7 @@ test("attach a file -> classified content appears in the conversation (INTK-02)"
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // Mint the thread first — IntakeControls needs a threadId (same lift ChatPane already does;
@@ -61,7 +61,7 @@ test("attach a file -> classified content appears in the conversation (INTK-02)"
 test("dictate -> transcript enters as a request turn (INTK-03, one-shot)", async ({ page }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
   const say = async (text: string) => {
     await composer.fill(text);

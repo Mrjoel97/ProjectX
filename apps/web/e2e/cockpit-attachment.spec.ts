@@ -24,7 +24,7 @@ test("chat → attach → PLAN(filename+download) → Approve → REPORT(deliver
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // Each send clears the composer on success — waiting for empty sequences turns without asserting prose.
@@ -72,7 +72,7 @@ test("remove-attachment variant: the attachment row disappears pre-approval (reg
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
   const say = async (text: string) => {
     await composer.fill(text);

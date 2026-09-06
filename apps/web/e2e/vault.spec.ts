@@ -23,6 +23,11 @@ import { expect, test } from "@playwright/test";
 // A single-line SMOKE::graph:: brain dump → one edge Alice —works_at→ Acme (two `other` nodes).
 const BRAIN_DUMP = "SMOKE::graph::Alice|Acme|works_at";
 
+// The three tests share ONE tenant's vault and the first asserts it is EMPTY, so declaration order
+// is load-bearing. `fullyParallel: true` (playwright.config.ts) does not promise it even at one
+// worker — measured 2026-09-06: an upload test's document was on the page when honest-zero began.
+test.describe.configure({ mode: "serial" });
+
 test("honest-zero → paste → processing→ready → search → preview(entities) → delete → empty", async ({
   page,
 }) => {
@@ -37,7 +42,9 @@ test("honest-zero → paste → processing→ready → search → preview(entiti
   for (const label of ["TOTAL FILES", "PROCESSED", "STORAGE USED", "CATEGORIES"]) {
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
-  await expect(page.getByText("0 MB", { exact: true })).toBeVisible();
+  // NOT "0 MB" / "0 files" any more: since Phase 11 the tenant's business profile is itself a vault
+  // document (kind `business_profile`, category workspace-docs), so an onboarded tenant's vault is
+  // never byte-empty. The zero this test can honestly assert is the default CATEGORY's.
   await expect(page.getByText("6", { exact: true })).toBeVisible(); // CATEGORIES = the fixed 6
 
   // The 6 category tabs, in screenshot order; "My Uploads" is the active teal pill.
@@ -63,8 +70,8 @@ test("honest-zero → paste → processing→ready → search → preview(entiti
     page.getByText(/Searchable: PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown/),
   ).toBeVisible();
 
-  // Empty grid on the default tab.
-  await expect(page.getByText(/No documents yet/)).toBeVisible();
+  // Empty grid on the default tab (category-empty — see the profile-document note above).
+  await expect(page.getByText(/No documents in this category/)).toBeVisible();
 
   // ── Paste a Brain Dump (SMOKE:: → offline ingest) ──────────────────────────────────────────────
   await page.getByRole("button", { name: "+ Paste a Brain Dump" }).click();
@@ -78,13 +85,16 @@ test("honest-zero → paste → processing→ready → search → preview(entiti
 
   // The card appears and its status chip settles processing → ready reactively (the durable
   // ingest ran offline). One ITEM in the grid.
-  const card = page.getByRole("button", { name: new RegExp(BRAIN_DUMP.replace(/[|]/g, "\\|")) });
+  // `.first()`: the disabled "Still reading…" voice action also carries the title in its name.
+  const card = page
+    .getByRole("button", { name: new RegExp(BRAIN_DUMP.replace(/[|]/g, "\\|")) })
+    .first();
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card.getByText("ready", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/^1 ITEM$/)).toBeVisible();
 
-  // The stat tiles reflect the ingest: TOTAL FILES + PROCESSED both show 1.
-  await expect(page.getByText("1", { exact: true }).first()).toBeVisible();
+  // (The stat tiles also count the profile document, so "1" is not asserted here — "1 ITEM" on
+  // the Brain Dumps tab above is the per-category count and IS.)
 
   // ── Search box (VALT-04 browse/search UI) ──────────────────────────────────────────────────────
   // Exercise the search action, then clear it (blur on empty restores the full grid). The hybrid
@@ -98,20 +108,28 @@ test("honest-zero → paste → processing→ready → search → preview(entiti
 
   // ── Preview modal: metadata + extracted entity chips + relationship ─────────────────────────────
   await card.click();
-  const dialog = page.getByRole("dialog", { name: /^Preview:/ });
+  const dialog = page.getByRole("dialog", { name: /./ });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("Kind", { exact: true })).toBeVisible();
   await expect(dialog.getByText("Status", { exact: true })).toBeVisible();
-  await expect(dialog.getByText("Entities & Relationships")).toBeVisible();
+  await expect(dialog.getByText("Entities & citations")).toBeVisible();
   // The SMOKE::graph:: fixture: chips Alice + Acme, edge "works_at".
-  await expect(dialog.getByText("Alice", { exact: true })).toBeVisible();
-  await expect(dialog.getByText("Acme", { exact: true })).toBeVisible();
+  // The chips read "<name> <type>" now, so match inside the entities list, not by exact text.
+  const entities = dialog.getByRole("list", { name: "Entities found" });
+  await expect(entities.getByText("Alice").first()).toBeVisible();
+  await expect(entities.getByText("Acme").first()).toBeVisible();
   await expect(dialog.getByText("works_at", { exact: true })).toBeVisible();
 
   // ── Delete → the grid returns to empty ──────────────────────────────────────────────────────────
-  await dialog.getByRole("button", { name: /Delete/ }).click();
+  // Two-step removal since the preview controls landed: request, then confirm.
+  await dialog.getByRole("button", { name: "Remove from vault" }).click();
+  await dialog.getByRole("button", { name: "Yes, remove it" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText(/No documents yet/)).toBeVisible({ timeout: 15_000 });
+  // The grid keeps the last search term after the modal closes now, so the empty state after the
+  // delete is either the category's or the search's — both mean the document is gone.
+  await expect(page.getByText(/No documents in this category|No documents match/)).toBeVisible({
+    timeout: 15_000,
+  });
 });
 
 // ── EXTR-H — Phase 3.8: a binary upload walks pending → ready via the extraction rail ────────────
@@ -136,7 +154,9 @@ async function extractionWalk(
 
   // Upload the sentinel bytes through the real Dropzone input (binary mime → accept-but-defer →
   // the vaultUpload hook schedules the extraction action; NO refresh from here on).
-  await page.locator('input[type="file"]').setInputFiles({
+  // The FILE input, not the two folder pickers (both carry an aria-label and `webkitdirectory`);
+  // since the folder-import controls landed, a bare `input[type="file"]` resolves to three elements.
+  await page.locator('input[type="file"]:not([aria-label])').setInputFiles({
     name: opts.filename,
     mimeType: opts.mimeType,
     buffer: Buffer.from(opts.bytes),
@@ -145,7 +165,9 @@ async function extractionWalk(
   const tablist = page.getByRole("tablist", { name: "Vault categories" });
   await tablist.getByRole("tab", { name: opts.tab }).click();
 
-  const card = page.getByRole("button", { name: new RegExp(opts.filename) });
+  // `.first()`: since the reel/preview controls landed, a disabled "Still reading your document"
+  // action button also carries the filename in its accessible name; the card is the first match.
+  const card = page.getByRole("button", { name: new RegExp(opts.filename) }).first();
   await expect(card).toBeVisible({ timeout: 20_000 });
 
   // The pill walks reactively: pending → extracting → processing → ready (no refresh).
@@ -155,10 +177,14 @@ async function extractionWalk(
   // Ready without a refresh — now the preview proves the doc landed in the search planes:
   // the SMOKE::graph:: extracted text produced the deterministic entity chips.
   await card.click();
-  const dialog = page.getByRole("dialog", { name: /^Preview:/ });
+  const dialog = page.getByRole("dialog", { name: /./ });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText(opts.entity, { exact: true })).toBeVisible();
-  await dialog.getByRole("button", { name: /Delete/ }).click();
+  await expect(
+    dialog.getByRole("list", { name: "Entities found" }).getByText(opts.entity).first(),
+  ).toBeVisible({ timeout: 15_000 });
+  // Two-step removal since the preview controls landed: request, then confirm.
+  await dialog.getByRole("button", { name: "Remove from vault" }).click();
+  await dialog.getByRole("button", { name: "Yes, remove it" }).click();
   await expect(dialog).toBeHidden();
 }
 

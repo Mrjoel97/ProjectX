@@ -33,7 +33,7 @@ const SMOKE_TITLE = "Smoke Document";
 test("chat → createDocument → the Output card names the artifact", async ({ page }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // The composer clears on success — waiting for empty sequences the turn without asserting prose.
@@ -57,7 +57,7 @@ test("chat → createDocument → the Output card names the artifact", async ({ 
 test("a turn that creates nothing renders no Output card", async ({ page }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // A recipient-only turn: a governed tool call that writes no vaultSources `created` row. The card

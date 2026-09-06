@@ -25,7 +25,7 @@ test("chat → 2 recipients → subject → body → personalize #1 → PLAN(2 d
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // Each send clears the composer on success — waiting for empty sequences turns without asserting prose.

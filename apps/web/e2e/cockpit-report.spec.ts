@@ -18,7 +18,7 @@ test("chat → plan → one approve → live per-recipient report (offline SMOKE
 
   // The chat pane only renders once Gmail is connected (workspace/page.tsx gate). If the harness
   // user has no mailbox this fails fast with a clear locator error rather than hanging.
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // One deterministic guided turn = fill the composer + Enter (ChatPane onKeyDown → sendCockpitMessage).

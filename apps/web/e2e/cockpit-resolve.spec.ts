@@ -24,7 +24,7 @@ test("agent path: resolve → card → pick → edit → PLAN (offline SMOKE::ag
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // Each send clears the composer on success (ChatPane sets text="" after the action resolves), so
@@ -136,7 +136,7 @@ test("demotion: brief primary → candidates park → picker precedes the demote
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   // Seed the fixture mailbox for THIS session's tenant (idempotent — re-runs never double it).
@@ -213,7 +213,7 @@ test("proposed + parked candidates: the picker survives, no '#1 (no name)' PlanC
 }) => {
   await page.goto("/dashboard/workspace");
 
-  const composer = page.getByPlaceholder("Describe your goal…");
+  const composer = page.getByPlaceholder("What business outcome should we work on?");
   await expect(composer).toBeVisible({ timeout: 15_000 });
 
   const say = async (text: string) => {
