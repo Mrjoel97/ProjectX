@@ -28,6 +28,7 @@
 // Both moves are CONT-01 as amended on 2026-08-22. The page NAMES the new owner rather than silently
 // dropping the category, because a reader who used to find sent mail here needs to know where it went.
 import { api } from "@pikar/backend/api";
+import { XLSX_MIME } from "@pikar/core";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
@@ -182,6 +183,8 @@ export function typeBadge(card: ArtifactCardData): string {
 
 function bytesLabel(mimeType: string): string {
   if (mimeType === "application/pdf") return "PDF";
+  // Phase 40: without this the badge printed the whole OOXML subtype in caps.
+  if (mimeType === XLSX_MIME) return "XLSX";
   if (mimeType === "video/mp4") return "MP4";
   if (mimeType.startsWith("image/")) return mimeType.slice("image/".length).toUpperCase();
   if (mimeType.startsWith("text/")) return "Text";

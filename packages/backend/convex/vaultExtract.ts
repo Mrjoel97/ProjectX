@@ -28,6 +28,7 @@ import {
 import { extractOfficeText } from "@pikar/vault/officeText";
 // Subpath import (NOT the barrel), same discipline and a much bigger number: SheetJS is ~1 MB and
 // enters ONLY this node action. Pitfall 9 applies to the package it imports — see xlsText.ts.
+import { sheetRows } from "@pikar/vault/sheets";
 import { xlsText } from "@pikar/vault/xlsText";
 import { generateText } from "ai";
 import type { GenericActionCtx } from "convex/server";
@@ -388,6 +389,9 @@ export const extractDoc = internalAction({
       // the rail dispatch — then dispatch by rail.
       const sniffed = decodeUtf8(bytes);
       let extracted: Extracted;
+      // Phase 40 (DOC-01): did this document turn out to be a WORKBOOK? Only a workbook gets a
+      // structured grid, and only the rail that read it knows — never guessed from the text.
+      let workbook = false;
       if (sniffed.startsWith(SMOKE_EXTRACT_PREFIX) && fixtureSeamFor(tenantId)) {
         extracted = { text: sniffed.slice(SMOKE_EXTRACT_PREFIX.length), path: "smoke" };
       } else if (rail === "pdf") {
@@ -410,7 +414,9 @@ export const extractDoc = internalAction({
         // Every ZIP-based office format (DOCX/DOCM, XLSX/XLSM, PPTX/PPTM, ODT/ODS/ODP, EPUB) —
         // extractOfficeText dispatches on the archive's own marker entry, not on a mime type.
         try {
-          extracted = { text: extractOfficeText(bytes).text, path: "office" };
+          const office = extractOfficeText(bytes);
+          extracted = { text: office.text, path: "office" };
+          workbook = office.kind === "spreadsheet"; // XLSX / XLSM, never DOCX or PPTX
         } catch {
           await fail("office_parse_failed");
           return null;
@@ -431,6 +437,7 @@ export const extractDoc = internalAction({
         // returning "" for an empty or unreadable workbook, so this catch is the only ending.
         try {
           extracted = { text: xlsText(bytes), path: "legacy" };
+          workbook = true; // .xls / .xlsb — SheetJS reads these for the grid too
         } catch {
           await fail("xls_parse_failed");
           return null;
@@ -512,6 +519,25 @@ export const extractDoc = internalAction({
         text: outText,
         truncated,
       });
+      // Phase 40 (DOC-01): the grid is a VIEW, written last and never fatal. A workbook whose
+      // structured read fails still ingests — the reader sees the text projection, which is the
+      // artifact of record and has already succeeded here. Cells never reach the audit (§4);
+      // the log already carries the rail + charCount above.
+      if (workbook) {
+        try {
+          const grid = sheetRows(bytes);
+          if (grid.sheets.length > 0) {
+            await ctx.runMutation(internal.vault.upsertSheets, {
+              tenantId,
+              docId: vaultDocId,
+              sheets: grid.sheets,
+              sheetCount: grid.sheetCount,
+            });
+          }
+        } catch {
+          // no grid for this document; the text projection stands
+        }
+      }
       return null;
     } catch (e) {
       // Unexpected throw -> honest failure with a refs-only reason (our own/parser/SDK error

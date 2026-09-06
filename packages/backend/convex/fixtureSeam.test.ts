@@ -313,6 +313,10 @@ describe("#11/#12 parseSmoke and parseAgentSmoke refuse without the operator fac
       route: "direct_llm",
       cache: false,
       failPrimary: false,
+      // Phase 40: `no-table::` forces the spreadsheet drafter's fixture to answer with prose, so
+      // the no-table refusal is reachable offline. Deep-equal here on purpose — a new switch on
+      // this parser is a new in-band sentinel and should have to be declared in this test.
+      noTable: false,
     });
     expect(parseAgentSmoke("SMOKE::agent::propose", "t_x")).toEqual({ kind: "propose" });
     expect(parseSmoke("SMOKE::route=direct_llm:: hello", "t_other")).toBeNull();

@@ -494,6 +494,50 @@ const xlsFixture = (): Uint8Array => {
   return new Uint8Array(xlsxWrite(wb, { bookType: "xls", type: "buffer" }));
 };
 
+/**
+ * A REAL .xlsx (OOXML), written by SheetJS — the same arrangement as `xlsFixture` above, one
+ * bookType over. `workbookZip()` below is a HAND-BUILT archive that satisfies the text walker's
+ * marker but is not a workbook SheetJS can read: the two fixtures together are what separate "the
+ * grid was written" from "the grid failed and the document ingested anyway".
+ */
+const xlsxFixture = (): Uint8Array => {
+  const wb = xlsxUtils.book_new();
+  xlsxUtils.book_append_sheet(
+    wb,
+    xlsxUtils.aoa_to_sheet([
+      ["Region", "Revenue"],
+      ["North", 152340.5],
+      ["South", 98120],
+    ]),
+    "Sales",
+  );
+  xlsxUtils.book_append_sheet(
+    wb,
+    xlsxUtils.aoa_to_sheet([
+      ["Item", "Cost"],
+      ["Rent", 1200],
+    ]),
+    "Costs",
+  );
+  return new Uint8Array(xlsxWrite(wb, { bookType: "xlsx", type: "buffer" }));
+};
+const XLSX_MIME_T = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const DOCX_MIME_T = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+/** A DOCX: the same zip rail, a different marker entry — the walker calls it a `document`. */
+const docxZipT = (): Uint8Array =>
+  zipStore({ "word/document.xml": "<document><w:p><w:t>Board notes</w:t></w:p></document>" });
+/** The grid rows this doc owns. `T` here is the schema-less `ReturnType<typeof convexTest>` this
+ *  file has always used, so the row shape is named locally rather than read off the DataModel. */
+type GridRow = {
+  docId: Id<"vaultDocuments">;
+  sheetCount: number;
+  sheets: { name: string; rows: string[][]; totalRows: number }[];
+};
+const gridOf = async (t: T, docId: Id<"vaultDocuments">): Promise<GridRow[]> =>
+  ((await t.run((ctx) => ctx.db.query("vaultSheets").collect())) as GridRow[]).filter(
+    (r) => r.docId === docId,
+  );
+
 /** 64 bytes nothing can read: not a signature, not %PDF, not valid printable text. */
 const NOISE = Uint8Array.from({ length: 64 }, (_, i) => i % 2);
 
@@ -1055,4 +1099,69 @@ describe("dispatcher source contract (vaultRedaction.test.ts static-scan pattern
     expect(unpdf, "unpdf usage missing").toBeGreaterThanOrEqual(0);
     expect(polyfill).toBeLessThan(unpdf);
   });
+});
+
+// ── Phase 40 (DOC-01): the structured grid beside the text projection ────────────────────────────
+//
+// The grid is a VIEW, not the artifact of record. These four tests pin what that sentence means:
+// a real workbook gets one, a Word document never does, a workbook SheetJS cannot read still
+// INGESTS, and re-running the rail leaves one row rather than two.
+describe("the sheet grid (Phase 40, DOC-01)", () => {
+  test("a real .xlsx lands a capped grid: sheet NAMES, the header row, and the row total", async () => {
+    const t = setup();
+    const docId = await uploadBytes(t, xlsxFixture(), XLSX_MIME_T, "sales.xlsx");
+
+    await runExtract(t, docId);
+
+    // The text projection still happened — it is what search and grounding read.
+    expect((await getDoc(t, docId))?.text).toContain("Sheet 1");
+    const [grid] = await gridOf(t, docId);
+    expect(grid?.sheetCount).toBe(2);
+    // The sheet NAME is the thing the text projection loses (it labels sheets `Sheet N` by number).
+    expect(grid?.sheets.map((s) => s.name)).toEqual(["Sales", "Costs"]);
+    expect(grid?.sheets[0]?.rows[0]).toEqual(["Region", "Revenue"]); // row 0 is the header
+    expect(grid?.sheets[0]?.rows[1]?.[0]).toBe("North");
+    expect(grid?.sheets[0]?.totalRows).toBe(3);
+    // §4: cells never reach the audit — the success row carries the rail and counts only.
+    expect(JSON.stringify(await successAudit(t))).not.toContain("North");
+  }, 20000);
+
+  test("a DOCX gets NO grid — the family comes from the walker, never from the text", async () => {
+    const t = setup();
+    const docId = await uploadBytes(t, docxZipT(), DOCX_MIME_T, "brief.docx");
+
+    await runExtract(t, docId);
+
+    expect((await getDoc(t, docId))?.status).toBe("processing"); // ingested normally
+    expect(await gridOf(t, docId)).toEqual([]);
+  }, 20000);
+
+  test("a workbook SheetJS cannot read still INGESTS — a failed grid is never fatal", async () => {
+    // The hand-built archive carries `xl/workbook.xml` (so the text walker reads it and the rail
+    // calls it a spreadsheet) but is not a workbook SheetJS can open. MUTATION that turns this RED:
+    // let the sheetRows throw escape the try in vaultExtract.
+    const t = setup();
+    const docId = await uploadBytes(t, workbookZip(), XLSM_MIME, "budget.xlsm");
+
+    await runExtract(t, docId);
+
+    const doc = await getDoc(t, docId);
+    expect(doc?.status).toBe("processing");
+    expect(doc?.text).toContain(CELL); // the text projection stands on its own
+    expect(await gridOf(t, docId)).toEqual([]);
+  }, 20000);
+
+  test("re-running the rail replaces the grid rather than adding a second one", async () => {
+    // Retry re-runs the WHOLE extraction from the stored bytes (vaultSweep), so the write has to be
+    // idempotent by construction, not by luck.
+    const t = setup();
+    const docId = await uploadBytes(t, xlsxFixture(), XLSX_MIME_T, "sales.xlsx");
+
+    await runExtract(t, docId);
+    await runExtract(t, docId);
+
+    const rows = await gridOf(t, docId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.sheets[0]?.name).toBe("Sales");
+  }, 30000);
 });

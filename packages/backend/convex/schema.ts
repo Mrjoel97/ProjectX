@@ -34,7 +34,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 58 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 59 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -58,7 +58,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   notifications, gmailTokens, microsoftCalendarTokens                      │
 // │                                                                            │
 // │ ── Vault (Document Store) ──────────────────────────────── ~L956           │
-// │   vaultSources, vaultDocuments, vaultFolders                               │
+// │   vaultSources, vaultDocuments, vaultFolders, vaultSheets                  │
 // │                                                                            │
 // │ ── Knowledge Graph ─────────────────────────────────────── ~L1772          │
 // │   graphNodes, graphEdges                                                   │
@@ -1361,7 +1361,9 @@ export default defineSchema({
     // ponytail: one form per row. If a single turn ever mixes forms, the row records the LAST
     // call's form and the badge follows it — upgrade path is a parallel `forms: string[]`
     // beside `titles`, not a second table.
-    form: v.optional(v.union(v.literal("short"), v.literal("long"))),
+    // Phase 40 (DOC-01) added `sheet` — a real .xlsx workbook. Widening this union is what lets
+    // the Output card's badge say SPREADSHEET instead of mislabelling a workbook DOCUMENT.
+    form: v.optional(v.union(v.literal("short"), v.literal("long"), v.literal("sheet"))),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
@@ -2184,6 +2186,37 @@ export default defineSchema({
   // document's `text` blob (this table holds book-sized uploads; a .collect() would walk into the
   // 16 MiB / 32k-doc read cap). The ONE deliberately cross-tenant index in the repo — read by a
   // single caller (the weekly review fan-out) and yielding tenant ids only, never content.
+
+  // ── Phase-40 sheet plane (DOC-01) ─────────────────────────────────────────
+  //
+  // A workbook's CAPPED GRID, one row per spreadsheet document. A NEW TABLE, deliberately, not a
+  // field on `vaultDocuments`: the vault grid's read bound (VAULT_GRID_READ_BUDGET_BYTES) counts
+  // `vaultDocuments.text` bytes to stay under Convex's 16 MiB per-transaction cap, and a second
+  // large blob on that row would slip straight past a bound that cannot see it. Read by exactly one
+  // query (`vault.vaultDocSheets`, ONE document at a time), never by the list projection.
+  //
+  // The text projection stays the artifact of record: this table is a VIEW for the preview, so a
+  // missing row means "no grid", never "no document". Replaced wholesale per doc (Retry re-runs the
+  // rail), deleted with its document.
+  vaultSheets: defineTable({
+    tenantId: v.string(),
+    docId: v.id("vaultDocuments"),
+    sheets: v.array(
+      v.object({
+        name: v.string(), // the workbook's own sheet name — the text projection loses it
+        rows: v.array(v.array(v.string())), // display text, row 0 = the header row
+        totalRows: v.number(), // the honesty field: rows.length may be smaller (SHEET_ROWS_CAP)
+      }),
+    ),
+    sheetCount: v.number(), // the workbook's TOTAL sheets, so the card can say what it is not showing
+    createdAt: v.number(),
+  })
+    .index("by_doc", ["tenantId", "docId"])
+    // Classifying this table `tenant_owned` (tenantData.ts) is a PROMISE that a tenant can export
+    // and delete it, and both walkers (tenantExport / tenantDelete) reach every owned table
+    // through `by_tenant`. Without this index those two go red — which is how the promise stays
+    // true rather than becoming a comment.
+    .index("by_tenant", ["tenantId"]),
 
   // ── Phase-15.3 folder plane (VALT-05..VALT-14) ─────────────────────────────
   // A folder ingested as ONE thing: estimated and reserved whole, SEALED until every member is

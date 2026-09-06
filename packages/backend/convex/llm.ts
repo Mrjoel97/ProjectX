@@ -38,6 +38,7 @@ import {
   RESEARCH_SPECIALIST_SKILL,
   REVENUE_SPECIALIST_SKILL,
   REVENUE_WORKFLOW_SKILLS,
+  SPREADSHEET_DRAFTER_SKILL,
   VOICE_BRIEF_SKILL,
 } from "@pikar/contracts/skill";
 import {
@@ -64,6 +65,7 @@ import {
   type DocFormat,
   exceedsByteCap,
   type FigureClaim,
+  formatForMime,
   formatSpec,
   grantsFor,
   type InboxMessageMeta,
@@ -73,6 +75,7 @@ import {
   isNeedsYou,
   isWorkflowPackSkill,
   joinDigest,
+  markdownToSheets,
   NO_GRANTS,
   packOutputIsDocument,
   parseAddress,
@@ -89,6 +92,7 @@ import {
   tokenizeMarkdown,
   toWinAnsi,
   validateFigureClaim,
+  XLSX_MIME,
 } from "@pikar/core";
 import {
   CHEAP_MODEL,
@@ -105,6 +109,9 @@ import {
   searchFeeUsd,
 } from "@pikar/cost";
 import { scanText } from "@pikar/pii";
+// Subpath import (NOT the barrel), the vaultExtract discipline: SheetJS is ~1 MB and enters only
+// the `use node` modules that write or read a workbook. STATIC, per Pitfall 9 — see sheets.ts.
+import { sheetsToXlsx } from "@pikar/vault/sheets";
 import { type BriefSections, buildBriefMarkdown } from "@pikar/voice";
 import {
   generateObject,
@@ -976,7 +983,12 @@ export const probeGemini = internalAction({
 // the grammar altogether once a mock-gateway smoke exists.
 type Route = RoutingDecision["route"];
 const SMOKE_ROUTES: readonly Route[] = ["direct_llm", "direct_tool", "sub_agent"];
-type Smoke = { route: Route | "unknown"; cache: boolean; failPrimary: boolean };
+type Smoke = {
+  route: Route | "unknown";
+  cache: boolean;
+  failPrimary: boolean;
+  noTable: boolean;
+};
 export function parseSmoke(text: string, tenantId: string): Smoke | null {
   if (!fixtureSeamFor(tenantId)) return null;
   const m = text.match(/^SMOKE::route=([a-z_]+)::/);
@@ -985,6 +997,10 @@ export function parseSmoke(text: string, tenantId: string): Smoke | null {
     route: SMOKE_ROUTES.includes(m[1] as Route) ? (m[1] as Route) : "unknown",
     cache: text.includes("cache=1::"),
     failPrimary: text.includes("fail=primary::"),
+    // Phase 40: force the spreadsheet drafter to answer with PROSE, so the no-table refusal is
+    // reachable offline (its fixture otherwise always returns a table). Tenant-gated with the rest
+    // of this parser — `fixtureSeamFor` above is the gate.
+    noTable: text.includes("no-table::"),
   };
 }
 
@@ -2148,14 +2164,20 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     const scan = scanText(topic);
     if (!scan.ok) throw new Error("cockpit: attachment-topic scan failed"); // redact-then-write §4
     const safeText = scan.value.safeText;
+    // Phase 40 (DOC-01): a spreadsheet needs a body that writes TABLES — a header row, plain
+    // numbers, one fact per cell, no formulas. `document-drafter` is told the opposite ("keep
+    // tables to 2–4 columns so they fit the page"), and it is GATED, so `spreadsheet-drafter` is a
+    // new ungated row rather than an edit to it (the Phase 18 content-drafter precedent).
+    const drafter = format === "xlsx" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL;
     const draft: { title: string; markdown: string } = await ctx.runAction(
       internal.llm.draftDocument,
       {
         tenantId,
         safeText,
         safeTextHash: await contentHash(safeText),
-        // The eval runner's document-drafter pin rides HERE (EVAL-01) — undefined = active skill.
-        skillVersion: skillVersions?.[DOCUMENT_DRAFTER_SKILL],
+        // The eval runner's drafter pin rides HERE (EVAL-01) — undefined = active skill.
+        skillName: drafter,
+        skillVersion: skillVersions?.[drafter],
       },
     );
     const setError = async (message: string): Promise<{ ok: false; message: string }> => {
@@ -2167,6 +2189,15 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       });
       return { ok: false, message };
     };
+    // A workbook with no table is not a workbook. Refused BEFORE the render so the message can
+    // say what is actually wrong — the generic render-fail sentence would send the model round the
+    // same loop with the same prose draft.
+    const sheets = format === "xlsx" ? markdownToSheets(draft.markdown) : [];
+    if (format === "xlsx" && sheets.length === 0) {
+      return setError(
+        "I couldn't build the spreadsheet — the draft came back with no table in it. Tell the user and ask which columns they want.",
+      );
+    }
     let bytes: Uint8Array;
     try {
       // ponytail: render=fail:: is a per-request offline hook (mirrors fail=primary::) to exercise
@@ -2175,7 +2206,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       bytes =
         format === "pdf"
           ? await markdownToPdf(draft.title, draft.markdown)
-          : new TextEncoder().encode(renderHtmlDocument(draft.title, draft.markdown));
+          : format === "xlsx"
+            ? sheetsToXlsx(sheets)
+            : new TextEncoder().encode(renderHtmlDocument(draft.title, draft.markdown));
     } catch {
       return setError(
         "I couldn't generate the attachment — the document failed to render. Tell the user and offer to try again.",
@@ -2702,9 +2735,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           },
           format: {
             type: "string",
-            enum: ["pdf", "html"],
+            enum: ["pdf", "html", "xlsx"],
             description:
-              "Output format. Omit for a PDF; use html only when the user asks for a web page.",
+              "Output format. Omit for a PDF; html only when the user asks for a web page; xlsx for a real spreadsheet they will work in — a price list, a schedule, a tracker, a comparison they will edit.",
           },
         },
         required: ["topic"],
@@ -2743,7 +2776,10 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         if (i < 0 || i >= existing.length)
           return `Rejected: there is no attachment #${index}. The plan has ${existing.length}.`;
         const old = existing[i]!;
-        const res = await renderAndStore(topic, existing, i);
+        // Phase 40: regenerate the format it ALREADY IS. This call passed no format until now, so
+        // an html or xlsx attachment silently came back as a PDF — the user asked for a revision,
+        // not a conversion. The stored MIME is the only record of the original choice.
+        const res = await renderAndStore(topic, existing, i, formatForMime(old.mimeType) ?? "pdf");
         if (!res.ok) return res.message;
         const next = existing.map((a, j) => (j === i ? res.att : a));
         await ctx.runMutation(internal.plans.recordAttachments, {
@@ -4023,7 +4059,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // The FORMAT clause. There is no format argument and there is no pptx, docx or slides
         // path; asked for one, say what this writes instead of agreeing. Observed live: the agent
         // reported creating a deck "in PowerPoint format" that never existed.
-        "It writes markdown and a PDF — never PowerPoint, Word or slides. " +
+        "It writes markdown with a PDF (`long`) or a real .xlsx workbook (`sheet`) — never PowerPoint, Word or slides. " +
         "The finished document appears in the workspace as well as the vault. " +
         // The trigger rule. It is a rule for THIS surface, where an unasked-for document is a
         // surprise — and it is one reason no workflow pack holds this tool: for a pack whose output
@@ -4031,7 +4067,11 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // Packs get `saveAsDocument` instead, which is a different tool for a different job.
         "Create directly when the user asks for one; when creating one is YOUR idea, say what you " +
         "would write and wait for a yes.",
-      inputSchema: jsonSchema<{ topic: string; form: "short" | "long"; replace?: number }>({
+      inputSchema: jsonSchema<{
+        topic: string;
+        form: "short" | "long" | "sheet";
+        replace?: number;
+      }>({
         type: "object",
         properties: {
           topic: { type: "string", description: "What to write, in plain language." },
@@ -4039,8 +4079,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           // and the PDF branch, which keeps the short/long split in code rather than a heuristic.
           form: {
             type: "string",
-            enum: ["short", "long"],
-            description: "long = proposal, one-pager, report. short = post, ad copy, headline.",
+            enum: ["short", "long", "sheet"],
+            description:
+              "long = proposal, one-pager, report. short = post, ad copy, headline. sheet = a spreadsheet they will work in (price list, schedule, tracker, comparison).",
           },
           // The locked replace-in-place revision. 1-based #index over what this conversation has
           // already created — the regenerateAttachment idiom. NEVER a raw id: the index resolves
@@ -4073,7 +4114,12 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // The ONE thing that reaches the content-drafter body. `skillVersions` is name-keyed, so
         // the eval runner's pin rides through with no new plumbing; `undefined` for content-drafter
         // is CORRECT — it is deliberately outside GATED_SKILLS, so the active row is the intent.
-        const skillName = form === "short" ? CONTENT_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL;
+        const skillName =
+          form === "short"
+            ? CONTENT_DRAFTER_SKILL
+            : form === "sheet"
+              ? SPREADSHEET_DRAFTER_SKILL
+              : DOCUMENT_DRAFTER_SKILL;
         let draft: { title: string; markdown: string };
         let storageId: Id<"_storage"> | undefined;
         try {
@@ -4089,6 +4135,11 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             // Uint8Array<ArrayBufferLike> too strictly (it may be SharedArrayBuffer-backed).
             const bytes = (await markdownToPdf(draft.title, draft.markdown)) as BlobPart;
             storageId = await ctx.storage.store(new Blob([bytes], { type: "application/pdf" }));
+          } else if (form === "sheet") {
+            // Phase 40 (DOC-01): the vault plane's workbook. `sheetsToXlsx` throws on zero sheets,
+            // which lands in the same catch as a failed PDF render — one refusal path, one sentence.
+            const bytes = sheetsToXlsx(markdownToSheets(draft.markdown)) as BlobPart;
+            storageId = await ctx.storage.store(new Blob([bytes], { type: XLSX_MIME }));
           }
         } catch (error) {
           // LOG THE REASON. A bare `catch` here returns a plausible sentence, the tool step records
@@ -4216,9 +4267,12 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             ? "saved to your vault"
             : `rewritten as #${effectiveReplace}`;
         const shown = " It is already open in the workspace for the user to read.";
-        const asFormat = storageId
-          ? " Written as markdown, with a PDF to download."
-          : " Written as markdown.";
+        const asFormat =
+          form === "sheet"
+            ? " Written as a spreadsheet — a real .xlsx workbook to download."
+            : storageId
+              ? " Written as markdown, with a PDF to download."
+              : " Written as markdown.";
         return `Created "${draft.title}" — ${saved}.${shown}${asFormat}`;
       },
     }),
@@ -6309,7 +6363,11 @@ export const draftDocument = internalAction({
     // at any registry row. Absent = document-drafter, so every shipped caller stays byte-identical
     // and `document-drafter`'s BODY is untouched — this changes who is ASKED for, never what it says.
     skillName: v.optional(
-      v.union(v.literal(DOCUMENT_DRAFTER_SKILL), v.literal(CONTENT_DRAFTER_SKILL)),
+      v.union(
+        v.literal(DOCUMENT_DRAFTER_SKILL),
+        v.literal(CONTENT_DRAFTER_SKILL),
+        v.literal(SPREADSHEET_DRAFTER_SKILL),
+      ),
     ),
   },
   handler: async (
@@ -6331,6 +6389,16 @@ export const draftDocument = internalAction({
         // failPrimary throws INTO the catch so the real fallback path runs; else offline document.
         if (smoke.failPrimary)
           throw new DOMException("smoke: forced primary failure", "TimeoutError");
+        // Phase 40: the spreadsheet drafter's offline fixture is a TABLE, because that is what
+        // its body promises and what `markdownToSheets` needs. `no-table::` asks for prose
+        // instead, so the no-table refusal can be exercised without a paid call.
+        if (name === SPREADSHEET_DRAFTER_SKILL && !smoke.noTable) {
+          return {
+            title: "Smoke Prices",
+            markdown:
+              "## Prices\n\n| Item | Unit price (USD) |\n| --- | --- |\n| Setup | 500 |\n| Monthly | 120 |\n",
+          };
+        }
         return {
           title: "Smoke Document",
           markdown: `# Smoke Document\n\nSmoke draft for ${safeTextHash}.`,

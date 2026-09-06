@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   buildDocFilename,
   exceedsByteCap,
+  formatForMime,
   formatSpec,
   inlineRuns,
+  markdownToSheets,
   PLAN_ATTACHMENT_CAP_BYTES,
   renderHtmlDocument,
   tokenizeMarkdown,
   toWinAnsi,
+  XLSX_MIME,
 } from "./documentGen";
 
 describe("tokenizeMarkdown", () => {
@@ -142,9 +145,85 @@ describe("buildDocFilename", () => {
 });
 
 describe("formatSpec", () => {
+  // Phase 40 (DOC-01) widened this from {pdf, html} to the three-entry set. ADR-036 fixes it as
+  // CLOSED: a DOCX/PPTX member is a decision this repo has made against, not a gap.
   it("is the one place the extension + MIME literals are written", () => {
     expect(formatSpec("pdf")).toEqual({ ext: "pdf", mimeType: "application/pdf" });
     expect(formatSpec("html")).toEqual({ ext: "html", mimeType: "text/html" });
+    expect(formatSpec("xlsx")).toEqual({ ext: "xlsx", mimeType: XLSX_MIME });
+    expect(XLSX_MIME).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  });
+
+  // Why this exists: `regenerateAttachment` had no format argument, so regenerating an html
+  // attachment silently produced a PDF. It now recovers the format from the stored MIME.
+  it("formatForMime round-trips every format and refuses a foreign MIME", () => {
+    for (const f of ["pdf", "html", "xlsx"] as const) {
+      expect(formatForMime(formatSpec(f).mimeType)).toBe(f);
+    }
+    expect(formatForMime("text/plain")).toBeNull();
+    expect(formatForMime("application/vnd.ms-excel")).toBeNull(); // legacy .xls is not an output
+  });
+});
+
+describe("markdownToSheets", () => {
+  it("makes one sheet per table, named from the heading above it, header row first", () => {
+    const md = [
+      "# Price book",
+      "",
+      "## Prices",
+      "",
+      "| Item | Unit price (USD) | Notes |",
+      "| --- | --- | --- |",
+      "| Setup | 500 | one-off |",
+      "| Monthly | 120 | per seat |",
+      "",
+      "## Schedule",
+      "",
+      "| Week | Milestone |",
+      "| --- | --- |",
+      "| 1 | Kickoff |",
+    ].join("\n");
+
+    expect(markdownToSheets(md)).toEqual([
+      {
+        name: "Prices",
+        rows: [
+          ["Item", "Unit price (USD)", "Notes"],
+          ["Setup", "500", "one-off"],
+          ["Monthly", "120", "per seat"],
+        ],
+      },
+      {
+        name: "Schedule",
+        rows: [
+          ["Week", "Milestone"],
+          ["1", "Kickoff"],
+        ],
+      },
+    ]);
+  });
+
+  it("names a table with no heading above it by position, and never reuses one heading twice", () => {
+    const bare = markdownToSheets("| A | B |\n| --- | --- |\n| 1 | 2 |");
+    expect(bare).toEqual([
+      {
+        name: "Sheet 1",
+        rows: [
+          ["A", "B"],
+          ["1", "2"],
+        ],
+      },
+    ]);
+
+    // Two tables under ONE heading: the first takes the title, the second falls back to its
+    // position rather than shipping two sheets with the same name.
+    const twin = markdownToSheets("## Prices\n\n| A |\n| --- |\n| 1 |\n\n| B |\n| --- |\n| 2 |");
+    expect(twin.map((s) => s.name)).toEqual(["Prices", "Sheet 2"]);
+  });
+
+  it("returns nothing when the draft has no table — the caller refuses instead of sending an empty book", () => {
+    expect(markdownToSheets("# Just prose\n\nNo table here at all.")).toEqual([]);
+    expect(markdownToSheets("")).toEqual([]);
   });
 });
 

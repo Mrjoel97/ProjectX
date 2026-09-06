@@ -7,21 +7,37 @@
 //     NEVER throw on smart punctuation / astral glyphs (V2 — no silent corruption).
 //   - buildDocFilename: a deterministic, LLM-free safe filename from a topic + date + format.
 //   - renderHtmlDocument: the second output format — DocToken[] → escaped, self-contained HTML.
+//   - markdownToSheets: the THIRD output format (Phase 40) — pipe tables → sheet rows for the
+//     .xlsx writer in @pikar/vault. This module still imports nothing: it hands over rows.
 //   - exceedsByteCap / PLAN_ATTACHMENT_CAP_BYTES: the attachment size guard.
 //
 // ponytail: line-based md tokenizer; swap to marked tokens if inline/nested md needed.
 
+/** The OOXML spreadsheet MIME. Written here and nowhere else — the read side already had this
+ *  literal in two places (vaultDrive's Drive filter, @pikar/vault extractKind); the write side
+ *  gets it from `formatSpec("xlsx")`. */
+export const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" as const;
+
 /** The output formats renderAndStore can emit. `pdf` is the Phase-3.3 default — callers that
- *  omit `format` are byte-identical to today. */
-export type DocFormat = "pdf" | "html";
+ *  omit `format` are byte-identical to today. Phase 40 (DOC-01) added `xlsx`; ADR-036 fixes this
+ *  as the CLOSED set — there is no DOCX/PPTX member and there is not going to be one. */
+export type DocFormat = "pdf" | "html" | "xlsx";
 
 const FORMAT: Record<DocFormat, { ext: string; mimeType: string }> = {
   pdf: { ext: "pdf", mimeType: "application/pdf" },
   html: { ext: "html", mimeType: "text/html" },
+  xlsx: { ext: "xlsx", mimeType: XLSX_MIME },
 };
 
 /** ext + MIME for a format — the ONE place either literal is written. */
 export const formatSpec = (f: DocFormat): { ext: string; mimeType: string } => FORMAT[f];
+
+/** The reverse: a stored attachment's MIME → its format, or null for anything this system did
+ *  not write. `regenerateAttachment` uses it to rebuild an attachment in the format it already
+ *  had — without it, regenerating an html or xlsx attachment silently produced a PDF. */
+export const formatForMime = (mimeType: string): DocFormat | null =>
+  (Object.keys(FORMAT) as DocFormat[]).find((f) => FORMAT[f].mimeType === mimeType) ?? null;
 
 /** A rendered block. Headings/para/bullet/ordered carry raw `text` (the renderer applies
  * `inlineRuns` for bold); a table carries its parsed header + body cells. */
@@ -103,6 +119,41 @@ export function tokenizeMarkdown(md: string): DocToken[] {
   }
   flush();
   return tokens;
+}
+
+/**
+ * Markdown tables → sheet sources for the `.xlsx` writer (@pikar/vault `sheetsToXlsx`).
+ *
+ * The drafter writes ONE pipe table per sheet under its own heading, so the mapping is: every
+ * `table` token becomes a sheet, named from the most recent heading above it. Row 0 of the sheet is
+ * the table's header row, because that is what the reader of a spreadsheet expects in row 1.
+ *
+ * Returns `[]` when the draft has no table at all — the caller turns that into a render refusal
+ * (an empty workbook is not a deliverable, and silently sending one would be the dishonest path).
+ *
+ * ponytail: reuses `tokenizeMarkdown`, so a spreadsheet inherits exactly the markdown the PDF and
+ * HTML renderers understand — one parser for every format (dashboard-pages.md's rule). Cells stay
+ * strings; the upgrade path, if a sheet ever needs real numbers, is a typed cell here AND in
+ * `sheetsToXlsx`, never a second parser.
+ */
+export type SheetSource = { name: string; rows: string[][] };
+
+export function markdownToSheets(markdown: string): SheetSource[] {
+  const sheets: SheetSource[] = [];
+  let heading: string | null = null;
+  for (const t of tokenizeMarkdown(markdown)) {
+    if (t.kind === "h1" || t.kind === "h2" || t.kind === "h3") {
+      heading = t.text;
+      continue;
+    }
+    if (t.kind !== "table") continue;
+    sheets.push({
+      name: heading ?? `Sheet ${sheets.length + 1}`,
+      rows: [t.header, ...t.rows],
+    });
+    heading = null; // one heading titles one table; a second table needs its own
+  }
+  return sheets;
 }
 
 /**

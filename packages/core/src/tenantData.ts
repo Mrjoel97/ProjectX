@@ -60,6 +60,9 @@ export const TENANT_TABLE_CLASSIFICATION = {
   intakeArtifacts: "tenant_owned",
   vaultDocuments: "tenant_owned",
   vaultFolders: "tenant_owned",
+  // Phase 40 (DOC-01): a workbook's capped grid, one row per spreadsheet document. Cell text, so
+  // it is tenant data in the fullest sense — it exports and deletes with its document.
+  vaultSheets: "tenant_owned",
   graphNodes: "tenant_owned",
   graphEdges: "tenant_owned",
   voiceSessions: "tenant_owned",

@@ -64,6 +64,22 @@ export const DOCUMENT_DRAFTER_SKILL = "document-drafter" as const;
  */
 export const CONTENT_DRAFTER_SKILL = "content-drafter" as const;
 
+/**
+ * Registry name of the SPREADSHEET drafter (Phase 40, DOC-01) — the body behind
+ * `generateAttachment({ format: "xlsx" })` and `createDocument({ form: "sheet" })`. It writes
+ * titled pipe tables and nothing else; `markdownToSheets` + `sheetsToXlsx` turn them into a real
+ * workbook, so the rules a spreadsheet needs (header row, plain numbers, one fact per cell, no
+ * formulas) live in the body rather than in code that would have to guess them.
+ *
+ * DELIBERATELY UNGATED — do NOT add to GATED_SKILLS, for the `content-drafter` reason verbatim:
+ * `run-eval-golden.mjs`'s SKILL_NAMES is DERIVED from GATED_SKILLS, and no golden fixture reaches
+ * the drafting path, so gating this row would mint a candidate no eval run could ever certify and
+ * strand it at v1 on its first body edit. A NEW name takes seedSkills' `rows.length === 0` branch
+ * and lands at v1 `active` with no eval cycle and no paid run — which is also why this is a new
+ * row instead of an edit to `document-drafter` (that one IS gated).
+ */
+export const SPREADSHEET_DRAFTER_SKILL = "spreadsheet-drafter" as const;
+
 /** Registry name of the attachment extractor OCR/extraction skill (INTK-02). */
 export const ATTACHMENT_EXTRACTOR_SKILL = "attachment-extractor" as const;
 

@@ -51,6 +51,25 @@ export function binaryMediaKind(mimeType: string): "image" | "video" | "pdf" | n
   return null;
 }
 
+/**
+ * Phase 40 (DOC-01): the formats a workbook can arrive as. This list sits BESIDE
+ * `binaryMediaKind`, never inside it: that function answers "can the browser display these bytes
+ * itself", and the answer for a workbook is still no — the grid is rendered from the structured
+ * rows the ingest wrote, not from the file. Widening `binaryMediaKind` would put an .xlsx in an
+ * <iframe> and show an empty frame, which is exactly what its own comment warns about.
+ */
+const SPREADSHEET_MIMES: readonly string[] = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-excel.sheet.macroEnabled.12", // .xlsm
+  "application/vnd.ms-excel", // .xls
+  "application/vnd.ms-excel.sheet.binary.macroEnabled.12", // .xlsb
+  "application/vnd.oasis.opendocument.spreadsheet", // .ods
+];
+
+/** Is this document a workbook, i.e. worth asking for a grid? A false negative costs a `<pre>`
+ *  fallback, never a broken view — the text projection is always there. */
+export const isSpreadsheet = (mimeType: string): boolean => SPREADSHEET_MIMES.includes(mimeType);
+
 /** Title + detail per binary kind. Exhaustive by construction: adding a `media` variant without a
  *  copy entry fails typecheck rather than shipping a wrong label. */
 const BINARY_COPY: Record<"image" | "video" | "pdf", { title: string; detail: string }> = {

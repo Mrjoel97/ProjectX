@@ -2473,7 +2473,7 @@ function SourceCard({ threadId }: { threadId?: string }) {
  *  every revise) and is the ONLY thing this card can read for the type: byThread returns a
  *  vaultSources row, and the short/long discriminator otherwise lives on vaultDocuments.kind,
  *  which this card deliberately never queries. */
-const FORM_LABEL = { long: "DOCUMENT", short: "POST" } as const;
+const FORM_LABEL = { long: "DOCUMENT", short: "POST", sheet: "SPREADSHEET" } as const;
 
 // The type badge pill. Token-only (the DocGrid icon-badge tint + --ink text): --teal-600 on white
 // is ~2.9:1 and BRAND §6 bans it for small text, so the teal lives in the FILL and the label stays
@@ -2646,6 +2646,20 @@ function OutputCard({ threadId }: { threadId?: string }) {
     api.vault.vaultDocText,
     selectedId ? { vaultDocId: selectedId } : "skip",
   );
+  // Phase 40 (DOC-01), and the ONE place in this file that mints a storage URL.
+  //
+  // A Convex storage URL does not expire (`ctx.storage.getUrl` takes no expiry), so it is a
+  // durable bearer capability and the project rule is that one is never minted for a row nobody is
+  // looking at (content.ts, and contentView.test.ts pins the shelf's half of it). The rule the
+  // owner accepted for an INLINE document narrows that to the thread in front of the user: this
+  // subscribes for the SELECTED created artifact of the OPEN thread — the newest by default, an
+  // older one only after the user clicks its title — and only when its bytes are a PDF a browser
+  // can frame. A shelf of documents still subscribes to nothing.
+  const pdfBytes = artifact?.storedMimeType === "application/pdf";
+  const pdfUrl = useQuery(
+    api.vault.vaultDownloadUrl,
+    selectedId && pdfBytes ? { vaultDocId: selectedId } : "skip",
+  );
   if (!created || created.count === 0) return null;
   // Absent `form` ⇒ DOCUMENT: rows written before this phase carry no form, and guessing from
   // `count` would be a heuristic where a stored closed enum already exists.
@@ -2701,6 +2715,22 @@ function OutputCard({ threadId }: { threadId?: string }) {
       >
         {artifact === undefined ? (
           "Loading document…"
+        ) : pdfUrl ? (
+          // The document AS IT WILL BE READ. The browser's own PDF viewer, the same bare iframe the
+          // vault modal uses (ADR-036: a `sandbox` attribute disables the viewer plugin and frames
+          // nothing). ONE scroll region — the viewer's — so a phone does not nest two.
+          <iframe
+            src={pdfUrl}
+            title={created.titles[selected] ?? "Document"}
+            data-testid="output-pdf"
+            style={{
+              width: "100%",
+              height: "min(70vh, 32rem)",
+              border: "1px solid var(--rule)",
+              borderRadius: "0.5rem",
+              background: "var(--card)",
+            }}
+          />
         ) : artifact?.text ? (
           <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
             <MarkdownDocument markdown={artifact.text} />

@@ -166,8 +166,13 @@ async function reelBlock(ctx: QueryCtx & { tenantId: string }, doc: Doc<"vaultDo
  * One artifact card: refs, enums, timestamps and counts only.
  *
  * NO storage id and NO body text cross this boundary. The page holds a `vaultDocId` (and, for a
- * reel, a `planId`) and asks the existing ownership-checked readers for a URL when the user acts —
- * so a bearer capability is never minted for a card nobody clicked, and never sits in a subscription.
+ * reel, a `planId`) and asks the existing ownership-checked readers for a URL when the user acts.
+ *
+ * THE RULE, as Phase 40 (DOC-01) restated it: a bearer capability is minted only for a row the
+ * user is LOOKING AT — a card they clicked, or the selected created artifact of the thread open in
+ * front of them (the cockpit's inline PDF, cards.tsx `OutputCard`) — and never sits in a
+ * subscription for a row nobody is viewing. A shelf of 24 documents subscribes to none of them.
+ * That is the property; "only on click" was the shape it happened to take when this was written.
  */
 async function card(ctx: QueryCtx & { tenantId: string }, doc: Doc<"vaultDocuments">) {
   const lane = LANE_BY_KIND[doc.kind as ShelfKind];

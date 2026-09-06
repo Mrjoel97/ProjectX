@@ -47,6 +47,7 @@ import {
   ONBOARDING_AGENT_SKILL,
   REPLY_DRAFTER_SKILL,
   RESEARCH_SPECIALIST_SKILL,
+  SPREADSHEET_DRAFTER_SKILL,
   STYLE_COACHING_SKILL,
   STYLE_CONCISE_SKILL,
   STYLE_DIRECT_SKILL,
@@ -93,6 +94,7 @@ import { packSalesCallPrepSkillBody } from "@pikar/contracts/skills/packSalesCal
 import { replyDrafterSkillBody } from "@pikar/contracts/skills/replyDrafter";
 import { researchSpecialistSkillBody } from "@pikar/contracts/skills/researchSpecialist";
 import { revenueSkillBodies } from "@pikar/contracts/skills/revenueBodies";
+import { spreadsheetDrafterSkillBody } from "@pikar/contracts/skills/spreadsheetDrafter";
 import { styleCoachingSkillBody } from "@pikar/contracts/skills/styleCoaching";
 import { styleConciseSkillBody } from "@pikar/contracts/skills/styleConcise";
 import { styleDirectSkillBody } from "@pikar/contracts/skills/styleDirect";
@@ -771,6 +773,10 @@ const SEEDS = [
   // editing its body would have minted a candidate needing a passing eval first, and no golden
   // fixture reaches the drafting path to clear it. Its body stays byte-unchanged.
   { name: CONTENT_DRAFTER_SKILL, body: contentDrafterSkillBody },
+  // UNGATED (40-02, DOC-01): the spreadsheet drafter. Same deadlock as content-drafter — no
+  // golden fixture reaches the drafting path — and the same remedy: a NEW name, so the body
+  // lands at v1 `active` and `document-drafter` stays byte-unchanged.
+  { name: SPREADSHEET_DRAFTER_SKILL, body: spreadsheetDrafterSkillBody },
   // UNGATED (20-03, MEDIA-01): the media specialist. Same deadlock as document-analyst — the
   // golden runner drives runCockpitAgent over TEXT fixtures and cannot exercise a
   // script/art-direction/storyboard turn, so gating would strand this at v1 on its first body

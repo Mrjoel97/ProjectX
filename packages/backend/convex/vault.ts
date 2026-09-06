@@ -17,6 +17,7 @@
 // attaches the failure-handling `onComplete`, so a dead run can never strand a doc at `processing`
 // (the vault plane's zero-embed-before-accept invariant, mirroring executePlan for delivery).
 import type { EntryId } from "@convex-dev/rag";
+import { XLSX_MIME } from "@pikar/core";
 import {
   capMB,
   categoryFor,
@@ -404,6 +405,13 @@ export const deleteVaultDoc = tenantMutation({
     if (doc.folderId && doc.status !== "ready" && doc.status !== "failed") {
       await bumpFolder(ctx, doc.folderId, true);
     }
+    // Phase 40: the grid is a VIEW of this document — it goes when the document goes, or the
+    // next upload that reuses the id would inherit a stranger's cells.
+    const grid = await ctx.db
+      .query("vaultSheets")
+      .withIndex("by_doc", (q) => q.eq("tenantId", ctx.tenantId).eq("docId", vaultDocId))
+      .unique();
+    if (grid) await ctx.db.delete(grid._id);
     await ctx.db.delete(vaultDocId);
     return { ok: true };
   },
@@ -576,12 +584,87 @@ export const listVaultDocs = tenantQuery({
  * `status` rides along because every caller branches on it (a `failed` row has no text coming), and
  * a second subscription for one adjacent field would be silly.
  */
-export const vaultDocText = tenantQuery({
+/** The grid shape, written once and shared by the mutation arg and the query return. */
+const SHEETS_ARG = v.array(
+  v.object({
+    name: v.string(),
+    rows: v.array(v.array(v.string())),
+    totalRows: v.number(),
+  }),
+);
+type SheetRowsShape = { name: string; rows: string[][]; totalRows: number };
+/**
+ * Phase 40 (DOC-01): the capped grid for ONE workbook. Replace-by-doc, so a Retry (which re-runs
+ * the whole extraction rail) leaves one row, not two — the write is idempotent by construction.
+ *
+ * Zero sheets deletes any existing row rather than storing an empty grid: "no row" is the state the
+ * preview already handles (it falls back to the text projection), so there is one empty state, not
+ * two.
+ */
+export const upsertSheets = internalMutation({
+  args: {
+    tenantId: v.string(),
+    docId: v.id("vaultDocuments"),
+    sheets: SHEETS_ARG,
+    sheetCount: v.number(),
+  },
+  handler: async (ctx, { tenantId, docId, sheets, sheetCount }): Promise<null> => {
+    const existing = await ctx.db
+      .query("vaultSheets")
+      .withIndex("by_doc", (q) => q.eq("tenantId", tenantId).eq("docId", docId))
+      .unique();
+    if (sheets.length === 0) {
+      if (existing) await ctx.db.delete(existing._id);
+      return null;
+    }
+    const row = { tenantId, docId, sheets, sheetCount, createdAt: Date.now() };
+    if (existing) await ctx.db.replace(existing._id, row);
+    else await ctx.db.insert("vaultSheets", row);
+    return null;
+  },
+});
+
+/**
+ * ONE document's grid, or null. Tenant-guarded and null-on-miss like `vaultDocText` (a throw would
+ * distinguish "not yours" from "no grid" — an ownership oracle). Content, so it is its own
+ * subscription: the vault list projection must never carry cell text.
+ */
+export const vaultDocSheets = tenantQuery({
   args: { vaultDocId: v.id("vaultDocuments") },
-  handler: async (ctx, { vaultDocId }): Promise<{ text: string | null; status: string } | null> => {
+  handler: async (
+    ctx,
+    { vaultDocId },
+  ): Promise<{ sheets: SheetRowsShape[]; sheetCount: number } | null> => {
     const doc = await ctx.db.get(vaultDocId);
     if (!doc || doc.tenantId !== ctx.tenantId) return null;
-    return { text: doc.text ?? null, status: doc.status };
+    const row = await ctx.db
+      .query("vaultSheets")
+      .withIndex("by_doc", (q) => q.eq("tenantId", ctx.tenantId).eq("docId", vaultDocId))
+      .unique();
+    return row ? { sheets: row.sheets, sheetCount: row.sheetCount } : null;
+  },
+});
+
+export const vaultDocText = tenantQuery({
+  args: { vaultDocId: v.id("vaultDocuments") },
+  handler: async (
+    ctx,
+    { vaultDocId },
+  ): Promise<{
+    text: string | null;
+    status: string;
+    storedMimeType: string | null;
+  } | null> => {
+    const doc = await ctx.db.get(vaultDocId);
+    if (!doc || doc.tenantId !== ctx.tenantId) return null;
+    // Phase 40 (DOC-01): `storedMimeType` rides along for the same reason `status` does — the
+    // Output card branches on it to decide whether these bytes are a PDF it can frame inline, and
+    // a second subscription for one adjacent metadata field would be silly. Metadata, not content.
+    return {
+      text: doc.text ?? null,
+      status: doc.status,
+      storedMimeType: doc.storedMimeType ?? null,
+    };
   },
 });
 
@@ -1293,11 +1376,31 @@ export const promoteToReference = tenantMutation({
   },
 });
 
+/**
+ * The forms a created artifact can take. `sheet` (Phase 40, DOC-01) is a real .xlsx workbook.
+ * Written once and shared by both writers below — the two used to carry the union separately.
+ */
+const CREATED_FORM = v.union(v.literal("short"), v.literal("long"), v.literal("sheet"));
+
+/**
+ * What the STORED BYTES are, given the form. `mimeType` stays LOCKED to `text/markdown` (the
+ * artifact of record — still searchable, still groundable); this answers the other question, and
+ * PreviewModal reads it as `storedMimeType ?? mimeType` to choose a viewer. No bytes ⇒ absent,
+ * which means "the bytes are what mimeType says".
+ */
+const storedMimeFor = (
+  form: "short" | "long" | "sheet",
+  storageId: Id<"_storage"> | undefined,
+): string | undefined => {
+  if (!storageId) return undefined;
+  return form === "sheet" ? XLSX_MIME : "application/pdf";
+};
+
 export const insertCreatedDoc = internalMutation({
   args: {
     tenantId: v.string(),
     title: v.string(),
-    form: v.union(v.literal("short"), v.literal("long")),
+    form: CREATED_FORM,
     markdown: v.string(),
     contentHash: v.string(),
     storageId: v.optional(v.id("_storage")),
@@ -1316,7 +1419,7 @@ export const insertCreatedDoc = internalMutation({
       tenantId,
       title,
       // Free-string `kind`. NOT "document" — smoke.ts seedVoiceDocSession already writes that.
-      kind: form === "long" ? "created_document" : "created_content",
+      kind: form === "short" ? "created_content" : "created_document",
       category: categoryFor({ source: "agent" }), // → workspace-docs, like every generated doc
       source: "agent",
       // LOCKED: markdown is the artifact of record for BOTH forms. "application/pdf" would land the
@@ -1331,7 +1434,7 @@ export const insertCreatedDoc = internalMutation({
       // for a long document — we hold markdown AND the PDF `createDocument` rendered from it — and
       // making one field carry both meanings is what left every agent-authored PDF unviewable.
       // Only `long` renders a PDF, so `storageId` present ⇒ those bytes are one.
-      storedMimeType: storageId ? "application/pdf" : undefined,
+      storedMimeType: storedMimeFor(form, storageId),
       origin: "agent", // the provenance + deferred-promotion discriminator
       sourceThreadId,
       sourcePlanId,
@@ -1358,7 +1461,7 @@ export const patchCreatedDoc = internalMutation({
     threadId: v.string(),
     index: v.number(), // 1-based, straight off the tool arg
     title: v.string(),
-    form: v.union(v.literal("short"), v.literal("long")),
+    form: CREATED_FORM,
     markdown: v.string(),
     contentHash: v.string(),
     storageId: v.optional(v.id("_storage")),
@@ -1390,11 +1493,15 @@ export const patchCreatedDoc = internalMutation({
     const oldStorageId = doc.storageId;
     await ctx.db.patch(docId, {
       title: a.title,
-      kind: a.form === "long" ? "created_document" : "created_content",
+      kind: a.form === "short" ? "created_content" : "created_document",
       text: a.markdown,
       size: byteLen(a.markdown),
       contentHash: a.contentHash,
       storageId: a.storageId, // undefined REMOVES it ⇒ long→short drops the Download button
+      // Phase 40: the bytes' type is REVISED with them. Without this line a long→sheet rewrite
+      // kept `application/pdf` over .xlsx bytes and PreviewModal framed a workbook in the PDF
+      // viewer; a long→short rewrite left a storedMimeType with no bytes under it at all.
+      storedMimeType: storedMimeFor(a.form, a.storageId),
     });
     return { ok: true, oldStorageId };
   },

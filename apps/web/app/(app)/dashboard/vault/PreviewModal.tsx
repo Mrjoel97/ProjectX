@@ -14,7 +14,8 @@ import {
   type PreviewControlHandlers,
   PreviewControls,
 } from "./PreviewControls";
-import { binaryMediaKind, derivePreviewState } from "./previewState";
+import { binaryMediaKind, derivePreviewState, isSpreadsheet } from "./previewState";
+import { SheetGrid } from "./SheetGrid";
 
 // `isImage`/`isVideo` used to live here, duplicating the same decision `previewState` makes. That
 // duplication had teeth: this file gates the SIGNED-URL query and previewState gates the RENDER
@@ -61,6 +62,13 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
   const media = binaryMediaKind(displayMime) !== null;
   const mediaUrl = useQuery(api.vault.vaultDownloadUrl, media ? { vaultDocId: doc._id } : "skip");
   const docText = useQuery(api.vault.vaultDocText, { vaultDocId: doc._id });
+  // Phase 40: the structured grid, asked for ONLY when the row is a workbook (its own
+  // subscription — cell text must never ride the vault list projection). `null` = no grid was
+  // written (an unreadable or empty workbook), and the tab-separated text still renders below.
+  const sheets = useQuery(
+    api.vault.vaultDocSheets,
+    isSpreadsheet(displayMime) ? { vaultDocId: doc._id } : "skip",
+  );
   const text = docText === undefined ? undefined : (docText?.text ?? null);
   const preview = derivePreviewState({
     status: doc.status,
@@ -275,7 +283,12 @@ export function PreviewModal({ doc, onClose }: { doc: VaultDoc; onClose: () => v
           </p>
           {preview.content.kind === "ready-text" ? (
             <>
-              {doc.mimeType === "text/markdown" ? (
+              {sheets ? (
+                // The workbook as rows. The text projection stays reachable underneath through the
+                // same "Show full text" control — the grid is a view of the same document, not a
+                // replacement for the artifact of record.
+                <SheetGrid sheets={sheets.sheets} sheetCount={sheets.sheetCount} />
+              ) : doc.mimeType === "text/markdown" ? (
                 <MarkdownDocument
                   markdown={expanded ? preview.content.text : preview.content.excerpt}
                 />

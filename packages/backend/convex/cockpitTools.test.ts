@@ -20,9 +20,11 @@ import {
   parseSendTime,
   SPECIALISTS,
   type ToolGrants,
+  XLSX_MIME,
 } from "@pikar/core";
+import { sheetRows } from "@pikar/vault/sheets";
 import { convexTest } from "convex-test";
-import { expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // resolveContacts drives gmail.search, whose refs-only mailbox.searched audit hits the auditCounts
 // aggregate; register the component (relative import — the package blocks the deep specifier) so the
 // REAL audit path runs under convex-test instead of throwing "component not registered".
@@ -3413,4 +3415,96 @@ test("recordScorecardAnswer REFUSES a finance figure — the Approve gate is not
     value: "$99",
   });
   expect(ok).toMatch(/Noted/i);
+});
+
+// ── Phase 40 (DOC-01): the .xlsx deliverable, on both planes ─────────────────────────────────────
+//
+// The chain under test is drafter -> markdownToSheets -> sheetsToXlsx -> storage, and the proof
+// that it worked is that the STORED BYTES read back as a workbook with the drafted header row.
+// Asserting the MIME alone would pass over a PDF renamed .xlsx.
+describe("the xlsx attachment (Phase 40)", () => {
+  test("format xlsx stores a REAL workbook whose bytes read back as sheets", async () => {
+    const { t, planId } = await setup();
+    const res = await call(t, planId, "generateAttachment", {
+      topic: `${ATTACH} price list`,
+      format: "xlsx",
+    });
+
+    expect(res).toMatch(/\.xlsx/);
+    expect(res).not.toMatch(/http:|https:/i);
+    const att = (await readPlan(t, planId))!.attachments![0]!;
+    expect(att.mimeType).toBe(XLSX_MIME);
+    expect(att.filename).toMatch(/\.xlsx$/);
+    expect(att.size).toBeGreaterThan(0);
+
+    // The bytes ARE a workbook: read them back with the same library the ingest rail uses.
+    // `t.run` returns through Convex's own serializer, so hand back an ArrayBuffer (v.bytes) and
+    // wrap it here — a Uint8Array is not a Convex value.
+    const buf = await t.run(
+      async (ctx) => await (await ctx.storage.get(att.storageId))!.arrayBuffer(),
+    );
+    const { sheets } = sheetRows(new Uint8Array(buf));
+    expect(sheets.length).toBeGreaterThan(0);
+    // The SMOKE drafter fixture writes one table under one heading (see draftDocument).
+    expect(sheets[0]?.rows[0]?.length).toBeGreaterThan(1); // a header row with columns
+  });
+
+  test("a draft with no table refuses with its OWN sentence and adds no ref", async () => {
+    // MUTATION that turns this RED: drop the markdownToSheets length check and let sheetsToXlsx
+    // throw into the generic render-fail catch — the model would be told "it failed to render" and
+    // would retry the same prose draft forever.
+    const { t, planId } = await setup();
+    const res = await call(t, planId, "generateAttachment", {
+      topic: "SMOKE::route=direct_llm::no-table:: just prose please",
+      format: "xlsx",
+    });
+
+    expect(res).toMatch(/no table/i);
+    expect(res).toMatch(/columns/i);
+    const plan = await readPlan(t, planId);
+    expect(plan?.attachments ?? []).toEqual([]);
+    expect(plan?.attachmentError).toMatch(/no table/i); // the plan is not proposable until fixed
+  });
+
+  test("regenerateAttachment keeps the format it already was — html stays html, xlsx stays xlsx", async () => {
+    // Before Phase 40 this call passed no format, so BOTH came back as PDFs: the user asked for a
+    // revision and got a conversion.
+    const { t, planId } = await setup();
+    await call(t, planId, "generateAttachment", { topic: `${ATTACH} launch`, format: "html" });
+    await call(t, planId, "generateAttachment", { topic: `${ATTACH} prices`, format: "xlsx" });
+
+    await call(t, planId, "regenerateAttachment", { index: 1, topic: `${ATTACH} launch v2` });
+    await call(t, planId, "regenerateAttachment", { index: 2, topic: `${ATTACH} prices v2` });
+
+    // `readPlan` rides this file's schema-less `T`, so the row is `any` — name the shape here.
+    const atts: { mimeType: string; filename: string }[] = (await readPlan(t, planId))!.attachments;
+    expect(atts.map((a) => a.mimeType)).toEqual(["text/html", XLSX_MIME]);
+    expect(atts.map((a) => a.filename.split(".").pop())).toEqual(["html", "xlsx"]);
+  });
+});
+
+describe("createDocument({ form: 'sheet' }) — the vault plane's workbook (Phase 40)", () => {
+  test("saves a markdown row whose BYTES are an xlsx, and badges it as a spreadsheet", async () => {
+    const { t, planId } = await setup();
+    const res = await call(t, planId, "createDocument", {
+      topic: `${ATTACH} price list`,
+      form: "sheet",
+    });
+
+    expect(res).toMatch(/spreadsheet/i);
+    const doc = await t.run(async (ctx) =>
+      (await ctx.db.query("vaultDocuments").collect()).find((d) => d.origin === "agent"),
+    );
+    // The artifact of record stays markdown (searchable, groundable); the BYTES are the workbook.
+    expect(doc?.mimeType).toBe("text/markdown");
+    expect(doc?.storedMimeType).toBe(XLSX_MIME);
+    expect(doc?.kind).toBe("created_document");
+    expect(doc?.storageId).toBeTruthy();
+
+    // The Output card's badge reads `vaultSources.form` and nothing else.
+    const card = await t.run(async (ctx) =>
+      (await ctx.db.query("vaultSources").collect()).find((r) => r.role === "created"),
+    );
+    expect(card?.form).toBe("sheet");
+  });
 });

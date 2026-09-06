@@ -40,7 +40,10 @@ describe("tenant table classification registry", () => {
     // RE-DERIVED 2026-09-05 at the Phase 28/28.1/29/33.x merge: main's 52 (with knowledgeSearches)
     // + the lane's five billing tables = 57. Counted from the merged schema.ts, not carried over.
     // + agenda (34-01, ADR-033 — the weekly review's gap lifecycle) = 58.
-    expect(schemaTables).toHaveLength(58);
+    // + vaultSheets (40-01, DOC-01 — a workbook's capped grid) = 59. RE-DERIVED, not bumped: this
+    // count and `schema.ts`'s own header index ("59 tables", asserted independently by
+    // schema.test.ts against the same source) are two readers of one file that now agree.
+    expect(schemaTables).toHaveLength(59);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });

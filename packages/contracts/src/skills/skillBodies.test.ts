@@ -36,6 +36,7 @@ import { packProcessSopSkillBody } from "./packProcessSop";
 import { packSalesCallPrepSkillBody } from "./packSalesCallPrep";
 import { researchSpecialistSkillBody } from "./researchSpecialist";
 import { revenueSkillBodies } from "./revenueBodies";
+import { spreadsheetDrafterSkillBody } from "./spreadsheetDrafter";
 import { styleCoachingSkillBody } from "./styleCoaching";
 import { styleConciseSkillBody } from "./styleConcise";
 import { styleDirectSkillBody } from "./styleDirect";
@@ -312,6 +313,10 @@ const bodies: [string, string][] = [
   // GATED: the body an eval run certifies and the body `seedSkills` publishes must be one file.
   ["knowledge-query-planner", knowledgeQueryPlannerSkillBody],
   ["knowledge-synthesizer", knowledgeSynthesizerSkillBody],
+  // 40-02 (DOC-01): the spreadsheet drafter. Ungated, but the row still matters — there is no
+  // generator for the derived `.ts`, so this is the only thing that turns an edit to one side into
+  // a failure rather than a silently stale seeded prompt.
+  ["spreadsheet-drafter", spreadsheetDrafterSkillBody],
 ];
 
 describe("evaluation/specialist skill bodies (BEVL-01) — md ↔ ts no-drift", () => {

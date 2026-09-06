@@ -243,7 +243,13 @@ const ODF_MIME_PREFIX = "application/vnd.oasis.opendocument.";
  * marker but not its payload still throws `office_parse_failed` from the walker. That is the honest
  * outcome and is exactly what the vaultExtract.ts dispatcher already handles.
  */
-export function extractOfficeText(bytes: Uint8Array): { text: string } {
+/** Which family the archive turned out to be. Phase 40 needs it for ONE thing: only a
+ *  spreadsheet gets a structured grid, and guessing from the extracted text (a workbook's text
+ *  happens to start with "Sheet 1") would be a discriminator the walker never promised.
+ *  Additive: every caller reads `.text`. */
+export type OfficeKind = "document" | "spreadsheet" | "presentation" | "odf" | "epub";
+
+export function extractOfficeText(bytes: Uint8Array): { text: string; kind: OfficeKind } {
   let entries: Record<string, Uint8Array>;
   try {
     entries = unzipSync(bytes);
@@ -251,15 +257,15 @@ export function extractOfficeText(bytes: Uint8Array): { text: string } {
     throw new Error("office_parse_failed: not a zip");
   }
   const doc = entries["word/document.xml"]; // DOCX / DOCM
-  if (doc) return { text: docxText(doc) };
-  if (entries["xl/workbook.xml"]) return { text: xlsxText(entries) }; // XLSX / XLSM
-  if (entries["ppt/presentation.xml"]) return { text: pptxText(entries) }; // PPTX / PPTM
+  if (doc) return { text: docxText(doc), kind: "document" };
+  if (entries["xl/workbook.xml"]) return { text: xlsxText(entries), kind: "spreadsheet" }; // XLSX / XLSM
+  if (entries["ppt/presentation.xml"]) return { text: pptxText(entries), kind: "presentation" }; // PPTX / PPTM
   const mimetype = entries.mimetype; // ODT / ODS / ODP — first entry, stored uncompressed
   if (mimetype && strFromU8(mimetype).trim().startsWith(ODF_MIME_PREFIX)) {
     const content = entries["content.xml"];
     if (!content) throw new Error("office_parse_failed: missing content.xml");
-    return { text: odfText(content) };
+    return { text: odfText(content), kind: "odf" };
   }
-  if (entries["META-INF/container.xml"]) return { text: epubText(entries) }; // EPUB
+  if (entries["META-INF/container.xml"]) return { text: epubText(entries), kind: "epub" }; // EPUB
   throw new Error("office_parse_failed: unrecognized zip");
 }

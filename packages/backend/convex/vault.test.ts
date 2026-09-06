@@ -900,3 +900,99 @@ describe("26-11 promoteToReference", () => {
   // audits (the shipped `vault.searched` precedent lives in llm.ts); 26-13 owns that when it builds
   // the promotion control. The invariant is enforced in vaultRedaction.test.ts, not here.
 });
+
+// ── Phase 40 (DOC-01): the sheet grid is tenant-guarded, and it dies with its document ───────────
+//
+// `vaultSheets` is the one table holding CELL TEXT, so it gets the same two guarantees as
+// `vaultDocText`: a stranger's grid is null (never a throw — a throw would distinguish "not yours"
+// from "no grid"), and the row cannot outlive the document it describes.
+describe("vaultDocSheets + the delete cascade (Phase 40)", () => {
+  const seedGrid = async (t: ReturnType<typeof convexTest>, tenantId: string) => {
+    const docId = await t.run((ctx) =>
+      ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title: "prices.xlsx",
+        kind: "upload",
+        category: "workspace-docs",
+        source: "upload",
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        size: 10,
+        contentHash: `h-${tenantId}`,
+        text: "Sheet 1\nItem\tCost",
+        status: "ready",
+        createdAt: Date.now(),
+      }),
+    );
+    await t.mutation(internal.vault.upsertSheets, {
+      tenantId,
+      docId,
+      sheets: [
+        {
+          name: "Prices",
+          rows: [
+            ["Item", "Cost"],
+            ["Rent", "1200"],
+          ],
+          totalRows: 2,
+        },
+      ],
+      sheetCount: 1,
+    });
+    return docId;
+  };
+
+  test("the owner reads the grid; another tenant reads null, not an error", async () => {
+    const t = convexTest(schema, modules);
+    const docId = await seedGrid(t, "tenant_a");
+
+    const mine = await asTenant(t, "tenant_a").query(api.vault.vaultDocSheets, {
+      vaultDocId: docId,
+    });
+    expect(mine?.sheetCount).toBe(1);
+    expect(mine?.sheets[0]?.name).toBe("Prices"); // the name the text projection cannot carry
+    expect(mine?.sheets[0]?.rows[0]).toEqual(["Item", "Cost"]);
+
+    expect(
+      await asTenant(t, "tenant_b").query(api.vault.vaultDocSheets, { vaultDocId: docId }),
+    ).toBeNull();
+  });
+
+  test("re-writing a grid replaces it, and an empty read is null rather than an empty grid", async () => {
+    const t = convexTest(schema, modules);
+    const docId = await seedGrid(t, "tenant_a");
+
+    await t.mutation(internal.vault.upsertSheets, {
+      tenantId: "tenant_a",
+      docId,
+      sheets: [{ name: "Costs", rows: [["A"]], totalRows: 1 }],
+      sheetCount: 1,
+    });
+    const rows = await t.run((ctx) => ctx.db.query("vaultSheets").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.sheets[0]?.name).toBe("Costs");
+
+    // Zero sheets means "no grid", which is the state the preview already handles — so the row goes
+    // rather than becoming a second, emptier empty state.
+    await t.mutation(internal.vault.upsertSheets, {
+      tenantId: "tenant_a",
+      docId,
+      sheets: [],
+      sheetCount: 0,
+    });
+    expect(await t.run((ctx) => ctx.db.query("vaultSheets").collect())).toEqual([]);
+    expect(
+      await asTenant(t, "tenant_a").query(api.vault.vaultDocSheets, { vaultDocId: docId }),
+    ).toBeNull();
+  });
+
+  test("deleting the document deletes its grid — no cell text survives its document", async () => {
+    // MUTATION that turns this RED: drop the vaultSheets delete from deleteVaultDoc.
+    const t = convexTest(schema, modules);
+    const docId = await seedGrid(t, "tenant_a");
+
+    await asTenant(t, "tenant_a").mutation(api.vault.deleteVaultDoc, { vaultDocId: docId });
+
+    expect(await t.run((ctx) => ctx.db.get(docId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.query("vaultSheets").collect())).toEqual([]);
+  });
+});
