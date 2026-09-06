@@ -74,11 +74,44 @@ header index must state the real table count and name every table — 58→59 wi
 and `isolation.test.ts` (every runtime table must be classified). Classifying the table then made
 `tenantExport`/`tenantDelete` demand a `by_tenant` index — the promise enforcing itself.
 
-**Open — the one item this plan did not close.** The cockpit-agent v3 body is written and will seed
-as a **candidate**; its local eval gate (`pnpm eval:golden --skill cockpit-agent@<v>`, 46 cases,
-~$0.80) and `activateSkill` have NOT been run, so the local deployment still executes v2 against the
-new tool set — the tool is present and works, the body simply does not yet advertise xlsx. Prod
-activation joins the owner's G19 list either way (EVAL_GATE is per deployment).
+**The eval gate — RUN, and it did NOT go green. `cockpit-agent` v3 is a CANDIDATE (v28), not
+active.** Three runs, ~$2.03 total:
+
+| Run | What | Result |
+|---|---|---|
+| full, pinned `cockpit-agent@28` | 46 cases | **45/46**, $0.80 — `33-research-insufficient-evidence` failed |
+| `--only 33-research`, NO pin (active v26) | 1 case | PASS, but only **on a retry** ($0.17) |
+| `--only 33-research --skill cockpit-agent@28` | 1 case | **PASS on the first attempt** ($0.08) |
+| full, pinned `cockpit-agent@28`, re-run | 46 cases | **45/46** again, $0.87 — the same case, the same signature |
+
+**The change is exonerated and the gate is still red.** The body executed on all 79–80 turns of both
+full runs (`observed skill loads: cockpit-agent@28`), so the pin took. The failing case is the
+refusal-to-confabulate proof (an invented cooperative with an impossible launch date), and its
+failure signature is identical each time:
+
+```
+declaredUnsupported: expected true, got false
+insufficientEvidence: expected true, got false
+tools the agent called: {"declareUnsupported":1,"dispatchResearch":1,"readPage":1,"webResearch":8}
+```
+
+The tool WAS called and the verdict still reads false, because `declaredUnsupported` is not a
+tool-call count: `smoke.researchDeclaredUnsupportedForThread` reads the boolean the SPECIALIST'S OWN
+ANSWER carried into the audit payload (`research.ts` `a.declaredUnsupported`). So the specialist
+declared a sub-question unsupported and then answered as though the whole question was supported —
+the near-miss sources the fixture's own description warns about. That is research-lane behaviour
+(specialist v10, Phase 39's body + `readPage`, which gives it more material to feel partially
+supported), stochastic on live search results, and nothing in the Phase 40 body edit touches
+research: the diff is the attachment routing bullet, the `form` list and the format caveat.
+
+**Why it was not activated anyway.** `activateSkill` routes through EVAL_GATE, which refuses a gated
+candidate with no recorded passing run (`skills.ts` `hasPassingEvidence`). The code enforced the
+discipline; no override was attempted, and none should be.
+
+**What this leaves open:** production and local both run `cockpit-agent` v2/v26 against the new tool
+set. That WORKS — the enum and the tool description carry `xlsx`, so the model can be asked for a
+spreadsheet — the body simply does not advertise it unprompted. The activation is owed once the
+research case is fixed or quarantined.
 
 **Deliberately not done.** DOCX/PPTX generation (ADR-036 says never), a per-document fee row, pack
 grants, an e2e case for the xlsx attachment (the SMOKE agent grammar carries `attach=<topic>` with

@@ -59,12 +59,16 @@ decided together, because each one is only defensible in the light of the others
    the artifact of record (searchable, groundable, capped, honesty-flagged when truncated) and its
    shape is unchanged by this ADR. A **spreadsheet** additionally gets a structured grid, read from
    a separate `vaultSheets` table written at ingest: capped in rows, columns, sheets and bytes,
-   carrying `totalRows` and `sheetCount` so the reader is told in words what is not shown. The grid
+   carrying `totalRows`, `totalCols` and `sheetCount` so the reader is told in words what is not
+   shown on EVERY axis — a row cap announced while a column cap is silent implies the columns are
+   whole, which is the same lie one axis over. The grid
    is a VIEW — a missing row means "no grid", never "no document", and a failed structured read
    never fails an ingest.
 4. **The PDF surface is the browser's own viewer in an un-sandboxed `<iframe>`.** A `sandbox`
-   attribute disables the viewer plugin and frames nothing, so the attribute is deliberately absent
-   and its absence is pinned by a test. An HTML-artifact preview, when it is built, must NOT share
+   attribute disables the viewer plugin and frames nothing, so the attribute is deliberately absent.
+   Its absence is pinned by a test on the cockpit frame (`outputCard.test.ts`); the older vault-modal
+   frame carries the same property by inspection and no pin — a gap this ADR names rather than
+   claims away. An HTML-artifact preview, when it is built, must NOT share
    that element or its policy: HTML needs `sandbox` + `srcDoc` precisely because it is model-authored
    markup, and a PDF needs the opposite.
 5. **A storage URL is minted only for a row the user is looking at.** Convex storage URLs do not

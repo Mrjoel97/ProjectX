@@ -232,7 +232,7 @@ a TENANT’s Stripe account read-only. Opposite direction, opposite trust bounda
 
 ### Document canvas (minted 2026-09-06 — Phase 40, Track C step 11 / G5)
 
-- [x] **DOC-01**: Documents render in their true form wherever the browser can — the PDF a turn produced is framed inline in the workspace card for the thread the user is viewing, and an uploaded workbook shows as a capped grid of real rows and named sheets with its ceilings stated in words — the agent can deliver a real `.xlsx` on both the email and vault planes from a registry-owned spreadsheet drafter, and Office fidelity is a recorded decision (ADR-036: `pdf | html | xlsx` out, PDF twin at creation, text projection plus original download in, never DOCX/PPTX) rather than an accident
+- [x] **DOC-01**: Documents render in their true form wherever the browser can — the PDF a turn produced is framed inline in the workspace card for the thread the user is viewing, and an uploaded workbook shows as a capped grid of real rows and named sheets with its ceilings stated in words — the agent can deliver a real `.xlsx` on both the email and vault planes from a registry-owned spreadsheet drafter, and Office fidelity is a recorded decision (ADR-036: `pdf | html | xlsx` out, PDF twin at creation, text projection plus original download in, never DOCX/PPTX) rather than an accident *(open: the `cockpit-agent` v3 body that teaches the third format is seeded as candidate v28 and NOT activated — its gate run is 45/46, blocked by `33-research-insufficient-evidence`, which is stochastic research-lane behaviour proven unrelated to this change; the shipped code path works against the older body)*
 
 ### Optional Vertical Packs
 

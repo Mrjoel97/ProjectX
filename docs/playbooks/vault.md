@@ -3,8 +3,18 @@
 > `vaultDocuments.text`, and its exact shape — tab cells, newline rows, `Sheet N` BY FILE NUMBER — stays
 > pinned by `officeText.test.ts`). Beside it, `packages/vault/src/sheets.ts` (`sheetRows`, subpath-only,
 > STATIC SheetJS import per Pitfall 9) writes a CAPPED grid into a NEW `vaultSheets` table: 200 rows, 30
-> columns, 10 sheets, 256 KiB of JSON at WHOLE-SHEET granularity, plus `totalRows` and `sheetCount` so the
-> reader is told in words what is not shown.
+> columns, 10 sheets, 256 KiB of UTF-8 JSON at WHOLE-SHEET granularity, plus `totalRows`, `totalCols`
+> and `sheetCount` so the reader is told in words what is not shown on EVERY axis (a row cap
+> announced while a column cap stays silent implies the columns are whole — the same lie one axis
+> over).
+>
+> **`nodim: true` on the `read()` is not a tuning knob — it is the only thing bounding the WORK.** A
+> sheet's `<dimension ref>` is self-declared and SheetJS trusts it, so without the flag
+> `sheet_to_json` walks the whole DECLARED range while `blankrows: false` hides the damage: the
+> output stays two rows and the caps never fire. Measured on one 5.7 KB workbook whose header was
+> rewritten by hand: A1:B2 = 25 ms, A1:XFD400 = 5.8 s, linear — so Excel's routine used-range bloat
+> extrapolates to HOURS inside an action whose try/catch cannot catch a hang. `sheets.test.ts` pins
+> it with a doctored fixture and a wall-clock bound.
 >
 > **Why a separate table and not a field on `vaultDocuments`:** the vault grid's read bound
 > (`VAULT_GRID_READ_BUDGET_BYTES`) counts `vaultDocuments.text` bytes to stay under Convex's 16 MiB

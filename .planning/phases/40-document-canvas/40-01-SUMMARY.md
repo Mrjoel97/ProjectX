@@ -71,6 +71,20 @@ tenant guard reads null for a stranger, re-writing replaces, deleting the docume
 grid). Web vault 56/56 including 5 new `sheetGrid` tests and a token-only source scan. Both
 typechecks clean.
 
+**A nine-agent adversarial review ran over the committed diff and found real defects — the suite was
+green for all of them.** Six dimension reviewers, three skeptics who had to refute each finding: 30 of
+40 candidates confirmed, fixed in the follow-up commit. The one that mattered most is in this plan's
+module: `sheetRows` capped its OUTPUT and not its WORK. A sheet's `<dimension ref>` is self-declared
+and SheetJS trusts it, so `sheet_to_json` walked the whole declared range while `blankrows: false`
+hid the damage — the result stayed two rows and no cap fired. Measured on one 5.7 KB workbook whose
+header was rewritten by hand: A1:B2 = 25 ms, A1:XFD400 = 5.8 s, linear, so Excel's routine used-range
+bloat extrapolates to HOURS inside an action whose try/catch cannot catch a hang. `nodim: true` fixes
+it; removing the flag now makes the new test take 5,095 ms and go red. Also fixed here: sheet names
+SheetJS itself refuses (`History`, outer apostrophes) that would have thrown and failed the whole
+deliverable; the byte cap counting UTF-16 units; the silent column truncation (now `totalCols`, stated
+in words beside the row cap); `upsertSheets` writing a grid for a document that was deleted mid-parse;
+and an `.ods` denied a grid by a discriminator the preview already contradicted.
+
 **Deliberately not done.** Sheet names or types in the TEXT projection (unchanged and pinned —
 downstream RAG/ground/digest consumers treat it as opaque), client-side SheetJS, re-parse on demand,
 CSV as a workbook (it is decoded as text at upload and never touches the walkers).

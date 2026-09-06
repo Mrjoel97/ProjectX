@@ -20,9 +20,21 @@
 > **`cockpit-agent` v3** teaches the third format (ADR-007: a granted capability must be TAUGHT — a body
 > that contradicts its tool set is a recorded failure class). It is GATED, so `seedSkills` publishes it as a
 > CANDIDATE and it needs `pnpm eval:golden --skill cockpit-agent@<v>` (46 cases, ~$0.80) then
-> `activateSkill` — per deployment, so the prod run is the owner's G19 step. **As of this commit that gate
-> has NOT been run**: the local deployment still executes v2 against the new tool set, which works (the
-> enum and tool description carry xlsx) but does not advertise it.)
+> `activateSkill` — per deployment, so the prod run is the owner's G19 step.
+>
+> **The gate WAS run and did NOT go green: 45/46, twice.** The one failure is
+> `33-research-insufficient-evidence`, and it is not this body's doing — the case passed on v28 ALONE
+> on its first attempt and needed a retry on the ACTIVE v26. Its signature is the tell:
+> `declareUnsupported` shows 1 call while `declaredUnsupported` reads false, because that key is NOT a
+> tool-call count — `smoke.researchDeclaredUnsupportedForThread` reads the boolean the specialist's own
+> ANSWER carried into the audit payload (`research.ts`). The specialist declared a sub-question
+> unsupported, then answered as though the whole question was supported: the near-miss sources that
+> fixture's own description warns about. Research-lane behaviour, stochastic on live results.
+>
+> `EVAL_GATE` therefore refused activation and v28 remains a CANDIDATE. That refusal is the system
+> working — never hand-activate a gated candidate around it. The shipped code path works against v2:
+> the enum and the tool description carry xlsx, so the model can be ASKED for a spreadsheet; the body
+> simply does not advertise it unprompted.)
 >
 > Last verified: 2026-09-06 (39-01, RSCH-01 — `research-specialist.md` → v4: three tools (`webResearch`, `readPage`, `declareUnsupported`), a "Read before you cite" section with the **page-read** / **snippet-only** labels, and the limit section rewritten (the "executed by the provider" sentence had been false since the Tavily move). The `.ts` constant was regenerated from the `.md` (LF-normalised, `skillBodies.test.ts` holds the byte identity). Published as a candidate by `seedSkills` on the local deployment and gated by `pnpm eval:golden --skill research-specialist@<v>` there; production activation is the owner's G19 step — see 39-01-SUMMARY.md for the run.)
 >
