@@ -45,7 +45,7 @@ import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { resolveModel } from "./lib/models";
-import { isRoot } from "./lib/planRow";
+import { holdsWork, isRoot } from "./lib/planRow";
 import { sealedIn } from "./vaultFolders";
 
 const TOP_ENTITY_COUNT = 20;
@@ -636,21 +636,34 @@ export const blueprintPulse = tenantQuery({
         q.eq("tenantId", ctx.tenantId).eq("status", "done").gt("createdAt", since),
       )
       .collect();
+    // THREE filters, and the number was wrong in three different ways without them.
+    //
     // ROOTS ONLY (ADR-037). Before Phase 42 a thread held exactly one `plans` row, so counting
     // rows and counting work were the same thing. A fan-out now mints a root plus up to
     // MAX_FAN_OUT children, every one of them `collecting` while its worker runs — so this
     // read inflated by up to 16x for the duration of one dispatch, on a number the user is
     // shown. A child is a WORKER, not a piece of work in flight; the root already represents
     // the whole team, which is the same reason only the root ever reaches the inbox.
+    //
+    // `holdsWork` because every chat thread mints a `collecting` root that never leaves, so the
+    // count grew by one per CONVERSATION for ever and read "40 plans in motion" over an empty
+    // inbox. See `lib/planRow.ts` for why a kind-only test is not enough.
+    //
+    // WINDOWED, like the two reads directly above — same index, same `since`, same sentence in
+    // the UI, which was already reporting two 30-day figures beside one all-time one. It is also
+    // what bounds the read: ADR-037 ended row recycling, so `proposed` accumulates for the life
+    // of the tenant, and a `plans` row is fat (`body`, `recipientBodies`, an inline `shots`
+    // deck), which puts the 8MiB query ceiling well ahead of the document one. This is a live
+    // `useQuery` behind the Blueprint panel; a breach throws the panel, not just the number.
     let plansInFlight = 0;
     for (const status of ["collecting", "proposed", "delivering"] as const) {
       const rows = await ctx.db
         .query("plans")
         .withIndex("by_tenant_status_createdAt", (q) =>
-          q.eq("tenantId", ctx.tenantId).eq("status", status),
+          q.eq("tenantId", ctx.tenantId).eq("status", status).gt("createdAt", since),
         )
         .collect();
-      plansInFlight += rows.filter(isRoot).length;
+      plansInFlight += rows.filter((p) => isRoot(p) && holdsWork(p)).length;
     }
 
     return {

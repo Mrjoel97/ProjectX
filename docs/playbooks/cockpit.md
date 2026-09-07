@@ -1,3 +1,17 @@
+> Last verified: 2026-09-07 (43-01b — `lib/planRow.ts` gained `hasDraftContent` (moved out of
+> `plans.ts`, which now imports it) and `holdsWork`. The move is the point: `blueprintPulse` needed
+> the same question `stageResearchPlan` asks before it dares recycle a row, and a second copy would
+> have been free to drift from the one that guards a user's half-composed email.
+>
+> `dispatch.ts`'s grounding-pass header was the FOURTH stale `.unique()` comment and the
+> load-bearing one — it is the reason given for where a PAID MODEL TURN runs. It claimed `plans`
+> is `.unique()` by (tenantId, threadId) and that `stageResearchPlan` RECYCLES it; ADR-037 deleted
+> both halves. The decision is unchanged and its true reason was already in the next sentence (the
+> pass writes only a vault document, which has no plan row of its own), so the premise was replaced
+> rather than the choice re-argued. The remaining siblings are lower-stakes prose:
+> `llm.ts:1828`, `llm.ts:3737`, `onboarding.ts:202`, `smoke.ts:928/974`,
+> `scripts/run-eval-golden.mjs:577/2804`.)
+>
 > Last verified: 2026-09-07 (43-01 — a COMMENT-ONLY correction with no behaviour change, recorded
 > because the comment was actively dangerous. `cockpit.ts`'s thread-and-plan helper said two
 > creators "would make it throw", because `plans.byThread` was a `.unique()` read. ADR-037 removed

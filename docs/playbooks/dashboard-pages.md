@@ -1,5 +1,25 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-07 (43-01b — **a REFUSED REEL was an Approve card in the approvals
+> inbox.** `landStoryboardRefusal` patches `status: "proposed"` + `proposalRefusal` and never
+> touches `kind`, which is still `"memo"` because no deck parsed and `persistStoryboard` never ran.
+> So this page drew it as an ordinary memo: "Approve & file to vault", over a reel that does not
+> exist — and approving ran `persistNextStepMemo`, filing "I couldn't turn this into a usable
+> storyboard" into the vault as though it were a finding. 43-01's `titleFor` change made it worse
+> by headlining the card with the reel's `subject`.
+>
+> 33-13 fixed exactly this on the WORKSPACE surface, branching on `proposalRefusal` above the memo
+> branch "because that is the branch it was wrongly falling into". **This page is the SECOND
+> approve surface and never got the branch** — the recurring shape on this playbook, and the reason
+> a media-plane change must always be walked on both surfaces. The refusal prose was already on
+> screen (it is `plan.body`); what was missing was a card that agrees with it. Same shape as
+> `IMAGE_CANVAS_NOTE` beside it: no Approve button, a note naming what happened, "Try again in
+> cockpit", and Discard left alone. The row STAYS in `listAwaiting` — it is genuinely `proposed`
+> and genuinely the user's to clear, and a proposal that vanished from the one page promising to
+> show everything held would be the worse lie. Mutation-proven: dropping `&& !refused` reddens
+> `approvalsView.test.ts`, and a no-refusal memo keeps its Approve button so the guard is not a
+> blanket suppression.)
+
 > Last verified: 2026-09-07 (43-01 — **a fan-out card was headlined by whichever worker landed
 > first.** `titleFor` read `plan.body.split("\n")[0]` for a `memo`, and a fan-out parent's body is
 > `fanOutMemoBody`: the children's memos assembled under `## <heading>` sections. So the first line

@@ -66,9 +66,21 @@ describe("blueprintPulse", () => {
         status: "done",
         createdAt: NOW - 10 * MIN,
       });
+      // 43-01b: `kind: "memo"` is what makes this row WORK rather than an empty chat. It had no
+      // kind and no content, which is precisely the shape `holdsWork` now excludes — the fixture
+      // was asserting the defect.
       await ctx.db.insert("plans", {
         tenantId: "tenantA",
         threadId: "th2",
+        status: "collecting",
+        kind: "memo",
+        createdAt: NOW - MIN,
+      });
+      // The shell `cockpit.ensureThreadAndPlan` mints for EVERY thread. It never leaves
+      // `collecting`, so before 43-01b the count grew by one per conversation, for ever.
+      await ctx.db.insert("plans", {
+        tenantId: "tenantA",
+        threadId: "th4",
         status: "collecting",
         createdAt: NOW - MIN,
       });
@@ -111,6 +123,67 @@ describe("blueprintPulse", () => {
       return id;
     });
     expect(root).toBeTruthy();
+
+    const out = await t
+      .withIdentity({ subject: "tenantA|s" })
+      .query(api.blueprint.blueprintPulse, { now: NOW });
+    expect(out.globals.plansInFlight).toBe(1);
+  });
+
+  it("an abandoned chat is not a plan in motion, but a half-composed email is", async () => {
+    // 43-01b. BOTH halves matter and the second is the one that is easy to lose. `kind` ABSENT
+    // means EMAIL (schema.ts), so a kind-only test would have dropped the row on this table a user
+    // is most likely to be actively working in — the exact over-correction this pins against.
+    // MUTATION that turns this red: `holdsWork = (p) => p.kind !== undefined`.
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      // Three bare shells: three conversations someone asked a question in and walked away from.
+      for (const threadId of ["c1", "c2", "c3"])
+        await ctx.db.insert("plans", {
+          tenantId: "tenantA",
+          threadId,
+          status: "collecting",
+          createdAt: NOW - MIN,
+        });
+      // A half-composed email: no kind, but the user has typed into it.
+      await ctx.db.insert("plans", {
+        tenantId: "tenantA",
+        threadId: "c4",
+        status: "collecting",
+        subject: "Following up on our call",
+        createdAt: NOW - MIN,
+      });
+    });
+
+    const out = await t
+      .withIdentity({ subject: "tenantA|s" })
+      .query(api.blueprint.blueprintPulse, { now: NOW });
+    expect(out.globals.plansInFlight).toBe(1);
+  });
+
+  it("the in-flight count is windowed like the two figures it is printed beside", async () => {
+    // 43-01b. ADR-037 ended row recycling, so `proposed` accumulates for the life of the tenant and
+    // an unbounded `.collect()` here would eventually breach the 8MiB query ceiling and throw the
+    // whole Blueprint panel — this is a live `useQuery`. The window is also the honest reading: the
+    // sentence already carried two 30-day figures beside this one.
+    // MUTATION that turns this red: drop `.gt("createdAt", since)` from the in-flight loop.
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("plans", {
+        tenantId: "tenantA",
+        threadId: "fresh",
+        status: "proposed",
+        kind: "memo",
+        createdAt: NOW - MIN,
+      });
+      await ctx.db.insert("plans", {
+        tenantId: "tenantA",
+        threadId: "ancient",
+        status: "proposed",
+        kind: "memo",
+        createdAt: NOW - 400 * 24 * 60 * MIN,
+      });
+    });
 
     const out = await t
       .withIdentity({ subject: "tenantA|s" })

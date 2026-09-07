@@ -14,7 +14,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
-import { isOpenRoot, newestRoot, threadRoots } from "./lib/planRow";
+import { hasDraftContent, isOpenRoot, newestRoot, threadRoots } from "./lib/planRow";
 
 // PINNED plan lifecycle (schema.ts): collecting → proposed → approved → (scheduled|delivering) → done,
 // plus the 03.5 deferred-send states scheduled (armed, pre-fire) and canceled (terminal, halted).
@@ -155,15 +155,6 @@ export const insertPlan = internalMutation({
  *  get a new root staged BESIDE them, which is also what stops an un-acted-on proposal being
  *  silently destroyed. `done`/`approved`/`delivering` used to REFUSE with `draft_in_progress` over
  *  a thread with nothing in flight; that was the lifetime ceiling, and it is gone. */
-
-/** Does this row hold composition work the USER would lose to a reset? The five slots a person
- *  actually fills; `candidates`/`pendingValid` are transient lookup state, not authored content. */
-const hasDraftContent = (p: Doc<"plans">): boolean =>
-  (p.recipients?.length ?? 0) > 0 ||
-  Boolean(p.subject) ||
-  Boolean(p.body) ||
-  Boolean(p.bodyIntent) ||
-  (p.attachments?.length ?? 0) > 0;
 
 /**
  * Stage the `collecting` memo row a scheduled research run will land on (16-06 / DISP-02).

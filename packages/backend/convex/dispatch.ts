@@ -1296,11 +1296,17 @@ export const runResearch = internalAction({
  * the body's own words for the outcome are exact: "a reel that could have been about this business
  * and is instead about businesses in general is a failed reel."
  *
- * **WHY THIS RUNS INSIDE `runMedia` RATHER THAN AS ITS OWN DISPATCH.** `plans` is `.unique()`
- * by (tenantId, threadId) — ONE row per thread — and `stageResearchPlan` RECYCLES it. Staging a
- * research card beside a media card would have research overwrite the card the reel is proposed on.
- * So this runs the specialist turn directly and writes only what has no plan row of its own: a
- * vault document, via the same `research.persistFindings` the research route uses.
+ * **WHY THIS RUNS INSIDE `runMedia` RATHER THAN AS ITS OWN DISPATCH.** It writes only what has
+ * no plan row of its own: a vault document, via the same `research.persistFindings` the research
+ * route uses. A grounding pass is not an artifact the user approves, so it must not mint a card.
+ *
+ * The REASON GIVEN here used to be that `plans` was `.unique()` by (tenantId, threadId) and
+ * `stageResearchPlan` RECYCLED it, so a research card would overwrite the card the reel is
+ * proposed on. Both halves died with ADR-037: `newestRoot` is a bounded descending scan, and
+ * `stageResearchPlan` now refuses an open root outright and otherwise stages a NEW root beside
+ * the old one. The decision is unchanged and the sentence above is the true reason for it — but
+ * a comment that justifies where a PAID MODEL TURN runs with a premise the codebase deleted is
+ * the load-bearing member of the class 43-01 fixed three of.
  *
  * That choice is what makes the rest free. The findings land where `searchVault` already looks, as
  * an ordinary vault doc with a real id, so the deck cites them through the `[doc:...]` slot the

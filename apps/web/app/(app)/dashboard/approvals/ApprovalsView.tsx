@@ -201,6 +201,28 @@ export const IMAGE_CANVAS_NOTE =
   "Images are generated from the workspace canvas, not from this gate. Open the thread to generate or re-generate this image.";
 
 /**
+ * 43-01b. A REFUSED REEL PROPOSAL is a `kind: "memo"` row at `proposed` — `landStoryboardRefusal`
+ * patches the status and the refusal and never touches `kind`, because no deck parsed and so
+ * `persistStoryboard` never ran. This page therefore drew it as an ordinary memo: an Approve
+ * button labelled "Approve & file to vault", over a reel that does not exist. Approving it ran
+ * `persistNextStepMemo` and filed "I couldn't turn this into a usable storyboard" into the vault
+ * as though it were a finding.
+ *
+ * 33-13 fixed exactly this on the WORKSPACE surface — `cards.tsx` branches on `proposalRefusal`
+ * ABOVE its memo branch, "because that is the branch it was wrongly falling into". The approvals
+ * inbox is the SECOND approve surface and never got the same branch; the refusal prose was
+ * already on screen (it is `plan.body`), so what was left to fix is the button that contradicts
+ * it. Same shape as `IMAGE_CANVAS_NOTE` directly above: the honest route, in place of a button
+ * whose only possible answer is the failure the card is already reporting.
+ *
+ * The row STAYS in the list rather than being filtered out of `listAwaiting`. It is genuinely
+ * `proposed` and genuinely the user's to clear, and a proposal that silently vanished from the
+ * one page that promises to show everything held would be the worse lie.
+ */
+export const REFUSED_PROPOSAL_NOTE =
+  "This never became a storyboard, so there is nothing to approve — and nothing was generated or spent. Open it in the cockpit to try again, or discard it.";
+
+/**
  * 25.1-04 (D9). A successful approve IS the `proposed → approved` transition, and
  * `approvals.listAwaiting` paginates `proposed` only — so the card that produced the message is
  * unmounted by the very mutation that produced it, and the user sees a row vanish with no outcome
@@ -604,6 +626,9 @@ export function AwaitingCardBody({
   // D10's ONE discriminator. `approvals.ts`'s `planKind` splits `plans.kind === "media"` into
   // reel/image on `mediaMode` alone, so a reel is unaffected here by construction.
   const imagePlan = item.kind === "image";
+  // NOT `item.kind` — a refused reel's kind is `memo`, which is the whole reason it reached the
+  // memo chrome. The refusal itself is the only thing on the row that still says "reel".
+  const refused = plan.proposalRefusal != null;
   const threadHref = `/dashboard/workspace?thread=${encodeURIComponent(item.threadId)}`;
   return (
     <article
@@ -672,9 +697,14 @@ export function AwaitingCardBody({
 
       {/* D10: the honest route, in place of a button whose only possible answer is `no_deck`. */}
       {imagePlan && <p style={{ ...muted, fontSize: "0.86rem" }}>{IMAGE_CANVAS_NOTE}</p>}
+      {refused && (
+        <p style={{ ...muted, fontSize: "0.86rem" }} data-testid="approvals-proposal-refused">
+          {REFUSED_PROPOSAL_NOTE}
+        </p>
+      )}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-        {!imagePlan && (
+        {!imagePlan && !refused && (
           <button type="button" style={primary} disabled={busy} onClick={onApprove}>
             {busy ? "Working…" : actionLabel(item.kind, plan)}
           </button>
@@ -685,11 +715,13 @@ export function AwaitingCardBody({
           </button>
         )}
         <Link href={threadHref} style={{ ...button, textDecoration: "none" }}>
-          {item.kind === "calendar_event"
-            ? "Change time in cockpit"
-            : item.kind === "email"
-              ? "Revise in cockpit"
-              : "Edit in cockpit"}
+          {refused
+            ? "Try again in cockpit"
+            : item.kind === "calendar_event"
+              ? "Change time in cockpit"
+              : item.kind === "email"
+                ? "Revise in cockpit"
+                : "Edit in cockpit"}
         </Link>
         <button
           type="button"

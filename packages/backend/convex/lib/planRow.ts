@@ -53,6 +53,35 @@ export const ROOT_SCAN = 2 * (MAX_FAN_OUT + 1);
  *  is a fan-out child and is never the answer to "what is the plan for this thread". */
 export const isRoot = (p: Doc<"plans">): boolean => p.parentPlanId === undefined;
 
+/** Does this row hold composition work the USER would lose to a reset? The five slots a person
+ *  actually fills; `candidates`/`pendingValid` are transient lookup state, not authored content.
+ *  Lived privately in `plans.ts` until 43-01b, when `blueprintPulse` needed the same question and
+ *  a second copy would have been free to drift from the one `stageResearchPlan` refuses on. */
+export const hasDraftContent = (p: Doc<"plans">): boolean =>
+  (p.recipients?.length ?? 0) > 0 ||
+  Boolean(p.subject) ||
+  Boolean(p.body) ||
+  Boolean(p.bodyIntent) ||
+  (p.attachments?.length ?? 0) > 0;
+
+/**
+ * Does this row hold WORK — or is it the empty shell every chat mints?
+ *
+ * `cockpit.ensureThreadAndPlan` inserts a `plans` row for EVERY new thread, at `collecting`,
+ * with no `kind` and nothing in it, and nothing moves that row unless something is staged on it.
+ * So a conversation where someone asked a question and read the answer leaves a permanent
+ * `collecting` ROOT behind. `isRoot` does not filter it out — it IS a root.
+ *
+ * BOTH halves are needed, and the second is the one that is easy to miss. `kind !== undefined`
+ * is the dispatch-owned discriminator (`reliabilitySweep`'s `collectingPlane`,
+ * `stageResearchPlan`'s `research_in_flight`). But `kind` ABSENT means EMAIL (schema.ts), so a
+ * half-composed email carries no kind at all and a kind-only test would drop the one row on this
+ * table a user is most likely to be actively working in. `hasDraftContent` is the other half,
+ * and it is the same pair `stageResearchPlan` asks before it dares recycle a row: a row it would
+ * recycle is, by its own reasoning, a row holding nothing anyone would miss.
+ */
+export const holdsWork = (p: Doc<"plans">): boolean => p.kind !== undefined || hasDraftContent(p);
+
 /**
  * The thread's newest roots, newest first, bounded by `ROOT_SCAN`. Callers that need to reason
  * about CONCURRENCY (is any reel still rendering on this thread?) need the whole window, not just

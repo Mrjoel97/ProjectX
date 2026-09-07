@@ -1,5 +1,25 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-07 (43-01b — **the in-flight figure was wrong in a THIRD way, and the
+> two remaining ways were both older than the fan-out.** 43-01 filtered the count to roots; this
+> pass windowed it and excluded the empty shell.
+>
+> `cockpit.ensureThreadAndPlan` inserts a `plans` row for EVERY new thread — `collecting`, no
+> `kind`, nothing in it — and nothing moves that row unless something is staged on it. So every
+> conversation someone asked a question in and walked away from stayed counted, for ever, and the
+> panel read "40 plans in motion · 1 completed in 30 days" over an empty inbox. `holdsWork`
+> (`lib/planRow.ts`) is the filter, and **both** its halves are load-bearing: `kind !== undefined`
+> is the dispatch-owned discriminator, but `kind` ABSENT means EMAIL, so a kind-only test would
+> drop a half-composed email — the row a user is most likely to be actively working in.
+> `hasDraftContent` moved out of `plans.ts` to be the other half rather than be copied.
+>
+> The loop is also `.gt("createdAt", since)` now, like the two reads directly above it in the same
+> handler. ADR-037 ended row recycling, so `proposed` accumulates for the life of the tenant, and a
+> `plans` row is fat (`body`, `recipientBodies`, an inline `shots` deck) — the 8MiB query ceiling
+> arrives well before the document one, and this is a live `useQuery`, so a breach throws the whole
+> Blueprint panel rather than one number. Mutation-proven both ways: a kind-only `holdsWork`
+> reddens, and so does dropping the window.)
+
 > Last verified: 2026-09-07 (43-01 — **`blueprintPulse`'s `plansInFlight` counted WORKERS as work.**
 > It sums `plans` rows at `collecting` / `proposed` / `delivering`, which was exactly right while a
 > thread held ONE row. ADR-037 ended that and ADR-040 made it worse: a fan-out mints a root plus up

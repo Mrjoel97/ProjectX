@@ -17,6 +17,7 @@ import {
   parseScheduleInput,
   persistentOutcomes,
   previewText,
+  REFUSED_PROPOSAL_NOTE,
   ResolvedOutcomeCard,
   refusalMessage,
   STALE_PLAN_MESSAGE,
@@ -182,6 +183,16 @@ describe("Approvals connected state contracts", () => {
     imagePrompt: "Teal product hero",
   } as unknown as BodyProps["plan"];
 
+  // 43-01b: what `landStoryboardRefusal` ACTUALLY writes — `kind` stays `"memo"` (no deck
+  // parsed, so `persistStoryboard` never ran), `body` is the composed refusal prose, and
+  // `subject` still names the reel the user asked for.
+  const refusedReelPlan = {
+    kind: "memo",
+    subject: "Reel: a 15-second promo for the launch",
+    body: "I couldn't turn this into a usable storyboard — no scene deck was written.",
+    proposalRefusal: { reason: "no_deck", contract: "scene" },
+  } as unknown as BodyProps["plan"];
+
   function bodyProps(overrides: Partial<BodyProps> = {}): BodyProps {
     return {
       item: {
@@ -245,6 +256,50 @@ describe("Approvals connected state contracts", () => {
     // Everything else the card could do is untouched.
     expect(html).toContain("Edit in cockpit");
     expect(html).toContain("Discard");
+  });
+
+  // 43-01b. THE SECOND APPROVE SURFACE. 33-13 fixed this on the workspace canvas by branching
+  // on `proposalRefusal` above the memo branch; this page never got the branch, so a refused
+  // reel arrived here as an ordinary memo with "Approve & file to vault" over it — and
+  // approving filed the refusal text into the vault as though it were a finding.
+  //
+  // MUTATION that turns this red: drop `&& !refused` from the Approve button's gate.
+  test("a refused reel proposal offers no Approve button, only the honest route", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        AwaitingCardBody,
+        bodyProps({
+          item: { ...bodyProps().item, kind: "memo" },
+          plan: refusedReelPlan,
+        }),
+      ),
+    );
+    expect(html).not.toContain("Approve &amp; file to vault");
+    expect(html).not.toContain("Approve & file to vault");
+    expect(html).toContain(REFUSED_PROPOSAL_NOTE.slice(0, 40));
+    // The refusal prose itself was always on screen — it is `plan.body`. What was missing is a
+    // card that agrees with it.
+    expect(html).toContain("usable storyboard");
+    // Still the user's to clear, and still reachable from the thread.
+    expect(html).toContain("Try again in cockpit");
+    expect(html).toContain("Discard");
+  });
+
+  // NON-VACUITY for the test above: an ordinary memo with no refusal keeps its Approve button,
+  // so `!refused` cannot be a blanket suppression of the memo Approve path.
+  test("an ordinary memo still offers Approve & file to vault", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        AwaitingCardBody,
+        bodyProps({
+          item: { ...bodyProps().item, kind: "memo" },
+          plan: { kind: "memo", subject: "Next step: pricing" } as unknown as BodyProps["plan"],
+        }),
+      ),
+    );
+    expect(html).toContain("Approve &amp; file to vault");
+    expect(html).not.toContain(REFUSED_PROPOSAL_NOTE.slice(0, 40));
+    expect(html).toContain("Edit in cockpit");
   });
 
   test("a reel plan still offers its Approve button", () => {
