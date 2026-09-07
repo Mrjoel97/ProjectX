@@ -42,7 +42,7 @@ import { internalAction, internalMutation, internalQuery } from "./_generated/se
 import { markAgendaProposed } from "./lib/agenda";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
-import { isOpenRoot, newestRoot } from "./lib/planRow";
+import { flipParentWhenSiblingsDone, isOpenRoot, newestRoot } from "./lib/planRow";
 import schema from "./schema";
 import { startIngest } from "./vaultIngest";
 
@@ -1147,6 +1147,27 @@ export const landSpecialistResult = internalMutation({
         row && gap
           ? buildMemo(row, gap, a.fallbackReason ?? "error")
           : (a.fallbackBody ?? LOST_CONTEXT_MEMO);
+    }
+    // ── ADR-037 Decision 4: A CHILD IS A WORKER, AND A WORKER HAS NO APPROVAL CARD ─────────────
+    // A landed child takes `approved`, which is already a member of the pinned lifecycle enum, so
+    // no literal is added. Exactly two statuses are invisible to every approvals query —
+    // `collecting` and `approved` — and `collecting` is unavailable: `reliabilitySweep`'s
+    // `collectingPlane` and `stageResearchPlan`'s interlock both read `collecting` + `kind: "memo"`
+    // as "a dispatch still owns this row", so parking a LANDED child there would re-arm the
+    // watchdog against finished work. That leaves `approved`, and the cost is semantic drift from
+    // the status comment's "executePlan CAS passed" — widened in the same commit.
+    //
+    // Only the PARENT ever reaches `proposed`, and only when no sibling is still running. That is
+    // what makes a five-worker fan-out exactly one card and exactly one Approve.
+    if (plan.parentPlanId !== undefined) {
+      await ctx.runMutation(internal.plans.patchPlan, {
+        planId: a.planId,
+        body,
+        status: "approved",
+      });
+      if (a.sources && a.sources.length > 0) await ctx.db.patch(a.planId, { sources: a.sources });
+      await flipParentWhenSiblingsDone(ctx, plan.tenantId, plan.parentPlanId);
+      return;
     }
     // patchPlan, not resetPlan: we are FILLING a staged row, and resetPlan would clear `kind: memo`.
     await ctx.runMutation(internal.plans.patchPlan, { planId: a.planId, body, status: "proposed" });

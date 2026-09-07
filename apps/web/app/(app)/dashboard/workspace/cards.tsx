@@ -2131,6 +2131,9 @@ const VERB: Record<string, [running: string, done: string]> = {
   ],
   dispatchLeadEngine: ["Working with the lead engine…", "Lead engine finished"],
   dispatchResearch: ["Researching…", "Research finished"],
+  // 42-03 (G6): a fan-out. ONE trace step for the whole team — the workers are separate plan
+  // rows, and the chat shows the question being handed out, not each worker in turn.
+  dispatchTeam: ["Asking the specialists…", "The specialists answered"],
   // The individual web search INSIDE a research run (llm.ts `webResearch`). It emits step rows only
   // since 2026-08-07, when it stopped being a provider-executed hosted tool and became a local
   // Tavily call — a hosted tool never fired onToolExecutionStart, so there was nothing to label.

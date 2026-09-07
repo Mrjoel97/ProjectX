@@ -2,6 +2,59 @@
 > provider's content check" off a row's `verdict`, never its `status`; a blocked row with no verdict
 > is a setup fault, not a refusal. Owned and explained in `media.md`'s entry of the same date.)
 
+> Last verified: 2026-09-07 (42-03 — **THE GOVERNED FAN-OUT: one question, up to five specialists,
+> ONE approval card (G6, ADR-037 + ADR-038).** `dispatchTeam` stages a ROOT through the ordinary
+> `stageResearchPlan` (so it earns every existing interlock and the one-open-root invariant, rather
+> than a second copy of them), then `dispatchRun.startTeamRun` mints the children and schedules one
+> durable starter each.
+>
+> **THE THING THAT WILL BITE THE NEXT PERSON: a child is `kind: "memo"` AT BIRTH.** `insertPlan`
+> gained `parentPlanId` / `kind` / `subject` for exactly this. Every previous caller set `kind` in a
+> SECOND transaction via `patchPlan`; a fan-out minting n children in one mutation has no second
+> transaction, and a child without `kind: "memo"` is discarded by THREE independent fail-closed
+> gates — `landSpecialistResult`'s CAS, the sibling flip that reads it, and `reliabilitySweep`'s
+> `collectingPlane`. The paid memo vanishes, the parent hangs at `collecting` for ever, and the
+> join tests still pass if their fixtures seed children by hand. Two independent adversarial
+> reviewers found this before implementation; `fanOut.test.ts` reads a minted child back and the
+> mutation that removes the field reddens FOUR tests. These three args are on `insertPlan` ONLY,
+> never on `patchPlan`: `parentPlanId` decides artifact-vs-worker, so it is written once, at birth,
+> by code the model cannot reach.
+>
+> **THE MONEY RULE IS ADR-038, AND IT SUPERSEDES ADR-037 DECISION 6.** A fan-out NARROWS to what
+> the rail can fund: `n = min(routes, MAX_FAN_OUT, rootEnvelope)` and `share = floor(root / n)`,
+> which makes `share >= 1` a theorem rather than a hope. ADR-037 claimed a child with a share of 0
+> is refused `budget_exhausted`; it is NOT — `governedDispatch` reads
+> `args.envelopeCents > 0 ? … : derive`, so a zero child takes the DERIVE branch and is granted the
+> FULL rail share, and `floor(root/n)` is 0 across the whole interval `root < n`, not just at 0.
+> `narrowFanOut` is a pure function in `lib/dispatchShared.ts` precisely so that arithmetic is
+> unit-testable without driving a rate limiter down. `Math.max(1, …)` stays forbidden.
+>
+> Three more things the model does NOT decide: duplicate routes are collapsed (`SPECIALIST_ROUTES`
+> is a closed six-member set, so five `research` entries would otherwise buy five identical paid
+> turns, and `wouldCycle` cannot catch it — it runs per child against an EMPTY ancestry and never
+> fires between siblings); `media` is refused at the door (a media dispatch runs `groundMediaBrief`,
+> a PAID turn with no envelope check, so N media children would be N full-price passes outside every
+> ceiling); and a `research` route runs on `kind: "research"`, because the generic specialist path
+> would lose `persistResearchFindings` AND land LOST_CONTEXT_MEMO's "the evaluation it was based on
+> is no longer on file" — false for a run that was never based on one.
+>
+> `lib/planRow.ts` stopped being read-only. It gained exactly ONE writer,
+> `flipParentWhenSiblingsDone`, because TWO callers need it and must not diverge: a child that lands
+> normally and a child a watchdog resolves. Two copies of "is this fan-out finished" is how a dead
+> worker leaves a parent stuck while the happy path looks healthy.
+>
+> Registration, all in this commit: the `llm.ts` tool key inside the existing `grants.dispatch`
+> spread, the `dispatchTeam` literal in `schema.ts`'s CLOSED `agentSteps.tool` union (fourth time
+> that union has been the trap — a missing literal throws inside the SDK where the error is
+> swallowed), the `cards.tsx` VERB entry, and the four sorted arrays in `toolRegistrySnapshot.test`.
+> **The tool is INVISIBLE until the `cockpit-agent` body that teaches it is ACTIVE** — the body is
+> edited here and is a GATED candidate; activation is owner work, per deployment.
+>
+> Measured: backend 4060 (2093 + 1967), core 1522, web 899 + 2 skipped, contracts 123; tsc and
+> biome clean. FOUR mutations verified RED and `cmp`-restored: dropping the rail from the worker
+> cap (3 red), minting children with no `kind` (4 red), removing the dedupe (1 red), removing the
+> sweep's child branch (1 red).)
+>
 > Last verified: 2026-09-07 (42-02 — **A DISPATCH IS A DURABLE RUN NOW, AND THE PAID STEP IS NEVER
 > RETRIED.** The three specialist entry points (`dispatch.runSpecialist` / `runResearch` /
 > `runMedia`) are no longer scheduled directly. Every caller now queues

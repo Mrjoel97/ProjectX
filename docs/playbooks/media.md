@@ -42,6 +42,20 @@
 > backend media 293/293, web mediaCanvas 134/134, both typechecks clean.)
 
 
+> Last verified: 2026-09-07 (42-03 — the `collecting` sweep learned that a fan-out has TWO shapes,
+> and the old single branch was right for only one of them. A stalled CHILD now takes the CHILD
+> terminal (`approved`) and re-runs the sibling check: sweeping it to `proposed` would put a SECOND
+> card in the inbox for work the parent already represents, and not re-running the check would
+> leave the parent at `collecting` for ever — invisible to every approvals query and blocking every
+> future dispatch on that thread through `isOpenRoot`. A PARENT with any child still `collecting`
+> is EXEMPT: its `collecting` is correct, the work is happening one row down, and `dispatchLive`
+> cannot see that because the parent has no workflow of its own.
+>
+> The finished-ness predicate is imported from `lib/planRow.ts`, not re-derived here. Two copies of
+> "is this fan-out done" is how a dead worker strands a parent while the happy path looks healthy.
+> STILL OWED BY THE OWNER: `RELIABILITY_SWEEP_ARMED=1` on production. Un-armed, none of this runs,
+> and a fan-out with one dead worker has no watchdog at all.)
+>
 > Last verified: 2026-09-07 (42-02 — **`dispatchLive` ASKS THE WORKFLOW COMPONENT FIRST, AND THIS IS
 > A DATA-LOSS FIX, NOT AN OPTIMISATION.** A dispatch is now enqueued by the workflow COMPONENT into
 > the component's own tables, so `reliabilitySweep`'s app-side `_scheduled_functions` scan sees the

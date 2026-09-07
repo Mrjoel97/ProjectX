@@ -1,5 +1,14 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-07 (42-03 — the `cockpit-agent` body gained a section teaching
+> `dispatchTeam`. **This makes it a GATED CANDIDATE, not a live change**: `cockpit-agent` is in
+> `GATED_SKILLS`, so `activateSkillVersion` throws without recorded passing eval evidence, and the
+> gate is PER DEPLOYMENT. Until the owner runs it, the fan-out tool is registered, tested and
+> completely invisible to the model — a tool the body does not teach is a tool that does not exist.
+> The `.md` and its hand-derived `.ts` mirror are pinned byte-identically by two tests and were
+> regenerated together. Read the live version back from `internal.skills.getActiveSkill` before the
+> cycle: the source labels conflict and a source label is not the registry version.)
+
 > Last verified: 2026-09-06 (40-02, DOC-01 — **A NEW UNGATED ROW, `spreadsheet-drafter@1`, AND
 > `cockpit-agent` BODY v3.**
 >

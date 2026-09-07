@@ -251,6 +251,10 @@ const CONVEX_MODULES = [
 const SCHEDULER_CALL_SITES = [
   "billingRollup.ts",
   "cockpit.ts",
+  // 42-03: `startTeamRun` schedules one durable starter per fan-out worker. It is the ONE place a
+  // dispatch is queued more than once from a single call, which is exactly why the count is bounded
+  // in code (`min(routes, MAX_FAN_OUT, rootEnvelope)`) and never by the model (ADR-008/ADR-038).
+  "dispatchRun.ts",
   "evaluations.ts",
   "llm.ts",
   "media.ts",

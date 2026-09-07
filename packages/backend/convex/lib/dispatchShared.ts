@@ -35,6 +35,56 @@ export const DISPATCH_ARGS = {
   ...TOOL_CONTEXT_ARGS,
 };
 
+/** One sub-agent tree may draw down at most this share of what is left of the day. Not a magic
+ *  constant on its own — it is a FRACTION of the live rail, so a nearly-drained day yields a small
+ *  envelope and a fresh day a large one.
+ *
+ *  Moved here from `dispatch.ts` in 42-03 (ADR-038) so the FAN-OUT MINT SITE and `governedDispatch`
+ *  derive the root envelope from ONE constant. Two copies of this fraction is how a divided
+ *  envelope and the envelope it was divided from stop being the same number.
+ *
+ *  ponytail: `dailySpendCents` is a KEYLESS window, so this is the DEPLOYMENT's remaining budget,
+ *  not the tenant's — matching the "fixed constants for the single-owner beta; per-tenant policy is
+ *  the upgrade path" comment already in guardrails.ts. */
+export const ENVELOPE_FRACTION = 0.25;
+
+/** The most workers ONE question may be fanned out to (ADR-037: ≤5, depth 1). An upper bound only —
+ *  ADR-038 makes the rail a second, lower bound, so the number that actually runs is
+ *  `min(routes, MAX_FAN_OUT, rootEnvelope)` and is not a fixed figure. A test that pins "five
+ *  workers" without seeding the rail is pinning the wrong thing. */
+export const MAX_FAN_OUT = 5;
+
+/**
+ * HOW MANY WORKERS A FAN-OUT ACTUALLY STARTS, AND WHAT EACH ONE IS GIVEN (ADR-038).
+ *
+ * Pure, and extracted for exactly that reason: this arithmetic is the whole money rule, and the
+ * version of it in ADR-037 Decision 6 was WRONG in a way no integration test would have caught.
+ * That decision reasoned about the single point `rootEnvelope === 0` and concluded a zero share is
+ * refused fail-closed. But `Math.floor(rootEnvelope / n)` is 0 across the whole interval
+ * `rootEnvelope < n`, and a child handed `envelopeCents: 0` is NOT refused — `governedDispatch`
+ * reads `args.envelopeCents > 0 ? args.envelopeCents : derive`, so a zero child takes the DERIVE
+ * branch and receives the FULL rail share. Five workers on a 4-cent envelope would each have been
+ * granted 4 cents, five times the budget the fan-out was dividing.
+ *
+ * The fix is to cap the WORKER COUNT by the envelope rather than to floor the share:
+ * `n = min(routeCount, MAX_FAN_OUT, rootEnvelopeCents)` makes `share >= 1` a theorem, because for
+ * integers with `1 <= n <= rootEnvelope`, `floor(rootEnvelope / n) >= 1`. `Math.max(1, …)` stays
+ * forbidden — it funds n workers at a penny each and the division stops being one.
+ *
+ * `workerCount === 0` means the rail cannot fund even one worker. The caller refuses the whole
+ * fan-out before inserting a row; it is the one case where fail-closed is still the only answer.
+ */
+export function narrowFanOut(
+  routeCount: number,
+  rootEnvelopeCents: number,
+): { workerCount: number; shareCents: number } {
+  const workerCount = Math.max(0, Math.min(routeCount, MAX_FAN_OUT, rootEnvelopeCents));
+  return {
+    workerCount,
+    shareCents: workerCount === 0 ? 0 : Math.floor(rootEnvelopeCents / workerCount),
+  };
+}
+
 /** Which of the three specialist entry points a run is for. A CODE-OWNED literal: it selects the
  *  action the durable step calls and the fallback body its terminal lands, and the model never
  *  supplies it (ADR-008). */

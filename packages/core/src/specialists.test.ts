@@ -4,6 +4,7 @@ import { BEHAVIOR_PRESETS, TIERS } from "./businessProfile";
 import * as specialists from "./specialists";
 import {
   evidenceVerdict,
+  fanOutMemoBody,
   INSUFFICIENT_EVIDENCE_LABEL,
   NOT_RESEARCHED_LABEL,
   PRESET_SKILL,
@@ -740,5 +741,50 @@ describe("specialistMemoBody incomplete markers (D11 — three causes, three sen
 
   test("a complete run carries no marker at all", () => {
     expect(specialistMemoBody({ ...base, incomplete: false })).not.toContain("Incomplete");
+  });
+});
+
+// ── fanOutMemoBody: the parent artifact of a fan-out (42-03, ADR-037 Decision 4) ──────────────
+//
+// A DETERMINISTIC assembly, not a synthesis turn — the owner's decision of 2026-09-07. That choice
+// is what these tests pin: no model call means byte-identical output for the same input, and no
+// place for a summary to contradict the sources it is summarising.
+describe("fanOutMemoBody", () => {
+  const kids = [
+    { heading: "Offer architect", body: "Raise the price and add a guarantee." },
+    { heading: "Lead engine", body: "Two channels, not five." },
+  ];
+
+  test("every worker's answer survives, in MINT ORDER, under its own heading", () => {
+    const body = fanOutMemoBody(kids);
+    expect(body.indexOf("## Offer architect")).toBeLessThan(body.indexOf("## Lead engine"));
+    expect(body).toContain("Raise the price and add a guarantee.");
+    expect(body).toContain("Two channels, not five.");
+    // Mint order is the order the model asked its questions in. Nothing here knows which answer is
+    // better, so sorting or ranking would be a claim the data does not support.
+    expect(fanOutMemoBody([...kids].reverse())).not.toBe(body);
+  });
+
+  test("it is DETERMINISTIC — the same input twice is byte-identical", () => {
+    // The whole argument for an assembly over a synthesis turn. If this can ever differ, a re-read
+    // of an approved artifact could show the owner something they did not approve.
+    expect(fanOutMemoBody(kids)).toBe(fanOutMemoBody(kids));
+  });
+
+  test("a fan-out that produced nothing is still an artifact, not an empty card", () => {
+    const body = fanOutMemoBody([]);
+    expect(body.trim().length).toBeGreaterThan(0);
+    expect(body).toContain("None of the specialists finished");
+  });
+
+  test("a worker that failed still gets its section — a narrower answer is never silent", () => {
+    // Dropping a failed worker would make the assembled artifact look complete while answering
+    // less than was asked.
+    const body = fanOutMemoBody([
+      kids[0] as { heading: string; body: string },
+      { heading: "Lead engine", body: "The run stopped before it produced anything." },
+    ]);
+    expect(body).toContain("## Lead engine");
+    expect(body).toContain("stopped before it produced anything");
   });
 });

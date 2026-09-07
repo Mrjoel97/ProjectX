@@ -1692,6 +1692,11 @@ export default defineSchema({
       // prompt or a narration line. Without it the step insert throws inside a callback the AI SDK
       // SWALLOWS → no trace row in prod while every offline test passes (Research Pitfall 4).
       v.literal("dispatchMedia"),
+      // 42-03 (G6): the governed fan-out's own trace step. FOURTH time this closed union has been
+      // the trap — a tool key with no literal here makes `agentSteps.record` throw inside the SDK,
+      // where the error is swallowed, so the step vanishes in production while every test stays
+      // green. `cockpitTools.test.ts` scans for exactly this and is why it cannot happen again.
+      v.literal("dispatchTeam"),
       // Standalone image proposals stage content only. The paid action remains a separate canvas
       // click, but the local tool still needs a trace literal because AI-SDK callback failures are
       // otherwise swallowed (the dispatchMedia rule immediately above).

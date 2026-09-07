@@ -1,5 +1,11 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-07 (42-03 — `subagent.dispatched` gained `workerCount` in the read-time
+> allowlist. It is how many workers a fan-out ACTUALLY started, which is not what the model asked
+> for whenever ADR-038's rail cap narrowed it. A COUNT, never a route list. Added in the same
+> commit as its writer, deliberately: `webSearchCalls` and `declaredUnsupported` are already
+> written and already invisible because that pairing was missed once.)
+
 > Last verified: 2026-09-06 (40-01, DOC-01 — one registry line, and the reason it is load-bearing.
 > `TENANT_TABLE_CLASSIFICATION` gains `vaultSheets: "tenant_owned"` — a workbook's capped grid is cell
 > text, so it is tenant data in the fullest sense. That classification is a PROMISE the tenant can export

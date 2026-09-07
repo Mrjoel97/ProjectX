@@ -98,17 +98,48 @@ const ATTACHMENTS = v.array(
 );
 
 /**
- * Create the single `plans` row for a thread (the agent creates it on first turn).
- * Starts at "collecting" with empty recipients; returns planId for the conversation to patch.
+ * Create a `plans` row for a thread. The agent creates one on first turn; a fan-out mints one per
+ * worker (42-03). Starts at "collecting" with empty recipients; returns planId for the caller.
+ *
+ * ── THE THREE OPTIONAL ARGS EXIST FOR ONE REASON, AND IT IS A MONEY BUG THIS ALMOST SHIPPED ──
+ * A row minted here used to carry NO `kind`, because every caller followed the insert with a
+ * `patchPlan` that set `kind: "memo"` in a second transaction. A fan-out cannot do that: it mints
+ * n children in ONE mutation, and a child that reaches its landing without `kind: "memo"` is
+ * discarded by THREE independent fail-closed gates — `landSpecialistResult`'s CAS, the sibling
+ * flip that reads it, and `reliabilitySweep`'s `collectingPlane`. The paid memo would vanish, the
+ * parent would sit at `collecting` for ever, and the fan-out's own join tests would pass green over
+ * it if their fixtures seeded children by hand. Two independent adversarial reviewers found this
+ * before a line was written; `plans.test.ts` now reads a minted child back and asserts the field.
+ *
+ * These are on `insertPlan` ONLY — never on `patchPlan`. `parentPlanId` decides whether a row is an
+ * artifact or a worker (ADR-037), so it is written exactly once, at birth, by code that is not
+ * reachable from the model. A `patchPlan` that could set it would let a later turn re-parent a
+ * landed artifact and make it disappear from the approvals inbox.
  */
 export const insertPlan = internalMutation({
-  args: { tenantId: v.string(), threadId: v.string() },
-  handler: async (ctx, { tenantId, threadId }) =>
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    /** ADR-037: absent = a ROOT (its own artifact, its own approval); present = a FAN-OUT CHILD. */
+    parentPlanId: v.optional(v.id("plans")),
+    /** Set at birth for a child, because a child has no second transaction in which to acquire it.
+     *  `v.literal("memo")`, not the schema's six-member union: a fan-out child is always a memo, and
+     *  a validator that only admits the one legal value is a cheaper guard than a test. */
+    kind: v.optional(v.literal("memo")),
+    /** A child's heading in the assembled parent memo (`fanOutMemoBody`). The `plans` table has no
+     *  `route` column, and parsing the route back out of the rendered body is the defect class this
+     *  avoids. */
+    subject: v.optional(v.string()),
+  },
+  handler: async (ctx, { tenantId, threadId, parentPlanId, kind, subject }) =>
     await ctx.db.insert("plans", {
       tenantId,
       threadId,
       status: "collecting",
       recipients: [],
+      ...(parentPlanId === undefined ? {} : { parentPlanId }),
+      ...(kind === undefined ? {} : { kind }),
+      ...(subject === undefined ? {} : { subject }),
       // DLVR-02: written EXPLICITLY at creation rather than left absent, even though absent means
       // the same thing. A row whose provider is unset is indistinguishable from a pre-25-05 legacy
       // row, and that ambiguity is what would make a later "which of these actually chose Google?"

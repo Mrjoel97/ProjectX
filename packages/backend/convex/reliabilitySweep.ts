@@ -33,6 +33,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { dispatchWorkflowLive } from "./dispatchRun";
+import { flipParentWhenSiblingsDone } from "./lib/planRow";
 import { migrations } from "./migrations";
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
@@ -330,12 +331,37 @@ export const sweepStuckPlans = migrations.define({
     }
 
     if (collectingPlane && !(await dispatchLive(ctx, plan))) {
-      // `proposed` is the honest terminal, and it is an EXISTING one: it is where every other
-      // dispatch outcome lands (`landSpecialistResult`), and it is the only status `PlanCard`
-      // renders. The row stops being invisible and the user can read what happened and re-ask.
-      // No new status member was needed, so none was added.
-      await ctx.db.patch(plan._id, { status: "proposed", body: COLLECTING_FALLBACK_BODY });
-      stalled = true;
+      // ── 42-03: A FAN-OUT HAS TWO SHAPES HERE, AND THE OLD BRANCH IS ONLY RIGHT FOR ONE ───────
+      //
+      // A stalled CHILD must take the CHILD terminal (`approved`, ADR-037 Decision 4) and re-run
+      // the sibling check, or a fan-out with one dead worker leaves its parent at `collecting`
+      // for ever — invisible to every approvals query, and blocking every future dispatch on that
+      // thread through `isOpenRoot`. Sweeping it to `proposed` instead would be worse than doing
+      // nothing: it would put a SECOND card in the inbox for work the parent already represents.
+      //
+      // A PARENT whose children are still running is NOT stalled at all. Its `collecting` is the
+      // correct state — the work is happening one row down — and `dispatchLive` cannot see that,
+      // because the parent has no workflow of its own. `flipParentWhenSiblingsDone` is the same
+      // predicate the happy path uses; calling it here rather than re-deriving "is this finished"
+      // is what stops the two answers drifting.
+      const children = await ctx.db
+        .query("plans")
+        .withIndex("by_parent", (q) => q.eq("tenantId", plan.tenantId).eq("parentPlanId", plan._id))
+        .collect();
+      if (children.some((c) => c.status === "collecting")) {
+        // A live fan-out. Not stalled, not swept, and deliberately not notified either.
+      } else if (plan.parentPlanId !== undefined) {
+        await ctx.db.patch(plan._id, { status: "approved", body: COLLECTING_FALLBACK_BODY });
+        await flipParentWhenSiblingsDone(ctx, plan.tenantId, plan.parentPlanId);
+        stalled = true;
+      } else {
+        // `proposed` is the honest terminal, and it is an EXISTING one: it is where every other
+        // dispatch outcome lands (`landSpecialistResult`), and it is the only status `PlanCard`
+        // renders. The row stops being invisible and the user can read what happened and re-ask.
+        // No new status member was needed, so none was added.
+        await ctx.db.patch(plan._id, { status: "proposed", body: COLLECTING_FALLBACK_BODY });
+        stalled = true;
+      }
     }
 
     // One notification per plan per pass, however many of its planes were swept — the user has one

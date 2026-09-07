@@ -1981,6 +1981,70 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
   // so), and this tool hardcodes `depth: 1, ancestry: []` — a re-entry through that path during a
   // SPECIALIST turn would bypass MAX_DEPTH and wouldCycle, the two guards this seam claims to
   // inherit for free. **The executive is the only agent that dispatches.**
+  // ── 42-03 (G6): THE GOVERNED FAN-OUT ────────────────────────────────────────────────────────
+  //
+  // One question, up to five specialists, ONE approval card. Built under the SAME gate as
+  // `dispatchResearch` and for the same reason: it hardcodes `depth: 1, ancestry: []`, so a
+  // re-entry during a SPECIALIST turn would bypass MAX_DEPTH and wouldCycle. The executive is the
+  // only agent that dispatches, and now the only one that fans out.
+  //
+  // The model supplies the routes and their ORDER and nothing else. Not the cap (MAX_FAN_OUT), not
+  // the envelope, not how many of its routes the rail can actually fund — `startTeamRun` dedupes,
+  // validates against the closed specialist set, drops `media`, and narrows to
+  // `min(routes, MAX_FAN_OUT, rootEnvelope)` (ADR-038). A route list of five `research` entries
+  // buys ONE worker, not five paid turns.
+  const dispatchTeamTool = {
+    dispatchTeam: tool({
+      description:
+        "Ask SEVERAL specialists one question at once, when the answer genuinely needs more than " +
+        "one kind of expertise. They run in the background and arrive as a SINGLE plan card the " +
+        "user approves once. Prefer dispatchResearch for anything one specialist can answer.",
+      inputSchema: jsonSchema<{ question: string; routes: string[] }>({
+        type: "object",
+        properties: {
+          question: { type: "string" },
+          routes: { type: "array", items: { type: "string" } },
+        },
+        required: ["question", "routes"],
+        additionalProperties: false,
+      }),
+      execute: async ({ question, routes }): Promise<string> => {
+        const threadId = toolCtx.threadId as string;
+        const rootRequestId = toolCtx.rootRequestId as string;
+        // The ROOT is staged through the ordinary research stager: it is a `collecting` memo on
+        // this thread, it obeys the one-open-root invariant, and it earns the same refusals. A
+        // second stager for fan-outs would be a second copy of every interlock.
+        const staged = await ctx.runMutation(internal.plans.stageResearchPlan, {
+          tenantId,
+          threadId,
+          subject: `Team: ${question}`.slice(0, 120),
+        });
+        if (!staged.ok) return RESEARCH_REFUSAL_REPLY[staged.reason];
+
+        const team = await ctx.runMutation(internal.dispatchRun.startTeamRun, {
+          tenantId,
+          threadId,
+          planId: staged.planId,
+          routes,
+          question,
+          rootRequestId,
+          skillVersions,
+          tenantSkillIds,
+        });
+        // A governed stop is a paused conversation, not a throw — and the root row it already
+        // staged is left `collecting` for the reliability sweep, exactly as a failed dispatch is.
+        if (!team.ok) return team.reply;
+        // ADR-038 Decision 4: a fan-out that quietly answers three of five questions reads as
+        // complete and is not. Say the number. Never the rail, never a cent figure, never a code.
+        return team.workerCount < team.requested
+          ? `Started ${team.workerCount} of the specialists you asked for — there was not enough of` +
+              " today's budget for the rest. Their answers will arrive as one plan card to approve."
+          : `Started ${team.workerCount} specialists on that. Their answers will arrive as ONE plan` +
+              " card for the user to approve.";
+      },
+    }),
+  };
+
   const dispatchResearchTool = {
     dispatchResearch: tool({
       description:
@@ -2569,8 +2633,11 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     // 20-08: ONE flag, ONE spread, both dispatch tools — the `webResearch`/`declareUnsupported`
     // precedent above. Media can never become reachable in a context where research is not.
     ...(grants.dispatch && toolCtx.threadId && toolCtx.rootRequestId
-      ? { ...dispatchResearchTool, ...dispatchMediaTool, ...proposeImageTool }
-      : ({} as typeof dispatchResearchTool & typeof dispatchMediaTool & typeof proposeImageTool)),
+      ? { ...dispatchResearchTool, ...dispatchMediaTool, ...proposeImageTool, ...dispatchTeamTool }
+      : ({} as typeof dispatchResearchTool &
+          typeof dispatchMediaTool &
+          typeof proposeImageTool &
+          typeof dispatchTeamTool)),
     // SKILL-02: a SEPARATE flag from `grants.dispatch`, deliberately. Both are derived from
     // `toolNames === undefined` today (grantsFor), but they are different capabilities —
     // dispatching a specialist spends money, authoring a skill changes what every future turn is

@@ -46,7 +46,12 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
-import { DISPATCH_ARGS, MEDIA_FAILED_MEMO, RESEARCH_FAILED_MEMO } from "./lib/dispatchShared";
+import {
+  DISPATCH_ARGS,
+  ENVELOPE_FRACTION,
+  MEDIA_FAILED_MEMO,
+  RESEARCH_FAILED_MEMO,
+} from "./lib/dispatchShared";
 import { traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
 import { runSpecialistTurn } from "./llm";
@@ -57,14 +62,11 @@ import { runSpecialistTurn } from "./llm";
  *  rises — raising it later is a one-constant change, because `ancestry` already travels. */
 const MAX_DEPTH = 1;
 
-/** One sub-agent tree may draw down at most this share of what is left of the day. Not a magic
- *  constant on its own — it is a FRACTION of the live rail, so a nearly-drained day yields a
- *  small envelope and a fresh day a large one.
- *  ponytail: `dailySpendCents` is a KEYLESS window (guardrails.ts:23-28), so this is the
- *  DEPLOYMENT's remaining budget, not the tenant's — matching the "fixed constants for the
- *  single-owner beta; per-tenant policy is the upgrade path" comment already at guardrails.ts:19-20.
- *  Upgrade path: key the limit by tenantId; not required by any Phase-15 success criterion. */
-const ENVELOPE_FRACTION = 0.25;
+/** `ENVELOPE_FRACTION` moved to `lib/dispatchShared.ts` in 42-03 (ADR-038) and is imported above.
+ *  The fan-out mint site derives the ROOT envelope with the same fraction this function uses, and a
+ *  second copy is how the divided envelope and the envelope it was divided from drift apart. The
+ *  derivation below is otherwise byte-identical and must stay that way — ADR-037 Decision 6 and
+ *  ADR-038 Decision 5 both require `governedDispatch` to be untouched. */
 
 // ── The four refusal replies ──────────────────────────────────────────────────────────────────
 //

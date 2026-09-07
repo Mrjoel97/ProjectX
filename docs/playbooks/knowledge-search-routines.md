@@ -1,5 +1,9 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-07 (42-03 — `routines.test.ts`'s pinned `ctx.scheduler` call-site set
+> gained `dispatchRun.ts`. It is the one place a dispatch is queued more than once from a single
+> call, which is exactly why the count is bounded in code and never by the model.)
+
 > Last verified: 2026-09-07 (42-02 — `routines.test.ts`'s pinned Convex module inventory gained
 > `dispatchRun.ts` and `lib/dispatchShared.ts`, the durable dispatch runner and its shared
 > validators. Inventory only; nothing in this subsystem's behaviour changed.)

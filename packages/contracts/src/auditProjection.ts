@@ -390,7 +390,9 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "envelopeCents",
     "incomplete",
   ],
-  "subagent.dispatched": [...LINEAGE, "envelopeCents", "spentCents"],
+  // 42-03: `workerCount` is how many workers a fan-out ACTUALLY started, which is not what the
+  // model asked for whenever ADR-038's rail cap narrowed it. A count, never a route list.
+  "subagent.dispatched": [...LINEAGE, "envelopeCents", "spentCents", "workerCount"],
   "subagent.refused": [...LINEAGE, "reason"],
   "tenant.deleted": [
     "tenantIdHash",

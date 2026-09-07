@@ -316,6 +316,36 @@ export function specialistMemoBody(args: {
   return `> Produced by the **${args.route}** specialist.${ceiling}\n\n${args.body}`;
 }
 
+/**
+ * THE PARENT ARTIFACT OF A FAN-OUT (42-03, ADR-037 Decision 4, owner decision 2026-09-07).
+ *
+ * A deterministic assembly of the children's memos, NOT a synthesis turn. That was the owner's
+ * call and it buys three things: no sixth model call and no sixth bill, byte-identical output for
+ * the same input (so it is unit-testable without a network), and no place for a synthesis to
+ * contradict the sources it is summarising — the provenance-laundering failure this repo has
+ * already shipped once.
+ *
+ * `heading` is the CHILD'S OWN SUBJECT, set at mint time from its route, and it is a parameter for
+ * a measured reason: the `plans` table has no `route` column. The only place a route survives on a
+ * landed child is inside `specialistMemoBody`'s rendered `> Produced by the **route** specialist.`
+ * line, and parsing a heading back out of prose the renderer produced is exactly the defect class
+ * that gets a repair shipped twice. The caller reads `subject` off the row it already has.
+ *
+ * Children arrive in MINT ORDER, which is the order the model asked its questions in. Not sorted,
+ * not ranked: nothing here knows which answer is better, and inventing an order would be a claim.
+ */
+export function fanOutMemoBody(children: readonly { heading: string; body: string }[]): string {
+  // A fan-out that produced nothing is still an artifact — the user asked, and the honest answer
+  // is that none of it came back. Silence would render as an empty approval card.
+  if (children.length === 0)
+    return (
+      "# Team\n\nNone of the specialists finished, so there is nothing to show yet." +
+      " Ask me to run it again."
+    );
+  const parts = children.map(({ heading, body }) => `## ${heading}\n\n${body.trim()}`);
+  return `# Team\n\n${parts.join("\n\n---\n\n")}`;
+}
+
 /** The three stop causes, each with its own sentence. `cost` is BYTE-IDENTICAL to the
  *  pre-Phase-16 string — existing eval fixtures and dispatch.test.ts depend on it.
  *

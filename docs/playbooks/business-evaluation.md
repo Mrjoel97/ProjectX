@@ -1,5 +1,23 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-09-07 (42-03 — `landSpecialistResult` now BRANCHES ON `parentPlanId`. A
+> landed CHILD takes `approved`, not `proposed`: exactly two statuses are invisible to every
+> approvals query, and `collecting` is unavailable because two other predicates read
+> `collecting` + `kind: "memo"` as "a dispatch still owns this row" and would re-arm the watchdog
+> against finished work. Only the PARENT ever reaches `proposed`, and only when no sibling is still
+> `collecting` — which is what makes a five-worker fan-out exactly one card and one Approve.
+>
+> The finish check lives in `lib/planRow.ts` as `flipParentWhenSiblingsDone`, not here, because the
+> reliability sweep needs the identical predicate for a child it resolves itself. There is no
+> coordinator and no counter: whichever run lands last does the work. The parent's own CAS is the
+> same `collecting` + `kind: "memo"` every landing uses, so a cancelled parent is left alone.
+>
+> The parent's body is `fanOutMemoBody` — a DETERMINISTIC assembly of the children's memos in mint
+> order (owner decision 2026-09-07), never a synthesis turn. Children's `sources` are merged and
+> de-duplicated by URL onto the parent by direct `ctx.db.patch`, for the same reason the
+> single-run path uses one: a source list is a PROVENANCE claim and `patchPlan` is the door the
+> model writes through.)
+
 > Last verified: 2026-09-07 (42-02 — `evaluations.ts`'s specialist kick-off is a DURABLE start:
 > `internal.dispatchRun.startDispatchRun` (journaled, `onComplete` terminal, paid step
 > `{ retry: false }`) replaces the bare `scheduler.runAfter(0, internal.dispatch.runSpecialist)`.

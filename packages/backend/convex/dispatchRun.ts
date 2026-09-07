@@ -32,11 +32,19 @@
 // unchanged: `governedDispatch`'s guard order, `dispatchAndLand`'s `finally`, and the envelope
 // arithmetic at `dispatch.ts:474-481` are byte-identical.
 import { vResultValidator, vWorkflowId, type WorkflowId } from "@convex-dev/workflow";
+import { resolveSpecialist } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { workflow } from "./index";
-import { DISPATCH_ARGS, DISPATCH_KIND, failedMemoFor } from "./lib/dispatchShared";
+import {
+  DISPATCH_ARGS,
+  DISPATCH_KIND,
+  ENVELOPE_FRACTION,
+  failedMemoFor,
+  narrowFanOut,
+} from "./lib/dispatchShared";
 
 /** Which action a run of each kind steps into. A record rather than a chain of `if`s so a fourth
  *  kind is a one-line addition that cannot forget the retry option — the option lives at the single
@@ -177,3 +185,153 @@ export async function dispatchWorkflowLive(
     return null; // unresolvable id — the caller decides what to do with "unknown"
   }
 }
+
+// ── 42-03: THE GOVERNED FAN-OUT (G6, ADR-037 + ADR-038) ───────────────────────────────────────
+
+/** Which entry point a route's worker runs on. `research` has its OWN terminal
+ *  (`persistResearchFindings` + `RESEARCH_FAILED_MEMO`), and putting a research child on the
+ *  generic `specialist` path would lose the vault document AND land LOST_CONTEXT_MEMO's "the
+ *  evaluation it was based on is no longer on file" — false for a run that was never based on one,
+ *  and the exact dead end that constant exists to remove. `media` is refused at the door, not
+ *  mapped: a media dispatch runs `groundMediaBrief`, a PAID turn with no envelope check, so N media
+ *  children would be N full-price grounding passes outside every ceiling (ADR-037 open item (b)). */
+const kindForRoute = (route: string): "specialist" | "research" =>
+  route === "research" ? "research" : "specialist";
+
+/** A worker's heading in the assembled parent memo, written at MINT time. The `plans` table has no
+ *  `route` column, so this is how the route survives to `fanOutMemoBody` without anyone parsing it
+ *  back out of rendered prose. */
+const headingForRoute = (route: string): string =>
+  route.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+
+/** What the model asked for, narrowed to what is legal. Dedupe FIRST: `SPECIALIST_ROUTES` is a
+ *  closed six-member set, so five copies of `research` would otherwise survive validation and buy
+ *  five identical paid turns on one question — and the cycle guard cannot catch it, because
+ *  `wouldCycle` is evaluated per child against an empty ancestry and never fires between siblings.
+ *  Order is the MODEL'S order, preserved: it chose what to ask and in what sequence, and ADR-038
+ *  truncates from the front rather than re-ranking. */
+const legalRoutes = (routes: readonly string[]): string[] =>
+  [...new Set(routes.map((r) => r.trim()).filter((r) => r.length > 0))].filter(
+    (r) => r !== "media" && resolveSpecialist(r).ok,
+  );
+
+/** No route the code recognises. Driver-plane sentence, never a reason code (§4). */
+const NO_ROUTES_REPLY =
+  "I don't have specialists for any of those, so I've left the next step as a written plan instead.";
+/** The rail cannot fund even one worker. The single-dispatch twin of `BUDGET_EXHAUSTED_REPLY`. */
+const NO_BUDGET_REPLY =
+  "This has used up the budget I set aside for today, so I haven't started the team. Ask me again" +
+  " tomorrow, or ask me one question at a time.";
+
+export type TeamRunResult =
+  | { ok: true; workerCount: number; requested: number }
+  | { ok: false; reply: string };
+
+/**
+ * MINT A FAN-OUT: one root, up to `MAX_FAN_OUT` children, one divided envelope, one approval.
+ *
+ * ── ADR-038: THE FAN-OUT NARROWS TO WHAT THE RAIL CAN FUND ────────────────────────────────────
+ * `n = min(routes, MAX_FAN_OUT, rootEnvelope)` and `share = floor(rootEnvelope / n)`. Capping `n`
+ * by the envelope is what makes `share >= 1` a theorem rather than a hope: for integers with
+ * `1 <= n <= rootEnvelope`, `floor(rootEnvelope / n) >= 1`. That matters because a child handed
+ * `envelopeCents: 0` does NOT get refused — `governedDispatch` reads `args.envelopeCents > 0 ? … :
+ * derive`, so a zero child takes the DERIVE branch and is granted the FULL rail share. ADR-037
+ * Decision 6 asserted the opposite; ADR-038 supersedes it on that point. `Math.max(1, …)` is still
+ * forbidden — it would fund n workers at a penny each and the division would stop being one.
+ *
+ * The children are minted in ONE mutation, after the root, which is what keeps `ROOT_SCAN`'s
+ * bounded descending scan correct: nothing newer than a root exists except its own children.
+ *
+ * ADR-008: the model supplies the routes and their order, and NOTHING else. Not the cap, not the
+ * envelope, not the worker count that actually runs, not the lineage, not the depth.
+ */
+export const startTeamRun = internalMutation({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    /** The staged ROOT — `collecting` + `kind: "memo"`, created by the caller's stager. */
+    planId: v.id("plans"),
+    /** The model's routes, in the model's order. Validated and narrowed here, never trusted. */
+    routes: v.array(v.string()),
+    question: v.string(),
+    rootRequestId: v.string(),
+    skillVersions: v.optional(v.record(v.string(), v.number())),
+    tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
+  },
+  handler: async (ctx, a): Promise<TeamRunResult> => {
+    const routes = legalRoutes(a.routes);
+    if (routes.length === 0) return { ok: false, reply: NO_ROUTES_REPLY };
+
+    // The SAME derivation `governedDispatch` uses for a root, from the SAME constant — that is why
+    // `ENVELOPE_FRACTION` moved to `lib/dispatchShared.ts`. `remainingDailyCents` is already clamped
+    // at 0, so this is never negative.
+    const rootEnvelope = Math.floor(
+      (await ctx.runQuery(internal.guardrails.remainingDailyCents, { tenantId: a.tenantId })) *
+        ENVELOPE_FRACTION,
+    );
+    const { workerCount, shareCents: share } = narrowFanOut(routes.length, rootEnvelope);
+    // Nothing to narrow to. Fail closed, before a single row is inserted — the one case where the
+    // refusal ADR-038 rejected as a general rule is still the only correct answer.
+    if (workerCount === 0) return { ok: false, reply: NO_BUDGET_REPLY };
+
+    const children: { planId: Id<"plans">; route: string }[] = [];
+    for (const route of routes.slice(0, workerCount)) {
+      const childId = await ctx.runMutation(internal.plans.insertPlan, {
+        tenantId: a.tenantId,
+        threadId: a.threadId,
+        parentPlanId: a.planId,
+        // BOTH of these are load-bearing at BIRTH, not decoration. Without `kind: "memo"` the
+        // child's landing is discarded by `landSpecialistResult`'s CAS, the sibling flip never
+        // fires, the parent hangs at `collecting` for ever, and `reliabilitySweep` cannot rescue it
+        // because its own predicate wants the same field. Without `subject` the assembled parent
+        // memo has no heading for this section.
+        kind: "memo",
+        subject: headingForRoute(route),
+      });
+      children.push({ planId: childId, route });
+    }
+
+    for (const child of children) {
+      await ctx.scheduler.runAfter(0, internal.dispatchRun.startDispatchRun, {
+        kind: kindForRoute(child.route),
+        tenantId: a.tenantId,
+        threadId: a.threadId,
+        planId: child.planId,
+        gapIndex: 0, // no gap on this path — the QUESTION briefs every worker
+        route: child.route,
+        question: a.question,
+        // ONE lineage key for the whole tree (`audit.by_correlation` reconstructs it), and distinct
+        // plan ids per worker. That pairing is exactly why the key is minted rather than derived.
+        rootRequestId: a.rootRequestId,
+        parentAgentId: "executive", // code-owned, never user or model text
+        depth: 1,
+        ancestry: [],
+        // NEVER 0 — see the header. `share >= 1` is guaranteed by the cap above.
+        envelopeCents: share,
+        spentCents: 0,
+        ...(a.skillVersions === undefined ? {} : { skillVersions: a.skillVersions }),
+        ...(a.tenantSkillIds === undefined ? {} : { tenantSkillIds: a.tenantSkillIds }),
+      });
+    }
+
+    // Refs and counts only (§4). `workerCount` is new on this event and is allow-listed in
+    // `auditProjection.ts` in the same commit — a payload key that is written and not listed is
+    // invisible at read time, which is how `webSearchCalls` came to be logged and unreadable.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: a.tenantId,
+      correlationId: a.rootRequestId,
+      eventType: "subagent.dispatched",
+      actor: "system",
+      payload: {
+        rootRequestId: a.rootRequestId,
+        planId: String(a.planId),
+        depth: 1,
+        envelopeCents: share,
+        spentCents: 0,
+        workerCount,
+      },
+    });
+
+    return { ok: true, workerCount, requested: a.routes.length };
+  },
+});

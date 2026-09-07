@@ -1,5 +1,13 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-09-07 (42-03 — `specialists.ts` gained `fanOutMemoBody`, the deterministic
+> parent artifact of a fan-out, beside `specialistMemoBody`. It takes `{ heading, body }[]` and NOT
+> plan rows, for a measured reason: the `plans` table has no `route` column, so the route survives
+> to the parent memo only via the child's `subject`, written at mint. Parsing it back out of
+> `specialistMemoBody`'s rendered header would be the defect class this repo has shipped before.
+> Deterministic by construction — no model call — which is what makes it unit-testable and what
+> stops a summary contradicting the sources under it.)
+
 > Last verified: 2026-09-06 (39-01, RSCH-01 — `RESEARCH_TOOLS` in `specialists.ts` gains `readPage` (the research specialist reads a page its own search returned; ADR-007 still holds: a read, code-owned, taught in the body) and `RESEARCH_STALE_AFTER_MS` lives beside the research constants; the equality test names the three-tool grant. The growth specialists' grant (`searchVault`) is unchanged.)
 >
 

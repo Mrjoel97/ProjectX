@@ -1,14 +1,24 @@
-// ADR-037 — how a thread's plan rows are read now that a thread may hold more than one.
+// ADR-037 — how a thread's plan rows are READ now that a thread may hold more than one, and
+// (since 42-03) the ONE place a fan-out's parent is written.
 //
-// Plain functions over a database reader (the `lib/agenda.ts` convention) so `plans.ts`,
-// `cockpit.ts` and `evaluations.ts` can all import this without importing each other. Every read
-// is `by_thread` with the tenantId the CALLER validated — the index PREFIX is the tenant boundary.
+// Plain functions over a database ctx (the `lib/agenda.ts` convention) so `plans.ts`, `cockpit.ts`,
+// `evaluations.ts` and `reliabilitySweep.ts` can all import this without importing each other.
+// Every read is `by_thread` / `by_parent` with the tenantId the CALLER validated — the index PREFIX
+// is the tenant boundary.
+//
+// This module was read-only until 42-03. It gained exactly one writer, `flipParentWhenSiblingsDone`,
+// because TWO callers need it and they must not diverge: a child that lands normally
+// (`evaluations.landSpecialistResult`) and a child a watchdog resolves
+// (`reliabilitySweep.sweepStuckPlans`). Two copies of "is this fan-out finished" is how a dead
+// worker leaves a parent stuck for ever while the happy path looks healthy.
 //
 // Nothing here is a second mechanism: `by_thread` is the index that has always existed, and Convex
 // appends `_creationTime, _id` as the implicit tail of every index, so `by_thread` already IS a
 // descending-by-creation scan within a thread. The only new thing is the ROOT filter.
-import type { Doc } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import { fanOutMemoBody } from "@pikar/core";
+import { internal } from "../_generated/api";
+import type { Doc, Id } from "../_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 /**
  * How far back a root scan looks. `smoke.ts:893-898` is the shipped idiom this copies —
@@ -78,3 +88,57 @@ export async function newestRoot(
  * defect, `plans.ts`, recorded there in full).
  */
 export const isOpenRoot = (p: Doc<"plans">): boolean => p.status === "collecting";
+
+/**
+ * THE ONLY PLACE A FAN-OUT BECOMES APPROVABLE (42-03, ADR-037 Decision 4).
+ *
+ * Called when a child lands. If any sibling is still `collecting`, this does nothing and the run
+ * that lands last does the work — no coordinator, no counter, no second table. When none is left,
+ * the parent's body becomes the deterministic assembly of its children's memos (owner decision
+ * 2026-09-07: an assembly, never a synthesis turn) and the parent flips `collecting → proposed`,
+ * which is the single Approve card the whole fan-out earns.
+ *
+ * Children are ordered by `_creationTime` — the mint order, i.e. the order the model asked its
+ * questions in. `by_parent` is `["tenantId", "parentPlanId"]` with Convex's implicit
+ * `_creationTime, _id` tail, so an ascending scan already IS mint order and no sort is written.
+ *
+ * The parent's own CAS is the same one every landing uses: `collecting` + `kind: "memo"`. A parent
+ * the user cancelled, or one a watchdog already resolved, is left alone.
+ *
+ * A child that produced nothing still counts as done and still contributes its section: its body is
+ * whatever `landSpecialistResult` decided (an honest failure memo), and dropping it would make the
+ * assembled artifact silently narrower than the question that was asked.
+ */
+export async function flipParentWhenSiblingsDone(
+  ctx: MutationCtx,
+  tenantId: string,
+  parentPlanId: Id<"plans">,
+): Promise<void> {
+  const children = await ctx.db
+    .query("plans")
+    .withIndex("by_parent", (q) => q.eq("tenantId", tenantId).eq("parentPlanId", parentPlanId))
+    .collect();
+  if (children.some((c) => c.status === "collecting")) return; // a worker is still running
+
+  const parent = await ctx.db.get(parentPlanId);
+  if (!parent || parent.tenantId !== tenantId) return;
+  if (parent.status !== "collecting" || parent.kind !== "memo") return;
+
+  const body = fanOutMemoBody(
+    children.map((c) => ({ heading: c.subject ?? "Specialist", body: c.body ?? "" })),
+  );
+  await ctx.runMutation(internal.plans.patchPlan, {
+    planId: parentPlanId,
+    body,
+    status: "proposed",
+  });
+  // The children's references, merged and de-duplicated by URL, so the ONE card the owner reads can
+  // attribute every finding under it. Direct `ctx.db.patch` for the same reason the single-run path
+  // uses one: a source list is a PROVENANCE claim and `patchPlan` is the door the model writes
+  // through. These come from the children's own rows, which only `landSpecialistResult` fills.
+  const seen = new Set<string>();
+  const sources = children
+    .flatMap((c) => c.sources ?? [])
+    .filter((src) => !seen.has(src.url) && seen.add(src.url));
+  if (sources.length > 0) await ctx.db.patch(parentPlanId, { sources });
+}
