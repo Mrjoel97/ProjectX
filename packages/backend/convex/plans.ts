@@ -14,6 +14,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
+import { isOpenRoot, newestRoot, threadRoots } from "./lib/planRow";
 
 // PINNED plan lifecycle (schema.ts): collecting → proposed → approved → (scheduled|delivering) → done,
 // plus the 03.5 deferred-send states scheduled (armed, pre-fire) and canceled (terminal, halted).
@@ -117,13 +118,12 @@ export const insertPlan = internalMutation({
     }),
 });
 
-/** Statuses a research stage may recycle from. Same three literals as `ACTABLE_PLAN_STATUS`
- *  (evaluations.ts) — anything past `proposed` is mid-flight or delivered. */
-const RECYCLABLE_STATUS: ReadonlySet<Doc<"plans">["status"]> = new Set([
-  "collecting",
-  "proposed",
-  "canceled",
-] as const);
+/** ADR-037 retired `RECYCLABLE_STATUS` (collecting | proposed | canceled). The question the three
+ *  stagers ask is no longer "may I reuse this row" but "is a root still OPEN on this thread" —
+ *  `isOpenRoot`, one status, in `lib/planRow.ts`. `proposed` and `canceled` used to recycle and now
+ *  get a new root staged BESIDE them, which is also what stops an un-acted-on proposal being
+ *  silently destroyed. `done`/`approved`/`delivering` used to REFUSE with `draft_in_progress` over
+ *  a thread with nothing in flight; that was the lifetime ceiling, and it is gone. */
 
 /** Does this row hold composition work the USER would lose to a reset? The five slots a person
  *  actually fills; `candidates`/`pendingValid` are transient lookup state, not authored content. */
@@ -162,9 +162,10 @@ const hasDraftContent = (p: Doc<"plans">): boolean =>
  * abstraction §8 forbids. Cross-referenced in both directions instead, so the divergence reads as
  * chosen rather than accidental.
  *
- * ponytail: REFUSING rather than staging a second row. The real fix is more than one plan row per
- * thread, and `plans.by_thread` is `.unique()` with `schema.ts` frozen after 16-01 — upgrade path,
- * not this phase.
+ * The upgrade path this comment named — "the real fix is more than one plan row per thread" — is
+ * TAKEN as of ADR-037. A thread may now hold several ROOTS, and a stager that finds no OPEN root
+ * inserts one instead of refusing. What is refused is narrower and stays refused: a run still in
+ * flight, and the user's own unfinished draft.
  *
  * 20-08 added `stageMediaPlan` below as a SECOND copy of this shape rather than a shared helper,
  * for the reason this comment already gives: it protects an in-flight REEL (paid-for `mediaJobs`
@@ -180,21 +181,23 @@ export const stageResearchPlan = internalMutation({
     | { ok: true; planId: Id<"plans"> }
     | { ok: false; reason: "research_in_flight" | "draft_in_progress" }
   > => {
-    const plan = await ctx.db
-      .query("plans")
-      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
-      .unique();
+    // ADR-037: the NEWEST ROOT, not `.unique()`. Checking only the newest root is sufficient HERE
+    // because at most one root per thread is `collecting` and a new root is only ever inserted when
+    // none is open — so a `collecting` root can never sit behind a newer one. The two media stagers
+    // below scan the WHOLE window instead, and that asymmetry is chosen, not an oversight: a
+    // rendering reel sits at `proposed`, which is not open, so a newer root can be staged past it.
+    const plan = await newestRoot(ctx, tenantId, threadId);
 
     let planId: Id<"plans">;
-    if (plan) {
-      if (plan.status === "collecting" && plan.kind === "memo") {
-        return { ok: false, reason: "research_in_flight" };
-      }
-      if (!RECYCLABLE_STATUS.has(plan.status)) return { ok: false, reason: "draft_in_progress" };
-      // A memo row holds a PREVIOUS run's findings (already landed and readable), and a canceled row
-      // is one the user halted — neither is work in progress. Anything else with content in it is.
-      const userWork = plan.kind !== "memo" && plan.status !== "canceled" && hasDraftContent(plan);
-      if (userWork) return { ok: false, reason: "draft_in_progress" };
+    if (plan && isOpenRoot(plan)) {
+      // A `collecting` MEMO root is one a DISPATCH staged and still owns — the interlock survives
+      // ADR-037 verbatim, because it serialises CONCURRENT work rather than counting artifacts.
+      if (plan.kind === "memo") return { ok: false, reason: "research_in_flight" };
+      // The open root is the composer. Anything the USER has typed into it is work a reset would
+      // destroy, and destroying a half-composed email because someone asked a research question is
+      // not a trade the user agreed to. (`status !== "canceled"` and `kind !== "memo"` are implied
+      // here now: the row is `collecting` and the memo case returned above.)
+      if (hasDraftContent(plan)) return { ok: false, reason: "draft_in_progress" };
       planId = plan._id;
       // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled slot,
       // which would carry a previous memo's subject/attachments onto this one.
@@ -251,9 +254,11 @@ const LIVE_RENDER_STATUS: ReadonlySet<string> = new Set(["pending", "rendering"]
  *  - `hasDraftContent` still applies: the MODEL is deciding here, and destroying a half-composed
  *    email because someone asked for a reel is not a trade the user agreed to.
  *
- * ponytail: REFUSING rather than staging a second row — `plans.by_thread` is `.unique()`, so a
- * thread has exactly one plan. The real fix is more than one plan row per thread, and it is the
- * same upgrade path `stageResearchPlan` names. A user who wants a second reel starts a new chat.
+ * ADR-037 took the upgrade path this comment used to name. "A user who wants a second reel starts a
+ * new chat" is no longer true and is no longer the design: a second reel gets its own ROOT on the
+ * same thread, with its own approval card. The refusals below are what survived that widening, and
+ * every one of them is about work that is STILL RUNNING — never about how many reels this thread
+ * has already made.
  */
 export const stageMediaPlan = internalMutation({
   args: { tenantId: v.string(), threadId: v.string(), subject: v.string() },
@@ -272,76 +277,64 @@ export const stageMediaPlan = internalMutation({
           | "image_proposal_pending";
       }
   > => {
-    const plan = await ctx.db
-      .query("plans")
-      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
-      .unique();
+    // ADR-037. The interlocks are scanned across the WHOLE root window, not just the newest root:
+    // a rendering reel sits at `proposed`, which is NOT an open root, so a newer root can legally
+    // have been staged in front of it. Reading `roots[0]` alone would let a second reel start while
+    // the first is still spending — the one regression the arity widening could have introduced.
+    const roots = await threadRoots(ctx, tenantId, threadId);
+    const plan = roots[0] ?? null;
+
+    for (const root of roots) {
+      if (root.kind !== "media") continue;
+      // The index PREFIX is the tenant boundary, so these are this tenant's rows by construction.
+      const jobs = await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", root._id))
+        .collect();
+      if (jobs.some((j) => LIVE_JOB_STATUS.has(j.status))) {
+        return { ok: false, reason: "reel_in_flight" };
+      }
+      if (root.renderStatus !== undefined && LIVE_RENDER_STATUS.has(root.renderStatus)) {
+        return { ok: false, reason: "render_in_flight" };
+      }
+      // ── A STAGED IMAGE PROPOSAL IS NOT A SPENT REEL DECK ──────────────────────────────────
+      // Observed live, in a conversation about a SLIDE DECK: `proposeImage` staged an image
+      // proposal, and the next turn's `dispatchMedia` recycled the row out from under it. The user
+      // never saw the image they were told to review, and the turn deadlocked.
+      //
+      // ADR-037 removes the RECYCLE that caused that (a new reel now gets its own root), so this
+      // refusal is no longer load-bearing for row destruction. It is KEPT anyway and deliberately:
+      // widening it away is a behaviour change nobody asked for, ADR-037 Decision 3 lists it among
+      // the interlocks that survive, and fail-closed is the right default on the money path. If a
+      // later phase wants two live proposals on one thread, that is its decision to record.
+      //
+      // `jobs.length === 0` is what makes "un-acted-on" precise rather than a guess: the moment the
+      // user clicks Generate a row exists, and a spent proposal is no longer pending.
+      if (root.mediaMode === "image" && root.imagePrompt && jobs.length === 0) {
+        return { ok: false, reason: "image_proposal_pending" };
+      }
+    }
 
     let planId: Id<"plans">;
-    if (plan) {
-      // A completed memo is terminal, not a draft. This includes a prior media-director refusal:
-      // the user may ask for the reel again in the SAME chat after correcting the brief or after
-      // we improve the specialist. Treating `done` as universally non-recyclable trapped that
-      // thread forever behind `draft_in_progress`, even though no provider job or render existed.
-      // The memo remains in chat/vault history; only the live canvas slot is reused.
-      const completedMemo = plan.kind === "memo" && plan.status === "done";
-      // ── THE MISSING INTERLOCK (2026-08-14) ──────────────────────────────────────────────────
-      // A `collecting` MEMO row is one a DISPATCH staged and still owns. `stageResearchPlan`
-      // refuses exactly this shape as `research_in_flight`, and the header above says this
-      // function is "a SECOND copy of that shape" — but the copy DROPPED this check, which is the
-      // one that makes "one run per thread" true.
+    if (plan && isOpenRoot(plan)) {
+      // ── THE MISSING INTERLOCK (2026-08-14) ────────────────────────────────────────────────
+      // A `collecting` MEMO root is one a DISPATCH staged and still owns. `stageResearchPlan`
+      // refuses exactly this shape as `research_in_flight`, and this function is a SECOND copy of
+      // that shape — but the copy DROPPED the check, which is the one that makes "one run per
+      // thread" true. It was reachable, not theoretical: a second `dispatchMedia` while the media
+      // director was still writing refused as `draft_in_progress`, whose reply talks about an
+      // EMAIL draft the user does not have.
       //
-      // It was reachable, not theoretical: a second `dispatchMedia` while the media director was
-      // still writing did refuse — but as `draft_in_progress`, whose reply talks about an EMAIL
-      // draft the user does not have. So the agent relayed a sentence about a draft that did not
-      // exist, and the user could not act on it. Refusing here, first, gives the honest reason.
-      //
-      // `done` still recycles (see `completedMemo` below) — a landed run is not in flight, and
-      // trapping a thread behind a finished one is the bug that comment was written for.
-      if (plan.status === "collecting" && plan.kind === "memo") {
-        return { ok: false, reason: "dispatch_in_flight" };
-      }
-      if (plan.kind === "media") {
-        // The index PREFIX is the tenant boundary, so these are this tenant's rows by construction.
-        const jobs = await ctx.db
-          .query("mediaJobs")
-          .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", plan._id))
-          .collect();
-        if (jobs.some((j) => LIVE_JOB_STATUS.has(j.status))) {
-          return { ok: false, reason: "reel_in_flight" };
-        }
-        if (plan.renderStatus !== undefined && LIVE_RENDER_STATUS.has(plan.renderStatus)) {
-          return { ok: false, reason: "render_in_flight" };
-        }
-        // ── A STAGED IMAGE PROPOSAL IS NOT A SPENT REEL DECK ──────────────────────────────────
-        // `userWork` below excludes `kind: "media"` on the reasoning that "a media row holds a
-        // PREVIOUS reel's deck ... not work in progress". That is true of a deck the user already
-        // generated or walked away from, and FALSE of a proposal staged moments earlier — and
-        // `mediaMode: "image"` rows are `kind: "media"` too.
-        //
-        // Observed live, in a conversation about a SLIDE DECK: `proposeImage` staged an image
-        // proposal, and the next turn's `dispatchMedia` recycled the row out from under it. The
-        // user never saw the image they were told to review, the following `proposeImage` then
-        // refused with `draft_in_progress` against the memo this function had just written, and
-        // the turn deadlocked. Silently destroying an un-acted-on proposal is the defect; a reel
-        // replacing a reel is the INTENDED flow and is deliberately still allowed.
-        //
-        // `jobs.length === 0` is what makes "un-acted-on" precise rather than a guess: the moment
-        // the user clicks Generate a row exists, and a spent proposal may be recycled.
-        if (plan.mediaMode === "image" && plan.imagePrompt && jobs.length === 0) {
-          return { ok: false, reason: "image_proposal_pending" };
-        }
-      }
-      if (!completedMemo && !RECYCLABLE_STATUS.has(plan.status))
+      // A FINISHED memo is no longer reachable here at all — a `done` row is not an open root, so
+      // it falls to the insert below. That is the `completedMemo` special case ADR-037 deleted:
+      // "the user may ask for the reel again in the SAME chat after correcting the brief" is now
+      // true structurally, for every terminal status, rather than for `done` memos only.
+      if (plan.kind === "memo") return { ok: false, reason: "dispatch_in_flight" };
+      // A media root holds a PREVIOUS reel's deck — not work in progress. Anything else the user
+      // has typed into the open composer is.
+      if (plan.kind !== "media" && hasDraftContent(plan)) {
         return { ok: false, reason: "draft_in_progress" };
-      // A media row holds a PREVIOUS reel's deck, and a canceled row is one the user halted —
-      // neither is work in progress. Anything else with content in it is.
-      const userWork =
-        !completedMemo &&
-        plan.kind !== "media" &&
-        plan.status !== "canceled" &&
-        hasDraftContent(plan);
-      if (userWork) return { ok: false, reason: "draft_in_progress" };
+      }
       planId = plan._id;
       // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled slot.
       // For media that is load-bearing twice over — resetPlan is what wipes the previous deck AND
@@ -540,36 +533,38 @@ export const stageImagePlan = internalMutation({
     | { ok: true; planId: Id<"plans"> }
     | {
         ok: false;
-        reason:
-          | "image_in_flight"
-          | "image_already_started"
-          | "draft_in_progress"
-          | "invalid_prompt";
+        reason: "image_in_flight" | "draft_in_progress" | "invalid_prompt";
       }
   > => {
     const clean = prompt.trim();
     if (clean.length === 0 || clean.length > 4_000) return { ok: false, reason: "invalid_prompt" };
-    const plan = await ctx.db
-      .query("plans")
-      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
-      .unique();
+    // The whole root window, for the reason `stageMediaPlan` gives above: a paid image callback can
+    // still land on a root that a newer one now sits in front of, and attaching that asset to a
+    // different proposal is the failure this scan prevents.
+    //
+    // `image_already_started` — the LIFETIME ceiling that refused a second image on any thread that
+    // had ever produced one — is DELETED here by ADR-037 Decision 3. It was the last copy of a rule
+    // `media.generateImage` had already abandoned when it dropped `succeeded` from its own
+    // in-flight set. A thread may now propose as many images as the daily media rail affords.
+    const roots = await threadRoots(ctx, tenantId, threadId);
+    const plan = roots[0] ?? null;
+
+    for (const root of roots) {
+      if (root.kind !== "media") continue;
+      const jobs = await ctx.db
+        .query("mediaJobs")
+        .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", root._id))
+        .collect();
+      if (jobs.some((job) => job.kind === "image" && LIVE_JOB_STATUS.has(job.status))) {
+        return { ok: false, reason: "image_in_flight" };
+      }
+    }
 
     let planId: Id<"plans">;
-    if (plan) {
-      if (plan.kind === "media") {
-        const jobs = await ctx.db
-          .query("mediaJobs")
-          .withIndex("by_plan", (q) => q.eq("tenantId", tenantId).eq("planId", plan._id))
-          .collect();
-        const imageJobs = jobs.filter((job) => job.kind === "image");
-        if (imageJobs.some((job) => LIVE_JOB_STATUS.has(job.status))) {
-          return { ok: false, reason: "image_in_flight" };
-        }
-        if (imageJobs.length > 0) return { ok: false, reason: "image_already_started" };
+    if (plan && isOpenRoot(plan)) {
+      if (plan.kind !== "media" && hasDraftContent(plan)) {
+        return { ok: false, reason: "draft_in_progress" };
       }
-      if (!RECYCLABLE_STATUS.has(plan.status)) return { ok: false, reason: "draft_in_progress" };
-      const userWork = plan.kind !== "media" && plan.status !== "canceled" && hasDraftContent(plan);
-      if (userWork) return { ok: false, reason: "draft_in_progress" };
       planId = plan._id;
       await ctx.runMutation(internal.plans.resetPlan, { planId });
     } else {
@@ -600,8 +595,9 @@ const MAX_REFUSED_BODY_CHARS = 20_000;
 /**
  * 33.1-06 — WHAT THE LAST STORYBOARD WAS REFUSED FOR, so the next attempt can be told.
  *
- * "Try again" is an ordinary chat message on the same thread (33-07), and the thread's plan row is
- * unique (`by_thread`), so the refusal the canvas just showed the owner is sitting on that row.
+ * "Try again" is an ordinary chat message on the same thread (33-07), and the refusal the canvas
+ * just showed the owner is sitting on the thread's NEWEST ROOT — the same row the canvas renders
+ * (ADR-037), so the model is told about the failure the owner is looking at and no other.
  * Until now it went to the owner and never to the model: the specialist got the same brief with no
  * idea what had just failed, and repeated it — 17 of 27 storyboard failures in the audit log were
  * the same code. `buildSpecialistPrompt` reads this for the media route and appends one line.
@@ -616,10 +612,7 @@ export const refusalForThread = internalQuery({
     ctx,
     { tenantId, threadId },
   ): Promise<{ reason: string; contract: string; variation?: string } | null> => {
-    const plan = await ctx.db
-      .query("plans")
-      .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
-      .unique();
+    const plan = await newestRoot(ctx, tenantId, threadId);
     return plan?.proposalRefusal ?? null;
   },
 });
@@ -1098,14 +1091,35 @@ export const attachmentUrls = tenantQuery({
   },
 });
 
-/** The tenant's plans row for a thread → feeds the PLAN + DRAFT cards (by_thread). */
+/**
+ * The tenant's plan row for a thread → feeds the PLAN + DRAFT cards.
+ *
+ * ADR-037: this is now the NEWEST ROOT, not `.unique()`. It answers "what is this thread working
+ * on", which is a question about the composer, and it is unambiguous because at most one root per
+ * thread is `collecting`.
+ *
+ * It is NOT the way to address a KNOWN row any more. A caller holding a `planId` — every approvals
+ * card does — must use `byId` below; resolving a known plan by its thread is exactly how a card
+ * ends up displaying one row while its Approve button fires on another.
+ */
 export const byThread = tenantQuery({
   args: { threadId: v.string() },
-  handler: async (ctx, { threadId }) =>
-    await ctx.db
-      .query("plans")
-      .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
-      .unique(),
+  handler: async (ctx, { threadId }) => await newestRoot(ctx, ctx.tenantId, threadId),
+});
+
+/**
+ * THE row, by id, tenant-guarded (ADR-037 Decision 7). The public twin of `getById` above, which is
+ * an `internalQuery` with no tenant check and could not be promoted as written.
+ *
+ * Returns `null` rather than throwing for another tenant's id — the `attachmentUrls` convention:
+ * a reader that cannot see a row must not be able to tell "not yours" from "not there".
+ */
+export const byId = tenantQuery({
+  args: { planId: v.id("plans") },
+  handler: async (ctx, { planId }) => {
+    const plan = await ctx.db.get(planId);
+    return plan && plan.tenantId === ctx.tenantId ? plan : null;
+  },
 });
 
 /**

@@ -1028,15 +1028,22 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
     await seedGapEvaluation(t);
 
     await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
+    // ADR-037: the first tap leaves a `collecting` MEMO root, which a dispatch OWNS — tapping again
+    // now refuses `plan_busy` rather than racing a second run onto the same row. So the second
+    // dispatch is taken after the first has LANDED, which is the only way two of them ever coexist.
+    const first = await asT.query(api.plans.byThread, { threadId: THREAD });
+    await t.run((ctx) => ctx.db.patch(first?._id as Id<"plans">, { status: "proposed" }));
     await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
 
     const scheduled = await readScheduled(t);
     expect(scheduled).toHaveLength(2);
     const roots = scheduled.map((s) => dispatchArgsOf(s).rootRequestId);
-    // planId is IDENTICAL across the two (actOnGap recycles the thread's one row, 12-05), which is
-    // exactly why the lineage key must not be derived from it — ADR-008.
+    // planId used to be IDENTICAL across the two (actOnGap recycled the thread's one row, 12-05);
+    // under ADR-037 each gap gets its own ROOT, so they now differ. The lineage key is STILL minted
+    // rather than derived from planId — ADR-008 — because a fan-out's children will share one
+    // rootRequestId while holding different plan ids, and that is the direction that matters.
     const planIds = new Set(scheduled.map((s) => dispatchArgsOf(s).planId));
-    expect(planIds.size).toBe(1);
+    expect(planIds.size).toBe(2);
     expect(new Set(roots).size).toBe(2);
     await cancelQueued(t);
   });
@@ -1070,7 +1077,7 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
     expect(await readScheduled(t)).toHaveLength(0);
   });
 
-  test("the 12-05 refusals are unchanged: gap_not_found and plan_busy still queue nothing", async () => {
+  test("gap_not_found and plan_busy still queue nothing — but plan_busy now means IN FLIGHT", async () => {
     const t = newTest();
     const asT = t.withIdentity({ subject: TENANT });
     await seedGapEvaluation(t);
@@ -1079,9 +1086,12 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
       await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 99 }),
     ).toEqual({ ok: false, reason: "gap_not_found" });
 
+    // The first tap leaves the row `collecting` + `kind: "memo"` — a dispatch owns it and is still
+    // writing. THAT is what `plan_busy` refuses now. Under `.unique()` this exact second tap
+    // SUCCEEDED and reset the row out from under the running specialist, discarding findings the
+    // tenant had already paid for; the refusal is new protection, not a preserved one.
+    // MUTATION that turns this red: drop the `plan.kind === "memo"` guard in `applyActOnGap`.
     await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 });
-    const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
-    await t.run((ctx) => ctx.db.patch(plan?._id as Id<"plans">, { status: "delivering" }));
     expect(await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 })).toEqual(
       {
         ok: false,
@@ -1089,6 +1099,15 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
       },
     );
     expect(await readScheduled(t)).toHaveLength(1); // only the first (successful) call queued one
+
+    // And the LIFETIME ceiling is gone: a `delivering` row is finished work, not an open composer,
+    // so it no longer refuses. The send it represents is untouched — a new ROOT is staged beside it.
+    const plan = await asT.query(api.plans.byThread, { threadId: THREAD });
+    await t.run((ctx) => ctx.db.patch(plan?._id as Id<"plans">, { status: "delivering" }));
+    expect(
+      (await asT.mutation(api.evaluations.actOnGap, { threadId: THREAD, gapIndex: 0 })).ok,
+    ).toBe(true);
+    expect(await readScheduled(t)).toHaveLength(2);
     await cancelQueued(t);
   });
 });

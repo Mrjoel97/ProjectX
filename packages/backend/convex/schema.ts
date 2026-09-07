@@ -1241,6 +1241,21 @@ export default defineSchema({
     mailProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
     workflowId: v.optional(v.string()), // set on executePlan
+    /** ADR-037. THE discriminator, and the only one: a row with NO parent is a ROOT — its own
+     *  artifact, its own approval card — and a row WITH one is a FAN-OUT CHILD, which never
+     *  reaches `proposed` and is therefore paged by no approvals query. One field answers both
+     *  "does this get its own Approve" and "whose work is this part of", which is why no second
+     *  field (no `batchId`, no `role`) is added beside it.
+     *
+     *  OPTIONAL, and absence means ROOT — the `requests.planId` / `vaultDocuments.folderId`
+     *  precedent verbatim. Every row written before this line is a root by construction, so there
+     *  is NO backfill and no migration.
+     *
+     *  There is no cascade in this repository (`ctx.db.delete` appears at 30 non-test sites and
+     *  not one targets `plans`), so a child outlives an abandoned parent. That is a stated
+     *  decision, not an oversight: an orphan sits at `approved`, which no approvals query pages
+     *  and no `blueprint.ts` bucket counts, so it is invisible rather than wrong. */
+    parentPlanId: v.optional(v.id("plans")),
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
@@ -1261,7 +1276,12 @@ export default defineSchema({
     // only {runId, result}, and this index is what lets a crashed renderReel run terminalize its
     // own plan. A separate column again — the submit run and the render run are different
     // lifecycles of the same plan, and each terminal must only ever resolve its own run.
-    .index("by_render_run", ["renderRunId"]),
+    .index("by_render_run", ["renderRunId"])
+    // ADR-037. The sibling scan: given a parent, every child of it. Read by the landing that
+    // decides whether a fan-out is finished (no sibling left at `collecting` ⇒ the parent becomes
+    // approvable). Leads with `tenantId`, so `isolation.test.ts`'s non-tenant-leading index
+    // registry needs no new exception.
+    .index("by_parent", ["tenantId", "parentPlanId"]),
 
   // ── Phase-3.7 inbox-briefing plane (CKPT-04) ───────────────────────────────
   // New tables only → no migration (prior-phase discipline).

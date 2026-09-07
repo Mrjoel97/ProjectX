@@ -23,7 +23,13 @@ type InFlightItem = InFlightPage["items"][number];
 type ClearedItem = FunctionReturnType<typeof api.approvals.listCleared>["items"][number];
 type DecisionPage = FunctionReturnType<typeof api.approvals.listDecisions>;
 type DecisionItem = DecisionPage["items"][number];
-type Plan = NonNullable<FunctionReturnType<typeof api.plans.byThread>>;
+// ADR-037 Decision 7. Every row on this page carries its own `planId` (`approvals.ts:74`), and each
+// card now READS the row it MUTATES. It was safe to display by `threadId` while mutating by
+// `planId` only because `plans.byThread` was `.unique()` and threw on a second row; the moment a
+// thread can hold two, a card would render one plan's recipients and body while Approve fires
+// `executePlan` on another's id — a silent wrong-row approve on the money surface. That is why this
+// could not be deferred to the phase that actually creates second rows.
+type Plan = NonNullable<FunctionReturnType<typeof api.plans.byId>>;
 type PlanKind = AwaitingItem["kind"];
 type AttachmentLinks = FunctionReturnType<typeof api.plans.attachmentUrls>;
 
@@ -743,7 +749,7 @@ function AwaitingCard({
   /** D9: the message belongs to the SECTION, because the card is what disappears. */
   onOutcome: (message: string | null) => void;
 }) {
-  const plan = useQuery(api.plans.byThread, { threadId: item.threadId });
+  const plan = useQuery(api.plans.byId, { planId: item.planId });
   const execute = useMutation(api.cockpit.executePlan);
   const discard = useMutation(api.cockpit.discardPlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
@@ -853,7 +859,7 @@ function AwaitingCard({
 }
 
 function ScheduledRow({ item }: { item: ScheduledItem }) {
-  const plan = useQuery(api.plans.byThread, { threadId: item.threadId });
+  const plan = useQuery(api.plans.byId, { planId: item.planId });
   const cancel = useMutation(api.cockpit.cancelScheduledPlan);
   const move = useMutation(api.cockpit.moveScheduledPlan);
   const [busy, setBusy] = useState(false);
@@ -972,7 +978,7 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
 }
 
 function InFlightRow({ item }: { item: InFlightItem }) {
-  const plan = useQuery(api.plans.byThread, { threadId: item.threadId });
+  const plan = useQuery(api.plans.byId, { planId: item.planId });
   const progress = item.progress;
   const completed = progress.state === "exact" ? progress.sent + progress.failed : null;
   const withheld = plan ? withheldNote(plan.recipients ?? [], plan.withheldRecipients) : null;
@@ -1330,7 +1336,7 @@ function DecisionsAndBlocked() {
 }
 
 function ClearedRow({ item }: { item: ClearedItem }) {
-  const plan = useQuery(api.plans.byThread, { threadId: item.threadId });
+  const plan = useQuery(api.plans.byId, { planId: item.planId });
   const status =
     item.status === "done"
       ? "Completed"

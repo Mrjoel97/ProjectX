@@ -599,10 +599,16 @@ export function isNonAgentThreadIdError(error: unknown): boolean {
 export const listThreadMessages = tenantQuery({
   args: { threadId: v.string(), paginationOpts: paginationOptsValidator },
   handler: async (ctx, { threadId, paginationOpts }) => {
+    // `.first()`, not `.unique()` (ADR-037). This asks AUTHORIZATION — "does this tenant own any
+    // plan row on this thread" — and an authorization predicate has no business throwing inside a
+    // live React subscription. Under `.unique()` the second a thread held two rows this chat pane
+    // threw rather than degraded, taking the cockpit page down. Not `newestRoot` either: a child
+    // row is still this tenant's, so a scan that filters children could answer "no" to a question
+    // that is plainly yes.
     const owns = await ctx.db
       .query("plans")
       .withIndex("by_thread", (q) => q.eq("tenantId", ctx.tenantId).eq("threadId", threadId))
-      .unique();
+      .first();
     if (!owns) return { page: [], isDone: true, continueCursor: "" };
     // The guard above answers AUTHORIZATION; it does not answer EXISTENCE. `plans.threadId` is a
     // plain string and is NOT guaranteed to name an agent-component thread: `smoke:seedCockpitPlan`

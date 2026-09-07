@@ -1,5 +1,30 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-09-07 (42-01, ADR-037 — **`applyActOnGap` INSERTS A ROOT PER STAGED GAP** and
+> no longer recycles the review thread's one row. `REVIEW_THREAD_ID` is a fixed string, so under
+> `.unique()` the weekly review had ONE plan row for the tenant's entire lifetime, and 34-01 had to
+> carve out `done && memo` just to let it propose more than once. That carve-out is DELETED: a done
+> memo is not an OPEN root, so it falls to the insert, and every terminal status now behaves the way
+> the exception made `done` behave. ROOTS, never children — a staged gap is a proposal the owner
+> approves on the ordinary surface, and an ADR-037 child is by definition unapprovable.
+>
+> `plan_busy` SURVIVES and is re-scoped, and the re-scoping CLOSES A REAL HOLE rather than preserving
+> one. It used to mean "the row is mid-send or delivered" — a lifetime ceiling. It now means "a
+> dispatch still owns the open root" (`collecting` + `kind: "memo"`), the check `stageResearchPlan`
+> has had since 16-06 and this function never acquired. Its own header said to decide CONSCIOUSLY
+> whether the two move together; this is that decision. Before it, a second "Act on this" tap RESET
+> the row out from under a running specialist and silently discarded findings the tenant had paid
+> for. The UI copy moved with it — "start a new chat to act on this" named a workaround for a
+> refusal that no longer exists.
+>
+> `lib/agenda.ts`'s demotion loop is KEPT and its justification rewritten: two agenda rows can no
+> longer collide on one planId, so the branch stops firing in practice, but it is still correct for
+> a planId that IS reused (a recycled open composer) and costs one comparison per row.
+>
+> Measured: evaluations + gapAction 51 tests green; the in-flight guard mutation-verified (2 RED,
+> restored by `cmp`). Read `docs/playbooks/cockpit.md`'s 42-01 block for the root/child rules
+> themselves — this playbook owns only what `evaluations.ts` and the agenda do with them.)
+
 > Last verified: 2026-09-05 (34-01 — **THE AGENDA SPEAKS (Goal Engine v0, G13, ADR-033).** The weekly
 > review now ends with `internal.agenda.syncFromReview`: every gap on the pinned review thread becomes an
 > `agenda` row keyed by `gapKey` with a lifecycle (`open / proposed / acted / dismissed / recurring`; rules in

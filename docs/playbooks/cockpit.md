@@ -1,3 +1,45 @@
+> Last verified: 2026-09-07 (42-01 — **A THREAD NOW HOLDS MANY PLAN ROWS (ADR-037).** The invariant
+> that shaped this subsystem since 12-05 is retired. `plans.by_thread` was `.unique()`, which THREW
+> on a second row; `plans.byThread` is now the NEWEST ROOT, read by a bounded descending scan
+> (`lib/planRow.ts`, `ROOT_SCAN = 20`, the shipped `smoke.ts:893-898` idiom). A row with no
+> `parentPlanId` is a ROOT — its own artifact, its own approval; a row with one is a fan-out CHILD
+> and is never what "the plan for this thread" means. The field is optional, so NO BACKFILL.
+>
+> THE DISTINCTION THE WHOLE CHANGE TURNS ON, and the one to keep straight before touching a
+> refusal here. **LIFETIME ceilings died; CONCURRENCY interlocks survived.** Gone:
+> `image_already_started` (it refused a second image on any thread that had EVER produced one),
+> the `RECYCLABLE_STATUS` set, the `completedMemo` carve-out, and every "start a new chat" line in
+> code and UI copy. Kept, untouched in meaning: `draft_in_progress`, `research_in_flight`,
+> `dispatch_in_flight`, `reel_in_flight`, `render_in_flight`, `image_in_flight`,
+> `image_proposal_pending`, and the UNDERWAY replies. Every survivor is about work that is STILL
+> RUNNING. If you are about to add a refusal, ask which of the two it is; if it counts artifacts,
+> it does not belong.
+>
+> THE INVARIANT THAT REPLACES THE THROW: **at most ONE root per thread is `collecting`.** A stager
+> REUSES the open root and INSERTS beside a finished one — that is what makes "the newest root" and
+> "the row the user is typing into" provably the same row. Without it, staging a reel beside a
+> half-composed email would move every later tool write onto the media row and strand the email
+> where no query reaches it.
+>
+> TWO ASYMMETRIES THAT ARE CHOSEN, NOT SLOPPY. (1) `stageResearchPlan` checks only the newest root;
+> the two MEDIA stagers scan the whole window, because a RENDERING reel sits at `proposed` — not an
+> open root — so a newer root can legally sit in front of it and a newest-only check would let a
+> second reel start while the first is still spending. (2) `cockpit.ts`'s `listThreadMessages` uses
+> `.first()`, not `newestRoot`: it asks AUTHORIZATION, a child row is still this tenant's, and an
+> auth predicate must not throw inside a live subscription.
+>
+> WHAT WAS MEASURED AND TURNED OUT NOT TO BE NEEDED: **no skill-body edit, so no gated candidate and
+> no eval gate.** ADR-037 predicted a `cockpit-agent` version bump. The body's "One reel at a time"
+> and "One image at a time" bullets describe the IN-FLIGHT interlocks, which all survive; the
+> lifetime ceiling lived only in `IMAGE_REFUSAL_REPLY.image_already_started` (a code string, now
+> deleted). Verified by grep, not assumed.
+>
+> Measured: backend 4034 across both shards + 5 new plan-row tests, web 898 + 2 skipped, tsc clean
+> both packages, biome clean. THREE mutations verified RED and restored by `cmp`: dropping the
+> `isRoot` filter in `threadRoots` (2 red), widening `isOpenRoot` to `proposed` (3 red), dropping
+> the in-flight memo guard in `applyActOnGap` (2 red). NOT DONE HERE, on purpose: no fan-out exists
+> yet — this plan widens the READ and the arity only. 42-02 is durable runs, 42-03 the fan-out.)
+>
 > Last verified: 2026-09-07 (second media-canvas fix under this playbook's `dashboard/workspace/`
 > watch path; the subsystem entry is in **media.md** and this is the cross-reference. `failureCards`
 > never applied `deckStillNeedsJob`, so a failed row the deck had stopped wanting still named its

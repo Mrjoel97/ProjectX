@@ -92,9 +92,13 @@ export async function syncAgenda(
  * agenda, so this is a no-op. Upserts, because "Act on this" can run before any Monday sync has
  * created the row.
  *
- * The review thread has ONE plan row that `applyActOnGap` recycles: any OTHER row still `proposed`
- * under the same planId lost its memo the moment this one was staged, so it goes back to `open`
- * rather than claiming a proposal that no longer exists.
+ * The demotion loop below was written when the review thread had ONE plan row that `applyActOnGap`
+ * recycled: any OTHER agenda row still `proposed` under the same planId had lost its memo the
+ * moment this one was staged, so it went back to `open` rather than claiming a proposal that no
+ * longer existed. ADR-037 gives each staged gap its OWN root, so two agenda rows can no longer
+ * collide on one planId and the branch stops firing in practice. It is KEPT rather than deleted:
+ * it is the correct answer for any planId that IS reused (a recycled open composer still is), and
+ * a demotion that never fires costs one comparison per row.
  */
 export async function markAgendaProposed(
   ctx: MutationCtx,

@@ -324,7 +324,7 @@ describe("actOnGap on a voice-doc thread (DOCV-01 / SC3)", () => {
     expect(requests).toHaveLength(0);
   });
 
-  test("a second tap REUSES the one plan row, never inserts a second", async () => {
+  test("a second tap stages a SECOND ROOT, and byThread answers with the newer one", async () => {
     const t = newTest();
     const asT = t.withIdentity({ subject: TENANT });
     await seedDocReview(t);
@@ -338,26 +338,40 @@ describe("actOnGap on a voice-doc thread (DOCV-01 / SC3)", () => {
       gapIndex: 0,
     });
 
-    // A second tap on a still-`proposed` plan SUCCEEDS by recycling that row — correct behaviour:
-    // changing your mind about which gap to act on must restage the memo, not be refused. What must
-    // never happen is a SECOND row, because `plans.byThread` is a `.unique()` read and a duplicate
-    // would make every later read of the thread THROW, not merely show the wrong thing.
+    // REWRITTEN for ADR-037, not deleted. This test used to argue the opposite case in its own
+    // words — a duplicate "would make every later read of the thread THROW, not merely show the
+    // wrong thing" — and that argument was correct while `plans.byThread` was `.unique()`. ADR-037
+    // pays that cost deliberately and buys three things back: at most one root per thread is
+    // `collecting` (so "the newest root" and "the row the user is working in" cannot diverge), the
+    // approvals plane resolves by `planId` instead of by thread, and a scan that finds NO root
+    // throws rather than guessing.
+    //
+    // The behaviour that changed: a first tap leaves a `proposed` root, which is a FINISHED
+    // artifact awaiting a human — not an open composer — so a second tap stages its own root
+    // beside it. Both stay approvable, which is the point: two gaps acted on are two proposals,
+    // and the old recycle silently destroyed the first one's memo.
     expect(second.ok).toBe(true);
     const plans = await t.run(async (ctx) => await ctx.db.query("plans").collect());
-    expect(plans).toHaveLength(1);
-    expect(first.ok && second.ok && first.planId === second.planId).toBe(true);
-    // Still parked at the gate after the recycle.
+    expect(plans).toHaveLength(2);
+    expect(first.ok && second.ok && first.planId !== second.planId).toBe(true);
+    // Every row is a ROOT — `actOnGap` never mints children (ADR-037 Decision 5: a staged gap must
+    // stay approvable, and a child is by definition unapprovable).
+    expect(plans.every((p) => p.parentPlanId === undefined)).toBe(true);
+    // The thread read answers with the NEWEST root, and it is still parked at the gate.
     const plan = await asT.query(api.plans.byThread, { threadId: DOC_THREAD });
     expect(plan?.status).toBe("proposed");
+    expect(second.ok && plan?._id === second.planId).toBe(true);
   });
 
-  test("an IN-FLIGHT plan is refused — staging a memo never clobbers a send", async () => {
+  test("a FINISHED plan no longer blocks the thread — the lifetime ceiling is gone", async () => {
     const t = newTest();
     const asT = t.withIdentity({ subject: TENANT });
     await seedDocReview(t);
     await asT.mutation(api.evaluations.actOnGap, { threadId: DOC_THREAD, gapIndex: 0 });
 
-    // Drive the plan past the gate, as an approval would.
+    // Drive the plan past the gate, as an approval would. Under `.unique()` this row was the
+    // thread's only row forever, so `plan_busy` here meant "this chat is used up" — the refusal
+    // whose UI copy told the user to start a new chat.
     await t.run(async (ctx) => {
       const p = await ctx.db.query("plans").first();
       if (p) await ctx.db.patch(p._id, { status: "delivering" });
@@ -368,7 +382,42 @@ describe("actOnGap on a voice-doc thread (DOCV-01 / SC3)", () => {
       gapIndex: 0,
     });
 
+    // ADR-037: a delivering plan is not an OPEN root, so it does not own the composer and cannot
+    // be clobbered by a stage that inserts beside it. The send is untouched — which is what the
+    // old refusal was actually protecting.
+    expect(res.ok).toBe(true);
+    const delivering = await t.run(
+      async (ctx) =>
+        (await ctx.db.query("plans").collect()).filter((p) => p.status === "delivering").length,
+    );
+    expect(delivering).toBe(1);
+  });
+
+  test("a RUNNING dispatch still blocks — plan_busy survives, re-scoped to an open root", async () => {
+    const t = newTest();
+    const asT = t.withIdentity({ subject: TENANT });
+    await seedDocReview(t);
+    await asT.mutation(api.evaluations.actOnGap, { threadId: DOC_THREAD, gapIndex: 0 });
+
+    // The shape a dispatch leaves behind while its specialist is still writing: `collecting` +
+    // `kind: "memo"`. `stageResearchPlan` has refused exactly this as `research_in_flight` since
+    // 16-06; `applyActOnGap` never checked it, and its own header said to decide consciously
+    // whether the two move together. This is that check, and this test is what holds it.
+    // MUTATION that turns this red: drop the `plan.kind === "memo"` guard in `applyActOnGap`.
+    await t.run(async (ctx) => {
+      const p = await ctx.db.query("plans").first();
+      if (p) await ctx.db.patch(p._id, { status: "collecting", kind: "memo" });
+    });
+
+    const res = await asT.mutation(api.evaluations.actOnGap, {
+      threadId: DOC_THREAD,
+      gapIndex: 0,
+    });
+
     expect(res).toEqual({ ok: false, reason: "plan_busy" });
+    // And no second row was minted behind the refusal.
+    const plans = await t.run(async (ctx) => await ctx.db.query("plans").collect());
+    expect(plans).toHaveLength(1);
   });
 
   test("a cross-tenant caller cannot act on the gap (BETA-05)", async () => {

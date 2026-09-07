@@ -1,5 +1,23 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-07 (42-01, ADR-037 Decision 7 — **the approvals plane reads the row it
+> mutates.** All four `useQuery(api.plans.byThread, { threadId: item.threadId })` calls in
+> `ApprovalsView.tsx` (Awaiting, Scheduled, In-flight, Cleared) and the `Plan` type alias move to a
+> new tenant-guarded `api.plans.byId` with the `planId` the list already emits
+> (`approvals.ts:74`). This could NOT be deferred to the phase that actually creates second rows:
+> displaying by `threadId` while mutating by `planId` was safe only because `plans.byThread` threw
+> on a duplicate, and the moment a thread can hold two rows the card would render one plan's
+> recipients and body while Approve fires `executePlan` on another's id — a silent wrong-row
+> approve on the money surface.
+>
+> `approvals.answerDecision` is deliberately NOT moved. It reads and writes `evaluations` by
+> `by_tenant_thread`, never a plan row, and its `DecisionItem` carries no `planId` to move to.
+> `listDecisions` is the one list that emits no `planId`, which is the same fact from the other side.
+>
+> `byId` returns `null` for another tenant's id rather than throwing — the `attachmentUrls`
+> convention: a reader that cannot see a row must not be able to tell "not yours" from "not there".
+> Covered by a new test in `plans.test.ts`. Measured: web 898 + 2 skipped, tsc clean.)
+
 > Last verified: 2026-09-06 (40-02/40-03, DOC-01 — two small changes here, both consequences of
 > `DocFormat` gaining `xlsx`. (1) `ContentView`'s `bytesLabel` maps the OOXML spreadsheet MIME to `"XLSX"`;
 > without it the badge fell through to `mimeType.split("/").pop()?.toUpperCase()` and printed

@@ -1818,7 +1818,13 @@ describe("stageResearchPlan — the collecting interlock (16-06 Task 2)", () => 
     expect(await readPlan(t, planId)).toEqual(before);
   });
 
-  test("a `proposed` EMAIL draft is the USER's work — refused, and it survives intact", async () => {
+  test("a `proposed` EMAIL draft gets its OWN ROOT beside it — and survives byte-identical", async () => {
+    // REWRITTEN for ADR-037. This used to expect `draft_in_progress`, and the reason it expected
+    // it was the row's survival: under `.unique()` the only way to protect a proposed draft was to
+    // refuse the research outright. A `proposed` row is a FINISHED artifact awaiting a human, not
+    // an open composer, so research now stages its own root beside it — and the draft is protected
+    // MORE strongly than before, because nothing is reset at all.
+    // MUTATION that turns this red: make `isOpenRoot` true for `proposed`.
     const { t, planId } = await setup();
     await t.run((ctx) =>
       ctx.db.patch(planId, {
@@ -1830,8 +1836,19 @@ describe("stageResearchPlan — the collecting interlock (16-06 Task 2)", () => 
     );
     const before = await readPlan(t, planId);
 
-    expect(await stage(t)).toEqual({ ok: false, reason: "draft_in_progress" });
+    const res = await stage(t);
+    expect(res.ok).toBe(true);
+    expect(res.ok && res.planId !== planId).toBe(true);
+    // The user's draft is untouched — every field, not just its status.
     expect(await readPlan(t, planId)).toEqual(before);
+    // And the new row is a ROOT, so it gets its own approval card.
+    const staged = res.ok ? await readPlan(t, res.planId) : null;
+    expect(staged?.parentPlanId).toBeUndefined();
+    expect(staged).toMatchObject({
+      kind: "memo",
+      status: "collecting",
+      subject: "Research: pricing",
+    });
   });
 
   test("a `collecting` EMAIL draft with content is refused too — the composing row is user work", async () => {
@@ -1841,28 +1858,46 @@ describe("stageResearchPlan — the collecting interlock (16-06 Task 2)", () => 
     expect(await stage(t)).toEqual({ ok: false, reason: "draft_in_progress" });
   });
 
-  test("the POSITIVE half: an EMPTY composing row, a proposed MEMO and a canceled row all recycle", async () => {
+  test("the POSITIVE half: an empty composer is REUSED; a finished row gets a NEW root", async () => {
     // Without this the refusals above would pass against a mutation that refuses everything — and
     // the empty-composing case is the PRIMARY path: cockpit.ts inserts every thread's plan row at
     // `collecting` and it stays there for the whole composition.
-    const cases: readonly (readonly [string, Record<string, unknown>])[] = [
-      ["an empty composing row", {}],
-      ["a proposed memo", { kind: "memo", status: "proposed", body: "previous findings" }],
-      ["a canceled row", { status: "canceled", subject: "abandoned", body: "abandoned" }],
+    //
+    // ADR-037 split this one case in two, and the split IS the decision. An OPEN root (collecting)
+    // with nothing in it is the composer the user is looking at, so it is reused — reusing it is
+    // what keeps "at most one root per thread is collecting" true. Everything else is a finished
+    // artifact, and a finished artifact is never overwritten to make room for new work.
+    // MUTATION that turns this red either way: make `isOpenRoot` constant.
+    const cases: readonly (readonly [string, Record<string, unknown>, "reuse" | "insert"])[] = [
+      ["an empty composing row", {}, "reuse"],
+      [
+        "a proposed memo",
+        { kind: "memo", status: "proposed", body: "previous findings" },
+        "insert",
+      ],
+      ["a canceled row", { status: "canceled", subject: "abandoned", body: "abandoned" }, "insert"],
+      // The ceiling ADR-037 removed: a DONE row used to refuse as `draft_in_progress` over a
+      // thread with nothing in flight at all.
+      ["a done memo", { kind: "memo", status: "done", body: "landed findings" }, "insert"],
     ];
-    for (const [name, patch] of cases) {
+    for (const [name, patch, expected] of cases) {
       const { t, planId } = await setup();
       if (Object.keys(patch).length > 0) await t.run((ctx) => ctx.db.patch(planId, patch));
 
       const res = await stage(t);
       expect(res.ok, `${name} was refused — research can never start`).toBe(true);
-      // resetPlan, not patchPlan: a previous memo's subject must not survive onto this one.
-      expect(await readPlan(t, planId)).toMatchObject({
+      if (!res.ok) continue;
+      expect(res.planId === planId, `${name} expected to ${expected}`).toBe(expected === "reuse");
+      // Whichever row it landed on: resetPlan, not patchPlan — a previous memo's subject must
+      // never survive onto this one — and it is a ROOT, never a child.
+      const staged = await readPlan(t, res.planId);
+      expect(staged).toMatchObject({
         kind: "memo",
         status: "collecting",
         subject: "Research: pricing",
         body: "",
       });
+      expect(staged?.parentPlanId).toBeUndefined();
     }
   });
 });
@@ -2397,7 +2432,13 @@ describe("20-08 — stageMediaPlan refuses rather than destroying an in-flight r
     if (!again.ok) expect(again.reason).toBe("render_in_flight");
   });
 
-  test("a FINISHED reel recycles — a terminal job and a rendered reel are not work in progress", async () => {
+  test("a FINISHED reel is KEPT — the new reel gets its own root and the rendered one survives", async () => {
+    // REWRITTEN for ADR-037. This used to assert the recycle: `resetPlan` wiped the previous deck
+    // and render plane so they could not show under a brand-new proposal. That is still the
+    // requirement — a stale deck must never appear under a new proposal — but the widening
+    // satisfies it a better way: the new reel is a NEW ROW, so there is nothing to wipe, and the
+    // reel the user already paid for and rendered is still there to watch and to save.
+    // MUTATION that turns this red: make `isOpenRoot` true for `proposed`.
     const { t } = await setup();
     const planId = await stagedMediaPlan(t);
     await t.run((ctx) =>
@@ -2412,11 +2453,16 @@ describe("20-08 — stageMediaPlan refuses rather than destroying an in-flight r
 
     const again = await restage(t);
     expect(again.ok).toBe(true);
-    // resetPlan ran: the previous deck AND the previous render plane are gone, either of which
-    // surviving would show under a brand-new proposal.
-    const plan = await readPlan(t, planId);
-    expect(plan?.clipSeconds).toBeUndefined();
-    expect(plan?.renderStatus).toBeUndefined();
+    expect(again.ok && again.planId !== planId).toBe(true);
+    // The finished reel is untouched.
+    const old = await readPlan(t, planId);
+    expect(old?.renderStatus).toBe("rendered");
+    expect(old?.clipSeconds).toBe(10);
+    // And the new row carries NONE of it — the stale-deck requirement, met structurally.
+    const fresh = again.ok ? await readPlan(t, again.planId) : null;
+    expect(fresh?.clipSeconds).toBeUndefined();
+    expect(fresh?.renderStatus).toBeUndefined();
+    expect(fresh?.parentPlanId).toBeUndefined();
   });
 
   // ── THE INTERLOCK (2026-08-14) ────────────────────────────────────────────────────────────
@@ -2490,7 +2536,12 @@ describe("20-08 — stageMediaPlan refuses rather than destroying an in-flight r
     expect((await restage(t)).ok).toBe(true);
   });
 
-  test("a completed refusal memo recycles so the user can retry the reel in the same chat", async () => {
+  test("a completed refusal memo does not trap the thread — the retry gets its own root", async () => {
+    // The 34-01 `completedMemo` special case existed to let a user retry a refused reel in the
+    // SAME chat: `done` was otherwise universally non-recyclable and the thread was trapped behind
+    // `draft_in_progress` forever. ADR-037 deletes the special case and keeps the guarantee — a
+    // `done` row is not an OPEN root, so every terminal status now behaves the way `done` memos
+    // were carved out to behave, and the refusal memo stays readable in chat and vault history.
     const { t, planId } = await setup();
     await t.run((ctx) =>
       ctx.db.patch(planId, {
@@ -2503,17 +2554,25 @@ describe("20-08 — stageMediaPlan refuses rather than destroying an in-flight r
 
     const again = await restage(t);
     expect(again.ok).toBe(true);
-    expect(await readPlan(t, planId)).toMatchObject({
+    expect(again.ok && again.planId !== planId).toBe(true);
+    expect(again.ok ? await readPlan(t, again.planId) : null).toMatchObject({
       kind: "memo",
       status: "collecting",
       subject: "Reel 2",
       body: "",
     });
+    // The refusal the user is reading is still on file.
+    expect(await readPlan(t, planId)).toMatchObject({
+      status: "done",
+      subject: "Reel: previous attempt",
+    });
   });
 
   test("the USER'S OWN email draft is protected — the MODEL is deciding here, not the user", async () => {
-    // `setup()` already inserts THIS thread's plan row, and `plans.by_thread` is `.unique()` —
-    // inserting a second one throws before the assertion can run.
+    // `setup()` already inserts THIS thread's plan row at `collecting` — the OPEN root, i.e. the
+    // composer the user is typing into. That is the one row a stage may still reuse, and this test
+    // is what stops it reusing one with the user's work in it (ADR-037 kept `draft_in_progress`
+    // for exactly this: it protects unfinished work, it does not count finished artifacts).
     const { t, planId } = await setup();
     await t.run((ctx) =>
       ctx.db.patch(planId, {

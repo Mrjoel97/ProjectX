@@ -2852,12 +2852,15 @@ function GapRow({
     setNote(null);
     try {
       const res = await actOnGap({ threadId, gapIndex });
-      // plan_busy: the thread's plan row is mid-send or already delivered, so staging a memo over
-      // it would clobber real work. Say so plainly rather than failing silently (§1 voice).
+      // plan_busy: a specialist is STILL RUNNING on this chat's open row, so staging a second memo
+      // over it would race two runs onto one row. Say so plainly rather than failing silently
+      // (§1 voice). ADR-037 narrowed this from "the row is mid-send or already delivered" — a
+      // finished plan no longer blocks anything, so the old copy ("start a new chat to act on
+      // this") named a workaround for a refusal the user can no longer hit.
       if (!res.ok)
         setNote(
           res.reason === "plan_busy"
-            ? "This chat already has a plan in flight — start a new chat to act on this."
+            ? "Something is still running on this chat. I'll be able to act on this once it finishes."
             : "That gap is no longer on the latest evaluation.",
         );
     } finally {

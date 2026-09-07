@@ -978,3 +978,122 @@ describe("calendar_manage proposal fields (17-05 — stage, reset, and the ref-p
     expect(await t.run((ctx) => ctx.db.query("calendarEvents").collect())).toHaveLength(1);
   });
 });
+
+// ── ADR-037: a thread holds many plan rows ────────────────────────────────────────────────────
+//
+// `plans.byThread` was `.unique()`, which THREW on a second row — both the invariant and the only
+// structural duplicate detector on this table. These tests are what replaces the throw: the read
+// must pick the newest ROOT, must never pick a child, must fail LOUDLY rather than guess when it
+// cannot find a root, and `byId` must be tenant-guarded because the approvals plane now depends on
+// it to resolve the row it is about to approve.
+describe("ADR-037 — newest root, never a child, never a silent wrong row", () => {
+  const THREAD = "thread_adr037";
+
+  /** Rows are created in call order, and `by_thread`'s implicit `_creationTime` tail is what makes
+   *  "newest" mean anything — so these are inserted one at a time, deliberately not in a batch. */
+  async function insertRow(
+    t: ReturnType<typeof convexTest>,
+    fields: Partial<{
+      status: string;
+      parentPlanId: Id<"plans">;
+      subject: string;
+      tenantId: string;
+    }> = {},
+  ): Promise<Id<"plans">> {
+    const { status = "proposed", tenantId = TENANT, ...rest } = fields;
+    return t.run(async (ctx) =>
+      ctx.db.insert("plans", {
+        tenantId,
+        threadId: THREAD,
+        status: status as "proposed",
+        recipients: [],
+        createdAt: Date.now(),
+        ...rest,
+      }),
+    );
+  }
+
+  test("byThread returns the NEWEST root, not the oldest and not `.unique()`'s throw", async () => {
+    const t = convexTest(schema, modules);
+    await insertRow(t, { subject: "first" });
+    const newest = await insertRow(t, { subject: "second" });
+
+    const plan = await t.withIdentity({ subject: TENANT }).query(api.plans.byThread, {
+      threadId: THREAD,
+    });
+    // Under `.unique()` this call THREW. That throw was load-bearing (it was the duplicate
+    // detector) and ADR-037 pays for losing it with the one-open-root invariant, `byId` on the
+    // approvals plane, and the fail-closed window below.
+    expect(plan?._id).toBe(newest);
+    expect(plan?.subject).toBe("second");
+  });
+
+  test("a CHILD is never the answer, even when it is the newest row on the thread", async () => {
+    const t = convexTest(schema, modules);
+    const root = await insertRow(t, { subject: "the artifact" });
+    await insertRow(t, { parentPlanId: root, subject: "worker 1" });
+    await insertRow(t, { parentPlanId: root, subject: "worker 2" });
+
+    const plan = await t.withIdentity({ subject: TENANT }).query(api.plans.byThread, {
+      threadId: THREAD,
+    });
+    // A fan-out child is a worker, not an artifact: it has no approval card and it is never what
+    // "the plan for this thread" means. If this ever fails, the cockpit renders a worker's row.
+    // MUTATION that turns this red: drop the `isRoot` filter in `threadRoots`.
+    expect(plan?._id).toBe(root);
+    expect(plan?.subject).toBe("the artifact");
+  });
+
+  test("beyond the scan window it returns NULL — loudly wrong, never quietly wrong", async () => {
+    const t = convexTest(schema, modules);
+    const root = await insertRow(t, { subject: "buried" });
+    // ROOT_SCAN is 20. Twenty children in front of the root push it out of the window.
+    for (let i = 0; i < 20; i++) await insertRow(t, { parentPlanId: root, subject: `w${i}` });
+
+    const plan = await t.withIdentity({ subject: TENANT }).query(api.plans.byThread, {
+      threadId: THREAD,
+    });
+    // This is the deliberate failure mode. `cockpit.ts` throws "plan row missing for thread" on a
+    // null, which is visible; returning a child or an arbitrary row would not be. The bound is safe
+    // in practice because a fan-out mints its children in one mutation right after their root, so a
+    // descending scan meets a root within C_max + 1 rows (6 for G6, 11 for G10).
+    expect(plan).toBeNull();
+  });
+
+  test("byId is tenant-guarded — the approvals plane cannot resolve a foreign row", async () => {
+    const t = convexTest(schema, modules);
+    const foreign = await insertRow(t, { tenantId: "tenant_b", subject: "not yours" });
+    const own = await insertRow(t, { subject: "yours" });
+    const asT = t.withIdentity({ subject: TENANT });
+
+    expect(await asT.query(api.plans.byId, { planId: own })).toMatchObject({ subject: "yours" });
+    // Null, not a throw: a reader that cannot see a row must not be able to tell "not yours" from
+    // "not there" (the `attachmentUrls` convention). Every approvals card reads through this.
+    expect(await asT.query(api.plans.byId, { planId: foreign })).toBeNull();
+  });
+
+  test("at most ONE root per thread is collecting — the invariant that makes newest-root right", async () => {
+    // The whole of Decision 2 rests on this: if two roots could be open at once, "the newest root"
+    // and "the row the user is typing into" could diverge, and a staged reel would move every
+    // subsequent cockpit tool write off a half-composed email. The three stagers enforce it by
+    // reusing the open root instead of inserting beside it.
+    // MUTATION that turns this red: make the stagers insert unconditionally.
+    const t = convexTest(schema, modules);
+    const composer = await insertRow(t, { status: "collecting" });
+
+    const staged = await t.mutation(internal.plans.stageResearchPlan, {
+      tenantId: TENANT,
+      threadId: THREAD,
+      subject: "Research: pricing",
+    });
+    expect(staged.ok).toBe(true);
+    expect(staged.ok && staged.planId).toBe(composer);
+
+    const collecting = await t.run(async (ctx) =>
+      (await ctx.db.query("plans").collect()).filter(
+        (p) => p.threadId === THREAD && p.status === "collecting" && p.parentPlanId === undefined,
+      ),
+    );
+    expect(collecting).toHaveLength(1);
+  });
+});

@@ -145,6 +145,7 @@
     "packages/backend/convex/review.ts",
     "packages/core/src/reviewThreshold.ts",
     "packages/backend/convex/plans.ts",
+    "packages/backend/convex/lib/planRow.ts",
     "packages/backend/convex/briefings.ts",
     "packages/backend/convex/briefings.test.ts",
     "packages/backend/convex/vaultSources.ts",

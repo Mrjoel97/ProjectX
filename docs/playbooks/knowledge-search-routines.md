@@ -1,5 +1,10 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-07 (42-01 — `routines.test.ts`'s pinned Convex module inventory gained
+> `lib/planRow.ts`, the shared newest-root/root-window reader ADR-037 introduced. Nothing in the
+> routines or knowledge-search behaviour changed; the closed-set test is doing exactly its job by
+> failing on a new module until someone names it.)
+
 > Last verified: 2026-09-06 (38-01 — `routines.test.ts`'s Convex module inventory gained `lib/toolContextArgs.ts`, the shared `TOOL_CONTEXT_ARGS` validator both agent doors spread since Phase 38; nothing in the routines/knowledge-search behaviour changed.)
 >
 

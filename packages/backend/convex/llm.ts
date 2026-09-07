@@ -1710,14 +1710,17 @@ export const USER_FACING_MEDIA_REPLY: ReadonlyMap<string, string> = new Map([
 const IMAGE_PROPOSED_REPLY =
   "The image prompt is staged on a plan card for the user to review. Nothing has been generated " +
   "and nothing has been charged; generation starts only when the user clicks Generate image.";
+// ADR-037 Decision 3 deleted `image_already_started` from this map and from the mutation that
+// raised it. It said "a new image needs a new conversation" — a LIFETIME ceiling that counted every
+// image the thread had ever produced, not an interlock over concurrent work. `image_in_flight`
+// below is the interlock, and it survives untouched. `media.generateImage` had already dropped
+// `succeeded` from its own in-flight set for the same reason; this was the last copy of the rule.
 const IMAGE_REFUSAL_REPLY: Record<
-  "image_in_flight" | "image_already_started" | "draft_in_progress" | "invalid_prompt",
+  "image_in_flight" | "draft_in_progress" | "invalid_prompt",
   string
 > = {
   image_in_flight:
     "An image is already being generated on this conversation. Nothing new was started. Tell the user it is still running.",
-  image_already_started:
-    "This conversation already has an image generation attempt. Nothing was replaced or charged. Tell the user a new image needs a new conversation.",
   // NAMES THE LEVER THE MODEL ALREADY HOLDS. The old copy said only "tell the user to finish or
   // discard it first", so the user answered "im ready, proceed" — which is not a discard — and the
   // turn deadlocked: the model has `resetPlan` and never reached for it, because nothing here said

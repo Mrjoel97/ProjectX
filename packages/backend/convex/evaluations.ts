@@ -42,6 +42,7 @@ import { internalAction, internalMutation, internalQuery } from "./_generated/se
 import { markAgendaProposed } from "./lib/agenda";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { isOpenRoot, newestRoot } from "./lib/planRow";
 import schema from "./schema";
 import { startIngest } from "./vaultIngest";
 
@@ -931,25 +932,31 @@ export async function applyActOnGap(
   // nothing crosses the Approve gate. Same answer for a stale index.
   if (!row || !gap) return { ok: false, reason: "gap_not_found" };
 
-  const plan = await ctx.db
-    .query("plans")
-    .withIndex("by_thread", (q) => q.eq("tenantId", tenantId).eq("threadId", threadId))
-    .unique();
-  // 34-01: a DONE memo is a vault artifact, not a send — the review thread's one row would
-  // otherwise be `plan_busy` forever after its first approved memo (the weekly review could
-  // propose exactly once, ever). A done EMAIL plan is still refused: its card is the delivery
-  // report for that thread.
-  const recyclable =
-    !plan ||
-    ACTABLE_PLAN_STATUS.has(plan.status) ||
-    (plan.status === "done" && plan.kind === "memo");
-  if (!recyclable) return { ok: false, reason: "plan_busy" };
+  // ADR-037 Decision 5. The review thread now INSERTS A ROOT per staged gap instead of recycling
+  // its one row — `REVIEW_THREAD_ID` is a fixed string, so under `.unique()` that thread had one
+  // plan row for the tenant's entire lifetime. Roots deliberately, never children: a staged gap is
+  // a proposal the owner approves on the ordinary approvals surface, and a child is by definition
+  // unapprovable (Decision 4).
+  //
+  // `plan_busy` SURVIVES, re-scoped: it now refuses a mid-flight OPEN root, never a finished
+  // artifact. The 34-01 `done && memo` special case is DELETED — a done memo is not an open root,
+  // so it falls straight to the insert, and the "the weekly review could propose exactly once,
+  // ever" trap that clause was patching is gone structurally rather than by exception.
+  const plan = await newestRoot(ctx, tenantId, threadId);
 
   let planId: Id<"plans">;
-  if (plan) {
+  if (plan && isOpenRoot(plan)) {
+    // THE CHECK THIS FUNCTION LACKED, and its own header flagged the divergence: "Change one and
+    // decide CONSCIOUSLY whether the other moves." This is that decision. A `collecting` MEMO root
+    // is one a DISPATCH staged and still owns; resetting it races two runs onto one row and the
+    // loser's findings — already paid for — are silently discarded. `stageResearchPlan` has
+    // refused exactly this shape as `research_in_flight` since 16-06.
+    if (plan.kind === "memo") return { ok: false, reason: "plan_busy" };
     planId = plan._id;
-    // resetPlan, not patchPlan: patchPlan DROPS undefined so it can never clear a filled slot —
-    // a half-composed email's recipients/attachments would survive onto the memo.
+    // Recycling the user's own OPEN composer is still allowed here and still deliberate: unlike
+    // `stageResearchPlan`, where the MODEL decides, this path runs because the USER tapped a
+    // control. resetPlan, not patchPlan: patchPlan DROPS undefined so it can never clear a filled
+    // slot — a half-composed email's recipients/attachments would survive onto the memo.
     await ctx.runMutation(internal.plans.resetPlan, { planId });
   } else {
     planId = await ctx.runMutation(internal.plans.insertPlan, {
@@ -983,11 +990,13 @@ export async function applyActOnGap(
     body: "",
     status: "collecting", // ← not approvable until landSpecialistResult flips it
   });
-  // Minted HERE, at the dispatch entry point, and deliberately NOT derived from `planId`:
-  // `plans.byThread` is `.unique()` and this very function RECYCLES the thread's one row, so two
-  // dispatches on a thread would merge into one unreconstructable lineage tree. It is not
-  // `plans.correlationId` either — that is only written at `executePlan`, i.e. after Approve.
-  // ADR-008.
+  // Minted HERE, at the dispatch entry point, and deliberately NOT derived from `planId`. It was
+  // written that way because this function recycled the thread's one row, so two dispatches would
+  // merge into one unreconstructable lineage tree; under ADR-037 each gap gets its OWN root, which
+  // makes `planId` unique per dispatch again — and the mint STAYS anyway, because a root request id
+  // is the lineage handle for a whole tree and a fan-out's children will share one while holding
+  // different plan ids. It is not `plans.correlationId` either — that is only written at
+  // `executePlan`, i.e. after Approve. ADR-008.
   const rootRequestId = crypto.randomUUID();
   await ctx.scheduler.runAfter(0, internal.dispatch.runSpecialist, {
     tenantId: tenantId,
