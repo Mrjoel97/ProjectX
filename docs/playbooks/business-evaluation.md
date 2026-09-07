@@ -1,5 +1,32 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-09-07 (43-04 — **TWO defects in `landSpecialistResult`, one of them live in
+> production since 42.2.**
+>
+> FIX E, the live one. The body precedence was
+> `row && gap ? buildMemo(row, gap, ...) : (fallbackBody ?? LOST_CONTEXT_MEMO)`. But EVERY non-gap
+> dispatch passes `gapIndex: 0` as a DUMMY (`dispatchRun.ts`, comment `// no gap on this path`),
+> and on any thread that has ever been evaluated index 0 resolves to a REAL gap. So a research /
+> media / fan-out worker that produced nothing landed an unrelated business-gap memo under its own
+> heading, instead of the honest failure sentence its caller had already composed. No throw, no
+> audit, and it reads like a real answer to a question nobody asked. A caller that supplies a
+> `fallbackBody` is SAYING “I am not a gap run” — which is what that field's own doc comment has
+> claimed since 16-06 — so it is checked first now. The gap path passes none and is byte-identical.
+>
+> This is the ONLY place that defect is visible: it lives inside a Convex mutation, so a pure
+> string test in `packages/core` cannot see it, and the fix is a two-line reorder a reverted diff
+> would leave looking identical. The test reads `plan.body` BACK OFF THE ROW, and its sibling
+> proves the gap path still builds the gap memo — without that control, “prefer the fallback” could
+> have been implemented as “never use the gap memo” and every other assertion would still pass.
+>
+> PROVENANCE. `persistNextStepMemo` hardcoded `kind: "next_step_memo"` and `source: "evaluation"`.
+> Filing content-batch variants under those is a FALSE CLAIM written into a stored row that is read
+> back months later — the provenance-laundering class this repo has shipped before. It branches on
+> `plan.channel === "vault"` now, which is reliable BECAUSE `channel` is birth-only: nothing can
+> flip a row into or out of it after the fact. An ordinary memo carries no channel and is unchanged
+> byte for byte. ponytail: ONE literal (`content_draft`) for the root assembly and its variants
+> alike — `sourcePlanId` already tells them apart for anyone who needs to.)
+
 > Last verified: 2026-09-07 (43-01 — comment-only, no behaviour change. `applyActOnGap`'s header
 > still said it "REUSES the thread's single `plans` row" because `plans.byThread` is a `.unique()`
 > read. Both halves are false since 42-03: it INSERTS a root per gap, and `newestRoot` replaced the

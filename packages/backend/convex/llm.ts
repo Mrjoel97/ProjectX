@@ -136,6 +136,7 @@ import {
   shouldUseGmailCapability,
 } from "./cockpitCapabilities";
 import { buildInvoiceReminderTool } from "./invoiceReminders";
+import { VARIANT_FAILED_MEMO } from "./lib/dispatchShared";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
 import {
@@ -6679,6 +6680,75 @@ export const draftDocument = internalAction({
       );
       return { ok: true, title: object.title, markdown: object.markdown };
     }
+  },
+});
+
+// ── 43-04: THE VARIANT WORKER ──────────────────────────────────────────────────
+//
+// One variant of one piece. It lives HERE and not in `dispatchRun.ts` for a structural reason:
+// `dispatchRun.ts` is DEFAULT runtime (its header says so — `workflow.define` returns a
+// RegisteredMutation), and this is an ACTION that calls the drafter. `llm.ts` is already `"use
+// node"` and already holds `draftDocument`, so this is a local call rather than a cross-module hop.
+//
+// IT IS NOT A `governedDispatch` RUN, and that is the decision worth keeping. `startDispatchRun`
+// requires an `envelopeCents`, and `governedDispatch` treats a 0 as "derive one" — which would hand
+// EVERY variant the full 25% rail share, verbatim the defect ADR-038 exists to fix. A variant is one
+// `draftDocument` call: no tools, no recursion, no sub-agent to govern. The money bound is the
+// COUNT, decided at mint time by `EST_DRAFT_CENTS`, plus `draftDocument`'s own per-draft gate.
+export const runVariant = internalAction({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    /** The piece and the angle, already welded together by `legalVariants`. */
+    brief: v.string(),
+    form: v.string(),
+    rootRequestId: v.string(),
+    skillVersions: v.optional(v.record(v.string(), v.number())),
+    tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
+  },
+  handler: async (ctx, a): Promise<null> => {
+    // §4 REDACT-THEN-WRITE. `draftDocument` documents its input as ALREADY-REDACTED, and the brief
+    // carries the user's own piece description — the same boundary `renderAndStore` crosses with the
+    // same call. An unscannable brief FAILS the variant honestly rather than being sent.
+    const scan = scanText(a.brief);
+    const drafted = scan.ok
+      ? await ctx.runAction(internal.llm.draftDocument, {
+          tenantId: a.tenantId,
+          safeText: scan.value.safeText,
+          safeTextHash: await contentHash(scan.value.safeText),
+          skillName: a.form === "sheet" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL,
+          ...(a.skillVersions === undefined
+            ? {}
+            : {
+                skillVersion:
+                  a.skillVersions[
+                    a.form === "sheet" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL
+                  ],
+              }),
+        })
+      : ({ ok: false, reason: "scan_failed" } as const);
+
+    // ALWAYS LANDS. A variant that produced nothing must still land, or its sibling flip never
+    // fires and the parent hangs at `collecting` for ever — the same reason `dispatchRun`'s terminal
+    // fires whatever happened to the run.
+    await ctx.runMutation(internal.evaluations.landSpecialistResult, {
+      tenantId: a.tenantId,
+      threadId: a.threadId,
+      planId: a.planId,
+      // A DUMMY, and it now costs nothing: 43-04's precedence fix means a caller that supplies a
+      // `fallbackBody` never reaches the gap lookup this index feeds. Before that fix, `0` resolved
+      // to a REAL gap on any evaluated thread and this worker's honest failure sentence was
+      // replaced by an unrelated business-gap memo.
+      gapIndex: 0,
+      incomplete: false,
+      // `route` OMITTED — no specialist produced this. The absence IS the fact, and
+      // `specialistMemoBody` drops the attribution line while keeping the incomplete ceiling.
+      ...(drafted.ok
+        ? { body: drafted.markdown }
+        : { fallbackBody: VARIANT_FAILED_MEMO, fallbackReason: drafted.reason }),
+    });
+    return null;
   },
 });
 

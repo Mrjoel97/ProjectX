@@ -168,6 +168,12 @@ export async function flipParentWhenSiblingsDone(
 
   const body = fanOutMemoBody(
     children.map((c) => ({ heading: c.subject ?? "Specialist", body: c.body ?? "" })),
+    // 43-04: the parent's OWN label. "# Team" is right for a fan-out of specialists and false for
+    // a content batch, which is fifteen variants of one piece. `subject` is written by CODE at
+    // stage time, so this is a deliberate label rather than model prose. The `|| "Team"` floor is
+    // the same idiom as `c.subject ?? "Specialist"` one line up: a root staged before subjects
+    // were written still renders the sentence it always did.
+    parent.subject?.trim() || "Team",
   );
   await ctx.runMutation(internal.plans.patchPlan, {
     planId: parentPlanId,

@@ -302,7 +302,15 @@ export function tierBriefing(a: {
  * Upgrade only if something other than a human needs to branch on incompleteness.
  */
 export function specialistMemoBody(args: {
-  route: string;
+  /** ABSENT = NO SPECIALIST PRODUCED THIS — a Phase-43 batch VARIANT, drafted straight from the
+   *  piece and its angle with no route in front of it. The ABSENCE is the fact; there is no
+   *  sentinel route string and no second formatter.
+   *
+   *  Why absence and not `plan.channel === "vault"`: a memo's Approve terminal ALREADY files a
+   *  vault document (`persistNextStepMemo`), so channel answers "where does this go", not "who
+   *  made it" — the adjacent-predicate class this repo has shipped before. And not
+   *  `parentPlanId !== undefined`: that is true of every fan-out child, which DOES have a route. */
+  route?: string;
   body: string;
   incomplete: boolean;
   /** WHY the run stopped early. CLOSED union, so a fourth cause is a compile error here rather
@@ -313,7 +321,17 @@ export function specialistMemoBody(args: {
   // Three reasons, three DISTINCT sentences. D12 raises the research budget but does NOT make this
   // redundant: raising a limit and defining behaviour AT the limit are different fixes.
   const ceiling = args.incomplete ? INCOMPLETE_MARKER[args.reason ?? "cost"] : "";
-  return `> Produced by the **${args.route}** specialist.${ceiling}\n\n${args.body}`;
+  // THE CEILING SURVIVES A ROUTELESS BODY, and that is the whole risk of this change. Every
+  // `INCOMPLETE_MARKER` entry begins "\n> ", so it was a CONTINUATION of the attribution line;
+  // drop the attribution and the marker would start with a stray newline and lose its own quote
+  // block. `trimStart()` promotes it to line 1 instead of discarding it. A variant that hit the
+  // cost ceiling must still say so — losing that is how a truncated draft reads as a finished one.
+  const header =
+    args.route === undefined
+      ? ceiling.trimStart()
+      : `> Produced by the **${args.route}** specialist.${ceiling}`;
+  // Route present => byte-identical to every shipped output (same template, same order).
+  return header === "" ? args.body : `${header}\n\n${args.body}`;
 }
 
 /**
@@ -334,16 +352,28 @@ export function specialistMemoBody(args: {
  * Children arrive in MINT ORDER, which is the order the model asked its questions in. Not sorted,
  * not ranked: nothing here knows which answer is better, and inventing an order would be a claim.
  */
-export function fanOutMemoBody(children: readonly { heading: string; body: string }[]): string {
+export function fanOutMemoBody(
+  children: readonly { heading: string; body: string }[],
+  /** The parent's own label. TRAILING and DEFAULTED so every shipped caller and every shipped
+   *  test stays byte-identical — a required leading parameter would have broken five call sites
+   *  in `specialists.test.ts` and silently deleted the empty-arm assertion with them.
+   *  A Phase-43 BATCH parent passes its subject, because "# Team" is false for it: fifteen
+   *  variants of one piece are not a team of specialists. */
+  title = "Team",
+): string {
   // A fan-out that produced nothing is still an artifact — the user asked, and the honest answer
   // is that none of it came back. Silence would render as an empty approval card.
+  //
+  // The wording stays specialist-flavoured on purpose. This arm is UNREACHABLE in production —
+  // `flipParentWhenSiblingsDone` only runs from a child's own landing, so `children.length >= 1`
+  // — and rewording it would cost a shipped assertion to buy nothing.
   if (children.length === 0)
     return (
-      "# Team\n\nNone of the specialists finished, so there is nothing to show yet." +
+      `# ${title}\n\nNone of the specialists finished, so there is nothing to show yet.` +
       " Ask me to run it again."
     );
   const parts = children.map(({ heading, body }) => `## ${heading}\n\n${body.trim()}`);
-  return `# Team\n\n${parts.join("\n\n---\n\n")}`;
+  return `# ${title}\n\n${parts.join("\n\n---\n\n")}`;
 }
 
 /** The three stop causes, each with its own sentence. `cost` is BYTE-IDENTICAL to the

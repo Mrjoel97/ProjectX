@@ -1,5 +1,27 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-09-07 (43-04 — `specialistMemoBody`'s `route` is OPTIONAL now, and the
+> ABSENCE is the fact: no specialist produced this, it is a content-batch variant. No sentinel
+> route string and no second formatter.
+>
+> **The ceiling is the whole risk of that change.** Every `INCOMPLETE_MARKER` entry begins with
+> `\n> `, so it was a CONTINUATION of the attribution line; drop the attribution and a naive fix
+> drops the marker's own quote block with it. `trimStart()` promotes it to line 1. A variant that
+> hit the cost ceiling must still say so — losing that is how a truncated draft reads as a
+> finished one. Mutation-proven, in its own test rather than sharing a body with the title check.
+>
+> Why absence and not `plan.channel === "vault"`: a memo's Approve terminal ALREADY files a vault
+> document, so channel answers “where does this go”, not “who made it” — the adjacent-predicate
+> class this repo has shipped before. And not `parentPlanId !== undefined`, which is true of every
+> fan-out child, and those DO have a route.
+>
+> `fanOutMemoBody` gained a title as an OPTIONAL TRAILING parameter, deliberately. A required
+> leading one — the obvious shape — breaks five one-argument call sites in `specialists.test.ts`
+> and would have silently taken the empty-arm assertion with them. The empty-arm sentence keeps its
+> specialist wording: that arm is unreachable in production (`flipParentWhenSiblingsDone` only runs
+> from a child's landing, so `children.length >= 1`), so rewording it costs a shipped assertion to
+> buy nothing.)
+
 > Last verified: 2026-09-07 (42-03 — `specialists.ts` gained `fanOutMemoBody`, the deterministic
 > parent artifact of a fan-out, beside `specialistMemoBody`. It takes `{ heading, body }[]` and NOT
 > plan rows, for a measured reason: the `plans` table has no `route` column, so the route survives

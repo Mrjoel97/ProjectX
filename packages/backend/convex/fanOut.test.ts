@@ -468,3 +468,138 @@ describe("startTeamRun — one route, several questions", () => {
     expect(ROOT_SCAN).toBeGreaterThan(MAX_FAN_OUT + 1);
   });
 });
+
+// ══ 43-04: THE CONTENT BATCH ══════════════════════════════════════════════════════════════════
+//
+// FOUR SEPARATE TESTS, one per fail-closed gate, deliberately not one body with five expects.
+// vitest aborts a body at its first failed assertion, so a mutation that reddens expect #1 leaves
+// #2..#5 unreached and looking proven — the shape that nearly shipped in 43-02.
+
+const startBatch = (t: T, planId: Id<"plans">, piece: string, variants: unknown[], form = "long") =>
+  t.mutation(internal.dispatchRun.startContentBatch, {
+    tenantId: TENANT,
+    threadId: THREAD,
+    planId,
+    piece,
+    form,
+    variants,
+    rootRequestId: "root-batch-1",
+  });
+
+/** V3: `fanOut.test.ts` had NO rail seeding of any kind. `newTest` already registers the
+ *  rateLimiter component, so a spend is writable — it just had to be authored. */
+const spendRail = (t: T, costUsd: number) =>
+  t.mutation(internal.guardrails.recordSpend, { tenantId: TENANT, costUsd });
+
+// 1a. THE SILENT ONE. An angle alone ("lead with the numbers") is a fragment with no subject:
+// fifteen workers briefed that way produce fifteen drafts about nothing, and the variant count the
+// tool reports is still correct, so it reads like a working feature.
+// MUTATIONS: `brief: angle` (drop the weld) → red; drop the normaliser → 3 children; drop the
+// `typeof` guard → `.trim()` throws on null.
+test("a batch child's subject carries the PIECE, and only real distinct angles survive", async () => {
+  const t = newTest();
+  const root = await stagedRoot(t);
+  const res = await startBatch(t, root, "September pricing post", [
+    "Lead with numbers",
+    "  lead   with NUMBERS ", // same angle, different whitespace/case → deduped
+    "", // blank → dropped, never defaulted to the piece
+    null, // trust boundary: jsonSchema carries no validator
+    { angle: "x" }, // ditto
+    "Lead with a story",
+  ]);
+  expect(res).toEqual({ ok: true, workerCount: 2, requested: 6 });
+
+  const kids = await childrenOf(t, root);
+  expect(kids).toHaveLength(2);
+  for (const kid of kids) expect(kid.subject).toContain("September pricing post");
+
+  // AND THE BRIEF THE WORKER ACTUALLY RECEIVES, read out of the scheduler's own args rather than
+  // off the narrower's return value. `subject` is what the approval card renders; `brief` is what
+  // is sent to the model, and they are composed separately — so asserting only `subject` leaves the
+  // consumer that ignores the weld completely invisible. This is the assertion that fails if a
+  // worker is ever briefed with a bare angle.
+  const queued = await t.run(async (ctx) => ctx.db.system.query("_scheduled_functions").collect());
+  const briefs = queued
+    .map((row) => (row.args[0] as { brief?: string } | undefined)?.brief)
+    .filter((b): b is string => typeof b === "string");
+  expect(briefs).toHaveLength(2);
+  for (const brief of briefs) expect(brief).toContain("September pricing post");
+  await cancelQueued(t);
+});
+
+// 1b. THE RECYCLE FORK — the only place ADR-037's one-open-root invariant can break, and it was
+// uncovered by every design's proposed check. `channel` is birth-only, so a RECYCLED shell can
+// never acquire one; a batch must cancel it and insert a fresh root beside it.
+// MUTATION: delete the `ctx.db.patch(plan._id, {status:"canceled"})` → assertion (b) counts 2.
+test("staging a batch over an open shell cancels it and leaves exactly ONE open root", async () => {
+  const t = newTest();
+  const shell = await t.run(async (ctx) =>
+    ctx.db.insert("plans", {
+      tenantId: TENANT,
+      threadId: "thread_recycle",
+      status: "collecting", // an open NON-memo root: an ordinary chat shell
+      recipients: [],
+      createdAt: Date.now(),
+    }),
+  );
+
+  const staged = await t.mutation(internal.plans.stageResearchPlan, {
+    tenantId: TENANT,
+    threadId: "thread_recycle",
+    subject: "September pricing post",
+    channel: "vault",
+  });
+  if (!staged.ok) throw new Error(`stage refused: ${staged.reason}`);
+
+  const rows = await t.run(async (ctx) =>
+    (await ctx.db.query("plans").collect()).filter((p) => p.threadId === "thread_recycle"),
+  );
+  expect(rows.find((r) => r._id === shell)?.status).toBe("canceled");
+  expect(
+    rows.filter((r) => r.status === "collecting" && r.parentPlanId === undefined),
+  ).toHaveLength(1);
+  expect(rows.find((r) => r._id === staged.planId)?.channel).toBe("vault");
+});
+
+// 1c. `kind: "memo"` at BIRTH, its own test and its own mutation. Three independent fail-closed
+// gates read it by equality (the landing CAS, the sibling flip, the watchdog) and each is a
+// separate way a fully-billed draft is lost.
+// MUTATION: delete `kind: "memo"` from startContentBatch's insertPlan.
+test("every batch child is born kind:memo and channel:vault", async () => {
+  const t = newTest();
+  const root = await stagedRoot(t);
+  await startBatch(t, root, "September pricing post", ["Numbers", "Story"]);
+  const kids = await childrenOf(t, root);
+  expect(kids).toHaveLength(2);
+  for (const kid of kids) {
+    expect(kid.kind).toBe("memo");
+    // ADR-042 D1: REQUIRED, never defaulted. Absent would read as "email" — a terminal a memo
+    // row structurally cannot reach.
+    expect(kid.channel).toBe("vault");
+  }
+  await cancelQueued(t);
+});
+
+// 1d. THE MONEY BOUND, and without it EST_DRAFT_CENTS is decoration. `preCall` is a CHECK, not a
+// reservation, so fifteen concurrent drafts all pass the same pre-spend rail; the COUNT is the only
+// real bound. `narrowFanOut`'s own cap is one CENT per worker, which a draft blows past.
+// MUTATION: `narrowFanOut(n, Math.floor(rootEnvelope / EST_DRAFT_CENTS))` → `narrowFanOut(n, rootEnvelope)`.
+test("the rail bounds the variant COUNT, divided by the per-draft estimate", async () => {
+  const t = newTest();
+  const root = await stagedRoot(t);
+  // THE ARITHMETIC IS SPELLED OUT, because an approximate assertion here is worthless. The first
+  // version of this test asserted `toBeLessThan(5)` and stayed GREEN under its own mutation: the
+  // undivided envelope funded 2 workers, which is also less than 5. The EXACT count is the only
+  // assertion that can tell the two apart.
+  //
+  //   DAILY_BUDGET_CENTS 500 - 480 spent        = 20c remaining
+  //   x ENVELOPE_FRACTION 0.25                  =  5c root envelope
+  //   / EST_DRAFT_CENTS 2, floored              =  2 workers  <- what must happen
+  //   undivided: min(5 asked, MAX_FAN_OUT, 5c)  =  5 workers  <- the defect, fully funded
+  await spendRail(t, 4.8);
+  const res = await startBatch(t, root, "September pricing post", ["A", "B", "C", "D", "E"]);
+  if (!res.ok) throw new Error(`batch refused: ${res.reply}`);
+  expect(res.workerCount).toBe(2);
+  expect(await childrenOf(t, root)).toHaveLength(2);
+  await cancelQueued(t);
+});

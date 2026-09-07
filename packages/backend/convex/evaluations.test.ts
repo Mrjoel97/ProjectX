@@ -1495,3 +1495,106 @@ describe("runEvaluation (a relayed figure still grounds its own finding)", () =>
     expect(cac?.citationTitle).toBeTruthy();
   });
 });
+
+// ══ 43-04 FIX E: an honest failure memo is not replaced by someone else's business gap ═════════
+//
+// THE ONLY PLACE THIS DEFECT IS VISIBLE. It lives inside a Convex mutation, so a pure string test
+// in `packages/core` cannot see it — and the whole change is a two-line reorder that a reverted
+// diff would leave looking identical.
+//
+// The defect: EVERY non-gap dispatch passes `gapIndex: 0` as a DUMMY (`dispatchRun.ts`, comment
+// `// no gap on this path`). On any thread that has ever been evaluated, index 0 resolves to a
+// REAL gap — so a research / media / fan-out / variant worker that produced nothing landed
+// `buildMemo(row, gaps[0], …)`: an unrelated business-gap memo, under that worker's own heading,
+// instead of the honest failure sentence its caller had already composed. No throw, no audit, and
+// it reads like a real answer to a question nobody asked.
+describe("landSpecialistResult — the caller's fallback beats a coincidental gap (43-04)", () => {
+  const FALLBACK = "This version didn't come back. Nothing was saved for it.";
+  const THREAD_E = "thread-fix-e";
+
+  async function seedThreadWithAGap(t: TestConvex<typeof schema>): Promise<Id<"plans">> {
+    return t.run(async (ctx) => {
+      // An evaluation row WITH a gap at index 0 — the coincidence that made the defect fire.
+      await ctx.db.insert("evaluations", {
+        tenantId: TENANT,
+        threadId: THREAD_E,
+        framework: "growth-os",
+        findings: [],
+        gaps: [
+          {
+            label: "No owner is named for retention",
+            leverageRank: 1,
+            route: "offer-architect",
+            playbook: "offer",
+            reason: "The report states the problem but never says who acts on it",
+            proofMetric: "A named owner and a review date",
+          },
+        ],
+        notEnoughData: [],
+        scorecard: {},
+        userProvided: [],
+        verdict: "gaps",
+        createdAt: Date.now(),
+      });
+      return ctx.db.insert("plans", {
+        tenantId: TENANT,
+        threadId: THREAD_E,
+        status: "collecting",
+        kind: "memo",
+        channel: "vault",
+        recipients: [],
+        subject: "September pricing post — Lead with numbers",
+        body: "",
+        createdAt: Date.now(),
+      });
+    });
+  }
+
+  // MUTATION A: revert the precedence reorder in `landSpecialistResult` — assertion (a) goes red,
+  // and `plan.body` reads "No owner is named for retention" instead.
+  // MUTATION B: `args.route ?? "content"` in `specialistMemoBody` — assertion (b) goes red.
+  test("a produced-nothing variant lands ITS OWN sentence, read back off the row", async () => {
+    const t = newTest();
+    const planId = await seedThreadWithAGap(t);
+
+    await t.mutation(internal.evaluations.landSpecialistResult, {
+      tenantId: TENANT,
+      threadId: THREAD_E,
+      planId,
+      gapIndex: 0, // the dummy every non-gap dispatch passes
+      incomplete: false,
+      fallbackBody: FALLBACK,
+      fallbackReason: "error",
+      // `route` OMITTED — no specialist produced this.
+    });
+
+    const row = await t.run(async (ctx) => ctx.db.get(planId));
+    // (a) the caller's own sentence, not the business gap that happened to sit at index 0.
+    expect(row?.body).toContain("didn't come back");
+    expect(row?.body).not.toContain("No owner is named for retention");
+    // (b) and no specialist is credited with it.
+    expect(row?.body).not.toContain("Produced by");
+  });
+
+  // NON-VACUITY, and it is the assertion that keeps Fix E honest: the GAP path is byte-identical.
+  // `runSpecialist` passes no `fallbackBody` at all, so it must still reach the evaluation lookup
+  // and still build the gap memo. Without this, "prefer the fallback" could have been implemented
+  // as "never use the gap memo" and every assertion above would still pass.
+  test("a gap run with NO fallbackBody still builds the gap memo", async () => {
+    const t = newTest();
+    const planId = await seedThreadWithAGap(t);
+
+    await t.mutation(internal.evaluations.landSpecialistResult, {
+      tenantId: TENANT,
+      threadId: THREAD_E,
+      planId,
+      gapIndex: 0,
+      route: "offer-architect",
+      incomplete: false,
+      fallbackReason: "error",
+    });
+
+    const row = await t.run(async (ctx) => ctx.db.get(planId));
+    expect(row?.body).toContain("No owner is named for retention");
+  });
+});

@@ -1090,7 +1090,10 @@ export const landSpecialistResult = internalMutation({
     threadId: v.string(),
     planId: v.id("plans"),
     gapIndex: v.number(),
-    route: v.string(),
+    /** ABSENT = no specialist produced this — a Phase-43 batch VARIANT. Passed straight through
+     *  to `specialistMemoBody`, whose absence-of-route arm drops the attribution line and keeps
+     *  the incomplete ceiling. */
+    route: v.optional(v.string()),
     /** the specialist's own output; ABSENT ⇒ fall back to the deterministic buildMemo template */
     body: v.optional(v.string()),
     incomplete: v.boolean(),
@@ -1136,6 +1139,21 @@ export const landSpecialistResult = internalMutation({
         incomplete: a.incomplete,
         reason: a.incompleteReason,
       });
+    } else if (a.fallbackBody !== undefined) {
+      // A CALLER THAT SUPPLIES ONE IS SAYING "I AM NOT A GAP RUN", and this branch is why the
+      // field's own doc comment above is true. It was the LAST resort until 43-04, and that was a
+      // live defect: every non-gap dispatch passes `gapIndex: 0` as a DUMMY (`dispatchRun.ts`,
+      // comment `// no gap on this path`), and on any thread that has ever been evaluated,
+      // index 0 resolves to a REAL gap. So a research / media / fan-out worker that produced
+      // nothing landed `buildMemo(row, gaps[0], ...)` — an unrelated business-gap memo, under
+      // that worker's own heading, instead of the honest failure sentence its caller had
+      // already composed. No throw, no audit, and it reads like a real answer to a question
+      // nobody asked.
+      //
+      // ROOT CAUSE, not the batch's symptom: the gap path (`runSpecialist`) passes no
+      // `fallbackBody` at all, so it still falls through to the lookup below byte-identically.
+      // A batch variant would have multiplied this by fifteen.
+      body = a.fallbackBody;
     } else {
       const row = await ctx.db
         .query("evaluations")
@@ -1145,10 +1163,7 @@ export const landSpecialistResult = internalMutation({
         .order("desc")
         .first();
       const gap = row?.gaps[a.gapIndex];
-      body =
-        row && gap
-          ? buildMemo(row, gap, a.fallbackReason ?? "error")
-          : (a.fallbackBody ?? LOST_CONTEXT_MEMO);
+      body = row && gap ? buildMemo(row, gap, a.fallbackReason ?? "error") : LOST_CONTEXT_MEMO;
     }
     // ── ADR-037 Decision 4: A CHILD IS A WORKER, AND A WORKER HAS NO APPROVAL CARD ─────────────
     // A landed child takes `approved`, which is already a member of the pinned lifecycle enum, so
@@ -1202,12 +1217,27 @@ export async function persistNextStepMemo(
   plan: Doc<"plans">,
 ): Promise<Id<"vaultDocuments">> {
   const markdown = plan.body ?? "";
+  // PROVENANCE, AND IT IS A CLAIM — not a taxonomy nicety. `kind` and `source` are what the
+  // STORED ROW says about where this document came from, and they are read back months later.
+  // A Phase-43 content batch is not a next step, and it did not come from an evaluation; filing
+  // fifteen content variants as `next_step_memo` / `"evaluation"` would write a false sentence
+  // into the vault, which is the provenance-laundering class this repo has shipped before.
+  //
+  // The discriminator is `channel`, and it is reliable BECAUSE it is birth-only (`insertPlan`):
+  // nothing can flip a row into or out of this after the fact, and the only writer that sets
+  // `"vault"` is the batch stager. An ordinary memo carries no channel at all and is unchanged,
+  // byte for byte.
+  //
+  // ponytail: ONE literal for the root assembly and its variants alike — both ARE content
+  // drafts, and `sourcePlanId` already distinguishes them for anyone who needs to. Split into
+  // `content_batch` / `content_variant` only if a reader actually has to branch on it.
+  const isContent = plan.channel === "vault";
   const vaultDocId = await ctx.db.insert("vaultDocuments", {
     tenantId: plan.tenantId,
-    title: plan.subject?.trim() || "Next step memo",
-    kind: "next_step_memo",
+    title: plan.subject?.trim() || (isContent ? "Content draft" : "Next step memo"),
+    kind: isContent ? "content_draft" : "next_step_memo",
     category: categoryFor({ source: "agent" }), // workspace-docs — a generated doc, not an upload
-    source: "evaluation",
+    source: isContent ? "content_batch" : "evaluation",
     mimeType: "text/markdown",
     size: new TextEncoder().encode(markdown).length,
     contentHash: await contentHash(markdown),

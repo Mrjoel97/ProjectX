@@ -788,3 +788,49 @@ describe("fanOutMemoBody", () => {
     expect(body).toContain("stopped before it produced anything");
   });
 });
+
+// ══ 43-04: a body no specialist produced ══════════════════════════════════════════════════════
+//
+// TWO SEPARATE TESTS, not one body with four expects. vitest aborts a body at its first failure,
+// so a mutation that reddens expect #1 leaves the rest unreached and looking proven — and these
+// two properties live in two different functions anyway.
+describe("specialistMemoBody without a route (43-04)", () => {
+  // THE CEILING IS THE WHOLE RISK. Every INCOMPLETE_MARKER entry begins "\n> ", so it was a
+  // CONTINUATION of the attribution line; drop the attribution and a naive fix drops the marker's
+  // own quote block with it. A variant that hit the cost ceiling must still say so — losing that
+  // is how a truncated draft reads as a finished one.
+  // MUTATION: `ceiling.trimStart()` → `""`. Red.
+  test("a route-absent body promotes the incomplete ceiling to line 1", () => {
+    const out = specialistMemoBody({ body: "Draft A.", incomplete: true, reason: "cost" });
+    expect(out.startsWith("> **Incomplete")).toBe(true);
+    expect(out).not.toContain("Produced by");
+    expect(out).toContain("Draft A.");
+  });
+
+  test("a route-absent COMPLETE body is the body alone, with no empty header", () => {
+    expect(specialistMemoBody({ body: "Draft A.", incomplete: false })).toBe("Draft A.");
+  });
+
+  // NON-VACUITY / byte-identity: the route-present arm is untouched, which is what lets this land
+  // without re-verifying every shipped eval fixture that matches on the first line.
+  test("a route-present body is byte-identical to what it always was", () => {
+    expect(specialistMemoBody({ route: "offer-architect", body: "X.", incomplete: false })).toBe(
+      "> Produced by the **offer-architect** specialist.\n\nX.",
+    );
+  });
+});
+
+describe("fanOutMemoBody's title (43-04)", () => {
+  const kids = [{ heading: "Lead with numbers", body: "Draft A." }];
+
+  // MUTATION: ignore the parameter (hardcode "Team"). Red.
+  test("a passed title replaces # Team", () => {
+    expect(fanOutMemoBody(kids, "5 hooks for the pricing post").startsWith("# 5 hooks")).toBe(true);
+  });
+
+  // The byte-identity guard for the five shipped one-argument call sites. This is why the
+  // parameter is TRAILING and DEFAULTED rather than leading and required.
+  test("no title still reads # Team", () => {
+    expect(fanOutMemoBody(kids).startsWith("# Team")).toBe(true);
+  });
+});

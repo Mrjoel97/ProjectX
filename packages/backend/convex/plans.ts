@@ -215,10 +215,27 @@ export const insertPlan = internalMutation({
  * from `plan.status` at all. Read them together before changing either.
  */
 export const stageResearchPlan = internalMutation({
-  args: { tenantId: v.string(), threadId: v.string(), subject: v.string() },
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    subject: v.string(),
+    /** ADR-042 D1 — PRESENT MEANS "a Phase-43 batch root, born with its terminal".
+     *
+     *  It is `v.literal("vault")` and NOT the `Channel` union, deliberately: the only other
+     *  member is `email`, and this stager writes `kind: "memo"` at its tail — the pair ADR-042
+     *  proves unsatisfiable, because `armFor("memo")` is `"inline"` and a memo row structurally
+     *  cannot reach the email terminal. A door that cannot express the illegal pair needs no
+     *  guard against it.
+     *
+     *  Absent keeps every shipped caller byte-identical. That default is exactly the hazard:
+     *  reusing this stager verbatim for a batch would mint a root with NO channel, which
+     *  `parseChannel(undefined)` reads as `"email"` — ADR-042's failure arriving through the
+     *  reuse door. */
+    channel: v.optional(v.literal("vault")),
+  },
   handler: async (
     ctx,
-    { tenantId, threadId, subject },
+    { tenantId, threadId, subject, channel },
   ): Promise<
     | { ok: true; planId: Id<"plans"> }
     | { ok: false; reason: "research_in_flight" | "draft_in_progress" }
@@ -240,12 +257,32 @@ export const stageResearchPlan = internalMutation({
       // not a trade the user agreed to. (`status !== "canceled"` and `kind !== "memo"` are implied
       // here now: the row is `collecting` and the memo case returned above.)
       if (hasDraftContent(plan)) return { ok: false, reason: "draft_in_progress" };
-      planId = plan._id;
-      // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled slot,
-      // which would carry a previous memo's subject/attachments onto this one.
-      await ctx.runMutation(internal.plans.resetPlan, { planId });
+      // THE RECYCLE FORK, AND `channel` IS WHY IT EXISTS. `channel` is BIRTH-ONLY
+      // (`insertPlan`; it is deliberately not a `patchPlan` arg), so a RECYCLED row can never
+      // acquire one — reusing the open shell for a batch would hand it a root that
+      // `parseChannel(undefined)` reads as `"email"`, which is the one thing ADR-042 forbids.
+      // A batch therefore CANCELS the empty shell and inserts a fresh root beside it. Both
+      // writes are in THIS mutation, so no reader ever observes two open roots and ADR-037's
+      // one-open-root invariant holds across the fork.
+      if (channel === undefined) {
+        planId = plan._id;
+        // resetPlan, NOT patchPlan: patchPlan drops `undefined` and so can never clear a filled
+        // slot, which would carry a previous memo's subject/attachments onto this one.
+        await ctx.runMutation(internal.plans.resetPlan, { planId });
+      } else {
+        await ctx.db.patch(plan._id, { status: "canceled" });
+        planId = await ctx.runMutation(internal.plans.insertPlan, {
+          tenantId,
+          threadId,
+          channel,
+        });
+      }
     } else {
-      planId = await ctx.runMutation(internal.plans.insertPlan, { tenantId, threadId });
+      planId = await ctx.runMutation(internal.plans.insertPlan, {
+        tenantId,
+        threadId,
+        ...(channel === undefined ? {} : { channel }),
+      });
     }
     await ctx.runMutation(internal.plans.patchPlan, {
       planId,

@@ -126,3 +126,10 @@ export const MEDIA_FAILED_MEMO =
  *  — it HAS an evaluation to fall back to, which is exactly what the two strings above do not. */
 export const failedMemoFor = (kind: "specialist" | "research" | "media"): string | undefined =>
   kind === "research" ? RESEARCH_FAILED_MEMO : kind === "media" ? MEDIA_FAILED_MEMO : undefined;
+
+/** 43-04: the honest sentence a CONTENT VARIANT lands when its draft did not come back. A sibling
+ *  of the two above and NOT a `failedMemoFor` member: a variant is not a dispatch `kind`, it never
+ *  enters `TARGET`, and widening that union would put a fourth arm on a switch nothing routes to. */
+export const VARIANT_FAILED_MEMO =
+  "This version didn't come back. Nothing was saved for it and nothing was charged — the other" +
+  " versions are unaffected. Ask me to try this one again.";

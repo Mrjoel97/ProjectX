@@ -1,3 +1,75 @@
+> Last verified: 2026-09-07 (43-04 — **the content batch: N variants of one piece, one approval
+> card.** `startContentBatch` is a SIBLING of `startTeamRun`, not a parameter on it:
+> `legalAssignments` drops any route `resolveSpecialist` rejects, so every content assignment
+> would have vanished and `NO_ROUTES_REPLY` would have fired on a batch with nothing wrong with it.
+>
+> **THE MONEY BOUND IS THE COUNT, AND THIS IS THE THING TO UNDERSTAND BEFORE CHANGING ANY OF IT.**
+> `guardrails.preCall` is `rateLimiter.check(..., { count: 1 })` — “is there ANY budget left”, not
+> “can I afford this call” — and `recordModelSpend` consumes AFTER the fact. So N CONCURRENT drafts
+> all see the same pre-spend rail and all pass. 43-02's per-draft gate bounds a SEQUENCE (two tool
+> calls in one turn), never a fan-out; the commit message for 43-02 claimed more than that and this
+> line is the correction. `narrowFanOut`'s own cap does not save it either: it caps `workerCount`
+> at `rootEnvelopeCents`, i.e. ONE CENT per worker, which is what makes `share >= 1` a theorem and
+> nowhere near what a draft costs. `EST_DRAFT_CENTS` divides the envelope so the COUNT is a real
+> bound. Mutation-proven with exact arithmetic (500c budget, 480 spent, x0.25, /2 = 2 workers;
+> undivided funds all 5) — the first version of that test asserted `toBeLessThan(5)` and stayed
+> GREEN under its own mutation, because the undivided envelope funded 2, which is also less than 5.
+>
+> A variant worker (`llm.runVariant`) does NOT go through `governedDispatch`. `startDispatchRun`
+> requires an `envelopeCents` and `governedDispatch` reads `envelopeCents > 0 ? it : derive`, so a
+> child passing 0 would be granted the FULL rail share — verbatim the defect ADR-038 fixed. A
+> variant is ONE `draftDocument` call: no tools, no recursion, nothing to govern. `planId` stays
+> TOP-LEVEL in the scheduler args so `reliabilitySweep`'s `dispatchLive` scan still sees the run.
+>
+> THE PIECE IS WELDED ONTO THE ANGLE IN CODE (`legalVariants`), the `headingFor` precedent. An
+> angle alone (“lead with the numbers”) is a fragment with no subject; fifteen workers briefed that
+> way produce fifteen drafts about nothing while the reported count stays correct. The test reads
+> the brief back out of `_scheduled_functions` args, not off the narrower's return — asserting the
+> `subject` alone left the consumer that ignores the weld completely invisible.
+>
+> `stageResearchPlan` gained ONE optional arg, `channel: v.literal("vault")`, and its RECYCLE
+> BRANCH FORKS. `channel` is birth-only, so a recycled shell can never acquire one — reusing the
+> open row for a batch would mint a root that `parseChannel(undefined)` reads as `"email"`, which
+> is exactly ADR-042's failure arriving through the reuse door. A batch cancels the shell and
+> inserts a fresh root beside it, both in the SAME mutation so no reader sees two open roots. That
+> fork was 100% uncovered by every proposed check until it got its own test.)
+>
+> Last verified: 2026-09-07 (43-04 — **the content batch: N variants of one piece, one approval
+> card.** `startContentBatch` is a SIBLING of `startTeamRun`, not a parameter on it:
+> `legalAssignments` drops any route `resolveSpecialist` rejects, so every content assignment
+> would have vanished and `NO_ROUTES_REPLY` would have fired on a batch with nothing wrong with it.
+>
+> **THE MONEY BOUND IS THE COUNT, AND THIS IS THE THING TO UNDERSTAND BEFORE CHANGING ANY OF IT.**
+> `guardrails.preCall` is `rateLimiter.check(..., { count: 1 })` — “is there ANY budget left”, not
+> “can I afford this call” — and `recordModelSpend` consumes AFTER the fact. So N CONCURRENT drafts
+> all see the same pre-spend rail and all pass. 43-02's per-draft gate bounds a SEQUENCE (two tool
+> calls in one turn), never a fan-out; the commit message for 43-02 claimed more than that and this
+> line is the correction. `narrowFanOut`'s own cap does not save it either: it caps `workerCount`
+> at `rootEnvelopeCents`, i.e. ONE CENT per worker, which is what makes `share >= 1` a theorem and
+> nowhere near what a draft costs. `EST_DRAFT_CENTS` divides the envelope so the COUNT is a real
+> bound. Mutation-proven with exact arithmetic (500c budget, 480 spent, x0.25, /2 = 2 workers;
+> undivided funds all 5) — the first version of that test asserted `toBeLessThan(5)` and stayed
+> GREEN under its own mutation, because the undivided envelope funded 2, which is also less than 5.
+>
+> A variant worker (`llm.runVariant`) does NOT go through `governedDispatch`. `startDispatchRun`
+> requires an `envelopeCents` and `governedDispatch` reads `envelopeCents > 0 ? it : derive`, so a
+> child passing 0 would be granted the FULL rail share — verbatim the defect ADR-038 fixed. A
+> variant is ONE `draftDocument` call: no tools, no recursion, nothing to govern. `planId` stays
+> TOP-LEVEL in the scheduler args so `reliabilitySweep`'s `dispatchLive` scan still sees the run.
+>
+> THE PIECE IS WELDED ONTO THE ANGLE IN CODE (`legalVariants`), the `headingFor` precedent. An
+> angle alone (“lead with the numbers”) is a fragment with no subject; fifteen workers briefed that
+> way produce fifteen drafts about nothing while the reported count stays correct. The test reads
+> the brief back out of `_scheduled_functions` args, not off the narrower's return — asserting the
+> `subject` alone left the consumer that ignores the weld completely invisible.
+>
+> `stageResearchPlan` gained ONE optional arg, `channel: v.literal("vault")`, and its RECYCLE
+> BRANCH FORKS. `channel` is birth-only, so a recycled shell can never acquire one — reusing the
+> open row for a batch would mint a root that `parseChannel(undefined)` reads as `"email"`, which
+> is exactly ADR-042's failure arriving through the reuse door. A batch cancels the shell and
+> inserts a fresh root beside it, both in the SAME mutation so no reader sees two open roots. That
+> fork was 100% uncovered by every proposed check until it got its own test.)
+>
 > Last verified: 2026-09-07 (43-03 — `plans.channel`, the content queue's other half. `CHANNELS`
 > in `packages/core/src/channel.ts` is CANONICAL; the `schema.ts` union is a MIRROR and the
 > two-way compile bind lives in `plans.ts` beside the `Doc<"plans">` it needs (§1 — core must never

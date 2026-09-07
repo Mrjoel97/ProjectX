@@ -381,3 +381,185 @@ export const startTeamRun = internalMutation({
     return { ok: true, workerCount, requested: a.assignments.length };
   },
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 43-04 — THE CONTENT BATCH: N VARIANTS OF ONE PIECE, ONE APPROVAL CARD
+//
+// A SIBLING of `startTeamRun`, not a parameter on it. `startTeamRun` drops any route
+// `resolveSpecialist` rejects (`legalAssignments` above), so every content assignment would vanish
+// and `NO_ROUTES_REPLY` would fire on a batch that had nothing wrong with it. The two share the
+// root/child/envelope SHAPE and differ in what a child is: a fan-out child is a QUESTION for a
+// specialist, a batch child is an ANGLE on one piece with no specialist at all.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** One variant: the angle the user asked for, the brief the worker is given, and the heading the
+ *  assembled parent renders it under. */
+export type Variant = { angle: string; brief: string; subject: string };
+
+/**
+ * THE PIECE IS WELDED ON IN CODE, which is the whole reason this returns a `brief` instead of
+ * letting the caller pass the angle through. An angle alone — "lead with the numbers" — is a
+ * fragment with no subject: fifteen workers briefed that way produce fifteen drafts about nothing,
+ * and the variant count the tool reports is still correct, so it reads like a working feature.
+ * `headingFor` above welds the same way and for the same reason.
+ *
+ * A BLANK ANGLE IS DROPPED, never defaulted to the piece. Defaulting would re-create the
+ * identical-paid-turn case ADR-040's dedupe exists to prevent, one layer down where no dedupe can
+ * see it. The `typeof` check is a trust boundary and not paranoia: `jsonSchema()` carries no
+ * validator, so `variants: [null]` or `[{angle:"x"}]` really does arrive here.
+ */
+export const legalVariants = (piece: string, raw: readonly unknown[]): Variant[] => {
+  const topic = piece.trim();
+  if (topic.length === 0) return [];
+  const seen = new Set<string>();
+  const out: Variant[] = [];
+  for (const item of raw ?? []) {
+    const angle = (typeof item === "string" ? item : "").trim();
+    if (angle.length === 0) continue;
+    // `legalAssignments`' normaliser with the route half dropped — a batch has one piece, so the
+    // angle alone is the identity. Deliberately NOT extracted into a shared helper: the shipped key
+    // joins on a NUL separator for an anti-collision reason that does not apply to a single field,
+    // and a knob for two callers that disagree is the abstraction §8 forbids.
+    const key = angle.toLowerCase().replace(/\s+/g, " ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      angle,
+      brief: `${topic}\n\n${angle}`,
+      subject: `${topic} \u2014 ${angle}`.slice(0, 120), // headingFor's cap, same reason
+    });
+  }
+  return out;
+};
+
+/**
+ * A PER-DRAFT COST ESTIMATE, AND IT IS A MONEY BOUND — stated out loud because getting it wrong
+ * costs real money in the direction that cannot be undone.
+ *
+ * `guardrails.preCall` is `rateLimiter.check(..., { count: 1 })` — "is there ANY budget left", NOT
+ * "can I afford this call" — and `recordModelSpend` consumes AFTER the fact. So fifteen CONCURRENT
+ * drafts all see the same pre-spend rail and all pass. The per-draft gate 43-02 added bounds a
+ * SEQUENCE (two tool calls in one turn), never a fan-out.
+ *
+ * `narrowFanOut`'s own cap does not save it either: it caps `workerCount` at `rootEnvelopeCents`,
+ * i.e. ONE CENT per worker, which is exactly what makes `share >= 1` a theorem and nowhere near
+ * what a document draft costs. Dividing the envelope by an estimate is what makes the COUNT a real
+ * bound. It errs toward starting FEWER variants, which is the recoverable direction.
+ *
+ * ponytail: a constant, not a measurement. Upgrade path: read the `document_draft` rows out of the
+ * spend ledger and replace the number — or serialize the batch so each draft's `preCall` sees what
+ * the last one spent. Do not delete the divisor.
+ */
+export const EST_DRAFT_CENTS = 2;
+
+/** Nothing to tell apart. Names what the user must supply and ENDS THE TURN — it must not imply a
+ *  piece was written, because none was: `startContentBatch` returns before minting anything. */
+const NO_VARIANTS_REPLY =
+  "Those all read as the same version, so I haven't started anything. Ask the user what should" +
+  " DIFFER between the versions before calling this again.";
+
+/**
+ * NOT `NO_BUDGET_REPLY`. That sentence ends "ask me one question at a time", which against an
+ * exhausted rail is a live instruction to call `createDocument` N more times THIS turn — every one
+ * of them refused by `draftDocument`'s own gate. That is the fixture-35 loop `DRAFT_BLOCKED_MESSAGE`
+ * was written to close: a refusal has to sound final or it is not a refusal. One specialist retry
+ * is cheap; fifteen document drafts are not.
+ */
+const BATCH_NO_BUDGET_REPLY =
+  "The AI spending limit has been reached, so no version was drafted and nothing was charged." +
+  " Tell the user their budget is used up and do NOT try again this turn.";
+
+/**
+ * MINT A CONTENT BATCH: one root, up to `MAX_FAN_OUT` variant children, one approval card.
+ *
+ * The root is staged by the CALLER (`plans.stageResearchPlan` with `channel: "vault"`), so the
+ * `research_in_flight` / `draft_in_progress` interlocks are the same ones a fan-out gets. This
+ * mutation owns only the children and the money.
+ */
+export const startContentBatch = internalMutation({
+  args: {
+    tenantId: v.string(),
+    threadId: v.string(),
+    planId: v.id("plans"),
+    /** The piece every variant is a version OF. */
+    piece: v.string(),
+    /** `long` | `short` | `sheet` — chooses the drafter skill, mirroring `createDocument`. */
+    form: v.string(),
+    /** The angles, as the model wrote them. `v.any()` elements because the trust boundary is
+     *  `legalVariants`, not this validator: the tool schema carries no validator either. */
+    variants: v.array(v.any()),
+    rootRequestId: v.string(),
+    skillVersions: v.optional(v.record(v.string(), v.number())),
+    tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
+  },
+  handler: async (ctx, a): Promise<TeamRunResult> => {
+    const wanted = legalVariants(a.piece, a.variants);
+    if (wanted.length === 0) return { ok: false, reply: NO_VARIANTS_REPLY };
+
+    // The SAME derivation `governedDispatch` and `startTeamRun` use, from the SAME constant.
+    const rootEnvelope = Math.floor(
+      (await ctx.runQuery(internal.guardrails.remainingDailyCents, { tenantId: a.tenantId })) *
+        ENVELOPE_FRACTION,
+    );
+    // `shareCents` is DISCARDED, and that is decided rather than overlooked: a variant worker does
+    // NOT go through `governedDispatch`, so there is no envelope for a share to fill. See the
+    // scheduling comment below for why.
+    const { workerCount } = narrowFanOut(wanted.length, Math.floor(rootEnvelope / EST_DRAFT_CENTS));
+    if (workerCount === 0) return { ok: false, reply: BATCH_NO_BUDGET_REPLY };
+
+    const kids: { planId: Id<"plans">; brief: string }[] = [];
+    for (const variant of wanted.slice(0, workerCount)) {
+      const childId = await ctx.runMutation(internal.plans.insertPlan, {
+        tenantId: a.tenantId,
+        threadId: a.threadId,
+        parentPlanId: a.planId,
+        // All three load-bearing at BIRTH, exactly as in `startTeamRun`. `kind: "memo"` because
+        // three fail-closed gates test it by equality; `subject` because the assembled parent has
+        // no heading for this section without it; `channel` because ADR-042 D1 REQUIRES it on a row
+        // a batch mints — absent would read as `"email"`, a terminal a memo row cannot reach.
+        kind: "memo",
+        subject: variant.subject,
+        channel: "vault",
+      });
+      kids.push({ planId: childId, brief: variant.brief });
+    }
+
+    for (const kid of kids) {
+      // NOT `startDispatchRun`. `DISPATCH_ARGS` makes `envelopeCents` REQUIRED, and
+      // `governedDispatch` reads `envelopeCents > 0 ? it : derive` — so a child passing 0 would be
+      // granted the FULL rail share, which is verbatim the defect ADR-038 was written to fix. A
+      // variant is ONE `draftDocument` call: no tools, no recursion, nothing to govern.
+      //
+      // `planId` stays TOP-LEVEL so `reliabilitySweep`'s `dispatchLive` scan of
+      // `_scheduled_functions` still matches this run and the watchdog can still see it.
+      await ctx.scheduler.runAfter(0, internal.llm.runVariant, {
+        tenantId: a.tenantId,
+        threadId: a.threadId,
+        planId: kid.planId,
+        brief: kid.brief,
+        form: a.form,
+        rootRequestId: a.rootRequestId,
+        ...(a.skillVersions === undefined ? {} : { skillVersions: a.skillVersions }),
+        ...(a.tenantSkillIds === undefined ? {} : { tenantSkillIds: a.tenantSkillIds }),
+      });
+    }
+
+    // The SHIPPED `subagent.dispatched` payload shape, so no `auditProjection` allowlist edit is
+    // needed. Refs and counts only (\u00a74) \u2014 no piece, no angle, no brief.
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: a.tenantId,
+      correlationId: a.rootRequestId,
+      eventType: "subagent.dispatched",
+      actor: "system",
+      payload: {
+        rootRequestId: a.rootRequestId,
+        planId: String(a.planId),
+        depth: 1,
+        envelopeCents: rootEnvelope,
+        spentCents: 0,
+        workerCount,
+      },
+    });
+    return { ok: true, workerCount, requested: a.variants.length };
+  },
+});
