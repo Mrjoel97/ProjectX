@@ -879,10 +879,12 @@ export type ActOnGapResult =
  * `applyScorecardAnswer` above: there must be no second copy of the terminal choice, the plan
  * recycle, or the scheduled dispatch to drift.
  *
- * It REUSES the thread's single `plans` row rather than inserting a second one: `plans.byThread`
- * is a `.unique()` read, so a second row for the same thread would throw for every reader of the
- * workspace. A row that is mid-flight or already delivered is refused outright (`plan_busy`) —
- * staging a memo must never clobber an in-flight send.
+ * It INSERTS A ROOT per gap (ADR-037, changed in 42-03). It used to reuse the thread's single
+ * row because `plans.byThread` was a `.unique()` read and a second row would have thrown for
+ * every reader of the workspace; `newestRoot`'s bounded descending scan replaced that, so a
+ * thread now legitimately holds many roots and the newest one is the artifact. A row that is
+ * mid-flight is still refused outright (`plan_busy`) — staging a memo must never clobber an
+ * in-flight send, and the one-open-root invariant is what still enforces that.
  *
  * 15-04 — TWO terminals, chosen by whether the gap names a REGISTERED specialist:
  *

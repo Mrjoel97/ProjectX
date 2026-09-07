@@ -1,5 +1,18 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-07 (43-01 — **`blueprintPulse`'s `plansInFlight` counted WORKERS as work.**
+> It sums `plans` rows at `collecting` / `proposed` / `delivering`, which was exactly right while a
+> thread held ONE row. ADR-037 ended that and ADR-040 made it worse: a fan-out mints a root plus up
+> to 15 children, every one of them `collecting` while its worker runs, so a number shown to the
+> user inflated by up to 16x for the duration of one dispatch. `.filter(isRoot)` — the predicate
+> imported from `lib/planRow.ts`, never re-derived — because a child is a WORKER and the root
+> already represents the whole team, which is the same reason only the root reaches the inbox.
+>
+> This is Phase-42 debt, found by an adversarial reviewer rather than by a test, and it is the
+> shape to look for elsewhere: **any aggregate over `plans` written before ADR-037 assumed one row
+> per thread.** Grep for `query("plans")` without an `isRoot` filter before trusting a count.
+> Mutation-proven: dropping the filter reddens `blueprintPulse.test.ts`.)
+
 > Last verified: 2026-09-06 (39-01 — `SegmentAnatomy.tsx`'s tool label map gains `readPage: "reading the pages it cites"`; nothing else on the profile surface changed.)
 >
 

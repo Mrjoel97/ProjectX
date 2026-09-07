@@ -1,5 +1,18 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-07 (43-01 — **a fan-out card was headlined by whichever worker landed
+> first.** `titleFor` read `plan.body.split("\n")[0]` for a `memo`, and a fan-out parent's body is
+> `fanOutMemoBody`: the children's memos assembled under `## <heading>` sections. So the first line
+> IS the first child's heading, and a card representing up to 15 specialists (ADR-040) was titled
+> by one of them at random.
+>
+> `subject` is read FIRST now. It is written by CODE at stage time (`Team: <question>`,
+> `Next step: <gap label>`), so it is a deliberate label rather than model prose — which makes it
+> the better headline for every memo, not only a fan-out's. The 25.1-05 body fallback stays for
+> rows staged before subjects were written, and it still strips the markdown heading it was added
+> for. `titleFor` is exported for the test, following the ~15 sibling helpers this file already
+> exports for exactly that reason. Mutation-proven: neutralising the `subject` read reddens it.)
+
 > Last verified: 2026-09-07 (42-01, ADR-037 Decision 7 — **the approvals plane reads the row it
 > mutates.** All four `useQuery(api.plans.byThread, { threadId: item.threadId })` calls in
 > `ApprovalsView.tsx` (Awaiting, Scheduled, In-flight, Cleared) and the `Plan` type alias move to a

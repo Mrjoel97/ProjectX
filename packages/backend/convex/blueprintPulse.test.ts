@@ -83,4 +83,38 @@ describe("blueprintPulse", () => {
     const out = await asA.query(api.blueprint.blueprintPulse, { now: NOW });
     expect(out.globals).toEqual({ sent30d: 1, plansDone30d: 1, plansInFlight: 1 });
   });
+
+  it("a fan-out is ONE plan in flight, not one per worker", async () => {
+    // 43-01. Before Phase 42 a thread held exactly one `plans` row, so counting rows and counting
+    // work were the same thing. A fan-out now mints a root plus up to MAX_FAN_OUT children, all
+    // `collecting` while their workers run — so this user-visible number inflated by up to 16x for
+    // the duration of one dispatch. A child is a WORKER; the root already represents the team.
+    // MUTATION that turns this red: drop `.filter(isRoot)` in blueprint.ts.
+    const t = convexTest(schema, modules);
+    const root = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("plans", {
+        tenantId: "tenantA",
+        threadId: "team",
+        status: "collecting",
+        kind: "memo",
+        createdAt: NOW - MIN,
+      });
+      for (let i = 0; i < 5; i++)
+        await ctx.db.insert("plans", {
+          tenantId: "tenantA",
+          threadId: "team",
+          parentPlanId: id,
+          status: "collecting",
+          kind: "memo",
+          createdAt: NOW - MIN,
+        });
+      return id;
+    });
+    expect(root).toBeTruthy();
+
+    const out = await t
+      .withIdentity({ subject: "tenantA|s" })
+      .query(api.blueprint.blueprintPulse, { now: NOW });
+    expect(out.globals.plansInFlight).toBe(1);
+  });
 });

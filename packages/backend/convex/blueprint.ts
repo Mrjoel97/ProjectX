@@ -45,6 +45,7 @@ import { toGoal } from "./goals";
 import { tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { resolveModel } from "./lib/models";
+import { isRoot } from "./lib/planRow";
 import { sealedIn } from "./vaultFolders";
 
 const TOP_ENTITY_COUNT = 20;
@@ -635,6 +636,12 @@ export const blueprintPulse = tenantQuery({
         q.eq("tenantId", ctx.tenantId).eq("status", "done").gt("createdAt", since),
       )
       .collect();
+    // ROOTS ONLY (ADR-037). Before Phase 42 a thread held exactly one `plans` row, so counting
+    // rows and counting work were the same thing. A fan-out now mints a root plus up to
+    // MAX_FAN_OUT children, every one of them `collecting` while its worker runs — so this
+    // read inflated by up to 16x for the duration of one dispatch, on a number the user is
+    // shown. A child is a WORKER, not a piece of work in flight; the root already represents
+    // the whole team, which is the same reason only the root ever reaches the inbox.
     let plansInFlight = 0;
     for (const status of ["collecting", "proposed", "delivering"] as const) {
       const rows = await ctx.db
@@ -643,7 +650,7 @@ export const blueprintPulse = tenantQuery({
           q.eq("tenantId", ctx.tenantId).eq("status", status),
         )
         .collect();
-      plansInFlight += rows.length;
+      plansInFlight += rows.filter(isRoot).length;
     }
 
     return {

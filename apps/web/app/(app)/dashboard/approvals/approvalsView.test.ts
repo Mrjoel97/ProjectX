@@ -20,6 +20,7 @@ import {
   ResolvedOutcomeCard,
   refusalMessage,
   STALE_PLAN_MESSAGE,
+  titleFor,
   withheldSuffix,
 } from "./ApprovalsView";
 
@@ -378,5 +379,33 @@ describe("Approvals connected state contracts", () => {
     expect(suffix).toContain("unsubscribed");
     expect(suffix).toContain("bob@x.com");
     expect(suffix).toContain("eve@y.com");
+  });
+});
+
+describe("titleFor — a fan-out card is not titled by whichever worker landed first (43-01)", () => {
+  // A fan-out parent's body is `fanOutMemoBody`: the children's memos assembled under
+  // `## <heading>` sections. Reading the first LINE of that returned the FIRST CHILD'S heading,
+  // so a card representing up to 15 specialists was headlined by one of them at random.
+  // MUTATION that turns this red: put `previewText(plan.subject ?? "")` back AFTER the body read.
+  test("a fan-out parent uses its code-written subject, not its first child's heading", () => {
+    expect(
+      titleFor({
+        kind: "memo",
+        subject: "Team: What should I fix first before launch?",
+        body: "## Offer architect — pricing\n\nThe offer is underpriced.",
+      } as never),
+    ).toBe("Team: What should I fix first before launch?");
+  });
+
+  // The 25.1-05 fallback still stands for rows staged before subjects were written, and it still
+  // strips the markdown heading it was added for.
+  test("with no subject it falls back to the stripped first line", () => {
+    expect(titleFor({ kind: "memo", body: "# Pricing findings\n\nBody." } as never)).toBe(
+      "Pricing findings",
+    );
+  });
+
+  test("with neither it is still a memo, never an empty headline", () => {
+    expect(titleFor({ kind: "memo" } as never)).toBe("Next-step memo");
   });
 });

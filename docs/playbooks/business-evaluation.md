@@ -1,5 +1,12 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-09-07 (43-01 — comment-only, no behaviour change. `applyActOnGap`'s header
+> still said it "REUSES the thread's single `plans` row" because `plans.byThread` is a `.unique()`
+> read. Both halves are false since 42-03: it INSERTS a root per gap, and `newestRoot` replaced the
+> unique read. The `plan_busy` refusal is unchanged and is now the ONLY thing keeping a memo from
+> clobbering an in-flight send — the one-open-root invariant, not a database uniqueness that no
+> longer exists.)
+
 > Last verified: 2026-09-07 (42-03 — `landSpecialistResult` now BRANCHES ON `parentPlanId`. A
 > landed CHILD takes `approved`, not `proposed`: exactly two statuses are invisible to every
 > approvals query, and `collecting` is unavailable because two other predicates read

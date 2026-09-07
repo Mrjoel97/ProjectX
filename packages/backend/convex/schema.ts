@@ -1083,9 +1083,13 @@ export default defineSchema({
     briefChangedAt: v.optional(v.number()),
     /** When the current deck(s) were proposed against the brief. */
     deckProposedAt: v.optional(v.number()),
-    /** The deck, INLINE rather than a `mediaShots` table: `plans.by_thread` is `.unique()`, so
-     *  there is exactly one plan row per thread, and the canvas editor's reorder / delete / edit
-     *  is then ONE array patch instead of N row writes plus an ordering column. There is no
+    /** The deck, INLINE rather than a `mediaShots` table: the canvas editor's reorder / delete /
+     *  edit is then ONE array patch instead of N row writes plus an ordering column.
+     *  (Was justified by `plans.by_thread` being `.unique()` — "exactly one plan row per
+     *  thread". ADR-037 ended that: a thread holds many rows and `newestRoot` does a bounded
+     *  descending scan. The INLINE decision is unaffected — a deck belongs to ONE plan row
+     *  either way — but the reason given for it was false and would have misled the next
+     *  reader into thinking the uniqueness still held.) There is no
      *  `mediaAssets` table either — a job produces at most one asset and its storage id lives on
      *  the job row. The element shape is the shared `shotElement` const above. */
     shots: v.optional(v.array(shotElement)),

@@ -1,3 +1,17 @@
+> Last verified: 2026-09-07 (43-01 — a COMMENT-ONLY correction with no behaviour change, recorded
+> because the comment was actively dangerous. `cockpit.ts`'s thread-and-plan helper said two
+> creators "would make it throw", because `plans.byThread` was a `.unique()` read. ADR-037 removed
+> that throw: `newestRoot` is a bounded descending scan, so a second creator now succeeds SILENTLY
+> and leaves two roots where the caller assumed one. Reaching the same row is a property this
+> function must keep ON PURPOSE; the database no longer keeps it for us.
+>
+> Two sibling comments were corrected in the same pass (`schema.ts`'s inline-deck rationale and
+> `evaluations.ts`'s actOnGap header), both of which still cited `.unique()` and one of which
+> described a reuse that 42-03 replaced with an insert. A stale comment that names a REMOVED
+> invariant is worse than no comment: it tells the next reader a constraint is enforced when the
+> only thing enforcing it is the code they are about to change. ADR-039 is the Phase-43 design
+> that depends on getting this right.)
+>
 > Last verified: 2026-09-07 (42.2 — **A FAN-OUT CHILD IS AN ASSIGNMENT, NOT A ROUTE (ADR-040).**
 > Owner decision: the fan-out should release up to 15 workers, not 5.
 >

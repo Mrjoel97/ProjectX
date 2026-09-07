@@ -358,7 +358,7 @@ export function emailApprovalActionLabel(plan: EmailApprovalPresentation): strin
   return "Approve & send email";
 }
 
-function titleFor(plan: Plan): string {
+export function titleFor(plan: Plan): string {
   if (plan.kind === "calendar_event") return plan.eventTitle || "Calendar plan";
   if (plan.kind === "calendar_manage")
     return plan.calendarOperation === "delete"
@@ -367,7 +367,20 @@ function titleFor(plan: Plan): string {
   // 25.1-05 (D11): the memo's own first line, which is a MARKDOWN HEADING — so the card headline
   // read `# Pricing findings`. The same strip as the preview below, because it is the same defect
   // one element up; found by the preview test failing on this string.
-  if (plan.kind === "memo") return previewText(plan.body?.split("\n")[0] ?? "") || "Next-step memo";
+  //
+  // 43-01: `subject` FIRST, and the reason is a fan-out. A fan-out parent's body is
+  // `fanOutMemoBody` — the children's memos assembled under `## <heading>` sections — so the
+  // first line is the FIRST CHILD'S heading, and a card representing up to 15 specialists was
+  // titled by whichever worker happened to land first. `subject` is written by CODE at stage
+  // time (`Team: <question>`, `Next step: <gap label>`) and is a deliberate label rather than
+  // model prose, which makes it the better headline for every memo, not only this one.
+  // The body fallback stays for rows staged before subjects were written.
+  if (plan.kind === "memo")
+    return (
+      previewText(plan.subject ?? "") ||
+      previewText(plan.body?.split("\n")[0] ?? "") ||
+      "Next-step memo"
+    );
   if (plan.kind === "crm_write") {
     const count = Array.isArray(plan.crmOperations) ? plan.crmOperations.length : 0;
     return `${count} change${count === 1 ? "" : "s"} to your records`;

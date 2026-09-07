@@ -179,9 +179,15 @@ async function recordPackPlanDecision(
 }
 
 /**
- * The thread + its single `plans` row, created on first use. Extracted verbatim from
- * `sendCockpitMessage` so the pack driver below reaches the SAME row rather than minting a second
- * one: `plans.byThread` is a `by_thread` unique read, so two creators would make it throw.
+ * The thread + its NEWEST ROOT `plans` row, created on first use. Extracted verbatim from
+ * `sendCockpitMessage` so the pack driver below reaches the SAME row rather than minting a
+ * second one.
+ *
+ * It used to say "two creators would make it throw", because `plans.byThread` was a `.unique()`
+ * read. ADR-037 removed that throw: `newestRoot` returns the newest row with no `parentPlanId`
+ * and a second creator would now succeed SILENTLY, leaving two roots where the caller assumed
+ * one. Reaching the same row is therefore a property this function must keep on purpose, not
+ * one the database still enforces for it.
  *
  * `runSpecialistTurn` REQUIRES a `planId` even for an analysis-only run. The row starts at
  * `collecting` with no `kind`, which is exactly right for one: nothing arms and nothing delivers.
