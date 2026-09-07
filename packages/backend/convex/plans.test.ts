@@ -6,6 +6,8 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { MAX_FAN_OUT } from "./lib/dispatchShared";
+import { ROOT_SCAN } from "./lib/planRow";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -1047,17 +1049,37 @@ describe("ADR-037 — newest root, never a child, never a silent wrong row", () 
   test("beyond the scan window it returns NULL — loudly wrong, never quietly wrong", async () => {
     const t = convexTest(schema, modules);
     const root = await insertRow(t, { subject: "buried" });
-    // ROOT_SCAN is 20. Twenty children in front of the root push it out of the window.
-    for (let i = 0; i < 20; i++) await insertRow(t, { parentPlanId: root, subject: `w${i}` });
+    // DERIVED, never the literal: ROOT_SCAN is `2 * (MAX_FAN_OUT + 1)` since ADR-040, and this test
+    // hardcoding 20 is exactly how raising the cap turned a real bound into a silently passing one.
+    // Filling the window entirely pushes the root out of it.
+    for (let i = 0; i < ROOT_SCAN; i++)
+      await insertRow(t, { parentPlanId: root, subject: `w${i}` });
 
     const plan = await t.withIdentity({ subject: TENANT }).query(api.plans.byThread, {
       threadId: THREAD,
     });
     // This is the deliberate failure mode. `cockpit.ts` throws "plan row missing for thread" on a
     // null, which is visible; returning a child or an arbitrary row would not be. The bound is safe
-    // in practice because a fan-out mints its children in one mutation right after their root, so a
-    // descending scan meets a root within C_max + 1 rows (6 for G6, 11 for G10).
+    // in practice because a fan-out mints its children in one mutation right after their root and
+    // MAX_DEPTH forbids a grandchild, so a descending scan meets a root within MAX_FAN_OUT + 1 rows
+    // — and ROOT_SCAN is now derived to be strictly larger than that, pinned in fanOut.test.ts.
     expect(plan).toBeNull();
+  });
+
+  test("a FULL fan-out still resolves its own root — the behaviour, not the arithmetic", async () => {
+    // The claim a user actually depends on, stated once at the real cap. fanOut.test.ts pins the
+    // RELATIONSHIP (ROOT_SCAN > MAX_FAN_OUT + 1); this pins what that relationship buys: mint the
+    // largest team ADR-040 allows and the thread still knows which row is its artifact.
+    // MUTATION that turns this red: ROOT_SCAN = MAX_FAN_OUT (a window one short of the burial).
+    const t = convexTest(schema, modules);
+    const root = await insertRow(t, { subject: "the artifact" });
+    for (let i = 0; i < MAX_FAN_OUT; i++)
+      await insertRow(t, { parentPlanId: root, subject: `w${i}` });
+
+    const plan = await t.withIdentity({ subject: TENANT }).query(api.plans.byThread, {
+      threadId: THREAD,
+    });
+    expect(plan?._id).toBe(root);
   });
 
   test("byId is tenant-guarded — the approvals plane cannot resolve a foreign row", async () => {

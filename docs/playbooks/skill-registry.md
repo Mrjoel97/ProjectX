@@ -1,5 +1,22 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-07 (42.2 — the `cockpit-agent` body's `dispatchTeam` section was rewritten
+> for ADR-040's assignment shape. **This is REQUIRED, not documentation**: ADR-007 says a granted
+> capability must be TAUGHT, and a body that describes `routes` while the tool takes `assignments`
+> is a body that contradicts its own tool set — a recorded failure class in this repo. The section
+> now tells the model to write a BREAKDOWN (each assignment a self-contained sub-question that no
+> sibling already covers), that two assignments may share a specialist when they ask different
+> things, that repeating a specialist AND the same sub-question is merged, and that a worker
+> receives only its own sub-question — not the overall question, not its siblings'.
+>
+> Still a GATED CANDIDATE. `cockpit-agent` is in `GATED_SKILLS`, so this edit publishes a candidate
+> and changes nothing live; the tool stays invisible to the model until the eval gate runs and it
+> is activated, per deployment. That gate is the one 42.1 diagnosed as jammed on fixture 33, so
+> this body cannot be certified until that is resolved. The `.md` and its hand-derived `.ts` mirror
+> were regenerated together and are pinned byte-identically (LF-normalised) by `skillBodies.test.ts`
+> — there is no generator, so that row is the only thing that turns an edit to one side into a
+> failure rather than a silently stale seeded prompt.)
+
 > Last verified: 2026-09-07 (42-03 — the `cockpit-agent` body gained a section teaching
 > `dispatchTeam`. **This makes it a GATED CANDIDATE, not a live change**: `cockpit-agent` is in
 > `GATED_SKILLS`, so `activateSkillVersion` throws without recorded passing eval evidence, and the

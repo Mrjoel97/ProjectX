@@ -1988,27 +1988,52 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
   // re-entry during a SPECIALIST turn would bypass MAX_DEPTH and wouldCycle. The executive is the
   // only agent that dispatches, and now the only one that fans out.
   //
-  // The model supplies the routes and their ORDER and nothing else. Not the cap (MAX_FAN_OUT), not
-  // the envelope, not how many of its routes the rail can actually fund — `startTeamRun` dedupes,
-  // validates against the closed specialist set, drops `media`, and narrows to
-  // `min(routes, MAX_FAN_OUT, rootEnvelope)` (ADR-038). A route list of five `research` entries
-  // buys ONE worker, not five paid turns.
+  // The model supplies the ASSIGNMENTS and their ORDER and nothing else. Not the cap
+  // (MAX_FAN_OUT), not the envelope, not how many the rail can actually fund — `startTeamRun`
+  // dedupes, validates against the closed specialist set, drops `media`, and narrows to
+  // `min(assignments, MAX_FAN_OUT, rootEnvelope)` (ADR-038/ADR-040).
+  //
+  // ADR-040: an assignment is a route AND ITS OWN SUB-QUESTION, and the dedupe is on the PAIR.
+  // Five `research` entries carrying the SAME question still buy ONE worker — that protection is
+  // unchanged, and it is why the cap could be raised at all. Five carrying five DIFFERENT
+  // sub-questions buy five workers, because that is five different pieces of work. While a
+  // child was merely a route, `SPECIALIST_ROUTES` (six members, `media` refused) was the binding
+  // constraint and MAX_FAN_OUT was decorative.
   const dispatchTeamTool = {
     dispatchTeam: tool({
       description:
-        "Ask SEVERAL specialists one question at once, when the answer genuinely needs more than " +
-        "one kind of expertise. They run in the background and arrive as a SINGLE plan card the " +
-        "user approves once. Prefer dispatchResearch for anything one specialist can answer.",
-      inputSchema: jsonSchema<{ question: string; routes: string[] }>({
+        "Split ONE question into separate pieces of work and give each piece to a specialist. " +
+        "Use it when the answer genuinely needs several different investigations. `question` is " +
+        "the overall question; `assignments` is the breakdown — each entry names a specialist " +
+        "and the SPECIFIC sub-question that one should answer. Two entries may share a " +
+        "specialist when they ask different things; entries that repeat the same specialist AND " +
+        "the same sub-question are merged. They all run in the background and arrive as a " +
+        "SINGLE plan card the user approves once. Prefer dispatchResearch when one specialist " +
+        "answering one question would do.",
+      inputSchema: jsonSchema<{
+        question: string;
+        assignments: { route: string; question: string }[];
+      }>({
         type: "object",
         properties: {
           question: { type: "string" },
-          routes: { type: "array", items: { type: "string" } },
+          assignments: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                route: { type: "string" },
+                question: { type: "string" },
+              },
+              required: ["route", "question"],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ["question", "routes"],
+        required: ["question", "assignments"],
         additionalProperties: false,
       }),
-      execute: async ({ question, routes }): Promise<string> => {
+      execute: async ({ question, assignments }): Promise<string> => {
         const threadId = toolCtx.threadId as string;
         const rootRequestId = toolCtx.rootRequestId as string;
         // The ROOT is staged through the ordinary research stager: it is a `collecting` memo on
@@ -2025,7 +2050,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           tenantId,
           threadId,
           planId: staged.planId,
-          routes,
+          assignments,
           question,
           rootRequestId,
           skillVersions,

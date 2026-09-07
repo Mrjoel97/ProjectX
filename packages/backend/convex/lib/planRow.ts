@@ -19,6 +19,7 @@ import { fanOutMemoBody } from "@pikar/core";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { MAX_FAN_OUT } from "./dispatchShared";
 
 /**
  * How far back a root scan looks. `smoke.ts:893-898` is the shipped idiom this copies —
@@ -27,14 +28,26 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
  * WHY A BOUND IS SAFE HERE. A fan-out's children are minted in one mutation immediately after
  * their root (ADR-037 Decision 6), so a descending scan meets a root after at most `C_max + 1`
  * rows: 6 for a G6 fan-out (≤5 workers), 11 for a G10 batch (2-10 deliverables). A window of 20
- * carries headroom for the largest batch plus its root plus a second batch's worth of drift.
+ * DERIVED FROM `MAX_FAN_OUT`, NOT A LITERAL, and that is the point of this line.
+ *
+ * The true bound is `MAX_FAN_OUT + 1`: a fan-out mints its children in ONE mutation right
+ * after their root, and `MAX_DEPTH = 1` forbids a grandchild, so a descending scan meets a
+ * root after at most one root plus its own children. Nothing older can be in front of it.
+ * Doubling that carries a second fan-out's worth of headroom.
+ *
+ * It was the literal `20` while `MAX_FAN_OUT` was 5, justified in PROSE by the arithmetic
+ * `6 for a G6 fan-out, 11 for a G10 batch` (ADR-037 Decision 2). ADR-040 raised the cap to 15
+ * and that prose silently became the only thing standing between 16 and 20. A constant whose
+ * safety depends on another constant's value, with the dependency recorded in a comment, is
+ * the same defect class as `declaredUnsupported`'s expired premise (42.1). So it is code now,
+ * and `planRow.test.ts` pins the relationship rather than either number.
  *
  * WHAT HAPPENS IF IT IS EVER EXCEEDED. `newestRoot` returns null and the caller throws
  * ("cockpit: plan row missing for thread") — LOUDLY, not silently, which is the property ADR-037
  * Decision 8 deliberately preserves now that `.unique()`'s throw is gone. A silent wrong row is
  * the one outcome this must never produce.
  */
-export const ROOT_SCAN = 20;
+export const ROOT_SCAN = 2 * (MAX_FAN_OUT + 1);
 
 /** A row with NO `parentPlanId` is a ROOT: its own artifact, its own approval card. A row WITH one
  *  is a fan-out child and is never the answer to "what is the plan for this thread". */

@@ -200,20 +200,59 @@ const kindForRoute = (route: string): "specialist" | "research" =>
 
 /** A worker's heading in the assembled parent memo, written at MINT time. The `plans` table has no
  *  `route` column, so this is how the route survives to `fanOutMemoBody` without anyone parsing it
- *  back out of rendered prose. */
-const headingForRoute = (route: string): string =>
+ *  back out of rendered prose.
+ *
+ *  ADR-040: the SUB-QUESTION is now part of it, and that is not decoration. Two children may
+ *  share a route, so a heading of just `Research` would give the assembled parent several
+ *  identical section headings and the reader could not tell which answer belonged to which
+ *  question. `subject` is capped at the same 120 the root's is. */
+const routeLabel = (route: string): string =>
   route.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+const headingFor = (route: string, question: string): string =>
+  `${routeLabel(route)} \u2014 ${question}`.slice(0, 120);
 
-/** What the model asked for, narrowed to what is legal. Dedupe FIRST: `SPECIALIST_ROUTES` is a
- *  closed six-member set, so five copies of `research` would otherwise survive validation and buy
- *  five identical paid turns on one question — and the cycle guard cannot catch it, because
- *  `wouldCycle` is evaluated per child against an empty ancestry and never fires between siblings.
+/** An ASSIGNMENT is a route AND the sub-question that worker is being asked. ADR-040. */
+export type Assignment = { route: string; question: string };
+
+/** The dedupe KEY, and the one place the pair semantics live. Normalised so that trivial
+ *  re-spellings of the same ask do not buy a second paid turn: case-folded, whitespace
+ *  collapsed. The ORIGINAL question is what the worker is briefed with — only the key is
+ *  normalised, because the model's own wording is the brief.
+ *  `\u0000` as the separator: it cannot occur in a route or a question, so `a|b` and `a` + `|b`
+ *  cannot collide the way they would with any printable joiner. */
+const assignmentKey = (a: Assignment): string =>
+  `${a.route}\u0000${a.question.toLowerCase().replace(/\s+/g, " ")}`;
+
+/** What the model asked for, narrowed to what is legal.
+ *
+ *  DEDUPE IS ON THE PAIR, NOT THE ROUTE (ADR-040). Under ADR-037 a child was a route and this
+ *  deduped by route, which was correct then: five copies of `research` on ONE question buy five
+ *  identical paid turns, and the cycle guard cannot catch it because `wouldCycle` is evaluated
+ *  per child against an empty ancestry and never fires between siblings. That protection is
+ *  PRESERVED exactly — five copies of the same route AND the same question still collapse to
+ *  one — while five `research` workers on five DIFFERENT sub-questions are now five different
+ *  pieces of work, which is what makes a 15-worker team mean anything.
+ *
+ *  A blank question is dropped rather than defaulted to the umbrella question: defaulting would
+ *  quietly re-create the identical-turn case this guards, wearing a route the caller did ask for.
  *  Order is the MODEL'S order, preserved: it chose what to ask and in what sequence, and ADR-038
  *  truncates from the front rather than re-ranking. */
-const legalRoutes = (routes: readonly string[]): string[] =>
-  [...new Set(routes.map((r) => r.trim()).filter((r) => r.length > 0))].filter(
-    (r) => r !== "media" && resolveSpecialist(r).ok,
-  );
+const legalAssignments = (raw: readonly Assignment[]): Assignment[] => {
+  const seen = new Set<string>();
+  const out: Assignment[] = [];
+  for (const item of raw) {
+    const route = (item?.route ?? "").trim();
+    const question = (item?.question ?? "").trim();
+    if (route.length === 0 || question.length === 0) continue;
+    if (route === "media" || !resolveSpecialist(route).ok) continue;
+    const a = { route, question };
+    const key = assignmentKey(a);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(a);
+  }
+  return out;
+};
 
 /** No route the code recognises. Driver-plane sentence, never a reason code (§4). */
 const NO_ROUTES_REPLY =
@@ -251,16 +290,20 @@ export const startTeamRun = internalMutation({
     threadId: v.string(),
     /** The staged ROOT — `collecting` + `kind: "memo"`, created by the caller's stager. */
     planId: v.id("plans"),
-    /** The model's routes, in the model's order. Validated and narrowed here, never trusted. */
-    routes: v.array(v.string()),
+    /** The model's ASSIGNMENTS, in the model's order. Validated and narrowed here, never
+     *  trusted — the route must resolve to a registered specialist and the question must be
+     *  non-empty. ADR-040. */
+    assignments: v.array(v.object({ route: v.string(), question: v.string() })),
+    /** The UMBRELLA question. It brief no worker: it is the approval card's subject and the
+     *  thing the assembled parent memo answers. Each worker is briefed with its OWN question. */
     question: v.string(),
     rootRequestId: v.string(),
     skillVersions: v.optional(v.record(v.string(), v.number())),
     tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
   },
   handler: async (ctx, a): Promise<TeamRunResult> => {
-    const routes = legalRoutes(a.routes);
-    if (routes.length === 0) return { ok: false, reply: NO_ROUTES_REPLY };
+    const assignments = legalAssignments(a.assignments);
+    if (assignments.length === 0) return { ok: false, reply: NO_ROUTES_REPLY };
 
     // The SAME derivation `governedDispatch` uses for a root, from the SAME constant — that is why
     // `ENVELOPE_FRACTION` moved to `lib/dispatchShared.ts`. `remainingDailyCents` is already clamped
@@ -269,13 +312,13 @@ export const startTeamRun = internalMutation({
       (await ctx.runQuery(internal.guardrails.remainingDailyCents, { tenantId: a.tenantId })) *
         ENVELOPE_FRACTION,
     );
-    const { workerCount, shareCents: share } = narrowFanOut(routes.length, rootEnvelope);
+    const { workerCount, shareCents: share } = narrowFanOut(assignments.length, rootEnvelope);
     // Nothing to narrow to. Fail closed, before a single row is inserted — the one case where the
     // refusal ADR-038 rejected as a general rule is still the only correct answer.
     if (workerCount === 0) return { ok: false, reply: NO_BUDGET_REPLY };
 
-    const children: { planId: Id<"plans">; route: string }[] = [];
-    for (const route of routes.slice(0, workerCount)) {
+    const children: { planId: Id<"plans">; route: string; question: string }[] = [];
+    for (const item of assignments.slice(0, workerCount)) {
       const childId = await ctx.runMutation(internal.plans.insertPlan, {
         tenantId: a.tenantId,
         threadId: a.threadId,
@@ -286,9 +329,9 @@ export const startTeamRun = internalMutation({
         // because its own predicate wants the same field. Without `subject` the assembled parent
         // memo has no heading for this section.
         kind: "memo",
-        subject: headingForRoute(route),
+        subject: headingFor(item.route, item.question),
       });
-      children.push({ planId: childId, route });
+      children.push({ planId: childId, route: item.route, question: item.question });
     }
 
     for (const child of children) {
@@ -297,9 +340,12 @@ export const startTeamRun = internalMutation({
         tenantId: a.tenantId,
         threadId: a.threadId,
         planId: child.planId,
-        gapIndex: 0, // no gap on this path — the QUESTION briefs every worker
+        gapIndex: 0, // no gap on this path — the assignment's own question briefs the worker
         route: child.route,
-        question: a.question,
+        // ADR-040: the CHILD'S question, never the umbrella one. Briefing every worker with
+        // the umbrella question is exactly the identical-paid-turn case the pair dedupe
+        // exists to prevent, re-introduced one layer down where no dedupe can see it.
+        question: child.question,
         // ONE lineage key for the whole tree (`audit.by_correlation` reconstructs it), and distinct
         // plan ids per worker. That pairing is exactly why the key is minted rather than derived.
         rootRequestId: a.rootRequestId,
@@ -332,6 +378,6 @@ export const startTeamRun = internalMutation({
       },
     });
 
-    return { ok: true, workerCount, requested: a.routes.length };
+    return { ok: true, workerCount, requested: a.assignments.length };
   },
 });

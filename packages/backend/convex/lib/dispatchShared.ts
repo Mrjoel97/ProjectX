@@ -48,11 +48,23 @@ export const DISPATCH_ARGS = {
  *  the upgrade path" comment already in guardrails.ts. */
 export const ENVELOPE_FRACTION = 0.25;
 
-/** The most workers ONE question may be fanned out to (ADR-037: ≤5, depth 1). An upper bound only —
- *  ADR-038 makes the rail a second, lower bound, so the number that actually runs is
- *  `min(routes, MAX_FAN_OUT, rootEnvelope)` and is not a fixed figure. A test that pins "five
- *  workers" without seeding the rail is pinning the wrong thing. */
-export const MAX_FAN_OUT = 5;
+/** The most workers ONE question may be fanned out to (ADR-040; was 5 under ADR-037, depth 1 is
+ *  unchanged). An upper bound only — ADR-038 makes the rail a second, lower bound, so the number
+ *  that actually runs is `min(assignments, MAX_FAN_OUT, rootEnvelope)` and is not a fixed figure.
+ *  A test that pins a worker count without seeding the rail is pinning the wrong thing.
+ *
+ *  WHY RAISING THIS ALONE WOULD HAVE BEEN A NO-OP, recorded because it is the whole reason
+ *  ADR-040 exists: while a child was A ROUTE, `SPECIALIST_ROUTES` was the binding constraint,
+ *  not this number. Six members, `media` refused at the door, deduped by route — five distinct
+ *  workers, and the cap happened to equal five. A child is now an ASSIGNMENT (a route AND its
+ *  own sub-question), deduped on the PAIR, so this number binds for the first time.
+ *
+ *  IT IS A MONEY CEILING. A child is dispatched with `spentCents: 0`, and `governedDispatch`
+ *  refuses only on `spent >= envelope` — which is false at the start of every child. So the
+ *  envelope bounds RECURSION, not the first turn, and this constant is the real bound on how
+ *  many paid turns one Approve can buy. `narrowFanOut` capping `n` by `rootEnvelope` is what
+ *  keeps a thin rail from starting all of them. */
+export const MAX_FAN_OUT = 15;
 
 /**
  * HOW MANY WORKERS A FAN-OUT ACTUALLY STARTS, AND WHAT EACH ONE IS GIVEN (ADR-038).

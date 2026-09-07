@@ -12,6 +12,7 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { MAX_FAN_OUT, narrowFanOut } from "./lib/dispatchShared";
+import { ROOT_SCAN } from "./lib/planRow";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -55,13 +56,31 @@ const childrenOf = (t: T, parentPlanId: Id<"plans">) =>
     (await ctx.db.query("plans").collect()).filter((p) => p.parentPlanId === parentPlanId),
   );
 
+const UMBRELLA = "What should I fix first before launch?";
+
+/** Routes only, every one carrying the SAME sub-question. That is deliberate: it is the shape
+ *  ADR-037 could express, so every pre-ADR-040 assertion below keeps its exact meaning — and
+ *  the repeated-route test still proves the identical-paid-turn guard, because same route AND
+ *  same question is precisely what the pair dedupe collapses. */
 const startTeam = (t: T, planId: Id<"plans">, routes: string[]) =>
+  startTeamAssign(
+    t,
+    planId,
+    routes.map((route) => ({ route, question: UMBRELLA })),
+  );
+
+/** ADR-040: the real shape. A child is a route AND its own sub-question. */
+const startTeamAssign = (
+  t: T,
+  planId: Id<"plans">,
+  assignments: { route: string; question: string }[],
+) =>
   t.mutation(internal.dispatchRun.startTeamRun, {
     tenantId: TENANT,
     threadId: THREAD,
     planId,
-    routes,
-    question: "What should I fix first before launch?",
+    assignments,
+    question: UMBRELLA,
     rootRequestId: "root-fanout-1",
   });
 
@@ -81,7 +100,10 @@ describe("narrowFanOut — the money rule, as pure arithmetic (ADR-038)", () => 
     // on a 4-cent envelope would each have received 4 cents — five times the budget being divided.
     // MUTATION that turns this red: drop `rootEnvelopeCents` from the Math.min.
     for (let rootEnvelope = 0; rootEnvelope <= 40; rootEnvelope++) {
-      for (let routeCount = 1; routeCount <= 8; routeCount++) {
+      // Widened past MAX_FAN_OUT (15) by ADR-040 so the range actually CROSSES the cap. At 8 it
+      // stopped short of it, and an exhaustive test that never reaches the bound it is checking
+      // proves the arithmetic on one side of the interesting point only.
+      for (let routeCount = 1; routeCount <= 20; routeCount++) {
         const { workerCount, shareCents } = narrowFanOut(routeCount, rootEnvelope);
         if (workerCount === 0) {
           expect(rootEnvelope, `n=0 only when the rail is empty`).toBe(0);
@@ -141,7 +163,13 @@ describe("startTeamRun — what a child is at birth", () => {
     }
     // The headings are what `fanOutMemoBody` will use — the route survives to the parent memo
     // WITHOUT anyone parsing it back out of rendered prose.
-    expect(kids.map((k) => k.subject).sort()).toEqual(["Lead engine", "Offer architect"]);
+    // ADR-040: the heading carries the ROUTE and the sub-question, because two children may now
+    // share a route and two identical section headings in the assembled memo would leave the
+    // reader unable to tell which answer came from which question.
+    expect(kids.map((k) => k.subject).sort()).toEqual([
+      `Lead engine — ${UMBRELLA}`,
+      `Offer architect — ${UMBRELLA}`,
+    ]);
     await cancelQueued(t);
   });
 
@@ -174,11 +202,13 @@ describe("startTeamRun — what a child is at birth", () => {
     await cancelQueued(t);
   });
 
-  test("a repeated route buys ONE worker, not five paid turns", async () => {
-    // `SPECIALIST_ROUTES` is a closed six-member set, so five copies of `research` survive
-    // validation. The cycle guard cannot catch it either: `wouldCycle` is evaluated per child
-    // against an EMPTY ancestry, so it never fires between siblings. Dedupe is the only guard.
-    // MUTATION that turns this red: drop the `new Set` from `legalRoutes`.
+  test("a repeated route ON ONE QUESTION buys ONE worker, not five paid turns", async () => {
+    // The guard ADR-040 had to PRESERVE while raising the cap. Four copies of `research` all
+    // asking the same thing are four identical paid turns for one answer, and the cycle guard
+    // cannot catch it: `wouldCycle` is evaluated per child against an EMPTY ancestry, so it
+    // never fires between siblings. The pair dedupe is the only guard.
+    // MUTATION that turns this red: dedupe on `route` alone in `legalAssignments`, or drop the
+    // `seen` set entirely.
     const t = newTest();
     const planId = await stagedRoot(t);
     const res = await startTeam(t, planId, ["research", "research", "research", "research"]);
@@ -196,7 +226,7 @@ describe("startTeamRun — what a child is at birth", () => {
     const res = await startTeam(t, planId, ["media", "not-a-route", "", "offer-architect"]);
     expect(res.ok && res.workerCount).toBe(1);
     const kids = await childrenOf(t, planId);
-    expect(kids.map((k) => k.subject)).toEqual(["Offer architect"]);
+    expect(kids.map((k) => k.subject)).toEqual([`Offer architect \u2014 ${UMBRELLA}`]);
     await cancelQueued(t);
   });
 
@@ -347,5 +377,94 @@ describe("reliabilitySweep resolves a fan-out (ADR-037 Decision 4)", () => {
     });
 
     expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("collecting");
+  });
+});
+
+// ── ADR-040: a child is an ASSIGNMENT, and that is what makes the cap mean anything. ──────────
+describe("startTeamRun — one route, several questions", () => {
+  test("the SAME route on DIFFERENT questions buys a worker each", async () => {
+    // The whole of ADR-040 in one assertion. Under ADR-037 this returned ONE worker, because a
+    // child was a route and the dedupe collapsed by route — so `MAX_FAN_OUT` was decorative and
+    // `SPECIALIST_ROUTES` (six members, `media` refused) was the real bound at five.
+    // MUTATION that turns this red: dedupe on `route` alone in `legalAssignments`.
+    const t = newTest();
+    const planId = await stagedRoot(t);
+    const res = await startTeamAssign(t, planId, [
+      { route: "research", question: "What do competitors charge?" },
+      { route: "research", question: "What do buyers complain about?" },
+      { route: "research", question: "Which channels do they use?" },
+    ]);
+    expect(res.ok && res.workerCount).toBe(3);
+    const kids = await childrenOf(t, planId);
+    expect(kids).toHaveLength(3);
+    // Every heading is DISTINCT. Three sections all headed `Research` would give the assembled
+    // parent memo three indistinguishable headings and the reader could not tell which answer
+    // belonged to which question.
+    expect(new Set(kids.map((k) => k.subject)).size).toBe(3);
+    await cancelQueued(t);
+  });
+
+  test("each worker is briefed with ITS OWN question, never the umbrella one", async () => {
+    // The failure this catches is silent and expensive: brief all N with the umbrella question and
+    // you have re-created the identical-paid-turn case ONE LAYER DOWN, where no dedupe can see it —
+    // N distinct children, N distinct rows, N identical model turns.
+    // MUTATION that turns this red: pass `a.question` instead of `child.question` in startTeamRun.
+    const t = newTest();
+    const planId = await stagedRoot(t);
+    await startTeamAssign(t, planId, [
+      { route: "research", question: "What do competitors charge?" },
+      { route: "lead-engine", question: "Where are leads leaking?" },
+    ]);
+    const queued = await t.run(async (ctx) =>
+      ctx.db.system.query("_scheduled_functions").collect(),
+    );
+    const asked = queued
+      .map((r) => (r.args[0] as { question?: string } | undefined)?.question)
+      .filter((q): q is string => typeof q === "string");
+    expect(asked).toHaveLength(2);
+    expect(new Set(asked)).toEqual(
+      new Set(["What do competitors charge?", "Where are leads leaking?"]),
+    );
+    expect(asked).not.toContain(UMBRELLA);
+    await cancelQueued(t);
+  });
+
+  test("a blank sub-question is DROPPED, never defaulted to the umbrella question", async () => {
+    // Defaulting would quietly re-create the identical-turn case wearing a route the caller really
+    // did ask for. Dropping is the fail-closed direction: the user gets a smaller team, not a
+    // duplicate paid turn. MUTATION: `question || a.question` in `legalAssignments`.
+    const t = newTest();
+    const planId = await stagedRoot(t);
+    const res = await startTeamAssign(t, planId, [
+      { route: "research", question: "   " },
+      { route: "lead-engine", question: "Where are leads leaking?" },
+    ]);
+    expect(res.ok && res.workerCount).toBe(1);
+    await cancelQueued(t);
+  });
+
+  test("MAX_FAN_OUT is the ceiling and it BINDS — 20 distinct assignments start 15", async () => {
+    // Before ADR-040 no input could reach this cap, so it was never the thing that stopped a
+    // fan-out. It is now the real bound on how many PAID TURNS one Approve can buy.
+    const t = newTest();
+    const planId = await stagedRoot(t);
+    const res = await startTeamAssign(
+      t,
+      planId,
+      Array.from({ length: 20 }, (_, i) => ({ route: "research", question: `Question ${i}?` })),
+    );
+    expect(res.ok && res.workerCount).toBe(MAX_FAN_OUT);
+    expect(res.ok && res.requested).toBe(20);
+    expect(await childrenOf(t, planId)).toHaveLength(MAX_FAN_OUT);
+    await cancelQueued(t);
+  });
+
+  test("ROOT_SCAN still clears a FULL fan-out — the coupling, not either number", async () => {
+    // ROOT_SCAN was the literal 20 while MAX_FAN_OUT was 5, and its safety was argued in PROSE.
+    // Raising the cap to 15 left 16 rows of burial against a window of 20 — still correct, and
+    // correct by luck rather than by construction. This pins the RELATIONSHIP, so raising the cap
+    // again cannot quietly push a root out of its own read.
+    // MUTATION that turns this red: `export const ROOT_SCAN = 20;` back as a literal.
+    expect(ROOT_SCAN).toBeGreaterThan(MAX_FAN_OUT + 1);
   });
 });

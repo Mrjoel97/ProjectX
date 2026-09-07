@@ -1,3 +1,54 @@
+> Last verified: 2026-09-07 (42.2 — **A FAN-OUT CHILD IS AN ASSIGNMENT, NOT A ROUTE (ADR-040).**
+> Owner decision: the fan-out should release up to 15 workers, not 5.
+>
+> **RAISING `MAX_FAN_OUT` ALONE WOULD HAVE BEEN A NO-OP, and that is the whole point of the
+> change.** While a child was A ROUTE, the binding constraint was never that constant: it was
+> `SPECIALIST_ROUTES`, a closed SIX-member set, minus `media` (refused at the door), deduped by
+> route. Five distinct workers, and the cap happened to equal five. Setting it to 15 would have let
+> more entries through the arithmetic and still produced five children, because the dedupe
+> collapsed the rest. Check what BINDS before changing what merely bounds.
+>
+> `dispatchTeam` now takes `assignments: { route, question }[]` beside the umbrella `question`, and
+> **the dedupe is on the PAIR**. Same route + same sub-question still collapses to one worker, so
+> the identical-paid-turn guard is preserved EXACTLY — five `research` entries on one question are
+> five identical paid turns for one answer, and `wouldCycle` cannot catch it because it runs per
+> child against an EMPTY ancestry and never fires between siblings. Same route + DIFFERENT
+> sub-questions is now several workers, which is what makes a 15-worker team mean anything.
+>
+> **Each worker is briefed with ITS OWN question, never the umbrella one.** The umbrella question
+> briefs nobody: it is the card's subject and what the assembled memo answers. Briefing all N with
+> it would re-create the identical-turn case ONE LAYER DOWN, where no dedupe can see it — N
+> distinct rows, N identical model turns. A blank sub-question is DROPPED, never defaulted to the
+> umbrella question, for the same reason. Both are mutation-proven.
+>
+> A child's `subject` carries the route AND the sub-question, because two children may now share a
+> route and two identical `## Research` headings in the assembled parent would leave the reader
+> unable to tell which answer belonged to which question.
+>
+> **`MAX_FAN_OUT` IS A MONEY CEILING, not a concurrency preference.** A child is dispatched with
+> `spentCents: 0` and `governedDispatch` refuses only on `spent >= envelope`, which is false at the
+> start of every child — so the envelope bounds RECURSION, not the first turn. This constant is the
+> real bound on how many paid turns one Approve can buy: up to 15, ~3x the old ceiling. ADR-038's
+> `narrowFanOut` still caps `n` by `rootEnvelope`, so a thin rail starts fewer, and `workerCount`
+> on `subagent.dispatched` records how many actually started.
+>
+> **`ROOT_SCAN` IS NOW DERIVED (`2 * (MAX_FAN_OUT + 1)`), NOT A LITERAL.** ADR-037 justified the
+> literal 20 in PROSE ("6 for a G6 fan-out, 11 for a G10 batch"). At a cap of 15 the true burial is
+> 16, so the literal would have kept passing with four rows of margin instead of the headroom the
+> ADR claimed, and nothing would have said so. That is the SAME defect class as 42.1's expired
+> conjunction: a constant whose safety depends on another constant's value, recorded only in a
+> comment. `fanOut.test.ts` pins `ROOT_SCAN > MAX_FAN_OUT + 1` rather than either number, and
+> `plans.test.ts` pins the behaviour at the real cap (a FULL fan-out still resolves its own root)
+> and derives its scan-window test from `ROOT_SCAN` instead of hardcoding 20.
+>
+> Recorded honestly: the mutation "put `ROOT_SCAN = 20` back as a literal" does NOT redden, and it
+> should not — 20 > 16 still holds today. The hazard is a FUTURE raise, which the property test
+> catches at the moment it appears. Non-vacuity was proven with `ROOT_SCAN = MAX_FAN_OUT + 1` (RED).
+>
+> Measured: backend 4067 (shards 2100 + 1967), contracts 123; tsc and biome clean. THREE mutations
+> verified RED and `cmp`-restored: dedupe on route alone (2 red), briefing every worker with the
+> umbrella question (1 red), and a scan window equal to the max burial (1 red).)
+>
 > Last verified: 2026-09-07 (42.1 — **THE RESEARCH INSTRUMENT: `declaredQuestionScope` now rides
 > beside `declaredUnsupported`, and the two are allowed to DISAGREE.**
 >
