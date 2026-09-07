@@ -42,6 +42,22 @@
 > backend media 293/293, web mediaCanvas 134/134, both typechecks clean.)
 
 
+> Last verified: 2026-09-07 (**A FETCH COUNT IS A CLAIM ABOUT THE WHOLE WORKER.** `media.test.ts`'s
+> "a transcript with no usable words never buys a sandbox" went red twice in three CI runs on
+> commits whose diffs never touched the render path, while passing locally 293/293 alone and in
+> file, and passing on a re-run of the identical commit. `vi.stubGlobal("fetch", …)` replaces fetch
+> for the WHOLE worker, so `toHaveBeenCalledTimes(0)` asserted that nothing anywhere in this
+> 294-test file issued a fetch in that window — including background scheduled work an EARLIER test
+> left settling. CI runs all 136 files in one process pool; local shards do not, which is why
+> shard-green never caught it.
+>
+> Replaced at all FOUR sites by `expectNoRenderPost`, which filters the mock's calls by the render
+> URL. That is STRICTER, not weaker: it says the thing the test actually claims — no sandbox was
+> bought — and is immune to an unrelated test's leftovers. Fixed at the idiom rather than at the one
+> test that tripped, because the other three carry the identical weakness. A matcher that recognises
+> nothing would pass every test it guards, so a POSITIVE CONTROL ships with it: the helper must
+> throw on a real render POST and stay quiet on an unrelated call.)
+>
 > Last verified: 2026-09-07 (42-03 — the `collecting` sweep learned that a fan-out has TWO shapes,
 > and the old single branch was right for only one of them. A stalled CHILD now takes the CHILD
 > terminal (`approved`) and re-runs the sibling check: sweeping it to `proposed` would put a SECOND

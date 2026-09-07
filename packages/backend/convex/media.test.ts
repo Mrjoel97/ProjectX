@@ -2270,6 +2270,46 @@ const RENDER_SIDECAR = JSON.stringify({
   ],
 });
 
+/**
+ * NO RENDER POST WAS MADE. Precise on purpose, and it replaced a bare
+ * `expect(fetchMock).toHaveBeenCalledTimes(0)` at all four sites in 42-03.
+ *
+ * `vi.stubGlobal("fetch", …)` swaps fetch for the WHOLE worker, so a total-call count is a claim
+ * about every async thing alive in this file, not about the code under test. Background scheduled
+ * work left by an EARLIER test in this file lands in whatever mock is current, and CI caught
+ * exactly that twice in one afternoon on runs whose diffs never touched the render path — green
+ * locally, green on a re-run, red under the full-suite pool.
+ *
+ * Naming the URL is STRICTER about the thing that actually matters ("never buys a sandbox") and
+ * immune to what an unrelated test's leftovers happen to do. If this ever fires, a render really
+ * was bought.
+ */
+const expectNoRenderPost = (fetchMock: { mock: { calls: unknown[][] } }): void => {
+  const posts = fetchMock.mock.calls.filter((call) =>
+    String(call[0] ?? "").includes("/api/media/render"),
+  );
+  expect(
+    posts,
+    "a render POST was issued — a sandbox was bought when nothing should have been",
+  ).toEqual([]);
+};
+
+// POSITIVE CONTROL for the helper above. A matcher that recognises nothing passes every test it
+// guards — the exact vacuity the four sites it replaced were rewritten to avoid. This proves the
+// substring really matches the URL `stubRenderEnv` configures, so a green assertion means the POST
+// did not happen rather than that the filter is broken.
+test("expectNoRenderPost actually recognises a render POST", () => {
+  expect(() =>
+    expectNoRenderPost({
+      mock: { calls: [["https://app.example.com/api/media/render", { method: "POST" }]] },
+    }),
+  ).toThrow();
+  // ...and does not fire on an unrelated call, which is the whole point of naming the URL.
+  expect(() =>
+    expectNoRenderPost({ mock: { calls: [["https://openrouter.ai/api/v1/chat", {}]] } }),
+  ).not.toThrow();
+});
+
 function stubRenderEnv() {
   stubMediaEnv();
   vi.stubEnv("MEDIA_RENDER_SECRET", RENDER_SECRET);
@@ -3002,7 +3042,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId }),
     ).rejects.toThrow(/MEDIA_RENDER_SECRET/);
     // The assertion that matters: a COUNT of zero, not merely the right message.
-    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expectNoRenderPost(fetchMock);
   });
 
   test("an unset MEDIA_RENDER_URL refuses the same way", async () => {
@@ -3015,7 +3055,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     await expect(
       t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId }),
     ).rejects.toThrow(/MEDIA_RENDER_URL/);
-    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expectNoRenderPost(fetchMock);
   });
 
   test("with the fixture set, the whole path runs at $0 and NEVER issues a fetch", async () => {
@@ -3044,7 +3084,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       batchId,
     });
     expect(out).toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expectNoRenderPost(fetchMock);
 
     const plan = await planRow(t, planId);
     expect(plan?.renderStatus).toBe("rendered");
@@ -5154,7 +5194,7 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
     expect(
       await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
     ).toEqual({ ok: false, reason: "caption_track_empty" });
-    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expectNoRenderPost(fetchMock);
     expect((await planRow(t, planId))?.renderStatus).toBe("rendered");
   });
 
