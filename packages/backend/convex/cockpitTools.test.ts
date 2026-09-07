@@ -64,20 +64,13 @@ const rateLimiterModules = import.meta.glob(
 const SMOKE = "SMOKE::route=direct_llm::";
 type T = ReturnType<typeof convexTest>;
 
+// ONE harness. There were two until 43-02, and the second existed because "runCockpitAgent (the
+// SMOKE::agent sentinel path) runs preCall/recordSpend, which the tool-level __invokeCockpitTool
+// shim never touches". 43-02 put `guardrails.preCall` in front of `draftDocument`, so the shim
+// touches it now: every attachment and document test in this file reaches the rate limiter, and
+// keeping a limiter-less variant would only mean the next drafting test picks the wrong one and
+// fails with a component-registration error that says nothing about what it was testing.
 async function setup(): Promise<{ t: T; planId: Id<"plans"> }> {
-  const t = convexTest(schema, modules);
-  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
-  await t.mutation(internal.skills.seedSkills, {});
-  const planId = await t.mutation(internal.plans.insertPlan, {
-    tenantId: "t1",
-    threadId: "thread1",
-  });
-  return { t, planId };
-}
-
-// Same harness plus the rate-limiter component: runCockpitAgent (the SMOKE::agent sentinel path)
-// runs preCall/recordSpend, which the tool-level __invokeCockpitTool shim never touches.
-async function setupWithLimiter(): Promise<{ t: T; planId: Id<"plans"> }> {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
@@ -2259,7 +2252,7 @@ test("parseAgentSmoke: create=<form>:<topic> splits on the FIRST colon, nested S
 });
 
 test("SMOKE::agent::create drives ONE governed createDocument OFFLINE and records tool: createDocument", async () => {
-  const { t, planId } = await setupWithLimiter();
+  const { t, planId } = await setup();
 
   const res = await t.action(internal.llm.runCockpitAgent, {
     tenantId: "t1",
@@ -2284,7 +2277,7 @@ test("SMOKE::agent::create drives ONE governed createDocument OFFLINE and record
 // back what actually ran; these two tests own the write half of that, because a read-back of a row
 // nobody writes fails in exactly the direction that looks like success (no evidence, no alarm).
 test("a PINNED cockpit turn records the body it loaded — the row the eval gate reads back", async () => {
-  const { t, planId } = await setupWithLimiter();
+  const { t, planId } = await setup();
   const active: number = (await t.query(internal.skills.getActiveSkill, { name: "cockpit-agent" }))
     .version;
   const pinned = active + 5;
@@ -2331,7 +2324,7 @@ test("a PINNED cockpit turn records the body it loaded — the row the eval gate
 });
 
 test("an UNPINNED turn writes no attribution row — production does not pay for a gate concern", async () => {
-  const { t, planId } = await setupWithLimiter();
+  const { t, planId } = await setup();
 
   await t.action(internal.llm.runCockpitAgent, {
     tenantId: "t1",
@@ -2370,7 +2363,7 @@ test("SMOKE Drive list/find round-trip offline at $0 with truthful tool traces",
     ["SMOKE::agent::drive=list:SMOKE::folder-1", "listDriveFolders", "Smoke folder"],
     ["SMOKE::agent::drive=find:SMOKE::quarterly", "findInDrive", "Smoke result"],
   ] as const) {
-    const { t, planId } = await setupWithLimiter();
+    const { t, planId } = await setup();
     const result = await t.action(internal.llm.runCockpitAgent, {
       tenantId: "t1",
       threadId: "thread1",
@@ -2798,7 +2791,7 @@ test("parseAgentSmoke: crm=<email>[:<note>] and its op→tool mapping", () => {
 });
 
 test("SMOKE::agent::crm drives ONE governed stageCrmWrite OFFLINE at $0 and traces it", async () => {
-  const { t, planId } = await setupWithLimiter();
+  const { t, planId } = await setup();
 
   const res = await t.action(internal.llm.runCockpitAgent, {
     tenantId: "t1",

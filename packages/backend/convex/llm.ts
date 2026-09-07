@@ -2280,17 +2280,19 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     // tables to 2–4 columns so they fit the page"), and it is GATED, so `spreadsheet-drafter` is a
     // new ungated row rather than an edit to it (the Phase 18 content-drafter precedent).
     const drafter = format === "xlsx" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL;
-    const draft: { title: string; markdown: string } = await ctx.runAction(
-      internal.llm.draftDocument,
-      {
-        tenantId,
-        safeText,
-        safeTextHash: await contentHash(safeText),
-        // The eval runner's drafter pin rides HERE (EVAL-01) — undefined = active skill.
-        skillName: drafter,
-        skillVersion: skillVersions?.[drafter],
-      },
-    );
+    const drafted = await ctx.runAction(internal.llm.draftDocument, {
+      tenantId,
+      safeText,
+      safeTextHash: await contentHash(safeText),
+      // The eval runner's drafter pin rides HERE (EVAL-01) — undefined = active skill.
+      skillName: drafter,
+      skillVersion: skillVersions?.[drafter],
+    });
+    // 43-02: the money rail can now refuse this, and it refuses by RETURNING. This function has
+    // no catch of its own, so a throw would have escaped as a raw SDK tool-error instead of a
+    // sentence — and the attachment plane already speaks `{ ok: false, message }`.
+    if (!drafted.ok) return { ok: false, message: DRAFT_BLOCKED_MESSAGE };
+    const draft: { title: string; markdown: string } = drafted;
     // The tool schema's `enum` is advertising, not enforcement: the AI SDK's `jsonSchema()` carries
     // no validator, so an out-of-enum `format` would fall through the render ternary to the HTML
     // branch and then die in `formatSpec(format)`. Refuse it in the tool's own voice instead.
@@ -4248,13 +4250,18 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         let storageId: Id<"_storage"> | undefined;
         let sheetRows: { name: string; rows: string[][] }[] = [];
         try {
-          draft = await ctx.runAction(internal.llm.draftDocument, {
+          const drafted = await ctx.runAction(internal.llm.draftDocument, {
             tenantId,
             safeText,
             safeTextHash: await contentHash(safeText),
             skillName,
             skillVersion: skillVersions?.[skillName],
           });
+          // 43-02. RETURNED from inside the try, deliberately: the catch below would otherwise
+          // be the thing that answered, and its sentence tells the agent to try again — the one
+          // instruction an exhausted rail must never receive.
+          if (!drafted.ok) return DRAFT_BLOCKED_MESSAGE;
+          draft = drafted;
           if (form === "long") {
             // ponytail: cast — a Uint8Array IS a valid BlobPart at runtime; the DOM lib types
             // Uint8Array<ArrayBufferLike> too strictly (it may be SharedArrayBuffer-backed).
@@ -6506,6 +6513,24 @@ const documentSchema = jsonSchema<{ title: string; markdown: string }>({
   additionalProperties: false,
 });
 
+/**
+ * 43-02. What a CLOSED MONEY RAIL says, in the model's own voice, to BOTH document callers.
+ *
+ * The load-bearing half is the last clause. `createDocument`'s catch says "offer to try again"
+ * — correct for a render error, and precisely wrong for an exhausted budget, where every retry
+ * is refused identically. That file's own comment records the price of getting this wrong:
+ * fixture 35, `createdDocCount 0` behind FIVE successful-looking calls, because a hard failure
+ * read to the agent as "didn't quite manage it". A refusal has to sound final or it is not a
+ * refusal.
+ *
+ * ONE sentence for all three reasons. `kill_switch`, `daily_budget_exhausted` and
+ * `deployment_budget_exhausted` differ in who closed the rail, not in what the user can do
+ * about it this turn, and the reason CODE still reaches the ledger and the logs.
+ * ponytail: one string; split it when a reason earns a different next step, not before.
+ */
+const DRAFT_BLOCKED_MESSAGE =
+  "I couldn't draft that — the AI spending limit has been reached, so nothing was generated and nothing was charged. Tell the user their budget is used up and do NOT try again this turn.";
+
 export const draftDocument = internalAction({
   args: {
     tenantId: v.string(),
@@ -6529,7 +6554,13 @@ export const draftDocument = internalAction({
   handler: async (
     ctx,
     { tenantId, safeText, safeTextHash, skillVersion, skillName },
-  ): Promise<{ title: string; markdown: string }> => {
+  ): Promise<
+    | { ok: true; title: string; markdown: string }
+    | {
+        ok: false;
+        reason: "kill_switch" | "daily_budget_exhausted" | "deployment_budget_exhausted";
+      }
+  > => {
     // Load the drafter FIRST (no hardcoded prompt — §5); fails closed (throws NO_ACTIVE_SKILL
     // unseeded / NO_SUCH_SKILL_VERSION on a missing pin), so a hardcoded fallback can never sneak
     // in — and the pinned lookup runs BEFORE the smoke short-circuit, so it is exercised offline.
@@ -6538,6 +6569,43 @@ export const draftDocument = internalAction({
       skillVersion !== undefined
         ? await ctx.runQuery(internal.skills.getSkillVersion, { name, version: skillVersion })
         : await ctx.runQuery(internal.skills.getActiveSkill, { name });
+
+    // 43-02: THIS ACTION WAS ENTIRELY OFF THE MONEY RAIL. Two fully-billed `generateObject`
+    // calls below (primary + CHEAP_MODEL fallback), both discarding `usage`, with no `preCall`
+    // ahead of them and no `recordSpend` after — so document drafting neither asked the budget
+    // nor told it. It is the ONE remaining unmetered paid call reachable from the cockpit, and
+    // Phase 43 is about to multiply it by MAX_FAN_OUT: a 15-variant batch is 15 unbilled drafts,
+    // and the rail would learn about none of them.
+    //
+    // IT IS NOT REDUNDANT WITH THE TURN GATE, and this is the reason worth keeping. `runAgentLoop`
+    // calls `preCall` ONCE, at the top of the turn, before any reasoning call — so one authorisation
+    // covers every tool call inside that turn. That is fine when a turn drafts one document and
+    // wrong the moment a turn drafts fifteen: a single Approve would buy a whole batch against a
+    // rail that was asked once, at the start, when it still had room. A per-draft gate is what makes
+    // the Nth variant answerable to what the first N-1 already spent.
+    //
+    // The gate sits ABOVE `parseSmoke`, the placement `deriveCandidates` already uses (and the
+    // same reason the skill load does): a guard the offline path never reaches is a guard no
+    // fixture can exercise, so it would only ever be tested in production. It costs the eval
+    // nothing — a fixture whose tenant is genuinely out of budget is already stopped by the turn
+    // gate above, which returns PAUSED_REPLY before any tool runs.
+    //
+    // A REFUSAL IS RETURNED, NEVER THROWN, and that is not a style choice. `createDocument`'s
+    // catch turns any throw into "drafting or rendering it failed — offer to try again", which
+    // is right for a render error and exactly wrong for an exhausted rail: it sends the agent
+    // round the same loop against a gate that will refuse every time. The comment on that catch
+    // already records what this costs — fixture 35, five successful-looking calls, zero
+    // documents. `renderAndStore` has no catch at all, so a throw there escapes as an SDK
+    // tool-error instead. Both callers already speak `if (!res.ok)`.
+    const gate = await ctx.runMutation(internal.guardrails.preCall, { tenantId });
+    if (!gate.ok) return { ok: false, reason: gate.reason };
+
+    // FIN-01 replay identity, MINTED per invocation rather than derived from `safeTextHash`:
+    // asking for the same document twice is two real charges, and a content-derived id would
+    // collapse the second onto the first and put the ledger BELOW the limiter — the
+    // unrecoverable direction. A batch makes this concrete: 15 variants of one piece share a
+    // topic, and under a hashed id 14 of them would be free.
+    const runId = crypto.randomUUID();
     const smoke = parseSmoke(safeText, tenantId);
 
     try {
@@ -6550,17 +6618,19 @@ export const draftDocument = internalAction({
         // instead, so the no-table refusal can be exercised without a paid call.
         if (name === SPREADSHEET_DRAFTER_SKILL && !smoke.noTable) {
           return {
+            ok: true,
             title: "Smoke Prices",
             markdown:
               "## Prices\n\n| Item | Unit price (USD) |\n| --- | --- |\n| Setup | 500 |\n| Monthly | 120 |\n",
           };
         }
         return {
+          ok: true,
           title: "Smoke Document",
           markdown: `# Smoke Document\n\nSmoke draft for ${safeTextHash}.`,
         };
       }
-      const { object } = await generateObject({
+      const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "document-drafter" })] },
         model: resolveModel(DEFAULT_MODEL),
         schema: documentSchema,
@@ -6569,12 +6639,28 @@ export const draftDocument = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 1,
       });
-      return { title: object.title, markdown: object.markdown };
+      // `:a0` / `:a1` — the CHEAP_MODEL retry in the catch is a SECOND fully-billed call, not a
+      // replay of this one. Sharing `document:${runId}` would make the ledger keep whichever
+      // landed first and silently drop the other (recordSpend's identity is
+      // (tenantId, correlationId, phase)).
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        DEFAULT_MODEL,
+        usage,
+        "document_draft",
+        `document:${runId}:a0`,
+      );
+      return { ok: true, title: object.title, markdown: object.markdown };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       if (smoke)
-        return { title: "Smoke Fallback Document", markdown: "# Smoke Fallback\n\nfallback body" };
-      const { object } = await generateObject({
+        return {
+          ok: true,
+          title: "Smoke Fallback Document",
+          markdown: "# Smoke Fallback\n\nfallback body",
+        };
+      const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "document-drafter" })] },
         model: resolveModel(CHEAP_MODEL),
         schema: documentSchema,
@@ -6583,7 +6669,15 @@ export const draftDocument = internalAction({
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      return { title: object.title, markdown: object.markdown };
+      await recordModelSpend(
+        ctx,
+        tenantId,
+        CHEAP_MODEL,
+        usage,
+        "document_draft",
+        `document:${runId}:a1`,
+      );
+      return { ok: true, title: object.title, markdown: object.markdown };
     }
   },
 });

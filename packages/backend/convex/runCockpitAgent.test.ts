@@ -740,6 +740,7 @@ test("draftDocument pin: loads the pinned drafter version, fails closed on a mis
   // short-circuit, so the pinned lookup itself is exercised offline.
   await insertCandidate(t, "document-drafter", 2);
   const doc = await t.action(internal.llm.draftDocument, { ...args, skillVersion: 2 });
+  if (!doc.ok) throw new Error(`draftDocument refused: ${doc.reason}`);
   expect(doc.title).toBe("Smoke Document");
 });
 
@@ -797,9 +798,10 @@ test("a NON-research scripted turn runs all four tool steps and is NOT truncated
 
 // ── FIN-01: every llm.ts spend correlation is DISTINCT ───────────────────────
 // A SOURCE check, for the same reason guardrails.test.ts's sibling scan is one: llm.ts spends at
-// eight places and no runtime test can observe a call site nobody scripted. Six of the eight are
-// one of three PRIMARY/FALLBACK pairs and a seventh is the web-search FEE that fires in the SAME
-// attempt as the loop's token cost — all of them fully billed, none of them replays. The ledger
+// ten places and no runtime test can observe a call site nobody scripted. Eight of the ten are one
+// of FOUR PRIMARY/FALLBACK pairs (43-02 added `document_draft`, whose CHEAP_MODEL fallback is a
+// second fully-billed call, not a replay of the first) and a ninth is the web-search FEE that fires
+// in the SAME attempt as the loop's token cost — all of them fully billed, none of them replays. The ledger
 // identity is (tenantId, correlationId, phase), so a copy-pasted template makes the second charge
 // return the first row and vanish, leaving the ledger BELOW the limiter. That is the direction
 // that cannot be reconstructed, and a duplicated literal is exactly how it would happen.
@@ -823,7 +825,8 @@ test("every llm.ts spend correlation template is distinct and charset-legal", ()
     ...[...code.matchAll(/correlationId:\s*`([^`]+)`/g)].map((m) => m[1] ?? ""),
   ];
   // Anti-vacuity: a renamed helper would otherwise make an empty list pass for free.
-  expect(templates.length).toBe(8);
+  // 8 → 10 in 43-02: `document:${runId}:a0` / `:a1`, the drafter's primary and CHEAP_MODEL fallback.
+  expect(templates.length).toBe(10);
   expect(new Set(templates).size, `duplicate spend correlation: ${templates.join(", ")}`).toBe(
     templates.length,
   );

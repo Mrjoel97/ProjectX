@@ -1,3 +1,35 @@
+> Last verified: 2026-09-07 (43-02 — **`draftDocument` was entirely off the money rail.** Two
+> fully-billed `generateObject` calls (primary + `CHEAP_MODEL` fallback), both discarding `usage`,
+> with no `preCall` in front and no `recordSpend` behind: the last unmetered paid call reachable
+> from the cockpit, and the one Phase 43's batch is about to multiply by `MAX_FAN_OUT`. Fifteen
+> variants would have been fifteen drafts the rail never heard about.
+>
+> THREE decisions worth keeping. (1) The gate sits ABOVE `parseSmoke`, the placement
+> `deriveCandidates` already uses — a guard the offline path never reaches is a guard no fixture
+> can exercise, so it would only ever be tested in production. (2) A refusal is RETURNED, never
+> thrown: `createDocument`'s catch answers a throw with “offer to try again”, which is right for a
+> render error and exactly wrong for an exhausted rail, and that file's own comment records the
+> price — eval fixture 35, `createdDocCount 0` behind five successful-looking calls.
+> `renderAndStore` has no catch at all, so a throw there escapes as a raw SDK tool-error. (3) The
+> correlation is `document:${runId}:a0` / `:a1` with a MINTED runId: the fallback is a second fully
+> billed call, and a content-derived id would collapse 14 of a 15-variant batch onto one ledger row
+> — the ledger below the limiter, the unrecoverable direction. `runCockpitAgent.test.ts`'s
+> correlation-template scan already guards this and went 8 → 10.
+>
+> THE TEST TRAP, recorded because it nearly shipped: the kill-switch and budget refusals were one
+> test, so the gate-neutralising mutation reddened the first `expect` and the run never reached the
+> second — the budget half was unproven while looking proven. They are two tests now, both
+> independently RED under that mutation. The kill switch only proves the gate is CALLED; the budget
+> is what proves it reads the window `recordSpend` writes to.
+>
+> KNOWN LIMIT, not a gap to close silently: the `recordSpend` halves are NOT exercised offline — no
+> spend happens on the smoke path because no model call happens. What is pinned offline is the gate
+> and the refusal union; the metering itself is first exercised by a paid run.
+>
+> `cockpitTools.test.ts` lost its second harness in the same pass. `setupWithLimiter` existed
+> because “the tool-level `__invokeCockpitTool` shim never touches preCall” — 43-02 made that false
+> for every attachment and document test, so there is ONE `setup` now.)
+>
 > Last verified: 2026-09-07 (43-01b — `lib/planRow.ts` gained `hasDraftContent` (moved out of
 > `plans.ts`, which now imports it) and `holdsWork`. The move is the point: `blueprintPulse` needed
 > the same question `stageResearchPlan` asks before it dares recycle a row, and a second copy would
