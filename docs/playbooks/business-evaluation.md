@@ -1,5 +1,11 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-09-07 (42-02 — `evaluations.ts`'s specialist kick-off is a DURABLE start:
+> `internal.dispatchRun.startDispatchRun` (journaled, `onComplete` terminal, paid step
+> `{ retry: false }`) replaces the bare `scheduler.runAfter(0, internal.dispatch.runSpecialist)`.
+> Same args, same guards, same landing; `crypto.randomUUID()` stays in the caller because the
+> workflow environment has no `crypto`. Owned and explained in `cockpit.md` / `dispatchRun.ts`.)
+
 > Last verified: 2026-09-07 (42-01, ADR-037 — **`applyActOnGap` INSERTS A ROOT PER STAGED GAP** and
 > no longer recycles the review thread's one row. `REVIEW_THREAD_ID` is a fixed string, so under
 > `.unique()` the weekly review had ONE plan row for the tenant's entire lifetime, and 34-01 had to

@@ -32,6 +32,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
+import { dispatchWorkflowLive } from "./dispatchRun";
 import { migrations } from "./migrations";
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
@@ -248,12 +249,31 @@ function captionStalled(
  * scheduled id on the plan row at stage time (the `plans.scheduledFunctionId` precedent) and this
  * becomes a single `ctx.db.system.get`.
  */
-async function dispatchLive(ctx: MutationCtx, planId: Id<"plans">): Promise<boolean> {
+async function dispatchLive(ctx: MutationCtx, plan: Doc<"plans">): Promise<boolean> {
+  // 42-02 — ASK THE COMPONENT FIRST, AND THIS IS NOT AN OPTIMISATION. A durable dispatch is
+  // enqueued by the workflow COMPONENT into the component's own tables; the app-side
+  // `_scheduled_functions` scan below sees the starter mutation, not the run, so on its own it
+  // returns FALSE for a genuinely running specialist. Armed, that is a data-loss path: the sweep
+  // would patch a live run's plan to `{ status: "proposed", body: COLLECTING_FALLBACK_BODY }`, and
+  // when the real turn lands, `landSpecialistResult`'s CAS discards the memo the tenant PAID FOR.
+  //
+  // This is also the upgrade path the ponytail comment above names — "store the scheduled id on the
+  // plan row at stage time" — taken with a column that already exists rather than a new one:
+  // `startDispatchRun` writes `plans.workflowId`, and `workflow.status` answers from it directly.
+  // `null` means the component could not resolve the id at all, which is not evidence of liveness,
+  // so it falls through rather than being read as `false`.
+  if (plan.workflowId !== undefined) {
+    const live = await dispatchWorkflowLive(ctx, plan.workflowId);
+    if (live !== null) return live;
+  }
+  // The legacy arm, for rows staged before 42-02 and for any future entry point that has not moved
+  // to a workflow. Matched by `args.planId` rather than by function NAME, so a fourth dispatch
+  // entry point is covered the day it is written instead of the day someone remembers this list.
   const scheduled = await ctx.db.system.query("_scheduled_functions").collect();
   return scheduled.some(
     (s) =>
       (s.state.kind === "pending" || s.state.kind === "inProgress") &&
-      (s.args[0] as { planId?: unknown } | undefined)?.planId === planId,
+      (s.args[0] as { planId?: unknown } | undefined)?.planId === plan._id,
   );
 }
 
@@ -309,7 +329,7 @@ export const sweepStuckPlans = migrations.define({
       stalled = true;
     }
 
-    if (collectingPlane && !(await dispatchLive(ctx, plan._id))) {
+    if (collectingPlane && !(await dispatchLive(ctx, plan))) {
       // `proposed` is the honest terminal, and it is an EXISTING one: it is where every other
       // dispatch outcome lands (`landSpecialistResult`), and it is the only status `PlanCard`
       // renders. The row stops being invisible and the user can read what happened and re-ask.

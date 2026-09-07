@@ -1240,7 +1240,13 @@ export default defineSchema({
      *  every per-recipient `requests` row at executePlan. Optional; absence means Google. */
     mailProvider: v.optional(v.union(v.literal("google"), v.literal("microsoft"))),
     correlationId: v.optional(v.string()), // set on executePlan (not the per-recipient cids)
-    workflowId: v.optional(v.string()), // set on executePlan
+    /** The durable run this row is waiting on. Written at TWO points now: `executePlan` (the
+     *  delivery fan-out) and, since 42-02, `startDispatchRun` (a specialist dispatch). The two
+     *  never overlap — a delivery workflow only ever runs on a non-memo plan at `delivering`, and a
+     *  dispatch only ever runs on a `collecting` memo. `reliabilitySweep`'s `dispatchLive` reads it
+     *  to ask the workflow component whether a run is still alive, instead of guessing from
+     *  `_scheduled_functions` (which cannot see a component-enqueued step at all). */
+    workflowId: v.optional(v.string()),
     /** ADR-037. THE discriminator, and the only one: a row with NO parent is a ROOT — its own
      *  artifact, its own approval card — and a row WITH one is a FAN-OUT CHILD, which never
      *  reaches `proposed` and is therefore paged by no approvals query. One field answers both

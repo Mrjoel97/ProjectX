@@ -952,6 +952,21 @@ async function readScheduled(t: TestConvex<typeof schema>): Promise<ScheduledRow
 }
 const dispatchArgsOf = (row: ScheduledRow): Record<string, unknown> =>
   row.args[0] as Record<string, unknown>;
+/** 42-02: the queued row is now the DURABLE STARTER (`dispatchRun.startDispatchRun`), which carries
+ *  the same dispatch args plus a code-owned `kind`. Replaying those args into the scripted twin
+ *  needs `kind` dropped — `__runSpecialistWithScript` validates `DISPATCH_ARGS` exactly, and Convex
+ *  refuses an extra field BEFORE the handler runs (the 21-03 `ArgumentValidationError` incident). */
+const replayArgsOf = (row: ScheduledRow): Record<string, unknown> => {
+  const { kind: _kind, ...rest } = dispatchArgsOf(row);
+  return rest;
+};
+/** The scheduled row a dispatch now leaves. Asserted as a pair — the MODULE and the FUNCTION — so a
+ *  rename of either is caught, and so the test still proves it is the durable starter that was
+ *  queued rather than a bare action. */
+const expectDispatchStarter = (row: ScheduledRow | undefined): void => {
+  expect(row?.name).toContain("startDispatchRun");
+  expect(row?.name).toContain("dispatchRun");
+};
 /** Drop whatever `actOnGap` queued. The PRODUCTION `runSpecialist` resolves a REAL gateway model,
  *  and convex-test flushes due scheduled work in the background — leaving a job queued would make
  *  these tests depend on whether OPENAI_API_KEY happens to be set on the machine. Every test below
@@ -983,9 +998,10 @@ describe("actOnGap dispatches the specialist (DISP-01)", () => {
 
     const scheduled = await readScheduled(t);
     expect(scheduled).toHaveLength(1);
-    expect(scheduled[0]?.name).toContain("runSpecialist");
-    expect(scheduled[0]?.name).toContain("dispatch");
+    expectDispatchStarter(scheduled[0]);
     const args = dispatchArgsOf(scheduled[0] as ScheduledRow);
+    // The kind selects WHICH entry point the durable step calls. Code-owned, never model-supplied.
+    expect(args.kind).toBe("specialist");
     expect(args).toMatchObject({
       tenantId: TENANT,
       threadId: THREAD,
@@ -1156,8 +1172,8 @@ describe("Act on this → dispatch → approvable (DISP-01)", () => {
     // 2. Run what was queued, with a scripted model (no network, no spend).
     const queued = await readScheduled(t);
     expect(queued).toHaveLength(1);
-    expect(queued[0]?.name).toContain("runSpecialist");
-    const args = dispatchArgsOf(queued[0] as ScheduledRow);
+    expectDispatchStarter(queued[0]);
+    const args = replayArgsOf(queued[0] as ScheduledRow);
     const rootRequestId = String(args.rootRequestId);
     // Cancel the queued PRODUCTION job first: it resolves a real gateway model, and convex-test
     // flushes due scheduled work as soon as the next action runs — so leaving it queued would race

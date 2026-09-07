@@ -46,9 +46,9 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
+import { DISPATCH_ARGS, MEDIA_FAILED_MEMO, RESEARCH_FAILED_MEMO } from "./lib/dispatchShared";
 import { traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
-import { TOOL_CONTEXT_ARGS } from "./lib/toolContextArgs";
 import { runSpecialistTurn } from "./llm";
 
 /** Depth 1 = executive → specialist. A specialist can never dispatch anything, which makes
@@ -265,26 +265,14 @@ type DispatchArgs = {
   tenantSkillIds?: Record<string, Id<"tenantSkills">>;
 };
 
-/** The Convex validators for the above — shared by BOTH entry points so neither can drift. */
-const dispatchArgs = {
-  tenantId: v.string(),
-  threadId: v.string(),
-  planId: v.id("plans"),
-  gapIndex: v.number(),
-  // v.string(), not a union: `gaps[].route` persists as v.string() (schema.ts:350) including
-  // diagnose()'s deliberate "", so the RUNTIME resolveSpecialist branch is the real guard.
-  route: v.string(),
-  rootRequestId: v.string(),
-  parentAgentId: v.string(),
-  depth: v.number(),
-  ancestry: v.array(v.string()),
-  envelopeCents: v.number(),
-  spentCents: v.number(),
-  question: v.optional(v.string()),
-  // 16-09 / 21-03: `skillVersions` + `tenantSkillIds`, the pins every agent door accepts — ONE
-  // shared validator (Phase 38), so this door and `runCockpitAgent` cannot drift from each other.
-  ...TOOL_CONTEXT_ARGS,
-};
+/** The Convex validators for the above now live in `lib/dispatchShared.ts` as `DISPATCH_ARGS`
+ *  (42-02, a pure move). They had to leave this file: `dispatchRun.ts` holds the `workflow.define`
+ *  that steps into these actions, a `workflow.define` is a RegisteredMutation and so cannot live in
+ *  a `"use node"` module, and a non-node module cannot import this one. Re-declaring them there
+ *  would have been a validator free to drift — and a drifted door is refused at RUNTIME with
+ *  `ArgumentValidationError`, after the caller has already committed (the 21-03 incident).
+ *  `dispatchArgs` stays as a local alias so every `args:` below reads exactly as it always did. */
+const dispatchArgs = DISPATCH_ARGS;
 
 /** Compile-time bind: every registered specialist's `stepTool` is a real agentSteps.tool literal.
  *  A registration naming a step tool the schema does not have would otherwise throw INSIDE an SDK
@@ -723,20 +711,10 @@ export const runSpecialist = internalAction({
     ),
 });
 
-/** The honest one sentence a FAILED research run lands as its memo body. It replaces
- *  LOST_CONTEXT_MEMO's "the evaluation it was based on is no longer on file", which is false for a
- *  run that was never based on an evaluation — a user told to re-run an assessment they never
- *  started has been given a dead end wearing an explanation's clothes. Driver-plane synthetic
- *  string, not a skill (§5 n/a — the four refusal replies above are the precedent). */
-const RESEARCH_FAILED_MEMO =
-  "# Research\n\nI couldn't finish that piece of research — the run stopped before it produced" +
-  " anything. Ask me to look into it again and I'll start it over.";
-
-/** The same, for a media run. Same class of driver-plane string, same reason. */
-const MEDIA_FAILED_MEMO =
-  "# Reel\n\nI couldn't put that reel proposal together — the run stopped before it produced" +
-  " anything. Ask me to plan it again and I'll start over. Nothing was generated and nothing was" +
-  " charged.";
+/** `RESEARCH_FAILED_MEMO` and `MEDIA_FAILED_MEMO` moved to `lib/dispatchShared.ts` in 42-02 and are
+ *  imported at the top of this file. The durable runner's `onComplete` terminal has to land the
+ *  SAME sentence this file's own `finally` lands, and two copies of an honest fallback body is
+ *  exactly how one of them stops being honest. */
 
 /**
  * What a media run lands when it produced PROSE but no usable deck. One sentence per lever, so the

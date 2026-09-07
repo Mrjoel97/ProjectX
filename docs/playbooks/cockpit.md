@@ -2,6 +2,52 @@
 > provider's content check" off a row's `verdict`, never its `status`; a blocked row with no verdict
 > is a setup fault, not a refusal. Owned and explained in `media.md`'s entry of the same date.)
 
+> Last verified: 2026-09-07 (42-02 — **A DISPATCH IS A DURABLE RUN NOW, AND THE PAID STEP IS NEVER
+> RETRIED.** The three specialist entry points (`dispatch.runSpecialist` / `runResearch` /
+> `runMedia`) are no longer scheduled directly. Every caller now queues
+> `internal.dispatchRun.startDispatchRun`, which starts a journaled `@convex-dev/workflow` run whose
+> single step calls the entry point with **`{ retry: false }`**.
+>
+> READ THIS BEFORE TOUCHING `dispatchRun.ts`. The shared `WorkflowManager` sets
+> `retryActionsByDefault: true` with `maxAttempts: 3` (`index.ts:10-11`), and a specialist turn is
+> NOT idempotent with respect to spend — it bills the model and draws the rail down through
+> `recordSpend` before any throw can be caught. Inheriting that default turns one failed $0.02 turn
+> into three. The repo already refused this exact bug one level down (`vaultIngestPool`,
+> `index.ts:35-39`, OCR double-charging). `pipeline.ts:243-247` is the shipped precedent for the fix.
+>
+> ONE `workflow.define` with a `kind` switch, NOT three, and the reason is the failure mode: the
+> dangerous edit here is an OMITTED option, invisible to the compiler, to biome and to every
+> behavioural test. One call site cannot be half-omitted; three can. `dispatchGuard.test.ts` pins
+> that `dispatchRun.ts` holds exactly ONE `step.runAction(` and that it carries the option, and that
+> no caller schedules `internal.dispatch.run*` directly any more.
+>
+> WHAT DURABILITY ACTUALLY BUYS, stated honestly. `dispatchAndLand`'s `finally` guarantees "the plan
+> always leaves `collecting`" only WITHIN one action invocation. `onDispatchComplete` covers the
+> invocation that never reaches the `finally`: a SECOND, FREE, IDEMPOTENT landing attempt. It is a
+> mutation, it calls no model, and `landSpecialistResult`'s CAS (`collecting` + `kind: "memo"` +
+> tenant) makes it a no-op on the happy path. It is not a re-run and it is not a rescue from
+> eviction — do not describe it as either.
+>
+> THE STARTER IS SCHEDULED, NOT INLINE, and that is a decision with a reason. The queued row is what
+> carries the dispatch args in the app's OWN `_scheduled_functions`; a `workflow.start` enqueues into
+> the COMPONENT, where five test sites that pin `skillVersions` / `tenantSkillIds` / `depth` /
+> `ancestry` cannot see it. Inline would buy transactional atomicity for exactly one of the three
+> callers (`applyActOnGap`; the two cockpit tools run in an action ctx and are a second transaction
+> either way) at the price of those pins. `crypto.randomUUID()` stays in the CALLER — the workflow
+> environment deletes `crypto` before a handler runs.
+>
+> `DISPATCH_ARGS`, `DISPATCH_KIND` and the two failed-run memo bodies moved to
+> `lib/dispatchShared.ts` as PURE MOVES. They had to: `dispatch.ts` is `"use node"`, a
+> `workflow.define` is a RegisteredMutation and cannot live in a node module, and a non-node module
+> cannot import a node one. `toolContextArgs.test.ts`'s door guard followed the const to its new
+> home — the invariant is about WHERE the pins are declared, not which file holds the door.
+>
+> Measured: backend 4048 green (shards 2081 + 1967), tsc clean both packages, biome clean. THREE
+> mutations verified RED and `cmp`-restored: deleting `{ retry: false }` (the tripwire), making the
+> terminal return early on `failed` (3 red), and dropping `landSpecialistResult`'s CAS (5 red).
+> NOT DONE HERE: no fan-out yet, and `agentSteps` still has no worker index — five same-root workers
+> would collide on `dispatch:<rootRequestId>`. 42-03 owns both.)
+>
 > Last verified: 2026-09-07 (42-01 — **A THREAD NOW HOLDS MANY PLAN ROWS (ADR-037).** The invariant
 > that shaped this subsystem since 12-05 is retired. `plans.by_thread` was `.unique()`, which THREW
 > on a second row; `plans.byThread` is now the NEWEST ROOT, read by a bounded descending scan

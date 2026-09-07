@@ -672,3 +672,45 @@ test("the Microsoft update gate is read from the probe, not from a constant", ()
       "cancel falls through to the provider branch instead of refusing before any token.",
   ).toContain("providerSupports(");
 });
+
+// ── 42-02: THE MONEY OPTION ON THE DURABLE STEP ───────────────────────────────────────────────
+//
+// The failure mode this guards is an OMISSION, which is why it is a source scan and not a
+// behavioural test. `dispatchRun.ts`'s one `step.runAction` calls a PAID specialist turn. The
+// shared WorkflowManager sets `retryActionsByDefault: true` with `maxAttempts: 3` (index.ts:10-11),
+// and `runSpecialistTurn` bills the model and draws the rail down through `recordSpend` before any
+// throw can be caught — so a step written without `{ retry: false }` re-bills a failed turn three
+// times. The compiler accepts it, biome accepts it, and every behavioural test stays green.
+//
+// The whole point of ONE define with a `kind` switch rather than three defines is that one call
+// site cannot be half-omitted. This test pins that arithmetic too: exactly one, carrying the option.
+
+test("dispatchRun.ts has exactly ONE step.runAction and it carries { retry: false }", () => {
+  const src = readExecutableCode("dispatchRun.ts");
+  const calls = src.match(/step\.runAction\(/g) ?? [];
+  // Non-vacuity floor: if the call disappears entirely, the `every` below would pass over nothing.
+  expect(
+    calls.length,
+    "dispatchRun.ts no longer has exactly one step.runAction — mutation: split the one define " +
+      "into several, and a retry option can be omitted from one of them unnoticed.",
+  ).toBe(1);
+  expect(
+    src,
+    "the durable step lost { retry: false } — mutation: delete the option, and a failed PAID " +
+      "specialist turn is re-billed up to three times by the shared WorkflowManager's default.",
+  ).toMatch(/step\.runAction\([^;]*retry:\s*false/);
+});
+
+// The other half of the same rule: the three ENTRY POINTS must no longer be started bare. A
+// `scheduler.runAfter` straight at `internal.dispatch.run*` skips the workflow, so it skips the
+// journal AND the onComplete terminal — a run that dies mid-action then leaves its plan row at
+// `collecting` with nothing to land it.
+test("no caller schedules a dispatch entry point directly any more (42-02)", () => {
+  for (const file of ["evaluations.ts", "llm.ts"]) {
+    expect(
+      readExecutableCode(file),
+      `${file} still schedules internal.dispatch.run* directly — mutation: revert a starter to ` +
+        `scheduler.runAfter, and that run loses both the journal and its onComplete landing.`,
+    ).not.toMatch(/runAfter\([^)]*internal\.dispatch\.run/);
+  }
+});

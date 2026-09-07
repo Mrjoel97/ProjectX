@@ -42,6 +42,29 @@
 > backend media 293/293, web mediaCanvas 134/134, both typechecks clean.)
 
 
+> Last verified: 2026-09-07 (42-02 — **`dispatchLive` ASKS THE WORKFLOW COMPONENT FIRST, AND THIS IS
+> A DATA-LOSS FIX, NOT AN OPTIMISATION.** A dispatch is now enqueued by the workflow COMPONENT into
+> the component's own tables, so `reliabilitySweep`'s app-side `_scheduled_functions` scan sees the
+> starter mutation and not the run. On its own it would therefore return FALSE for a genuinely
+> running specialist — and with `RELIABILITY_SWEEP_ARMED=1` the sweep would then patch a live run's
+> plan to `{ status: "proposed", body: COLLECTING_FALLBACK_BODY }`, after which the real turn lands
+> and `landSpecialistResult`'s CAS DISCARDS THE MEMO THE TENANT PAID FOR. Shipping 42-02 without
+> this would have put that one env var away from live.
+>
+> The fix is the upgrade path this function's own ponytail comment already named — "store the
+> scheduled id on the plan row at stage time" — taken with a column that already exists rather than
+> a new one: `startDispatchRun` writes `plans.workflowId`, and `dispatchWorkflowLive` reads the run's
+> status from it. `workflow.status` THROWS on an id the component cannot resolve, and that throw
+> would kill the migration batch this runs inside, so it is caught and returned as `null` —
+> "unknown", which falls through to the legacy scan rather than being read as "not live". The legacy
+> arm is kept for rows staged before 42-02 and for any entry point that has not moved to a workflow.
+>
+> `dispatchLive` now takes the PLAN ROW rather than a `planId`, because it needs `workflowId`.
+> Nothing else in the sweep changed. Measured: backend 4048 green; the sweep's own suite untouched
+> and passing. STILL OWED BY THE OWNER: `RELIABILITY_SWEEP_ARMED=1` on production. It is not a
+> blocker for 42-02 — nothing stalls that did not stall before — but 42-03 must not ship without it,
+> or a fan-out with one dead worker leaves its parent at `collecting` forever.)
+>
 > Last verified: 2026-09-07 (**THE TWO WAYS A REEL HOLDS, AND THE CANVAS ONLY EVER KNEW ONE.**
 > Follow-on to the tracker fix below, from the same held reel. `evaluateRenderTrigger` refuses a
 > render on TWO conditions -- a needed job that did not succeed, AND `deckReady`, which demands every

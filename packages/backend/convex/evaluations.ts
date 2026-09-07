@@ -998,7 +998,18 @@ export async function applyActOnGap(
   // different plan ids. It is not `plans.correlationId` either — that is only written at
   // `executePlan`, i.e. after Approve. ADR-008.
   const rootRequestId = crypto.randomUUID();
-  await ctx.scheduler.runAfter(0, internal.dispatch.runSpecialist, {
+  // 42-02: the durable start. SCHEDULED rather than called inline, and that is deliberate on
+  // both counts. Scheduled, because the queued row is what carries the dispatch args in the
+  // app's own system table — five test sites pin `skillVersions` / `tenantSkillIds` / `depth` /
+  // `ancestry` off it, and a `workflow.start` enqueues into the COMPONENT where none of them
+  // can see it. Durable, because `startDispatchRun` journals the run and its paid step carries
+  // `{ retry: false }`, so a failure lands an honest memo through `onDispatchComplete` instead
+  // of re-billing the model. The extra hop is the one that existed before this change, and the
+  // reliability sweep covers it the same way.
+  // `crypto.randomUUID()` stays HERE and must never move into the workflow handler — the workflow
+  // environment deletes `crypto` before a handler runs.
+  await ctx.scheduler.runAfter(0, internal.dispatchRun.startDispatchRun, {
+    kind: "specialist",
     tenantId: tenantId,
     threadId,
     planId,

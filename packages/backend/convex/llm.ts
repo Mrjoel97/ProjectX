@@ -2004,7 +2004,16 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // Conversational, never a throw — a governed stop is a paused conversation (the
         // PAUSED_REPLY / dispatch-refusal precedent).
         if (!staged.ok) return RESEARCH_REFUSAL_REPLY[staged.reason];
-        await ctx.scheduler.runAfter(0, internal.dispatch.runResearch, {
+        // 42-02: the durable start. SCHEDULED rather than called inline, and that is deliberate on
+        // both counts. Scheduled, because the queued row is what carries the dispatch args in the
+        // app's own system table — five test sites pin `skillVersions` / `tenantSkillIds` / `depth` /
+        // `ancestry` off it, and a `workflow.start` enqueues into the COMPONENT where none of them
+        // can see it. Durable, because `startDispatchRun` journals the run and its paid step carries
+        // `{ retry: false }`, so a failure lands an honest memo through `onDispatchComplete` instead
+        // of re-billing the model. The extra hop is the one that existed before this change, and the
+        // reliability sweep covers it the same way.
+        await ctx.scheduler.runAfter(0, internal.dispatchRun.startDispatchRun, {
+          kind: "research",
           tenantId,
           threadId,
           planId: staged.planId,
@@ -2066,7 +2075,16 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         });
         // Conversational, never a throw — a governed stop is a paused conversation.
         if (!staged.ok) return MEDIA_REFUSAL_REPLY[staged.reason];
-        await ctx.scheduler.runAfter(0, internal.dispatch.runMedia, {
+        // 42-02: the durable start. SCHEDULED rather than called inline, and that is deliberate on
+        // both counts. Scheduled, because the queued row is what carries the dispatch args in the
+        // app's own system table — five test sites pin `skillVersions` / `tenantSkillIds` / `depth` /
+        // `ancestry` off it, and a `workflow.start` enqueues into the COMPONENT where none of them
+        // can see it. Durable, because `startDispatchRun` journals the run and its paid step carries
+        // `{ retry: false }`, so a failure lands an honest memo through `onDispatchComplete` instead
+        // of re-billing the model. The extra hop is the one that existed before this change, and the
+        // reliability sweep covers it the same way.
+        await ctx.scheduler.runAfter(0, internal.dispatchRun.startDispatchRun, {
+          kind: "media",
           tenantId,
           threadId,
           planId: staged.planId,

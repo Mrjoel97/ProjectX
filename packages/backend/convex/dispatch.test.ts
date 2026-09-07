@@ -1104,9 +1104,15 @@ const LOST_CONTEXT_PHRASE = "no longer on file";
 const BUDGET_EXHAUSTED_REPLY =
   "This request has used up the budget I set aside for it. Here's where things stand — ask me to carry on and I'll pick it back up.";
 
+/** 42-02: a research dispatch is queued as the DURABLE STARTER carrying `kind: "research"`, not as
+ *  a bare `dispatch.runResearch` action. Filtering on the KIND rather than on the function name is
+ *  what keeps this helper honest — the starter is one function for all three routes, so a name
+ *  filter alone would count a media dispatch as a research one. */
 const scheduledResearch = async (t: T) =>
-  (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter((s) =>
-    s.name.includes("runResearch"),
+  (await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect())).filter(
+    (s) =>
+      s.name.includes("startDispatchRun") &&
+      (s.args[0] as { kind?: unknown } | undefined)?.kind === "research",
   );
 
 describe("the question-prompt seam (16-06 Task 1)", () => {
@@ -3715,5 +3721,120 @@ describe("33.2 — smoke.storyboardFactsForPlan reads the terminal's verdict off
     expect(ran.runs).toBe(1);
     expect(ran.rowCount).toBeGreaterThan(0);
     expect(ran.models).toEqual([MEDIA_MODEL]);
+  });
+});
+
+// ── 42-02: THE DURABLE RUN'S TERMINAL ─────────────────────────────────────────────────────────
+//
+// `dispatchAndLand`'s `finally` guarantees "the plan always leaves `collecting`" — but only within
+// one action invocation. What it cannot cover is an invocation that never reaches the `finally` at
+// all. `onDispatchComplete` is the second, FREE, idempotent landing attempt that covers it, and
+// these three tests are the whole claim: it lands a row nothing else landed, it writes NOTHING on
+// the happy path, and it can never overwrite a row that already landed.
+//
+// It is also where owner decision 2 is proved from the other side. A re-landing must never re-bill,
+// and it cannot: `onDispatchComplete` is a MUTATION, it calls no model, and `landSpecialistResult`
+// refuses any row that is not still `collecting` + `kind: "memo"` for this tenant.
+describe("onDispatchComplete — the durable run's terminal (42-02)", () => {
+  const failed = { kind: "failed" as const, error: "container evicted" };
+
+  async function collectingMemo(): Promise<{ t: T; planId: Id<"plans"> }> {
+    const { t, planId } = await setup();
+    await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));
+    return { t, planId };
+  }
+
+  const ctxFor = (planId: Id<"plans">, kind: "specialist" | "research" | "media") => ({
+    tenantId: TENANT,
+    threadId: THREAD,
+    planId,
+    gapIndex: 0,
+    route: kind === "specialist" ? "offer-architect" : kind,
+    rootRequestId: "root-42-02",
+    kind,
+  });
+
+  test("a run that died before landing IS landed, with the kind's own honest sentence", async () => {
+    // MUTATION that turns this red: make onDispatchComplete return early on `failed` too.
+    const { t, planId } = await collectingMemo();
+
+    await t.mutation(internal.dispatchRun.onDispatchComplete, {
+      workflowId: "wf_test_1" as never,
+      result: failed,
+      context: ctxFor(planId, "research"),
+    });
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.status).toBe("proposed"); // it left `collecting` — the whole point
+    // The RESEARCH sentence, not LOST_CONTEXT_MEMO's "the evaluation it was based on is no longer
+    // on file" — which is false for a run that was never based on an evaluation.
+    expect(plan?.body).toContain("couldn't finish that piece of research");
+    expect(plan?.body).not.toContain("no longer on file");
+  });
+
+  test("a media run gets the MEDIA sentence — the kinds are not interchangeable", async () => {
+    const { t, planId } = await collectingMemo();
+    await t.mutation(internal.dispatchRun.onDispatchComplete, {
+      workflowId: "wf_test_2" as never,
+      result: failed,
+      context: ctxFor(planId, "media"),
+    });
+    const plan = await readPlan(t, planId);
+    expect(plan?.body).toContain("Nothing was generated and nothing was charged");
+  });
+
+  test("it CANNOT overwrite a row that already landed — the CAS makes the second landing free", async () => {
+    // The normal path: the action's own `finally` landed the row, and the terminal then fires
+    // anyway. If this ever overwrote, every successful research run would end up wearing a failure
+    // memo. MUTATION that turns this red: drop the status/kind CAS in landSpecialistResult.
+    const { t, planId } = await collectingMemo();
+    await t.run((ctx) =>
+      ctx.db.patch(planId, {
+        status: "proposed",
+        body: "# Findings\n\nThe real, paid-for answer.",
+      }),
+    );
+
+    await t.mutation(internal.dispatchRun.onDispatchComplete, {
+      workflowId: "wf_test_3" as never,
+      result: failed,
+      context: ctxFor(planId, "research"),
+    });
+
+    const plan = await readPlan(t, planId);
+    expect(plan?.body).toBe("# Findings\n\nThe real, paid-for answer.");
+    expect(plan?.status).toBe("proposed");
+  });
+
+  test("on SUCCESS it writes nothing at all — no landing, no audit row", async () => {
+    const { t, planId } = await collectingMemo();
+    const before = await t.run((ctx) => ctx.db.query("audit").collect());
+
+    await t.mutation(internal.dispatchRun.onDispatchComplete, {
+      workflowId: "wf_test_4" as never,
+      result: { kind: "success", returnValue: null },
+      context: ctxFor(planId, "specialist"),
+    });
+
+    // Still collecting: the ACTION owns the landing on the happy path, and the terminal must not
+    // race it. A row left collecting here is correct — the action's own `finally` has it.
+    expect((await readPlan(t, planId))?.status).toBe("collecting");
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(before.length);
+  });
+
+  test("the failure audit row carries refs and a CODE — never the provider's error text (§4)", async () => {
+    const { t, planId } = await collectingMemo();
+    await t.mutation(internal.dispatchRun.onDispatchComplete, {
+      workflowId: "wf_test_5" as never,
+      result: { kind: "failed", error: "sk-live-abc123 leaked into a stack trace" },
+      context: ctxFor(planId, "specialist"),
+    });
+
+    const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+    const row = rows.find((r) => r.eventType === "subagent.refused");
+    expect(row).toBeDefined();
+    expect(row?.payload).toMatchObject({ reason: "error", rootRequestId: "root-42-02" });
+    expect(JSON.stringify(row?.payload)).not.toContain("sk-live");
+    expect(JSON.stringify(row?.payload)).not.toContain("stack trace");
   });
 });

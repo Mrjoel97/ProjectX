@@ -1142,8 +1142,18 @@ test("21-03: runCockpitAgent accepts a tenant pin AND forwards it to the dispatc
   const scheduled = (await t.run((ctx) =>
     ctx.db.system.query("_scheduled_functions").collect(),
   )) as unknown as { name: string; args: unknown[] }[];
-  const media = scheduled.find((s) => s.name.includes("runMedia"));
-  expect(media, "the explicit-video route must schedule dispatch:runMedia").toBeTruthy();
+  // 42-02: the queued row is the DURABLE STARTER, one function for all three routes, so the media
+  // dispatch is identified by its code-owned `kind` rather than by a function name. Matched on BOTH
+  // — a name-only match would count a research dispatch as a media one now that they share a door.
+  const media = scheduled.find(
+    (sched) =>
+      sched.name.includes("startDispatchRun") &&
+      (sched.args[0] as { kind?: unknown } | undefined)?.kind === "media",
+  );
+  expect(media, "the explicit-video route must start a durable media dispatch").toBeTruthy();
+  // The pin itself is the point of this test and does not move: drop it and a `--tenant-skill`
+  // media run silently executes the tenant's effective body while writing evidence onto the
+  // candidate. 21-03, one registry scope down.
   expect(media?.args[0]).toMatchObject({ tenantSkillIds: { media: candidateId } });
 });
 

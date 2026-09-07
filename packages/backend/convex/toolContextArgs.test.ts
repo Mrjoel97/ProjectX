@@ -23,7 +23,12 @@ function slice(src: string, start: string, end: string): string {
 
 const DOORS: readonly [string, string, string][] = [
   ["llm.ts", "export const runCockpitAgent = internalAction({", "handler:"],
-  ["dispatch.ts", "const dispatchArgs = {", "};"],
+  // 42-02: the dispatch door's validator moved OUT of the `"use node"` dispatch.ts into
+  // `lib/dispatchShared.ts`, so the durable runner (`dispatchRun.ts`, a default-runtime module that
+  // cannot import a node one) declares the same args from the same const instead of a second copy.
+  // The guard follows the const to its new home — the invariant is about WHERE the pins are
+  // declared, not which file happens to hold the door this week.
+  ["lib/dispatchShared.ts", "export const DISPATCH_ARGS = {", "};"],
 ];
 
 for (const [file, start, end] of DOORS) {

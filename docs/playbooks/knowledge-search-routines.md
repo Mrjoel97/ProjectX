@@ -1,5 +1,9 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-07 (42-02 — `routines.test.ts`'s pinned Convex module inventory gained
+> `dispatchRun.ts` and `lib/dispatchShared.ts`, the durable dispatch runner and its shared
+> validators. Inventory only; nothing in this subsystem's behaviour changed.)
+
 > Last verified: 2026-09-07 (42-01 — `routines.test.ts`'s pinned Convex module inventory gained
 > `lib/planRow.ts`, the shared newest-root/root-window reader ADR-037 introduced. Nothing in the
 > routines or knowledge-search behaviour changed; the closed-set test is doing exactly its job by
