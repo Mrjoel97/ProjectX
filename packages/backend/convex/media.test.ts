@@ -7661,6 +7661,19 @@ describe("stock scenes: free, and still a LINE on the same rail", () => {
     // §4: the CODE, and nothing the throw was carrying. A thrown message can hold a url, a request
     // body, or a fragment of the narration the line was submitting.
     expect(row?.failureReason).not.toMatch(/PEXELS|api\.pexels|Error|http/i);
+    // `blocked` means NOT RETRYABLE, not "the provider judged the content". An unset key never
+    // reached a provider, so the row must carry NO safety verdict — `provider_blocked` here was a
+    // claim the provider never made, and the canvas rendered it as "refused by the content check"
+    // over a missing credential (seen on production 2026-09-07).
+    expect(row?.verdict).toBeUndefined();
+    // The 422 arm — the one `blocked` was named for — still IS a verdict.
+    expect(row).toBeDefined();
+    if (!row) return;
+    await t.mutation(internal.media.recordSubmission, {
+      jobId: row._id,
+      result: { ok: false, blocked: true, code: "http_422" },
+    });
+    expect((await rows(t))[0]?.verdict).toBe("provider_blocked");
   });
 
   test("submitBatch ROUTES ON PROVIDER: a stock row is fetched, never POSTed as a generation", async () => {

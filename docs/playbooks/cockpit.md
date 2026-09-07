@@ -1,3 +1,7 @@
+> Last verified: 2026-09-07 (media canvas copy — `mediaCanvasView.ts` now words "refused by the
+> provider's content check" off a row's `verdict`, never its `status`; a blocked row with no verdict
+> is a setup fault, not a refusal. Owned and explained in `media.md`'s entry of the same date.)
+
 > Last verified: 2026-09-07 (42-01 — **A THREAD NOW HOLDS MANY PLAN ROWS (ADR-037).** The invariant
 > that shaped this subsystem since 12-05 is retired. `plans.by_thread` was `.unique()`, which THREW
 > on a second row; `plans.byThread` is now the NEWEST ROOT, read by a bounded descending scan

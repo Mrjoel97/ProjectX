@@ -175,9 +175,15 @@ describe("a tile says what its kind actually does — three of four never have a
     expect(pictureLine("generated_video", { status: "submitted" }, null)).toBe(
       "Clip: generating… (usually 1–3 minutes)",
     );
-    expect(pictureLine("generated_video", { status: "blocked" }, null)).toMatch(
-      /refused by the provider/,
+    expect(
+      pictureLine("generated_video", { status: "blocked", verdict: "provider_blocked" }, null),
+    ).toMatch(/refused by the provider/);
+    // A row can be terminal WITHOUT the provider having judged anything (an unset key, a take
+    // that drifted from its line). The tile must not turn that into a content verdict.
+    expect(pictureLine("generated_video", { status: "blocked", verdict: null }, null)).not.toMatch(
+      /refused|content check/,
     );
+    expect(voiceLine("Hello.", { status: "blocked", verdict: null })).not.toMatch(/refused/);
   });
 
   test("an unknown provider status is shown, never swallowed", () => {
@@ -428,6 +434,8 @@ describe("a failed render says what happened, and what to do about it", () => {
     expect(failureClause("tts_not_verbatim", "scene")).toMatch(
       /differently from how it was written/,
     );
+    // The one cause measured on production (2026-09-07) names its lever: a leading "Name:".
+    expect(failureClause("tts_not_verbatim", "scene")).toMatch(/speaker label.*use a period/);
     // A provider status with no dedicated entry still says the number rather than nothing.
     expect(failureClause("http_429", "scene")).toMatch(/HTTP 429/);
     expect(failureClause("http_5xx", "scene")).toBe(GENERIC_FAILURE_CLAUSE); // not a real status
@@ -1212,10 +1220,28 @@ describe("a failure is a plain-language card with honest economics", () => {
   });
 
   test("a BLOCKED scene says the provider refused it, and still owes the money", () => {
-    const card = sceneCard({ clip: face({ status: "blocked", failureReason: "content_policy" }) });
+    const card = sceneCard({
+      clip: face({
+        status: "blocked",
+        verdict: "provider_blocked",
+        failureReason: "content_policy",
+      }),
+    });
     expect(card?.headline).toMatch(/refused/i);
     expect(card?.detailCode).toContain("content_policy");
     expect(card?.sunkLine).toContain("$0.42");
+  });
+
+  test("a scene blocked by a MISSING KEY is a setup fault, never a content refusal", () => {
+    // Production 2026-09-07: "its picture was refused by the provider's content check — a media
+    // provider key is missing on this deployment". Two clauses that cannot both be true, composed
+    // from `status` and `failureReason` on one row. The verdict, not the status, owns "refused".
+    const card = sceneCard({
+      clip: face({ status: "blocked", verdict: null, failureReason: "media_not_configured" }),
+    });
+    expect(card?.headline).not.toMatch(/refused|content check/i);
+    expect(card?.headline).toMatch(/key is missing/);
+    expect(card?.detailCode).toBe("picture: media_not_configured");
   });
 
   test("NO CARD PRINTS A PROVIDER STRING — the code is the detail line and nothing else", () => {

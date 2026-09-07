@@ -176,7 +176,13 @@ export const KIND_COST_NOTE = {
   stock_image: "From a free library, panned in the render. Nothing is bought.",
 } as const satisfies Record<VisualKind, string>;
 
-type JobFace = { status: string } | null;
+/** `verdict` is what the PROVIDER said; `status: "blocked"` only says the line is not retryable. A
+ *  row can be blocked with no verdict at all (an unset key never reached a provider), and only the
+ *  verdict may be worded as a content refusal. */
+type JobFace = { status: string; verdict?: string | null } | null;
+const REFUSED = "refused by the provider's content check";
+const blockedCopy = (f: NonNullable<JobFace>): string =>
+  f.verdict === "provider_blocked" ? REFUSED : "stopped — see the note below";
 
 /**
  * THE PICTURE ROW, per kind — and this is where the old canvas lied.
@@ -218,7 +224,7 @@ export function pictureLine(
         : "generating… (usually 1–3 minutes)",
     succeeded: "ready",
     failed: stock ? "no match found in the free library" : "failed",
-    blocked: "refused by the provider's content check",
+    blocked: blockedCopy(clip),
   };
   return `${noun}: ${copy[clip.status] ?? clip.status}`;
 }
@@ -233,7 +239,7 @@ export function voiceLine(narration: string, voice: JobFace): string {
     submitted: "recording the narration…",
     succeeded: "ready",
     failed: "failed",
-    blocked: "refused by the provider's content check",
+    blocked: blockedCopy(voice),
   };
   return `Voice: ${copy[voice.status] ?? voice.status}`;
 }
@@ -371,8 +377,11 @@ export function failureText(reason: string, noun: "scene" | "block"): string {
       "a media provider key is missing on this deployment — a setup problem, not the deck's",
     submit_threw: "the request could not be built — a code fault on our side, not the deck's",
     tts_no_audio: "the voice model answered with no sound at all — try again",
+    // 2026-09-07, measured 3/3 on production's own line: a name followed by a colon at the START of
+    // a narration ("NISUKE: Take time…") is read as a speaker label and never spoken. A prompt hint
+    // fixed it 1/3; a period fixed it 2/2. The lever is the script, so the card names it.
     tts_not_verbatim:
-      "the voice model read the line differently from how it was written, so the take was refused rather than shipped with the wrong words",
+      "the voice model read the line differently from how it was written, so the take was refused rather than shipped with the wrong words — a name followed by a colon at the start of a line is read as a speaker label and dropped; use a period instead",
     // The CAPTIONS plane. `maybeStartCaptions` refuses a transcript whose source takes are
     // missing; `submitCaptions` fails on the transcript itself.
     incomplete_takes: `a ${noun}'s voice take never landed, so there was nothing to transcribe`,
@@ -1186,6 +1195,8 @@ export function citationView(citations: readonly Citation[] | null | undefined):
  *  provider prose"), which is what makes it safe to render at all. */
 export type FailureFace = {
   status: string;
+  /** See `JobFace`: only this, never `status`, may be worded as a content refusal. */
+  verdict?: string | null;
   failureReason: string | null;
   estUsd: number;
   actualCents: number | null;
@@ -1444,9 +1455,7 @@ export function failureCards(
     const voiceFailed = wantedVoiceFailed(s);
     const pictureWord = s.visual === "animated_image" ? "still" : "picture";
     const said = (f: FailureFace | null, what: string): string =>
-      f?.status === "blocked"
-        ? `its ${what} was refused by the provider's content check`
-        : `its ${what} failed`;
+      f?.verdict === "provider_blocked" ? `its ${what} was ${REFUSED}` : `its ${what} failed`;
 
     const parts = [
       pictureFailed ? said(s.clip, pictureWord) : null,

@@ -1399,6 +1399,19 @@ export const recordMusicCredit = internalMutation({
   },
 });
 
+/**
+ * `blocked` means NOT RETRYABLE. It does not mean the provider judged the content, and the two must
+ * not be conflated on the row: `verdict` is rendered as a safety statement (`VERDICT_COPY`), so a
+ * `provider_blocked` stamped on a line the provider never saw is a claim nobody made. Two codes are
+ * minted by OUR code with `blocked: true` and no provider opinion behind them — an unset deployment
+ * variable, and a take whose words drifted from its line. Everything else that arrives blocked came
+ * back from a provider's 400/422 and IS its verdict. (Production 2026-09-07: sixteen stock rows read
+ * "refused by the provider's content check — a media provider key is missing".)
+ */
+const BLOCKED_WITHOUT_VERDICT = new Set(["media_not_configured", "tts_not_verbatim"]);
+const verdictFor = (code: string): { verdict?: "provider_blocked" } =>
+  BLOCKED_WITHOUT_VERDICT.has(code) ? {} : { verdict: "provider_blocked" };
+
 export const recordSubmission = internalMutation({
   args: {
     jobId: v.id("mediaJobs"),
@@ -1415,7 +1428,7 @@ export const recordSubmission = internalMutation({
       // A 422 is an INPUT refusal — the line is finished, not retryable, and it says so.
       await ctx.db.patch(jobId, {
         status: "blocked",
-        verdict: "provider_blocked",
+        ...verdictFor(result.code),
         failureReason: result.code,
         updatedAt,
       });
@@ -2417,7 +2430,7 @@ export const recordCaptionSubmission = internalMutation({
     await ctx.db.patch(a.planId, { captionStatus: "failed", captionReason: a.result.code });
     await ctx.db.patch(a.jobId, {
       status: a.result.blocked ? "blocked" : "failed",
-      ...(a.result.blocked ? { verdict: "provider_blocked" as const } : {}),
+      ...(a.result.blocked ? verdictFor(a.result.code) : {}),
       failureReason: a.result.code,
       updatedAt,
     });

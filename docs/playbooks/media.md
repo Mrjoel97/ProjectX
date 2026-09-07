@@ -1,5 +1,47 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-07 (**`blocked` MEANS NOT RETRYABLE. IT NEVER MEANT THE PROVIDER JUDGED
+> THE CONTENT, AND THE ROW SAID IT DID.** Found on production, not by a test.
+>
+> **The symptom.** Sixteen stock rows on production read *"its picture was refused by the
+> provider's content check — a media provider key is missing on this deployment"* — two clauses that
+> cannot both be true, composed from two fields on one row. `submitBatch`'s catch records an unset
+> variable as `media_not_configured` with `blocked: true` (33.1-06, correct: retrying cannot help).
+> `recordSubmission` then treated EVERY blocked result as the 422 arm and stamped
+> `verdict: "provider_blocked"`; the canvas keyed "refused by the provider's content check" off
+> `status === "blocked"` and appended the reason sentence after it. So a line no provider ever saw
+> carried a safety verdict, and `VERDICT_COPY` rendered it under the tile as a compliance statement.
+>
+> **The fix is one guard in the shared mutation, and the canvas keys off the VERDICT.**
+> `verdictFor(code)` beside `recordSubmission` (used by `recordCaptionSubmission` too): two codes are
+> minted by OUR code with `blocked: true` and no provider opinion behind them — `media_not_configured`
+> and `tts_not_verbatim` — and get no verdict; everything else that arrives blocked came back from a
+> 400/422 and IS the verdict. The set is closed because it is over codes this file mints, not over
+> the provider's vocabulary. On the canvas, `pictureLine`/`voiceLine`/`failureCards` say "refused"
+> only when `verdict === "provider_blocked"`; a blocked row with no verdict reads "stopped — see the
+> note below" on the tile and "its picture failed — a media provider key is missing …" on the card.
+> `JobFace`/`FailureFace` gained an optional `verdict`; `media.byPlan` already projected it.
+>
+> **The operational half, which was the actual outage.** `PEXELS_API_KEY` was never set on the
+> production deployment — the 2026-09-05 release note's "confirmed set" was wrong; the key lived only
+> in the repo-root `.env`, which NOTHING reads (no dotenv, git-ignored). Convex functions see only
+> `npx convex env set … --prod`. Set 2026-09-07; `ops:envCheck --prod` no longer lists it. The 16
+> rows already stamped `provider_blocked` on production are left as they are — "Buy this scene again"
+> replaces them at $0.
+>
+> **Same day, the next gate down: `tts_not_verbatim` on a line that opens with `NISUKE:`.** Reproduced
+> 3/3 by re-sending the exact request (`openai/gpt-audio-mini`, `nova`, the same system line): the
+> model reads a leading `Name:` as a SPEAKER LABEL and never speaks it, so the gate was right — the
+> take really lacked the word. A system-prompt hint fixed it 1/3 (a reflex, not a knob); the same
+> line with a period, `NISUKE. Take time…`, 2/2. The lever is the SCRIPT, so `failureText`'s
+> sentence for the code now names it. Not added: a parser pre-flight or a silent rewrite — the gate
+> already catches this for $0.006 before bytes land, and rewriting the owner's words is a
+> provenance violation. The durable fix is a rule in the narration-writing skill (§5, a registry
+> version bump), owed.
+>
+> backend media 293/293, web mediaCanvas 134/134, both typechecks clean.)
+
+
 > Last verified: 2026-09-07 (**THE TWO WAYS A REEL HOLDS, AND THE CANVAS ONLY EVER KNEW ONE.**
 > Follow-on to the tracker fix below, from the same held reel. `evaluateRenderTrigger` refuses a
 > render on TWO conditions -- a needed job that did not succeed, AND `deckReady`, which demands every
