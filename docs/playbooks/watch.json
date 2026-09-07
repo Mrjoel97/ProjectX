@@ -146,6 +146,8 @@
     "packages/core/src/reviewThreshold.ts",
     "packages/backend/convex/plans.ts",
     "packages/backend/convex/lib/planRow.ts",
+    "packages/core/src/channel.ts",
+    "packages/core/src/channel.test.ts",
     "packages/backend/convex/lib/dispatchShared.ts",
     "packages/backend/convex/dispatchRun.ts",
     "packages/backend/convex/briefings.ts",

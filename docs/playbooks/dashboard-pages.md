@@ -1,5 +1,18 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-07 (43-03 — the approvals schedule flow now READS `setPlanSendTime`'s
+> refusal. THE ORDER is why it matters: the handler sets the time and then calls `execute`, so a
+> refused time followed by an unconditional execute does not fail — it fires the plan NOW, which is
+> the precise outcome ADR-039 D3 exists to prevent. `refusalMessage` gained
+> `channel_not_schedulable`.
+>
+> Today every path to that button is `item.kind === "email"` (pinned by the source scan in
+> `approvalsView.test.ts`) and email is schedulable, so the refusal is UNREACHABLE from this
+> surface. It is written anyway, because it stops being unreachable the moment a second kind gains
+> a Schedule button — and that is exactly when nobody re-reads the line. The two `cards.tsx`
+> pickers are fire-and-forget `void setSendTime(...)`, which is safe for the same structural
+> reason: they live below the memo branch, in email chrome.)
+
 > Last verified: 2026-09-07 (43-01b — **a REFUSED REEL was an Approve card in the approvals
 > inbox.** `landStoryboardRefusal` patches `status: "proposed"` + `proposalRefusal` and never
 > touches `kind`, which is still `"memo"` because no deck parsed and `persistStoryboard` never ran.

@@ -9,6 +9,7 @@
 // Writers are internal (called by the agent action / executePlan / the fan-out
 // workflow). Readers are tenantQuery so the browser subscribes and the PLAN/DRAFT/
 // REPORT cards update live; every reader is guarded on ctx.tenantId (no cross-tenant leak).
+import { CHANNELS, type Channel, isSchedulable, parseChannel } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -29,6 +30,19 @@ const PLAN_STATUS = v.union(
   v.literal("done"),
   v.literal("canceled"),
 );
+
+// ADR-039 D4 / ADR-042: the TWO-WAY compile bind between @pikar/core's canonical `CHANNELS` and the
+// schema mirror. It lives here rather than in `packages/core` because it needs the GENERATED
+// `Doc<"plans">`, which core must never import (§1).
+//
+// `NonNullable<>` on BOTH sides, and that is not decoration: `channel` is optional, so without it
+// `undefined` joins the document's type and the bind passes in one direction while failing in the
+// other — recorded when `vaultLlm.ts` hit exactly this.
+type PlanRow = Doc<"plans">;
+const _channelsAreInTheSchema: readonly NonNullable<PlanRow["channel"]>[] = CHANNELS;
+const _schemaAddsNoChannel: readonly Channel[] = [] as NonNullable<PlanRow["channel"]>[];
+void _channelsAreInTheSchema;
+void _schemaAddsNoChannel;
 
 const recoveryCandidateArg = v.object({
   subjectRef: v.string(),
@@ -130,8 +144,13 @@ export const insertPlan = internalMutation({
      *  `route` column, and parsing the route back out of the rendered body is the defect class this
      *  avoids. */
     subject: v.optional(v.string()),
+    /** ADR-039 D2 / ADR-042 D1. BIRTH-ONLY, and deliberately NOT a `patchPlan` arg: `patchPlan`
+     *  is the MODEL's door (it is how `sendAt` gets written), so a channel that could be
+     *  patched would allow set-`sendAt`-then-flip-`channel` — a bypass of the refusal below
+     *  that would then need a second guard to close. Birth-only closes it for free. */
+    channel: v.optional(v.union(v.literal("email"), v.literal("vault"))),
   },
-  handler: async (ctx, { tenantId, threadId, parentPlanId, kind, subject }) =>
+  handler: async (ctx, { tenantId, threadId, parentPlanId, kind, subject, channel }) =>
     await ctx.db.insert("plans", {
       tenantId,
       threadId,
@@ -140,6 +159,7 @@ export const insertPlan = internalMutation({
       ...(parentPlanId === undefined ? {} : { parentPlanId }),
       ...(kind === undefined ? {} : { kind }),
       ...(subject === undefined ? {} : { subject }),
+      ...(channel === undefined ? {} : { channel }),
       // DLVR-02: written EXPLICITLY at creation rather than left absent, even though absent means
       // the same thing. A row whose provider is unset is indistinguishable from a pre-25-05 legacy
       // row, and that ambiguity is what would make a later "which of these actually chose Google?"
@@ -783,6 +803,19 @@ export const patchPlan = internalMutation({
     // Do not add them here speculatively.
   },
   handler: async (ctx, { planId, ...patch }) => {
+    // ADR-039 D3, SECOND WRITE SITE. `setPlanSendTime` is the USER's door and can refuse by
+    // returning; this is the MODEL's door and has no refusal channel, so it THROWS. Silently
+    // dropping the `sendAt` instead would be the precise failure D3 exists to forbid — a time
+    // accepted and then never honoured — and it would be invisible on both sides.
+    //
+    // The read is paid only on a patch that actually carries a time, which is rare; `channel` is
+    // birth-only (see `insertPlan`), so there is no flip-after-the-fact path that could get behind
+    // this check.
+    if (patch.sendAt !== undefined) {
+      const plan = await ctx.db.get(planId);
+      if (plan && !isSchedulable(parseChannel(plan.channel)))
+        throw new Error("CHANNEL_NOT_SCHEDULABLE");
+    }
     // Drop undefined keys so a partial patch never clobbers a filled slot with undefined.
     const fields = Object.fromEntries(Object.entries(patch).filter(([, val]) => val !== undefined));
     await ctx.db.patch(planId, fields);
@@ -797,10 +830,22 @@ export const patchPlan = internalMutation({
  */
 export const setPlanSendTime = tenantMutation({
   args: { planId: v.id("plans"), sendAt: v.optional(v.number()) },
-  handler: async (ctx, { planId, sendAt }) => {
+  handler: async (
+    ctx,
+    { planId, sendAt },
+  ): Promise<{ ok: true } | { ok: false; reason: "channel_not_schedulable" }> => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant write
+    // ADR-039 D3 — AN UNSCHEDULABLE CHANNEL REFUSES, and it refuses HERE, before the row is
+    // written. It never accepts a `sendAt` and then fires immediately, and it never accepts one
+    // and drops it: `armFor("memo")` is `"inline"`, and the inline arm has no `ctx.scheduler`
+    // call and never reads `plan.sendAt`, so a time stored on a vault-bound row is a promise
+    // the system does not keep. Clearing a time (`sendAt: undefined`) is always allowed —
+    // refusing that would strand a row nobody can un-schedule.
+    if (sendAt !== undefined && !isSchedulable(parseChannel(plan.channel)))
+      return { ok: false, reason: "channel_not_schedulable" };
     await ctx.db.patch(planId, { sendAt }); // undefined removes the field → immediate
+    return { ok: true };
   },
 });
 
@@ -985,6 +1030,8 @@ export const resetPlan = internalMutation({
       recipientBodies: undefined,
       recipientNames: undefined, // explicit clear (UAT-F1) — stale picked names must not re-label the NEXT draft's recipients
       sendAt: undefined,
+      // ADR-039 D7: a thread that queued one channel must not carry it across a "start over".
+      channel: undefined,
       // 03.11 RPLY-01 (Pitfall 6): a reply then "start over" must NOT leave a stale threadId that
       // silently threads the next FRESH compose into the old conversation. patchPlan drops undefined,
       // so — like every field above — each threading field must be named explicitly to clear.

@@ -10,6 +10,7 @@ export * from "./calendar";
 export * from "./calendarManagement";
 export * from "./cash";
 export * from "./cashSpine";
+export * from "./channel";
 export * from "./contactImport";
 export * from "./contacts";
 export * from "./dashboard";

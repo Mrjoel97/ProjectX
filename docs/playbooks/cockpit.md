@@ -1,3 +1,42 @@
+> Last verified: 2026-09-07 (43-03 — `plans.channel`, the content queue's other half. `CHANNELS`
+> in `packages/core/src/channel.ts` is CANONICAL; the `schema.ts` union is a MIRROR and the
+> two-way compile bind lives in `plans.ts` beside the `Doc<"plans">` it needs (§1 — core must never
+> import the generated types). `NonNullable<>` on BOTH sides of that bind: the field is optional,
+> and without it `undefined` joins the document type and the bind passes one way while failing the
+> other.
+>
+> **ADR-042 SUPERSEDES ADR-039 D2, and the reason is worth reading before touching this.** D2 made
+> an absent `channel` mean `"email"`; D6 pins every batch row to `kind: "memo"`. But
+> `armFor("memo")` is `"inline"`, and the inline arm's memo terminal returns BEFORE the email arm,
+> the gmail check, the horizon cap and the scheduler — so a memo row structurally CANNOT reach the
+> email terminal. A batch row written exactly as ADR-039 specified would have been accepted into
+> the queue as an email and then silently filed a vault document, and D3's refusal would not have
+> caught it because `email` is the schedulable member. `channel` is now REQUIRED on any row a batch
+> mints. Optional on the TABLE is not a default in the CODE.
+>
+> `channel` is BIRTH-ONLY on `insertPlan` and deliberately NOT a `patchPlan` argument. `patchPlan`
+> is the model's door — it is how `sendAt` gets written — so a patchable channel would allow
+> set-`sendAt`-then-flip-`channel`, a bypass needing a second guard. Birth-only closes it for free.
+>
+> The D3 refusal sits at BOTH `sendAt` write sites, and they refuse differently on purpose:
+> `setPlanSendTime` is the USER's door and RETURNS `{ ok: false, reason: "channel_not_schedulable" }`;
+> `patchPlan` is the MODEL's door, has no refusal channel, and THROWS. Silently dropping the field
+> would be the exact failure D3 forbids. Clearing a time is always allowed — refusing
+> `sendAt: undefined` would strand a row nobody could un-schedule.
+>
+> THE TEST THAT EARNS ITS KEEP is the READ-BACK: `expect(row?.sendAt).toBeUndefined()`. Asserting
+> only the returned reason stays green against a guard placed AFTER the patch — mutation-proven,
+> moving the guard below `db.patch` reddens that one assertion and nothing else. Two positive
+> controls sit beside it (an email row still schedules; a LEGACY row with no channel at all still
+> schedules), because a blanket “nothing schedules” would otherwise pass every refusal test.
+>
+> **A KNOWN EXPIRY, do not just delete it.** `channel.test.ts`'s non-vacuity check asserts some
+> channel is unschedulable. 43-06 flips `vault` to `schedulable: true` in the SAME commit as the arm
+> (ADR-042 D3 — the flip and the arm must not be separable), and at that moment the check fails BY
+> DESIGN. ADR-042 D4 names its replacement: a binding test in `packages/backend` that every channel
+> whose spec says `schedulable: true` HAS an arm. That is strictly stronger — it asks the hazard
+> question rather than a fact about a list — and it stays falsifiable for ever.)
+>
 > Last verified: 2026-09-07 (43-02 — **`draftDocument` was entirely off the money rail.** Two
 > fully-billed `generateObject` calls (primary + `CHEAP_MODEL` fallback), both discarding `usage`,
 > with no `preCall` in front and no `recordSpend` behind: the last unmetered paid call reachable

@@ -128,6 +128,10 @@ export function refusalMessage(reason: string): string {
     gmail_not_connected: "Gmail is not connected. Nothing was sent and nothing was spent.",
     send_time_too_far: "That time is outside the safe scheduling window. Nothing was sent.",
     review_escalated: "This plan cannot be approved until its review issue is resolved.",
+    // ADR-039 D3: the channel this plan is bound to has no scheduler arm, so a time on it would be
+    // a promise the system does not keep. Nothing was scheduled and nothing fired.
+    channel_not_schedulable:
+      "This plan can't be scheduled — where it's set to go doesn't support a send time yet. Nothing was scheduled and nothing was sent.",
     no_deck: "This media plan has no generation-ready deck. Nothing was generated or spent.",
     // 19-05. This page is the SECOND approve surface (the cockpit plan card is the other), so the
     // two CAN-SPAM refusals need an entry here too — the fallback below would print the raw enum.
@@ -849,7 +853,17 @@ function AwaitingCard({
     setBusy(true);
     onOutcome(null);
     try {
-      await setSendTime({ planId: item.planId, sendAt: epochMs });
+      // ADR-039 D3 / 43-03. The ORDER is what makes this guard matter: set the time, then execute.
+      // If the time is refused and we execute anyway, the plan does not fail — it fires NOW, which
+      // is the precise outcome "an unschedulable channel refuses" exists to prevent. Today every
+      // path to this button is `item.kind === "email"` (pinned by a source scan above) and email is
+      // schedulable, so the refusal is unreachable from here; it stops being unreachable the moment
+      // a second kind gains a Schedule button, and that is exactly when nobody re-reads this line.
+      const timed = await setSendTime({ planId: item.planId, sendAt: epochMs });
+      if (!timed.ok) {
+        onOutcome(refusalMessage(timed.reason));
+        return;
+      }
       const response = await execute({ planId: item.planId });
       if (!response.ok) onOutcome(refusalMessage(response.reason));
       else if (response.alreadyStarted)

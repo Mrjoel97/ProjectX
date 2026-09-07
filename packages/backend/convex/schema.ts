@@ -846,6 +846,16 @@ export default defineSchema({
     // optional → no migration (append-only, like recipientBodies/attachments). Content-plane only.
     sendAt: v.optional(v.number()),
     scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+    // ADR-039 D2/D4 + ADR-042: WHERE this plan acts — the other half of the fact `sendAt`
+    // carries. A MIRROR ONLY: `CHANNELS` in @pikar/core is canonical (§1), and the two-way
+    // compile bind lives in `plans.ts` beside the `Doc<"plans">` it needs. Optional — every row
+    // written before Phase 43 has none and those rows are emails, so no migration and no
+    // backfill (the `sendAt`/`mailProvider` precedent). Optional on the TABLE is NOT a default
+    // in the CODE: ADR-042 D1 requires a batch stager to pass it explicitly, because
+    // `armFor("memo")` is `"inline"` and a memo row structurally cannot reach the email
+    // terminal — a default would have let a batch row inherit a terminal nobody chose for it.
+    // NOT beside `mailProvider`: that is WHICH MAILBOX, and it means nothing on a vault row.
+    channel: v.optional(v.union(v.literal("email"), v.literal("vault"))),
     // Phase-26 Approvals. Missing provenance on a legacy canceled row means a historical
     // scheduled cancellation; every new cancel writes the discriminator explicitly.
     // 17-08 added `refused`: the SYSTEM stopped this act, the user did not. It is a third literal

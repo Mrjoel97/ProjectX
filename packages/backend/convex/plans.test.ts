@@ -1119,3 +1119,112 @@ describe("ADR-037 — newest root, never a child, never a silent wrong row", () 
     expect(collecting).toHaveLength(1);
   });
 });
+
+// ── 43-03 (ADR-039 D3, ADR-042): an unschedulable channel REFUSES ─────────────────────────────
+describe("setPlanSendTime refuses a channel that has no scheduler arm", () => {
+  const future = () => Date.now() + 60 * 60 * 1000;
+
+  // THE READ-BACK IS THE POINT. Asserting only the returned reason stays green against a guard
+  // placed AFTER the patch — the row would carry a time that nothing will ever honour, which is
+  // the exact failure D3 exists to forbid ("never accepts a sendAt and then drops it").
+  test("a vault-bound plan is refused AND no sendAt is written", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: TENANT,
+      threadId: "thread_vault",
+      kind: "memo",
+      channel: "vault",
+    });
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).mutation(api.plans.setPlanSendTime, {
+        planId,
+        sendAt: future(),
+      }),
+    ).resolves.toEqual({ ok: false, reason: "channel_not_schedulable" });
+
+    const row = await t.run(async (ctx) => ctx.db.get(planId));
+    expect(row?.sendAt).toBeUndefined();
+  });
+
+  // POSITIVE CONTROL #1: the schedulable member still schedules. Without this the refusal could be
+  // a blanket "nothing schedules" and every assertion above would still pass.
+  test("an email-bound plan still schedules", async () => {
+    const t = convexTest(schema, modules);
+    const at = future();
+    const planId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: TENANT,
+      threadId: "thread_email",
+      channel: "email",
+    });
+    await expect(
+      t
+        .withIdentity({ subject: TENANT })
+        .mutation(api.plans.setPlanSendTime, { planId, sendAt: at }),
+    ).resolves.toEqual({ ok: true });
+    expect((await t.run(async (ctx) => ctx.db.get(planId)))?.sendAt).toBe(at);
+  });
+
+  // POSITIVE CONTROL #2: every row written before Phase 43 carries NO channel, and those rows are
+  // emails. If this reddened, the change would have silently un-scheduled the entire existing table.
+  test("a legacy row with no channel at all still schedules", async () => {
+    const t = convexTest(schema, modules);
+    const at = future();
+    const planId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: TENANT,
+      threadId: "thread_legacy",
+    });
+    await expect(
+      t
+        .withIdentity({ subject: TENANT })
+        .mutation(api.plans.setPlanSendTime, { planId, sendAt: at }),
+    ).resolves.toEqual({ ok: true });
+    expect((await t.run(async (ctx) => ctx.db.get(planId)))?.sendAt).toBe(at);
+  });
+
+  // CLEARING is always allowed, whatever the channel. Refusing `sendAt: undefined` would strand a
+  // row nobody could un-schedule — a guard that locks the door it was meant to watch.
+  test("clearing a send time is allowed even on an unschedulable channel", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: TENANT,
+      threadId: "thread_clear",
+      kind: "memo",
+      channel: "vault",
+    });
+    await expect(
+      t
+        .withIdentity({ subject: TENANT })
+        .mutation(api.plans.setPlanSendTime, { planId, sendAt: undefined }),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  // THE MODEL'S DOOR. `patchPlan` has no refusal channel, so it throws rather than silently
+  // dropping the field. `channel` is birth-only, so there is no flip-after-the-fact path around it.
+  test("patchPlan throws rather than silently dropping a sendAt on a vault row", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: TENANT,
+      threadId: "thread_patch",
+      kind: "memo",
+      channel: "vault",
+    });
+    await expect(
+      t.mutation(internal.plans.patchPlan, { planId, sendAt: future() }),
+    ).rejects.toThrow(/CHANNEL_NOT_SCHEDULABLE/);
+    expect((await t.run(async (ctx) => ctx.db.get(planId)))?.sendAt).toBeUndefined();
+  });
+
+  // ADR-039 D7: a thread that queued one channel must not carry it across a "start over".
+  test("resetPlan clears the channel", async () => {
+    const t = convexTest(schema, modules);
+    const planId = await t.mutation(internal.plans.insertPlan, {
+      tenantId: TENANT,
+      threadId: "thread_reset",
+      kind: "memo",
+      channel: "vault",
+    });
+    await t.mutation(internal.plans.resetPlan, { planId });
+    expect((await t.run(async (ctx) => ctx.db.get(planId)))?.channel).toBeUndefined();
+  });
+});
