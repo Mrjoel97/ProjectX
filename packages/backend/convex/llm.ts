@@ -4829,6 +4829,12 @@ async function runAgentLoop(
   /** 22.1b: did the specialist CALL `declareUnsupported`? One bit, monotone downward — it can only
    *  move `evidenceVerdict` from `sourced` to `insufficient_evidence`, never the other way. */
   declaredUnsupported: boolean;
+  /** 42.1: the model's RAW bit, BEFORE the `sources.length === 0` conjunction that produces
+   *  `declaredUnsupported` above. The two answer different questions: "did the specialist
+   *  declare the whole question unsupported?" and "did the verdict act on that?". Collapsing
+   *  them is what left the reflex unmeasurable through three skill-body rewrites.
+   *  READ-ONLY instrumentation: nothing branches on it, so it can never move a verdict. */
+  declaredQuestionScope: boolean;
   /** 27-10: the pack asked for THIS reply to be saved, under this title. Absent when it did not.
    *  The title is model-authored; the CONTENT is never — see `buildSaveAsDocumentTool`. */
   saveRequest?: { title: string };
@@ -4939,6 +4945,12 @@ async function runAgentLoop(
     toolTrace: readonly string[];
     toolOutputs: readonly { tool: string; output: unknown }[];
     declaredUnsupported: boolean;
+    /** 42.1: the model's RAW bit, BEFORE the `sources.length === 0` conjunction that produces
+     *  `declaredUnsupported` above. The two answer different questions: "did the specialist
+     *  declare the whole question unsupported?" and "did the verdict act on that?". Collapsing
+     *  them is what left the reflex unmeasurable through three skill-body rewrites.
+     *  READ-ONLY instrumentation: nothing branches on it, so it can never move a verdict. */
+    declaredQuestionScope: boolean;
     saveRequest?: { title: string };
     truncated: boolean;
     truncatedReason?: "steps" | "clock";
@@ -5169,6 +5181,7 @@ async function runAgentLoop(
       toolTrace,
       toolOutputs,
       declaredUnsupported,
+      declaredQuestionScope,
       saveRequest,
       sources,
       // The step cap is reported first when both are true: it is the more specific cause.
@@ -5295,6 +5308,12 @@ export async function runSpecialistTurn(
    *  see the declaration and the whole channel dead-ends one function short of the verdict, which
    *  is exactly how `webSearchCalls` was lost before 22.1. */
   declaredUnsupported: boolean;
+  /** 42.1: the model's RAW bit, BEFORE the `sources.length === 0` conjunction that produces
+   *  `declaredUnsupported` above. The two answer different questions: "did the specialist
+   *  declare the whole question unsupported?" and "did the verdict act on that?". Collapsing
+   *  them is what left the reflex unmeasurable through three skill-body rewrites.
+   *  READ-ONLY instrumentation: nothing branches on it, so it can never move a verdict. */
+  declaredQuestionScope: boolean;
   /** 27-10: the same pass-through seam again — `{ ...res, skillVersion }` already forwards it, and
    *  only this type had to widen so `workflowPackBinding` can see the request and write the file. */
   saveRequest?: { title: string };

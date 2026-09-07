@@ -4642,6 +4642,22 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1)
             RETRY_READ,
           ),
         );
+  // 42.1 DIAGNOSTIC, and the ONLY read here deliberately NOT keyed to its own expect key.
+  // No fixture asserts it. It rides `researchDocPresent` because the measurement it exists
+  // for is on the fixtures that PASS: `declaredUnsupported` is ANDed with `sources.length
+  // === 0` in llm.ts, so whether that conjunction is load-bearing depends on whether 32 and
+  // 34 would declare too -- and a read that only fired on a failing assertion could never
+  // see that. Free (a pure internalQuery, no model turn), so it costs nothing to always ask.
+  const declarationPair =
+    fixture.expect.researchDocPresent === undefined
+      ? undefined
+      : parse(
+          must(
+            "smoke:researchDeclarationPairForThread",
+            { tenantId: tenant, threadId },
+            RETRY_READ,
+          ),
+        );
   // Phase 18 (ACTN-04). Same skipped-unless-asked rule as every read above, so the 33 fixtures
   // that do not create a document pay no extra hop and see the fail-closed 0.
   const createdDocCount =
@@ -4726,7 +4742,24 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1)
     failures.length === 0
       ? undefined
       : parse(must("smoke:toolCallsForThread", { tenantId: tenant, threadId }, RETRY_READ));
-  return { pass: failures.length === 0, failures, caseCost, specialistCost, toolCalls };
+  return {
+    pass: failures.length === 0,
+    failures,
+    caseCost,
+    specialistCost,
+    toolCalls,
+    // 42.1: diagnostic, never an assertion. `researchObserved` is undefined on the 43
+    // fixtures that ask for no research document, which is how the printer knows to stay
+    // silent rather than print three falses about a fixture that never researched.
+    // BOTH declaration halves come from `declarationPair` (ONE audit row), never from the
+    // `declaredUnsupported` local above: that one is gated on its OWN expect key, which only
+    // fixture 33 sets, so on fixtures 32 and 34 it is an unread `false`. Printing it as a
+    // measurement would have claimed the conjunction beat the model on exactly the two
+    // fixtures where the conjunction's output was never read.
+    ...(declarationPair === undefined
+      ? {}
+      : { researchObserved: { ...declarationPair, insufficientEvidence } }),
+  };
 }
 
 /** The identity every agent-row evidence write carries. Recomputed here rather than trusted from
@@ -4860,6 +4893,21 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
     console.log(
       `  ${tag.padEnd(15)} ${fixture.id}  (${formatCost(outcome.caseCost, outcome.specialistCost)})`,
     );
+    // 42.1: printed for every research fixture, passing or failing. That is the point: the
+    // question "is the conjunction load-bearing?" is answered by fixtures 32 and 34, which
+    // PASS, so a line printed only on failure could never answer it.
+    if (outcome.researchObserved !== undefined) {
+      const o = outcome.researchObserved;
+      console.log(
+        `      research: questionScope=${o.questionScope}` +
+          ` declaredUnsupported=${o.unsupported}` +
+          ` insufficientEvidence=${o.insufficientEvidence}` +
+          // `overrode` is computed inside ONE audit row by the query, not re-derived here from
+          // the two reductions: on a thread with two dispatches those can be true off
+          // different turns, and the conjunction on them would answer about neither.
+          (o.overrode ? `  <- DECLARED, AND sources.length === 0 BEAT IT` : ``),
+      );
+    }
     if (!outcome.pass) {
       for (const f of outcome.failures) {
         console.log(

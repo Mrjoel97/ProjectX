@@ -1,3 +1,43 @@
+> Last verified: 2026-09-07 (42.1 — **THE RESEARCH INSTRUMENT: `declaredQuestionScope` now rides
+> beside `declaredUnsupported`, and the two are allowed to DISAGREE.**
+>
+> `llm.ts` computes `declaredUnsupported = declaredQuestionScope && sources.length === 0`. That
+> conjunction ANDs `evidenceVerdict`'s FIRST disjunct into its SECOND — the verdict is
+> `sourceCount === 0 || declaredUnsupported` — so it collapses the disjunction to its counter leg
+> and `insufficient_evidence` can no longer fire with `sourceCount > 0`. The semantic channel
+> 22.1b built is, today, unreachable.
+>
+> **THE CONJUNCTION WAS RIGHT WHEN IT WAS WRITTEN AND ITS PREMISE HAS SINCE EXPIRED.** It was
+> justified by a measurement recorded in `dispatch.test.ts`: "fixture 33's measured shape — every
+> one of its dispatches across v2–v7 came back with sourceCount 0". Phase 39 then shipped
+> research-specialist v10 with `readPage`. The Phase-40 gate run shows 8 `webResearch` calls with
+> `insufficientEvidence: false`, and since the verdict fires on `sourceCount === 0` whenever
+> `webSearchCalls > 0`, that reading PROVES `sourceCount > 0`. A frozen fact about another lane
+> became a predicate, and the lane moved. Consequence today: research on a fabricated entity lands
+> verdict `sourced` with no `INSUFFICIENT_EVIDENCE_LABEL` — D11 is off on the verdict plane, and
+> the golden gate is red on fixture 33, which jams EVERY gated skill activation
+> (`shouldRecordEvidence` demands all 46 green with no filters).
+>
+> **THIS COMMIT DOES NOT FIX THE CONJUNCTION, DELIBERATELY.** Removing it is only safe if the
+> declaration reflex is gone at v10, and the reflex was last measured at v6/v7 (declared on 5/5
+> runs while holding 0,3,4,6,8 and then 6,10,0,9,8 sources). If it persists, dropping the `&&`
+> moves the red from fixture 33 onto fixtures 32 and 34 instead. So the owner's call was
+> INSTRUMENT FIRST: expose the raw pre-conjunction bit so ONE live gate run decides it with data
+> instead of a fourth skill-body rewrite tuning a signal nobody could see.
+>
+> `declaredQuestionScope` is READ-ONLY instrumentation. Nothing branches on it, no fixture asserts
+> it, and it can never move a verdict — which is what makes adding it to a money/honesty path safe
+> to ship un-measured. It rides `subagent.completed` rather than `research.persisted` because that
+> row already carries `declaredUnsupported` and the eval harness already walks it, so no
+> `persistFindings` argument and no `groundMediaBrief` change was needed. The two booleans on one
+> row disagreeing IS the measurement; asserted together in `dispatch.test.ts` rather than
+> separately, because either alone is satisfiable by a run that did nothing.
+>
+> Measured: backend `dispatch.test.ts` 127, `llmRedaction.test.ts` 67, contracts 123; `tsc` clean
+> in backend and contracts; the runner's `--self-check` passes. TWO mutations verified RED and
+> `cmp`-restored: dropping the key from the `subagent.completed` payload (1 red), and forcing the
+> instrument to a constant `true` (1 red — the sub-question test is the non-vacuity half).)
+>
 > Last verified: 2026-09-07 (media canvas copy — `mediaCanvasView.ts` now words "refused by the
 > provider's content check" off a row's `verdict`, never its `status`; a blocked row with no verdict
 > is a setup fault, not a refusal. Owned and explained in `media.md`'s entry of the same date.)

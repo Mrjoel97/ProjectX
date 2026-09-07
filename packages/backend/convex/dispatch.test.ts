@@ -1603,6 +1603,27 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
       (r) => r.eventType === "research.persisted",
     );
     expect(persisted?.payload).toMatchObject({ sourceCount: 2, evidenceVerdict: "sourced" });
+
+    // 42.1 THE INSTRUMENT. This is fixture 33's exact failing shape, and until now the two
+    // facts about it were indistinguishable: "the specialist never declared" and "the
+    // specialist declared and the source counter overrode it" both read
+    // `declaredUnsupported: false` and nothing else. The gate could only ever report the
+    // second as the first, which is why three skill-body rewrites were tuning blind.
+    // MUTATION that turns this RED: drop `declaredQuestionScope` from llm.ts's return, or
+    // from the `subagent.completed` payload in dispatch.ts.
+    expect(
+      res.declaredQuestionScope,
+      "the raw model bit must survive the conjunction that beats it",
+    ).toBe(true);
+    const completed = (await t.run((ctx) => ctx.db.query("audit").collect())).find(
+      (r) => r.eventType === "subagent.completed",
+    );
+    // The two booleans DISAGREEING on one row is the whole measurement. Asserted together
+    // rather than separately: either one alone is satisfiable by a run that did nothing.
+    expect(completed?.payload).toMatchObject({
+      declaredQuestionScope: true,
+      declaredUnsupported: false,
+    });
   });
 
   // ACTN-03: the OTHER half of the scoped declaration, and the whole reason the enum exists.
@@ -1645,6 +1666,17 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
       sourceCount: 1,
       evidenceVerdict: "sourced",
     });
+
+    // 42.1: the instrument must be FALSE here. A `sub-question` note is not a declaration
+    // that the whole question is unsupported, and an instrument that read true on every
+    // call would report a constant — which is exactly the failure mode of the unscoped bit
+    // ACTN-03 replaced. This is the non-vacuity half of the test above.
+    // MUTATION that turns this RED: return `declaredQuestionScope: true` unconditionally,
+    // or drop the `?.scope === "question"` check in llm.ts.
+    expect(
+      res.declaredQuestionScope,
+      "a sub-question note is not a whole-question declaration",
+    ).toBe(false);
   });
 
   test("wall clock: partial findings return and land with the distinct clock marker", async () => {

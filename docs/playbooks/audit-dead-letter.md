@@ -1,5 +1,19 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-07 (42.1 — `subagent.completed`'s read-time allowlist gained THREE keys,
+> and two of them are not new writes. `webSearchCalls` and `declaredUnsupported` have been WRITTEN
+> on this row since 22.1b and never shown in the viewer — the exact pairing the 42-03 entry below
+> flagged as "missed once". `declaredQuestionScope` is new and lands in the same commit as its
+> writer so it cannot repeat that. A count and two booleans: §4-clean, and the tool's `claim` prose
+> is captured nowhere in this codebase.
+>
+> No runtime risk from the new key: `audit.payload` is `v.any()` at BOTH boundaries (the table
+> validator in `schema.ts` and `internal.audit.log`'s args), so an unknown key is accepted rather
+> than rejected — checked rather than assumed, because a closed validator here would have thrown on
+> every governed dispatch while `tsc` and every offline suite stayed green. The exact-shape test in
+> `dispatch.test.ts` uses `toMatchObject`, not key-set equality, so an added key does not redden
+> it.)
+
 > Last verified: 2026-09-07 (42-03 — `subagent.dispatched` gained `workerCount` in the read-time
 > allowlist. It is how many workers a fan-out ACTUALLY started, which is not what the model asked
 > for whenever ADR-038's rail cap narrowed it. A COUNT, never a route list. Added in the same

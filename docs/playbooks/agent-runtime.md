@@ -1,3 +1,37 @@
+> Last verified: 2026-09-07 (42.1 — `smoke.ts` gained `researchDeclarationPairForThread`, and
+> `run-eval-golden.mjs` learned to PRINT what it reads.
+>
+> The new reader asks the same question as `researchDeclaredUnsupportedForThread` one step UPSTREAM
+> of `llm.ts`'s `&& sources.length === 0`. TRUE here with FALSE there means the specialist declared
+> the whole question unsupported and the source counter beat it — fixture 33's exact failure,
+> and a state that was previously indistinguishable from "never declared". It harvests off
+> `subagent.completed` (where the bit is written), not `research.persisted`, and the `typeof`
+> guards are what keep an old row contributing NO pair rather than a false one.
+>
+> **IT RETURNS BOTH HALVES OFF ONE ROW, AND THAT IS THE FIX AN ADVERSARIAL PASS FORCED.** The first
+> cut read the raw bit off `subagent.completed` and printed it beside `declaredUnsupported`, which
+> `researchDeclaredUnsupportedForThread` harvests off `research.persisted` — a row that is ABSENT
+> when the persist fails and on the gap path. So `false` from an EMPTY array could print beside a
+> real `true` and claim the conjunction beat a run in which it never ran. Worse, the runner read
+> `declaredUnsupported` under its OWN expect key, which only fixture 33 sets: on 32 and 34 the
+> printed value was an unread default, so the diagnostic made a claim about the conjunction on
+> exactly the two fixtures where the conjunction was never measured. Now a row missing either key
+> contributes no pair at all, and `overrode` is computed WITHIN a row rather than by ANDing two
+> `.some()` reductions that can be true off different turns.
+>
+> **THE RUNNER READ IS THE ONE DELIBERATELY NOT KEYED TO ITS OWN `expect` KEY.** Every other
+> research read in `run-eval-golden.mjs` is skipped-unless-asked. This one rides
+> `researchDocPresent`, because the measurement it exists for is on the fixtures that PASS: whether
+> the conjunction is load-bearing depends on whether 32 and 34 would ALSO declare, and a read that
+> only fired on a failing assertion could never see that. It is a pure `internalQuery` — no model
+> turn — so always asking costs nothing. It is a DIAGNOSTIC: no fixture asserts it, and
+> `shouldRecordEvidence` is untouched.
+>
+> The printer runs on PASS and FAIL alike and flags the shape explicitly
+> (`questionScope=true declaredUnsupported=false` prints `<- DECLARED, AND sources.length
+> === 0`). `researchObserved` is absent on the 43 fixtures that ask for no research document, so
+> the printer stays silent rather than printing three falses about a fixture that never researched.)
+
 > Last verified: 2026-09-06 (38-01, Track C step 10 — **one tool context, one grant derivation, one
 > validator.** `buildCockpitTools` takes `(toolCtx: ToolContext, grants: ToolGrants = NO_GRANTS)` instead
 > of eight append-only positionals; `grantsFor` (`@pikar/core`, `toolGrants.ts`) is the ONE place the

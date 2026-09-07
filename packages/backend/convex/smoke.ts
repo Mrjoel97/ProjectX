@@ -806,6 +806,10 @@ async function researchTrailForThread(
   verdicts: string[];
   /** 22.1b: the SEMANTIC act, harvested off the same `research.persisted` row as `verdicts`. */
   declarations: boolean[];
+  /** 42.1: the RAW model bit AND the post-conjunction one, harvested TOGETHER off a single
+   *  `subagent.completed` row. Both-or-neither: a row missing either key contributes no
+   *  pair at all, so the two halves can never come from different turns. Diagnostic only. */
+  declarationPairs: { questionScope: boolean; unsupported: boolean }[];
 }> {
   const steps = await ctx.db
     .query("agentSteps")
@@ -828,6 +832,16 @@ async function researchTrailForThread(
   let costUsd = 0;
   const verdicts: string[] = [];
   const declarations: boolean[] = [];
+  // 42.1: the pre- and post-conjunction bits, harvested off `subagent.completed` rather than
+  // `research.persisted`, because that is the row BOTH are written on and this trail already
+  // walks it for `webSearchCalls`.
+  //
+  // Kept separate from `declarations` above, which reads the post-conjunction bit off
+  // `research.persisted` and is what fixture 33 ASSERTS. That row is absent when the persist
+  // failed and on the gap path, so pairing across the two planes would print `false` from an
+  // EMPTY array beside a real `true` and claim the conjunction overrode a run in which it
+  // never ran. One row, both halves, or no pair.
+  const declarationPairs: { questionScope: boolean; unsupported: boolean }[] = [];
   for (const correlationId of correlations) {
     const auditRows = await ctx.db
       .query("audit")
@@ -842,6 +856,12 @@ async function researchTrailForThread(
         if (typeof count === "number" && Number.isFinite(count) && count >= 0) {
           webSearchCalls += count;
         }
+        // 42.1: instrumentation only. Absent on every row written before this commit, so the
+        // typeof guards are what keep an old row contributing NO pair rather than a false one.
+        const scoped = row.payload?.declaredQuestionScope;
+        const post = row.payload?.declaredUnsupported;
+        if (typeof scoped === "boolean" && typeof post === "boolean")
+          declarationPairs.push({ questionScope: scoped, unsupported: post });
         const spend = row.payload?.costUsd;
         if (typeof spend === "number" && Number.isFinite(spend) && spend >= 0) {
           costUsd += spend;
@@ -869,7 +889,7 @@ async function researchTrailForThread(
     const doc = await ctx.db.get(docId);
     if (doc?.tenantId === tenantId && doc.kind === "web_research") docs.push(doc);
   }
-  return { docs, webSearchCalls, costUsd, verdicts, declarations };
+  return { docs, webSearchCalls, costUsd, verdicts, declarations, declarationPairs };
 }
 
 /**
@@ -1100,6 +1120,40 @@ export const researchDeclaredUnsupportedForThread = internalQuery({
   args: { tenantId: v.string(), threadId: v.string() },
   handler: async (ctx, { tenantId, threadId }): Promise<boolean> =>
     (await researchTrailForThread(ctx, tenantId, threadId)).declarations.some(Boolean),
+});
+
+/**
+ * 42.1: the SAME question, asked one step upstream of the conjunction.
+ *
+ * `researchDeclaredUnsupportedForThread` above reads the post-conjunction bit off
+ * `research.persisted` and is what fixture 33 ASSERTS. This returns BOTH halves off one
+ * `subagent.completed` row: the model's raw scoped declaration and the value llm.ts derived
+ * from it after ANDing `sources.length === 0`.
+ *
+ * `overrode` is the state the whole measurement turns on: the specialist declared the whole
+ * question unsupported and the source counter won. That is fixture 33's exact failure, and
+ * it was indistinguishable from "never declared" while one boolean carried both meanings.
+ *
+ * DIAGNOSTIC ONLY. No fixture asserts it and no code branches on it; it exists so ONE live
+ * gate run can measure whether the declaration reflex still exists at specialist v10.
+ */
+export const researchDeclarationPairForThread = internalQuery({
+  args: { tenantId: v.string(), threadId: v.string() },
+  handler: async (
+    ctx,
+    { tenantId, threadId },
+  ): Promise<{ questionScope: boolean; unsupported: boolean; overrode: boolean }> => {
+    const pairs = (await researchTrailForThread(ctx, tenantId, threadId)).declarationPairs;
+    return {
+      questionScope: pairs.some((p) => p.questionScope),
+      unsupported: pairs.some((p) => p.unsupported),
+      // COMPUTED WITHIN A ROW, never by comparing the two `.some()` results above. On a
+      // thread with two dispatches those two reductions can both be true off DIFFERENT
+      // turns, and `questionScope && !unsupported` over them would then be false while a
+      // real override sat in the trail. This is the answer the measurement turns on.
+      overrode: pairs.some((p) => p.questionScope && !p.unsupported),
+    };
+  },
 });
 
 /** Phase 16 / D10 #2: sum the hosted-search COUNT already written to subagent.completed. The

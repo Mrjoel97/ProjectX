@@ -389,6 +389,13 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
     "spentCents",
     "envelopeCents",
     "incomplete",
+    // 42.1: three fields this row has WRITTEN all along that the viewer has never shown.
+    // `webSearchCalls` and `declaredUnsupported` are the pairing 42-03 flagged as missed
+    // once; `declaredQuestionScope` is new and lands with its writer in the same commit so
+    // it cannot repeat that. A count and two booleans: §4-clean.
+    "webSearchCalls",
+    "declaredUnsupported",
+    "declaredQuestionScope",
   ],
   // 42-03: `workerCount` is how many workers a fan-out ACTUALLY started, which is not what the
   // model asked for whenever ADR-038's rail cap narrowed it. A count, never a route list.

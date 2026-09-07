@@ -227,6 +227,9 @@ export type DispatchResult =
        *  and a diligent search of a nonexistent entity always returns near-misses, so the two
        *  counters alone can never reach the insufficient-evidence verdict. */
       declaredUnsupported: boolean;
+      /** 42.1: the model's RAW bit, BEFORE the `sources.length === 0` conjunction that makes
+       *  `declaredUnsupported` above. Instrumentation only: nothing branches on it. */
+      declaredQuestionScope: boolean;
       retrievedAt: number;
       /** 16-07: the vault document the findings landed in. Present ONLY on a research run whose
        *  persist succeeded — absent on the gap path (which persists nothing here) and absent when
@@ -548,6 +551,14 @@ async function governedDispatch(
         webSearchCalls: turn.webSearchCalls,
         // 22.1b: a BOOLEAN, never the `claim` string the tool was called with (§4).
         declaredUnsupported: turn.declaredUnsupported,
+        // 42.1: the RAW model bit beside the verdict-facing one, on the row the eval
+        // harness already reads. `declaredUnsupported` is ANDed with `sources.length ===
+        // 0` upstream, so when the two DISAGREE the specialist declared and the counter
+        // overrode it. That is the measurement three body rewrites could not see.
+        // ("overrode", never the one-word past tense of "over"+"rule": routines.test.ts scans
+        // this namespace for ten banned tokens by case-insensitive SUBSTRING and does not strip
+        // comments, and one of those tokens is a substring of that word.)
+        declaredQuestionScope: turn.declaredQuestionScope,
       },
     });
     return {
@@ -563,6 +574,7 @@ async function governedDispatch(
       sources: turn.sources,
       webSearchCalls: turn.webSearchCalls,
       declaredUnsupported: turn.declaredUnsupported,
+      declaredQuestionScope: turn.declaredQuestionScope,
       retrievedAt: Date.now(),
       modelId: turn.modelId,
       fallbackModelId: turn.fallbackModelId,
