@@ -1,5 +1,44 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (45-02 — **THE ARCHIVE IS CLEAN. The 45-01 entry below is now
+> HISTORY, not the current state, and one of its sentences is FALSE as of this line:** it says
+> arming WORM would freeze a majority-synthetic archive. That was true when written and is not
+> true now, because the purge it describes has been RUN.
+>
+> MEASURED ON PRODUCTION after purging all 145 synthetic tenant ids (55 run roots + 90 derived):
+>
+> | table | before | synthetic | after | synthetic |
+> |---|---|---|---|---|
+> | `audit` | 1894 | 1225 | **672** | **0** |
+> | `plans` | 632 | 583 | **51** | **0** |
+> | `vaultDocuments` | 733 | 674 | **59** | **0** |
+>
+> 11,121 rows and 123 blobs removed across two passes, ZERO errors, and **zero real rows lost** —
+> verified by diffing actual row `_id`s before and after, not by comparing counts. That
+> distinction earned its keep: the count comparison LOOKED like 485 real vault documents had been
+> destroyed, and the truth was that the audit's own predicate had drifted between the two
+> measurements (`.startsWith("eval-")` classified every `packeval-*` row as real; the regex
+> `/^(eval|packeval)-/` classified it as synthetic). The ruler moved, not the data. Diff ids, not
+> counts, whenever the question is “did I delete the wrong thing”.
+>
+> A SECOND SELF-INFLICTED LESSON, recorded because it is this playbook's own subject: the first
+> purge loop swallowed CLI errors into a `0 0 true` fallback — indistinguishable from “nothing
+> left to delete” — so 90 `packeval-<hex>-c<n>` tenants survived it without a single error being
+> printed. A loop whose success signal and failure signal are the same value can only ever report
+> success.
+>
+> WHAT THIS DOES AND DOES NOT CHANGE FOR ADR-044 D2. It RETIRES the majority-synthetic objection
+> entirely. It does NOT clear the gate: the cursor still starts at 0 (`getCursor` returns `?? 0`),
+> so arming still freezes the ENTIRE 672-row history on day one rather than archiving from now;
+> `audit.payload` is still `v.any()` with no systemic §4 scanner having read a row; and the
+> `billingEvents` bridge (ADR-044 C2, second count) is still untouched. **WORM STAYS OFF** — on
+> the reasons that always mattered, now that the loudest one is gone.
+>
+> STILL PRESENT: 142 orphaned blobs, 65.2 MB, unchanged by this work and unchanged in bytes. A
+> tenant purge deletes blobs REFERENCED by the rows it deletes; these are referenced by nothing,
+> so no row-shaped cleanup can ever reach them. Removing them needs a deliberate orphan reaper and
+> an owner decision, because it permanently deletes production bytes.)
+
 > Last verified: 2026-09-09 (45-01 — **THE EVAL HARNESS NEVER CLEANED UP, AND IT IS THE SECOND
 > AND STRONGER REASON WORM STAYS OFF.** Measured on production: `run-eval-golden.mjs` mints a
 > throwaway `eval-<runId>` tenant per run and has never removed it, so **472 of 632 `plans` rows,
