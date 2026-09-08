@@ -19,10 +19,12 @@ import {
   applyRecipientEdit,
   armFor,
   assertNever,
+  beyondHorizon,
   classifyReviewDecision,
   type FigureClaim,
   normalizeAddress,
   notificationMessage,
+  parseChannel,
   SEND_TIME_HORIZON_MS,
 } from "@pikar/core";
 // 20-07: the SHOT_TYPES boundary check for the media pre-step. Deep specifier — `storyboard` is not
@@ -44,6 +46,7 @@ import { applyCrmOperations } from "./contacts";
 // The memo terminal (12-05): a memo-plan's Approve saves a vault doc instead of fanning out email.
 import { persistNextStepMemo } from "./evaluations";
 import { retrier, workflow } from "./index";
+import { MAX_FAN_OUT } from "./lib/dispatchShared";
 import { requireOwnerAction, tenantAction, tenantMutation, tenantQuery } from "./lib/functions";
 // 20-07 MEDIA-01: the whole-reel reservation, called DIRECTLY (not via runMutation) so it lands in
 // the same serializable transaction as the proposed -> approved CAS. See its doc comment.
@@ -802,6 +805,16 @@ async function startFanout(
   ctx: MutationCtx,
   { planId, tenantId, requestIds, correlationIds, planCid }: FanoutArgs,
 ): Promise<string> {
+  // A FAN-OUT OF NOTHING IS NOT A DELIVERY. `deliverApprovedPlan` loops over `requestIds` and
+  // then calls `markPlanDone` unconditionally, so an empty array walks a row
+  // scheduled -> delivering -> done having published nothing — and because the workflow
+  // SUCCEEDS, `onPipelineComplete` archives no dead-letter row either.
+  //
+  // UNREACHABLE TODAY, and written anyway: the email path refuses `all_recipients_suppressed`
+  // before it seeds, and the memo arm refuses to arm a non-vault child. This is the structural
+  // close for the NEXT channel routed here by mistake, which is exactly the mistake the switch
+  // above exists to make impossible — belt and braces on the one failure with no symptom.
+  if (requestIds.length === 0) throw new Error("EMPTY_FANOUT");
   const workflowId = await workflow.start(
     ctx,
     internal.deliverApprovedPlan.deliverApprovedPlan,
@@ -843,7 +856,55 @@ export const startScheduledDelivery = internalMutation({
     ) {
       return null;
     }
-    return startFanout(ctx, args);
+    // ADR-042 — THE CHANNEL DISPATCH LIVES HERE, INSIDE the callback, and it is read off the ROW
+    // this handler already re-read above, never off `args`. An argument minted wrong once is
+    // wrong for ever; the row is re-read on every fire, so a later move or edit cannot leave a
+    // stale terminal behind.
+    //
+    // WHY IT CANNOT BE A BRANCH AROUND THIS CALL. Arming a memo child on the EXISTING email
+    // callback is the single most likely way this phase ships broken and looks fine:
+    // `startFanout` patches `delivering`, `deliverApprovedPlan` loops over ZERO `requests` rows,
+    // `markPlanDone` patches `done` — so the row reads scheduled -> delivering -> done, the
+    // workflow SUCCEEDS so no dead-letter row is archived, and nothing was ever published. No
+    // throw, no audit, nothing to find.
+    //
+    // The switch is EXHAUSTIVE over `Channel`: a third member cannot compile without deciding
+    // its terminal right here, which is the fail-closed property ADR-042 D4 asks for.
+    const channel = parseChannel(plan.channel);
+    switch (channel) {
+      case "email":
+        return startFanout(ctx, args);
+      case "vault": {
+        // The SAME terminal Approve uses — not a second copy of the persist.
+        const vaultDocId = await persistNextStepMemo(ctx, plan);
+        await ctx.db.patch(args.planId, { status: "done", scheduledFunctionId: undefined });
+        await ctx.runMutation(internal.audit.log, {
+          tenantId: args.tenantId,
+          correlationId: args.planCid,
+          eventType: "plan.published",
+          actor: "system",
+          payload: { planId: args.planId, vaultDocId }, // refs only (§4)
+        });
+        // A queued CHILD firing is the last thing that can finish its batch. ponytail: four
+        // lines rather than reusing `flipParentWhenSiblingsDone` — that helper CASes on
+        // `collecting` and re-assembles the parent's body, and both are wrong here: the parent
+        // is `scheduled` and its body was assembled long ago.
+        const parentPlanId = plan.parentPlanId;
+        if (parentPlanId !== undefined) {
+          const siblings = await ctx.db
+            .query("plans")
+            .withIndex("by_parent", (q) =>
+              q.eq("tenantId", args.tenantId).eq("parentPlanId", parentPlanId),
+            )
+            .take(MAX_FAN_OUT + 1);
+          if (!siblings.some((sib) => sib.status === "scheduled"))
+            await ctx.db.patch(parentPlanId, { status: "done" });
+        }
+        return null;
+      }
+      default:
+        return assertNever(channel);
+    }
   },
 });
 
@@ -974,6 +1035,75 @@ type ExternalArgs = {
  * instead of starting (status → scheduled; nothing sends before fire, SC3). Explicit return type
  * dodges TS7022.
  */
+
+/**
+ * ONE APPROVE SETTLES EVERY CHILD (ADR-039 D5, ADR-042 D3).
+ *
+ * A child WITH a `sendAt` is ARMED. A child WITHOUT one PUBLISHES NOW — and that half is the whole
+ * point of this function. An arm that only handled the scheduled children would leave every
+ * unscheduled variant sitting at `approved`, which is one of exactly two statuses invisible to
+ * every approvals query; the parent's own sibling check would then flip it to `done`. A fifteen
+ * variant batch where the user timed three would file three documents, silently discard twelve
+ * FULLY BILLED drafts, and read finished. "Unscheduled" means "publish now", never "publish never".
+ *
+ * Returns the COUNTS so the caller decides the parent's status from what is still pending rather
+ * than from what happened to it. `{ armed: 0, published: 0 }` for an ordinary childless memo, which
+ * is what keeps the single-memo Approve path byte-identical.
+ */
+async function armOrPublishChildren(
+  ctx: MutationCtx,
+  parent: Doc<"plans">,
+): Promise<{ armed: number; published: number } | { refusal: "send_time_too_far" }> {
+  const children = await ctx.db
+    .query("plans")
+    .withIndex("by_parent", (q) => q.eq("tenantId", parent.tenantId).eq("parentPlanId", parent._id))
+    // `.take`, not `.collect`: a mis-staged parent must not be able to blow the transaction.
+    .take(MAX_FAN_OUT + 1);
+  const due = children.filter((c) => c.status === "approved");
+  if (due.length === 0) return { armed: 0, published: 0 };
+
+  const now = Date.now();
+  // EVERY REFUSAL BEFORE THE FIRST WRITE. Arming eight children and refusing the ninth leaves a
+  // half-armed batch that nothing can resume and nothing can cleanly cancel — the 20-07 lesson,
+  // and the reason this is a separate pre-pass rather than a check inside the loop below.
+  for (const child of due) {
+    const channel = parseChannel(child.channel);
+    // FAIL CLOSED on a child that is not vault-bound. `parseChannel(undefined)` resolves to
+    // `"email"`, and an email arm with zero `requests` rows walks a row scheduled -> delivering ->
+    // done having published nothing. A child born without a channel is a mint bug; it must never
+    // reach a timer.
+    if (channel !== "vault") return { refusal: "send_time_too_far" };
+    if (child.sendAt !== undefined && beyondHorizon(channel, child.sendAt, now))
+      return { refusal: "send_time_too_far" };
+  }
+
+  let armed = 0;
+  let published = 0;
+  for (const child of due) {
+    if (child.sendAt === undefined) {
+      await persistNextStepMemo(ctx, child);
+      await ctx.db.patch(child._id, { status: "done" });
+      published++;
+      continue;
+    }
+    const scheduledFunctionId = await ctx.scheduler.runAt(
+      child.sendAt,
+      internal.cockpit.startScheduledDelivery,
+      {
+        planId: child._id,
+        tenantId: parent.tenantId,
+        requestIds: [],
+        correlationIds: [],
+        planCid: crypto.randomUUID(),
+        scheduledFor: child.sendAt,
+      },
+    );
+    await ctx.db.patch(child._id, { status: "scheduled", scheduledFunctionId });
+    armed++;
+  }
+  return { armed, published };
+}
+
 export const executePlan = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (
@@ -1073,6 +1203,51 @@ export const executePlan = tenantMutation({
           return { ok: true, applied: applied.applied };
         }
         // memo (12-05 BEVL-02): Approve means SAVE. See evaluations.ts.
+        //
+        // 43-06: a memo row may now be a BATCH PARENT or a row with its own `sendAt`, so this
+        // terminal has three cases above the original one. They are ordered by what the row IS,
+        // not by what is convenient.
+        const settled = await armOrPublishChildren(ctx, plan);
+        if ("refusal" in settled) return { ok: false, reason: settled.refusal };
+
+        // (1) A CHILDLESS row carrying its own time. Before 43-06 `vault` was unschedulable so
+        // `setPlanSendTime` refused this outright; the flip made it legal, and without this
+        // branch the row would publish IMMEDIATELY and drop the time it just accepted — ADR-039
+        // D3's exact prohibition, surviving the flip that was supposed to honour it.
+        if (settled.armed === 0 && settled.published === 0 && plan.sendAt !== undefined) {
+          if (beyondHorizon(parseChannel(plan.channel), plan.sendAt, Date.now()))
+            return { ok: false, reason: "send_time_too_far" };
+          const scheduledFunctionId = await ctx.scheduler.runAt(
+            plan.sendAt,
+            internal.cockpit.startScheduledDelivery,
+            {
+              planId,
+              tenantId: plan.tenantId,
+              requestIds: [],
+              correlationIds: [],
+              planCid: crypto.randomUUID(),
+              scheduledFor: plan.sendAt,
+            },
+          );
+          await ctx.db.patch(planId, { status: "scheduled", scheduledFunctionId });
+          return { ok: true, scheduled: true };
+        }
+
+        // (2) A BATCH PARENT saves NOTHING of its own: its body is already the ASSEMBLY of its
+        // children (`flipParentWhenSiblingsDone`), so publishing it too would file the whole
+        // batch twice. While any child is armed it is the cancellable handle for the queue —
+        // and it must NOT take `done`, because `cancelScheduledPlan` CASes on `scheduled` and
+        // `discardPlan` on `proposed`, so a `done` parent is unreachable from both doors.
+        if (settled.armed > 0) {
+          await ctx.db.patch(planId, { status: "scheduled" });
+          return { ok: true, scheduled: true };
+        }
+        if (settled.published > 0) {
+          await ctx.db.patch(planId, { status: "done" });
+          return { ok: true };
+        }
+
+        // (3) The ordinary single memo, byte-identical to what it always was.
         await ctx.db.patch(planId, { status: "done" });
         await persistNextStepMemo(ctx, plan);
         return { ok: true };
@@ -1203,13 +1378,21 @@ export const executePlan = tenantMutation({
     if ((profile?.postalAddress ?? "").trim() === "")
       return { ok: false, reason: "no_postal_address" };
 
-    // Far-future cap (SCHD-01): the AUTHORITATIVE gate. A beyond-horizon sendAt would fire past the
-    // Gmail token's life (design/scheduled-send.md) → dead token. Refuse HERE — the one place the
-    // schedule-vs-immediate decision is made — so every write path (NL setSendTime, picker
-    // setPlanSendTime, Plan 05 reschedule) is covered before any row seeds or the scheduler arms
-    // (mirrors the gmail_not_connected fail-before-mutate guard; the < now guard at :422 only ever
-    // sees an in-window sendAt because of this).
-    if (plan.sendAt !== undefined && plan.sendAt > Date.now() + SEND_TIME_HORIZON_MS)
+    // Far-future cap (SCHD-01): the EMAIL arm's gate. A beyond-horizon sendAt would fire past the
+    // Gmail token's life (design/scheduled-send.md) → dead token, so every write path (NL
+    // setSendTime, picker setPlanSendTime, Plan 05 reschedule) is covered before any row seeds or
+    // the scheduler arms (mirrors the gmail_not_connected fail-before-mutate guard; the < now
+    // guard at :422 only ever sees an in-window sendAt because of this).
+    //
+    // IT USED TO CALL ITSELF "the one place the schedule-vs-immediate decision is made". 43-06
+    // made that false — the memo/vault arm bounds each child's `sendAt` in its own pre-pass — and
+    // the sentence is deleted here rather than left to expire quietly, which is the exact defect
+    // class 43-01b spent a commit cleaning up. What IS still true, and is the property worth
+    // keeping: both arms call ONE predicate, `beyondHorizon`, so they cannot drift.
+    if (
+      plan.sendAt !== undefined &&
+      beyondHorizon(parseChannel(plan.channel), plan.sendAt, Date.now())
+    )
       return { ok: false, reason: "send_time_too_far" };
 
     // 19-05 SC#5, THE PER-ADDRESS DROP — and it has to be HERE, before the join below:
@@ -1362,6 +1545,52 @@ export const executePlan = tenantMutation({
  * plan.canceled audit (payload = {planId} ONLY — never subject/body/recipients; audit is insert-only
  * per CLAUDE.md §3/§4). Tenant-guarded (no cross-tenant cancel). Idempotent.
  */
+
+/**
+ * CANCEL WALKS THE CHILDREN (ADR-039 D5). One Approve armed them; one cancel must disarm them, or
+ * a cancelled batch leaves live timers that publish content the user already withdrew.
+ *
+ * ONE GUARD, and the count is the point. `scheduler.cancel` THROWS on an id whose callback has
+ * already committed, and a bare loop would turn ONE already-fired child into a thrown mutation that
+ * rolls the WHOLE transaction back — leaving every sibling armed and the cancel looking like it
+ * simply failed. `done` / `canceled` / `delivering` are exactly the states whose callback has run,
+ * so skipping them is the same predicate, stated once.
+ *
+ * A SECOND guard (`status === "scheduled" && scheduledFunctionId`) was in the design and is NOT
+ * here: it is dead code behind the first, and its presence made the mutation that was supposed to
+ * prove this loop unfalsifiable — delete the inner check and the outer `continue` still skips the
+ * fired child, so the test stayed green over a removed guard.
+ *
+ * Sound rather than lucky: this mutation and `startScheduledDelivery` both READ and WRITE the same
+ * child row, so Convex serialises them and there is no window where a child fires between the read
+ * and the cancel.
+ */
+async function cancelFanOutChildren(
+  ctx: MutationCtx,
+  parent: Doc<"plans">,
+  cancelKind: "scheduled_cancel" | "discarded",
+): Promise<number> {
+  const children = await ctx.db
+    .query("plans")
+    .withIndex("by_parent", (q) => q.eq("tenantId", parent.tenantId).eq("parentPlanId", parent._id))
+    .take(MAX_FAN_OUT + 1);
+  const now = Date.now();
+  let canceled = 0;
+  for (const child of children) {
+    if (child.status === "done" || child.status === "canceled" || child.status === "delivering")
+      continue;
+    if (child.scheduledFunctionId) await ctx.scheduler.cancel(child.scheduledFunctionId);
+    await ctx.db.patch(child._id, {
+      status: "canceled",
+      cancelKind,
+      canceledAt: now,
+      scheduledFunctionId: undefined,
+    });
+    canceled++;
+  }
+  return canceled;
+}
+
 export const cancelScheduledPlan = tenantMutation({
   args: { planId: v.id("plans") },
   handler: async (
@@ -1372,6 +1601,8 @@ export const cancelScheduledPlan = tenantMutation({
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant cancel
     if (plan.status !== "scheduled") return { ok: true, alreadyResolved: true }; // CAS: cancel() would throw on a fired id
     if (plan.scheduledFunctionId) await ctx.scheduler.cancel(plan.scheduledFunctionId);
+    // ADR-039 D5: the parent is the cancellable handle for the WHOLE batch.
+    const childrenCanceled = await cancelFanOutChildren(ctx, plan, "scheduled_cancel");
     await ctx.db.patch(planId, {
       status: "canceled",
       cancelKind: "scheduled_cancel",
@@ -1383,7 +1614,10 @@ export const cancelScheduledPlan = tenantMutation({
       correlationId: plan.correlationId ?? String(planId),
       eventType: "plan.canceled",
       actor: ctx.tenantId,
-      payload: { planId }, // refs only (§4) — never subject/body/recipients/sendAt
+      // Refs and a COUNT only (§4) — never subject/body/recipients/sendAt. `childrenCanceled`
+      // is added to `auditProjection`'s allowlist in THIS commit: an unlisted key is written
+      // and then invisible at read time, so the evidence would exist and never render.
+      payload: { planId, childrenCanceled },
     });
     return { ok: true, canceled: true };
   },
@@ -1405,6 +1639,11 @@ export const discardPlan = tenantMutation({
     if (plan.status !== "proposed") return { ok: true, alreadyResolved: true };
 
     if (plan.scheduledFunctionId) await ctx.scheduler.cancel(plan.scheduledFunctionId);
+    // 43-06: discarding a BATCH root before Approve. Its children are `approved` and carry no
+    // timer yet, so the scheduler half of the walk is a no-op here — but the STATUS half is not:
+    // without it fifteen children keep reading `approved`, which is invisible to every approvals
+    // query, and the batch becomes fifteen orphan rows nobody can see or clear.
+    const childrenCanceled = await cancelFanOutChildren(ctx, plan, "discarded");
     await ctx.db.patch(planId, {
       status: "canceled",
       cancelKind: "discarded",
@@ -1416,7 +1655,7 @@ export const discardPlan = tenantMutation({
       correlationId: plan.correlationId ?? String(planId),
       eventType: "plan.discarded",
       actor: ctx.tenantId,
-      payload: { planId, kind: "discarded" },
+      payload: { planId, kind: "discarded", childrenCanceled },
     });
     // 27-07: the pilot's `plan_rejected`. Inert for every plan no pack staged.
     await recordPackPlanDecision(ctx, ctx.tenantId, planId, "plan_rejected");
@@ -1515,6 +1754,16 @@ export const reschedulePlan = tenantMutation({
     ) {
       return { ok: true, alreadyResolved: true };
     }
+    // 43-06: A FAN-OUT OR BATCH ROOT IS NOT RE-OPENABLE, and this refusal is DELIBERATE now.
+    // Its children were terminated by the same cancel that produced this row, so re-arming the
+    // parent would restore a queue with nothing in it. It was already refused in practice — but
+    // only by `needs_future_time` below, because a root never carried its own `sendAt`. B3 makes
+    // exactly that legal, so the accident was one commit away from evaporating silently.
+    const anyChild = await ctx.db
+      .query("plans")
+      .withIndex("by_parent", (q) => q.eq("tenantId", plan.tenantId).eq("parentPlanId", plan._id))
+      .first();
+    if (anyChild) return { ok: true, alreadyResolved: true };
     // The re-ask: a reschedule OUT of canceled requires a future time — write NOTHING on a past/absent
     // sendAt (no orphan delete, no status flip, no audit) so a stale time can never drive a silent send.
     if (plan.sendAt === undefined || plan.sendAt <= Date.now()) {

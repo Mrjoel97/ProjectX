@@ -16,7 +16,7 @@ import { COCKPIT_AGENT_SKILL } from "@pikar/contracts/skill";
 import { SEND_TIME_HORIZON_MS, withheldNote } from "@pikar/core";
 import { maxCharsFor } from "@pikar/core/storyboard";
 import { convexTest } from "convex-test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // cancelScheduledPlan writes a refs-only plan.canceled audit; the SOLE audit-insert surface counts
 // the auditCounts aggregate, so register the component (relative import — the package blocks the
 // deep specifier), same pattern as cockpitTools.test.ts.
@@ -1023,7 +1023,11 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
         .collect(),
     );
     expect(audits).toHaveLength(1);
-    expect(audits[0]?.payload).toEqual({ planId, kind: "discarded" });
+    // 43-06 widened this payload with `childrenCanceled`, a COUNT of the batch children this
+    // discard also cancelled. Still refs-and-counts only (§4), and asserted EXACTLY rather than
+    // with `objectContaining` — the point of this assertion has always been that nothing else
+    // creeps into a payload that renders in the audit viewer.
+    expect(audits[0]?.payload).toEqual({ planId, kind: "discarded", childrenCanceled: 0 });
 
     expect(await asT.mutation(api.cockpit.discardPlan, { planId })).toEqual({
       ok: true,

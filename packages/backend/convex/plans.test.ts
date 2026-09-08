@@ -1121,31 +1121,26 @@ describe("ADR-037 — newest root, never a child, never a silent wrong row", () 
 });
 
 // ── 43-03 (ADR-039 D3, ADR-042): an unschedulable channel REFUSES ─────────────────────────────
-describe("setPlanSendTime refuses a channel that has no scheduler arm", () => {
+describe("setPlanSendTime and the channel bind (43-03, narrowed by 43-06)", () => {
   const future = () => Date.now() + 60 * 60 * 1000;
 
-  // THE READ-BACK IS THE POINT. Asserting only the returned reason stays green against a guard
-  // placed AFTER the patch — the row would carry a time that nothing will ever honour, which is
-  // the exact failure D3 exists to forbid ("never accepts a sendAt and then drops it").
-  test("a vault-bound plan is refused AND no sendAt is written", async () => {
-    const t = convexTest(schema, modules);
-    const planId = await t.mutation(internal.plans.insertPlan, {
-      tenantId: TENANT,
-      threadId: "thread_vault",
-      kind: "memo",
-      channel: "vault",
-    });
-
-    await expect(
-      t.withIdentity({ subject: TENANT }).mutation(api.plans.setPlanSendTime, {
-        planId,
-        sendAt: future(),
-      }),
-    ).resolves.toEqual({ ok: false, reason: "channel_not_schedulable" });
-
-    const row = await t.run(async (ctx) => ctx.db.get(planId));
-    expect(row?.sendAt).toBeUndefined();
-  });
+  // TWO TESTS WERE DELETED HERE IN 43-06, AND THIS IS THE RECORD SO THEY ARE NOT MOURNED.
+  //
+  // They asserted that a `vault`-bound plan is REFUSED a `sendAt` (returned reason + a read-back
+  // proving no time was written) and that `patchPlan` THROWS rather than silently dropping one.
+  // 43-06 flipped `vault` to schedulable in the same commit as the arm that honours it, so both
+  // guards lost their reachable subject: with every member of `CHANNELS` schedulable, neither can
+  // fire on any input a caller can construct.
+  //
+  // THEY WERE NOT REPLACED WITH A TERNARY. The obvious move —
+  // `expect(result).toEqual(isSchedulable(c) ? {ok:true} : {ok:false, reason:...})` — is DEAD on
+  // its false arm the moment every channel is schedulable, which is the exact vacuity the deleted
+  // `channel.test.ts` assertion existed to make loud, reintroduced inside its own replacement and
+  // better disguised. A guard with no reachable subject deserves an honest note, not a green tick.
+  //
+  // The guards THEMSELVES stay: they are fail-closed tripwires for the next channel added without
+  // an arm. What proves that channel would be caught is `cockpit.test.ts`'s arm binding (ADR-042
+  // D4), not anything in this file.
 
   // POSITIVE CONTROL #1: the schedulable member still schedules. Without this the refusal could be
   // a blanket "nothing schedules" and every assertion above would still pass.
@@ -1184,7 +1179,7 @@ describe("setPlanSendTime refuses a channel that has no scheduler arm", () => {
 
   // CLEARING is always allowed, whatever the channel. Refusing `sendAt: undefined` would strand a
   // row nobody could un-schedule — a guard that locks the door it was meant to watch.
-  test("clearing a send time is allowed even on an unschedulable channel", async () => {
+  test("clearing a send time is allowed on ANY channel", async () => {
     const t = convexTest(schema, modules);
     const planId = await t.mutation(internal.plans.insertPlan, {
       tenantId: TENANT,
@@ -1197,22 +1192,6 @@ describe("setPlanSendTime refuses a channel that has no scheduler arm", () => {
         .withIdentity({ subject: TENANT })
         .mutation(api.plans.setPlanSendTime, { planId, sendAt: undefined }),
     ).resolves.toEqual({ ok: true });
-  });
-
-  // THE MODEL'S DOOR. `patchPlan` has no refusal channel, so it throws rather than silently
-  // dropping the field. `channel` is birth-only, so there is no flip-after-the-fact path around it.
-  test("patchPlan throws rather than silently dropping a sendAt on a vault row", async () => {
-    const t = convexTest(schema, modules);
-    const planId = await t.mutation(internal.plans.insertPlan, {
-      tenantId: TENANT,
-      threadId: "thread_patch",
-      kind: "memo",
-      channel: "vault",
-    });
-    await expect(
-      t.mutation(internal.plans.patchPlan, { planId, sendAt: future() }),
-    ).rejects.toThrow(/CHANNEL_NOT_SCHEDULABLE/);
-    expect((await t.run(async (ctx) => ctx.db.get(planId)))?.sendAt).toBeUndefined();
   });
 
   // ADR-039 D7: a thread that queued one channel must not carry it across a "start over".

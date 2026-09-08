@@ -1,5 +1,19 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-08 (43-06 — three `auditProjection` allowlist rows, added in the SAME
+> COMMIT as the writers that fill them. `plan.canceled` and `plan.discarded` gained
+> `childrenCanceled`; `plan.published` is new, carrying `planId` + `vaultDocId`.
+>
+> The rule this is an instance of: an eventType with no allowlist row yields a shell with
+> `known: false` and no payload detail at all, and a key that is not listed is written and then
+> INVISIBLE at read time. So the evidence exists in the table and never renders — which is worse
+> than not writing it, because the writer looks correct. `childrenCanceled` is the only evidence
+> that a batch cancel disarmed the whole queue rather than just the parent, and `plan.published`
+> is the counter-evidence for “a publish that happened leaves a row”: without it a fired variant
+> is indistinguishable from one that silently did nothing.
+>
+> All three are refs and a COUNT, so §4 holds — no title, no body, no piece.)
+
 > Last verified: 2026-09-07 (42.1 — `subagent.completed`'s read-time allowlist gained THREE keys,
 > and two of them are not new writes. `webSearchCalls` and `declaredUnsupported` have been WRITTEN
 > on this row since 22.1b and never shown in the viewer — the exact pairing the 42-03 entry below

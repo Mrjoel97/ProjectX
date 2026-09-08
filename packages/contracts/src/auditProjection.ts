@@ -260,8 +260,15 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "onboarding.profile_updated": ["vaultDocId", "fieldCount", "tierSource", "reembed"],
   "owner.granted": ["owner"],
   "owner.revoked": ["owner"],
-  "plan.canceled": ["planId"],
-  "plan.discarded": ["planId", "kind"],
+  // 43-06: `childrenCanceled` is a COUNT (§4-clean) and it is the ONLY evidence that a batch
+  // cancel disarmed its whole queue rather than just the parent. An unlisted key is written and
+  // then invisible at read time — the evidence would exist and never render.
+  "plan.canceled": ["planId", "childrenCanceled"],
+  "plan.discarded": ["planId", "kind", "childrenCanceled"],
+  // 43-06: a vault publish that FIRED from the queue. Refs only — the document's id, never its
+  // text. This is the counter-evidence for "a publish that happened leaves a row": without it a
+  // fired variant is indistinguishable from one that silently did nothing.
+  "plan.published": ["planId", "vaultDocId"],
   "plan.rescheduled": ["planId"],
   // 26-16 board pack. Refs, ids, counts, the resolved window and the outcome — never a title, never
   // a recipient, never a figure from the pack itself. `timeZone` is an IANA name and `timeZoneSource`

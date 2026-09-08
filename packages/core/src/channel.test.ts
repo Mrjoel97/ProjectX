@@ -2,23 +2,21 @@ import { describe, expect, test } from "vitest";
 import { CHANNEL_SPECS, CHANNELS, isSchedulable, LEGACY_CHANNEL, parseChannel } from "./channel";
 
 describe("channel — the canonical list and its specs (ADR-039 D4, ADR-042)", () => {
-  // NON-VACUITY, and it is the first test in the file on purpose. Every refusal test in
-  // `plans.test.ts` asserts that an unschedulable channel is refused; if no channel is
-  // unschedulable, those tests pass against a guard that can never fire and the whole refusal is
-  // decoration.
+  // THE EXPIRED ASSERTION, AND WHERE IT WENT (43-06). This file used to open with
+  // `expect(CHANNELS.filter((c) => !CHANNEL_SPECS[c].schedulable)).not.toEqual([])` — "at least one
+  // channel is unschedulable, so the refusal has a reachable subject". 43-06 flipped `vault` to
+  // schedulable in the same commit as the arm that honours it (ADR-042 D3), so that assertion had
+  // no subject left and was removed ON PURPOSE, not lost.
   //
-  // THIS TEST HAS A KNOWN EXPIRY. Plan 43-06 lands the memo/vault scheduler arm and flips `vault`
-  // to `schedulable: true` in the SAME commit as the arm (ADR-042 D3). At that moment both members
-  // are schedulable and this assertion fails BY DESIGN. Do not delete it and move on: ADR-042 D4
-  // says what replaces it — a binding test in `packages/backend` that every channel whose spec says
-  // `schedulable: true` HAS an arm. That question stays falsifiable for ever, and it is the one
-  // that actually matters.
-  test("at least one channel is unschedulable, so the refusal has a reachable subject", () => {
-    expect(CHANNELS.filter((c) => !CHANNEL_SPECS[c].schedulable)).not.toEqual([]);
-  });
+  // ADR-042 D4 names its replacement, and it is STRICTLY STRONGER: `cockpit.test.ts` now binds
+  // every channel whose spec says `schedulable: true` to an ARM that actually fires it. The old
+  // check asked a question about a LIST; the new one asks the hazard — can every channel that
+  // claims to be schedulable actually be scheduled — and it stays falsifiable for ever.
+  //
+  // It could not live here: proving a channel has an arm needs `convex/`, and `packages/core` must
+  // never import it (§1).
 
-  // The other half: a list where NOTHING is schedulable would also pass the test above while
-  // making the queue itself fictional.
+  // A list where NOTHING is schedulable would make the queue itself fictional.
   test("at least one channel IS schedulable, so the queue is not fictional", () => {
     expect(CHANNELS.filter((c) => CHANNEL_SPECS[c].schedulable)).not.toEqual([]);
   });

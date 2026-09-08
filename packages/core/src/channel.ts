@@ -14,6 +14,10 @@ import { SEND_TIME_HORIZON_MS } from "./emailIntent";
  * at two.
  */
 export const CHANNELS = ["email", "vault"] as const;
+
+/** A vault publish has NO CREDENTIAL TO EXPIRE — it is an insert on our own table — so this is a
+ *  product bound on how far ahead a queue may reach, not a token life. Ninety days. */
+export const VAULT_HORIZON_MS = 90 * 24 * 60 * 60 * 1000;
 export type Channel = (typeof CHANNELS)[number];
 
 /**
@@ -42,20 +46,34 @@ export type ChannelSpec = { schedulable: true; horizonMs: number } | { schedulab
  * `satisfies Record<Channel, ChannelSpec>` — adding a member to `CHANNELS` without deciding its
  * spec is a COMPILE error here. That is the entire reason the enum ships with two members.
  *
- * WHY `vault` IS NOT SCHEDULABLE YET — a fact about code, not a preference, and it expires on a
- * known commit. `armFor("memo")` is `"inline"` (`actionType.ts`), and the inline arm
- * (`convex/cockpit.ts`) contains no `ctx.scheduler` call and never reads `plan.sendAt`; the only
- * arm site sits inside the `workflow` (email) block, below `case "workflow": break;`. So a `sendAt`
- * on a vault-bound row would be accepted and then silently dropped at Approve — ADR-039 D3's exact
- * prohibition. Plan 43-06 lands the memo arm and flips this to `true` IN THE SAME COMMIT as the arm
- * (ADR-042 D3: the flip and the arm must not be separable). Until then the refusal below is live
- * and reachable, which is what keeps D3 from being prose.
+ * `vault` BECAME SCHEDULABLE IN 43-06, in the SAME COMMIT as the arm that honours it (ADR-042 D3
+ * — the flip and the arm must not be separable, because a `schedulable: true` with no arm behind it
+ * is precisely the lie D3 forbids). Its terminal is `persistNextStepMemo`, reached through
+ * `startScheduledDelivery`'s channel switch; before that commit the only arm site sat inside the
+ * email block and a `sendAt` on a vault row would have been accepted and then silently dropped.
+ *
+ * THE HORIZONS ARE DIFFERENT ON PURPOSE. Email's is the GMAIL TOKEN'S LIFE — a credential that
+ * expires, so a send past it is a dead token. A vault publish has no credential to expire: it is a
+ * row insert on our own table. Borrowing email's seven days would have been a number copied for no
+ * reason, and a reader would rightly have asked which fact it encoded.
  */
 export const CHANNEL_SPECS = {
   // The horizon is the Gmail token's life, not a policy — see `emailIntent.ts`.
   email: { schedulable: true, horizonMs: SEND_TIME_HORIZON_MS },
-  vault: { schedulable: false },
+  vault: { schedulable: true, horizonMs: VAULT_HORIZON_MS },
 } as const satisfies Record<Channel, ChannelSpec>;
+
+/**
+ * ONE predicate for "is this time honourable on this channel", so the email cap in `executePlan`
+ * and the per-child pre-pass in the memo arm cannot drift apart. Before 43-06 the email cap's own
+ * comment called itself "the one place the schedule-vs-immediate decision is made"; a second arm
+ * made that false, and this is what makes it true again in the only sense that matters — one
+ * predicate, two call sites.
+ */
+export const beyondHorizon = (c: Channel, sendAt: number, now: number): boolean => {
+  const spec = CHANNEL_SPECS[c];
+  return spec.schedulable && sendAt > now + spec.horizonMs;
+};
 
 /** ONE predicate, so the two `sendAt` write sites in `plans.ts` cannot drift apart. */
 export const isSchedulable = (c: Channel): boolean => CHANNEL_SPECS[c].schedulable;

@@ -155,9 +155,15 @@ test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction
   }
   expect(readSource("plans.ts"), "plans.ts calls audit.log").not.toMatch(/audit\.log\b/);
   const cockpit = readSource("cockpit.ts");
-  // cockpit.ts's allowed crossings are FOUR refs-only plan-lifecycle audits: cancel (03.5-03),
-  // reschedule (03.5-05), and 26-03's discard + schedule-move. A FIFTH audit.log here would be a
-  // new content-plane leak surface, so the count stays pinned.
+  // cockpit.ts's allowed crossings are FIVE refs-only plan-lifecycle audits: cancel (03.5-03),
+  // reschedule (03.5-05), 26-03's discard + schedule-move, and 43-06's `plan.published`. A SIXTH
+  // audit.log here would be a new content-plane leak surface, so the count stays pinned.
+  //
+  // UPDATED 2026-09-08 (43-06) — 4 → 5. `plan.published` records that a QUEUED VAULT VARIANT fired:
+  // `{ planId, vaultDocId }`, two ids and nothing else. It is the counter-evidence for "a publish
+  // that happened leaves a row" — without it a fired variant is indistinguishable from one that
+  // silently did nothing. The payload was checked by hand against the refs-only scan below, which
+  // is the actual guarantee; this count is what makes a new site announce itself.
   //
   // UPDATED 2026-08-07 — it had drifted to red at HEAD: 26-03 added `plan.discarded` and a SECOND
   // `plan.rescheduled` site while the pin still said 2. All four payloads were checked by hand at
@@ -168,15 +174,16 @@ test("cockpit content-plane modules emit NO audit/DLQ/telemetry write (redaction
   // `plan.discarded` slipped in unchecked, and (b) it used a non-global `match`, which reads only
   // the FIRST site per eventType — with two `plan.rescheduled` sites the second was never read.
   // Derive the sites from the source instead, so a new call site cannot pass by being unnamed.
-  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(4);
+  expect(cockpit.match(/audit\.log\b/g) ?? [], "cockpit.ts audit.log call sites").toHaveLength(5);
   const sites = [
     ...cockpit.matchAll(/eventType:\s*["'](plan\.[a-zA-Z]+)["'][\s\S]*?payload:\s*(\{[^}]*\})/g),
   ];
   // Every audit.log call site is accounted for — an unnamed new one fails here, not silently.
-  expect(sites, "every cockpit.ts audit.log site is scanned").toHaveLength(4);
+  expect(sites, "every cockpit.ts audit.log site is scanned").toHaveLength(5);
   expect(sites.map((s) => s[1]).sort(), "cockpit.ts audited plan events").toEqual([
     "plan.canceled",
     "plan.discarded",
+    "plan.published",
     "plan.rescheduled",
     "plan.rescheduled",
   ]);

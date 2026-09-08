@@ -1,38 +1,81 @@
-> Last verified: 2026-09-07 (43-04 — **the content batch: N variants of one piece, one approval
-> card.** `startContentBatch` is a SIBLING of `startTeamRun`, not a parameter on it:
-> `legalAssignments` drops any route `resolveSpecialist` rejects, so every content assignment
-> would have vanished and `NO_ROUTES_REPLY` would have fired on a batch with nothing wrong with it.
+> Last verified: 2026-09-08 (43-06 — **THE VAULT ARM.** `CHANNEL_SPECS.vault` is
+> `schedulable: true` now, flipped in the SAME COMMIT as the arm that honours it (ADR-042 D3): a
+> `schedulable: true` with no arm behind it is precisely the lie ADR-039 D3 forbids.
 >
-> **THE MONEY BOUND IS THE COUNT, AND THIS IS THE THING TO UNDERSTAND BEFORE CHANGING ANY OF IT.**
-> `guardrails.preCall` is `rateLimiter.check(..., { count: 1 })` — “is there ANY budget left”, not
-> “can I afford this call” — and `recordModelSpend` consumes AFTER the fact. So N CONCURRENT drafts
-> all see the same pre-spend rail and all pass. 43-02's per-draft gate bounds a SEQUENCE (two tool
-> calls in one turn), never a fan-out; the commit message for 43-02 claimed more than that and this
-> line is the correction. `narrowFanOut`'s own cap does not save it either: it caps `workerCount`
-> at `rootEnvelopeCents`, i.e. ONE CENT per worker, which is what makes `share >= 1` a theorem and
-> nowhere near what a draft costs. `EST_DRAFT_CENTS` divides the envelope so the COUNT is a real
-> bound. Mutation-proven with exact arithmetic (500c budget, 480 spent, x0.25, /2 = 2 workers;
-> undivided funds all 5) — the first version of that test asserted `toBeLessThan(5)` and stayed
-> GREEN under its own mutation, because the undivided envelope funded 2, which is also less than 5.
+> THE ARM INVENTORY, and it is the thing to read before touching any of this:
+> `email -> startFanout`, `vault -> persistNextStepMemo`, BOTH inside `startScheduledDelivery`,
+> switching on the channel read off the ROW that handler already re-read. Never off `args`: an
+> argument minted wrong once is wrong for ever, whereas the row is re-read on every fire.
 >
-> A variant worker (`llm.runVariant`) does NOT go through `governedDispatch`. `startDispatchRun`
-> requires an `envelopeCents` and `governedDispatch` reads `envelopeCents > 0 ? it : derive`, so a
-> child passing 0 would be granted the FULL rail share — verbatim the defect ADR-038 fixed. A
-> variant is ONE `draftDocument` call: no tools, no recursion, nothing to govern. `planId` stays
-> TOP-LEVEL in the scheduler args so `reliabilitySweep`'s `dispatchLive` scan still sees the run.
+> **WHY THE SWITCH IS INSIDE THE CALLBACK AND NOT AROUND IT.** Arming a memo child on the EXISTING
+> email callback is the single most likely way this phase could have shipped broken and looked
+> fine: `startFanout` patches `delivering`, `deliverApprovedPlan` loops over ZERO `requests` rows,
+> `markPlanDone` patches `done` — the row reads scheduled -> delivering -> done, the workflow
+> SUCCEEDS so no dead-letter row is archived, and nothing was ever published. No throw, no audit,
+> nothing to find. `startFanout` now also throws `EMPTY_FANOUT` on an empty `requestIds`: today
+> unreachable (the email path refuses `all_recipients_suppressed` first, and the arm refuses a
+> non-vault child), written as the structural close for the NEXT channel routed there by mistake.
 >
-> THE PIECE IS WELDED ONTO THE ANGLE IN CODE (`legalVariants`), the `headingFor` precedent. An
-> angle alone (“lead with the numbers”) is a fragment with no subject; fifteen workers briefed that
-> way produce fifteen drafts about nothing while the reported count stays correct. The test reads
-> the brief back out of `_scheduled_functions` args, not off the narrower's return — asserting the
-> `subject` alone left the consumer that ignores the weld completely invisible.
+> **AN UNSCHEDULED VARIANT MEANS PUBLISH NOW, NEVER PUBLISH NEVER.** `armOrPublishChildren` arms a
+> child that carries a `sendAt` and PUBLISHES one that does not. An arm handling only the
+> scheduled children would leave the rest at `approved` — one of exactly two statuses invisible to
+> every approvals query — and the parent's sibling check would then flip it to `done`: a
+> 15-variant batch where the user timed three would file three documents, silently discard twelve
+> FULLY BILLED drafts, and read finished. Mutation-proven, and it is the highest-consequence
+> assertion in the phase.
 >
-> `stageResearchPlan` gained ONE optional arg, `channel: v.literal("vault")`, and its RECYCLE
-> BRANCH FORKS. `channel` is birth-only, so a recycled shell can never acquire one — reusing the
-> open row for a batch would mint a root that `parseChannel(undefined)` reads as `"email"`, which
-> is exactly ADR-042's failure arriving through the reuse door. A batch cancels the shell and
-> inserts a fresh root beside it, both in the SAME mutation so no reader sees two open roots. That
-> fork was 100% uncovered by every proposed check until it got its own test.)
+> EVERY REFUSAL HAPPENS BEFORE THE FIRST WRITE (the 20-07 lesson). Arming eight children and
+> refusing the ninth leaves a half-armed batch nothing can resume and nothing can cleanly cancel,
+> which is why the horizon and channel checks are a separate pre-pass rather than a check inside
+> the arming loop.
+>
+> A BATCH PARENT TAKES `scheduled`, NOT `done`, while any child is armed — `cancelScheduledPlan`
+> CASes on `scheduled` and `discardPlan` on `proposed`, so a `done` parent is unreachable from
+> BOTH doors and its queue could never be cancelled. It also files no document of its own: its
+> body is already the assembly of its children, so publishing it too would file the batch twice.
+>
+> THE CANCEL WALK HAS **ONE** GUARD, and the count is the point. `scheduler.cancel` THROWS on a
+> committed id, so a bare loop turns ONE already-fired child into a thrown mutation that rolls the
+> WHOLE transaction back and leaves every sibling armed. The design had TWO guards; the second was
+> dead code behind the first and made the mutation meant to prove the loop unfalsifiable — delete
+> the inner check and the outer `continue` still skipped the fired child, so the test stayed green
+> over a removed guard. One guard, and it reddens.
+>
+> A CHILDLESS vault memo with its own `sendAt` is ARMED, not published now. Before the flip
+> `setPlanSendTime` refused that row outright; the flip made it legal, and without its own branch
+> the memo terminal would have published immediately and dropped the time it had just accepted —
+> ADR-039 D3's prohibition surviving the very flip meant to honour it.
+>
+> The far-future cap is the EMAIL arm's gate and no longer “the one place the schedule-vs-immediate
+> decision is made”; that sentence was deleted rather than left to expire. What is still true:
+> both arms call ONE predicate, `beyondHorizon`, so they cannot drift. Email's horizon is the Gmail
+> TOKEN'S LIFE; vault's is a product bound (90 days) because a vault publish has no credential to
+> expire — borrowing email's seven days would have been a number copied for no reason.
+>
+> TWO REFUSAL TESTS WERE DELETED in `plans.test.ts` and are not mourned: with every channel
+> schedulable, `setPlanSendTime`'s `channel_not_schedulable` and `patchPlan`'s throw have NO
+> REACHABLE SUBJECT. They stay in the code as fail-closed tripwires for the next channel. They
+> were NOT replaced with an `isSchedulable(c) ? A : B` ternary — dead on its false arm, which is
+> the exact vacuity the deleted `channel.test.ts` assertion existed to make loud, reintroduced
+> inside its own replacement. What proves a new channel would be caught is `vaultArm.test.ts`'s
+> ADR-042 D4 binding: every channel whose spec says `schedulable: true` HAS an arm, asserted on a
+> per-channel ARTIFACT (`vaultDocuments.sourcePlanId`, `plans.workflowId`) rather than a status —
+> a status-only assertion goes GREEN on the mis-arming case, which was verified by mutation.
+>
+> `vaultArm.test.ts` IS ITS OWN FILE on purpose. Run inside `cockpit.test.ts` these tests failed
+> PROGRESSIVELY — the first two green, everything after red with `crypto is not defined`, a message
+> pointing at `contentHash` and having nothing to do with it — and passed in isolation under `-t`.
+> That difference is the diagnosis: cross-describe interference in a 2400-line file with eight fake
+> clocks and three harnesses. The new file registers only what the vault arm touches and quiesces
+> its ingest workflows in `afterEach`.
+>
+> `reschedulePlan` now refuses a row with children DELIBERATELY. It was already refused in
+> practice, but only by `needs_future_time` — an accident that would have evaporated the moment a
+> root could carry its own `sendAt`, which this commit makes legal.
+>
+> NOT IN THIS PHASE, and it is a missing capability rather than a defect: `moveScheduledPlan`
+> refuses a vault row at its `requests.length === 0` guard. Owner decision 2026-09-07: a variant's
+> time is SET ONCE at Approve; to change one, cancel the batch and re-approve.)
 >
 > Last verified: 2026-09-07 (43-04 — **the content batch: N variants of one piece, one approval
 > card.** `startContentBatch` is a SIBLING of `startTeamRun`, not a parameter on it:
