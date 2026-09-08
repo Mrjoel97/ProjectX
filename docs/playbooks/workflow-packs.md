@@ -1,5 +1,27 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-09-08 (44-04 — **THE PACK EVAL HARNESS'S OWN FREE GATE WAS RED, AND HAD BEEN
+> SINCE 35-02.** `run-workflow-pack-evals.mjs --self-test` asserted `PACK_EVAL_SUITE.packs.size
+> === 6`; 35-02 correctly added `pack-offer-and-lead-plan` as a seventh (deliberately without a
+> revision bump, since the six existing rows were unchanged), so the self-test failed on the NUMBER
+> while the per-pack `casesHash`/`caseCount` drift loop directly above it was passing. A gate that
+> is red for a non-reason stops being read, and the real failures it exists to surface go with it.
+>
+> Replaced with a SET IDENTITY (`deepEqual` of declared ids against the fixture ids on disk, `pack-`
+> prefix normalised). Strictly stronger than the count: the loop above catches a DECLARED pack
+> drifting from disk, and this catches a pack that is ON DISK and was never declared — which is the
+> direction a new pack actually arrives from, and the direction `=== 6` could never see (6 declared
+> + 7 on disk passed the old assertion). Mutation-proven in that direction and `cmp`-restored.
+>
+> ALSO MEASURED THIS DAY, against production: the eval plane is NOT the binding constraint on pack
+> activation. `pack-business-pulse` v2 (5/5, $0.0093) and `pack-sales-call-prep` v2 (5/5, $0.2013)
+> both recorded passing eval evidence on the PROD rows, and `activateSkill` still refused both with
+> `PACK_GATE: … lacks browser evidence`. Provenance is present on both. **The missing plane is
+> BROWSER** (`workflow-pack-pilot.spec.ts` → `skills:recordPackBrowserEvidence`), which needs a
+> signed-in browser session against the target deployment — on prod that is a real Google login, so
+> it is owner-only work and cannot be produced from a terminal. Record that before spending on more
+> pack eval runs: the eval half is now DONE on prod for those two, and re-running it buys nothing.)
+
 > Last verified: 2026-09-06 (39-01 — the research specialist gained `readPage`; **packs did NOT**: `researchTheWeb`'s tools stay `webResearch` + `declareUnsupported` because a pack body must TEACH every tool it holds (the "taught in its body" test) and a pack body edit mints three candidates behind the pack gate. `readPage` IS built in the record beside `webResearch`, so the pack's `toolNames` filter withholds it (ADR-007) — pinned by a test that expects no pack to be granted `readPage`. Widen it when the three research-bearing pack bodies are next revised through the gate.)
 >
 

@@ -753,7 +753,19 @@ function selfTest(packs) {
     assert.equal(disk.casesHash, declaredPack.casesHash, `${name} casesHash has drifted from disk`);
     assert.equal(disk.caseCount, declaredPack.caseCount, `${name} caseCount has drifted from disk`);
   }
-  assert.equal(declaredSuite.packs.size, 6, "PACK_EVAL_SUITE does not declare all six packs");
+  // EVERY PACK ON DISK IS DECLARED, and every declared pack is on disk. This was `=== 6` until
+  // 2026-09-08, which made it a COUNT rather than an identity: 35-02 added
+  // `pack-offer-and-lead-plan` to `PACK_EVAL_SUITE` (correctly, and deliberately without a revision
+  // bump), and the free gate went red on the number while the loop above it — the actual drift
+  // check — was passing. A gate that is red for a non-reason stops being read, and the real
+  // failures it exists to surface go with it. A set comparison is also strictly stronger: the loop
+  // above catches a DECLARED pack drifting from disk, and this catches a pack that exists on disk
+  // and was never declared, which is the direction a new pack actually arrives from.
+  assert.deepEqual(
+    [...declaredSuite.packs.keys()].map((n) => n.replace(/^pack-/, "")).sort(),
+    [...packs.keys()].map((n) => n.replace(/^pack-/, "")).sort(),
+    "PACK_EVAL_SUITE and the fixtures on disk declare different packs",
+  );
 
   // Every pack must have thresholds, and none may licence an invented money figure.
   for (const packId of packs.keys()) {
