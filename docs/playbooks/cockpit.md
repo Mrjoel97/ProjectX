@@ -1,3 +1,34 @@
+> Last verified: 2026-09-08 (44-02 — `apps/web/e2e/erasure.spec.ts`, the FIRST browser coverage of
+> `/dashboard/settings`. That surface had 33 sibling specs and none of them: the single
+> irreversible action in the product was the only major one with no browser proof.
+>
+> IT MINTS ITS OWN DISPOSABLE TENANT through the real invite-gated signup and erases THAT one.
+> Running it as the shared e2e user would delete the account every other spec signs in as —
+> erasure removes the sign-in binding, which is the 2026-08-16 permanent-lockout incident.
+> `test.use({ storageState: { cookies: [], origins: [] } })` is an EXPLICIT empty state, never
+> `undefined`: undefined reads as unset and falls back to the project's shared `storageState`,
+> i.e. exactly the account it must not touch.
+>
+> TWO FAIL-CLOSED GUARDS: `PIKAR_E2E_ERASURE=1` (absent ⇒ `test.skip`, so a plain `pnpm test:e2e`
+> never runs it and Playwright reports SKIPPED rather than passed), and `CONVEX_DEPLOYMENT` read
+> out of `packages/backend/.env.local` must start with `local:` — read from the FILE, because
+> `CONVEX_URL` is usually unset in a Playwright shell and a guard that passes on “unset” is not a
+> guard.
+>
+> THE ASSERTION IS THE BLOB, and that is the whole point. Row counts were green through the entire
+> 44-01 defect — the action's own `deletedByTable`, the backend tests, and the UI's “Erased — N
+> rows across M tables” were all telling the truth about rows while the files stayed on disk. So
+> the spec probes the `_storage` system table (the same read the walk guards its delete with) for
+> a blob it created and confirms it is GONE, with a PRE-condition proving it was there first —
+> without that, “absent from _storage” is a check that cannot fail.
+>
+> **IT HAS NEVER BEEN EXECUTED.** It is typechecked (`apps/web` tsc exit 0), linted, and DISCOVERED
+> by `playwright test --list`. e2e is deliberately not in CI, and this environment has no running
+> stack. Do not cite it as erasure evidence — GOVN-03 does not move until an owner runs it.
+>
+> To run: `convex dev` (NOT --once) + `next dev` on :3111, then
+> `PIKAR_E2E_ERASURE=1 npx playwright test e2e/erasure.spec.ts --no-deps` from `apps/web`.)
+>
 > Last verified: 2026-09-08 (43-05 — **THE BATCH DOOR, `createVariants`.** `dispatchTeamTool`'s
 > shape with exactly two substitutions: the stager is told the TERMINAL at birth
 > (`channel: "vault"`, ADR-042 D1) and the minter is `startContentBatch`, not `startTeamRun`. It

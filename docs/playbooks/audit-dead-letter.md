@@ -750,9 +750,37 @@
 > says the local grant was removed anyway, because a user asking for erasure must not be blocked by
 > a provider outage. Rounding those two into one "revoked" line would defeat GOVN-03 — do not.
 >
-> **NOT OWNER-PROVEN.** 22.1-05 Task 3's disposable-tenant irreversibility run — export, delete,
-> re-export empty-but-well-formed, audit row count identical before and after — has NOT been
-> performed. Until it has, this is a built surface, not a verified erasure, and GOVN-03 stays open.
+> **NOT OWNER-PROVEN, AND THE DRILL WAS REWRITTEN 2026-09-08 BECAUSE THE OLD ONE COULD NOT FAIL.**
+> As originally defined — export, delete, re-export empty-but-well-formed, audit row count
+> identical before and after — EVERY LEG IS ROWS-ONLY. It would have returned GREEN through the
+> entire 44-01 defect, with every one of the tenant's stored files still on disk, their document
+> text still in the RAG component and their chat threads still in the agent component. A drill that
+> certifies a surface it cannot inspect is worse than no drill, because its green line is then cited
+> as proof.
+>
+> THE WIDENED DRILL. Disposable tenant, on a deployment you can afford to lose. Legs L1-L3 and L6-L7
+> are PASS-REQUIRED; L4-L5 are the recorded residual (see below).
+>   L1. Export, then delete, then re-export — empty but well-formed. (The original.)
+>   L2. Audit row count identical before and after. (The original; §3 insert-only.)
+>   L3. **THE BLOB.** Before deleting, note one `storageId` the tenant owns; after, confirm it is
+>       GONE from the `_storage` system table. `apps/web/e2e/erasure.spec.ts` automates exactly this
+>       leg end to end through the real UI — run it instead of doing L3 by hand if you can.
+>   L6. **THE SIGN-IN BINDING.** No `authAccounts` row still names the erased identity (the
+>       2026-08-16 permanent-lockout incident: a deleted `users` row with an orphaned auth row).
+>   L7. **THE EXPORT'S HONESTY.** Confirm what the export you took in L1 actually contains. It holds
+>       NO FILES today, while the erasure UI says “Download your data first if you want a copy.”
+>       Until that is fixed the drill's own L1 leg is passing over a false promise — record it,
+>       do not wave it through.
+>
+> THE RESIDUAL, recorded rather than pretended: L4 (the RAG entries are gone) and L5 (the agent
+> component's threads are gone) have **no operator-facing surface** — both live inside components
+> with no queryable admin read. They are covered by `tenantDelete.test.ts` and by the cascades
+> themselves, not by this drill. Do not mark them passed by inspection; they are the known gap.
+>
+> Until L1-L3 and L6-L7 have been performed, this is a built surface, not a verified erasure, and
+> GOVN-03 stays open. **Nothing in the 44-02 commit may be recorded as erasure evidence:** the
+> e2e spec is written, typechecked, linted and DISCOVERED by the runner, and has never been
+> executed.
 > web dataControls 4/4, backend tenantDelete 6/6, web typecheck exit 0.)
 
 > Last verified: 2026-08-16 (export budget is PER TABLE now — the global cap starved every

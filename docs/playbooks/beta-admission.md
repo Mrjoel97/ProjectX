@@ -425,6 +425,19 @@ provider-shape guard existed it reddened **nothing**.
    excluded from `deletableTables()` by construction. This is a **real open Art. 17 question**,
    deliberately not decided in an admission plan — tenant deletion is Phase 22.1's owned,
    irreversible surface. Recorded for the owner in `tenantData.ts`.
+
+   **UPGRADED 2026-09-08 by ADR-044.** This is no longer only an admission question.
+   `betaInvites.redeemedUserId` IS the `users` document id, and `tenantId` is `String(userId)` —
+   so joining any audit row to a surviving `betaInvites` row returns the erased person's email and
+   OAuth subject. That makes this row **the named falsifier** of the “no personal data” claim on
+   three user-facing surfaces (`AUDIT_ARCHIVE_STATEMENT`, the erasure UI, the privacy page), and
+   **arming WORM is held OFF until it is closed** (ADR-044 D2, T1-T2). Three options with a
+   recommendation are in ADR-044 D3; the recommended one clears `email`, `redeemedUserId` and
+   `redeemedSubject` at erasure while keeping `redeemedAt`, so the invite stays spent. Note ADR-044
+   D4: any such fix is FORWARD-ONLY — rows for people already erased keep the bridge until a sweep
+   clears them. **Do not change `betaInvites`' erasure posture without reading ADR-044 first.**
+
+   Nothing enforces this entry: `watch.json` lists no invites path, so a change here trips no hook.
 4. **No rate limit on `requestAccess`.** It is public, unauthenticated and writes a row. Idempotency
    per address bounds the damage to one row per distinct address, but nothing bounds distinct
    addresses. ponytail: idempotency is the whole defence; add the Rate-Limiter component if the
