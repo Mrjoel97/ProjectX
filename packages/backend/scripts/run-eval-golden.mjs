@@ -5172,7 +5172,56 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
     }
   }
 
+  teardownEvalTenant(tenant, allGreen);
+
   process.exit(allGreen ? 0 : 1);
+}
+
+/**
+ * DELETE THE THROWAWAY TENANT THIS RUN MINTED. Added 2026-09-09, after measuring what its absence
+ * had done to PRODUCTION.
+ *
+ * Every run mints `eval-<runId>` and nothing has ever removed it. On the live deployment that meant
+ * **472 of 632 `plans` rows, 189 of 733 `vaultDocuments`, and 1007 of 1894 AUDIT rows** belonging to
+ * 18 synthetic tenants, plus 140 orphaned blobs (65 MB) no row referenced. Every gate run made it
+ * worse, and gates MUST run against production because evidence lives on one deployment's row.
+ *
+ * It is not tidiness. ADR-044 holds the WORM export off, and this is now its second and stronger
+ * reason: arming it would freeze a MAJORITY-SYNTHETIC archive into 7-year COMPLIANCE objects.
+ *
+ * ONLY ON AN ALL-GREEN RUN, deliberately. A failed run's rows are the only record of WHY a case
+ * failed — the plan row, the audit trail, the staged output — and this session spent real money
+ * re-running a case precisely because that evidence is what you read first. A green run has nothing
+ * left to explain. So the rule is: pass, and the exhaust goes; fail, and it stays for you to read.
+ *
+ * BEST-EFFORT, and it must never change the verdict. The run has already decided pass or fail and
+ * already written its evidence; a teardown that threw here would turn a green gate red for a
+ * housekeeping error, which is the tail wagging the dog. Failures are reported and swallowed.
+ */
+function teardownEvalTenant(tenantId, allGreen) {
+  if (!allGreen) {
+    console.log(
+      `[eval:golden] tenant ${tenantId} KEPT — a failed run's rows are the evidence for why. ` +
+        `Remove it with: npx convex run tenantDelete:purgeEvalTenant '{"tenantId":"${tenantId}"}'`,
+    );
+    return;
+  }
+  try {
+    let deleted = 0;
+    let blobs = 0;
+    // Paged: the mutation bounds its own batch, so loop until a full pass moves nothing. The cap is
+    // a runaway guard, not an expected limit.
+    for (let i = 0; i < 200; i++) {
+      const out = JSON.parse(must("tenantDelete:purgeEvalTenant", { tenantId }) || "{}");
+      deleted += out.deleted ?? 0;
+      blobs += out.blobs ?? 0;
+      if (out.done) break;
+    }
+    console.log(`[eval:golden] tenant ${tenantId} purged — ${deleted} row(s), ${blobs} blob(s)`);
+  } catch (e) {
+    // Never fatal. See the header: the verdict is already decided and already recorded.
+    console.log(`[eval:golden] tenant ${tenantId} NOT purged (${e.message.split("\n")[0]})`);
+  }
 }
 
 /**

@@ -18,6 +18,45 @@
 > `reminderOpener(providerLabel, id)` — pinned by test to eval case 42's first turn. Nothing loads on render;
 > nothing in the panel stages or sends. PayPal's offer gets no list (the tool refuses it).
 >
+> Last verified: 2026-09-09 (45-01 — **THE OWNER RUNBOOK ABOVE COULD NOT BE RUN.** Its step 2
+> seals the gate `--prod`, and `sealGate` is an `ownerMutation`: `npx convex run` carries an admin
+> key but NO user identity, so it answered `UNAUTHENTICATED`. No UI calls `sealGate` either — a
+> repo-wide search finds zero callers outside tests — so on production the row could not be
+> written by ANYONE, the owner included, and `providerGates` was EMPTY. A gate nobody can open is
+> not a strict gate; it is a dead end, and it is why QuickBooks never moved.
+>
+> FIXED by splitting the transition out as `sealGateFor` and adding `sealGateAsOperator`
+> (`internalMutation`), exactly mirroring the shipped `activateSkillVersion` /
+> `activateSkill` / `activateCandidate` shape and for the same stated reason: `requireOwner` asks
+> *may this CALLER act?*, the seal rules ask *is this transition legal?*, and they are orthogonal.
+> Every rule — the compare-and-set, `CANNOT_SEAL_PASSED`, the cleared-conditions check — lives in
+> the shared body, so the two entry points cannot drift. The owner surface is UNCHANGED and still
+> pinned: `isolation.test.ts` refuses a non-owner tenant `providerGates.sealGate`, and an internal
+> mutation is not client-callable at all. An admin-key caller already outranks the owner, so this
+> weakens nothing — it adds the ability to record the decision THROUGH the validated transition
+> instead of around it.
+>
+> `check-provider-lane.mjs --apply` now calls that seam, honours `PIKAR_CONVEX_TARGET=prod`
+> (`smokeRun.mjs`'s convention — explicit opt-in, never defaultable), and no longer runs the CLI
+> through a SHELL: on Windows `shell: true` stripped the quotes from the JSON payload, so the CLI
+> received `{provider:quickbooks,...}` and died with `JSON5: invalid character 'q' at 1:11`.
+> `smokeRun.mjs` documents that exact trap in its header and solves it the same way.
+>
+> QUICKBOOKS CONFIG IS NOW ON PROD: `QUICKBOOKS_CLIENT_ID`, `QUICKBOOKS_CLIENT_SECRET` and
+> `QUICKBOOKS_REDIRECT_URI` =
+> `https://opulent-octopus-494.convex.site/connectors/quickbooks/callback/production` — which must
+> be registered VERBATIM on the Intuit app or the consent screen refuses. Note the environment is
+> the LAST PATH SEGMENT and there is no trailing slash: the route reads
+> `url.pathname.split("/").pop()`, so a trailing slash yields `""` and fails the closed set.
+> The credentials the owner supplied were in the ROOT `.env`, which nothing reads — see
+> production-beta.md; they had to be pushed with `npx convex env set --prod`.
+>
+> KNOWN RED and NOT caused here: `node scripts/check-provider-lane.mjs --self-test` fails 3 checks
+> at HEAD as well (verified by running the committed file in place, not from /tmp — `repoRoot` is
+> derived from the script's own path, so a copy elsewhere fails differently and proves nothing).
+> All three concern refusing a `pass`; the `from-owner`/park path they gate is green, which is the
+> path this commit uses.)
+
 > **OWNER RUNBOOK — passing the QuickBooks lane (chosen 2026-09-06; owner has an empty or sandbox company):**
 > 1. `cd packages/backend && npx convex env set --prod QUICKBOOKS_CLIENT_ID …`, `QUICKBOOKS_CLIENT_SECRET`,
 >    `QUICKBOOKS_REDIRECT_URI` = `https://<prod>.convex.site/connectors/quickbooks/callback/production`

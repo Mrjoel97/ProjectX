@@ -1,3 +1,26 @@
+> Last verified: 2026-09-09 (45-01 — **`run-eval-golden.mjs` NOW CLEANS UP AFTER ITSELF.** It has
+> always minted a throwaway `eval-<runId>` tenant and never removed it; measured on production
+> that was 472 of 632 `plans` rows, 189 of 733 `vaultDocuments` and 1007 of 1894 AUDIT rows across
+> 18 synthetic tenants, plus 140 orphaned blobs (65 MB). Gates MUST run against prod — evidence
+> lives on one deployment's skills row — so every gate run made it worse. It is also the second
+> and stronger reason ADR-044 D2 keeps WORM off (see audit-dead-letter.md).
+>
+> `teardownEvalTenant` calls `tenantDelete.purgeEvalTenant` in a loop until `done`. TWO RULES
+> worth keeping when you touch it:
+>
+> 1. **ONLY ON AN ALL-GREEN RUN.** A failed run's rows are the only record of WHY a case failed.
+>    This session read a failing plan row to prove `24-reply-injection` was not a v13 regression
+>    — the row was an EMPTY SHELL, which is what showed `replyToMessage` had been called and had
+>    written nothing. Purging that would have destroyed the diagnosis. A failure keeps its rows
+>    and prints the command to remove them later.
+> 2. **BEST-EFFORT, never fatal.** The verdict is decided and the evidence written before teardown
+>    runs. A housekeeping error must not turn a green gate red, so failures are reported and
+>    swallowed.
+>
+> The purge covers the run's whole tenant FAMILY by prefix range, because `authoringTenantFor`
+> derives `eval-<runId>-<fixture>-a<attempt>` for the five agent-author fixtures. An exact match
+> would clear the parent and strand the children.)
+
 > Last verified: 2026-09-08 (43-07 — **FIXTURE 33 WAS NEVER A FLAKE, AND THE DECLARATION LEG OF
 > `evidenceVerdict` IS DEAD CODE.** ADR-043, owner decision Option B.
 >

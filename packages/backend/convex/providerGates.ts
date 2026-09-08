@@ -44,7 +44,7 @@ import {
   type ProviderGateRecord,
   resolveProviderEligibility,
 } from "@pikar/revenue";
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import {
   internalMutation,
   internalQuery,
@@ -479,66 +479,111 @@ export const gateEligibility = internalQuery({
  * Parking is NEVER blocked. A refusal must always be recordable, or a lane discovered to be broken
  * could not be shut off.
  */
-export const sealGate = ownerMutation({
-  args: {
-    provider: providerValidator,
-    environment: environmentValidator,
-    admission: admissionValidator,
-    lane: laneValidator,
-    /** A doc/commit REF, never evidence prose (CLAUDE.md §4). */
-    evidenceRef: v.string(),
-    reviewBy: v.number(),
-    clearedConditions: v.optional(v.array(v.string())),
-    expectedRevision: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const existing = await rowFor(ctx, args.provider, args.environment);
-    const currentRevision = existing?.revision ?? 0;
-    if ((args.expectedRevision ?? 0) !== currentRevision) {
+const sealGateArgs = {
+  provider: providerValidator,
+  environment: environmentValidator,
+  admission: admissionValidator,
+  lane: laneValidator,
+  /** A doc/commit REF, never evidence prose (CLAUDE.md §4). */
+  evidenceRef: v.string(),
+  reviewBy: v.number(),
+  clearedConditions: v.optional(v.array(v.string())),
+  expectedRevision: v.optional(v.number()),
+} as const;
+
+/** DERIVED from the validators above, never hand-written. The first draft of this type spelled
+ *  `admission` as `ProviderGateRecord["admission"]`, which is WIDER — it includes `undecided`, a
+ *  register-only value the gate row may not hold — and the compiler caught it at the insert. A
+ *  hand-written twin of a validator is a second source of truth that drifts on the first edit. */
+type SealGateArgs = Infer<ReturnType<typeof v.object<typeof sealGateArgs>>>;
+
+/**
+ * THE SEAL ITSELF — every rule, in one place, shared by the owner endpoint and the operator one.
+ *
+ * Split out 2026-09-09 (Phase 45) when the QuickBooks runbook turned out to be UNEXECUTABLE. Its
+ * step 2 says to seal the gate `--prod`, and `sealGate` is an `ownerMutation`: `npx convex run`
+ * carries an admin key but NO user identity, so it answered `UNAUTHENTICATED`. No UI calls
+ * `sealGate` either — a repo-wide search found zero callers outside tests — so on production the
+ * row could not be written **by anyone, the owner included**, and `providerGates` was empty. A gate
+ * nobody can open is not a strict gate; it is a dead end.
+ *
+ * The split follows the shipped `activateSkillVersion` precedent exactly, including its reasoning:
+ * `requireOwner` asks *may this CALLER act?* and the seal rules ask *is this transition legal?*.
+ * Those are orthogonal, so the rules live here and each caller answers the first question its own
+ * way. Everything that makes a seal safe — the compare-and-set, the `CANNOT_SEAL_PASSED` resolve,
+ * the cleared-conditions check — is INSIDE this function, so the two entry points cannot drift.
+ */
+async function sealGateFor(ctx: MutationCtx, args: SealGateArgs) {
+  const existing = await rowFor(ctx, args.provider, args.environment);
+  const currentRevision = existing?.revision ?? 0;
+  if ((args.expectedRevision ?? 0) !== currentRevision) {
+    throw new Error(
+      `STALE_REVISION: the ${args.provider}/${args.environment} gate is at revision ${currentRevision}.`,
+    );
+  }
+
+  const cleared = args.clearedConditions ?? [];
+  const proposed: ProviderGateRecord = {
+    provider: args.provider,
+    environment: args.environment,
+    admission: args.admission,
+    lane: args.lane,
+    reviewBy: args.reviewBy,
+    clearedConditions: cleared,
+  };
+  if (args.lane === "passed") {
+    const verdict = resolve(proposed, args.provider, Date.now());
+    if (verdict.state !== "passed") {
       throw new Error(
-        `STALE_REVISION: the ${args.provider}/${args.environment} gate is at revision ${currentRevision}.`,
+        `CANNOT_SEAL_PASSED: ${args.provider}/${args.environment} resolves ${verdict.state} — ${verdict.reasons.join(", ")}.`,
       );
     }
+  }
 
-    const cleared = args.clearedConditions ?? [];
-    const proposed: ProviderGateRecord = {
+  const revision = currentRevision + 1;
+  const fields = {
+    admission: args.admission,
+    lane: args.lane,
+    evidenceRef: args.evidenceRef,
+    reviewBy: args.reviewBy,
+    clearedConditions: cleared,
+    revision,
+    updatedAt: Date.now(),
+  };
+  if (existing === null) {
+    await ctx.db.insert("providerGates", {
       provider: args.provider,
       environment: args.environment,
-      admission: args.admission,
-      lane: args.lane,
-      reviewBy: args.reviewBy,
-      clearedConditions: cleared,
-    };
-    if (args.lane === "passed") {
-      const verdict = resolve(proposed, args.provider, Date.now());
-      if (verdict.state !== "passed") {
-        throw new Error(
-          `CANNOT_SEAL_PASSED: ${args.provider}/${args.environment} resolves ${verdict.state} — ${verdict.reasons.join(", ")}.`,
-        );
-      }
-    }
+      ...fields,
+    });
+  } else {
+    await ctx.db.patch(existing._id, fields);
+  }
+  return { revision };
+}
 
-    const revision = currentRevision + 1;
-    const fields = {
-      admission: args.admission,
-      lane: args.lane,
-      evidenceRef: args.evidenceRef,
-      reviewBy: args.reviewBy,
-      clearedConditions: cleared,
-      revision,
-      updatedAt: Date.now(),
-    };
-    if (existing === null) {
-      await ctx.db.insert("providerGates", {
-        provider: args.provider,
-        environment: args.environment,
-        ...fields,
-      });
-    } else {
-      await ctx.db.patch(existing._id, fields);
-    }
-    return { revision };
-  },
+export const sealGate = ownerMutation({
+  args: sealGateArgs,
+  handler: (ctx, args) => sealGateFor(ctx, args),
+});
+
+/**
+ * THE OPERATOR'S SEAL — the same transition, for a caller with no browser identity.
+ *
+ * `scripts/check-provider-lane.mjs` is the operator tool the runbook names, and it shells out to
+ * `npx convex run`. That is an ADMIN-KEY caller: strictly MORE privileged than the owner, not less,
+ * so routing it here weakens nothing — anyone holding the deploy credential can already write any
+ * row. What it adds is the ability to record the decision through the SAME validated transition
+ * instead of around it.
+ *
+ * The owner surface is untouched and still pinned: `isolation.test.ts` asserts a non-owner tenant is
+ * refused `providerGates.sealGate`, and an `internalMutation` is not client-callable at all, so it
+ * cannot become a way in. The decision itself is not invented here either — it is read from the
+ * committed suitability record's `decision:` marker by the script that calls this.
+ */
+export const sealGateAsOperator = internalMutation({
+  args: sealGateArgs,
+  handler: (ctx, args) => sealGateFor(ctx, args),
 });
 
 /**

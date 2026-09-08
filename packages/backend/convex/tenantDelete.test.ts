@@ -898,6 +898,132 @@ describe("erasure deletes stored files (2026-09-08)", () => {
   });
 });
 
+// ══ THE EVAL HARNESS'S TEARDOWN (2026-09-09) ══════════════════════════════════════
+//
+// Measured on production: 472 of 632 `plans` rows and 1007 of 1894 AUDIT rows belonged to synthetic
+// eval tenants, because neither eval runner has ever cleaned up. The prefix check is the entire
+// safety argument, so it is the thing these tests are really about.
+describe("purgeEvalTenant only ever touches synthetic tenants", () => {
+  test("it REFUSES a tenant id that is not an eval tenant, before reading anything", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const tenantId = "qd7realtenantid00000000000000";
+      const plan = await ctx.db.insert("plans", {
+        tenantId,
+        threadId: "thread-real",
+        status: "collecting",
+        createdAt: Date.now(),
+      });
+      return { tenantId, plan };
+    });
+
+    // MUTATION: delete the `/^(eval|packeval)-/` guard → this resolves and the row below is gone.
+    await expect(
+      t.mutation(internal.tenantDelete.purgeEvalTenant, { tenantId: seeded.tenantId }),
+    ).rejects.toThrow("NOT_AN_EVAL_TENANT");
+
+    // The real tenant's row is untouched — asserted separately from the throw, because a guard that
+    // throws AFTER deleting would satisfy `rejects.toThrow` and still have done the damage.
+    expect(await t.run((ctx) => ctx.db.get(seeded.plan))).not.toBeNull();
+  });
+
+  test("it deletes an eval tenant's rows, its AUDIT rows and its blobs, and spares a real neighbour", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const evalTenant = "eval-8df2792b";
+      const realTenant = "qd7realtenantid00000000000000";
+      const blob = await ctx.storage.store(
+        new Blob(["%PDF-1.4 eval"], { type: "application/pdf" }),
+      );
+      const keptBlob = await ctx.storage.store(
+        new Blob(["%PDF-1.4 real"], { type: "application/pdf" }),
+      );
+      await ctx.db.insert("plans", {
+        tenantId: evalTenant,
+        threadId: "thread-eval",
+        status: "collecting",
+        createdAt: Date.now(),
+        renderStorageId: blob,
+      });
+      await ctx.db.insert("audit", {
+        tenantId: evalTenant,
+        actor: "system",
+        eventType: "evaluation.ran",
+        payload: { cases: 1 },
+        ts: Date.now(),
+        correlationId: "eval-corr",
+      });
+      const keptPlan = await ctx.db.insert("plans", {
+        tenantId: realTenant,
+        threadId: "thread-real",
+        status: "collecting",
+        createdAt: Date.now(),
+        renderStorageId: keptBlob,
+      });
+      const keptAudit = await ctx.db.insert("audit", {
+        tenantId: realTenant,
+        actor: "user",
+        eventType: "plan.created",
+        payload: {},
+        ts: Date.now(),
+        correlationId: "real-corr",
+      });
+      return { evalTenant, blob, keptBlob, keptPlan, keptAudit };
+    });
+
+    const res = await t.mutation(internal.tenantDelete.purgeEvalTenant, {
+      tenantId: seeded.evalTenant,
+    });
+
+    // MUTATION: drop the `audit` block → deleted is 1, not 2, and the archive keeps the test exhaust.
+    expect(res.deleted).toBe(2);
+    // MUTATION: drop the `storageIdsIn` loop → blobs is 0 and the assertion below finds the bytes.
+    expect(res.blobs).toBe(1);
+
+    // THE BLOB, which is the assertion row counts cannot make (the 44-01 lesson).
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", seeded.blob))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", seeded.keptBlob))).not.toBeNull();
+
+    // The real tenant keeps everything, including its audit row.
+    expect(await t.run((ctx) => ctx.db.get(seeded.keptPlan))).not.toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(seeded.keptAudit))).not.toBeNull();
+  });
+
+  // A run does not mint ONE tenant. `authoringTenantFor` derives
+  // `eval-<runId>-<fixture>-a<attempt>` for every authoring fixture, so the five agent-author cases
+  // leave extra tenants behind. An exact-match purge would clear the parent and strand the
+  // children — a partial cleanup wearing a fix's clothes, which is how the mess arose.
+  test("it also purges the DERIVED authoring tenants of the same run", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const run = "eval-8df2792b";
+      const child = await ctx.db.insert("plans", {
+        tenantId: `${run}-42-agent-author-happy-a1`,
+        threadId: "thread-authoring",
+        status: "collecting",
+        createdAt: Date.now(),
+      });
+      // A DIFFERENT run must not be swept up by the range.
+      const other = await ctx.db.insert("plans", {
+        tenantId: "eval-99999999",
+        threadId: "thread-other-run",
+        status: "collecting",
+        createdAt: Date.now(),
+      });
+      return { run, child, other };
+    });
+
+    // MUTATION: restore `q.eq("tenantId", …)` → the child survives and this goes red.
+    const res = await t.mutation(internal.tenantDelete.purgeEvalTenant, {
+      tenantId: seeded.run,
+    });
+    expect(res.deleted).toBe(1);
+    expect(await t.run((ctx) => ctx.db.get(seeded.child))).toBeNull();
+    // The range is bounded by the run id, so a sibling run is untouched.
+    expect(await t.run((ctx) => ctx.db.get(seeded.other))).not.toBeNull();
+  });
+});
+
 // ══ ADR-044 D3(a)/D4 — THE ADMISSION BRIDGE (2026-09-08) ═════════════════════════════════════
 //
 // `betaInvites` is `admission_plane`, which `deletableTables()` structurally cannot reach, so the

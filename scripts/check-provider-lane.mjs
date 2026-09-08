@@ -494,11 +494,31 @@ function buildSeal(fs, options) {
  * lane ever needs to seal without a shell, swap this one call for `ConvexHttpClient`.
  */
 function applySeal(payload) {
-  const r = spawnSync("npx", ["convex", "run", "providerGates:sealGate", JSON.stringify(payload)], {
-    cwd: join(repoRoot, "packages/backend"),
-    stdio: "inherit",
-    shell: true,
-  });
+  // WHICH DEPLOYMENT, and it is the same rule the eval harness uses (`smokeRun.mjs`): an unflagged
+  // run can never touch production by accident, and `PIKAR_CONVEX_TARGET=prod` is an EXPLICIT
+  // per-invocation opt-in with deliberately no way to make it the default. A gate row is
+  // deployment-global state, so sealing the wrong deployment is the mistake worth making impossible
+  // to make silently.
+  const target = process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : [];
+  // `sealGateAsOperator`, NOT `sealGate`. The owner endpoint is an `ownerMutation` and `convex run`
+  // carries an admin key with NO user identity, so it answered UNAUTHENTICATED — which meant this
+  // `--apply` path, and the OWNER RUNBOOK in revenue-connectors.md that depends on it, had never
+  // worked against production. Both entry points share `sealGateFor`, so every seal rule is
+  // identical; only the "may this caller act?" question differs, and an admin key already outranks
+  // the owner. Measured 2026-09-09: `providerGates` was EMPTY on prod and writable by nobody.
+  // NO `shell: true`, and NOT `npx`. Measured 2026-09-09 on Windows: the shell strips the quotes
+  // around the JSON payload, so the CLI received
+  // `{provider:quickbooks,environment:production,...}` and died with
+  // `JSON5: invalid character 'q' at 1:11`. `smokeRun.mjs` documents this exact trap in its header
+  // and solves it the same way — invoke the CLI's entry script through node so the payload stays
+  // ONE argv element that no shell ever parses.
+  const backendDir = join(repoRoot, "packages/backend");
+  const convexBin = join(backendDir, "node_modules/convex/bin/main.js");
+  const r = spawnSync(
+    process.execPath,
+    [convexBin, "run", ...target, "providerGates:sealGateAsOperator", JSON.stringify(payload)],
+    { cwd: backendDir, stdio: "inherit" },
+  );
   return r.status ?? 1;
 }
 
@@ -513,7 +533,8 @@ function seal(fs, options) {
   if (!options.apply) {
     stdout.write(
       "\nNot applied. Re-run with --apply to send this to the deployment, or paste it into\n" +
-        "  cd packages/backend && npx convex run providerGates:sealGate '<payload>'\n",
+        "  cd packages/backend && npx convex run providerGates:sealGateAsOperator '<payload>'\n" +
+        "Add PIKAR_CONVEX_TARGET=prod to either form to seal PRODUCTION.\n",
     );
     return 0;
   }

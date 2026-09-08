@@ -710,6 +710,108 @@ export const deleteTenantData = tenantAction({
 });
 
 /**
+ * THE EVAL HARNESS'S TEARDOWN — delete one SYNTHETIC eval tenant, rows and blobs.
+ *
+ * WHY IT EXISTS, measured on production 2026-09-08. `run-eval-golden.mjs` mints a throwaway
+ * `eval-<runId>` tenant per run and `run-workflow-pack-evals.mjs` a `packeval-<runId>` one, and
+ * NEITHER has ever cleaned up. The result, on the live deployment: **472 of 632 `plans` rows, 189 of
+ * 733 `vaultDocuments`, and 1007 of 1894 AUDIT rows belonged to 18 synthetic tenants**, plus 140
+ * orphaned blobs (65 MB) that no row referenced at all. Every gate run made it worse.
+ *
+ * That is not merely untidy. ADR-044 holds the WORM export OFF, and its second and stronger reason
+ * is now this: arming it would freeze a MAJORITY-SYNTHETIC archive into 7-year COMPLIANCE objects
+ * that cannot be deleted for seven years. Cleaning the debris is a precondition for that decision,
+ * not housekeeping.
+ *
+ * WHY IT IS NOT `deleteTenantDataPage`. That path authorizes on `String(userId) === tenantId` and
+ * takes an `Id<"users">` — it can only ever erase a REAL account, which is exactly right for
+ * Art. 17 and exactly useless here: an eval tenant is a bare synthetic string with no `users` row.
+ * Reusing it would have meant loosening its authorization, which is the one thing that must not
+ * happen to the erasure terminal.
+ *
+ * THE SAFETY PROPERTY IS THE PREFIX, and it is checked FIRST, before a single row is read. This
+ * function is structurally incapable of touching a real tenant: a real `tenantId` IS
+ * `String(userId)`, a Convex id, and no Convex id can begin `eval-` or `packeval-`. That is why an
+ * `internalMutation` with no owner check is safe here — the argument it would need to do harm
+ * cannot be constructed.
+ *
+ * Blobs go FIRST, via the same `storageIdsIn` map the erasure walk reads (44-01), so the two cannot
+ * drift and a table one clears is a table the other clears. `ctx.storage.delete` throws on an
+ * already-gone id, so existence is checked through the `_storage` SYSTEM table rather than
+ * `getUrl` — minting a bearer capability only to discard it is what `llmRedaction.test.ts` forbids.
+ *
+ * A PREFIX RANGE, not an equality, and that is required rather than convenient. A run does not mint
+ * ONE tenant: `authoringTenantFor` derives `eval-<runId>-<fixture>-a<attempt>` for every authoring
+ * fixture, so the five `agent-author-*` cases leave four or five extra tenants behind. An exact
+ * match would purge the parent and leave the children — the same partial cleanup that produced the
+ * mess, wearing a fix's clothes. The range is safe because the run id is the prefix: `runId` is 8
+ * hex characters, so nothing outside this run's own family can fall inside it.
+ *
+ * PAGED and IDEMPOTENT. Returns `done` when a full pass moved nothing, so a caller loops until then.
+ */
+export const purgeEvalTenant = internalMutation({
+  args: { tenantId: v.string(), limit: v.optional(v.number()) },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ deleted: number; blobs: number; done: boolean; tenantId: string }> => {
+    // FIRST, and before any read. See the safety property above.
+    if (!/^(eval|packeval)-/.test(args.tenantId)) {
+      throw new Error("NOT_AN_EVAL_TENANT");
+    }
+    const budget = Math.min(args.limit ?? 200, 1000);
+    let deleted = 0;
+    let blobs = 0;
+
+    for (const table of deletableTables()) {
+      // `users` is the identity table and an eval tenant has no row in it; the `by_tenant` index
+      // does not exist there either, so asking would throw rather than return nothing.
+      if (table === "users") continue;
+      if (deleted >= budget) break;
+      const rows = await ctx.db
+        .query(table as Exclude<DeletableTenantTable, "users">)
+        .withIndex("by_tenant", (q) =>
+          q.gte("tenantId", args.tenantId).lt("tenantId", `${args.tenantId}\uffff`),
+        )
+        .take(budget - deleted);
+      for (const row of rows) {
+        for (const storageId of storageIdsIn(table, row as unknown as Record<string, unknown>)) {
+          const id = storageId as Id<"_storage">;
+          if ((await ctx.db.system.get("_storage", id)) !== null) {
+            await ctx.storage.delete(id);
+            blobs += 1;
+          }
+        }
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+    }
+
+    // The AUDIT rows are the whole point of this for the WORM decision, and they are the reason
+    // this function exists rather than a `deletableTables()` loop alone: `audit` is
+    // `audit_immutable`, so `deletableTables()` structurally cannot reach it and the erasure
+    // terminal must never touch it. For a SYNTHETIC tenant there is no Art. 17 interest and no
+    // integrity claim to preserve — the rows describe a robot talking to itself. CLAUDE.md §3's
+    // insert-only rule protects a real tenant's history; it is not a reason to keep 1007 rows of
+    // test exhaust in an archive somebody is about to freeze for seven years.
+    if (deleted < budget) {
+      const auditRows = await ctx.db
+        .query("audit")
+        .withIndex("by_tenant_ts", (q) =>
+          q.gte("tenantId", args.tenantId).lt("tenantId", `${args.tenantId}\uffff`),
+        )
+        .take(budget - deleted);
+      for (const row of auditRows) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+    }
+
+    return { deleted, blobs, done: deleted === 0, tenantId: args.tenantId };
+  },
+});
+
+/**
  * ADR-044 D4 — THE ONE-TIME SWEEP, for people erased BEFORE D3(a) shipped.
  *
  * D3(a) severs the admission bridge at erasure time, which does nothing for anyone already erased:

@@ -1,5 +1,36 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (45-01 — **THE EVAL HARNESS NEVER CLEANED UP, AND IT IS THE SECOND
+> AND STRONGER REASON WORM STAYS OFF.** Measured on production: `run-eval-golden.mjs` mints a
+> throwaway `eval-<runId>` tenant per run and has never removed it, so **472 of 632 `plans` rows,
+> 189 of 733 `vaultDocuments` and 1007 of 1894 AUDIT rows** belonged to 18 synthetic tenants,
+> plus 140 orphaned blobs (65 MB) no row referenced. Every gate run made it worse — and gates MUST
+> run against production, because evidence lives on one deployment's skills row.
+>
+> ADR-044 D2 holds the WORM export off. Its first reason was the cursor-at-zero finding; this is
+> the sharper one, because it is about the rows themselves rather than their payloads: **arming
+> WORM today would freeze a MAJORITY-SYNTHETIC archive into 7-year COMPLIANCE objects.** Cleaning
+> the debris is a precondition for that decision, not housekeeping.
+>
+> `tenantDelete.purgeEvalTenant` deletes one run's tenant family — rows, blobs AND audit rows.
+> THE SAFETY PROPERTY IS THE PREFIX, checked before a single row is read: a real `tenantId` IS
+> `String(userId)`, a Convex id, and no Convex id can begin `eval-`/`packeval-`, so the function
+> is structurally incapable of touching a real tenant and the argument it would need to do harm
+> cannot be constructed. That is what makes an `internalMutation` with no owner check safe here.
+> It is a PREFIX RANGE, not an equality, because `authoringTenantFor` derives
+> `eval-<runId>-<fixture>-a<attempt>` for the five agent-author fixtures — an exact match would
+> clear the parent and strand the children, the same partial cleanup that produced the mess.
+>
+> IT DELETES `audit` ROWS, which §3 forbids for a real tenant and must keep forbidding. The
+> distinction is the subject, not the table: §3 protects a TENANT'S history, and these rows record
+> a robot talking to itself under an id no person ever held. Test exhaust is not history.
+>
+> The runner purges ONLY after an ALL-GREEN run. A failed run's rows are the only record of WHY a
+> case failed — this session read a failing plan row to prove a defect was not a regression — so
+> a failure keeps its evidence and prints the command to remove it later. Teardown is best-effort
+> and never changes the verdict: the gate has already decided and already written its evidence,
+> and a housekeeping error must not turn a green gate red.)
+
 > Last verified: 2026-09-08 (44-03 — ADR-045: the admission bridge is SEVERED, and the export hands
 > over the files.
 >
