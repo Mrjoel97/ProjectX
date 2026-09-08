@@ -1,3 +1,53 @@
+> Last verified: 2026-09-08 (43-07 — **FIXTURE 33 WAS NEVER A FLAKE, AND THE DECLARATION LEG OF
+> `evidenceVerdict` IS DEAD CODE.** ADR-043, owner decision Option B.
+>
+> THE PROOF, and it needs no model turn. `evidenceVerdict` reads
+> `sourceCount === 0 || declaredUnsupported`; `llm.ts` computes
+> `declaredUnsupported = declaredQuestionScope && sources.length === 0`; `research.ts` takes
+> `sourceCount: a.sources.length` off the SAME array. So `S===0 || (Q && S===0)` ≡ `S===0` by
+> absorption, and the model's declaration cannot move the verdict under ANY input — exhaustively
+> checked over webSearchCalls x sourceCount x declared: **0 of 24**. Fixture 33 asserted
+> `declaredUnsupported: true` while its own description says a diligent search of a nonexistent
+> entity DOES surface near-miss sources “which is why no counter-based rule could express this”.
+> It asserted what the code computes with exactly the rule its description rules out, so it passed
+> ALONE and failed in FULL RUNS — live search results deciding whether an impossible assertion
+> happened to hold. Two full pinned runs and ~$1.67 were spent on it, and a phase recorded it as
+> stochastic research-lane behaviour.
+>
+> HOW TWO CORRECT INTENTS CANCELLED: 22.1b built the channel so the label could fire with
+> `sourceCount > 0`; ACTN-03 then ANDed the counter in to defeat the specialist's declaration
+> REFLEX (v7: `scope: "question"` on 5 of 5 dispatches while holding 6, 10, 0, 9 and 8 sources).
+> The reflex is real and the guard was reasonable — but its own justification names the fixture it
+> broke (“which is what fixture 33 is”, asserting 33 is a zero-source case) and fixture 33 says the
+> opposite. Two documents describing one object disagreed and the code followed the wrong one. That
+> tell is worth more than the fix: when a guard's rationale cites a fixture, READ THE FIXTURE.
+>
+> WHAT CHANGED: `researchDeclarationPairForThread`'s `questionScope` is PROMOTED from diagnostic
+> to the asserted runner key `declaredQuestionScope` — the TOOL-CALL RECORD off
+> `subagent.completed`, which no source counter can suppress and no page quoting the label
+> sentence can reach (fixture 34's premise is intact). `evidenceVerdict` is UNCHANGED: no
+> production honesty label moves. Fixture 33 no longer asserts `insufficientEvidence`, which is a
+> NARROWING and not a quarantine — the underlying defect (a fabricated entity reads `sourced`)
+> stays OPEN and named in ADR-043 D4 and `43-FIXTURE-33-FINDING.md`, exactly as ADR-041's draft
+> demands.
+>
+> THE GUARD THAT MATTERS IS THE SLOT GUARD, and it exists because the four obvious rows did not
+> catch the failure they were written for. `declaredQuestionScope` is the LAST parameter of
+> `evaluateExpect`, 19 positions deep and AFTER `revenueState`. Swapping the final two arguments
+> of the live call leaves every direct-call assertion GREEN — they call `evaluateExpect` straight
+> and never exercise the live call site — while the live path reads `null !== true` and misses on
+> every run: an assertion that looks like it works and can only ever fail. A `runnerSource` scan
+> pins the argument order; PROVEN by mutation, because the version without it was green under the
+> swap. Use `lastIndexOf`, never `indexOf` — `runnerSource` is THIS FILE and the search string
+> matches the guard's own literal first. A source scan that finds itself reports on its own text.
+>
+> RE-MANIFESTING IS FREE RIGHT NOW AND ONLY RIGHT NOW. Editing a fixture moves its sha256 and
+> therefore `casesHash`, so `AGENT_EVAL_SUITE.revision` was bumped and every older evidence row
+> retired. That costs nothing because the gate has been jammed since Phase 40 and NO passing
+> evidence exists. Order matters: bump the revision in contracts FIRST, then
+> `eval:golden -- --write-suite-manifest` (it reads the revision from contracts and deliberately
+> refuses to write it back), then paste the printed `casesHash` into `AGENT_EVAL_SUITE`.)
+>
 > Last verified: 2026-09-07 (42.1 — `smoke.ts` gained `researchDeclarationPairForThread`, and
 > `run-eval-golden.mjs` learned to PRINT what it reads.
 >

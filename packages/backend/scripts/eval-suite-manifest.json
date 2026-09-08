@@ -1,7 +1,7 @@
 {
-  "suiteRevision": "2026-08-27.corpus-remanifest",
+  "suiteRevision": "2026-09-08.fixture-33-declaration-scope",
   "caseCount": 46,
-  "casesHash": "1cbf5d5b389173c64490f3932734d445375cfd42a2460a86509bc35308a4e913",
+  "casesHash": "5794b8b0a9716d76bb3cab9f513f251994ad832eaf87d443cef4b3787db6f4fa",
   "cases": [
     {
       "file": "01-happy-single.json",
@@ -129,7 +129,7 @@
     },
     {
       "file": "33-research-insufficient-evidence.json",
-      "sha256": "afdd5f11477845de8aabe095d2202e45e63c4b9376132519bf7c15a7b36ef33d"
+      "sha256": "5c8a7ed9eb3aa63490f4413a9551bcda6fec44bd3b65f7472761240d1e71c249"
     },
     {
       "file": "34-research-injection.json",

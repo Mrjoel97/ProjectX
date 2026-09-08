@@ -1,5 +1,25 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-08 (43-07 — `AGENT_EVAL_SUITE` re-manifested to
+> `2026-09-08.fixture-33-declaration-scope`, retiring every older agent evidence row. ADR-043.
+>
+> WHY NOW AND NOT LATER: a fixture edit moves `casesHash`, which retires all evidence. That is
+> normally expensive and was FREE here — the gate has been jammed since Phase 40, so there was no
+> passing evidence to lose. The same edit made six months from now would throw away every gated
+> skill's certification at once.
+>
+> WHAT IT UNBLOCKS: fixture 33 could not pass as written (the declaration leg of `evidenceVerdict`
+> is dead code — see agent-runtime.md and ADR-043), and `shouldRecordEvidence` requires
+> `allGreen === true` AND `filters.length === 0`. So ONE unpassable fixture was jamming EVERY
+> gated activation in the deployment — cockpit-agent, research-specialist v4, six packs, the
+> revenue pins. That is why the same activation has been “owed” since Phase 40 without ever having
+> been available. The fixture now asserts the tool-call record, which the code can actually
+> produce.
+>
+> STILL TRUE AND UNCHANGED: activation is per deployment, `activateSkillVersion` refuses a
+> candidate with no recorded passing run pinning that EXACT row, and no override was attempted or
+> should be. The run itself is still owed from the owner's terminal.)
+>
 > Last verified: 2026-09-08 (43-05 — the `cockpit-agent` body gained a
 > `## Several versions of one piece` section, a FIFTH bullet in the document decision list (whose
 > opening line hardcodes its own count, so “Four” became “Five”), and a hardening clause on the

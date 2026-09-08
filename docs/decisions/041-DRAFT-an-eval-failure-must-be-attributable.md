@@ -100,6 +100,19 @@ test rather than a convention, if and when ordering-bundles are introduced.
 
 ## The measurement that must land first
 
+> **UPDATE 2026-09-08 (ADR-043).** Questions 1 and 2 below are ANSWERED, analytically and at zero
+> cost. The conjunction does not "beat" the declaration — it **absorbs** it: `evidenceVerdict`
+> reads `sourceCount === 0 || declaredUnsupported` while `llm.ts` computes
+> `declaredUnsupported = declaredQuestionScope && sources.length === 0` off the SAME array, so the
+> disjunction reduces to `sourceCount === 0` and the declaration is unreachable in the verdict for
+> every input (exhaustively checked: 0 of 24). So Q2's "is the conjunction load-bearing" is **no**,
+> and Q1's premise is stronger than drafted. **Question 3 is untouched and still needs the run.**
+> This draft therefore stays PROPOSED. Note that this ADR's own sentence below — "fixture 33's
+> current red is a real broken capability (D11: a fabricated entity reads `sourced`)" — is
+> CONFIRMED, and ADR-043 deliberately does not close it: it separates what fixture 33 can prove
+> (the model refused to confabulate) from what it cannot (that the refusal reached the verdict).
+
+
 One full `pnpm eval:golden --skill cockpit-agent@<v>` run, ~$0.90. Thanks to 42.1 the runner now
 prints `questionScope / declaredUnsupported / insufficientEvidence` for **every** research fixture,
 passing ones included, so a single run answers three questions at once:

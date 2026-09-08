@@ -733,8 +733,8 @@ export function hasPassingTenantEvidence(
  * `pnpm --filter @pikar/backend eval:golden -- --write-suite-manifest`.
  */
 export const AGENT_EVAL_SUITE = {
-  revision: "2026-08-27.corpus-remanifest",
-  casesHash: "1cbf5d5b389173c64490f3932734d445375cfd42a2460a86509bc35308a4e913",
+  revision: "2026-09-08.fixture-33-declaration-scope",
+  casesHash: "5794b8b0a9716d76bb3cab9f513f251994ad832eaf87d443cef4b3787db6f4fa",
   caseCount: 46,
 } as const;
 

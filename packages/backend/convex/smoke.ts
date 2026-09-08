@@ -1134,8 +1134,19 @@ export const researchDeclaredUnsupportedForThread = internalQuery({
  * question unsupported and the source counter won. That is fixture 33's exact failure, and
  * it was indistinguishable from "never declared" while one boolean carried both meanings.
  *
- * DIAGNOSTIC ONLY. No fixture asserts it and no code branches on it; it exists so ONE live
- * gate run can measure whether the declaration reflex still exists at specialist v10.
+ * PROMOTED 43-07 (owner decision Option B): `questionScope` is now what fixture 33 ASSERTS, via
+ * the runner's `declaredQuestionScope` key. It was written as a diagnostic to measure whether the
+ * `sources.length === 0` conjunction was load-bearing; the answer turned out to be that it is not
+ * load-bearing but ABSORBING. `evidenceVerdict` reads `sourceCount === 0 || declaredUnsupported`
+ * while `llm.ts` computes `declaredUnsupported = declaredQuestionScope && sources.length === 0`
+ * off the SAME array, so the disjunction reduces to `sourceCount === 0` and the model's
+ * declaration cannot move the verdict under ANY input (verified exhaustively: 0 of 24).
+ *
+ * `questionScope` is the half that survives that, because it is the TOOL-CALL RECORD and nothing
+ * else — no counter can suppress it and no page quoting the label sentence can reach it.
+ * `overrode` stays diagnostic. The open question this does NOT answer, deliberately — should a run
+ * holding only near-miss sources be labelled `sourced`? — is recorded in
+ * `.planning/phases/43-batch-content-and-the-content-queue/43-FIXTURE-33-FINDING.md`.
  */
 export const researchDeclarationPairForThread = internalQuery({
   args: { tenantId: v.string(), threadId: v.string() },

@@ -556,10 +556,22 @@ const EXPECT_KEYS = new Set([
   //     separates "searched and judged the sources insufficient" from "searched, got zero
   //     citations, and confabulated" — those satisfy `insufficientEvidence` identically. The
   //     closed EXPECT vocabulary is extended by exactly this one key, deliberately.
+  //   declaredQuestionScope — 43-07 (Option B). smoke:researchDeclarationPairForThread's
+  //     `questionScope`: did the specialist CALL `declareUnsupported` at question scope? THE
+  //     TOOL-CALL RECORD, read off `subagent.completed`, and the key fixture 33 actually needs.
+  //     `declaredUnsupported` above CANNOT serve that purpose: llm.ts computes it as
+  //     `declaredQuestionScope && sources.length === 0`, and `evidenceVerdict` reads
+  //     `sourceCount === 0 || declaredUnsupported` off the SAME array — so the disjunction
+  //     absorbs to `sourceCount === 0` and the model's declaration cannot move the verdict under
+  //     ANY input. A fixture whose premise is that near-miss sources ARE found therefore asserts
+  //     something the code cannot compute. This key asks the SEMANTIC question directly and is
+  //     independent of the source counter. See
+  //     .planning/phases/43-batch-content-and-the-content-queue/43-FIXTURE-33-FINDING.md.
   "researchDocPresent",
   "insufficientEvidence",
   "webSearchCallsAtLeast",
   "declaredUnsupported",
+  "declaredQuestionScope",
   // Phase 18 (ACTN-04): `createdDocCount` — how many standalone documents `createDocument` saved
   // on the thread, read from smoke:createdDocCountForThread (the `vaultSources` role:"created"
   // row's `docIds`), never from the reply. The failure it exists to catch is the agent ANSWERING
@@ -862,7 +874,12 @@ function validateFixture(fx, source) {
       fail(`expect.${key} requires actOnGap (nothing dispatches without the tap)`);
     }
   }
-  for (const key of ["insufficientEvidence", "webSearchCallsAtLeast", "declaredUnsupported"]) {
+  for (const key of [
+    "insufficientEvidence",
+    "webSearchCallsAtLeast",
+    "declaredUnsupported",
+    "declaredQuestionScope",
+  ]) {
     if (fx.expect[key] !== undefined && fx.expect.researchDocPresent !== true) {
       fail(`expect.${key} requires researchDocPresent:true (the anti-vacuity companion)`);
     }
@@ -1626,6 +1643,12 @@ function evaluateExpect(
   /** Phase 28: the persisted revenue snapshot assembled after the candidate workflow. Null is
    * fail-closed; exact deep equality makes every extra/missing tool, ref, count and result bite. */
   revenueState = null,
+  /** 43-07: smoke:researchDeclarationPairForThread's `questionScope` — the TOOL-CALL record, read
+   * off `subagent.completed`. FALSE when unasked or unread, and false is the FAIL-CLOSED direction
+   * for an honesty signal (the `declaredUnsupported` precedent directly above). LAST in the list
+   * deliberately: 18 positional arguments already flow through `evaluateRevenueFixture`, and a
+   * parameter inserted anywhere else shifts every one of them silently. */
+  declaredQuestionScope = false,
 ) {
   const failures = [];
   const miss = (key, expected, actual) => failures.push({ key, expected, actual });
@@ -1745,6 +1768,12 @@ function evaluateExpect(
         break;
       case "declaredUnsupported":
         if (declaredUnsupported !== expected) miss(key, expected, declaredUnsupported);
+        break;
+      // 43-07: the SEMANTIC act on its own, independent of the source counter. `declaredUnsupported`
+      // above cannot answer this question -- it is `declaredQuestionScope && sources.length === 0`,
+      // and `evidenceVerdict` ORs the same counter back in, so it absorbs to `sourceCount === 0`.
+      case "declaredQuestionScope":
+        if (declaredQuestionScope !== expected) miss(key, expected, declaredQuestionScope);
         break;
       case "createdDocCount":
         if (createdDocCount !== expected) miss(key, expected, createdDocCount);
@@ -2700,6 +2729,83 @@ function selfCheck() {
     () => validateFixture({ ...base, expect: { declaredUnsupported: true } }, "<synthetic>"),
     /requires researchDocPresent:true/,
     "the declaration without a persisted research document is vacuous",
+  );
+
+  // 43-07 (Option B): the SEMANTIC act ON ITS OWN, which is what fixture 33 now asserts. Four rows,
+  // because this key replaced one that could not fail for the right reason and the replacement must
+  // not inherit that.
+  //
+  // ARGUMENT POSITION IS THE RISK HERE, not the comparison. `declaredQuestionScope` is the LAST
+  // parameter of `evaluateExpect`, after `revenueState` — 19 positions deep. A row that passed it
+  // in the wrong slot would read `undefined !== true` and MISS, i.e. it would look like a working
+  // assertion while proving nothing about the reader. Rows 1 and 2 are a matched pair over the same
+  // 19 arguments with only the final value flipped, so the slot itself is what they pin.
+  const scopeArgs = (questionScope) => [
+    { researchDocPresent: true, declaredQuestionScope: true },
+    collecting,
+    0,
+    false,
+    0,
+    0,
+    0,
+    "",
+    1,
+    false,
+    1,
+    false,
+    0,
+    0,
+    0,
+    0,
+    null,
+    null,
+    questionScope,
+  ];
+  assert.equal(
+    evaluateExpect(...scopeArgs(false)).length,
+    1,
+    "declaredQuestionScope:true MUST FAIL when the tool-call reader returns false",
+  );
+  assert.equal(
+    evaluateExpect(...scopeArgs(true)).length,
+    0,
+    "declaredQuestionScope:true MUST PASS when the reader returns true \u2014 without this the row " +
+      "above passes for the wrong reason (a mis-slotted argument reads undefined and always misses)",
+  );
+  // The DEFAULT, and it is the fail-closed direction: an unread pair must never manufacture the
+  // honesty signal. Omitting the trailing argument entirely is exactly what a non-research fixture
+  // does.
+  assert.ok(
+    evaluateExpect({ researchDocPresent: true, declaredQuestionScope: true }, collecting).some(
+      (f) => f.key === "declaredQuestionScope",
+    ),
+    "declaredQuestionScope defaults to FALSE when unread, never true",
+  );
+  assert.throws(
+    () => validateFixture({ ...base, expect: { declaredQuestionScope: true } }, "<synthetic>"),
+    /requires researchDocPresent:true/,
+    "the scoped declaration without a persisted research document is vacuous",
+  );
+
+  // THE SLOT ITSELF, pinned at the LIVE call site — and this guard exists because the four rows
+  // above do NOT catch the failure they were written for. Proven by mutation: swapping the last two
+  // arguments of the live `evaluateExpect(...)` call (so `declaredQuestionScope` lands in
+  // `revenueState`'s slot and `null` lands in its own) leaves every row above GREEN, because they
+  // call `evaluateExpect` DIRECTLY and never exercise the live call site at all. The live path
+  // would then read `null !== true` and miss on every run — an assertion that looks like it works
+  // and can only ever fail. `runnerSource` scanning is the shipped idiom here (`attemptCase`,
+  // `writeSuiteManifest`).
+  // `lastIndexOf`, NOT `indexOf` — `runnerSource` is THIS FILE, so the search string matches the
+  // literal on this very line before it ever reaches the live call 2,000 lines below. The shipped
+  // `attemptCase` scan uses lastIndexOf for the same reason. A source scan that finds itself is a
+  // guard that reports on its own text.
+  const liveCall = runnerSource.slice(runnerSource.lastIndexOf("const failures = evaluateExpect("));
+  assert.ok(
+    /\n {4}authoring,\n(?: *\/\/[^\n]*\n)* {4}null,\n {4}declaredQuestionScope,\n {2}\);/.test(
+      liveCall.slice(0, liveCall.indexOf(");") + 2),
+    ),
+    "the live evaluateExpect call must end `authoring, null, declaredQuestionScope` — any other " +
+      "order silently lands the declaration in revenueState's slot and the key can never pass",
   );
 
   // 2f. Phase 18 (ACTN-04): `createdDocCount` is in the vocabulary, is graded off the READ (arg 13)
@@ -4642,12 +4748,20 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1)
             RETRY_READ,
           ),
         );
-  // 42.1 DIAGNOSTIC, and the ONLY read here deliberately NOT keyed to its own expect key.
-  // No fixture asserts it. It rides `researchDocPresent` because the measurement it exists
-  // for is on the fixtures that PASS: `declaredUnsupported` is ANDed with `sources.length
-  // === 0` in llm.ts, so whether that conjunction is load-bearing depends on whether 32 and
-  // 34 would declare too -- and a read that only fired on a failing assertion could never
-  // see that. Free (a pure internalQuery, no model turn), so it costs nothing to always ask.
+  // 42.1, PROMOTED 43-07: this was DIAGNOSTIC ONLY and is now also the source of the
+  // `declaredQuestionScope` assertion key. The measurement it was built for answered its own
+  // question: the conjunction is NOT load-bearing, it is ABSORBING -- `declaredUnsupported` is
+  // `declaredQuestionScope && sources.length === 0` while `evidenceVerdict` reads
+  // `sourceCount === 0 || declaredUnsupported` off the same array, so the declaration cannot move
+  // the verdict under any input. `questionScope` is the half that survives that, because it is the
+  // tool-call record and nothing else.
+  //
+  // It still rides `researchDocPresent` rather than its own key, deliberately: the anti-vacuity
+  // rule in validateFixture already FORCES `researchDocPresent: true` on any fixture asking for
+  // `declaredQuestionScope`, so the read is guaranteed present; and keeping it unconditional
+  // preserves the diagnostic on the fixtures that PASS, which is where the reflex is visible.
+  // Free (a pure internalQuery, no model turn), so it costs nothing to always ask.
+  /** @type {{questionScope: boolean, unsupported: boolean} | undefined} */
   const declarationPair =
     fixture.expect.researchDocPresent === undefined
       ? undefined
@@ -4658,6 +4772,12 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1)
             RETRY_READ,
           ),
         );
+  // FAIL-CLOSED: `?? false`, never `?? true`. An unread pair (a non-research fixture, or a read
+  // that never fired) must not manufacture the honesty signal — the `vaultNeedle: ""` and
+  // `declaredUnsupported = false` precedents. validateFixture already forces
+  // `researchDocPresent: true` on any fixture asking for this key, so an asking fixture always
+  // has the read; this default covers the fixtures that do NOT ask.
+  const declaredQuestionScope = declarationPair?.questionScope ?? false;
   // Phase 18 (ACTN-04). Same skipped-unless-asked rule as every read above, so the 33 fixtures
   // that do not create a document pay no extra hop and see the fail-closed 0.
   const createdDocCount =
@@ -4719,6 +4839,12 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1)
     driveReadToolCount,
     imageProposalCount,
     authoring,
+    // `revenueState` is null on this path (it is the revenue lane's snapshot) and MUST be named
+    // here so the trailing argument below lands in its own slot. 43-07 put the new parameter LAST
+    // rather than beside `declaredUnsupported` for exactly this reason: this call is positional
+    // and 17 arguments deep, and a mid-list insertion shifts every one after it silently.
+    null,
+    declaredQuestionScope,
   );
   // Standing invariants: zero requests rows + refs-only needle scan (throws on violation).
   try {
