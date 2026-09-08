@@ -208,10 +208,20 @@ test("erasure deletes the tenant's stored blob, not only its rows", async ({ pag
   await expect(eraseButton).toBeEnabled();
   await eraseButton.click();
 
-  // Settling means EITHER the report renders OR the shell signs itself out — the action deletes the
-  // `users` row this session's identity resolves to, so the (app) layout is entitled to bounce to
-  // /signin before the status line is read. Both are the erasure completing; neither is the
-  // evidence. The evidence is the probe below.
+  // Settling means the report renders, OR the shell signs itself out, OR it bounces to ONBOARDING —
+  // the action deletes the `users` row this session's identity resolves to, so the (app) layout is
+  // entitled to redirect before the status line is ever read.
+  //
+  // ONBOARDING IS THE ONE THIS SPEC LEARNED BY RUNNING. Written in 44-02 and never executed, it
+  // listed only the report and /signin; the FIRST real execution (2026-09-08) sat on
+  // `/dashboard/onboarding` for the full 240s and failed. The session outlives the profile, so the
+  // layout treats the erased tenant as a brand-new one and routes it to onboarding. That is a real
+  // terminal, not a workaround for a flake.
+  //
+  // WIDENING THIS CANNOT MAKE THE SPEC VACUOUS, and that is why it is safe: none of the three
+  // branches is the evidence. They only establish that the click was PROCESSED, so the probe below
+  // is not racing an action that never started. The load-bearing assertion is the blob, and it is
+  // unchanged.
   await expect
     .poll(
       async () => {
@@ -223,7 +233,7 @@ test("erasure deletes the tenant's stored blob, not only its rows", async ({ pag
       },
       { timeout: 240_000, intervals: [1_000] },
     )
-    .toMatch(/Erased —|\/signin/);
+    .toMatch(/Erased —|\/signin|\/dashboard\/onboarding/);
 
   // ── THE ASSERTION THIS SPEC EXISTS FOR ────────────────────────────────────────────────────────
   // Polled, not read once: `ctx.storage.delete` lands inside the page mutation, but the probe is a

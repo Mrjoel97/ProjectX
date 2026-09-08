@@ -1,3 +1,24 @@
+> Last verified: 2026-09-08 (44-07 — **`erasure.spec.ts` HAS NOW ACTUALLY RUN, and its first run
+> failed.** Written in 44-02, typechecked and discovered by playwright but NEVER EXECUTED; 44-02
+> said so and refused to call it evidence. Correct call: the first real execution sat on
+> `/dashboard/onboarding` for the full 240s settle window and failed. The settle predicate listed
+> only the report and `/signin`, but an erased tenant's SESSION OUTLIVES ITS PROFILE, so the (app)
+> layout treats it as brand new and routes it to onboarding. Predicate widened to that third real
+> terminal; the spec then passes in 30.8s.
+>
+> Widening it cannot make the spec vacuous, which is the only reason it is safe: none of the three
+> branches is the evidence. They establish only that the click was PROCESSED, so the probe is not
+> racing an action that never started. The load-bearing assertion — a blob that provably EXISTED in
+> `_storage` before the click is GONE after — is untouched.
+>
+> TO RUN IT: the local stack must be up (`convex dev` on :3210 — the local DB is ~21 GB and needs
+> `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=600`; a production `next build` + `next start -p 3111`,
+> because `next dev` OOMs). Then `PIKAR_E2E_ERASURE=1 PIKAR_E2E_STORAGE_STATE=e2e/.auth/user.json
+> npx playwright test erasure.spec.ts --workers=1 --project=chromium`. The storage-state variable is
+> NOT for signing in — this spec mints its own tenant and clears `storageState` — it is there to
+> skip the shared `setup` project, which otherwise demands `E2E_USER_EMAIL`/`PASSWORD` this spec
+> does not need.)
+
 > Last verified: 2026-09-08 (44-05 — an e2e spec in this directory took a live production feature
 > DOWN, and the lesson generalises past packs. `workflow-pack-pilot.spec.ts`'s `@drill rollback`
 > clicks "Turn off <pack>" with NO restore step, so even a green run leaves that pack dark. 27-12

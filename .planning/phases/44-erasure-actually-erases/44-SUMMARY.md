@@ -1,7 +1,7 @@
 # Phase 44 — Erasure actually erases
 
-**Opened and closed 2026-09-08.** `52ed980` (44-01, deployed), `9e0bc4e` (44-02, deployed) and
-this commit (44-03).
+**Opened and closed 2026-09-08.** Seven plans: `52ed980` (44-01), `9e0bc4e` (44-02), `aeb93f3`
+(44-03), `29ff037` (44-04), `77a7718` (44-05), `d9b881d` (44-06) and this commit (44-07). All deployed.
 
 Built from the Track C step 12 research turn, which found that step 12 was not next: two of its
 three parts should not be built at all, and the third — the retention ADR — sat behind a defect that
@@ -107,6 +107,109 @@ through Stripe. Severing D3 removes one of the two counts, not both — so the "
 claim is still not strictly true, and **WORM stays OFF** (ADR-044 D2). Do not read 44-03 as
 clearing that gate.
 
+## 44-04 — the pack harness's own free gate was red (`29ff037`)
+
+Found while trying to run a pack gate. `run-workflow-pack-evals.mjs --self-test` asserted
+`PACK_EVAL_SUITE.packs.size === 6`; 35-02 had correctly added `pack-offer-and-lead-plan` as a
+seventh, deliberately without a revision bump. So the FREE gate failed on the number while the
+per-pack `casesHash`/`caseCount` drift loop directly above it was passing — red for a non-reason
+since 2026-09-06, which is how a gate stops being read.
+
+Replaced with a set identity (`deepEqual` of declared ids against the fixture ids on disk). Strictly
+stronger: the loop above catches a DECLARED pack drifting from disk; this catches a pack that is ON
+DISK and undeclared, which is the direction a new pack arrives from and the one `=== 6` could never
+see. **The mutation lesson is the keeper** — the first mutation (declare a pack with no fixtures)
+went red one check EARLIER, in the drift loop, proving that loop and not the line being written.
+Only the opposite direction reaches the new assertion.
+
+## 44-05 — a drill took a live pack down on production (`77a7718`)
+
+Earning the pack browser plane ran `workflow-pack-pilot.spec.ts` against prod. `@drill rollback`
+clicks "Turn off <pack>" and **has no restore step** — it asserts the pack left the surface, asserts
+it returned as a candidate, and stops. It is an outage on a GREEN run; the failure that exposed it
+merely made it visible. Production had NO active `pack-business-pulse` row until it was re-activated
+by hand.
+
+**The root cause is not the drill.** 27-12 gave that file production reach for the evidence plane,
+and every test already in it inherited that reach without being re-read under it. Adding a capability
+to a file silently changes the blast radius of everything already in it. Both destructive drills now
+skip unless the target is local, proven in BOTH directions (skip before navigation against prod;
+proceed and fail on connection-refused against local — a guard that skipped everywhere would have
+looked identical in the first check alone).
+
+Left red on purpose: the `@dark` block asserts a precondition prod no longer meets and fails where it
+should skip. The obvious guard is a trap — its own assertion is `toHaveCount(0)`, so skipping when a
+pack IS offered makes it unfalsifiable, and this block once PASSED with all six packs active. A
+correct guard reads pack state out of band. Two mobile-viewport failures also open.
+
+## 44-06 — G19 closed (this commit)
+
+Production now runs `cockpit-agent` **v13** (was v8, dated 2026-08-15), `research-specialist` **v3**,
+`pack-business-pulse` **v2** and `pack-sales-call-prep` **v2**. No candidate ahead of any active row
+remains.
+
+**v8 was 24 days stale, and v13 is the first body containing both `dispatchTeam` and
+`createVariants`** — tools REACHABLE in production since 42-03, because a registered dispatch tool
+carries its name, description and schema into every executive turn whatever the active body says.
+Present and untaught for three weeks: the measured price of the 43-05 finding.
+
+**The G19 row's stated blocker was wrong.** Credit was never the constraint. Evidence lives on ONE
+deployment's `skills` row, so `PIKAR_CONVEX_TARGET=prod` is REQUIRED, not optional. Packs need a
+THIRD plane — provenance + eval + browser — and prod has no password sign-in, so the browser plane
+comes from `capture-prod-session.mjs`, whose header explicitly rejects minting an owner-privileged
+password account on prod. Its persisted Chrome profile was still signed in from 2026-09-02, so it
+needed no human. ~$2.9 total across four full gate runs, two pack gates and six A/B probes.
+
+**And two corrections worth keeping.** I had recorded for weeks that prod runs "come from the owner's
+terminal" — wrong; a device token in `~/.convex/config.json` authorises the whole CLI. And I first
+reported "no prod row carries evidence" after projecting the field as `evalEvidence`; the gate reads
+`evidence`, and eleven rows had it.
+
+## 44-07 — the erasure spec finally RAN, and its first run failed (this commit)
+
+44-02 shipped `apps/web/e2e/erasure.spec.ts` and said plainly: typechecked, linted, discovered by
+playwright, **never executed, so it is not evidence**. That caution was correct. Stood a local stack
+up (convex on :3210 against the ~21 GB local DB, a production `next build` + `next start -p 3111`)
+and ran it. **It failed.**
+
+Not on the assertion it exists for — it reached the confirmation, armed the guard, clicked, and then
+sat on `/dashboard/onboarding` for the full 240-second settle window. The predicate listed two
+terminals, the report and `/signin`. There is a third: **an erased tenant's SESSION OUTLIVES ITS
+PROFILE**, so the `(app)` layout treats it as a brand-new tenant and routes it to onboarding.
+
+Predicate widened to that third real terminal; **the spec now passes in 30.8s.** Widening it cannot
+make the spec vacuous, and that is the only reason it is safe: none of the three branches is the
+evidence. They establish only that the click was PROCESSED, so the probe is not racing an action that
+never started. The load-bearing assertion — a blob that provably EXISTED in `_storage` before the
+click is GONE after — is untouched.
+
+**GOVN-03 now has browser proof for the first time**, and the 2026-08-16 "complete" verdict is
+retrospectively known to have been incomplete: every leg of it counted ROWS, which is exactly what
+stayed green through the whole 44-01 defect.
+
+## What production actually looks like, measured 2026-09-08
+
+- **ADR-044's two bridges are EMPTY.** `betaInvites` 0 rows (the D4 sweep scanned 0), `billingEvents`
+  0 rows. The archive claim's named falsifiers are unpopulated today — they populate on the first
+  invite redemption or Stripe event, so this is a reprieve, not a repeal.
+- **Storage**: 218 MB / 438 blobs. **140 orphans (65.2 MB, 30%)**, ALL created 2026-08-13..08-21,
+  none since, and zero dangling pointers. `STORAGE_ID_FIELDS` verified complete against both the
+  schema (7 fields, 5 tables) and the live data (no orphan id appears in any field of any table).
+- **The orphans are eval debris, and the rows were never cleaned up either.**
+  `run-eval-golden.mjs` has no teardown: **472 of 632** `plans` rows, **189 of 733**
+  `vaultDocuments` and **1007 of 1894 AUDIT rows** belong to synthetic `eval-*` tenants (18 of 83
+  distinct tenants). **This is a sharper argument for ADR-044 D2 than cursor-at-zero:** arming WORM
+  today would freeze a majority-synthetic archive into 7-year COMPLIANCE objects.
+- `RELIABILITY_SWEEP_ARMED` was **already 1**.
+- Exactly **one** `tenant.deleted` event exists in the whole archive.
+
+## Owner-side, what actually remains
+
+1. **G22 / QuickBooks** — blocked on an Intuit developer app. `QUICKBOOKS_CLIENT_ID`,
+   `QUICKBOOKS_CLIENT_SECRET` and `QUICKBOOKS_REDIRECT_URI` are unset on prod and only you can
+   register one.
+2. **WORM stays off.** ADR-044 D2 holds, now for a second and stronger reason.
+
 ## Verification
 
 44-01: backend 4099 (2112 + 1987, 0 FAIL), core 1540, contracts 123; four typechecks and biome clean;
@@ -126,6 +229,11 @@ already-cleared row and the `redeemedUserId` check keeps it off everyone else's,
 READ VOLUME, which `convex-test` does not enforce. The test was deleted rather than kept green, and
 a `ponytail:` comment names the ceiling and the upgrade path (an index on `redeemedUserId`).
 
-**The erasure spec has still never been executed** — e2e is not in CI and this environment has no
-running stack. Nothing here is erasure evidence, and the sweep has not been run against any
-deployment.
+44-04: pack self-test exit 0, mutation-proven in the direction that reaches the new assertion and
+`cmp`-restored. 44-05: `apps/web` tsc exit 0; both drills proven to skip against a prod origin and to
+proceed against a local one. 44-06/07: `apps/web` tsc exit 0; both doc gates exit 0.
+
+**`apps/web/e2e/erasure.spec.ts` EXECUTES GREEN** (2026-09-08, 30.8s, local deployment) — the line
+that stood here through 44-02 and 44-03 saying it had never run is now retired. The **D4 sweep has
+run against production** (`done: true`, 0 rows scanned). What is still unproven: the post-erasure
+re-export, and anything about the `billingEvents` bridge.
