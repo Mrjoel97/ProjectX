@@ -1715,6 +1715,11 @@ export default defineSchema({
       // click, but the local tool still needs a trace literal because AI-SDK callback failures are
       // otherwise swallowed (the dispatchMedia rule immediately above).
       v.literal("proposeImage"),
+      // 43-05 (BATCH-01): the content batch's door. Same swallow trap as every literal
+      // above, and this union has now been the trap five times — a missing literal makes
+      // `agentSteps:record` throw an ArgumentValidationError inside an AI-SDK callback the
+      // SDK SILENTLY swallows, so prod loses the step while the whole suite stays green.
+      v.literal("createVariants"),
       // Phase-19 (ACTN-05): the CRM staging tool. Same swallow trap as every literal above — a
       // missing literal makes `agentSteps:record` throw an ArgumentValidationError inside an
       // AI-SDK callback, which the SDK SILENTLY swallows, so prod loses the step while the whole

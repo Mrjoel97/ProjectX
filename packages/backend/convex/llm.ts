@@ -30,6 +30,9 @@ import {
   COCKPIT_AGENT_SKILL,
   CONTENT_DRAFTER_SKILL,
   DOCUMENT_DRAFTER_SKILL,
+  DOCUMENT_FORMS,
+  type DocumentForm,
+  drafterSkillFor,
   EMAIL_DRAFTER_SKILL,
   EXECUTIVE_ROUTER_SKILL,
   INBOX_DIGEST_SKILL,
@@ -2071,6 +2074,118 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     }),
   };
 
+  // 43-05: THE BATCH DOOR — `dispatchTeamTool`'s shape with exactly two substitutions. The stager
+  // is told the TERMINAL at birth (`channel: "vault"`, ADR-042 D1) and the minter is
+  // `startContentBatch` rather than `startTeamRun`. Same `grants.dispatch` spread and same lineage
+  // gate on purpose: a batch spends up to MAX_FAN_OUT paid drafts, which IS the dispatch
+  // capability, not a new one — `grantsFor` derives `dispatch` from the ABSENCE of an allow-list
+  // (toolGrants.ts:57,61), and a second flag derived identically is the one-value knob §8 forbids.
+  //
+  // THE DESCRIPTION CARRIES THE RULES, and that is decided rather than lazy. `cockpit-agent` is in
+  // GATED_SKILLS, so the body section teaching this tool ships as a CANDIDATE and does not go live
+  // until an eval run promotes it — while this tool is spread UNCONDITIONALLY under
+  // `grants.dispatch` below, and `buildCockpitTools`' caller hands the executive the UNFILTERED
+  // record (`toolNames === undefined ? built : filtered`). THE GATE WITHHOLDS INSTRUCTIONS, NEVER
+  // REACHABILITY — `dispatchTeam` is in exactly that state in production today. So anything the
+  // model must not get wrong in that window (no drafts this turn, one card, relay the count)
+  // belongs in the string it reads on EVERY turn, not only in the body it may never be told.
+  const createVariantsTool = {
+    createVariants: tool({
+      // Split literal: every chunk under the 200-char §5 source-scan ceiling (skills.test.ts).
+      description:
+        "Write ONE piece several ways at once so the user can choose between them. `piece` is " +
+        "what is being written; `variants` is the list of angles — one line each, saying what " +
+        "DIFFERS about that version. For a single document use createDocument instead. " +
+        "The versions are drafted in the BACKGROUND: you do not get them in this turn, so never " +
+        "quote a line from one. They arrive as ONE plan card the user approves once. Fewer " +
+        "versions may run than you asked for — relay the number this tool returns.",
+      inputSchema: jsonSchema<{ piece: string; form: DocumentForm; variants: string[] }>({
+        type: "object",
+        properties: {
+          piece: { type: "string", description: "What to write, in plain language." },
+          // `createDocument`'s enum, from the SHARED constant rather than a second copy — this very
+          // mapping already drifted between two callers, which is why `drafterSkillFor` exists.
+          form: {
+            type: "string",
+            enum: [...DOCUMENT_FORMS],
+            description:
+              "long = proposal, one-pager, report. short = post, ad copy, headline. sheet = a spreadsheet they will work in.",
+          },
+          variants: {
+            type: "array",
+            items: { type: "string" },
+            description: "One line per version, saying what makes that version different.",
+          },
+        },
+        required: ["piece", "form", "variants"],
+        additionalProperties: false,
+      }),
+      execute: async ({ piece, form, variants }): Promise<string> => {
+        // Non-null asserted: the whole record key is absent unless both are present (the gate on
+        // the `grants.dispatch` spread below), exactly as dispatchTeam does it.
+        const threadId = toolCtx.threadId as string;
+        const rootRequestId = toolCtx.rootRequestId as string;
+        // `channel: "vault"` IS THE LOAD-BEARING ARGUMENT, not decoration. Absent, the root is
+        // minted with no channel and `parseChannel(undefined)` reads it as "email" — a terminal a
+        // memo row structurally cannot reach, and NOTHING would be red, because the CHILDREN still
+        // carry their own channel from `startContentBatch`. Only the root that drives
+        // `startScheduledDelivery`'s switch would be wrong.
+        //
+        // It also switches the stager onto its cancel-and-insert fork, because `channel` is
+        // BIRTH-ONLY and a recycled row can never acquire one. `hasDraftContent` refuses BEFORE
+        // that fork (plans.ts:259 vs :267), so the cancelled row is always an EMPTY composing
+        // shell — a real draft earns `draft_in_progress` and nothing of the user's is destroyed.
+        //
+        // ponytail: that cancelled shell IS the `planId` this closure captured, so an email tool
+        // called LATER IN THE SAME TURN would write into a row `newestRoot` no longer returns —
+        // `readPlan()` checks existence and tenant only, and a canceled row passes both.
+        // dispatchTeam/dispatchResearch do not have this: they RECYCLE the same `_id`. The close
+        // here is the reply below, which ends the turn. Upgrade path if that is ever not enough:
+        // a `status` precondition inside `cockpit.proposeEmailPlan` — ONE guard where every caller
+        // routes, never a second copy here.
+        const staged = await ctx.runMutation(internal.plans.stageResearchPlan, {
+          tenantId,
+          threadId,
+          subject: `Versions: ${piece}`.slice(0, 120),
+          channel: "vault",
+        });
+        // TOTAL BY CONSTRUCTION: this map's key set IS `stageResearchPlan`'s reason union
+        // (plans.ts:241), so a new reason added there is a TYPE error here — never an `undefined`
+        // relayed to the user as the literal word "undefined".
+        if (!staged.ok) return RESEARCH_REFUSAL_REPLY[staged.reason];
+
+        const batch = await ctx.runMutation(internal.dispatchRun.startContentBatch, {
+          tenantId,
+          threadId,
+          planId: staged.planId,
+          piece,
+          form,
+          variants,
+          rootRequestId,
+          // 21-03 / EVAL-01: without the pin every worker loads the ACTIVE drafter row, so an eval
+          // `--skill content-drafter@N` run would certify a body no variant ever ran.
+          skillVersions,
+          tenantSkillIds,
+        });
+        // A governed stop is a paused conversation, never a throw. Both no-op replies are OWNED by
+        // the mutation (NO_VARIANTS_REPLY / BATCH_NO_BUDGET_REPLY) — relay and add nothing.
+        if (!batch.ok) return batch.reply;
+        // ADR-038 Decision 4: a batch that quietly writes 2 of 6 reads as complete and is not. Say
+        // the NUMBER — but NOT dispatchTeam's budget clause a few lines above. `requested` is the
+        // RAW model-supplied list length (`startContentBatch` returns `a.variants.length`), so a
+        // blank or repeated angle lowers the count just as much as an exhausted rail does. Naming
+        // the budget here would answer a PIPELINE question with a MONEY claim — the defect class
+        // this repo has now recorded three times.
+        return batch.workerCount < batch.requested
+          ? `Started ${batch.workerCount} of the ${batch.requested} versions listed — the others` +
+              " were not started. Say that number and do not imply the rest are coming. They" +
+              " arrive as ONE plan card for the user to approve."
+          : `Started ${batch.workerCount} versions of that piece. They arrive as ONE plan card for` +
+              " the user to approve — you do not have them yet, so do not quote one.";
+      },
+    }),
+  };
+
   const dispatchResearchTool = {
     dispatchResearch: tool({
       description:
@@ -2661,11 +2776,18 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     // 20-08: ONE flag, ONE spread, both dispatch tools — the `webResearch`/`declareUnsupported`
     // precedent above. Media can never become reachable in a context where research is not.
     ...(grants.dispatch && toolCtx.threadId && toolCtx.rootRequestId
-      ? { ...dispatchResearchTool, ...dispatchMediaTool, ...proposeImageTool, ...dispatchTeamTool }
+      ? {
+          ...dispatchResearchTool,
+          ...dispatchMediaTool,
+          ...proposeImageTool,
+          ...dispatchTeamTool,
+          ...createVariantsTool,
+        }
       : ({} as typeof dispatchResearchTool &
           typeof dispatchMediaTool &
           typeof proposeImageTool &
-          typeof dispatchTeamTool)),
+          typeof dispatchTeamTool &
+          typeof createVariantsTool)),
     // SKILL-02: a SEPARATE flag from `grants.dispatch`, deliberately. Both are derived from
     // `toolNames === undefined` today (grantsFor), but they are different capabilities —
     // dispatching a specialist spends money, authoring a skill changes what every future turn is
@@ -4241,12 +4363,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // The ONE thing that reaches the content-drafter body. `skillVersions` is name-keyed, so
         // the eval runner's pin rides through with no new plumbing; `undefined` for content-drafter
         // is CORRECT — it is deliberately outside GATED_SKILLS, so the active row is the intent.
-        const skillName =
-          form === "short"
-            ? CONTENT_DRAFTER_SKILL
-            : form === "sheet"
-              ? SPREADSHEET_DRAFTER_SKILL
-              : DOCUMENT_DRAFTER_SKILL;
+        const skillName = drafterSkillFor(form);
         let draft: { title: string; markdown: string };
         let storageId: Id<"_storage"> | undefined;
         let sheetRows: { name: string; rows: string[][] }[] = [];
@@ -6708,6 +6825,11 @@ export const runVariant = internalAction({
     tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
   },
   handler: async (ctx, a): Promise<null> => {
+    // THE SAME MAPPING `createDocument` USES, from the same function. 43-04 shipped a two-way copy
+    // here that drafted every `short` variant with the LONG-form body — three versions of an ad
+    // headline came back as three one-pagers, and nothing was red because `document-drafter` is a
+    // legal member of the closed union it feeds.
+    const variantDrafter = drafterSkillFor(a.form);
     // §4 REDACT-THEN-WRITE. `draftDocument` documents its input as ALREADY-REDACTED, and the brief
     // carries the user's own piece description — the same boundary `renderAndStore` crosses with the
     // same call. An unscannable brief FAILS the variant honestly rather than being sent.
@@ -6717,15 +6839,12 @@ export const runVariant = internalAction({
           tenantId: a.tenantId,
           safeText: scan.value.safeText,
           safeTextHash: await contentHash(scan.value.safeText),
-          skillName: a.form === "sheet" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL,
+          // ONE local, read twice — the two-way ternary this replaced was written out twice and
+          // both copies were wrong for `short`. See `drafterSkillFor` for what that cost.
+          skillName: variantDrafter,
           ...(a.skillVersions === undefined
             ? {}
-            : {
-                skillVersion:
-                  a.skillVersions[
-                    a.form === "sheet" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL
-                  ],
-              }),
+            : { skillVersion: a.skillVersions[variantDrafter] }),
         })
       : ({ ok: false, reason: "scan_failed" } as const);
 

@@ -2174,6 +2174,12 @@ const VERB: Record<string, [running: string, done: string]> = {
   // must never read "Generated" or "Reel ready".
   dispatchMedia: ["Writing the script and art direction…", "Storyboard ready"],
   proposeImage: ["Composing the image prompt…", "Image proposal ready"],
+  // 43-05 (BATCH-01): MANDATORY beside the schema literal — traceParity.test.ts asserts set
+  // equality BOTH ways, so either half alone is RED. The done state is a PROMISE, not a
+  // completion: the variants are drafted but NOTHING is saved until the user approves the
+  // card, so this must never read "Saved to your vault" (BRAND §1 forbids claiming an action
+  // that did not happen). Plural throughout — one card carries every version.
+  createVariants: ["Writing the versions…", "Versions ready to approve"],
   // Phase-19 (ACTN-05): MANDATORY beside the schema literal — traceParity.test.ts asserts set
   // equality BOTH ways, so either half alone is RED. The done state is the PROMISE the tool keeps:
   // it STAGES a card and applies nothing, so this must never read "Saved" or "Updated your

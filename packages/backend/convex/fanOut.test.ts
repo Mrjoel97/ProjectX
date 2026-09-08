@@ -5,6 +5,13 @@
 //
 // Two of the tests below exist because two independent adversarial reviewers found the defects
 // they pin, before a line of the implementation was written. Both are named at their test.
+import { readFileSync } from "node:fs";
+import {
+  CONTENT_DRAFTER_SKILL,
+  DOCUMENT_DRAFTER_SKILL,
+  drafterSkillFor,
+  SPREADSHEET_DRAFTER_SKILL,
+} from "@pikar/contracts/skill";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -602,4 +609,56 @@ test("the rail bounds the variant COUNT, divided by the per-draft estimate", asy
   expect(res.workerCount).toBe(2);
   expect(await childrenOf(t, root)).toHaveLength(2);
   await cancelQueued(t);
+});
+
+// ══ 43-05: A VARIANT IS DRAFTED BY THE BODY THAT MATCHES ITS FORM ═════════════════════════════
+//
+// 43-04 shipped `runVariant` with its OWN two-way ternary (`sheet` or `document-drafter`) while
+// `createDocument` had used the three-way since Phase 18. Exposing `form: "short"` on the tool —
+// the PRIMARY case, since versions of a post or an ad headline are short-form — would have drafted
+// every one of them with the LONG-form body. Nothing was red: `document-drafter` is a legal member
+// of `draftDocument`'s closed `skillName` union, so the wrong body returns plausible prose. The
+// `skillVersions` lookup repeated the same ternary, so an eval pin on `content-drafter` could not
+// reach a variant either — a pin that reads as honoured and is not.
+//
+// `runVariant` has no behaviour coverage anywhere (it is an action that calls another action), and
+// that absence is exactly why the copy shipped. These two tests are what replace it.
+describe("the form -> drafter mapping (43-05)", () => {
+  // MUTATION: drop the `short` arm of `drafterSkillFor` → the first expect is red.
+  test("short is content-drafter, sheet is spreadsheet-drafter, everything else is long-form", () => {
+    expect(drafterSkillFor("short")).toBe(CONTENT_DRAFTER_SKILL);
+    expect(drafterSkillFor("sheet")).toBe(SPREADSHEET_DRAFTER_SKILL);
+    expect(drafterSkillFor("long")).toBe(DOCUMENT_DRAFTER_SKILL);
+    // THE TRUST BOUNDARY, not a curiosity: `jsonSchema()` carries no validator and
+    // `startContentBatch`'s own arg is `v.string()`, so an unknown form really does arrive here.
+    // Long-form is the shipped default and the recoverable direction.
+    expect(drafterSkillFor("slides")).toBe(DOCUMENT_DRAFTER_SKILL);
+  });
+
+  // THE TRIPWIRE, and it is the half that makes the fix STICK. The test above passes even if
+  // `runVariant` keeps a private copy of the ternary — asserting a shared function proves nothing
+  // about who calls it. What actually went wrong was a SECOND COPY, so a second copy is what this
+  // refuses. The shipped `step.runAction` and `agentSteps` source pins are the precedent.
+  //
+  // MUTATION: restore `a.form === "sheet" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL`
+  // anywhere in llm.ts → red.
+  test("llm.ts maps a form to a drafter in ONE place, and it is drafterSkillFor", () => {
+    const src = readFileSync(new URL("./llm.ts", import.meta.url), "utf8");
+    // A form comparison REACHING A DRAFTER CONSTANT — deliberately narrow, and the narrowing was
+    // forced. The first version matched any `form === "..." ?` ternary and went red on two
+    // innocent neighbours: a rendering branch at llm.ts:4269 and the user-facing "Written as a
+    // spreadsheet" sentence at :4412. A tripwire that fires on the wrong subject gets loosened by
+    // the next person until it fires on nothing, so it asserts what it actually means.
+    // `generateAttachment` is not matched on purpose either: it keys off `format`
+    // (`pdf | html | xlsx`), a different domain with no short-form member.
+    const copies = src.match(/form\s*===\s*"(short|sheet|long)"[\s\S]{0,80}?_DRAFTER_SKILL/g) ?? [];
+    expect(copies).toEqual([]);
+    // NON-VACUITY: the pattern above finding nothing must mean "no copies", never "wrong regex".
+    // This proves the regex matches the shape it claims to, on the string it was written against.
+    const shipped = 'a.form === "sheet" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL';
+    expect(
+      shipped.match(/form\s*===\s*"(short|sheet|long)"[\s\S]{0,80}?_DRAFTER_SKILL/g),
+    ).toHaveLength(1);
+    expect(src).toContain("drafterSkillFor(a.form)");
+  });
 });

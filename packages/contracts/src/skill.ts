@@ -80,6 +80,43 @@ export const CONTENT_DRAFTER_SKILL = "content-drafter" as const;
  */
 export const SPREADSHEET_DRAFTER_SKILL = "spreadsheet-drafter" as const;
 
+/** The three shapes a drafted document can take. `createDocument` and `createVariants` share it. */
+export const DOCUMENT_FORMS = ["short", "long", "sheet"] as const;
+export type DocumentForm = (typeof DOCUMENT_FORMS)[number];
+
+/**
+ * WHICH BODY DRAFTS THIS FORM — one predicate, because two callers already disagreed about it.
+ *
+ * 43-04 shipped `runVariant` with a TWO-way ternary (`sheet` or `document-drafter`) while
+ * `createDocument` had used the three-way since Phase 18. Nothing was red: `document-drafter` is a
+ * valid member of `draftDocument`'s closed `skillName` union, so a short-form variant was drafted
+ * by the LONG-form body and came back as plausible prose. The `skillVersions` lookup repeated the
+ * same two-way ternary a few lines down, so an eval pin on `content-drafter` could not reach a
+ * variant either — a pin that reads as honoured and is not.
+ *
+ * It lives here rather than in `llm.ts` for the §8 root-cause reason: the mapping now has two
+ * callers, and a copy per caller is what let them drift in the first place. `generateAttachment`
+ * is deliberately NOT a caller — it keys off `format` (`pdf | html | xlsx`), a different domain
+ * with no short-form member, and folding the two would invent a `format: "short"` that means
+ * nothing.
+ *
+ * It takes `string`, not `DocumentForm`, because that is what actually arrives: `jsonSchema()`
+ * carries no validator and `startContentBatch`'s own arg is `v.string()`, so an unknown form is
+ * reachable from the model. An unknown one drafts long-form, which is the shipped default and the
+ * recoverable direction — a narrower signature would only move the lie to a cast at the call site.
+ */
+export const drafterSkillFor = (
+  form: string,
+):
+  | typeof CONTENT_DRAFTER_SKILL
+  | typeof SPREADSHEET_DRAFTER_SKILL
+  | typeof DOCUMENT_DRAFTER_SKILL =>
+  form === "short"
+    ? CONTENT_DRAFTER_SKILL
+    : form === "sheet"
+      ? SPREADSHEET_DRAFTER_SKILL
+      : DOCUMENT_DRAFTER_SKILL;
+
 /** Registry name of the attachment extractor OCR/extraction skill (INTK-02). */
 export const ATTACHMENT_EXTRACTOR_SKILL = "attachment-extractor" as const;
 

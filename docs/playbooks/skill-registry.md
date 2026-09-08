@@ -1,5 +1,53 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-08 (43-05 — the `cockpit-agent` body gained a
+> `## Several versions of one piece` section, a FIFTH bullet in the document decision list (whose
+> opening line hardcodes its own count, so “Four” became “Five”), and a hardening clause on the
+> “six or seven slides” caveat — six SECTIONS, not six documents and not six versions — because
+> that clause is the highest mis-route risk in the eval corpus.
+>
+> **A GATED CANDIDATE WITHHOLDS INSTRUCTIONS, NOT REACHABILITY. Correcting the record:**
+> `42-03-SUMMARY.md` and `.planning/STATE.md` both state that a tool behind this gate is
+> “INVISIBLE to the model until the eval gate runs”. That is FALSE. The dispatch bundle is spread
+> unconditionally under `grants.dispatch` and the executive receives the UNFILTERED tool record,
+> so a newly-registered tool is name-, description- and schema-visible on the next executive turn
+> no matter what the active body says — `toolRegistrySnapshot.test.ts` builds that key set with no
+> skill body in the call at all. `dispatchTeam` is present-but-untaught in PRODUCTION right now.
+> What the gate actually withholds is the guidance. So the non-negotiables live in the tool's own
+> DESCRIPTION (no drafts this turn, one card, relay the count) and the body carries the routing
+> judgement. Do not write “invisible” again.
+>
+> CANDIDATES STACK, AND THE REVIEW SURFACE HIDES IT. `seedSkills` compares against the NEWEST row
+> and mints `maxVersion + 1` per seed run, and `pnpm dev` seeds on every boot — so rows
+> accumulate, every one carrying the FULL current `.md`. `candidatesForReview` then reduces to the
+> single newest, so the owner sees ONE card and one Activate button with no indication of what
+> rides on it. Today that one click flips the Phase 40 document-canvas edits, the ADR-040
+> `dispatchTeam` section AND `createVariants` together. Separating them needs a version number
+> the CLI cannot read (`candidatesForReview` is an `ownerQuery`), that intermediate row to exist
+> on that deployment, and its own full green run. Put it to the owner as a DECISION: one click,
+> three capabilities.
+>
+> THE GATE IS CURRENTLY JAMMED, and that is why “the owner owes an activation” has been carried
+> since Phase 40 without being payable. `shouldRecordEvidence` requires `allGreen === true` AND
+> `filters.length === 0`, and both full pinned runs went 45/46 on
+> `33-research-insufficient-evidence` for a cause proven unrelated to the body. A `--only 33`
+> re-run STRUCTURALLY cannot certify. Fixture 33 has to be fixed before any activation is
+> available at all.
+>
+> THE PAIR IS PINNED BY THREE ROWS, not two: `skills.test.ts` “no hardcoded agent prompts”,
+> `skillBodies.test.ts` md↔ts no-drift, AND `skills.test.ts`'s gated-candidate SEED test, which
+> reddens on a stale mirror even if both drift tables somehow passed. There is NO generator — the
+> `.ts` is derived by hand. Regenerate it by reading the HEADER OUT OF THE FILE ITSELF and
+> re-emitting `JSON.stringify(md)`; never retype the 7-line header, and never hand-edit the 48KB
+> literal. Verified by mutation that all three go red on a stale mirror.
+>
+> NAMED DEBT, carried deliberately: there is NO eval fixture and NO assertion key for
+> `dispatchTeam` or `createVariants`, against `run-eval-golden.mjs`'s own rule that a tool with no
+> assertion key is a tool the set certifies nothing about. It is not fixed here because a 47th
+> case changes `casesHash`/`caseCount` and RETIRES every `AGENT_EVAL_SUITE` evidence row —
+> including the evidence the jammed gate is trying to earn — and an assertion key with no fixture
+> using it is unfalsifiable. The two must land together, sequenced AFTER fixture 33.)
+>
 > Last verified: 2026-09-07 (42.2 — the `cockpit-agent` body's `dispatchTeam` section was rewritten
 > for ADR-040's assignment shape. **This is REQUIRED, not documentation**: ADR-007 says a granted
 > capability must be TAUGHT, and a body that describes `routes` while the tool takes `assignments`

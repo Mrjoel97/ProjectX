@@ -1,3 +1,67 @@
+> Last verified: 2026-09-08 (43-05 — **THE BATCH DOOR, `createVariants`.** `dispatchTeamTool`'s
+> shape with exactly two substitutions: the stager is told the TERMINAL at birth
+> (`channel: "vault"`, ADR-042 D1) and the minter is `startContentBatch`, not `startTeamRun`. It
+> rides the EXISTING `grants.dispatch` spread with NO new grant — a batch spends paid drafts,
+> which IS the dispatch capability, and `grantsFor` derives `dispatch` from the ABSENCE of an
+> allow-list, so a second flag derived identically is the one-value knob §8 forbids.
+>
+> **THE GATE WITHHOLDS INSTRUCTIONS, NEVER REACHABILITY — and the durable record said otherwise.**
+> `cockpit-agent` is gated, so the body section teaching a new tool ships as a CANDIDATE. It is
+> tempting to read that as the tool being withheld too. It is not: the dispatch bundle is spread
+> UNCONDITIONALLY under `grants.dispatch`, and the executive (`toolNames === undefined`) receives
+> the UNFILTERED record, so the model sees the tool's NAME, DESCRIPTION and SCHEMA on the very
+> next executive turn whatever the active body says. `toolRegistrySnapshot.test.ts`'s “executive
+> via runAgentLoop” array is the proof — it builds the tool set with no skill body anywhere in the
+> call. `dispatchTeam` is in that state in PRODUCTION today. 42-03-SUMMARY and STATE.md both said
+> “INVISIBLE to the model until the eval gate runs”; that was FALSE, and it was load-bearing,
+> because it is the premise a later phase builds on. **Consequence for every future tool: anything
+> the model must not get wrong belongs in the tool DESCRIPTION, which it reads on every turn with
+> no activation required — the body carries the routing judgement, the description carries the
+> non-negotiables.**
+>
+> THE TRUNCATION SENTENCE MUST NEVER NAME THE BUDGET, and this is the third time this repo has
+> written down the same defect class. `startContentBatch` returns `requested: a.variants.length`
+> — the RAW model-supplied list length — while `legalVariants` drops blanks and dedupes. So
+> `workerCount < requested` is equally true when the MODEL listed the same angle twice. Copying
+> `dispatchTeam`'s “there was not enough of today's budget” clause would answer a PIPELINE
+> question with a MONEY claim, on a turn where nothing was short of money. Pinned by a source
+> scan in `cockpitTools.test.ts`, which strips comments first — its first draft went red on the
+> very comment explaining the rule, and a guard that fires on its own rationale gets deleted
+> rather than fixed.
+>
+> THE `channel: "vault"` FORK CANCELS THE THREAD'S COMPOSING SHELL, so the tool closure's
+> `planId` points at a canceled row for the rest of the turn: `readPlan()` checks existence and
+> tenant only and lets it through, while `newestRoot` returns the batch root instead. Nothing of
+> the user's is destroyed — `hasDraftContent` refuses with `draft_in_progress` BEFORE the fork, so
+> the cancelled row is always an EMPTY shell. `dispatchTeam`/`dispatchResearch` do not have this
+> at all: they RECYCLE the same `_id`. **ponytail ceiling:** the close here is the reply string,
+> which ends the turn; the structural close is a `status` precondition inside
+> `cockpit.proposeEmailPlan` — ONE guard where every caller routes, never a second copy in the
+> tool.
+>
+> `RESEARCH_REFUSAL_REPLY.draft_in_progress` says “starting research would discard it” on a
+> VARIANTS refusal — the wrong noun, deliberately not forked. `dispatchTeam` already relays the
+> same map; the refusal is right in shape and severity and only the word is off, and splitting a
+> driver-plane map for one word is the abstraction §8 forbids. Named here instead of fixed.
+>
+> REGISTRATION IS SEVEN SITES AND FOUR OF THEM FAIL SILENT: the `agentSteps.tool` literal (fifth
+> time this union has been the trap — a missing literal throws inside an AI-SDK callback the SDK
+> SWALLOWS, so prod loses the trace row while the suite stays green), the `cards.tsx` VERB, the
+> `.md`→`.ts` mirror, and the body section itself. The swallowed-step guard only SEES the tool
+> because its key sits at FOUR-space indent inside `buildCockpitTools`; a top-level
+> `buildSaveAsDocumentTool`-shaped builder (key at two spaces) is invisible to that regex and
+> would disarm the check silently. Verified by mutation, not by reading.
+>
+> A FORM MAPS TO A DRAFTER IN ONE PLACE, `drafterSkillFor` in `@pikar/contracts/skill`. 43-04 had
+> shipped `runVariant` with its OWN two-way copy (`sheet` or long-form) while `createDocument`
+> used the three-way, so every `short` variant — the PRIMARY case, since versions of a post or an
+> ad headline are short-form — would have been drafted by the long-form body, and the
+> `skillVersions` lookup repeated the same ternary so an eval pin on `content-drafter` could not
+> reach a variant. Nothing was red: `document-drafter` is a legal member of the closed union it
+> feeds, so the wrong body returns plausible prose. `runVariant` had NO behaviour coverage, which
+> is why it shipped; a source tripwire now refuses a second copy, narrowed to a form comparison
+> REACHING a drafter constant after the first version went red on two innocent neighbours.)
+>
 > Last verified: 2026-09-08 (43-06 — **THE VAULT ARM.** `CHANNEL_SPECS.vault` is
 > `schedulable: true` now, flipped in the SAME COMMIT as the arm that honours it (ADR-042 D3): a
 > `schedulable: true` with no arm behind it is precisely the lie ADR-039 D3 forbids.

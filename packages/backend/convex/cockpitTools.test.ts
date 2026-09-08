@@ -3545,3 +3545,66 @@ describe("createDocument({ form: 'sheet' }) — the vault plane's workbook (Phas
     expect((await readPlan(t, planId))?.attachments ?? []).toEqual([]);
   });
 });
+
+// ══ 43-05: THE BATCH DOOR ═════════════════════════════════════════════════════════════════════
+//
+// ponytail: a SOURCE scan, and the ceiling is named rather than hidden. `__invokeCockpitTool`
+// passes no `threadId`/`rootRequestId` and builds with `NO_GRANTS`, so NO dispatch tool's `execute`
+// is reachable offline today — `dispatchTeam` has no behaviour test for exactly the same reason.
+// Upgrade path: optional lineage args on that shim, passing `grantsFor({})` ONLY when both are
+// present; unconditional would change the bare key set `toolRegistrySnapshot.test.ts` pins.
+/** Slice the createVariants tool body: `createVariants: tool(` → the NEXT tool key in the record. */
+function createVariantsBlock(): string {
+  const full = readLlmSource();
+  const start = full.indexOf("createVariants: tool(");
+  expect(start, "createVariants tool not found — did it get renamed?").toBeGreaterThanOrEqual(0);
+  const rest = full.slice(start);
+  const end = rest.slice(1).search(/\n {4}[A-Za-z_]\w*: tool\(/);
+  expect(end, "no tool follows createVariants — the slice would run to EOF").toBeGreaterThan(0);
+  const block = rest.slice(0, end + 1);
+  // Non-vacuity floor: an anchor that moved must fail LOUDLY, not pass trivially.
+  expect(block.length, "the createVariants slice is empty").toBeGreaterThan(400);
+  return block;
+}
+
+test("createVariants stages the batch root as a VAULT terminal, and never blames the budget", () => {
+  const block = createVariantsBlock();
+
+  // ADR-042 D1. Absent, `parseChannel(undefined)` reads the root as "email" — a terminal a memo row
+  // structurally cannot reach — and NOTHING else is red, because the CHILDREN still carry
+  // `channel: "vault"` from `startContentBatch`. Only the root that drives
+  // `startScheduledDelivery`'s switch would be wrong, which is the silent half of ADR-042.
+  // MUTATION: delete `channel: "vault",` from the stageResearchPlan call → red.
+  expect(block, "the batch root is staged with no channel — it would read as email").toMatch(
+    /stageResearchPlan[\s\S]*?channel:\s*"vault"/,
+  );
+
+  // `requested` is the RAW model-supplied list length (`startContentBatch` returns
+  // `a.variants.length`), so `workerCount < requested` is true for a DUPLICATE or BLANK angle just
+  // as much as for an exhausted rail. dispatchTeam's shipped truncation sentence names the budget;
+  // copied here it would be a money claim the return value cannot support — the same defect class
+  // as the tracker that answered a pipeline question with a money predicate.
+  // MUTATION: paste dispatchTeam's "there was not enough of today's budget" into the ternary → red.
+  //
+  // COMMENTS ARE STRIPPED FIRST, and the first draft of this test proves why: it scanned the whole
+  // block and went red on the very comment explaining WHY the reply must not say "budget". A guard
+  // that fires on its own rationale gets deleted, not fixed. What is asserted is what the MODEL is
+  // told — the reply strings — so that is what is scanned.
+  const said = block
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("//"))
+    .join("\n");
+  expect(
+    said,
+    "the truncation reply blames the budget for a count the budget may not explain",
+  ).not.toMatch(/budget/i);
+
+  // THE NON-VACUITY CONTROL for the assertion above. A `.not.toMatch` is green on an empty string,
+  // on a renamed anchor, and on a tool that lost its truncation branch entirely — so prove the
+  // branch this is guarding still EXISTS and still says the number.
+  expect(said, "the truncation branch is gone — the .not.toMatch above now proves nothing").toMatch(
+    /workerCount\s*<\s*batch\.requested/,
+  );
+  // AND the comment stripper did not eat the code it was meant to spare.
+  expect(said.length, "stripping comments emptied the block").toBeGreaterThan(400);
+});
