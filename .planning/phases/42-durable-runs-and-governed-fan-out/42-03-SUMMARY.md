@@ -72,11 +72,24 @@ else, per ADR-008:
 
 ## Open — and one of these gates the feature
 
-- **The tool is invisible until the owner activates the body.** `cockpit-agent` is in
-  `GATED_SKILLS`, so the section teaching `dispatchTeam` is a **candidate**; `activateSkillVersion`
-  throws without recorded passing eval evidence, and the gate is per deployment. Until that runs,
-  `dispatchTeam` is registered, tested and unreachable — a tool the body does not teach is a tool
-  that does not exist. This rides with the `cockpit-agent` v3 candidate already pending from Phase 40.
+- **The tool is UNTAUGHT until the owner activates the body — not unreachable.**
+  ~~*Originally written as: "registered, tested and unreachable — a tool the body does not teach is
+  a tool that does not exist."*~~ **CORRECTED 2026-09-08 (43-05): that was FALSE, and it was
+  load-bearing, because 43-05 was being designed on top of it.** `grantsFor` sets
+  `dispatch: executive` where `executive = toolNames === undefined`, and an executive turn receives
+  the UNFILTERED tool record — so the dispatch bundle is in the model's tool set with its NAME,
+  DESCRIPTION and JSON SCHEMA on every executive turn, whatever the active skill body says. The
+  proof is a shipped test: `toolRegistrySnapshot.test.ts`'s "executive via runAgentLoop" array
+  builds that key set with no skill body anywhere in the call. `dispatchTeam` has therefore been
+  PRESENT-BUT-UNTAUGHT in production since this phase shipped — callable with none of the body's
+  rules attached (don't state findings on a dispatch turn, relay the reduced worker count, one paid
+  run per assignment). What the eval gate withholds is the GUIDANCE, never the REACHABILITY.
+  The general rule this yields, now recorded in `docs/playbooks/cockpit.md` and
+  `docs/playbooks/skill-registry.md`: anything the model must not get wrong belongs in the tool's
+  own DESCRIPTION, which it reads on every turn with no activation required; the body carries the
+  routing judgement. What IS true as written: `activateSkillVersion` throws without recorded passing
+  eval evidence, the gate is per deployment, and this rides with the `cockpit-agent` v3 candidate
+  already pending from Phase 40.
 - **`RELIABILITY_SWEEP_ARMED=1` on production.** Un-armed, a fan-out with one dead worker has no
   watchdog at all. The code path is built and tested; the env var is owner work.
 - **No fan-out spend report.** Cost is answerable only by summing `spendEvents` by `planId` across
