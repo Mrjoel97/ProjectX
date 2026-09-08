@@ -2,6 +2,7 @@ import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantDa
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
@@ -9,6 +10,12 @@ import schema from "./schema";
 const modules = import.meta.glob("./**/*.*s");
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
+);
+// 2026-09-08: erasure now deletes the tenant's CHAT THREADS, which live in the `agent`
+// component, so every harness that drives `deleteTenantData` must register it. The page-walk
+// harnesses do not need it — the cascade is a one-shot in the ACTION, deliberately.
+const agentModules = import.meta.glob(
+  "../node_modules/@convex-dev/agent/src/component/**/!(*.test).ts",
 );
 const deleteTenantDataPage = makeFunctionReference<
   "mutation",
@@ -57,6 +64,7 @@ async function deleteAll(
 async function seedTwoTenants() {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  t.registerComponent("agent", agentSchema, agentModules);
   const seeded = await t.run(async (ctx) => {
     const tenantA = await ctx.db.insert("users", {
       email: "tenant-a-delete@example.test",
@@ -303,6 +311,7 @@ describe("tenant deletion is the tenant's own right, not an owner privilege", ()
   test("a NON-owner tenant erases its own data and still cannot reach another tenant's", async () => {
     const t = convexTest(schema, modules);
     t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    t.registerComponent("agent", agentSchema, agentModules);
     const { tenantA, tenantB } = await t.run(async (ctx) => {
       const tenantA = await ctx.db.insert("users", { email: "non-owner@example.test" });
       const tenantB = await ctx.db.insert("users", { email: "bystander@example.test" });
@@ -348,6 +357,7 @@ describe("erasure removes the sign-in binding, not just the data", () => {
   test("deletes the erased user's auth account/session/token rows and leaves other users' alone", async () => {
     const t = convexTest(schema, modules);
     t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    t.registerComponent("agent", agentSchema, agentModules);
 
     const seeded = await t.run(async (ctx) => {
       const erased = await ctx.db.insert("users", { email: "erased@example.test" });
@@ -799,5 +809,90 @@ describe("the connector arm revokes what it can and refuses to overstate the res
     const serialized = JSON.stringify(deleted);
     expect(serialized).not.toContain("CIPHERTEXT_SENTINEL_NEVER_IN_A_LOG");
     expect(serialized).not.toContain("IV_SENTINEL");
+  });
+});
+
+// ══ ERASURE DELETES THE BYTES, NOT JUST THE ROWS THAT POINT AT THEM (2026-09-08) ═════════════
+//
+// Until this commit the walk was `.take()` + `ctx.db.delete(row._id)` and nothing else — a
+// case-insensitive grep of `tenantDelete.ts` for "storage" returned ZERO. So erasure deleted a
+// user's POINTERS and left their FILES, and because the pointer went first the bytes were then
+// unreachable AND unremovable by any product path. `DataControls.tsx` promised the opposite:
+// "removes your account data and content — your profile, vault documents, contacts, plans,
+// approvals, generated media and stored connection grants."
+//
+// THE ASSERTION IS ON THE BLOB, NEVER ON THE ROW. Every row-count assertion in this file stayed
+// green through the entire defect — that is exactly why it went unnoticed for months — so a test
+// that counted rows again would prove nothing.
+//
+// SCOPE: this proves the WALK deletes whatever `storageIdsIn` returns, using `plans` (which alone
+// carries a top-level field AND the nested `attachments[]` path) plus a second table to show it is
+// not plans-specific. That the MAP covers every `_storage` field in `schema.ts` is a different
+// question, and it is answered where it can be answered exhaustively and for free — the drift
+// guard in `packages/core/src/tenantData.test.ts`, which parses the schema.
+describe("erasure deletes stored files (2026-09-08)", () => {
+  test("the walk deletes a row's blobs — nested ones too — and spares another tenant's", async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    t.registerComponent("agent", agentSchema, agentModules);
+
+    const seeded = await t.run(async (ctx) => {
+      const tenantA = await ctx.db.insert("users", { email: "blob-a@example.test", owner: true });
+      const tenantB = await ctx.db.insert("users", { email: "blob-b@example.test", owner: true });
+
+      const reel = await ctx.storage.store(new Blob(["reel"]));
+      const sidecar = await ctx.storage.store(new Blob(["sidecar"]));
+      const planPdf = await ctx.storage.store(new Blob(["plan-attachment"]));
+      const asset = await ctx.storage.store(new Blob(["media-asset"]));
+      const survivor = await ctx.storage.store(new Blob(["tenant-b-must-survive"]));
+
+      await ctx.db.insert("plans", {
+        tenantId: tenantA,
+        threadId: "thread_blob",
+        status: "done",
+        renderStorageId: reel,
+        sidecarStorageId: sidecar,
+        // NESTED, and it is the largest class of generated file in the product. A top-level-only
+        // extractor satisfies every other assertion here and misses exactly this one.
+        attachments: [
+          { storageId: planPdf, filename: "brief.pdf", mimeType: "application/pdf", size: 4 },
+        ],
+        createdAt: Date.now(),
+      });
+      // A SECOND TABLE, so a fix that special-cased `plans` cannot pass.
+      await ctx.db.insert("attachments", {
+        tenantId: tenantA,
+        storageId: asset,
+        filename: "second-table.pdf",
+        mimeType: "application/pdf",
+        size: 4,
+      });
+      // TENANT B's blob, on a row the walk never visits. Erasure must be a scalpel.
+      await ctx.db.insert("plans", {
+        tenantId: tenantB,
+        threadId: "thread_keep",
+        status: "done",
+        renderStorageId: survivor,
+        createdAt: Date.now(),
+      });
+      return { tenantA, mine: [reel, sidecar, planPdf, asset], survivor };
+    });
+
+    const urls = (ids: Id<"_storage">[]) =>
+      t.run(async (ctx) => Promise.all(ids.map((id) => ctx.storage.getUrl(id))));
+
+    // NON-VACUITY FLOOR: all four blobs really exist before the walk. Without this the test passes
+    // just as happily against a `ctx.storage.store` that silently did nothing.
+    expect((await urls(seeded.mine)).filter((u) => u !== null)).toHaveLength(4);
+
+    await deleteAll(t, seeded.tenantA, seeded.tenantA);
+
+    // MUTATION: drop the `ctx.storage.delete` loop from `deleteTenantDataPage` → all four survive.
+    expect(
+      (await urls(seeded.mine)).filter((u) => u !== null),
+      "these blobs survived erasure — the user's files are still on disk",
+    ).toEqual([]);
+    // …and the neighbour's file is untouched.
+    expect((await urls([seeded.survivor])).filter((u) => u !== null)).toHaveLength(1);
   });
 });

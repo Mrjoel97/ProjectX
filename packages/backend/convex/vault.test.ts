@@ -589,6 +589,42 @@ describe("extraction lifecycle internals (Phase 3.8 Wave 0 seam)", () => {
 });
 
 describe("deleteVaultDoc (cascade + orphan GC + tenant guard)", () => {
+  // 2026-09-08: THE CASCADE REMOVED EVERYTHING EXCEPT THE FILE. It deleted the RAG chunks, the
+  // graph edges and nodes and the sheet grid, then `ctx.db.delete(vaultDocId)` — and never touched
+  // `doc.storageId`. So deleting ONE document orphaned its bytes exactly the way deleting the
+  // whole account did, on the path a user actually walks. Same rule, two callers, one fix (§8).
+  //
+  // ASSERTS THE BLOB, not the row: the row assertions in this describe were all green throughout
+  // the defect, which is why nobody saw it.
+  // MUTATION: drop the `ctx.storage.delete(doc.storageId)` line from `deleteVaultDoc` → red.
+  test("deletes the stored bytes, not only the row that points at them", async () => {
+    const t = withIngest();
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["the user's file"])));
+    const doc = await seedDoc(t, { storageId, ragEntryId: "smoke::content-hash" });
+
+    // NON-VACUITY: the blob is really there first, so a green result cannot mean "never stored".
+    expect(await t.run((ctx) => ctx.storage.getUrl(storageId))).not.toBeNull();
+
+    expect(await asTenant(t).mutation(api.vault.deleteVaultDoc, { vaultDocId: doc })).toEqual({
+      ok: true,
+    });
+    expect(
+      await t.run((ctx) => ctx.storage.getUrl(storageId)),
+      "the document row is gone but its bytes are still on disk",
+    ).toBeNull();
+  });
+
+  // A doc with NO stored bytes must still delete cleanly — `storageId` is optional, and handing
+  // `undefined` to `ctx.storage.delete` would throw and make the row undeletable.
+  test("a row with no storageId still deletes", async () => {
+    const t = withIngest();
+    const doc = await seedDoc(t, { ragEntryId: "smoke::content-hash" });
+    expect(await asTenant(t).mutation(api.vault.deleteVaultDoc, { vaultDocId: doc })).toEqual({
+      ok: true,
+    });
+    expect(await t.run((ctx) => ctx.db.get(doc))).toBeNull();
+  });
+
   test("deletes an offline SMOKE-ingested row without calling RAG with a synthetic entry id", async () => {
     const t = withIngest();
     const doc = await seedDoc(t, { status: "ready", ragEntryId: "smoke::content-hash" });

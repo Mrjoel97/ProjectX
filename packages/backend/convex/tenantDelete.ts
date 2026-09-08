@@ -1,17 +1,20 @@
+import type { EntryId } from "@convex-dev/rag";
 import {
   type DeletableTenantTable,
   deletableTables,
+  storageIdsIn,
   type TenantDeletionCursor,
   tenantTableScope,
 } from "@pikar/core/tenantData";
 import type { RevocationUpstream } from "@pikar/revenue";
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, components } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { rag } from "./vaultRag";
 
 export const TENANT_DELETE_BATCH_SIZE = 2;
 
@@ -312,7 +315,58 @@ export const deleteTenantDataPage = internalMutation({
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .take(TENANT_DELETE_BATCH_SIZE + 1);
     const rows = page.slice(0, TENANT_DELETE_BATCH_SIZE);
-    for (const row of rows) await ctx.db.delete(row._id);
+    // THE BYTES GO FIRST, IN THE SAME TRANSACTION AS THE ROW. Before 2026-09-08 this loop was
+    // `ctx.db.delete(row._id)` and nothing else — a case-insensitive grep of this file for
+    // "storage" returned ZERO — so erasure deleted the POINTERS to a user's files and left the
+    // FILES. With the pointer gone the bytes were unreachable AND unremovable by any product
+    // path, which is worse than a leak, while `DataControls.tsx` promised erasure removes
+    // "vault documents … generated media".
+    //
+    // SAME TRANSACTION IS SAFE, and it was established by experiment rather than assumed: a
+    // mutation that deletes a blob and then THROWS leaves the blob intact (convex-test probe,
+    // 2026-09-08 — `ctx.storage.delete` rolls back with the transaction). So an aborted page
+    // rolls back rows and bytes together and the retry redoes both. Had it NOT rolled back, this
+    // ordering would wedge the walk for ever: `ctx.storage.delete` THROWS on an already-gone id
+    // (`renderReel.ts:644`), so every retry would re-throw on the first blob it had already
+    // removed and the tenant could never finish erasing.
+    //
+    // THE EXISTENCE CHECK IS THAT THROW'S ONLY REAL DEFENCE. Two rows can point at ONE blob —
+    // across pages and across tables (a `plans` attachment and an `attachments` row are the
+    // shipped case) — and deduping within a page cannot see that. A try/catch would also work and
+    // was rejected: it cannot tell "already gone" from a real storage failure, and swallowing the
+    // latter deletes the row anyway and strands the bytes forever.
+    //
+    // `ctx.db.system.get("_storage", id)`, NEVER `ctx.storage.getUrl`. The first draft used getUrl
+    // and a shipped source scan (`llmRedaction.test.ts`) went red: a storage URL is a BEARER
+    // CAPABILITY, and that guard keeps every one of them inside a tenant-guarded read. Minting one
+    // purely to throw it away is exactly what it forbids, and it was right to fire. The system
+    // table answers the same question — null when the blob is gone — and mints nothing.
+    for (const row of rows) {
+      for (const storageId of storageIdsIn(table, row as unknown as Record<string, unknown>)) {
+        const id = storageId as Id<"_storage">;
+        if ((await ctx.db.system.get("_storage", id)) !== null) await ctx.storage.delete(id);
+      }
+      // THE RAW DOCUMENT TEXT, which is not in this database at all. `vault.ts` says it in code:
+      // the RAG chunks are "the only raw-content stores" — so deleting a `vaultDocuments` row
+      // removed the INDEX ENTRY's owner and left the searchable text of the user's documents
+      // standing inside the component. An Art. 17 erasure that leaves the prose behind is the
+      // clearest possible failure of the promise the UI makes.
+      //
+      // The narrow per-table branch is deliberate. It mirrors `vault.deleteVaultDoc`'s shipped
+      // cascade rather than inventing a second one, and the SMOKE sentinel case it guards against
+      // is the same: an offline embed never creates a component entry, so passing that sentinel
+      // to `deleteAsync` would violate the component's contract.
+      if (table === "vaultDocuments") {
+        const ragEntryId = (row as { ragEntryId?: string }).ragEntryId;
+        if (
+          typeof ragEntryId === "string" &&
+          ragEntryId.length > 0 &&
+          !ragEntryId.startsWith("smoke")
+        )
+          await rag.deleteAsync(ctx, { entryId: ragEntryId as EntryId });
+      }
+      await ctx.db.delete(row._id);
+    }
 
     return {
       table,
@@ -556,6 +610,28 @@ export const deleteTenantData = tenantAction({
     ];
 
     const deletedByTable: Record<string, number> = {};
+    // THE CHAT HISTORY, and it is deleted HERE rather than inside the paged mutation.
+    //
+    // Agent threads live in the `agent` COMPONENT, so no `by_tenant` row walk can reach them:
+    // erasure removed every plan, memo and artifact while the user's actual conversations
+    // survived. This is the same call `cockpit.clearChatHistory` makes — the component owns its
+    // own message/stream cascade, so reusing it beats a second copy (§8).
+    //
+    // WHY THE ACTION AND NOT THE `users` TERMINAL PAGE, which is where it first went: it is a
+    // ONE-SHOT, not a per-page step, and putting a component call inside `deleteTenantDataPage`
+    // forced every harness that drives the walk to register the whole `agent` module tree. Six
+    // test harnesses went red at once, and 19-02/19-05 record that each extra `registerComponent`
+    // loads another module tree into another in-memory backend. The orchestrator is the honest
+    // home for a one-shot; the page mutation stays a row walk.
+    //
+    // BEFORE the walk, deliberately. The component deletes a bounded first page inline and
+    // SCHEDULES the rest, so it must be started while the tenant's rows — and the authorization
+    // this action already performed — still stand. It is idempotent: a second erasure of an
+    // already-empty user is a no-op.
+    await ctx.runMutation(components.agent.users.deleteAllForUserIdAsync, {
+      userId: ctx.tenantId,
+    });
+
     let cursor: TenantDeletionCursor | undefined;
     do {
       const currentTable = deletableTables()[cursor?.tableIndex ?? 0];

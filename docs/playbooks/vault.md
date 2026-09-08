@@ -1,3 +1,20 @@
+> Last verified: 2026-09-08 (**`deleteVaultDoc` REMOVED EVERYTHING EXCEPT THE FILE.** It deleted
+> the RAG chunks, the graph edges and nodes, and the sheet grid, then `ctx.db.delete(vaultDocId)` —
+> and never touched `doc.storageId`. So deleting ONE document orphaned its bytes exactly the way
+> deleting the whole account did, on the path a user actually walks every day.
+>
+> It is the SAME rule as tenant erasure with two callers, not two bugs, and it was fixed in the
+> same commit for that reason (§8 root-cause). See `audit-dead-letter.md`'s 2026-09-08 entry for
+> the transaction-rollback evidence and why the delete is existence-checked rather than
+> try/caught.
+>
+> `storageId` is OPTIONAL, so the guard is `doc.storageId && …` — handing `undefined` to
+> `ctx.storage.delete` throws, which would make a byte-less row undeletable. There is a test for
+> exactly that, because it is the kind of branch a happy-path fixture never reaches.
+>
+> The new tests assert `ctx.storage.getUrl` AFTER the delete. Every row assertion in that describe
+> was green throughout the defect — which is precisely why it survived.)
+>
 > Last verified: 2026-09-06 (40-01, DOC-01 — **A WORKBOOK IS NOW READ TWICE: AS TEXT, AND AS ROWS.**
 > The text projection is unchanged and is still the artifact of record (search, grounding, digest all read
 > `vaultDocuments.text`, and its exact shape — tab cells, newline rows, `Sheet N` BY FILE NUMBER — stays

@@ -412,6 +412,22 @@ export const deleteVaultDoc = tenantMutation({
       .withIndex("by_doc", (q) => q.eq("tenantId", ctx.tenantId).eq("docId", vaultDocId))
       .unique();
     if (grid) await ctx.db.delete(grid._id);
+    // THE STORED BYTES, and this is the SAME defect tenant erasure had. This cascade already
+    // removed the RAG chunks, the graph edges and nodes, and the sheet grid — everything except
+    // the file itself. So deleting ONE document from the vault orphaned its blob exactly the way
+    // deleting the whole account did, and the ordinary path is the one a user actually walks.
+    // Fixed HERE as well as in the erasure walk because they are two callers of one rule, not two
+    // bugs (CLAUDE.md §8 root-cause).
+    //
+    // Existence-checked, never try/caught: `ctx.storage.delete` THROWS on an already-gone id
+    // (`renderReel.ts:644`), a blob can be referenced by more than one row, and a catch cannot
+    // tell that apart from a real storage failure. The check reads the `_storage` SYSTEM TABLE
+    // rather than `ctx.storage.getUrl`, because a storage URL is a bearer capability and
+    // `llmRedaction.test.ts` scans for exactly that — minting one to discard it is still minting
+    // it. `storageId` is optional, so the `&&` is load-bearing: `undefined` would throw and make
+    // a byte-less row undeletable.
+    if (doc.storageId && (await ctx.db.system.get("_storage", doc.storageId)) !== null)
+      await ctx.storage.delete(doc.storageId);
     await ctx.db.delete(vaultDocId);
     return { ok: true };
   },

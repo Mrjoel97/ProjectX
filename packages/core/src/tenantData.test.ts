@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { deletableTables, TENANT_TABLE_CLASSIFICATION } from "./tenantData";
+import {
+  deletableTables,
+  STORAGE_ID_FIELDS,
+  storageIdsIn,
+  TENANT_TABLE_CLASSIFICATION,
+} from "./tenantData";
 
 const schemaSource = readFileSync(
   new URL("../../backend/convex/schema.ts", import.meta.url),
@@ -135,5 +140,147 @@ describe("tenant table classification registry", () => {
         .filter((table) => table !== "users"),
       "users",
     ]);
+  });
+});
+
+// ══ WHERE THE BYTES ARE (2026-09-08) ══════════════════════════════════════════════════════════
+//
+// `storageIdsIn` is the whole reason erasure can now delete a user's files. It is pure, so it is
+// provable here without a database — and it MUST be, because the paths it walks are the part a
+// behaviour test cannot see: a row whose attachments array is missing looks identical to one whose
+// attachments carried no bytes.
+describe("storageIdsIn — every byte reachable from one row", () => {
+  // MUTATION: drop the `attachments[].storageId` entry from STORAGE_ID_FIELDS → red. That entry is
+  // the single largest class of generated file in the product, and it is the one a top-level-fields
+  // -only map would silently miss.
+  test("walks INTO an inline array of objects, not just top-level fields", () => {
+    expect(
+      storageIdsIn("plans", {
+        renderStorageId: "kg_reel",
+        sidecarStorageId: "kg_sidecar",
+        attachments: [{ storageId: "kg_pdf_a" }, { storageId: "kg_pdf_b" }],
+      }),
+    ).toEqual(["kg_reel", "kg_sidecar", "kg_pdf_a", "kg_pdf_b"]);
+  });
+
+  // FAIL-SAFE, and it is the difference between a bad row and a user who cannot delete their
+  // account: every field but two is `v.optional`, so a half-written row is reachable in practice,
+  // and handing `undefined` to `ctx.storage.delete` THROWS inside the erasure walk.
+  // MUTATION: return the raw values without the `typeof === "string"` guard → red on every row.
+  test("drops absent, null, empty and non-string ids rather than returning them", () => {
+    expect(storageIdsIn("plans", {})).toEqual([]);
+    expect(storageIdsIn("plans", { renderStorageId: null, sidecarStorageId: undefined })).toEqual(
+      [],
+    );
+    expect(storageIdsIn("plans", { renderStorageId: "" })).toEqual([]);
+    expect(storageIdsIn("plans", { attachments: "not-an-array" })).toEqual([]);
+    expect(storageIdsIn("plans", { attachments: [null, 7, {}, { storageId: 3 }] })).toEqual([]);
+  });
+
+  // A table with no bytes must yield nothing rather than throw — the walk calls this for EVERY
+  // deletable table, and most of them carry no files at all.
+  test("an unlisted table yields nothing", () => {
+    expect(storageIdsIn("contacts", { storageId: "kg_nope" })).toEqual([]);
+    expect(storageIdsIn("audit", {})).toEqual([]);
+  });
+
+  // NON-VACUITY for the test above: `storageId` is a real field name on OTHER tables, so "unlisted
+  // yields nothing" must not be passing because the extractor is broken for everyone.
+  test("...but the same field name IS read on a table that declares it", () => {
+    expect(storageIdsIn("vaultDocuments", { storageId: "kg_doc" })).toEqual(["kg_doc"]);
+    expect(storageIdsIn("mediaJobs", { assetStorageId: "kg_asset" })).toEqual(["kg_asset"]);
+  });
+});
+
+// ══ THE DRIFT GUARD — a new table carrying bytes cannot land unnoticed ═══════════════════════
+//
+// The dangerous edit here is an OMITTED table, which no compiler, linter or behaviour test can
+// see: add a table with a `v.id("_storage")` field, forget to declare it, and erasure silently
+// stops covering it while every test stays green. That is EXACTLY how the original defect
+// survived — `tenantDelete.ts` never mentioned storage at all and nothing noticed for months.
+//
+// This parses `schema.ts` the same way the classification drift test above does, and it is the
+// reason `STORAGE_ID_FIELDS` is a declarative map rather than branches at the delete site.
+describe("STORAGE_ID_FIELDS covers every _storage field in schema.ts", () => {
+  /** Every `v.id("_storage")` occurrence, paired with the table whose `defineTable(` most
+   *  recently opened above it. Nested-in-an-array fields are found too — `plans.attachments[]`
+   *  is exactly such a case, and it is the largest class of generated file in the product. */
+  const storageSites = (): { table: string; field: string }[] => {
+    const out: { table: string; field: string }[] = [];
+    let table: string | null = null;
+    for (const line of schemaSource.split("\n")) {
+      const opened = /^ {2}([A-Za-z][A-Za-z0-9]*): defineTable\(/.exec(line);
+      if (opened?.[1] !== undefined) table = opened[1];
+      const field = /([A-Za-z][A-Za-z0-9]*):\s*v\.(?:optional\(\s*)?v?\.?id\("_storage"\)/.exec(
+        line,
+      );
+      if (field?.[1] !== undefined && table !== null) out.push({ table, field: field[1] });
+    }
+    return out;
+  };
+
+  // MUTATION: delete any entry from STORAGE_ID_FIELDS → red, naming the table.
+  test("every table with a _storage field is declared", () => {
+    const sites = storageSites();
+    // NON-VACUITY FLOOR. A regex that stopped matching would make this whole describe pass over
+    // nothing — the failure mode the classification guard above was also written to refuse.
+    expect(sites.length, "the _storage regex matched nothing — the scan is broken").toBeGreaterThan(
+      5,
+    );
+    // EVERY SITE, not every table. Checking table coverage alone was the first version of this
+    // guard and it was too weak: dropping the `attachments[].storageId` PATH from a `plans` entry
+    // that still exists left it green, which mutation testing caught. The leaf field is what has
+    // to be covered, because that is what the extractor actually reads.
+    const declaredLeaves = new Set(
+      Object.entries(STORAGE_ID_FIELDS).flatMap(([table, paths]) =>
+        paths.map((p) => `${table}.${p.includes("[].") ? p.slice(p.indexOf("[].") + 3) : p}`),
+      ),
+    );
+    const undeclared = [
+      ...new Set(
+        sites
+          .filter((x) => !declaredLeaves.has(`${x.table}.${x.field}`))
+          .map((x) => `${x.table}.${x.field}`),
+      ),
+    ];
+    expect(
+      undeclared,
+      "these fields hold file bytes that erasure would silently leave behind",
+    ).toEqual([]);
+  });
+
+  // The other direction: a declared path that no longer exists is a delete that quietly stops
+  // finding anything. Renaming `assetStorageId` and forgetting this map would go unnoticed.
+  test("every declared path still exists in schema.ts", () => {
+    const sites = storageSites();
+    const missing: string[] = [];
+    for (const [table, paths] of Object.entries(STORAGE_ID_FIELDS)) {
+      for (const path of paths) {
+        const leaf = path.includes("[].") ? path.slice(path.indexOf("[].") + 3) : path;
+        if (!sites.some((x) => x.table === table && x.field === leaf))
+          missing.push(`${table}.${path}`);
+      }
+    }
+    expect(missing, "declared storage paths that schema.ts no longer has").toEqual([]);
+  });
+
+  // AND THE PATHS ARE REACHED BY THE EXTRACTOR, not merely listed. A map that is correct and an
+  // extractor that cannot walk it are the same bug from the user's side.
+  test("storageIdsIn reaches every declared path", () => {
+    for (const [table, paths] of Object.entries(STORAGE_ID_FIELDS)) {
+      for (const path of paths) {
+        const marker = `kg_${table}_${path}`;
+        const row: Record<string, unknown> = path.includes("[].")
+          ? {
+              [path.slice(0, path.indexOf("[]."))]: [
+                { [path.slice(path.indexOf("[].") + 3)]: marker },
+              ],
+            }
+          : { [path]: marker };
+        expect(storageIdsIn(table, row), `${table}.${path} is declared but unreachable`).toContain(
+          marker,
+        );
+      }
+    }
   });
 });

@@ -273,6 +273,76 @@ export function deletableTables(): readonly DeletableTenantTable[] {
   return [...tables.filter((table) => table !== "users"), "users"];
 }
 
+/**
+ * WHERE THE BYTES ARE — every field in `schema.ts` that holds an `_id("_storage")`, by table.
+ *
+ * THE DEFECT THIS EXISTS TO CLOSE (found 2026-09-08). `deleteTenantDataPage`'s walk was
+ * `.take()` + `ctx.db.delete(row._id)` and nothing else: a case-insensitive grep of
+ * `tenantDelete.ts` for "storage" returned ZERO. So erasure deleted the ROWS that point at a
+ * user's files and left the FILES — and because the pointers went first, those bytes became
+ * unreachable AND unremovable by any product path. Worse than a leak. Meanwhile
+ * `DataControls.tsx` promised erasure removes "vault documents … generated media", and
+ * `tenantExport.ts` (also zero) could not hand them over either: the export promised a copy and
+ * omitted the files while the delete promised removal and kept them, failing in OPPOSITE
+ * directions.
+ *
+ * A DECLARATIVE MAP, not seven branches at the delete site, for the reason the classification
+ * registry above exists: the dangerous edit is an OMITTED table, which no compiler, linter or
+ * behaviour test can see. `storageFieldDrift` (isolation.test.ts) parses `schema.ts` and asserts
+ * every `v.id("_storage")` occurrence is covered here, so a new table carrying bytes cannot land
+ * without either an entry or a deliberate exemption.
+ *
+ * `attachments[].storageId` is a PATH, not a field: plan attachments are an inline array of
+ * objects (`schema.ts` `plans.attachments`), and the bytes hide one level down. A map that only
+ * understood top-level fields would silently miss them — which is the single largest class of
+ * generated file in the product.
+ */
+export const STORAGE_ID_FIELDS = {
+  plans: ["renderStorageId", "sidecarStorageId", "attachments[].storageId"],
+  attachments: ["storageId"],
+  intakeArtifacts: ["storageId"],
+  vaultDocuments: ["storageId"],
+  mediaJobs: ["assetStorageId"],
+} as const satisfies Record<string, readonly string[]>;
+
+export type StorageBearingTable = keyof typeof STORAGE_ID_FIELDS;
+
+/**
+ * Every storage id reachable from ONE row, as plain strings. Pure and Convex-free (§1), so the
+ * path walk is unit-testable without a database.
+ *
+ * Absent, null and non-string values are DROPPED rather than returned: every field but two is
+ * `v.optional`, a half-written row is reachable in practice, and handing `undefined` to
+ * `ctx.storage.delete` would throw inside the erasure walk — turning a missing attachment into a
+ * user who cannot delete their account.
+ */
+export function storageIdsIn(table: string, row: Record<string, unknown>): string[] {
+  const paths = (STORAGE_ID_FIELDS as Record<string, readonly string[] | undefined>)[table];
+  if (paths === undefined) return [];
+  const out: string[] = [];
+  const push = (v: unknown): void => {
+    if (typeof v === "string" && v.length > 0) out.push(v);
+  };
+  for (const path of paths) {
+    const split = path.indexOf("[].");
+    if (split === -1) {
+      push(row[path]);
+      continue;
+    }
+    // `indexOf`/`slice` rather than destructuring `split("[].")`: under
+    // `noUncheckedIndexedAccess` both halves type as `string | undefined`, and the cast that
+    // silences that is exactly the lie this function exists to avoid.
+    const head = path.slice(0, split);
+    const tail = path.slice(split + 3);
+    const arr = row[head];
+    if (!Array.isArray(arr)) continue;
+    for (const item of arr) {
+      if (item !== null && typeof item === "object") push((item as Record<string, unknown>)[tail]);
+    }
+  }
+  return out;
+}
+
 export const exportableTables = deletableTables;
 
 export const TENANT_EXPORT_SCHEMA_VERSION = 1;

@@ -1,5 +1,64 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-08 (**ERASURE DELETED THE ROWS AND LEFT THE FILES.** Owner decision Q1(a),
+> 2026-09-08.
+>
+> THE DEFECT: `deleteTenantDataPage`'s walk was `.take()` + `ctx.db.delete(row._id)` and nothing
+> else — a case-insensitive grep of `tenantDelete.ts` for “storage” returned ZERO. Seven schema
+> fields hold `v.id("_storage")` (plan attachments, reel `final.mp4`, reel sidecar, attachments,
+> intake artifacts, vault documents, scene assets). Erasure deleted the POINTERS and left the
+> BYTES — and with the pointer gone those bytes were unreachable AND unremovable by any product
+> path, which is worse than a leak. `tenantExport.ts` had the same zero, so the two halves failed
+> in OPPOSITE directions: the export promised a copy and omitted the files, the delete promised
+> removal and kept them, while `DataControls.tsx` said erasure removes “vault documents …
+> generated media”.
+>
+> WHY NO TEST CAUGHT IT: every assertion in `tenantDelete.test.ts` counted ROWS, and row counts
+> were correct throughout. The new test asserts the BLOB — `ctx.storage.getUrl` after the walk.
+> **Any future assertion about erasure must name the artifact, never the row count.**
+>
+> SAME TRANSACTION IS SAFE, AND IT WAS MEASURED RATHER THAN ASSUMED. A throwaway convex-test probe
+> established that a mutation which deletes a blob and then THROWS leaves the blob intact —
+> `ctx.storage.delete` rolls back with the transaction. That is what makes an in-walk delete
+> correct: an aborted page rolls back rows and bytes together and the retry redoes both. Had it
+> NOT rolled back, this ordering would WEDGE erasure for ever, because `ctx.storage.delete` THROWS
+> on an already-gone id and every retry would re-throw on the first blob it had already removed.
+> If Convex's real semantics ever differ from convex-test's here, this is the assumption to re-run.
+>
+> THE EXISTENCE CHECK, not a try/catch. Two rows can point at ONE blob, across pages and across
+> tables (a `plans` attachment and an `attachments` row are the shipped case), so deduping within
+> a page cannot see it. `getUrl` returns null for a blob that is gone, so the walk skips instead of
+> throwing. A catch was rejected because it cannot tell “already gone” from a real storage
+> failure, and swallowing the latter deletes the row anyway and strands the bytes for ever.
+>
+> `STORAGE_ID_FIELDS` IS A DECLARATIVE MAP IN `@pikar/core`, not branches at the delete site, for
+> the reason `TENANT_TABLE_CLASSIFICATION` is: the dangerous edit is an OMITTED table, which no
+> compiler or behaviour test can see. A drift guard parses `schema.ts` and refuses any
+> `v.id("_storage")` FIELD it does not cover — field-level, not table-level, because the first
+> version checked only tables and mutation testing showed a dropped PATH
+> (`plans.attachments[].storageId`) slipped straight through. That path is nested inside an array
+> and is the largest class of generated file in the product.
+>
+> TWO MORE THINGS ERASURE NOW REMOVES. RAW DOCUMENT TEXT: `vault.ts` states in code that the RAG
+> chunks are “the only raw-content stores”, so deleting a `vaultDocuments` row left the searchable
+> text of the user's documents inside the component — an Art. 17 erasure that keeps the prose.
+> CHAT THREADS: agent threads live in the `agent` COMPONENT, which no `by_tenant` row walk can
+> reach, so erasure removed every plan, memo and artifact while the conversations survived. Both
+> reuse the shipped cascades (`rag.deleteAsync`, `components.agent.users.deleteAllForUserIdAsync`)
+> rather than a second copy.
+>
+> THE THREAD CASCADE LIVES IN THE ACTION, NOT THE PAGE MUTATION, and the reason is worth keeping:
+> it is a ONE-SHOT, and putting a component call inside `deleteTenantDataPage` turned six existing
+> harnesses red at once because each then had to register the whole `agent` module tree (19-02 /
+> 19-05: every extra `registerComponent` loads another module tree into another in-memory
+> backend). The orchestrator is the home for a one-shot; the page mutation stays a row walk.
+>
+> STILL OPEN, deliberately: the EXPORT still contains no files, so “download your data first”
+> hands over rows only. And **GOVN-03 as currently defined in this playbook — export, delete,
+> re-export empty-but-well-formed, audit row count identical — is ROWS-ONLY and would have passed
+> green through this entire defect.** Do not run it as the erasure proof until it names blobs and
+> components.)
+>
 > Last verified: 2026-09-08 (43-06 — three `auditProjection` allowlist rows, added in the SAME
 > COMMIT as the writers that fill them. `plan.canceled` and `plan.discarded` gained
 > `childrenCanceled`; `plan.published` is new, carrying `planId` + `vaultDocId`.
