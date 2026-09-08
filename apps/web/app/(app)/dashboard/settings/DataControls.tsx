@@ -161,9 +161,11 @@ export function DataControls() {
             Download your data
           </h2>
           <p style={body}>
-            Receive your account and business data as structured JSON. Connection grants include
-            only whether they are connected, when they changed, and the shape of their scopes.
-            Access and refresh tokens are never included.
+            Receive your account and business data as structured JSON, with time-limited download
+            links for your stored files — documents, attachments and generated media. The links
+            expire, so fetch your files when you take the export. Connection grants include only
+            whether they are connected, when they changed, and the shape of their scopes. Access and
+            refresh tokens are never included.
           </p>
           <p style={body}>
             The immutable audit archive and refs-only compliance records are omitted. The archive

@@ -1,10 +1,12 @@
 # Phase 44 — Erasure actually erases
 
-**Opened and part-closed 2026-09-08.** Head `52ed980` (44-01, deployed) + this commit (44-02).
+**Opened and closed 2026-09-08.** `52ed980` (44-01, deployed), `9e0bc4e` (44-02, deployed) and
+this commit (44-03).
 
 Built from the Track C step 12 research turn, which found that step 12 was not next: two of its
 three parts should not be built at all, and the third — the retention ADR — sat behind a defect that
-outranked the whole build guide. Owner answered five questions on 2026-09-08; this phase is Q1-Q4.
+outranked the whole build guide. Owner answered five questions on 2026-09-08; this phase is Q1-Q4, and then approved ADR-044's
+D3/D4 and the export-files fix, which is 44-03.
 
 ## 44-01 — the fix (`52ed980`, deployed)
 
@@ -55,10 +57,42 @@ minting and erasing its own disposable tenant behind two fail-closed guards); th
 widened to name artifacts, because as written every leg was rows-only and it would have passed green
 through the whole 44-01 defect; `beta-admission.md` invariant 3 upgraded; and the corpus re-synced.
 
+## 44-03 — the bridge severed, the files handed over (this commit)
+
+The owner approved ADR-044 D3(a) and D4, and separately asked for the export gap 44-02 left open.
+Both are here; **ADR-045** records them.
+
+**The admission bridge is cut, by CLEARING and not deleting.** `betaInvites` is `admission_plane`,
+which `deletableTables()` structurally cannot reach, so a redeemed invite survived erasure carrying
+`email` AND `redeemedUserId` — and because `tenantId` IS `String(userId)`, that one surviving row
+resolved every audit identifier back to the erased person's address. Erasure now empties `email`,
+`redeemedUserId` and `redeemedSubject` and KEEPS `redeemedAt` + `code`. The distinction is the
+decision: deleting the row would hand a used invite code back to whoever still holds it, so
+admission integrity and erasure are satisfied together only by clearing. The lookup is `by_email`
+off the `users` row the terminal has already loaded — there is no index on `redeemedUserId`, and a
+table scan inside the one path that must always finish would be a scale defect.
+
+**And a sweep for the people already erased**, because any fix here is otherwise forward-only and
+the population it would miss is precisely the one Art. 17 protects.
+`sweepOrphanedInviteIdentities` is paged and idempotent, and it needs NO list of who was erased: a
+`redeemedUserId` that no longer resolves to a live `users` document IS the evidence. That is also
+what makes it structurally unable to touch a living user's row. Run it until `done: true`.
+
+**The export hands over the files.** `tenantExport` now returns `files` — `{table, rowId,
+storageId, url}` per page — built from the SAME `STORAGE_ID_FIELDS` map the 44-01 erasure walk
+reads, so a table erasure clears is a table the export hands over and the two cannot drift.
+`ctx.storage.getUrl` is legitimate here and only here: the shipped `llmRedaction` scan forbids
+minting a bearer capability outside a `tenantQuery`, and this IS one — handing a tenant a link to
+their own bytes is the point, whereas the erasure walk used the `_storage` system table precisely
+because there a URL would be minted only to be discarded. A `null` url is a real state (a row
+pointing at a blob already gone) and is reported rather than hidden. `DataControls` copy follows,
+and adds the part that would otherwise rot silently: the links are time-limited, so fetch the files
+when you take the export.
+
 ## Owner-side
 
-1. **Decide ADR-044 D3** (the `betaInvites` bridge — recommended: clear the identifying fields at
-   erasure, keep `redeemedAt`) and D4's sweep for people already erased. WORM stays off until then.
+1. **Run `tenantDelete.sweepOrphanedInviteIdentities` until `done: true`** — the forward fix is
+   live, but people erased before this commit still carry an email on their spent invite.
 2. **Read the media storage number** in the Convex dashboard (Q5). An age-out placed on
    `reliability-sweep` deletes zero bytes until `RELIABILITY_SWEEP_ARMED=1` is set on prod.
 3. Run the erasure spec once against a local deployment to move GOVN-03 off open.
@@ -67,15 +101,31 @@ through the whole 44-01 defect; `beta-admission.md` invariant 3 upgraded; and th
 
 ## Not done, deliberately
 
-`tenantExport` still contains no files, so "Download your data first if you want a copy" is false
-for the user's own documents and media. The copy fix is not taken here because it would have to be
-reverted by the export change that makes it true; it is recorded as ADR-044's export disclosure
-trigger and as leg L7 of the widened drill.
+**The `billingEvents` bridge is untouched** (ADR-044 C2, second count): `audit_immutable` and so
+structurally unreachable, carrying `tenantId` beside `stripeObjectId` and bridging externally
+through Stripe. Severing D3 removes one of the two counts, not both — so the "no personal data"
+claim is still not strictly true, and **WORM stays OFF** (ADR-044 D2). Do not read 44-03 as
+clearing that gate.
 
 ## Verification
 
 44-01: backend 4099 (2112 + 1987, 0 FAIL), core 1540, contracts 123; four typechecks and biome clean;
 four mutations RED and cmp-restored. 44-02: no production code; `apps/web` tsc exit 0 with the spec
 in place, biome clean, `playwright test --list` discovers it, `check-playbooks` and
-`check-planning` exit 0. **The erasure spec has never been executed** — e2e is not in CI and this
-environment has no running stack. Nothing here is erasure evidence.
+`check-planning` exit 0. 44-03: backend 4102 (2115 + 1987, 0 FAIL) with three new tests, core 1540;
+tsc exit 0 in core, backend and web; biome clean over 899 files; three mutations proven RED and
+`cmp`-restored — the sweep's dangling-user check removed (it cleared 2 rows instead of 1), the
+D3(a) clear block removed, and the export `files` loop removed.
+
+**One guard ships with no test, and that is recorded in the code rather than hidden.** The D3(a)
+lookup is guarded on `user.email` being present, because `q.eq("email", user.email ?? "")` would
+match every invite this same code has ALREADY cleared — an unbounded `.collect()` growing with each
+erasure until it trips the per-mutation read limit and wedges the one path that must always finish.
+A test was written for it and **passed under its own mutation**: the patch is idempotent on an
+already-cleared row and the `redeemedUserId` check keeps it off everyone else's, so the only harm is
+READ VOLUME, which `convex-test` does not enforce. The test was deleted rather than kept green, and
+a `ponytail:` comment names the ceiling and the upgrade path (an index on `redeemedUserId`).
+
+**The erasure spec has still never been executed** — e2e is not in CI and this environment has no
+running stack. Nothing here is erasure evidence, and the sweep has not been run against any
+deployment.

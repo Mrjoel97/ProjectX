@@ -2,13 +2,16 @@ import {
   AUDIT_ARCHIVE_STATEMENT,
   type DeletableTenantTable,
   exportableTables,
+  storageIdsIn,
   summarizeTenantCredential,
   TENANT_EXPORT_SCHEMA_VERSION,
   TENANT_TABLE_CLASSIFICATION,
   type TenantDataExportPage,
+  type TenantExportFile,
   tenantTableScope,
 } from "@pikar/core/tenantData";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { tenantQuery } from "./lib/functions";
 
 export const TENANT_EXPORT_PAGE_SIZE = 256;
@@ -144,7 +147,38 @@ export const exportTenantData = tenantQuery({
             generatedAt,
           };
 
+    // THE FILES. Until 2026-09-08 this export was rows-only — a grep of this file for "storage"
+    // returned ZERO — while the erasure surface said “Download your data first if you want a copy.”
+    // That was false for the two things a user would most want back, their documents and their
+    // generated media, and it was the mirror image of the delete defect 44-01 fixed: export
+    // promised a copy and omitted the files, delete promised removal and kept them. One promise,
+    // two halves.
+    //
+    // `ctx.storage.getUrl` IS legitimate here, and only here. `llmRedaction.test.ts` scans for a
+    // storage URL minted outside a `tenantQuery`, because a storage URL is a BEARER CAPABILITY —
+    // this is a tenantQuery, and handing a tenant a link to their OWN bytes is the entire point.
+    // The 44-01 erasure walk deliberately used the `_storage` SYSTEM table instead, because there
+    // the URL would have been minted only to be thrown away.
+    //
+    // Reuses `storageIdsIn` / `STORAGE_ID_FIELDS` from 44-01, so the export and the delete read the
+    // SAME map: a table that erasure clears is a table the export hands over, and neither can
+    // silently drift from the other. A `null` url is a real state — a row can point at a blob that
+    // is already gone — and saying so beats omitting the entry.
+    const files: TenantExportFile[] = [];
+    for (const row of rows) {
+      const rowId = String((row as { _id?: unknown })._id ?? "");
+      for (const storageId of storageIdsIn(table, row)) {
+        files.push({
+          table,
+          rowId,
+          storageId,
+          url: await ctx.storage.getUrl(storageId as Id<"_storage">),
+        });
+      }
+    }
+
     return {
+      files,
       header: {
         schemaVersion: TENANT_EXPORT_SCHEMA_VERSION,
         generatedAt,

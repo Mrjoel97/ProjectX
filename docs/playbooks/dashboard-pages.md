@@ -1,5 +1,15 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-08 (44-03 — `DataControls`'s export copy now MATCHES what the export
+> ships. Until this commit the surface said only "structured JSON", while the erase panel beside
+> it said "Download your data first if you want a copy" — and `tenantExport` carried no files at
+> all, so that copy was false for the two things a user would most want back, their documents and
+> their generated media. The export now returns a `files` array per page, so the sentence is true;
+> what it ADDS is the expiry, because `ctx.storage.getUrl` mints TIME-LIMITED links and an export
+> JSON kept for a week hands over URLs that no longer resolve. Saying so on the surface is the
+> whole point — an honest promise about a link that expires beats a silent one that rots. No
+> behaviour change on this page; the copy is the deliverable. See ADR-045 D3/D4.
+> 
 > Last verified: 2026-09-07 (43-03 — the approvals schedule flow now READS `setPlanSendTime`'s
 > refusal. THE ORDER is why it matters: the handler sets the time and then calls `execute`, so a
 > refused time followed by an unconditional execute does not fail — it fires the plan NOW, which is

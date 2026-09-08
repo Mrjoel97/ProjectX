@@ -1,5 +1,35 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-08 (44-03 — ADR-045: the admission bridge is SEVERED, and the export hands
+> over the files.
+>
+> ERASURE NOW CLEARS `betaInvites`: `email`, `redeemedUserId` and `redeemedSubject` are emptied,
+> while `redeemedAt` and `code` REMAIN so the invite stays SPENT. Clearing rather than deleting is
+> the whole decision — deleting the row would hand a used code back to whoever still holds it, so
+> admission integrity and erasure are both satisfied by clearing and only by clearing. The lookup
+> uses `by_email` off the `users` row the terminal already loaded; there is no index on
+> `redeemedUserId`, and a scan inside the one path that must always finish would be a scale defect.
+>
+> AND A ONE-TIME SWEEP for people erased BEFORE this shipped — `sweepOrphanedInviteIdentities`,
+> paged and idempotent. It NEEDS NO LIST of who was erased: a `redeemedUserId` that no longer
+> resolves to a live `users` document IS the evidence, which is exactly what makes it impossible
+> for it to clear a living user's row. Run it until `done: true`. Without it the fix is
+> forward-only, and the people it would miss are the population Art. 17 protects.
+>
+> THE EXPORT NOW CARRIES `files` — `{ table, rowId, storageId, url }` per page, built from the SAME
+> `STORAGE_ID_FIELDS` map the erasure walk reads, so a table erasure clears is a table the export
+> hands over and the two cannot drift. `ctx.storage.getUrl` is legitimate HERE and only here: the
+> shipped scan forbids minting a bearer capability outside a `tenantQuery`, and this is one —
+> handing a tenant a link to their OWN bytes is the point, whereas the erasure walk used the
+> `_storage` system table precisely because there the URL would be minted only to be discarded.
+> A `null` url is a real state (a row pointing at a blob already gone) and is reported, not hidden.
+>
+> STILL OPEN, and do not read 44-03 as closing it: the `billingEvents` bridge (ADR-044 C2, second
+> count) is untouched — `audit_immutable`, carrying `tenantId` beside `stripeObjectId`, bridging
+> externally through Stripe. **The “no personal data” claim is therefore still not strictly true
+> and WORM STAYS OFF** (ADR-044 D2). Drill leg L7 now passes on the files, and the L1 export leg
+> is no longer passing over a false promise.)
+>
 > Last verified: 2026-09-08 (**ERASURE DELETED THE ROWS AND LEFT THE FILES.** Owner decision Q1(a),
 > 2026-09-08.
 >

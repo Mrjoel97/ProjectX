@@ -301,6 +301,58 @@ export const deleteTenantDataPage = internalMutation({
             payload,
           });
         }
+        // ADR-044 D3(a), owner decision 2026-09-08 — SEVER THE ADMISSION BRIDGE.
+        //
+        // `betaInvites` is `admission_plane`, which `deletableTables()` structurally cannot reach,
+        // so the row survives erasure carrying `email` AND `redeemedUserId`. Because `tenantId` is
+        // `String(userId)`, that row joins every audit row's identifier straight back to the erased
+        // person's address — which is the named falsifier of the “no personal data” claim on three
+        // user-facing surfaces (ADR-044 C2).
+        //
+        // CLEARED, NOT DELETED, and the distinction is the whole decision. `redeemedAt` stays, so
+        // the invite remains SPENT and cannot be re-redeemed; deleting the row would hand a used
+        // invite code back to whoever still has it. What goes is the identifying half: the email,
+        // the user id, and `redeemedSubject` (`provider|oauthSubject`, which identifies just as
+        // well as the address does).
+        //
+        // BY EMAIL, using the shipped `by_email` index, because there is no index on
+        // `redeemedUserId` and a table scan inside the erasure terminal would be a scale defect on
+        // the one path that must always finish. The email comes off the `users` row this branch
+        // has already loaded — read one line above, before it is deleted.
+        //
+        // NO EMAIL, NO LOOKUP, and that guard is load-bearing rather than tidy. An invite is
+        // reachable only BY the address it names, so a user without one has no bridge to sever —
+        // while `q.eq("email", "")` would match every invite ALREADY cleared by this very code, an
+        // unbounded `.collect()` growing with each erasure until it trips the per-mutation read
+        // limit and WEDGES the one path that must always finish.
+        //
+        // ponytail: NO TEST GUARDS THIS LINE, deliberately, and the reason is worth recording.
+        // Removing it changes nothing observable — the patch below is idempotent on an already
+        // cleared row, and the `redeemedUserId` check keeps it off everyone else's — so the harm
+        // is READ VOLUME alone, which `convex-test` does not enforce. A test written against this
+        // mutation passes, and one that cannot fail is worse than none. Upgrade path: if betaInvites
+        // ever grows an index on `redeemedUserId`, look up by that instead and the ambiguity goes.
+        const erasedEmail = user.email;
+        const invited = erasedEmail
+          ? await ctx.db
+              .query("betaInvites")
+              .withIndex("by_email", (q) => q.eq("email", erasedEmail))
+              .collect()
+          : [];
+        // An invite this address holds but never redeemed is cleared too: it still NAMES the
+        // erased person, and they have just deleted the account it would have admitted.
+        for (const invite of invited) {
+          if (
+            invite.redeemedUserId !== undefined &&
+            String(invite.redeemedUserId) !== args.tenantId
+          )
+            continue;
+          await ctx.db.patch(invite._id, {
+            email: "",
+            redeemedUserId: undefined,
+            redeemedSubject: undefined,
+          });
+        }
         await ctx.db.delete(user._id);
       }
       return {
@@ -654,5 +706,53 @@ export const deleteTenantData = tenantAction({
     } while (cursor);
 
     return { deletedByTable, providers };
+  },
+});
+
+/**
+ * ADR-044 D4 — THE ONE-TIME SWEEP, for people erased BEFORE D3(a) shipped.
+ *
+ * D3(a) severs the admission bridge at erasure time, which does nothing for anyone already erased:
+ * their `betaInvites` row still carries `email` + `redeemedUserId`, and that is exactly the
+ * population Art. 17 protects. A fix that is forward-only would let the claim read as closed while
+ * the people it matters most for still have a live join.
+ *
+ * IT NEEDS NO LIST OF WHO WAS ERASED, and that is what makes it safe to run: the test is simply
+ * whether `redeemedUserId` still resolves to a live `users` document. A dangling pointer means the
+ * account is gone; a live one means it is not. There is nothing to look up, nothing to remember,
+ * and no way to clear a row belonging to a living user.
+ *
+ * PAGED and IDEMPOTENT. `betaInvites` has no index on `redeemedUserId`, so this is a scan — bounded
+ * per call, resumable by cursor, and a second run over swept rows finds nothing to do. Run it from
+ * the owner's terminal until `done: true`.
+ */
+export const sweepOrphanedInviteIdentities = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())), limit: v.optional(v.number()) },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ scanned: number; cleared: number; cursor: string | null; done: boolean }> => {
+    const page = await ctx.db
+      .query("betaInvites")
+      .paginate({ cursor: args.cursor ?? null, numItems: Math.min(args.limit ?? 100, 500) });
+    let cleared = 0;
+    for (const invite of page.page) {
+      // An UNREDEEMED invite is not an orphan — it never named anybody. Only a redemption that
+      // points at a deleted account is one.
+      if (invite.redeemedUserId === undefined) continue;
+      if ((await ctx.db.get(invite.redeemedUserId)) !== null) continue;
+      await ctx.db.patch(invite._id, {
+        email: "",
+        redeemedUserId: undefined,
+        redeemedSubject: undefined,
+      });
+      cleared += 1;
+    }
+    return {
+      scanned: page.page.length,
+      cleared,
+      cursor: page.continueCursor,
+      done: page.isDone,
+    };
   },
 });

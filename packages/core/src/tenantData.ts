@@ -406,9 +406,36 @@ export type TenantExportCursor = {
   generatedAt: string;
 };
 
+/**
+ * A FILE THE TENANT OWNS, handed over as a time-limited download link.
+ *
+ * THE GAP THIS CLOSES: until 2026-09-08 the export was rows-only — a grep of `tenantExport.ts` for
+ * "storage" returned ZERO — while the erasure surface said “Download your data first if you want a
+ * copy.” It was false for the two things a user would most want back: their documents and their
+ * generated media. The delete had the mirror-image defect and was fixed in 44-01; this is the other
+ * half, and the two are one promise.
+ *
+ * `url` is NULLABLE and that is a real state, not a placeholder: a row can carry a `storageId`
+ * whose blob is already gone (a failed render, a half-written intake). A null says so instead of
+ * pretending, and the export stays well-formed.
+ *
+ * THE LINK EXPIRES. `ctx.storage.getUrl` mints a time-limited signed URL, so an export JSON kept
+ * for a week hands over links that no longer resolve. That is disclosed on the surface rather than
+ * hidden — fetch the files when you take the export.
+ */
+export type TenantExportFile = {
+  table: string;
+  rowId: string;
+  storageId: string;
+  url: string | null;
+};
+
 export type TenantDataExportPage = {
   header: TenantExportHeader;
   table: { name: DeletableTenantTable; rows: readonly unknown[] };
+  /** The stored files reachable from THIS page's rows, via `STORAGE_ID_FIELDS`. One list per page,
+   *  not one per row, so the shape of the rows themselves is unchanged. */
+  files: readonly TenantExportFile[];
   omitted: Readonly<Record<string, string>>;
   nextCursor: TenantExportCursor | null;
   limits: TenantDataExport["limits"];

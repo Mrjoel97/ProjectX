@@ -1,5 +1,19 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-09-08 (44-03 — ADR-045 D1 answers invariant 3's open question, and the owner
+> chose it: erasure now CLEARS `email` / `redeemedUserId` / `redeemedSubject` on a redeemed invite
+> and KEEPS `redeemedAt` + `code`, so the invite stays SPENT while the identifying half is gone.
+> Clearing rather than deleting is the whole decision — deleting the row would hand a used code
+> back to whoever still holds it, so admission integrity and erasure are satisfied together only
+> this way. The lookup is by `by_email` off the `users` row the erasure terminal has already
+> loaded; there is no index on `redeemedUserId`, and a scan inside the one path that must always
+> finish would be a scale defect. A one-time paged sweep,
+> `tenantDelete.sweepOrphanedInviteIdentities`, does the same for redemptions whose user row is
+> ALREADY gone — it needs no list of who was erased, because a `redeemedUserId` that no longer
+> resolves IS the evidence, which is also what makes it unable to touch a living user's row. Run
+> it until `done: true`; without it the fix is forward-only and misses exactly the people Art. 17
+> protects. Invariant 3 below is now HISTORY — read it for the reasoning, not for what is true.)
+
 > Last verified: 2026-09-06 (36-01 — `AdminView`'s not-ready headline gains "N fixture seam(s) active — a
 > provider is being faked." when `fixturesActive` is non-empty, matching `ops.envCheck`'s new `ready`
 > conjunct (production-beta.md). `adminPresentation.test.ts` 10/10.)

@@ -4,6 +4,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import agentSchema from "../node_modules/@convex-dev/agent/src/component/schema.js";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
@@ -894,5 +895,102 @@ describe("erasure deletes stored files (2026-09-08)", () => {
     ).toEqual([]);
     // …and the neighbour's file is untouched.
     expect((await urls([seeded.survivor])).filter((u) => u !== null)).toHaveLength(1);
+  });
+});
+
+// ══ ADR-044 D3(a)/D4 — THE ADMISSION BRIDGE (2026-09-08) ═════════════════════════════════════
+//
+// `betaInvites` is `admission_plane`, which `deletableTables()` structurally cannot reach, so the
+// row survives erasure. It carries `email` AND `redeemedUserId` — and `tenantId` IS `String(userId)`
+// — so it joins every audit row's identifier back to the erased person's address. That is the named
+// falsifier of the "no personal data" claim on three user-facing surfaces (ADR-044 C2).
+describe("erasure severs the admission bridge (ADR-044 D3a)", () => {
+  test("the invite is CLEARED but stays spent, and another person's invite is untouched", async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+    t.registerComponent("agent", agentSchema, agentModules);
+
+    const seeded = await t.run(async (ctx) => {
+      const tenantA = await ctx.db.insert("users", { email: "gone@example.test", owner: true });
+      const tenantB = await ctx.db.insert("users", { email: "stays@example.test", owner: true });
+      const mine = await ctx.db.insert("betaInvites", {
+        email: "gone@example.test",
+        code: "CODE-A",
+        createdAt: Date.now(),
+        redeemedAt: Date.now(),
+        redeemedSubject: "google|subject-a",
+        redeemedUserId: tenantA,
+      });
+      const theirs = await ctx.db.insert("betaInvites", {
+        email: "stays@example.test",
+        code: "CODE-B",
+        createdAt: Date.now(),
+        redeemedAt: Date.now(),
+        redeemedSubject: "google|subject-b",
+        redeemedUserId: tenantB,
+      });
+      return { tenantA, mine, theirs };
+    });
+
+    await deleteAll(t, seeded.tenantA, seeded.tenantA);
+
+    const after = await t.run((ctx) => ctx.db.get(seeded.mine));
+    // MUTATION: delete the `ctx.db.patch(invite._id, …)` block → email/subject/userId survive, red.
+    expect(after?.email, "the erased person's address survived in the admission plane").toBe("");
+    expect(after?.redeemedUserId).toBeUndefined();
+    expect(after?.redeemedSubject).toBeUndefined();
+    // …and the invite is still SPENT. Deleting the row would hand a used code back to whoever has
+    // it; that is why this clears rather than deletes.
+    expect(after?.redeemedAt, "the invite must stay spent").toBeDefined();
+    expect(after?.code).toBe("CODE-A");
+
+    // A NEIGHBOUR'S invite is untouched — the `by_email` lookup must not be a table sweep.
+    const neighbour = await t.run((ctx) => ctx.db.get(seeded.theirs));
+    expect(neighbour?.email).toBe("stays@example.test");
+    expect(neighbour?.redeemedUserId).toBeDefined();
+  });
+
+  // D4: the forward-only gap. D3(a) does nothing for people erased BEFORE it shipped, and that is
+  // exactly the population Art. 17 protects.
+  test("the sweep clears a DANGLING redemption and spares a live one", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const live = await ctx.db.insert("users", { email: "live@example.test", owner: true });
+      const ghostUser = await ctx.db.insert("users", { email: "ghost@example.test", owner: true });
+      const orphan = await ctx.db.insert("betaInvites", {
+        email: "ghost@example.test",
+        code: "CODE-GHOST",
+        createdAt: Date.now(),
+        redeemedAt: Date.now(),
+        redeemedSubject: "google|ghost",
+        redeemedUserId: ghostUser,
+      });
+      const kept = await ctx.db.insert("betaInvites", {
+        email: "live@example.test",
+        code: "CODE-LIVE",
+        createdAt: Date.now(),
+        redeemedAt: Date.now(),
+        redeemedUserId: live,
+      });
+      // An UNREDEEMED invite never named anybody, so it is not an orphan.
+      const pending = await ctx.db.insert("betaInvites", {
+        email: "pending@example.test",
+        code: "CODE-PENDING",
+        createdAt: Date.now(),
+      });
+      // The account goes; the invite row is left behind exactly as a pre-D3(a) erasure left it.
+      await ctx.db.delete(ghostUser);
+      return { orphan, kept, pending };
+    });
+
+    const res = await t.mutation(internal.tenantDelete.sweepOrphanedInviteIdentities, {});
+    expect(res.done).toBe(true);
+    // MUTATION: drop the `ctx.db.get(...) !== null` check → the LIVE row is cleared too, red below.
+    expect(res.cleared).toBe(1);
+
+    expect((await t.run((ctx) => ctx.db.get(seeded.orphan)))?.email).toBe("");
+    // The living user's invite must be untouched — this is the assertion that makes the sweep safe.
+    expect((await t.run((ctx) => ctx.db.get(seeded.kept)))?.email).toBe("live@example.test");
+    expect((await t.run((ctx) => ctx.db.get(seeded.pending)))?.email).toBe("pending@example.test");
   });
 });

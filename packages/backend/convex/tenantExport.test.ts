@@ -176,3 +176,52 @@ describe("tenant data export", () => {
     expect(result.limits.truncated).toBe(true);
   });
 });
+
+// ══ THE EXPORT HANDS OVER THE FILES (2026-09-08) ═════════════════════════════════════════════
+//
+// Until this commit a grep of `tenantExport.ts` for "storage" returned ZERO, while the erasure
+// surface said "Download your data first if you want a copy." It was false for the two things a
+// user would most want back — their documents and their generated media. It is the mirror image of
+// the 44-01 delete defect: export promised a copy and omitted the files, delete promised removal
+// and kept them. One promise, two halves.
+test("a page carries download links for the files its rows point at", async () => {
+  const t = convexTest(schema, modules);
+  const seeded = await t.run(async (ctx) => {
+    const tenantA = await ctx.db.insert("users", { email: "files-a@example.test" });
+    const tenantB = await ctx.db.insert("users", { email: "files-b@example.test" });
+    const mine = await ctx.storage.store(new Blob(["my reel"]));
+    const theirs = await ctx.storage.store(new Blob(["not mine"]));
+    await ctx.db.insert("plans", {
+      tenantId: tenantA,
+      threadId: "thread_files",
+      status: "done",
+      renderStorageId: mine,
+      createdAt: Date.now(),
+    });
+    await ctx.db.insert("plans", {
+      tenantId: tenantB,
+      threadId: "thread_theirs",
+      status: "done",
+      renderStorageId: theirs,
+      createdAt: Date.now(),
+    });
+    return { tenantA, mine, theirs };
+  });
+
+  const files: { storageId: string; url: string | null }[] = [];
+  let cursor: TenantExportCursor | undefined;
+  do {
+    const page = await t
+      .withIdentity({ subject: `${seeded.tenantA}|export-session` })
+      .query(exportTenantData, cursor ? { cursor } : {});
+    files.push(...page.files);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+
+  // MUTATION: delete the `files` loop from the handler → empty, red.
+  const mine = files.filter((f) => f.storageId === String(seeded.mine));
+  expect(mine, "the tenant's own file is missing from their export").toHaveLength(1);
+  expect(mine[0]?.url, "the file is listed but has no download link").toBeTruthy();
+  // TENANT ISOLATION, on the same assertion: another tenant's blob must never appear.
+  expect(files.map((f) => f.storageId)).not.toContain(String(seeded.theirs));
+});
