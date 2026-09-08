@@ -1024,6 +1024,90 @@ describe("purgeEvalTenant only ever touches synthetic tenants", () => {
   });
 });
 
+// ══ THE ORPHAN REAPER (2026-09-09) ═══════════════════════════════════════════════
+//
+// Until 44-01 erasure deleted a row and kept its blob, so 142 files (65.2 MB) on production are
+// referenced by nothing and reachable by nothing. A tenant purge cannot find them — the reference is
+// exactly what was lost — so this reaps by ABSENCE of a reference instead.
+//
+// AGE IS FAKED BY MOVING THE CLOCK FORWARD, never by backdating the blob: `ctx.storage.store` stamps
+// `_creationTime` from the harness clock, and `vi.setSystemTime` without `useFakeTimers()` is a
+// silent no-op (measured — the first draft of these tests "passed" a backdate that never happened).
+// `shouldAdvanceTime` keeps convex-test's own promises resolving under fake timers.
+const ageBlobsBy = async (ms: number, run: () => Promise<unknown>) => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date(Date.now() + ms));
+  try {
+    return await run();
+  } finally {
+    vi.useRealTimers();
+  }
+};
+
+describe("reapOrphanedBlobs deletes only unreferenced, settled bytes", () => {
+  test("a REFERENCED blob survives, an old ORPHAN is reaped", async () => {
+    const t = convexTest(schema, modules);
+    const seeded = await t.run(async (ctx) => {
+      const kept = await ctx.storage.store(new Blob(["kept"], { type: "application/pdf" }));
+      const orphan = await ctx.storage.store(new Blob(["orphan"], { type: "application/pdf" }));
+      await ctx.db.insert("plans", {
+        tenantId: "qd7realtenant0000000000000000",
+        threadId: "thread-keeps-a-file",
+        status: "collecting",
+        createdAt: Date.now(),
+        renderStorageId: kept,
+      });
+      return { kept, orphan };
+    });
+
+    const res = (await ageBlobsBy(40 * 60 * 60 * 1000, () =>
+      t.mutation(internal.tenantDelete.reapOrphanedBlobs, {}),
+    )) as { deleted: number };
+
+    // MUTATION: drop the `referenced.has(blob._id)` skip → the kept blob goes too and this reddens.
+    expect(res.deleted).toBe(1);
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", seeded.orphan))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", seeded.kept))).not.toBeNull();
+  });
+
+  // THE ONE THAT MATTERS. `generateUploadUrl` hands out a URL, the client PUTs the bytes, and only
+  // then is the row written. Between those two steps the blob is unreferenced and is NOT garbage.
+  test("a FRESH orphan is left alone — it may be an upload in flight", async () => {
+    const t = convexTest(schema, modules);
+    const inFlight = await t.run((ctx) =>
+      ctx.storage.store(new Blob(["just uploaded"], { type: "application/pdf" })),
+    );
+
+    const res = await t.mutation(internal.tenantDelete.reapOrphanedBlobs, {});
+
+    // MUTATION: remove the `blob._creationTime > cutoff` skip → deleted becomes 1 and a user's
+    // in-flight file is destroyed. This assertion is the whole reason the age floor exists.
+    expect(res.deleted).toBe(0);
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", inFlight))).not.toBeNull();
+  });
+
+  test("the age floor cannot be argued below its minimum, and dryRun touches nothing", async () => {
+    const t = convexTest(schema, modules);
+    const fresh = await t.run((ctx) =>
+      ctx.storage.store(new Blob(["fresh"], { type: "application/pdf" })),
+    );
+
+    // A caller asking for a 1ms window still gets the 24h floor.
+    // MUTATION: change `Math.max(...)` to take the argument → the fresh blob is deleted, red.
+    const forced = await t.mutation(internal.tenantDelete.reapOrphanedBlobs, { olderThanMs: 1 });
+    expect(forced.deleted).toBe(0);
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", fresh))).not.toBeNull();
+
+    // And a dry run reports without destroying.
+    const dry = (await ageBlobsBy(40 * 60 * 60 * 1000, () =>
+      t.mutation(internal.tenantDelete.reapOrphanedBlobs, { dryRun: true }),
+    )) as { orphans: number; deleted: number };
+    expect(dry.orphans).toBe(1);
+    expect(dry.deleted).toBe(0);
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", fresh))).not.toBeNull();
+  });
+});
+
 // ══ ADR-044 D3(a)/D4 — THE ADMISSION BRIDGE (2026-09-08) ═════════════════════════════════════
 //
 // `betaInvites` is `admission_plane`, which `deletableTables()` structurally cannot reach, so the

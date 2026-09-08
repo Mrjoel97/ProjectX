@@ -1,5 +1,31 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (45-03 — `tenantDelete.reapOrphanedBlobs`, for the 142 blobs (65.2 MB)
+> that no tenant purge can reach. Until 44-01 erasure deleted a row and KEPT its blob, so those
+> bytes are referenced by nothing and were unremovable by any product path — the reference is
+> exactly what was lost, which is why this reaps by ABSENCE of a reference rather than by tenant.
+> The archive holds exactly ONE `tenant.deleted` event and that erasure predates 44-01, so some of
+> these bytes belong to somebody who asked to be forgotten and was told they had been. This
+> finishes that request; it is not housekeeping.
+>
+> TWO GUARDS, both mutation-proven RED and `cmp`-restored:
+> 1. **AGE (`ORPHAN_REAP_MIN_AGE_MS`, 24h).** Intake is UPLOAD-FIRST — `generateUploadUrl` hands
+>    out a URL, the client PUTs the bytes, and ONLY THEN is the row written. Between those steps a
+>    blob is unreferenced and is a user's file, not garbage. This floor is the only thing standing
+>    between the reaper and an in-flight upload, and `Math.max` means a caller cannot argue it
+>    lower. Every production orphan is 19–27 days old, so the floor costs nothing.
+> 2. **THE REFERENCE SET comes from `STORAGE_ID_FIELDS`** — the same map the erasure walk and the
+>    export read. A schema field added there and not to the map would make this delete LIVE bytes;
+>    the field-level drift guard that parses `schema.ts` is what keeps that honest. Never hand-roll
+>    a second list here.
+>
+> `dryRun: true` reports and touches nothing. USE IT FIRST, every time — this is the only function
+> in the repo that permanently destroys bytes no other path can recreate.
+>
+> A TEST NOTE worth keeping: age is faked by moving the clock FORWARD, never by backdating a blob.
+> `vi.setSystemTime` WITHOUT `useFakeTimers()` is a silent no-op, and the first draft of these tests
+> “passed” a backdate that never happened — a fixture that cannot express the condition it names.)
+
 > Last verified: 2026-09-09 (45-02 — **THE ARCHIVE IS CLEAN. The 45-01 entry below is now
 > HISTORY, not the current state, and one of its sentences is FALSE as of this line:** it says
 > arming WORM would freeze a majority-synthetic archive. That was true when written and is not

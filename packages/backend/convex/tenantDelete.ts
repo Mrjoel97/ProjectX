@@ -2,6 +2,7 @@ import type { EntryId } from "@convex-dev/rag";
 import {
   type DeletableTenantTable,
   deletableTables,
+  STORAGE_ID_FIELDS,
   storageIdsIn,
   type TenantDeletionCursor,
   tenantTableScope,
@@ -808,6 +809,101 @@ export const purgeEvalTenant = internalMutation({
     }
 
     return { deleted, blobs, done: deleted === 0, tenantId: args.tenantId };
+  },
+});
+
+/**
+ * THE FLOOR UNDER `reapOrphanedBlobs`, and the single most important line in it.
+ *
+ * Intake and requests are UPLOAD-FIRST: `generateUploadUrl` hands the client a URL, the client PUTs
+ * the bytes, and only THEN does `attachToThread` write the row that points at them. So a blob with
+ * no referencing row is not necessarily garbage — for a few seconds it is a user's file, mid-flight.
+ * A reaper without an age floor deletes it and the upload fails for a reason nobody can reconstruct.
+ *
+ * Twenty-four hours is absurdly generous for an HTTP PUT and costs nothing: every orphan measured on
+ * production (2026-09-09) was between 19 and 27 days old.
+ */
+export const ORPHAN_REAP_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * DELETE STORED BYTES THAT NO ROW POINTS AT — and finish an erasure the product promised.
+ *
+ * WHAT THESE FILES ARE. Until 44-01, erasure deleted a row and left its blob: `deleteTenantDataPage`
+ * and `vault.deleteVaultDoc` both removed the POINTER and kept the BYTES, which made those bytes
+ * unreachable AND unremovable by any product path. Measured on production 2026-09-09: 142 blobs,
+ * 65.2 MB, every one created between 2026-08-13 and 2026-08-21, referenced by no field of any row.
+ * The archive contains exactly ONE `tenant.deleted` event, and that erasure ran before 44-01 — so
+ * some of these bytes belong to a person who asked to be forgotten and was told they had been.
+ * Reaping them is not housekeeping; it is completing an Art. 17 request.
+ *
+ * A TENANT PURGE CANNOT REACH THEM, which is why this exists separately. `purgeEvalTenant` and the
+ * erasure walk delete blobs REFERENCED BY the rows they delete. These are referenced by nothing, so
+ * no row-shaped cleanup will ever find them — the reference is exactly what was lost.
+ *
+ * THE TWO GUARDS, and both are load-bearing:
+ *   1. AGE. See `ORPHAN_REAP_MIN_AGE_MS` — the upload-first race is real and this is the only thing
+ *      standing between a reaper and a user's in-flight file.
+ *   2. THE REFERENCE SET is built from `STORAGE_ID_FIELDS`, the SAME map the erasure walk and the
+ *      export read (44-01, ADR-045). A field added to the schema and not to that map would make this
+ *      delete live bytes — which is precisely why a field-level drift guard already parses
+ *      `schema.ts` and reddens when the two disagree. Do not hand-roll a second list here.
+ *
+ * `dryRun` reports what it WOULD delete and touches nothing. Use it first, every time: this is the
+ * one function in the repo that permanently destroys bytes no other path can recreate.
+ */
+export const reapOrphanedBlobs = internalMutation({
+  args: {
+    limit: v.optional(v.number()),
+    dryRun: v.optional(v.boolean()),
+    olderThanMs: v.optional(v.number()),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    scanned: number;
+    orphans: number;
+    deleted: number;
+    bytes: number;
+    done: boolean;
+  }> => {
+    const minAge = Math.max(args.olderThanMs ?? ORPHAN_REAP_MIN_AGE_MS, ORPHAN_REAP_MIN_AGE_MS);
+    const cutoff = Date.now() - minAge;
+    const budget = Math.min(args.limit ?? 200, 1000);
+
+    // EVERY reference, from the shared map. Built once per call and held in memory: after the 45-02
+    // purge the storage-bearing tables hold a few hundred rows in total, so this is cheap — but it
+    // is also why this is a paged mutation rather than a single sweep, because "cheap" is a fact
+    // about today's row count and not a guarantee.
+    const referenced = new Set<string>();
+    for (const table of Object.keys(STORAGE_ID_FIELDS)) {
+      const rows = await ctx.db.query(table as Exclude<DeletableTenantTable, "users">).collect();
+      for (const row of rows) {
+        for (const id of storageIdsIn(table, row as unknown as Record<string, unknown>)) {
+          referenced.add(id);
+        }
+      }
+    }
+
+    let scanned = 0;
+    let orphans = 0;
+    let deleted = 0;
+    let bytes = 0;
+    const blobs = await ctx.db.system.query("_storage").take(budget);
+    for (const blob of blobs) {
+      scanned += 1;
+      if (referenced.has(blob._id)) continue;
+      // The age floor, applied to the ORPHAN and not to the scan: a young referenced blob is fine,
+      // a young UNREFERENCED one is the in-flight upload this must not touch.
+      if (blob._creationTime > cutoff) continue;
+      orphans += 1;
+      if (args.dryRun === true) continue;
+      await ctx.storage.delete(blob._id);
+      deleted += 1;
+      bytes += blob.size ?? 0;
+    }
+
+    return { scanned, orphans, deleted, bytes, done: blobs.length < budget };
   },
 });
 
