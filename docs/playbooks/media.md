@@ -1,5 +1,33 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-08 (**`expectNoRenderPost` WAS REPORTING ANOTHER TEST'S PURCHASE AS THIS
+> ONE'S**, and it had been filed as a load flake four times before anyone read the failure
+> direction.
+>
+> THE MECHANISM: the helper filtered captured fetch calls by URL alone, while
+> `vi.stubGlobal("fetch", …)` replaces the GLOBAL. So the mock caught render POSTs issued by ANY
+> in-flight scheduled function anywhere in the worker — including one legitimately belonging to a
+> test whose workflow had not quiesced — and then asserted “a sandbox was bought when nothing
+> should have been” about a purchase the test under assertion never made.
+>
+> THE TELL WAS IN THE DIRECTION, and the earlier record had it BACKWARDS. A missing-call flake
+> reads `expected [render POST] to equal []`-inverted — you asked for a POST and got none. This
+> read `expected [ [ …(2) ] ] to deeply equal []`: none expected, one RECEIVED, with two real
+> arguments. A received value cannot be a timeout. That distinction is what turns “flaky under
+> load” into “cross-test contamination”, and it reproduced locally on a full shard run, not only
+> in CI.
+>
+> FIXED BY SCOPE, NOT BY QUIESCING. The helper now takes the id the test OWNS and ignores POSTs
+> carrying anyone else's: `batchId` for the three `renderReel` sites, `planId` for the
+> `burnCaptions` site — `renderReel` puts them on the wire as `renderId` and `sourceId`.
+> Quiescing would only narrow the window; the guarantee actually wanted is **no sandbox was bought
+> FOR THIS PLAN**, which holds no matter what else the worker is doing.
+>
+> ITS POSITIVE CONTROL NOW RUNS BOTH DIRECTIONS — this plan's POST must still FAIL the assertion,
+> another plan's must NOT. A scope that matched nothing would make every guarded test pass for
+> ever, which is the exact vacuity the URL control was written to prevent, reintroduced one
+> argument later. Any future narrowing of this helper needs the same pair.)
+>
 > Last verified: 2026-09-07 (**`blocked` MEANS NOT RETRYABLE. IT NEVER MEANT THE PROVIDER JUDGED
 > THE CONTENT, AND THE ROW SAID IT DID.** Found on production, not by a test.
 >

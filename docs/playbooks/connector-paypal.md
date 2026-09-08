@@ -1,5 +1,29 @@
 # Playbook: PayPal connector (REVN-03)
 
+> Last verified: 2026-09-08 (the §4 EVIDENCE LEAK SCAN was reporting leaks that never happened.
+> `paypalReadEvidence`'s blob is counts, states and closed labels plus ONE variable field —
+> `retrievedAt`, a raw 13-digit epoch. The test scanned that serialized blob for the needle
+> `"1999"` (the fixture's 19.99 amount, in cents), so whenever the millisecond field was 999 and
+> the digit before it was 1 the TIMESTAMP ended in `1999` and the scan failed. Reproduced from the
+> CI log exactly: red at 1788872041999 = 2026-09-08T12:54:01.999Z. Roughly one run in ten thousand.
+>
+> WHY IT MATTERED MORE THAN ITS RATE. This is a §4 assertion — the one that proves vendor payload
+> never reaches evidence — and an assertion that periodically cries wolf is one somebody
+> eventually relaxes or deletes. It had already been read twice as generic CI flakiness.
+>
+> THE FIX KEEPS THE PROPERTY. The clock is proven to BE a clock (a bounded skew check against
+> `Date.now()`, which no amount, merchant id or access token could satisfy) and is then EXCLUDED
+> from the needle scan by substitution; every other field is still scanned for every needle. A
+> non-vacuity row proves the scan can still SEE a planted leak after the object is reshaped — a
+> `.includes` over a rebuilt object is exactly the assertion that quietly starts reading the wrong
+> string and passes for ever.
+>
+> THE RULE FOR THIS LANE: never scan a serialized blob for a SHORT NUMERIC needle while the blob
+> carries a timestamp, a count or an id. Amounts-in-cents are 3-5 digits and collide with all
+> three. Scan for the vendor STRINGS (tokens, merchant ids, transaction ids) freely; for a numeric
+> amount, assert the field that could carry it is absent or typed, rather than grepping the whole
+> blob.)
+>
 > Last verified: 2026-09-01 (28-29 recovery telemetry — after the passed-only transaction read
 > returns a normalized successful payment linked to an invoice, it can match a provider-scoped
 > one-way ref from an earlier tenant-owned reminder and emit one idempotent `recovery_observed`.
