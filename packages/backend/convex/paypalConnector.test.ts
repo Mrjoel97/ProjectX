@@ -778,7 +778,23 @@ describe("lane evidence carries no vendor payload", () => {
       environment: "sandbox",
       entity: "transactions",
     });
-    const serialized = JSON.stringify(evidence);
+    // THE TIMESTAMP IS EXCLUDED FROM THE NEEDLE SCAN, and that is a FIX rather than a weakening.
+    // `retrievedAt` is a raw 13-digit epoch, and `"1999"` (19.99 in cents) is a FOUR-DIGIT NUMERIC
+    // needle: whenever the millisecond field is 999 and the digit before it is 1, the epoch string
+    // ENDS in "1999" and this scan failed on a leak that never happened. Reproduced exactly — CI
+    // red at 1788872041999, i.e. 2026-09-08T12:54:01.999Z. Roughly 1 run in 10,000, which on a repo
+    // that runs CI constantly is a recurring false red on a §4 assertion, and a §4 assertion that
+    // cries wolf is one somebody eventually silences.
+    //
+    // The property is KEPT, not dropped: the clock value is proven to BE a clock value (a bounded
+    // range check — an amount, an id or a token could never satisfy it), and every other field is
+    // still scanned for every needle.
+    expect(typeof evidence.retrievedAt).toBe("number");
+    const skew = Math.abs((evidence.retrievedAt as number) - Date.now());
+    expect(`retrievedAt-is-a-clock:${skew < 24 * 60 * 60 * 1000}`).toBe(
+      "retrievedAt-is-a-clock:true",
+    );
+    const serialized = JSON.stringify({ ...evidence, retrievedAt: "<clock>" });
     for (const leak of [
       ACCESS_1,
       TENANT_MERCHANT,
@@ -789,6 +805,10 @@ describe("lane evidence carries no vendor payload", () => {
     ]) {
       expect(`${leak}:${serialized.includes(leak)}`).toBe(`${leak}:false`);
     }
+    // NON-VACUITY: the scan must still be able to SEE a leak after the substitution above. A
+    // `.includes` scan over a reshaped object is exactly the kind of assertion that quietly starts
+    // reading an empty string, and it would then pass forever.
+    expect(JSON.stringify({ ...evidence, entity: ACCESS_1 }).includes(ACCESS_1)).toBe(true);
     expect(evidence.itemCount).toBe(2);
     expect(evidence.refCount).toBe(2);
   });

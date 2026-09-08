@@ -2284,10 +2284,29 @@ const RENDER_SIDECAR = JSON.stringify({
  * immune to what an unrelated test's leftovers happen to do. If this ever fires, a render really
  * was bought.
  */
-const expectNoRenderPost = (fetchMock: { mock: { calls: unknown[][] } }): void => {
-  const posts = fetchMock.mock.calls.filter((call) =>
-    String(call[0] ?? "").includes("/api/media/render"),
-  );
+const expectNoRenderPost = (
+  fetchMock: { mock: { calls: unknown[][] } },
+  /** THE PLAN THIS TEST OWNS. Optional only for the synthetic positive control below; every real
+   *  call site passes it, and passing it is what makes the assertion honest.
+   *
+   *  WITHOUT IT THIS ASSERTION IS CROSS-TEST-CONTAMINATED. `vi.stubGlobal("fetch", …)` replaces the
+   *  GLOBAL, so the mock captures every fetch any in-flight scheduled function issues anywhere in
+   *  the worker — including a render POST legitimately belonging to another test whose workflow has
+   *  not quiesced. It then reports "a sandbox was bought" about a purchase this test never made.
+   *  Reproduced both in CI and locally under load; the received value was a real POST with two
+   *  arguments, not an artefact.
+   *
+   *  Scoping by plan is the fix rather than quiescing, because quiescing would only narrow the
+   *  window: the guarantee wanted here is "no sandbox was bought FOR THIS PLAN", which is true
+   *  regardless of what else the worker is doing. `renderReel` puts the plan on the burn POST as
+   *  `sourceId` and the batch on every POST as `renderId`. */
+  scopeId?: string,
+): void => {
+  const posts = fetchMock.mock.calls.filter((call) => {
+    if (!String(call[0] ?? "").includes("/api/media/render")) return false;
+    if (scopeId === undefined) return true;
+    return String((call[1] as { body?: unknown } | undefined)?.body ?? "").includes(scopeId);
+  });
   expect(
     posts,
     "a render POST was issued — a sandbox was bought when nothing should have been",
@@ -2307,6 +2326,21 @@ test("expectNoRenderPost actually recognises a render POST", () => {
   // ...and does not fire on an unrelated call, which is the whole point of naming the URL.
   expect(() =>
     expectNoRenderPost({ mock: { calls: [["https://openrouter.ai/api/v1/chat", {}]] } }),
+  ).not.toThrow();
+
+  // THE SCOPE, both directions. Without the second row the scoping could match nothing at all and
+  // every guarded test would pass forever — the vacuity the URL control above already exists to
+  // prevent, reintroduced one argument later.
+  const post = (body: string) => ({
+    mock: { calls: [["https://app.example.com/api/media/render", { method: "POST", body }]] },
+  });
+  expect(
+    () => expectNoRenderPost(post('{"sourceId":"plan_mine"}'), "plan_mine"),
+    "a POST for THIS plan must still fail the assertion",
+  ).toThrow();
+  expect(
+    () => expectNoRenderPost(post('{"sourceId":"plan_other"}'), "plan_mine"),
+    "another test's POST must NOT be reported as this test's purchase",
   ).not.toThrow();
 });
 
@@ -3042,7 +3076,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId }),
     ).rejects.toThrow(/MEDIA_RENDER_SECRET/);
     // The assertion that matters: a COUNT of zero, not merely the right message.
-    expectNoRenderPost(fetchMock);
+    expectNoRenderPost(fetchMock, batchId);
   });
 
   test("an unset MEDIA_RENDER_URL refuses the same way", async () => {
@@ -3055,7 +3089,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
     await expect(
       t.action(internal.render.renderReel.renderReel, { tenantId: A, planId, batchId }),
     ).rejects.toThrow(/MEDIA_RENDER_URL/);
-    expectNoRenderPost(fetchMock);
+    expectNoRenderPost(fetchMock, batchId);
   });
 
   test("with the fixture set, the whole path runs at $0 and NEVER issues a fetch", async () => {
@@ -3084,7 +3118,7 @@ describe("renderReel: fail-closed on the secret, then the offline seam", () => {
       batchId,
     });
     expect(out).toEqual({ ok: true });
-    expectNoRenderPost(fetchMock);
+    expectNoRenderPost(fetchMock, batchId);
 
     const plan = await planRow(t, planId);
     expect(plan?.renderStatus).toBe("rendered");
@@ -5194,7 +5228,7 @@ describe("the caption BURN terminal: a failure degrades the reel, it never unpub
     expect(
       await t.action(internal.render.renderReel.burnCaptions, { tenantId: A, planId }),
     ).toEqual({ ok: false, reason: "caption_track_empty" });
-    expectNoRenderPost(fetchMock);
+    expectNoRenderPost(fetchMock, planId);
     expect((await planRow(t, planId))?.renderStatus).toBe("rendered");
   });
 
