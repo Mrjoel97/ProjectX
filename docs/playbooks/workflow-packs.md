@@ -1,5 +1,30 @@
 # Playbook: Workflow Packs (curated knowledge-work pilot)
 
+> Last verified: 2026-09-08 (44-05 — **THE BROWSER PLANE IS EARNED, AND A DRILL TOOK A LIVE PACK
+> DOWN GETTING THERE.** `pack-business-pulse` v2 and `pack-sales-call-prep` v2 are ACTIVE on
+> production: `capture-prod-session.mjs` harvested a signed-in owner session from its persisted
+> Chrome profile (no sign-in needed — the profile was still live), the pilot spec ran against prod,
+> and `@evidence` wrote `browserEvidence` for the v2 rows it actually reached. All three planes
+> present, `activateSkill` accepted both.
+>
+> THE HAZARD, and read this before running the pilot spec anywhere shared: `@drill rollback` clicks
+> "Turn off <pack>" and **HAS NO RESTORE STEP** — it asserts the pack left the surface, asserts it
+> returned as a candidate, and stops. On a GREEN run it still leaves that pack dark. 27-12 gave
+> this file prod reach for the evidence plane and every test in it inherited that reach without
+> being re-read under it. On 2026-09-08 the drill archived `pack-business-pulse` on PRODUCTION and
+> failed before the last assertion; prod had no active business-pulse row until it was re-activated
+> by hand. Both destructive drills now `test.skip` unless `appOrigin` is local (`targetIsShared`),
+> mirroring `provision-owner.setup.ts`. Guarding beats restoring: a restore is one more step that
+> can fail halfway, and it would still leave the pack dark in between, on a live surface.
+>
+> STILL RED against prod and NOT patched here, deliberately: the `@dark` block ("the pilot is
+> invisible while every pack is a candidate") asserts a precondition production no longer meets —
+> packs are live — so it fails where it should skip. The obvious guard is a TRAP: the block's own
+> assertion is `expect(quickStarts).toHaveCount(0)`, so skipping when a pack IS offered makes it
+> unfalsifiable, and this exact block once PASSED with all six packs active. A correct guard reads
+> the deployment's pack state OUT OF BAND (a `convexRun`), never from the page under assertion.
+> Two mobile-viewport failures (`@discovery`, `@preview`) are also open and undiagnosed.)
+
 > Last verified: 2026-09-08 (44-04 — **THE PACK EVAL HARNESS'S OWN FREE GATE WAS RED, AND HAD BEEN
 > SINCE 35-02.** `run-workflow-pack-evals.mjs --self-test` asserted `PACK_EVAL_SUITE.packs.size
 > === 6`; 35-02 correctly added `pack-offer-and-lead-plan` as a seventh (deliberately without a

@@ -1,3 +1,17 @@
+> Last verified: 2026-09-08 (44-05 — an e2e spec in this directory took a live production feature
+> DOWN, and the lesson generalises past packs. `workflow-pack-pilot.spec.ts`'s `@drill rollback`
+> clicks "Turn off <pack>" with NO restore step, so even a green run leaves that pack dark. 27-12
+> gave the file production reach (`PIKAR_E2E_STORAGE_STATE` + `capture-prod-session.mjs`) for the
+> browser-evidence plane, and every test already in it inherited that reach without being re-read
+> under it. Both destructive drills now skip unless `appOrigin` is local.
+>
+> THE RULE FOR THIS WHOLE DIRECTORY: a spec that MUTATES state and can be pointed at a shared
+> deployment needs its own local-only guard, keyed on `PIKAR_E2E_BASE_URL` — do not rely on the
+> spec being "normally" run locally. `erasure.spec.ts` already does this (two fail-closed guards);
+> the pilot spec did not, and the gap only appeared once someone actually aimed it at prod. When
+> adding a prod-capable capability to a spec file, audit every OTHER test in that file for what it
+> writes. See workflow-packs.md for the pack-specific detail.)
+
 > Last verified: 2026-09-08 (44-02 — `apps/web/e2e/erasure.spec.ts`, the FIRST browser coverage of
 > `/dashboard/settings`. That surface had 33 sibling specs and none of them: the single
 > irreversible action in the product was the only major one with no browser proof.

@@ -48,6 +48,28 @@ const appOrigin = process.env.PIKAR_E2E_BASE_URL ?? "http://127.0.0.1:3111";
  */
 const TARGET_ARGS = process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : [];
 
+/**
+ * IS THE TARGET A SHARED DEPLOYMENT? Guards the two DESTRUCTIVE drills below.
+ *
+ * MEASURED 2026-09-08, on production. 27-12 made this file runnable against prod so the pack
+ * BROWSER EVIDENCE plane could be earned there — and every test already in the file inherited that
+ * reach without being re-read under it. `@drill rollback` clicks "Turn off <pack>" and HAS NO
+ * RESTORE STEP: it asserts the pack left the surface, asserts it came back as a candidate, and
+ * stops. That is correct against a local deployment and an OUTAGE against a live one, and it is an
+ * outage on a GREEN run — the failure that exposed it merely made it visible. `pack-business-pulse`
+ * was left archived on production with no active row until it was re-activated by hand.
+ *
+ * The drills prove PRODUCT behaviour, not deployment-specific behaviour, so skipping them off-local
+ * costs nothing: the browser-evidence plane is the only thing that genuinely needs prod, and it is
+ * `@evidence`, not `@drill`. Guarding rather than restoring is deliberate — a restore step is one
+ * more thing that can fail halfway, and it would still leave the pack dark for the seconds in
+ * between, on a surface real users are looking at.
+ *
+ * Mirrors `provision-owner.setup.ts`, which hard-refuses any non-local deployment for the same
+ * class of reason.
+ */
+const targetIsShared = !/127\.0\.0\.1|localhost/.test(appOrigin);
+
 /** ⚠️ ENDS THE BROWSER SESSION. Never call this before a navigation you still need. */
 function convexRun<T>(fn: string, args: Record<string, unknown>): T {
   const result = spawnSync(
@@ -468,6 +490,7 @@ test.describe("@drill rollback", () => {
   test("an owner can turn a live pack off, and everyone stops being offered it", async ({
     page,
   }) => {
+    test.skip(targetIsShared, `refusing to darken a live pack on ${appOrigin}`);
     test.setTimeout(120_000);
     await openWorkspace(page);
 
@@ -513,6 +536,7 @@ test.describe("@drill rollback", () => {
   // must work mid-incident and must never be blocked by a broken eval or browser harness — and this
   // is the only test that exercises it from the surface an owner would actually use.
   test("an owner can roll a live pack back to its previous version", async ({ page }) => {
+    test.skip(targetIsShared, `refusing to roll back a live pack on ${appOrigin}`);
     test.setTimeout(120_000);
     await openWorkspace(page);
 
