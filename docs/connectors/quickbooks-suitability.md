@@ -428,6 +428,61 @@ answers `/connectors/quickbooks/callback/:environment` on the deployment, and
 `www.pikar-ai.com`. Registering a NEW URI is what is blocked; MATCHING an existing one is not.
 
 ---
+## DIAGNOSIS CLOSED — 2026-09-09 (45-10). The Intuit APP RECORD is unreadable. Not our config.
+
+The decisive test. The only redirect URI registered on the app is Intuit's own Playground
+default, `https://developer.intuit.com/v2/OAuth2Playground/RedirectUrl`. Production was pointed
+at that exact string and the owner ran a consent. **It failed with the same
+`/oauth2/error`.** A REGISTERED redirect URI is refused, so the redirect URI was never the
+variable — and every hour spent on which URI to register was spent on the wrong question.
+
+### The chain, and every link is measured
+
+1. `POST /oauth2/v1/tokens/bearer` with a bogus code → `invalid_grant`, not `invalid_client`.
+   **The app exists and its credentials are provisioned.**
+2. The consent page says “Sorry, but **undefined** didn't connect.” That `undefined` is the app's
+   DISPLAY NAME failing to resolve. Given (1), the app is not missing — so appcenter cannot READ
+   its record.
+3. The developer console cannot read it either: `developerdeveloper.api.intuit.com/v4/graphql`
+   returns `responseStatus: 0` on its second call after a 200 on the first, and does not retry.
+
+One unreadable app record explains all four symptoms — the workspace list that never resolves,
+the absent Create-workspace control, the missing Save button on Keys and credentials, and the
+refused consent. It is a single Intuit-side data/service defect on this account.
+
+**Note on (2).** A fabricated client_id produces the same page, so the error text alone
+discriminates NOTHING — that control still stands. `undefined` becomes evidence only when paired
+with (1), which independently rules out “the app does not exist”. Neither fact carries the
+conclusion on its own.
+
+### Consequence — nothing on our side is outstanding
+
+`QUICKBOOKS_REDIRECT_URI` is restored to
+`https://opulent-octopus-494.convex.site/connectors/quickbooks/callback/production` — the value
+that represents intent and the endpoint that is live and fails closed. It is NOT registered on
+the app, and cannot be until the console can save. That is now a downstream detail, not the
+blocker.
+
+### The standby bridge, if Intuit repairs the app record but not the console
+
+The Playground URI would then be a registered, working redirect that our automation cannot
+receive on — but a human can carry the code the last few metres:
+
+1. `convex env set QUICKBOOKS_REDIRECT_URI https://developer.intuit.com/v2/OAuth2Playground/RedirectUrl --prod`
+2. Connect from the Connections page; approve consent; the browser lands on the Playground URL.
+3. Take `state`, `code` and `realmId` from the ADDRESS BAR (the page itself may render broken).
+4. `npx convex run --prod quickbooksAuth:handleCallback '{"environment":"production","state":"…","code":"…","realmId":"…"}'`
+
+`handleCallback` is the SAME internalAction the HTTP callback invokes — it consumes the state row
+and seals the credential normally, so this is the ordinary path with a manual last hop, not a
+shortcut around it. The code and the state row both expire in ~10 minutes. Refresh and revoke do
+not use the redirect URI, so once sealed the lane behaves normally.
+
+### Owner action — Intuit support, nothing else
+
+No configuration change on our side can affect this. The ticket text is in the playbook.
+
+---
 ## Evidence URLs
 
 - https://developer.intuit.com/app/developer/qbo/docs/learn/scopes · https://static.developer.intuit.com/output_html/qbo/docs/learn/scopes.html

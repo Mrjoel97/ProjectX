@@ -1,5 +1,25 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
+> Last verified: 2026-09-09 (45-10 — DIAGNOSIS CLOSED. The app's ONLY registered redirect URI is
+> Intuit's Playground default; production was pointed at that exact string and consent STILL
+> failed. A registered URI is refused, so the redirect URI was never the variable.
+>
+> THE CHAIN: (1) the token endpoint returns `invalid_grant`, not `invalid_client` — the app exists
+> and its credentials are provisioned; (2) the consent page's “**undefined** didn't connect” is the
+> app's DISPLAY NAME failing to resolve, so appcenter cannot READ the app record; (3) the console
+> cannot read it either (`v4/graphql` → `responseStatus: 0`). ONE unreadable app record explains
+> the empty workspace list, the absent Create-workspace control, the missing Save button, and the
+> refused consent. Intuit-side; no configuration of ours can affect it.
+>
+> KEEP THE CONTROL IN MIND: a fabricated client_id yields the same error page, so `undefined`
+> proves nothing ALONE. It becomes evidence only paired with (1), which rules out non-existence.
+> Two weak signals that constrain each other beat one strong-sounding signal read on its own.
+>
+> STANDBY BRIDGE if Intuit repairs the app record but not the console: point
+> `QUICKBOOKS_REDIRECT_URI` at the Playground URI, consent, take `state`/`code`/`realmId` from the
+> ADDRESS BAR, then `convex run --prod quickbooksAuth:handleCallback` — the same internalAction the
+> HTTP callback invokes, so the credential is sealed by the ordinary path with a manual last hop.
+> Both the code and the state row expire in ~10 minutes. Steps in the suitability record.)
 > Last verified: 2026-09-09 (45-09 — ROOT CAUSE of the connect failure, and it is Intuit's, not
 > ours: on the app's Keys and credentials page a redirect URI can be typed but **there is no Save
 > button**, so it is never stored. Measured cause — the console's workspaces query
