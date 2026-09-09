@@ -46,7 +46,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       # The convex CLI (for the gate queries) lives in packages/backend/node_modules — install it
       # BEFORE the gates, since the gates ARE `convex run` calls. ponytail: one workspace install;

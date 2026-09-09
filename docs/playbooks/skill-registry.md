@@ -1,5 +1,12 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-09 (45-07 — `skillopt.yml` moved from Node 20 to Node 24, matching
+> `ci.yml` and `deploy-production.yml`. Nothing about the skill registry changed; the workflow was
+> simply the last place in the repo still installing on a runtime nothing else uses, and
+> `engines.node` is now `>=24`. The step that matters here — `pnpm eval:golden --skill <candidate>`,
+> which writes the passing evidence `activateSkill`'s EVAL_GATE reads — has been run on Node 24
+> locally all along; this makes the scheduled run agree with it. See ci-gate.md for why the
+> divergence surfaced.)
 > Last verified: 2026-09-08 (43-07 — `AGENT_EVAL_SUITE` re-manifested to
 > `2026-09-08.fixture-33-declaration-scope`, retiring every older agent evidence row. ADR-043.
 >

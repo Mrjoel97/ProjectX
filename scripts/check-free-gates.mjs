@@ -1,6 +1,6 @@
 // EVERY FREE GATE MUST BE GREEN, AND CI MUST BE THE ONE ASKING.
 //
-// THE DEFECT THIS CLOSES. This repo has fifteen scripts carrying a `--self-test` / `--self-check` /
+// THE DEFECT THIS CLOSES. This repo has sixteen scripts carrying a `--self-test` / `--self-check` /
 // `--fixtures-only` mode: offline, zero-cost checks that exist to redden BEFORE anyone spends money
 // or touches a deployment. Nothing ran them. Two were found red by accident on 2026-09-08/09:
 //
@@ -119,6 +119,12 @@ const realFs = {
 
 function runGate(gate) {
   const backend = gate.path.startsWith("packages/backend");
+  // ANY NON-ZERO IS A FAILURE, INCLUDING AN "ENVIRONMENT ABORT" (exit 2). The pack harness exits 2
+  // when the Node running it is too old to strip TS types natively, and that is what reddened this
+  // step on its very first CI run: ci.yml pinned Node 20 while deploy-production built on 24, so the
+  // gate was reporting on a runtime nothing ships. Do NOT teach this runner to skip exit 2 — "the
+  // environment could not run the check" is indistinguishable from "nobody ran the check", which is
+  // the entire defect this file exists to close. Fix the environment; leave the gate red.
   // Exit code read DIRECTLY. Never `| tail`, never `$?` after a pipeline.
   const r = spawnSync(process.execPath, [join(repoRoot, gate.path), gate.flag], {
     cwd: backend ? join(repoRoot, "packages/backend") : repoRoot,

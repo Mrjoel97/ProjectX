@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: pnpm
 
       - name: Install workspace
@@ -63,14 +63,14 @@ jobs:
 
       # Unit tests only (vitest). apps/web's Playwright suite is `test:e2e` and is deliberately NOT
       # part of this gate — it needs a live deployment and a seeded tenant.
-      # THE FREE GATES. Fifteen scripts carry an offline `--self-test` / `--self-check` mode, and
+      # THE FREE GATES. Sixteen scripts carry an offline `--self-test` / `--self-check` mode, and
       # until 2026-09-09 nothing ran them: two were found red BY ACCIDENT, one of them stale since
       # 35-02. A gate nobody runs is indistinguishable from a gate that passes, and a gate that sits
       # red for a non-reason stops being read — taking the real failures with it. Offline and free,
       # so this costs the job seconds and needs no deployment.
       #
       # Its own `--self-test` runs FIRST, and deliberately as a separate command: a runner that
-      # cannot fail would report fifteen green gates whatever they said.
+      # cannot fail would report sixteen green gates whatever they said.
       - name: Free gates
         run: |
           node scripts/check-free-gates.mjs --self-test

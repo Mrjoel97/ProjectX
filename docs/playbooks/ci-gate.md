@@ -1,4 +1,25 @@
 # Playbook: CI gate (typecheck / lint / test / build)
+> Last verified: 2026-09-09 (45-07 — **EVERY WORKFLOW NOW RUNS NODE 24, because CI was gating on
+> a runtime nothing ships.** The free-gates step reddened on its FIRST CI run — not from a bug in
+> the gate, but because `ci.yml` pinned `node-version: "20"` while `deploy-production.yml` built
+> on `"24"` and every developer machine ran 24. `run-workflow-pack-evals.mjs --self-test` reads
+> the pack registry by stripping TS types NATIVELY (floor: Node 22.6) and exits **2**, its
+> documented ENVIRONMENT ABORT, on anything older. Green locally, red in CI, and the difference
+> was the runtime — which is the whole point: typecheck, lint, test and build had never once been
+> verified on the Node that production actually builds with.
+>
+> `ci.yml` and `skillopt.yml` are now on 24, matching `deploy-production.yml`. `engines.node` is
+> `>=24`, NOT the `>=22.6` those two type-stripping scripts individually need: a version range
+> nobody exercises is a claim with no check behind it, and this repo has now spent a phase on
+> exactly that failure mode. State the floor you actually test. (The pack script keeps its own
+> internal 22.6 floor — harmless, just a wider tolerance than the repo claims.)
+>
+> AN EXIT 2 STAYS RED. `check-free-gates.mjs` treats ANY non-zero as failure, and the comment at
+> `runGate` says why in the file: “the environment could not run the check” is indistinguishable
+> from “nobody ran the check”. Teaching the runner to skip environment aborts would make this step
+> green by making it cover nothing — the defect it was built to close, re-entering through its own
+> error handler.)
+
 > Last verified: 2026-09-09 (45-06 — **CI NOW RUNS THE FREE GATES, because nothing did.** Sixteen
 > scripts carry an offline `--self-test` / `--self-check` mode — zero-cost checks that exist to
 > redden BEFORE anyone spends money or touches a deployment — and no automation ever invoked one.
