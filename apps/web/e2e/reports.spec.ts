@@ -271,6 +271,11 @@ test("ROLE SPLIT: the deployment card is absent for a non-owner and present for 
   page,
 }) => {
   await page.goto(ROUTE);
+  // THE POSITIVE CONTROL, and it is not decoration. `toHaveCount(0)` SUCCEEDS ON ITS FIRST POLL, so
+  // asserting absence straight after a `goto` passes against a page still showing nothing at all —
+  // the card would be "absent" because React had not painted, not because the owner gate withheld
+  // it. Proving the page rendered FIRST is what makes the next line evidence rather than a race.
+  await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
   await expect(page.getByText("Deployment (owner only)")).toHaveCount(0);
   // Not merely hidden: a non-owner never CALLS the owner queries, so their figures are nowhere.
   expect(await page.content()).not.toContain("Last cursor advance");

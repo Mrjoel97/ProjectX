@@ -1,4 +1,28 @@
 # Playbook: CI gate (typecheck / lint / test / build)
+> Last verified: 2026-09-09 (45-06 — **CI NOW RUNS THE FREE GATES, because nothing did.** Sixteen
+> scripts carry an offline `--self-test` / `--self-check` mode — zero-cost checks that exist to
+> redden BEFORE anyone spends money or touches a deployment — and no automation ever invoked one.
+> Two were found red BY ACCIDENT this week: the pack harness had asserted
+> `PACK_EVAL_SUITE.packs.size === 6` since 35-02 added a seventh, and `check-provider-lane`'s
+> self-test failed three checks whose premises had been borrowed from the real tree and expired.
+> A gate nobody runs is indistinguishable from a gate that passes.
+>
+> `scripts/check-free-gates.mjs` does two things, and the first is what survives a growing repo:
+> the registry is an ALLOWLIST written by hand, and it fails when the filesystem and the list
+> disagree in EITHER direction — so a new script with a free mode is a visible one-line diff in
+> review rather than a gate silently covering nothing. Deriving the list from the scan would make
+> the file agree with whatever it found, which is not a check. Second, every registered gate must
+> exit 0, with the exit code read DIRECTLY from `spawnSync` — never through a pipe, because a
+> pipeline reports the exit of its LAST stage and `node gate.mjs | tail` is green whatever the
+> gate said. That mistake is how at least one red gate stayed invisible here.
+>
+> ITS OWN `--self-test` RUNS FIRST, as a separate command in the same step: a runner that cannot
+> fail would report sixteen green gates whatever they said. Both directions are mutation-proven
+> against the real tree — an unregistered gate and a red gate each fail the check.
+>
+> Offline and free, so the step costs seconds and needs no deployment. It sits between Lint and
+> Test deliberately: it is cheaper than the suite and catches a class the suite cannot see.)
+
 
 > Last verified: 2026-09-06 (37-01, G26 — **a second Stop hook, `scripts/check-planning.mjs`, guards the
 > planning corpus** the way `check-playbooks.mjs` guards the playbooks: STATE.md must start with `---

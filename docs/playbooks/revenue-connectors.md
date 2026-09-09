@@ -18,6 +18,23 @@
 > `reminderOpener(providerLabel, id)` — pinned by test to eval case 42's first turn. Nothing loads on render;
 > nothing in the panel stages or sends. PayPal's offer gets no list (the tool refuses it).
 >
+> Last verified: 2026-09-09 (45-06 — `check-provider-lane.mjs --self-test` is GREEN again; it had
+> been failing three checks. None was a logic break: all three PREMISES had been borrowed from the
+> real tree and expired. Two seal cases asserted a `pass` is refused “while the lane is unbuilt”
+> and “because Stripe's allow-list is empty” — both true when written, both false once `hubspot.ts`
+> shipped and `PROVIDER_READ_PATHS.stripe` gained five paths. A premise taken from the tree
+> expires the moment somebody does the work it assumes nobody has done.
+>
+> All three now BUILD their premise into the fixture, which is what the mutation cases above them
+> already did: the hubspot modules are renamed out of the listing (renamed, not removed — a row
+> that only fails when its file is MISSING would survive the file being WRONG), and Stripe's
+> allow-list is emptied by substitution. A new `mustReplace` helper THROWS when a substitution
+> matches nothing, because `String.replace` with a stale pattern returns the input unchanged and
+> the fixture then quietly asserts against the real tree — the same failure in a different door.
+> Mutation-proven: break the pattern and the self-test fails by name.
+>
+> This gate now runs in CI via `scripts/check-free-gates.mjs`; see ci-gate.md.)
+
 > Last verified: 2026-09-09 (45-05 — **INTUIT REFUSES A `convex.site` REDIRECT URI, so the callback
 > now lives on our own domain.** Google and Microsoft both accept
 > `https://<deployment>.convex.site/<provider>/callback` and have used it since Phase 12; a

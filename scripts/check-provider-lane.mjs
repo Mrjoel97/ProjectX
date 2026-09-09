@@ -569,6 +569,22 @@ function verifyGate() {
 // ── --self-test ───────────────────────────────────────────────────────────────────────────────
 
 /** A filesystem that reads the real tree except for the paths a mutation overrides. */
+/**
+ * A SUBSTITUTION THAT CANNOT SILENTLY MISS.
+ *
+ * Every fixture below builds its premise by rewriting real source, and `String.replace` with a
+ * pattern that matches nothing returns the input UNCHANGED — so the fixture quietly asserts against
+ * the real tree instead of the intended one, and the check either passes for the wrong reason or
+ * fails for one. That is not hypothetical: three checks in this very self-test went red on
+ * 2026-09-09 because their premises ("hubspot's lane is unbuilt", "stripe's allow-list is empty")
+ * were BORROWED FROM THE REAL TREE and the tree moved underneath them. Same shape, different door.
+ */
+const mustReplace = (src, pattern, replacement, label) => {
+  const out = src.replace(pattern, replacement);
+  if (out === src) throw new Error(`self-test fixture did not apply: ${label}`);
+  return out;
+};
+
 const mutatedFs = (overrides) => ({
   read: (p) => (p in overrides ? overrides[p] : realFs.read(p)),
   list: (d) => (`list:${d}` in overrides ? overrides[`list:${d}`] : realFs.list(d)),
@@ -637,9 +653,19 @@ function selfTest() {
     {
       row: "allow-list",
       why: "a lane module over an EMPTY allow-list could only ever fail closed",
+      // THE EMPTINESS IS BUILT, NOT BORROWED. This case used to rely on Stripe's
+      // `PROVIDER_READ_PATHS` entry actually being empty, which was true when it was written and
+      // false by 2026-09-09 (five paths). A premise taken from the real tree expires the moment
+      // somebody does the work it assumes nobody has done.
       fs: mutatedFs({
         [`list:${CONNECTOR_DIR}`]: [...realFs.list(CONNECTOR_DIR), "stripeRead.ts"],
         [`${CONNECTOR_DIR}/stripeRead.ts`]: "export const read = 1;",
+        [CONNECTOR_FETCH]: mustReplace(
+          fetchSrc,
+          /\n {2}stripe: \[[^\]]*\],/,
+          "\n  stripe: [],",
+          "empty stripe allow-list",
+        ),
       }),
       provider: "stripe",
     },
@@ -756,6 +782,15 @@ function selfTest() {
     },
     {
       why: "pass with evidence and every condition named is still refused while the lane is unbuilt",
+      // UNBUILT IS BUILT INTO THE FIXTURE. `hubspot.ts` and `hubspotAuth.ts` now exist, so borrowing
+      // "unbuilt" from the real tree made this assert the opposite of its own sentence. Renamed
+      // rather than removed, per this file's own doctrine: a row that only fails when its file is
+      // MISSING would survive the file being WRONG.
+      fs: mutatedFs({
+        [`list:${CONNECTOR_DIR}`]: realFs
+          .list(CONNECTOR_DIR)
+          .map((name) => (name.toLowerCase().startsWith("hubspot") ? `renamed_${name}` : name)),
+      }),
       options: {
         seal: "pass",
         provider: "hubspot",
@@ -766,6 +801,15 @@ function selfTest() {
     },
     {
       why: "pass for Stripe is refused even fully evidenced — its allow-list is empty by decision",
+      // Built, not borrowed — see the allow-list case above.
+      fs: mutatedFs({
+        [CONNECTOR_FETCH]: mustReplace(
+          fetchSrc,
+          /\n {2}stripe: \[[^\]]*\],/,
+          "\n  stripe: [],",
+          "empty stripe allow-list (seal)",
+        ),
+      }),
       options: {
         seal: "pass",
         provider: "stripe",

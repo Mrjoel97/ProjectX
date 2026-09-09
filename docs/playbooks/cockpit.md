@@ -1,3 +1,35 @@
+> Last verified: 2026-09-09 (45-06 — **AN ABSENCE ASSERTION NEEDS SOMETHING THAT PROVES THE
+> SURFACE RENDERED**, and `scripts/check-absence-guards.mjs` now enforces it as a registered free
+> gate. `toHaveCount(0)` SUCCEEDS ON ITS FIRST POLL — zero is already true of a page that has
+> painted nothing — so absence asserted straight after a `goto` passes against “Loading…” and
+> reports it as proof. Two instances shipped: `routines.spec.ts` settled on prose rather than a
+> button, and this file's `@dark` block once PASSED WITH ALL SIX PACKS ACTIVE.
+>
+> The scan flags ONLY an absence assertion with nothing before it IN ITS OWN `test(` block. A
+> blanket “every zero-count needs a positive control” rule would flag 82 sites across 20 files on
+> day one, and a gate red for a non-reason stops being read — the failure the whole family exists
+> to prevent. Comments are stripped first, because prose about the hazard would otherwise register
+> as the hazard (two of the first five raw matches were exactly that).
+>
+> READ EVERY FLAG BEFORE FIXING IT. The first draft reported five; FOUR WERE THE SCANNER'S OWN
+> BUG — a `toBeVisible\(\)` pattern requiring EMPTY parens, which cannot match the
+> `toBeVisible({ timeout: 15_000 })` this codebase actually writes. Had those been “fixed”, four
+> healthy tests would have gained redundant assertions to satisfy a broken detector, and the bug
+> would have been laundered into the suite. One was real: `reports.spec.ts` asserted the
+> owner-only card absent immediately after a `goto`, now preceded by a heading assertion.
+>
+> `@dark` IS FIXED PROPERLY. It asserts a property that holds only while every pack is a
+> candidate, and two are now live on production, so it failed where it should skip. The obvious
+> guard is a TRAP: the block's own assertion is `toHaveCount(0)`, so skipping when a pack IS
+> offered makes it unfalsifiable. The precondition is therefore read OUT OF BAND —
+> `somePackIsLive()` asks the DEPLOYMENT through the CLI (`loadSkill` fails closed with
+> `NO_ACTIVE_SKILL`), never the page under assertion. Memoised; seven round trips, asked once.
+>
+> Settle HELPERS are a pinned allowlist in the scanner, each VERIFIED at its definition rather
+> than taken on its name (`openWorkspace` awaits a `workspace-pane` visibility; `settlePackQueries`
+> awaits a `waitFor` race). Adding a name there without reading its body is how this gate would
+> start passing what it should not.)
+
 > Last verified: 2026-09-08 (44-07 — **`erasure.spec.ts` HAS NOW ACTUALLY RUN, and its first run
 > failed.** Written in 44-02, typechecked and discovered by playwright but NEVER EXECUTED; 44-02
 > said so and refused to call it evidence. Correct call: the first real execution sat on

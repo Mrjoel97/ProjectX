@@ -196,7 +196,41 @@ const TITLE_TO_PACK: Record<string, string> = {
 };
 
 // ── FREE: the pilot is dark, and the product proves it ────────────────────────────────────────
+/**
+ * IS ANY PACK LIVE ON THIS DEPLOYMENT? Asked OUT OF BAND, through the CLI, and that is the point.
+ *
+ * `@dark` asserts a property that only holds WHILE EVERY PACK IS A CANDIDATE. On production two
+ * packs are now active, so the block fails where it should skip — and the obvious guard is a TRAP:
+ * the block's own assertion is `expect(quickStarts).toHaveCount(0)`, so skipping when a pack IS
+ * offered would make it unfalsifiable. This exact block once PASSED WITH ALL SIX PACKS ACTIVE,
+ * which is what that failure mode looks like from the outside.
+ *
+ * So the precondition is read from the DEPLOYMENT, never from the page under assertion. `loadSkill`
+ * fails closed with `NO_ACTIVE_SKILL` when a name has no active row, so a throw for every pack means
+ * dark and one success means live. Memoised: seven CLI round trips, asked once.
+ */
+let packLive: boolean | null = null;
+const somePackIsLive = (): boolean => {
+  if (packLive !== null) return packLive;
+  packLive = Object.values(TITLE_TO_PACK).some((packId) => {
+    try {
+      return (
+        convexRun<{ version?: number } | null>("skills:getActiveSkill", {
+          name: `pack-${packId}`,
+        })?.version !== undefined
+      );
+    } catch {
+      return false;
+    }
+  });
+  return packLive;
+};
+
 test.describe("@dark the pilot is invisible while every pack is a candidate", () => {
+  // OUT OF BAND — see `somePackIsLive`. Reading the DEPLOYMENT rather than the page under
+  // assertion is what keeps this a skip-when-inapplicable instead of a check that cannot fail.
+  test.skip(somePackIsLive, "a pack is live on this deployment — the pilot is not dark");
+
   // THE CENTRAL PROPERTY OF THE PHASE, asserted at the surface a real user looks at rather than
   // at the query. Six candidates exist on this deployment right now; not one may be offered.
   test("no guided workflow is offered at all", async ({ page }) => {

@@ -1,5 +1,12 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-09 (45-06 — `reports.spec.ts`'s ROLE SPLIT test asserted the
+> owner-only deployment card ABSENT immediately after `page.goto`, with nothing establishing that
+> the page had rendered. `toHaveCount(0)` succeeds on its first poll, so the card was “absent”
+> because React had not painted, not because the owner gate withheld it — the assertion could not
+> fail. A `Reports` heading assertion now precedes it. Enforced repo-wide by
+> `scripts/check-absence-guards.mjs`; see cockpit.md.)
+
 > Last verified: 2026-09-08 (44-03 — `DataControls`'s export copy now MATCHES what the export
 > ships. Until this commit the surface said only "structured JSON", while the erase panel beside
 > it said "Download your data first if you want a copy" — and `tenantExport` carried no files at
