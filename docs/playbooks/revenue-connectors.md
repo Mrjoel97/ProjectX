@@ -18,6 +18,37 @@
 > `reminderOpener(providerLabel, id)` — pinned by test to eval case 42's first turn. Nothing loads on render;
 > nothing in the panel stages or sends. PayPal's offer gets no list (the tool refuses it).
 >
+> Last verified: 2026-09-09 (45-05 — **INTUIT REFUSES A `convex.site` REDIRECT URI, so the callback
+> now lives on our own domain.** Google and Microsoft both accept
+> `https://<deployment>.convex.site/<provider>/callback` and have used it since Phase 12; a
+> PRODUCTION QuickBooks app does not, so the URI step 1 above tells you to register could not be
+> entered at all (owner, 2026-09-09). Step 1's URI is therefore superseded for QuickBooks:
+>
+> **`https://www.pikar-ai.com/connectors/quickbooks/callback/production`**
+>
+> `apps/web/app/connectors/[provider]/callback/[environment]/route.ts` receives it and hands the
+> request to the SAME Convex handler that has always processed it. No connector logic moved —
+> `quickbooksAuth.handleCallback` is still the only thing that validates a state, a realmId or a
+> code — and the route covers `hubspot` and `stripe` on the same path shape, so the next lane needs
+> no second copy (the 28.1-11 lesson: a repair that reaches two of three copies IS the defect).
+>
+> SERVER-SIDE FETCH, NOT A BROWSER REDIRECT, and that is the point. A 307 back to `convex.site`
+> would put the authorization CODE in browser history, in a `Referer`, and in every proxy log on
+> the second hop — the exact leak the Convex route already refuses for `error_description`
+> (§4). Forwarding server-side means the code is seen by our Next server and our Convex deployment
+> and by nothing else.
+>
+> IT CANNOT BECOME AN OPEN REDIRECT, which is the thing to preserve if you ever touch it. The
+> Convex handler answers 303 with an ABSOLUTE `Location` composed from its own `SITE_URL`; this
+> route takes only the PATH and re-hosts it on the request's origin, so the only reachable
+> destination is a page on this site even if `SITE_URL` is misconfigured. Mutation-proven: forward
+> `location` verbatim and the suite reddens on an `evil.example` destination. The provider and
+> environment segments are closed sets checked BEFORE the fetch — also mutation-proven, by the
+> upstream call count, because “before anything is forwarded” is a claim only that can settle.
+>
+> Production now carries the PRODUCTION Intuit keys (client id 40 chars, not the 50-char
+> development one) and this redirect URI.)
+
 > Last verified: 2026-09-09 (45-01 — **THE OWNER RUNBOOK ABOVE COULD NOT BE RUN.** Its step 2
 > seals the gate `--prod`, and `sealGate` is an `ownerMutation`: `npx convex run` carries an admin
 > key but NO user identity, so it answered `UNAUTHENTICATED`. No UI calls `sealGate` either — a
