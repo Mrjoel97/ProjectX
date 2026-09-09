@@ -1,5 +1,17 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (47-08 — **T3'S EVIDENCE, FINAL NUMBER.** After the detector fix and a
+> redeploy, the production run is `audit scanned=672 complete findings=0` /
+> `deadLetters scanned=9 complete findings=0` — **0 violations AND 0 suspects**.
+>
+> THAT ZERO IS NOT VACUOUS, AND THE REASON MATTERS. A brand-new check reporting zero on its first
+> run tells you nothing about whether it can report anything else. This one reported EIGHT first,
+> named them, and went to zero only after its own false positives were fixed — so the live path is
+> demonstrably able to discriminate. That sequence IS the positive control, and it happened by
+> accident rather than by design; a future rewrite of this gate should keep the property on purpose.
+>
+> Cite this run as ADR-044 T3's evidence. Reproduce with
+> `node scripts/check-audit-payloads.mjs --prod` (add `--strict` to fail on suspects too).)
 > Last verified: 2026-09-09 (47-06 — **THE §4 GATE RAN AGAINST PRODUCTION AND §4 HOLDS.** 672 audit
 > rows + 9 deadLetters rows, walk COMPLETE, **0 violations**. That is ADR-044 T3's evidence, and it
 > is the first time the “no content in the archive” assumption has been tested against a row rather
