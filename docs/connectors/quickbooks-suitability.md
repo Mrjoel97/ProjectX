@@ -364,6 +364,70 @@ this date: `packages/backend/convex/http.ts` registers `pathPrefix:
 left as written because it is a dated record; this note supersedes it.
 
 ---
+## Intuit console defect — 2026-09-09 (45-09). ROOT-CAUSED, and NOT fixable from our side.
+
+Continuation of the 45-08 record. The owner reports the same failure from the UI: on the app's
+**Keys and credentials** page a redirect URI can be TYPED but **there is no Save button**, so it
+is never stored. That, not our configuration, is why every consent attempt fails.
+
+### First: the keys are CORRECT. That question is closed.
+
+They live in the root `.env` as `INTUITAPP_CLIENT_ID` / `INTUITAPP_CLIENT_SECRET` — NOT
+`QUICKBOOKS_*`, which is why an earlier grep for `^QUICKBOOKS_` reported them absent and briefly
+made “wrong keys on prod” look like the leading theory. Compared by SHA-256 (values never
+printed): the deployment's `QUICKBOOKS_CLIENT_ID` and `QUICKBOOKS_CLIENT_SECRET` are
+**byte-identical** to the `.env` pair. Search every plausible spelling before concluding a secret
+is missing.
+
+### The defect, measured
+
+`developer.intuit.com/workspaces` renders 30 spinners and never resolves. The cause is one
+failing call, visible in `PerformanceResourceTiming.responseStatus`:
+
+| Call | Status |
+|---|---|
+| `identity.api.intuit.com/v2/graphql` | 200 |
+| `authz-decision.api.intuit.com/v2/authorize` | 200 (console logs `authZ: Authorize Decision - PERMIT`) |
+| `accounts.intuit.com/graphql` | 200 |
+| `developerdeveloper.api.intuit.com/v4/graphql` (1st) | 200, 519 bytes |
+| **`developerdeveloper.api.intuit.com/v4/graphql` (2nd)** | **0 — response never completed** |
+
+`responseStatus: 0` is a network-layer failure, not an HTTP error the app could render. The app
+does not retry: a `fetch` interceptor installed afterwards and re-triggered by switching tabs
+captured nothing. The list never arrives, so no workspace UI mounts — which is also why there is
+no **Create workspace** control to click, and why the same API failing on the app-settings page
+leaves its form with no Save.
+
+**Ruled out, each by test rather than assumption:**
+
+- *Local browser state / extensions* — the owner reproduced it in Incognito with extensions off.
+- *Authentication* — authZ returns PERMIT and three other authenticated GraphQL calls return 200.
+- *Cookie consent* — OneTrust initialised (`OptanonActiveGroups` populated, no banner). The
+  `Script error.` from `otSDKStub.js` in the console is cross-origin noise; it was briefly a
+  suspect and is not the cause.
+- *A malformed host* — `developerdeveloper.api.intuit.com` looks like a doubled-word typo but
+  resolves through Akamai and answers 401 to an unauthenticated POST, exactly as
+  `developer.api.intuit.com` does. Real host.
+
+A raw `fetch` to that endpoint from the page returns `401 AuthenticationFailed`, but that probe
+omits the bearer ticket the SPA attaches — it is INCONCLUSIVE about the app's own call and must
+not be read as the cause.
+
+### Consequence
+
+No redirect URI can be registered until Intuit fixes this account's console, so the production
+consent cannot be completed and the lane cannot be sealed. Nothing on our side is outstanding.
+
+### The workaround that needs no fix from Intuit
+
+The app already carries at least one registered redirect URI from when it was built, and the
+owner CAN read that page even though they cannot save it. If any registered URI is on a host we
+control, point `QUICKBOOKS_REDIRECT_URI` at it and serve the callback there — `http.ts` already
+answers `/connectors/quickbooks/callback/:environment` on the deployment, and
+`apps/web/app/connectors/[provider]/callback/[environment]/route.ts` forwards the same shape from
+`www.pikar-ai.com`. Registering a NEW URI is what is blocked; MATCHING an existing one is not.
+
+---
 ## Evidence URLs
 
 - https://developer.intuit.com/app/developer/qbo/docs/learn/scopes · https://static.developer.intuit.com/output_html/qbo/docs/learn/scopes.html

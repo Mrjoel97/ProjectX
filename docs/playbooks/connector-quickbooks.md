@@ -1,5 +1,26 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
+> Last verified: 2026-09-09 (45-09 — ROOT CAUSE of the connect failure, and it is Intuit's, not
+> ours: on the app's Keys and credentials page a redirect URI can be typed but **there is no Save
+> button**, so it is never stored. Measured cause — the console's workspaces query
+> (`developerdeveloper.api.intuit.com/v4/graphql`) returns `responseStatus: 0`, a network-layer
+> failure, on its SECOND call after a 200 on the first; the app never retries. No list mounts, so
+> there is no Create-workspace control either.
+>
+> Ruled out BY TEST, not assumption: extensions/local state (owner reproduced it in Incognito),
+> authentication (authZ PERMIT plus three other authenticated GraphQL 200s), cookie consent
+> (OneTrust initialised; its `Script error.` is cross-origin noise), and a malformed host
+> (`developerdeveloper…` resolves through Akamai and behaves like `developer.api.intuit.com`).
+>
+> AND THE KEYS ARE CORRECT — that question is closed. They are in the root `.env` as
+> `INTUITAPP_CLIENT_ID`/`INTUITAPP_CLIENT_SECRET`, not `QUICKBOOKS_*`; a grep for the wrong
+> spelling reported them missing and briefly made “wrong keys on prod” the leading theory. By
+> SHA-256 the deployment values are byte-identical to `.env`.
+>
+> THE WORKAROUND THAT NEEDS NO FIX FROM INTUIT: registering a NEW URI is blocked; MATCHING an
+> already-registered one is not. If any URI already on the app is on a host we control, point
+> `QUICKBOOKS_REDIRECT_URI` at it — `http.ts` serves the callback on the deployment and the
+> `apps/web` forwarder serves the same shape on `www.pikar-ai.com`.)
 > Last verified: 2026-09-09 (45-08 — first live production connect attempt. It did NOT connect,
 > and the blocker is on Intuit's side: the developer account has **no workspace**, so no surface
 > will display the app's registered redirect URIs. The OAuth Playground says it outright — “you
