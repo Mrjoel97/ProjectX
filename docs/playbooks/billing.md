@@ -1,5 +1,22 @@
 # Playbook: Billing — Pikar's OWN merchant account (Phase 28.1)
 
+> Last verified: 2026-09-09 (47-10 — **`billingEvents.stripeObjectId` was investigated for removal
+> and DELIBERATELY KEPT.** ADR-047 D2. Nothing reads it — verified exhaustively: one write path
+> (`billingLedger.ts:153` ← `billingWebhook.ts:545`), one test insert, zero reads, zero index
+> usage, zero UI. The `stripeObjectId` on the billing panel is `billingUnapplied`'s field, a
+> different table, `tenant_owned`, and erased.
+>
+> It is kept for two reasons. Removing it would NOT close ADR-044 C2, because `correlationId` is
+> `billing/<stripe id>` and carries the same id — so the delete would change what a reader
+> believes without changing what is true. And it is the ONLY place the invoice appears on a
+> `credit_note.created` row: that movement correlates on the credit note, because Stripe permits
+> several against one invoice and correlating on the invoice made the second collide with the
+> first's `(tenant, correlation, refunded)` identity.
+>
+> **If you grep this field, find no callers and reach for the delete key — this note is why not.**
+> The table is empty on every deployment (measured 2026-09-09), so the change would be free; that
+> is exactly what makes the temptation worth writing down rather than re-litigating at the first
+> live delivery, when it stops being free.)
 > **Test-hygiene pass, 2026-08-30 (found by the 28-09 callback slice's full-suite run, not by a
 > billing change).** `billingWebhook.test.ts`'s "the stored row carries no payload" assertion
 > scanned the WHOLE stored row — `_creationTime` included — for the fixture's `1200`. A

@@ -121,6 +121,72 @@ describe("tenant table classification registry", () => {
     expect(deletableTables()).toContain("billingUnapplied");
   });
 
+  /**
+   * THE SET THAT SURVIVES ERASURE IS CLOSED, AND IT IS DERIVED — NEVER HAND-ENUMERATED.
+   *
+   * ADR-044 C2 asked "which surviving table still resolves to a person" and answered it by hand:
+   * it named `betaInvites` and `billingEvents`, and said of the rest "Every other surviving table
+   * was checked — `billingCoverage`, `workflowPackEvents` and `billingStripeEvents` — the failure
+   * is these two and no others." That sentence was wrong in two places, and BOTH omissions were
+   * invisible precisely because the list was typed rather than derived (47-09):
+   *
+   *   • `deadLetters` (`audit_immutable`) was never mentioned. `billingWebhook.ts`'s dead-letter
+   *     payload carries `stripeCustomerId` and `billedTenantId` together — the same shape ADR-044
+   *     objected to in `billingEvents`, one table over.
+   *   • `betaWaitlist` (`admission_plane`) was never mentioned. It holds a RAW `email`, a `name`
+   *     and a free-text `referral`, it is excluded from the erasure walk exactly as `betaInvites`
+   *     is — and unlike every other row in this argument it is NOT hypothetical: production held
+   *     live rows when this test was written.
+   *
+   * So the classification map is the source, and this list is the assertion. Adding a table to any
+   * surviving class now FAILS HERE, by name, and the person adding it has to say what personal
+   * data it carries. That is the whole point: the defect was never a wrong answer, it was a
+   * question asked of a list somebody remembered.
+   *
+   * `tenant_owned` and `tenant_credential` are deliberately NOT pinned — they are erased, so a new
+   * one carries no obligation and pinning them would be noise that trains people to edit the list
+   * without thinking.
+   */
+  test("the tables that OUTLIVE an erasure are a closed, named set", () => {
+    const surviving = (klass: string) =>
+      Object.entries(TENANT_TABLE_CLASSIFICATION)
+        .filter(([, c]) => c === klass)
+        .map(([t]) => t)
+        .sort();
+
+    // Excluded from the erasure walk by construction. Every one of these is a table whose rows a
+    // deletion request cannot reach, so every one of them is a place personal data must not be.
+    expect(surviving("audit_immutable")).toEqual([
+      "audit",
+      "billingCoverage",
+      "billingEvents",
+      "deadLetters",
+      "workflowPackEvents",
+    ]);
+
+    // The admission plane. `betaInvites` is cleared at erasure (ADR-045 D1) rather than deleted,
+    // so the invite stays spent. `betaWaitlist` is NOT cleared by anything — see ADR-047.
+    expect(surviving("admission_plane")).toEqual(["betaInvites", "betaWaitlist"]);
+
+    // Not tenant-scoped at all: no tenantId, so nothing here can be joined back to a person by
+    // an id on an audit row. That is why they are a different class and not an oversight.
+    expect(surviving("global")).toEqual([
+      "billingStripeEvents",
+      "exportCursors",
+      "guardrailConfig",
+      "optimizerConfig",
+      "pendingTimeouts",
+      "providerGates",
+      "skills",
+    ]);
+
+    // POSITIVE CONTROL: the filter really reads the map, so the three assertions above cannot be
+    // passing over an empty result. Without this, renaming the class strings would turn every
+    // list into `[]` and all three would still be green.
+    expect(surviving("tenant_owned").length).toBeGreaterThan(10);
+    expect(surviving("not-a-real-classification")).toEqual([]);
+  });
+
   test("exposes only tenant-owned and credential tables to deletion, with identity last", () => {
     const tables = deletableTables();
 

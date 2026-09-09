@@ -1,5 +1,33 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (47-10 — **ADR-047: the billing ledger KEEPS its Stripe ids, and
+> ADR-044's survey missed two tables.** ADR-044 D3 left the `billingEvents` choice open and ADR-045
+> declined it; ADR-047 makes it. The finding that decided it: `billingEvents` carries the Stripe id
+> TWICE — once in `stripeObjectId` (which **nothing reads**: one write path, zero reads, zero index
+> usage, zero projection) and once inside `correlationId`, which is `billing/<stripe id>` and IS
+> the dedupe identity. So severing `stripeObjectId` would delete a DUPLICATE of the bridge and
+> leave the bridge — while reading, in a commit subject, like a privacy win. And hashing the
+> correlation buys nothing either: we hold the Stripe account and can list and hash every invoice
+> on demand, so the preimage set is “objects we can enumerate”; against a database-only attacker a
+> raw Stripe id was already useless without Stripe. **A defence that only inconveniences its own
+> operator is a claim, not a control.** The narrowed claim from 47-05 is therefore the true
+> sentence and it stays.
+>
+> THE WHOLE BILLING BRIDGE IS LATENT, measured against production with `audit` (672 rows) and
+> `users` as the positive control on the same connection: `billingEvents`, `billingCoverage`,
+> `billingCustomers` and `betaInvites` are ALL EMPTY, no dead letter has ever come from billing,
+> and no audit payload carries a Stripe-shaped key. That also means **ADR-045's D2 sweep has no
+> population** — ADR-044 T2 is satisfied by a measurement rather than by a destructive write.
+>
+> AND THE PART THAT MATTERS MOST. Deriving the surviving-table set from the classification map
+> instead of reading ADR-044's hand-written list found TWO tables it never named: `deadLetters`
+> (its billing payload puts `stripeCustomerId` beside `billedTenantId` — the exact shape ADR-044
+> objected to, one table over; latent) and **`betaWaitlist`, which is LIVE**: raw `email` + `name`,
+> excluded from the erasure walk, 2 rows on production, and `approve` PATCHES the row rather than
+> clearing it so nothing ever removes the address. Both are open and owner-owned per ADR-044 D3.
+> `tenantData.test.ts` now pins the full membership of all three surviving classes with a positive
+> control, so the next addition fails by name — the defect was never a wrong answer, it was a
+> question asked of a list somebody remembered.)
 > Last verified: 2026-09-09 (47-08 — **T3'S EVIDENCE, FINAL NUMBER.** After the detector fix and a
 > redeploy, the production run is `audit scanned=672 complete findings=0` /
 > `deadLetters scanned=9 complete findings=0` — **0 violations AND 0 suspects**.
