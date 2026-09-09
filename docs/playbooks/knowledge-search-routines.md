@@ -1,5 +1,37 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> **ARMED ON PRODUCTION 2026-09-09 — FOUR PROBES, AND THE MODULE IS FROZEN UNTIL 2026-11-01.**
+> Verified `pending` in `_scheduled_functions` immediately after arming:
+>
+> | zone | fires (UTC) | shift | direction |
+> | --- | --- | --- | --- |
+> | `Pacific/Auckland` | 2026-09-26T15:00:16Z | GMT+12 → GMT+13 | spring forward |
+> | `Australia/Lord_Howe` | 2026-10-03T16:30:16Z | GMT+10:30 → GMT+11 | **+30 min** |
+> | `Europe/Berlin` | 2026-10-25T02:00:30Z | GMT+2 → GMT+1 | fall back |
+> | `America/New_York` | 2026-11-01T07:00:02Z | GMT-4 → GMT-5 | fall back |
+>
+> WHY FOUR AND NOT ONE. ADR-046 D9's normative sentence says “a real DST transition”, so any one
+> of them satisfies it; the ADR's *reasoning* then names Berlin and New York and argues fall-back
+> is the harder direction, because that is where a local time exists twice. Auckland is 16 days
+> away and neither of those is — so arming only the earliest would have taken the easy direction,
+> and arming only the ADR's examples would have idled six weeks. The probe takes a zone and an
+> instant, so all four cost four CLI calls. **Lord Howe is the one worth having**: it shifts by
+> THIRTY MINUTES, and any code that assumes a transition is an hour passes the other three.
+>
+> **DO NOT RENAME OR DELETE `convex/dstProbe.ts`, `arm` OR `observe` BEFORE 2026-11-01.** A pending
+> job stores a late-bound `module.js:export` string resolved at fire time, so a rename orphans it
+> and it fails ON TRANSITION DAY — indistinguishable from a scheduler defect, and unrepeatable for
+> six months. Ordinary deploys are safe; the name is not. After the last fire the module is
+> genuinely throwaway and should be deleted, along with its `CONVEX_MODULES`,
+> `SCHEDULER_CALL_SITES` and `watch.json` entries.
+>
+> To check progress at any time (it prints “armed row(s) are waiting … nothing is wrong” until the
+> transition, then writes the artifact):
+>
+> ```
+> PIKAR_CONVEX_TARGET=prod PIKAR_DST_ZONE=Pacific/Auckland \
+>   node packages/backend/scripts/collect-recurrence-evidence.mjs dst-boundary --deployment prod
+> ```
 > Last verified: 2026-09-09 (47-09 — **`dst-boundary` STOPPED ANSWERING ITSELF WITH ARITHMETIC.**
 > Until today `collect-recurrence-evidence.mjs` collected that row by comparing a zone's UTC offset
 > 24 hours ago with its offset now. That is a true statement about ICU's tz database and it
