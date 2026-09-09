@@ -1,5 +1,33 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
+> Last verified: 2026-09-09 (45-08 — first live production connect attempt. It did NOT connect,
+> and the blocker is on Intuit's side: the developer account has **no workspace**, so no surface
+> will display the app's registered redirect URIs. The OAuth Playground says it outright — “you
+> must first create a workspace” — and `/workspaces` renders its shell but never issues the XHR
+> for its list (verified in the tab's network log: only a notification-tray POST and a logging
+> POST fire, and there is no console error). `/app/developer/myapps` now 302s to `/homepage`.
+>
+> TWO THINGS TO REUSE, both of which cost minutes and save hours:
+>
+> 1. **Probe the TOKEN endpoint to test credentials — never the authorize page.** A POST to
+>    `/oauth2/v1/tokens/bearer` with a deliberately bogus code returns `invalid_grant` when the
+>    client_id/secret pair is GOOD and `invalid_client` when it is not — an answer with no consent
+>    and no authorization. On 2026-09-09 it returned `invalid_grant`, which is how we know the
+>    production keys are live and the failure is elsewhere. Exact curl in the suitability record.
+> 2. **`appcenter.intuit.com/app/connect/oauth2`'s error page tells you NOTHING.** It renders the
+>    same “Sorry, but *undefined* didn't connect” for a good client_id with a good URI, a good
+>    client_id with a URI that is definitely unregistered, AND a client_id that DOES NOT EXIST.
+>    The fabricated-client_id control is what proves it, and it is one navigation. Run that control
+>    BEFORE building a theory on that page: a detector returning the same answer for known-good and
+>    known-bad inputs is measuring nothing, and reasoning from it produces confident wrong fixes.
+>    (Same discipline as `scripts/check-absence-guards.mjs`; see cockpit.md.)
+>
+> Our side is verified complete and live: keys set on prod, `QUICKBOOKS_REDIRECT_URI` read back
+> byte-for-byte, and the `http.ts` callback answering — junk params → `303` to
+> `?connect=quickbooks&result=invalid_state`, with no provider text in the redirect (§4).
+>
+> THE LANE STAYS UNSEALED. No live read has happened, so there is nothing to seal — the gate
+> behaving correctly, not an omission. Full record: `docs/connectors/quickbooks-suitability.md`.)
 > Last verified: 2026-09-01 (28-29 recovery telemetry — after the passed-only tenant read returns a
 > normalized zero-balance invoice or linked payment, it can match a provider-scoped one-way ref
 > from an earlier tenant-owned reminder and emit one idempotent `recovery_observed`. Unavailable

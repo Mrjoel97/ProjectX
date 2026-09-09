@@ -274,6 +274,96 @@ does not own (28-09). A live run needs that route first.
 
 ---
 
+## Live connect attempt — 2026-09-09 (45-08). BLOCKED at Intuit, NOT on our side.
+
+First attempt to complete a real production consent. It did not connect. Everything below was
+observed directly; nothing here is inferred from a previous session's notes.
+
+### Our side is complete and verified live
+
+| Fact | How it was verified |
+|---|---|
+| `QUICKBOOKS_CLIENT_ID` / `_SECRET` set on prod | `convex env list --prod` (values never printed) |
+| `QUICKBOOKS_REDIRECT_URI` = `https://opulent-octopus-494.convex.site/connectors/quickbooks/callback/production` | `convex env get --prod`, read back byte-for-byte |
+| The callback endpoint is LIVE and fails closed | `GET` with junk params → `303` to `/dashboard/profile?connect=quickbooks&result=invalid_state`, no provider text in the redirect (§4) |
+| The Connect button reaches Intuit | Browser: consent request left with our exact `client_id`, `scope` and `redirect_uri` |
+| **The production credentials are VALID** | See the token-endpoint probe below — the one informative provider signal obtained |
+
+### THE REUSABLE DIAGNOSTIC — probe the TOKEN endpoint, never the authorize page
+
+OAuth 2 gives distinct errors for distinct failures at `/oauth2/v1/tokens/bearer`: `invalid_client`
+(401) means the client_id/secret pair itself was rejected; `invalid_grant` (400) means the
+credentials were ACCEPTED and only the code was bad. So posting a deliberately bogus code answers
+“are these keys live?” with no authorization and no consent:
+
+```
+curl -u "$ID:$SECRET" -X POST https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer \
+  -H 'Accept: application/json' -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode grant_type=authorization_code \
+  --data-urlencode code=deliberately-bogus-code \
+  --data-urlencode "redirect_uri=$RU"
+```
+
+2026-09-09 result: **`{"error":"invalid_grant","error_description":"Invalid authorization code"}`**
+(HTTP 400). Intuit accepted the production key pair. The keys are not the problem.
+
+### THE AUTHORIZE ERROR PAGE CARRIES NO INFORMATION — do not diagnose from it
+
+`appcenter.intuit.com/app/connect/oauth2` fails to `/oauth2/error` reading “Sorry, but **undefined**
+didn't connect”. That app name rendering as `undefined` looks like a clue. It is not. Four requests
+were sent and **all four produced the byte-identical page**:
+
+| Probe | Expected to differ? | Result |
+|---|---|---|
+| real `client_id` + the convex.site URI | — | `/oauth2/error` |
+| real `client_id` + the `www.pikar-ai.com` URI | — | `/oauth2/error` |
+| real `client_id` + `https://example.com/definitely-not-registered` | yes, if URI matters | `/oauth2/error` |
+| **fabricated `client_id`** `ZZnotarealclientid…` | yes, certainly | `/oauth2/error` |
+
+A page that is identical for a client_id THAT DOES NOT EXIST cannot distinguish anything. Any
+reading of it — including “Intuit accepted the redirect URI because it got as far as the consent
+screen” — is unfalsifiable. The control that establishes this costs one navigation; run it before
+theorising, not after. (This is the same discipline as [check-absence-guards]: a detector that
+returns the same answer for a known-good and a known-bad input is measuring nothing.)
+
+### The actual blocker — the Intuit developer account has NO WORKSPACE
+
+`developer.intuit.com/workspaces` renders its shell but never resolves — the tab reads
+`My workspaces (…)` indefinitely, **no XHR for the list is ever issued** (confirmed by reading the
+tab's network log: only a notification-tray POST and a logging POST fire) and there is no console
+error. `/app/developer/myapps` now 302s to `/homepage`; the legacy route is gone.
+
+The OAuth 2.0 Playground states it plainly: **“To use playground, you must first create a
+workspace.”** In Intuit's current model apps live inside workspaces, so with no workspace on the
+signed-in developer account there is no surface that will display the app's registered redirect
+URIs — which is exactly the fact needed to finish this.
+
+The owner IS authenticated at Intuit throughout (`Welcome, joel` on appcenter; `My Hub` on
+developer.intuit.com), so this is not a sign-in problem.
+
+### What is NOT yet known
+
+Whether the redirect URI is registered against THIS `client_id`. It cannot be read while the
+workspace is missing, and — per the table above — it cannot be inferred from the authorize page.
+Both of these remain open and neither is favoured by the evidence:
+
+1. the URI is registered on a different key set (development vs production) or a different app; or
+2. the app is not eligible to be connected in production yet.
+
+### Owner action required
+
+Creating a workspace changes the Intuit account, so it was not done unilaterally. The owner needs
+to reach the app's **Keys & credentials → Redirect URIs** for the PRODUCTION key set and confirm
+the value matches `QUICKBOOKS_REDIRECT_URI` exactly, or say which Intuit account holds the app.
+
+### Correction to “Still not landed” above
+
+That section says the HTTP callback route is unregistered and “nothing calls it yet”. STALE as of
+this date: `packages/backend/convex/http.ts` registers `pathPrefix:
+"/connectors/quickbooks/callback/"` and it is live in production (probed above). The section is
+left as written because it is a dated record; this note supersedes it.
+
+---
 ## Evidence URLs
 
 - https://developer.intuit.com/app/developer/qbo/docs/learn/scopes · https://static.developer.intuit.com/output_html/qbo/docs/learn/scopes.html
