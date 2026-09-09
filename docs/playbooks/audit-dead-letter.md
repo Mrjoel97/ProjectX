@@ -1,5 +1,30 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (47-06 — **THE §4 GATE RAN AGAINST PRODUCTION AND §4 HOLDS.** 672 audit
+> rows + 9 deadLetters rows, walk COMPLETE, **0 violations**. That is ADR-044 T3's evidence, and it
+> is the first time the “no content in the archive” assumption has been tested against a row rather
+> than against source.
+>
+> The run also reported 8 suspects and **all eight were the DETECTOR's false positives**, sharing
+> one shape: a PII-ish stem with a REF suffix — `promptHash` (193 rows), `skillBodyHash` (57),
+> `messageId`, `bodyHash`. A hash OF a prompt is not a prompt, and §4's own words permit “refs,
+> hashes, ids and counts”, so `REF_SUFFIXES` now clears them. That is not loosening the rule; it is
+> matching what the rule says. The opposite direction is pinned in the same commit: `prompt`,
+> `body`, `message`, `email` and `customerName` are all still caught.
+>
+> `skillName` is an EXACT reviewed exception, not a `*Name` rule — it is a code-owned skill slug
+> (`revenue-crm@1`), and a `*Name` rule would have walked `customerName` through behind it. Named
+> in `REVIEWED_KEYS`, for the reason `schema.test.ts` gives about its own three carve-outs:
+> “quietly widening a scan until it passes is how an absence test starts lying.”
+>
+> ADR-044 C2's `stripeObjectId` is UNAFFECTED: its stem is `stripe`/`object`, never on the PII list,
+> so the key rule never caught it and this change cannot release it.
+>
+> Fixing the DETECTOR rather than the rows is the same call as 45-06, where four of five flags were
+> the scanner's own bug — and a gate that is NOISY for a non-reason stops being read just as surely
+> as one that is red for a non-reason. Transport note: the convex CLI is NOT hoisted to the repo
+> root under pnpm; it resolves from `packages/backend/node_modules`, which is the path
+> `check-provider-lane.mjs` already used. One answer, not two.)
 > Last verified: 2026-09-09 (47-05 — **ADR-044 T1 CLOSED BY OPTION (c): the claim is narrowed to
 > something TRUE, and it now has ONE definition.** `AUDIT_ARCHIVE_STATEMENT` no longer says “and no
 > personal data” — it says “and no directly identifying data”, which is ADR-044 T1's own suggested

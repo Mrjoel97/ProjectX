@@ -70,6 +70,36 @@ describe("the KEY can convict a value that looks innocent", () => {
     }
   });
 
+  test("a REF SUFFIX on a PII stem is permitted — §4 names refs, hashes and ids", () => {
+    // Every one of these was a false positive on the first live production run (8 suspects over
+    // 672 rows, all of this shape, none real).
+    for (const k of [
+      "promptHash",
+      "skillBodyHash",
+      "bodyHash",
+      "messageId",
+      "emailHash",
+      "noteRef",
+    ]) {
+      expect(keyIsPiiShaped(k), `${k} points AT the thing, it is not the thing`).toBe(false);
+    }
+  });
+
+  test("the ref-suffix rule does NOT release a bare PII key", () => {
+    // The direction that matters: loosening for `promptHash` must not loosen for `prompt`.
+    for (const k of ["prompt", "body", "message", "email", "customerName"]) {
+      expect(keyIsPiiShaped(k), `${k} is still PII-shaped`).toBe(true);
+    }
+  });
+
+  test("the reviewed-key exception is EXACT, not a suffix rule", () => {
+    expect(keyIsPiiShaped("skillName")).toBe(false);
+    // If this were a `*Name` rule, the next line would fail — and a person's name would walk
+    // through the gate behind a skill slug.
+    expect(keyIsPiiShaped("customerName")).toBe(true);
+    expect(keyIsPiiShaped("recipientName")).toBe(true);
+  });
+
   test("a PII-shaped key flags even when the value is a clean ref", () => {
     const f = classifyPayload({ email: "kg2h8x1p9m4tz7qwer3nvb5c" });
     expect(f).toHaveLength(1);

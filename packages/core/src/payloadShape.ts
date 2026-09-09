@@ -86,9 +86,41 @@ const parts = (key: string): string[] =>
  */
 const COUNT_SUFFIXES = ["count", "total", "sent", "failed", "ok", "len", "length", "size", "n"];
 
+/**
+ * A REF-shaped name also survives a PII-shaped stem, and this is not a loophole — it is §4's own
+ * words. The rule permits "refs, hashes, ids and counts", so `promptHash` is the hash OF a prompt,
+ * `messageId` is an id, `bodyHash` is a digest. None of them is the thing itself.
+ *
+ * MEASURED 2026-09-09 on production: the first live run reported 8 suspects over 672 audit rows and
+ * ALL EIGHT were this shape (`promptHash` x193, `skillBodyHash` x57, `messageId`, `bodyHash`). Zero
+ * were real. A gate that is noisy for a non-reason stops being read just as surely as one that is
+ * red for a non-reason, so the fix belongs in the detector — the same call as 45-06, where four of
+ * five flags were the scanner's own bug.
+ *
+ * NOTE WHAT THIS DOES NOT EXEMPT. ADR-044 C2's `stripeObjectId` is an opaque id that still bridges
+ * to a person, and it is untouched here: its stem is `stripe`/`object`, which was never on the PII
+ * list, so the key rule never caught it and this change cannot release it.
+ */
+const REF_SUFFIXES = ["hash", "hashes", "id", "ids", "ref", "refs", "key", "keys", "digest"];
+
+/**
+ * Exact keys a human READ and cleared. Listed rather than pattern-matched, for the reason
+ * `schema.test.ts` gives about its own three exceptions: "quietly widening a scan until it passes
+ * is how an absence test starts lying."
+ *
+ *   • `skillName` — a code-owned skill slug (`revenue-crm@1`), never a person's name. It is the
+ *     one `*Name` key in the production log, and `customerName` must still be caught, so this is
+ *     an exact-name exception rather than a `Name` suffix rule.
+ */
+const REVIEWED_KEYS = new Set(["skillname"]);
+
 export function keyIsPiiShaped(key: string): boolean {
+  if (REVIEWED_KEYS.has(key.toLowerCase())) return false;
   const p = parts(key);
-  if (p.some((s) => COUNT_SUFFIXES.includes(s))) return false;
+  const last = p[p.length - 1] ?? "";
+  if (COUNT_SUFFIXES.includes(last) || p.some((s) => COUNT_SUFFIXES.includes(s))) return false;
+  // A ref suffix means the field holds a POINTER to the thing, which §4 permits by name.
+  if (REF_SUFFIXES.includes(last)) return false;
   // A plural stem reads as a count of things, not a thing.
   return p.some((s) => PII_KEYS.includes(s));
 }

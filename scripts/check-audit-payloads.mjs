@@ -75,7 +75,9 @@ async function walkTable(run, table, prod) {
 /** The real transport: `convex run`, no shell — Windows `shell: true` strips the JSON's quotes. */
 function convexRun(table, cursor, prod) {
   const args = [
-    join(repoRoot, "node_modules", "convex", "bin", "main.js"),
+    // The convex CLI is NOT hoisted to the repo root under pnpm — it lives in the backend
+    // package, which is the path `check-provider-lane.mjs` already resolves. One answer, not two.
+    join(repoRoot, "packages", "backend", "node_modules", "convex", "bin", "main.js"),
     "run",
     ...(prod ? ["--prod"] : []),
     "audit:payloadShapes",
