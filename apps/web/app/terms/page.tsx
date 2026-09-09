@@ -162,8 +162,8 @@ export default function Terms() {
         <strong>
           We do not use Your Content to train generalised AI or machine-learning models.
         </strong>{" "}
-        This licence ends when you delete the content or your account, save for the non-personal
-        audit records described in the Privacy Policy.
+        This licence ends when you delete the content or your account, save for the audit records
+        described in the Privacy Policy.
       </p>
       <p>
         You are responsible for having a lawful basis to submit any personal data about third

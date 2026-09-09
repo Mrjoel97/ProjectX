@@ -1,5 +1,28 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (47-05 — **ADR-044 T1 CLOSED BY OPTION (c): the claim is narrowed to
+> something TRUE, and it now has ONE definition.** `AUDIT_ARCHIVE_STATEMENT` no longer says “and no
+> personal data” — it says “and no directly identifying data”, which is ADR-044 T1's own suggested
+> wording. The old sentence was false and had been since the archive existed: `audit.tenantId` IS
+> the erased person's account id, and ADR-044 C2 showed `billingEvents` bridges it onward through
+> `stripeObjectId` — “the join is performable by us on demand”.
+>
+> WHY NARROWING RATHER THAN SEVERING. T1 offers both. Severing the bridge (option a) preserves the
+> STRONGER promise but means mutating a table classified `audit_immutable`, which is a real design
+> question and a separate build. Narrowing costs nothing and stops the product asserting something
+> untrue TODAY. If the stronger promise is wanted back, option (a) is the path and this note is
+> where it starts. **BRAND.md §1 lists “Honest about limits” as the voice**, so this is in-voice,
+> not a deviation from it.
+>
+> THE REAL DEFECT WAS FOUR PROSE COPIES. The claim lived as text in `tenantData.ts`,
+> `DataControls.tsx` (twice), `privacy/page.tsx` and `terms/page.tsx` — which is exactly how three
+> of them said one thing while the data model said another. All surfaces now RENDER the shared
+> constant, and `dataControls.test.ts` asserts the retired phrase is absent from every file that
+> made it, with a positive control proving the scan can read those files at all.
+>
+> That guard immediately earned itself: it went red on MY OWN replacement text, which explained
+> the change in a sentence that still contained the retired phrase. A scan cannot tell an
+> explanation from a claim — and the sentence was legalese anyway, so it was rewritten plainly.)
 > Last verified: 2026-09-09 (47-03 — **§4 IS NOW CHECKED AGAINST THE ROWS, NOT THE SOURCE.**
 > ADR-044 T3 gates WORM arming on exactly this and says why: “every latent §4 defect in the
 > history becomes permanent on arming day, and a source scan cannot see a single already-written

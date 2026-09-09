@@ -5,6 +5,7 @@ import type {
   TenantDataExportPage,
   TenantExportCursor,
 } from "@pikar/core/tenantData";
+import { AUDIT_ARCHIVE_STATEMENT } from "@pikar/core/tenantData";
 import { useConvex } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { type CSSProperties, useState } from "react";
@@ -169,8 +170,7 @@ export function DataControls() {
           </p>
           <p style={body}>
             The immutable audit archive and refs-only compliance records are omitted. The archive
-            contains references, identifiers, hashes, and counts only — never message content or
-            personal data.
+            contains {AUDIT_ARCHIVE_STATEMENT}
           </p>
         </div>
 
@@ -232,9 +232,8 @@ export function DataControls() {
             (work or school). You are told below which outcome each account actually reached.
           </p>
           <p style={body}>
-            The audit archive is retained. It holds references, identifiers, hashes, and counts —
-            never the content of your messages, and no personal data. There is nothing in it to
-            erase.
+            The audit archive is retained. It holds {AUDIT_ARCHIVE_STATEMENT} What stays is the
+            record that actions happened — never what they contained.
           </p>
         </div>
 

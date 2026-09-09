@@ -1,5 +1,12 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-09 (47-05 — the Settings erasure card and the privacy policy stopped
+> carrying their own PROSE COPIES of the audit-archive claim and now render
+> `AUDIT_ARCHIVE_STATEMENT` from `@pikar/core/tenantData`. Four copies is how three surfaces came
+> to assert “no personal data” while the data model disagreed (ADR-044 C2). The claim is narrowed
+> to “no DIRECTLY identifying data”, and the card's “There is nothing in it to erase” — a
+> consequence of the false claim — now reads “What stays is the record that actions happened —
+> never what they contained.” See audit-dead-letter.md for the argument.)
 > Last verified: 2026-09-09 (45-06 — `reports.spec.ts`'s ROLE SPLIT test asserted the
 > owner-only deployment card ABSENT immediately after `page.goto`, with nothing establishing that
 > the page had rendered. `toHaveCount(0)` succeeds on its first poll, so the card was “absent”

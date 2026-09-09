@@ -1,3 +1,4 @@
+import { AUDIT_ARCHIVE_STATEMENT } from "@pikar/core/tenantData";
 import type { Metadata } from "next";
 import {
   CONTACT,
@@ -347,14 +348,12 @@ export default function Privacy() {
         describe it in advance.
       </p>
       <p>
-        For this reason the audit log is designed to hold{" "}
-        <strong>
-          references, identifiers, hashes, and counts only — never the content of your messages, and
-          no personal data.
-        </strong>{" "}
-        This is what allows an immutable log and your right to erasure to coexist: there is nothing
-        in the archive to erase. Deleting your account removes your account data and content; the
-        audit archive retains only the non-personal record that actions occurred.
+        For this reason the audit log is designed to hold <strong>{AUDIT_ARCHIVE_STATEMENT}</strong>{" "}
+        This is what allows an immutable log and your right to erasure to coexist. Deleting your
+        account removes your account data and your content; the audit archive retains only the
+        record that actions occurred — never what they contained. Those records still carry your
+        account identifier, which we can link back to you. That is why we describe them as holding
+        nothing that identifies you directly.
       </p>
 
       <h2>10. Your rights</h2>

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { AUDIT_ARCHIVE_STATEMENT } from "@pikar/core/tenantData";
 import { describe, expect, test } from "vitest";
 
 const read = (relative: string) =>
@@ -41,7 +42,14 @@ describe("tenant data control reachability", () => {
   test("states what erasure removes and what the audit archive retains", () => {
     const source = read("./DataControls.tsx");
 
-    expect(source).toContain("references, identifiers, hashes, and counts");
+    // ADR-044 T1 (47-05): the claim now has ONE definition and the card RENDERS it, rather than
+    // carrying a fourth prose copy. Asserting the substring here would have gone on passing while
+    // the constant said something else — which is exactly how three surfaces drifted apart.
+    expect(source).toContain("AUDIT_ARCHIVE_STATEMENT");
+    expect(AUDIT_ARCHIVE_STATEMENT).toContain("references, identifiers, hashes, and counts");
+    // The over-claim ADR-044 C2 falsified must not come back on any surface.
+    expect(AUDIT_ARCHIVE_STATEMENT).not.toContain("no personal data");
+    expect(source).not.toContain("no personal data");
     expect(source).toContain("cannot be undone");
     expect(source).toMatch(/revok|disconnect/i);
   });
@@ -50,6 +58,28 @@ describe("tenant data control reachability", () => {
   // place the product CANNOT deliver what a reader might assume from the Google paragraph, so both
   // the card and the published policy must name the gap AND hand over the real control. Without the
   // links this is an honest dead end; with them it is an exercisable right.
+  // ADR-044 C2 falsified "no personal data" on THREE user-facing surfaces, and it took writing the
+  // argument down to notice, because each surface carried its own prose copy. One definition plus
+  // this scan is what stops a fourth copy reintroducing it: the constant is asserted above, and
+  // every surface that repeats the claim is asserted here to no longer make the retired one.
+  test("the retired 'no personal data' over-claim is gone from EVERY surface that made it", () => {
+    for (const rel of [
+      "./DataControls.tsx",
+      "../../../privacy/page.tsx",
+      "../../../terms/page.tsx",
+    ]) {
+      expect(read(rel), `${rel} still makes the retired claim`).not.toContain("no personal data");
+      expect(read(rel), `${rel} still calls the records non-personal`).not.toContain(
+        "non-personal",
+      );
+    }
+    // POSITIVE CONTROL: the scan can see these files at all. Without it, a typo'd path would make
+    // every assertion above vacuously true — the defect this repo shipped once as a toHaveCount(0)
+    // that passed with all six packs active.
+    expect(read("../../../privacy/page.tsx")).toContain("audit");
+    expect(read("../../../terms/page.tsx")).toContain("licence");
+  });
+
   test("hands the user Microsoft's own consent control instead of implying parity with Google", () => {
     const card = read("./DataControls.tsx");
     const policy = read("../../../privacy/page.tsx");

@@ -347,7 +347,7 @@ export const exportableTables = deletableTables;
 
 export const TENANT_EXPORT_SCHEMA_VERSION = 1;
 export const AUDIT_ARCHIVE_STATEMENT =
-  "references, identifiers, hashes, and counts only — never the content of your messages, and no personal data.";
+  "references, identifiers, hashes, and counts only — never the content of your messages, and no directly identifying data.";
 
 export type TenantExportHeader = {
   schemaVersion: typeof TENANT_EXPORT_SCHEMA_VERSION;
