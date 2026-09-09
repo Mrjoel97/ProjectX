@@ -124,6 +124,99 @@ widen-only change of exactly the kind that field already absorbed once.
 - **Not send anything.** ADR-046 D1: retrieval and preparation only; every external write still
   materialises a per-run plan through the existing approvals path.
 
+## Finding 5 (2026-09-09, AFTER the owner's answers) — THE PHASE CANNOT BUILD THE TABLE YET
+
+This was found by trying. With the owner's four answers in hand I wrote ADR-047, added the
+`routines` table to `schema.ts`, and ran the guards. **Six went red exactly where they should**, and
+one of them was a rule this research had missed:
+
+```
+decision is `defer` but docs/decisions/047-one-routines-table-…md exists — no ADR may be minted
+```
+
+`check-routine-gate.mjs`'s `deferAbsenceChecks` forbids **any ADR whose FILENAME matches
+`routine|recurrence|schedul`** while `29-RECURRENCE-DECISION.md` records `decision: defer`. Its own
+ponytail note states the two exits:
+
+> *Upgrade path if it ever fires falsely: **rename the ADR, or lift the defer**.*
+
+**Renaming is not available to us.** Slipping past a governance scan by choosing different words is
+precisely the attack three verifiers used to defeat this repo's earlier absence proofs, and the
+lesson written into `routines.test.ts` is that a blocklist over an open vocabulary cannot prove
+absence. Renaming ADR-047 would be that behaviour, performed deliberately, by the person the gate
+exists to stop.
+
+**Lifting the defer is not available either — yet.** `check-routine-gate.mjs` accepts only
+`defer | enable-safe`, and will not offer `enable-safe` until `dst-boundary`, `oauth-expiry-reauth`
+and `provider-read` each carry `evidenceType: live`. Only `provider-read` does.
+
+So the ordering was wrong, and the gate caught it. **The table is not this phase's first deliverable.
+The EVIDENCE is.** ADR-046 D9 defined what `dst-boundary` evidence looks like; nobody has collected
+it. Defining evidence and holding it are different things, and the gate is built to know the
+difference — it is the same distinction that made 44-07's erasure spec matter only once it actually
+ran.
+
+### What was reverted, and what it proved
+
+`schema.ts` and the ADR were reverted; `schema.test.ts` + `routines.test.ts` are **50/50 green**
+again. The exercise was not wasted — it is the positive control for the whole guard family. Watched
+going red, in order:
+
+| Guard | Failure |
+|---|---|
+| `no table named after a routine, schedule, cron, recurrence or run history` | the new table |
+| `no table name contains routine/cron/recurr/schedul at all` | `table routines is recurrence-shaped` |
+| `NO FIELD ANYWHERE is a next-run, cadence, timezone-rule…` | `a schema field is named ianaTimezone` |
+| `the L359 promise is still written down` | the superseded sentence |
+| `the ten banned tokens … none appears in the convex namespace` | the new comments |
+| `no ADR may be minted` | ADR-047's filename |
+
+`CONVEX_MODULES` and `SCHEDULER_CALL_SITES` stayed **green**, correctly — no module was added. They
+are what will fire on the next attempt, and they are the two that renaming cannot dodge.
+
+### THE REVISED PHASE SCOPE
+
+Not the table. In order:
+
+1. **Collect `dst-boundary` live evidence** (ADR-046 D9): a throwaway `ctx.scheduler` function armed
+   before, and observed firing after, a real DST transition, recording armed instant, fired instant
+   and resolved wall time. This needs no `routines` table, mints no ADR and installs no dependency,
+   so it does not trip `deferAbsenceChecks`. It DOES need a `SCHEDULER_CALL_SITES` entry — a
+   deliberate, reviewed one-line diff, which is exactly what that allowlist is for.
+   **Next transitions: 2026-10-25 Europe/Berlin, 2026-11-01 America/New_York.**
+2. **Collect `oauth-expiry-reauth` live evidence**: a real Gmail 7-day refresh clock observed
+   lapsing and re-authing. `gmailAuth.flagExpiringTokens` already warns ~24 h ahead. Not
+   bootstrapped — that clock runs whether or not routines exist — so it is available on a ~7-day
+   horizon rather than a six-week one.
+3. **Then** supersede `29-RECURRENCE-DECISION.md` with an artifact recording `enable-safe`, which
+   the gate will accept once (1) and (2) are held and every other row is `pass`.
+4. **Then** the table, under an ADR that may finally be minted.
+
+### The design decisions, PRESERVED but not yet minted
+
+The owner delegated two of the four questions and they were answered; the answers are recorded here
+rather than lost, to be minted as an ADR when the defer lifts:
+
+- **A new `routines` table, not an extension of `savedPrompts`.** That row is defined as INERT AT
+  REST — a contract, not an implementation detail — and `by_tenant_textHash` already collides on
+  identical text, so two schedules of one prompt would be two routines and one hash. Above all, a
+  new module and a new table are a **visible governance diff**; burying recurrence under an existing
+  table name would spend exactly the visibility the guards buy. A routine REFERENCES a
+  `savedPrompts` row, which is the reuse the ladder actually asks for.
+- **Due-ness is COMPUTED, never stored — there is no `nextRunAt`.** The sweep resolves the
+  occurrence key for "now" in the routine's zone and compares it with `lastOccurrenceKey`. This
+  removes the re-arm chain a deploy or cancel can orphan, composes with D3/D4 (a sweep asks "what is
+  due and not running?" declaratively from rows), and reduces the schema's carve-out from the
+  twenty-name banned list to **exactly one**, `ianaTimezone` — named honestly rather than spelled
+  around.
+- **One envelope constant, `ROUTINE_RUN_ENVELOPE_CENTS`**, reserved on the EXISTING
+  `dailySpendCents` + `deploymentSpendCents` rails so a routine cannot escape either ceiling. Not a
+  per-routine field (nobody sets it in a free beta) and not a share of the daily budget (which makes
+  the same routine succeed at 09:00 and be refused at 17:00 for no reason a user can act on).
+  `maxReserved` stays UNSET — setting it "for safety" breaks a whole-unit reservation.
+- **The routine envelope REFUNDS; media and ingest keep their own policies.** Reserving ~$1 and
+  spending $0.10 is dollars of drift, which is ingest's case, not media's.
+
 ## Owner questions
 
 1. **Tick: cron sweep or exact arming?** Ride the existing 30-minute `reliability-sweep` shape (30-min
