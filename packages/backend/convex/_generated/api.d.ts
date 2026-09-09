@@ -43,6 +43,7 @@ import type * as delivery from "../delivery.js";
 import type * as demo from "../demo.js";
 import type * as dispatch from "../dispatch.js";
 import type * as dispatchRun from "../dispatchRun.js";
+import type * as dstProbe from "../dstProbe.js";
 import type * as evaluations from "../evaluations.js";
 import type * as feedback from "../feedback.js";
 import type * as finance from "../finance.js";
@@ -192,6 +193,7 @@ declare const fullApi: ApiFromModules<{
   demo: typeof demo;
   dispatch: typeof dispatch;
   dispatchRun: typeof dispatchRun;
+  dstProbe: typeof dstProbe;
   evaluations: typeof evaluations;
   feedback: typeof feedback;
   finance: typeof finance;

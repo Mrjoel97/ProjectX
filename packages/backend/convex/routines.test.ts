@@ -129,6 +129,7 @@ const CONVEX_MODULES = [
   "demo.ts",
   "dispatch.ts",
   "dispatchRun.ts",
+  "dstProbe.ts",
   "evaluations.ts",
   "feedback.ts",
   "finance.ts",
@@ -255,6 +256,10 @@ const SCHEDULER_CALL_SITES = [
   // dispatch is queued more than once from a single call, which is exactly why the count is bounded
   // in code (`min(routes, MAX_FAN_OUT, rootEnvelope)`) and never by the model (ADR-008/ADR-038).
   "dispatchRun.ts",
+  // 47-09: the ADR-046 D9 probe. It arms ONE call at ONE absolute instant and never re-arms —
+  // the whole point is that it is a throwaway trace across a real DST boundary, not a cadence.
+  // Every zone decision lives OUTSIDE the convex namespace, in collect-recurrence-evidence.mjs.
+  "dstProbe.ts",
   "evaluations.ts",
   "llm.ts",
   "media.ts",

@@ -22,8 +22,18 @@
  *
  * ═══ WHAT IS AND IS NOT EXERCISED, READ THIS BEFORE TRUSTING A GREEN RUN ═══
  *
- * `dst-boundary` is COMPLETE and runs today: whether a zone has crossed a transition between two
- * instants is pure clock arithmetic, and `Intl` answers it without a provider or a network.
+ * `dst-boundary` NO LONGER ANSWERS ITSELF WITH ARITHMETIC. Until 47-09 this probe compared the
+ * zone's UTC offset 24 hours ago with its offset now and wrote an artifact when they differed.
+ * That is a true statement about ICU's tz database and it evidences NOTHING about this
+ * deployment's scheduler, which is what the row is about. Any laptop could produce it, on any
+ * day after any transition, with no deployment involved at all.
+ *
+ * ADR-046 D9 named the replacement: a throwaway `ctx.scheduler` function, armed on a real
+ * deployment BEFORE a real transition and observed to fire on the far side of it. That is
+ * `convex/dstProbe.ts`. This probe now READS the two audit rows that function leaves behind and
+ * refuses if they are not there. The arithmetic below survives as the INDEPENDENT CHECK: the
+ * deployment reports the offsets it saw, and this script asks its own ICU whether a transition
+ * really fell between the armed and fired instants. Two witnesses, and they must agree.
  *
  * `oauth-expiry-reauth` and `provider-read` have their PRECONDITION half complete and their
  * COLLECTION half unexercised, because there is nothing on this deployment to collect from: every
@@ -154,31 +164,104 @@ export function soonestTransition(fromMs) {
 /** The probe implementations. Each returns `{ observed: false, reason }` or `{ observed: true, detail }`. */
 const COLLECTORS = {
   /**
-   * COMPLETE. A run that spans a transition in the tenant's zone is the trace; anything less is a
-   * unit test wearing the word "live", which is the exact relabelling the gate exists to catch.
+   * THE SCHEDULER'S OWN TRACE, read back from the deployment. Never computed here.
+   *
+   * `convex/dstProbe.ts` writes two `audit` rows under one correlation: `armed` when the call is
+   * booked, `fired` when it actually runs. This probe demands BOTH, and then applies four
+   * independent tests before it will call anything observed. Three of them exist because each is
+   * a way the row could read green while evidencing nothing:
+   *
+   *   1. Both halves present, under ONE correlation. A `fired` row alone cannot show when it was
+   *      armed, and "armed before the transition" is the entire claim.
+   *   2. THIS SCRIPT'S OWN ICU agrees a transition fell between the armed and fired instants.
+   *      The deployment reporting its own offsets is one witness; a checker that took that on
+   *      trust would be reading the claim back rather than checking it.
+   *   3. The deployment's own offsets differ across the two rows. The other direction of the same
+   *      question, asked of the runtime that actually ran the job — if these two witnesses ever
+   *      disagree, THAT is the finding, and it is a tzdata skew nobody would otherwise see.
+   *   4. It did not fire EARLY. A call that ran before its target instant never crossed anything,
+   *      whatever the offsets say.
    */
-  "dst-boundary": ({ zone, fromMs, toMs }) => {
-    const { crossed, from, to } = crossedDstBoundary(zone, fromMs, toMs);
-    if (!crossed) {
-      // The refusal DERIVES its own date. Quoting a remembered one is how the first version of this
-      // message came to be seven weeks late.
-      const own = nextTransition(zone, toMs);
-      const soonest = soonestTransition(toMs);
+  "dst-boundary": ({ zone, runConvex, nowMs }) => {
+    const rows = runConvex("dstProbeRows", { sinceMs: nowMs - PROBE_LOOKBACK_MS });
+    if (rows === UNREACHABLE) return { observed: false, reason: UNREACHABLE_REASON };
+    if (rows === null) return { observed: false, reason: noProbeReason(zone, nowMs) };
+
+    const mine = rows.filter((r) => r?.payload?.zone === zone);
+    const fired = mine.find((r) => r.payload.phase === "fired");
+    if (!fired) return { observed: false, reason: noProbeReason(zone, nowMs, mine) };
+    const armed = mine.find(
+      (r) => r.payload.phase === "armed" && r.correlationId === fired.correlationId,
+    );
+    if (!armed) {
       return {
         observed: false,
         reason:
-          `no DST transition in ${zone} between the two instants (offset ${from} throughout). ` +
-          "A live trace requires a scheduled run that actually SPANS one — it cannot be simulated. " +
-          (own === null
-            ? `${zone} has no transition at all in the next 400 days, so it can never carry this row.`
-            : `${zone} next transitions on ${own.day} (${own.from} -> ${own.to}).`) +
-          (soonest === null
-            ? ""
-            : ` Earliest anywhere: ${soonest.day} (${soonest.zones.join(", ")}) — a tenant in one of ` +
-              "those zones with a run scheduled across that instant is the cheapest route to this row."),
+          `a fired row exists for ${zone} but its \`armed\` half is missing under correlation ` +
+          `${fired.correlationId}. Without it there is no record of WHEN the call was booked, and ` +
+          '"armed before the transition" is the whole claim. Arm a fresh probe rather than ' +
+          "inferring the missing instant.",
       };
     }
-    return { observed: true, detail: { zone, offsetBefore: from, offsetAfter: to } };
+
+    const armedAtMs = Number(armed.payload.armedAtMs);
+    const firedAtMs = Number(fired.payload.firedAtMs);
+    const targetAtMs = Number(fired.payload.fireAtMs);
+    if (!Number.isFinite(armedAtMs) || !Number.isFinite(firedAtMs)) {
+      return { observed: false, reason: "the probe rows carry no usable instants" };
+    }
+
+    // WITNESS TWO: this script's ICU, asked independently of whatever the deployment reported.
+    const local = crossedDstBoundary(zone, armedAtMs, firedAtMs);
+    if (!local.crossed) {
+      return {
+        observed: false,
+        reason:
+          `the probe fired, but THIS runtime sees ${zone} holding ${local.from} across the whole ` +
+          `armed-to-fired window (${new Date(armedAtMs).toISOString()} -> ` +
+          `${new Date(firedAtMs).toISOString()}). A run that spans no transition evidences nothing.`,
+      };
+    }
+    // The deployment's own reading of the same question.
+    const deployedBefore = String(fired.payload.offsetAtArm ?? "");
+    const deployedAfter = String(fired.payload.offsetAtFire ?? "");
+    if (deployedBefore === deployedAfter) {
+      return {
+        observed: false,
+        reason:
+          `THE TWO WITNESSES DISAGREE, and that is the finding rather than a missing probe. This ` +
+          `runtime says ${zone} moved ${local.from} -> ${local.to} across the window; the ` +
+          `deployment that ran the job reported ${deployedBefore} at both ends. One of the two ` +
+          "tzdata sets is stale. Do not record this row until they agree.",
+      };
+    }
+    if (Number.isFinite(targetAtMs) && firedAtMs < targetAtMs) {
+      return {
+        observed: false,
+        reason:
+          `the call fired ${targetAtMs - firedAtMs}ms BEFORE its target instant, so it did not ` +
+          "cross the boundary it was armed for.",
+      };
+    }
+
+    return {
+      observed: true,
+      // REFS, COUNTS AND TIMESTAMPS ONLY (§4). A zone, four instants, two offsets and a wall time.
+      detail: {
+        zone,
+        correlationId: fired.correlationId,
+        armedAt: new Date(armedAtMs).toISOString(),
+        targetAt: Number.isFinite(targetAtMs) ? new Date(targetAtMs).toISOString() : "unknown",
+        firedAt: new Date(firedAtMs).toISOString(),
+        heldForMs: firedAtMs - armedAtMs,
+        driftMs: Number.isFinite(targetAtMs) ? firedAtMs - targetAtMs : "unknown",
+        wallClockAtFire: String(fired.payload.wallClockAtFire ?? "unavailable"),
+        offsetBefore: deployedBefore,
+        offsetAfter: deployedAfter,
+        offsetBeforeLocal: local.from,
+        offsetAfterLocal: local.to,
+      },
+    };
   },
 
   /**
@@ -260,6 +343,54 @@ const COLLECTORS = {
   },
 };
 
+/**
+ * How far back to look for the probe's rows. The armed half is written WEEKS before the fired
+ * half, and `audit:recentByType` defaults to a seven-day window — so an unstated `sinceMs` would
+ * silently return the `fired` row alone and this probe would refuse for entirely the wrong reason.
+ * 120 days covers any pair of consecutive transitions anywhere on earth.
+ */
+const PROBE_LOOKBACK_MS = 120 * 86_400_000;
+
+/** The eventType `convex/dstProbe.ts` writes under. One literal, two places — keep them equal. */
+const DST_PROBE_EVENT = "clock.dst_probe";
+
+/**
+ * "There is no trace yet" — and the exact command that would start one.
+ *
+ * A REFUSAL NOBODY CAN ACT ON IS ITS OWN DEAD END, and this one has an 18-day-to-six-month lead
+ * time, so being told WHAT to run and WHEN is the difference between a gate that opens this month
+ * and one that opens next year. The dates are DERIVED from ICU rather than remembered: the first
+ * version of this file's refusal named "2026-10-25 (EU), 2026-11-01 (US)" and was wrong by seven
+ * weeks, because America/Santiago transitions in September and a northern-hemisphere author does
+ * not picture it.
+ */
+function noProbeReason(zone, nowMs, seen = []) {
+  const own = nextTransition(zone, nowMs);
+  const soonest = soonestTransition(nowMs);
+  const pending = seen.filter((r) => r.payload?.phase === "armed").length;
+  const target = own === null ? null : Date.parse(`${own.day}T12:00:00Z`);
+  return (
+    `no completed \`${DST_PROBE_EVENT}\` trace for ${zone}` +
+    (pending > 0
+      ? ` — ${pending} armed row(s) are waiting for their transition, which has not arrived yet. ` +
+        "That is the expected state between arming and firing; nothing is wrong."
+      : " — nothing has been armed on this deployment.") +
+    (own === null
+      ? ` ${zone} has no transition in the next 400 days, so it can never carry this row.`
+      : ` ${zone} next transitions on ${own.day} (${own.from} -> ${own.to}).`) +
+    (soonest === null ? "" : ` Earliest anywhere: ${soonest.day} (${soonest.zones.join(", ")}).`) +
+    (target === null
+      ? ""
+      : "\n  To arm it, pick an instant on the FAR SIDE of that transition and run:\n" +
+        `    node node_modules/convex/bin/main.js run internal:dstProbe:arm ` +
+        `'{"zone":"${zone}","fireAtMs":${target}}'${
+          process.env.PIKAR_CONVEX_TARGET === "prod" ? " --prod" : ""
+        }\n` +
+        "  (from packages/backend. `arm` refuses any window with no transition in it, so a wrong\n" +
+        "  instant is loud rather than silently useless.)")
+  );
+}
+
 const NEEDS_TENANT =
   "--tenant <id> is required: the tenant holding the grant is not guessed. Discovering it by " +
   "scanning would make this script pick WHOSE data is read, which is exactly the decision it must " +
@@ -303,7 +434,11 @@ function convexProbe(fn, args) {
     const cliRequire = createRequire(join(REPO_ROOT, "packages", "backend", "package.json"));
     const cliPkg = cliRequire.resolve("convex/package.json");
     const cli = join(dirname(cliPkg), "bin", "main.js");
-    const out = execFileSync(process.execPath, [cli, "run", fn, JSON.stringify(args)], {
+    // WHICH DEPLOYMENT, stated per invocation and never guessed — `check-provider-lane.mjs:502`'s
+    // convention. The evidence that matters is production's, and a probe that read dev while
+    // reporting "prod" would be the worst kind of green.
+    const target = process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : [];
+    const out = execFileSync(process.execPath, [cli, "run", ...target, fn, JSON.stringify(args)], {
       cwd: join(REPO_ROOT, "packages", "backend"),
       encoding: "utf8",
       // stderr PIPED, not ignored: the crash path needs `err.stdout`, and node only populates the
@@ -327,10 +462,16 @@ function convexProbe(fn, args) {
 /** stdout -> parsed object, or UNREACHABLE when there is nothing to parse. The ONE place output
  *  becomes an answer, so the success and crash paths cannot diverge in how they read it. */
 function parseProbeOutput(out) {
-  const m = /\{[\s\S]*\}/.exec(out);
-  if (m === null) return UNREACHABLE;
+  // AN ARRAY IS A VALID ANSWER. `audit:recentByType` returns a LIST, and the original
+  // `/\{[\s\S]*\}/` would have matched from the first inner `{` to the last `}` — i.e. sliced the
+  // brackets off and handed `JSON.parse` a fragment. That failure would have read as UNREACHABLE,
+  // which is the one diagnosis this function exists to keep separate from the others.
+  const start = out.search(/[[{]/);
+  if (start < 0) return UNREACHABLE;
+  const end = Math.max(out.lastIndexOf("]"), out.lastIndexOf("}"));
+  if (end <= start) return UNREACHABLE;
   try {
-    return JSON.parse(m[0]);
+    return JSON.parse(out.slice(start, end + 1));
   } catch {
     return UNREACHABLE;
   }
@@ -359,6 +500,19 @@ function makeRunConvex(correlationId) {
       if (r === UNREACHABLE) return UNREACHABLE;
       if (r === null || r.present !== true) return null;
       return { real: r.real === true, expiresAt: r.expiresAt };
+    }
+    if (what === "dstProbeRows") {
+      const r = convexProbe("audit:recentByType", {
+        eventType: DST_PROBE_EVENT,
+        sinceMs: args.sinceMs,
+        limit: 100,
+      });
+      if (r === UNREACHABLE) return UNREACHABLE;
+      // An EMPTY ARRAY is an answer ("we looked, there is nothing"), not a failure to look. Only a
+      // non-array is unreadable. Collapsing the two is the defect the UNREACHABLE sentinel exists
+      // for, and it would report "nothing armed" on a deployment that never answered.
+      if (!Array.isArray(r)) return UNREACHABLE;
+      return r.length === 0 ? null : r;
     }
     if (what === "listInbox") {
       const r = convexProbe("gmail:probeReadCount", { ...args, correlationId });
@@ -462,24 +616,122 @@ function selfCheck() {
       `${probe} must refuse a fixture token — reading it observes the offline seam, not a provider`,
     );
   }
-  const dstRefusal = COLLECTORS["dst-boundary"]({
-    zone: "Africa/Nairobi",
-    fromMs: oct,
-    toMs: nov,
-  });
-  assert.equal(dstRefusal.observed, false);
-  // The refusal must name a DERIVED date, and it must be a real one. Pinning the literal string
-  // would re-create the constant this change deleted, so the assertion is on the SHAPE and on the
-  // derivation agreeing with an independent call.
-  assert.match(
-    dstRefusal.reason,
-    /Earliest anywhere: \d{4}-\d{2}-\d{2}/,
-    "must name a derived date",
+  // ═══ dst-boundary: THE SCHEDULER'S TRACE, and every way it can fail to be one ═══════════════
+  //
+  // The whole probe is now a reader, so each branch is driven against a stubbed deployment. The
+  // POSITIVE case comes first, deliberately: without it every refusal below could be passing
+  // because the collector says no to everything, which is the shape of a check that cannot fail.
+  const NZ = "Pacific/Auckland";
+  const nzArm = Date.UTC(2026, 8, 20, 0);
+  const nzTarget = Date.UTC(2026, 8, 27, 19, 0);
+  const nzFired = nzTarget + 1200;
+  const dstRows = (over = {}) => [
+    {
+      correlationId: "dst-probe:c1",
+      payload: {
+        phase: "fired",
+        zone: NZ,
+        armedAtMs: nzArm,
+        fireAtMs: nzTarget,
+        firedAtMs: nzFired,
+        wallClockAtFire: "2026-09-28T08:00:01",
+        offsetAtArm: "GMT+12",
+        offsetAtFire: "GMT+13",
+        ...over,
+      },
+    },
+    {
+      correlationId: "dst-probe:c1",
+      payload: { phase: "armed", zone: NZ, armedAtMs: nzArm, fireAtMs: nzTarget },
+    },
+  ];
+  const dst = (rows, zone = NZ) =>
+    COLLECTORS["dst-boundary"]({ zone, nowMs: nzFired, runConvex: () => rows });
+
+  // POSITIVE WITNESS. A real pair, a real crossing, and the detail carries what ADR-046 D9 names.
+  const dstOk = dst(dstRows());
+  assert.equal(
+    dstOk.observed,
+    true,
+    "a complete armed+fired pair across a real crossing IS the trace",
   );
+  assert.equal(dstOk.detail.wallClockAtFire, "2026-09-28T08:00:01");
+  assert.equal(dstOk.detail.driftMs, 1200);
+  assert.ok(dstOk.detail.armedAt < dstOk.detail.firedAt, "armed must precede fired");
+  // §4: nothing in the artifact may be a person, and there is nowhere to put one.
+  for (const [k, v] of Object.entries(dstOk.detail)) {
+    assert.ok(
+      typeof v === "string" || typeof v === "number",
+      `dst-boundary detail.${k} must be a primitive`,
+    );
+  }
+
+  // NOTHING ARMED AT ALL — and the refusal must hand over a runnable command with a derived date.
+  const dstNone = dst(null);
+  assert.equal(dstNone.observed, false);
+  assert.match(dstNone.reason, /nothing has been armed on this deployment/);
+  assert.match(dstNone.reason, /internal:dstProbe:arm/, "the refusal must say how to arm one");
   assert.match(
-    dstRefusal.reason,
-    /has no transition at all in the next 400 days/,
-    "Africa/Nairobi never transitions and the refusal must say so about the zone it was given",
+    dstNone.reason,
+    /"fireAtMs":\d{10,}/,
+    "and with a DERIVED instant, not a placeholder",
+  );
+  assert.match(dstNone.reason, /Earliest anywhere: \d{4}-\d{2}-\d{2}/, "must name a derived date");
+
+  // ARMED BUT NOT YET FIRED — the expected state for most of the wait. It must read as "not yet",
+  // never as "broken", or somebody re-arms a probe that is working perfectly.
+  const dstPending = dst([{ correlationId: "c2", payload: { phase: "armed", zone: NZ } }]);
+  assert.equal(dstPending.observed, false);
+  assert.match(dstPending.reason, /1 armed row\(s\) are waiting/);
+  assert.match(dstPending.reason, /nothing is wrong/);
+
+  // UNREACHABLE IS NOT "NOTHING ARMED". Same sentinel discipline as the other two probes.
+  assert.match(
+    COLLECTORS["dst-boundary"]({
+      zone: NZ,
+      nowMs: nzFired,
+      runConvex: () => UNREACHABLE_SENTINEL_FOR_TEST,
+    }).reason,
+    /the question was never asked/,
+  );
+
+  // A FIRED ROW WITH NO ARMED HALF. The armed instant is the claim; it is never inferred.
+  assert.match(
+    dst([dstRows()[0]]).reason,
+    /its `armed` half is missing/,
+    "a fired row alone cannot evidence when it was armed",
+  );
+
+  // THE WINDOW SPANS NO TRANSITION, according to THIS runtime — the independent witness. The
+  // deployment claimed GMT+12 -> GMT+13 and the rows are otherwise perfect; the local ICU check is
+  // the only thing that can catch a forged or mistaken pair, so it must be able to.
+  const flat = dst(
+    dstRows({
+      armedAtMs: Date.UTC(2026, 5, 1),
+      firedAtMs: Date.UTC(2026, 5, 2),
+      fireAtMs: Date.UTC(2026, 5, 2),
+    }),
+  );
+  assert.equal(flat.observed, false);
+  assert.match(flat.reason, /A run that spans no transition evidences nothing/);
+
+  // THE TWO WITNESSES DISAGREE. A real crossing locally, but the deployment saw one offset at both
+  // ends — a tzdata skew, which is a finding rather than a missing probe.
+  const skew = dst(dstRows({ offsetAtArm: "GMT+12", offsetAtFire: "GMT+12" }));
+  assert.equal(skew.observed, false);
+  assert.match(skew.reason, /THE TWO WITNESSES DISAGREE/);
+  assert.match(skew.reason, /tzdata sets is stale/);
+
+  // IT FIRED EARLY. Offsets can differ across a window a call never actually crossed.
+  const early = dst(dstRows({ firedAtMs: nzTarget - 5 }));
+  assert.equal(early.observed, false);
+  assert.match(early.reason, /BEFORE its target instant/);
+
+  // A ZONE THAT NEVER TRANSITIONS still gets an honest refusal naming itself.
+  assert.match(
+    dst(null, "Africa/Nairobi").reason,
+    /has no transition in the next 400 days/,
+    "UTC+3 can never carry this row and the refusal must say so about the zone it was given",
   );
   // NEXT-TRANSITION, BOTH DIRECTIONS. A zone that transitions and one that never does.
   const santiago = nextTransition("America/Santiago", Date.UTC(2026, 7, 30));
@@ -553,10 +805,14 @@ function selfCheck() {
 
   console.log(
     "[recurrence-evidence] self-check PASSED " +
-      "(artifact writer refuses a false observation; dst-boundary proven in BOTH directions incl. " +
-      "the local UTC+3 zone that can never produce it; all three probes refuse on the current " +
-      "deployment state with actionable reasons; and BOTH collection halves RUN — a real count is " +
-      "the provider-read trace, an expiry ADVANCING across a read is the re-auth trace, and an " +
+      "(artifact writer refuses a false observation; dst-boundary now READS THE SCHEDULER'S OWN " +
+      "TRACE and every failure mode is driven — nothing armed, armed-but-waiting, unreachable, a " +
+      "fired row with no armed half, a window spanning no transition, the two tzdata witnesses " +
+      "disagreeing, and a call that fired early — with a positive witness first so none of those " +
+      "refusals can be passing vacuously; all three probes refuse on the current deployment state " +
+      "with actionable reasons, and the dst refusal hands over a runnable arm command with a " +
+      "DERIVED instant; and BOTH provider collection halves RUN — a real count is the " +
+      "provider-read trace, an expiry ADVANCING across a read is the re-auth trace, and an " +
       "unexpired token refuses because a refresh nobody needed evidences nothing)",
   );
 }
@@ -590,14 +846,17 @@ function main(argv) {
   const tenIx = argv.indexOf("--tenant");
   const tenant = tenIx >= 0 ? argv[tenIx + 1] : undefined;
   const now = Date.now();
+  const runConvex = makeRunConvex(`recurrence-evidence:${probe}:${now}`);
   const input =
     probe === "dst-boundary"
       ? {
-          zone: process.env.PIKAR_DST_ZONE ?? "Africa/Nairobi",
-          fromMs: now - 86_400_000,
-          toMs: now,
+          // NO DEFAULT ZONE. The old default was Africa/Nairobi — UTC+3, which never transitions —
+          // so the unconfigured run refused for a reason that had nothing to do with the probe.
+          zone: process.env.PIKAR_DST_ZONE ?? "Pacific/Auckland",
+          runConvex,
+          nowMs: now,
         }
-      : { tenant, runConvex: makeRunConvex(`recurrence-evidence:${probe}:${now}`) };
+      : { tenant, runConvex };
 
   const res = COLLECTORS[probe](input);
   if (!res.observed) {

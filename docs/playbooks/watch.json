@@ -415,6 +415,7 @@
     "packages/core/src/routineSchedule",
     "packages/backend/convex/routineDecision",
     "packages/backend/convex/routines",
+    "packages/backend/convex/dstProbe",
     "packages/backend/convex/pinnedWorkflows",
     "packages/backend/scripts/check-routine-gate.mjs",
     "packages/backend/convex/knowledgeSearch",

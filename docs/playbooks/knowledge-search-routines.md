@@ -1,5 +1,45 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-09 (47-09 — **`dst-boundary` STOPPED ANSWERING ITSELF WITH ARITHMETIC.**
+> Until today `collect-recurrence-evidence.mjs` collected that row by comparing a zone's UTC offset
+> 24 hours ago with its offset now. That is a true statement about ICU's tz database and it
+> evidences NOTHING about this deployment's scheduler — any laptop could produce it, on any day
+> after any transition, with no deployment involved. The file's own docstring called the probe
+> “COMPLETE”, which is how it survived three rounds of adversarial review.
+>
+> `convex/dstProbe.ts` is the replacement ADR-046 D9 names: `arm` books ONE `ctx.scheduler.runAt`
+> at ONE absolute instant and writes an `armed` audit row; `observe` writes a `fired` row carrying
+> the instant it actually ran and **the resolved wall time**, read on the deployment, in the zone.
+> It never re-arms. Every zone decision lives OUTSIDE the convex namespace, which is not tidiness:
+> two of `routineSchedule.ts`'s exports are BANNED IDENTIFIERS here, so a probe that imported the
+> repo's own wall-clock engine would redden `routines.test.ts`'s ten-token scan on the import line
+> and `routineDecision.test.ts` on the module name. Keeping the probe dumb is what makes it legal
+> to exist while `decision: defer` stands.
+>
+> THE COLLECTOR IS NOW A READER, and it applies FOUR tests before calling anything observed — each
+> one a way the row could read green while evidencing nothing: (1) both halves present under ONE
+> correlation, because a `fired` row alone cannot show when it was armed and “armed before the
+> transition” is the entire claim; (2) THIS runtime's ICU agrees a transition fell between the
+> armed and fired instants — taking the deployment's word for it would be reading the claim back
+> rather than checking it; (3) the deployment's own offsets differ across the two rows, and **if
+> the two witnesses ever disagree that is the finding**, a tzdata skew nobody would otherwise see;
+> (4) it did not fire EARLY. The `--self-check` drives all four plus nothing-armed,
+> armed-but-waiting, unreachable and a fired-row-with-no-armed-half — with a POSITIVE witness
+> first, so none of those refusals can be passing vacuously.
+>
+> TWO MEASURED FACTS SHAPED IT. Production reaps completed `_scheduled_functions` rows after about
+> three days (28-31/day for exactly three days, nothing older, `--limit 800` unreached) while
+> `audit` goes back 27 days — so **the audit row is the evidence**, and reading the fire out of the
+> scheduler table would find nothing 18 days later. And a pending job stores a LATE-BOUND NAME
+> STRING (`dispatchRun.js:startDispatchRun` on prod), resolved at fire time: **renaming or
+> deleting `dstProbe.ts` or either export before the last armed transition orphans the call**, and
+> it fails at fire time rather than at deploy time — which reads exactly like a scheduler defect
+> and would poison the conclusion. Ordinary deploys in between are safe; a rename is not.
+>
+> The refusal hands over a runnable `arm` command with a DERIVED instant, because the wait between
+> arming and firing is 18 days at best and six months at worst, and a refusal nobody can act on
+> costs a season. `arm` itself refuses any window containing no transition — read that guard for
+> what it is: it stops a pointless arm, and it is NOT the evidence.)
 > Last verified: 2026-09-07 (42-03 — `routines.test.ts`'s pinned `ctx.scheduler` call-site set
 > gained `dispatchRun.ts`. It is the one place a dispatch is queued more than once from a single
 > call, which is exactly why the count is bounded in code and never by the model.)
