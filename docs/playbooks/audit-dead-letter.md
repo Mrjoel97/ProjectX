@@ -1,5 +1,32 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (45-04 — **THE REAPER HAS RUN. Production storage is clean.** Dry run
+> first (315 scanned, 140 orphans, 0 deleted), then live: **140 blobs / 68,385,711 bytes deleted**,
+> second pass confirms 0 orphans remaining and 0 dangling pointers created.
+>
+> | | session start | now |
+> |---|---|---|
+> | blobs | 438 | **175** |
+> | total | 217.8 MB | **150.5 MB** |
+> | orphans | 140 (65.2 MB) | **2 (both <24h old)** |
+> | dangling | 0 | **0** |
+>
+> The two survivors are 4 hours old and are the AGE FLOOR WORKING, not a miss — exactly the
+> in-flight-upload case it exists for. They age out of protection on their own.
+>
+> THE DRY RUN CORRECTED THE OPERATOR, which is the argument for having one. An offline analysis
+> had computed 142 orphans; the mutation found 140. The script had omitted the `attachments`
+> table while the mutation iterates the whole `STORAGE_ID_FIELDS` map — so the ad-hoc
+> reconstruction was the only thing that could be wrong, and it was. That is the payoff of 44-01
+> making the map the single source: the erasure walk, the export and the reaper all read it.
+>
+> WHERE ADR-044 D2 NOW STANDS. Two objections are retired: the archive is no longer
+> majority-synthetic (it is 672 genuine rows) and the orphaned bytes are gone. UNCHANGED and still
+> decisive: the cursor starts at 0, so arming freezes the ENTIRE history on day one rather than
+> archiving from now; `audit.payload` is `v.any()` with no systemic §4 scanner having read a row;
+> and the `billingEvents` bridge (C2, second count) is untouched. **WORM STAYS OFF** — a smaller
+> and cleaner decision than it was, but the same decision.)
+
 > Last verified: 2026-09-09 (45-03 — `tenantDelete.reapOrphanedBlobs`, for the 142 blobs (65.2 MB)
 > that no tenant purge can reach. Until 44-01 erasure deleted a row and KEPT its blob, so those
 > bytes are referenced by nothing and were unremovable by any product path — the reference is
