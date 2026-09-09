@@ -8,7 +8,9 @@
 //
 // `payload` is redaction-safe (refs/hashes/ids/counts only — see AuditPayload /
 // CLAUDE.md rule 4). Redaction must happen BEFORE calling log().
+
 import type { AuditPayload } from "@pikar/contracts/audit";
+import { classifyPayload } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
@@ -99,6 +101,98 @@ export const recentByType = internalQuery({
       correlationId: r.correlationId,
       payload: r.payload,
     }));
+  },
+});
+
+/**
+ * ADR-044 T3 — THE §4 CHECK THAT READS ROWS INSTEAD OF SOURCE.
+ *
+ * Every §4 guard in this repo scans SOURCE. ADR-044 says that is not enough and says why: "every
+ * latent §4 defect in the history becomes permanent on arming day, and a source scan cannot see a
+ * single already-written row. The honest check reads rows, not code." `recentByType` above states
+ * the same assumption from the other side — "if a payload ever carried content, this query would
+ * not be the bug" — and that is the claim nobody had tested until this query existed.
+ *
+ * THE CLASSIFICATION HAPPENS HERE, INSIDE THE DEPLOYMENT, AND VALUES NEVER CROSS THE WIRE. What
+ * comes back is a field PATH, a code-owned reason, a count, and a redacted fingerprint (length and
+ * character classes). A checker that shipped suspected PII to a terminal, a CI log or an agent
+ * transcript would have moved the leak rather than found it — so it cannot, by construction.
+ *
+ * FINDINGS ARE AGGREGATED by (eventType, path, reason). 672 rows sharing one defect are one line,
+ * not 672: a report nobody reads is a check nobody runs. `count` is how many rows hit it.
+ *
+ * BOTH §4 TABLES, one query. `deadLetters.payload` carries the same contract as `audit.payload`,
+ * and a second near-identical query is a second place to forget a table.
+ *
+ * ponytail: paginated rather than `.collect()`. Ceiling — the caller drives the cursor to the end;
+ * a partial walk reports a partial answer and says so via `isDone`. Upgrade path if the log ever
+ * outgrows an operator loop: an aggregate keyed by the finding, written at insert.
+ */
+export const payloadShapes = internalQuery({
+  args: {
+    table: v.union(v.literal("audit"), v.literal("deadLetters")),
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { table, cursor, limit }) => {
+    const page = await ctx.db
+      .query(table)
+      .paginate({ cursor: cursor ?? null, numItems: Math.min(limit ?? 200, 500) });
+
+    /** key -> aggregated finding. The key is what makes 672 rows one line. */
+    const agg = new Map<
+      string,
+      {
+        kind: string;
+        path: string;
+        verdict: string;
+        reason: string;
+        count: number;
+        fingerprint?: string;
+      }
+    >();
+
+    for (const row of page.page) {
+      // `eventType` on audit, `error` class on deadLetters — both code-owned literals, §4-clean,
+      // and both answer "which writer produced this?" which is the only question a finding raises.
+      const kind =
+        table === "audit"
+          ? ((row as { eventType?: string }).eventType ?? "(none)")
+          : ((row as { source?: string }).source ?? "workflow");
+      for (const f of classifyPayload((row as { payload?: unknown }).payload)) {
+        const key = `${kind}|${f.path}|${f.reason}`;
+        const hit = agg.get(key);
+        if (hit) {
+          hit.count += 1;
+          continue;
+        }
+        agg.set(key, {
+          kind,
+          path: f.path,
+          verdict: f.verdict,
+          reason: f.reason,
+          count: 1,
+          fingerprint: f.fingerprint,
+        });
+      }
+    }
+
+    return {
+      scanned: page.page.length,
+      isDone: page.isDone,
+      cursor: page.continueCursor,
+      // Worst first, then loudest: an operator reads the top of this list and stops.
+      findings: [...agg.values()].sort(
+        (a, b) =>
+          (a.verdict === b.verdict
+            ? 0
+            : a.verdict === "violation"
+              ? -1
+              : b.verdict === "violation"
+                ? 1
+                : 0) || b.count - a.count,
+      ),
+    };
   },
 });
 

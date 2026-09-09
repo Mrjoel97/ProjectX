@@ -1,5 +1,33 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+> Last verified: 2026-09-09 (47-03 — **§4 IS NOW CHECKED AGAINST THE ROWS, NOT THE SOURCE.**
+> ADR-044 T3 gates WORM arming on exactly this and says why: “every latent §4 defect in the
+> history becomes permanent on arming day, and a source scan cannot see a single already-written
+> row. The honest check reads rows, not code.” `recentByType` states the same assumption from the
+> other side — “if a payload ever carried content, this query would not be the bug” — and that is
+> the claim nobody had ever tested.
+>
+> `audit:payloadShapes` (internalQuery, both §4 tables, paginated) classifies INSIDE the
+> deployment and returns a field PATH, a code-owned reason, a row COUNT and a redacted
+> fingerprint (length + character classes). **Values never cross the wire**, which is what makes
+> its output safe to paste into a terminal, a CI log or an agent transcript — a checker that
+> echoed suspected PII would have moved the leak rather than found it. Findings aggregate by
+> (kind, path, reason), so 672 rows sharing one defect are ONE line.
+>
+> The classifier is `@pikar/core`'s `payloadShape.ts` (pure, 24 tests) so the live gate and the
+> offline self-test share one implementation. TWO PROPERTIES ARE PINNED, and the second is the
+> one that keeps the gate readable: it catches what §4 forbids (an email anywhere in a string, a
+> URL carrying a QUERY — the query is where identity hides — prose, and a PII-shaped KEY even
+> when today's value is clean, which is ADR-044 C2's argument about `stripeObjectId`), AND it does
+> NOT convict the shapes the log is actually made of (`emailsSent`, `messageCount`, `bodySize` are
+> COUNTS, not content).
+>
+> `scripts/check-audit-payloads.mjs` drives the cursor to `isDone` — **an incomplete walk exits 1,
+> because a partial scan is not a clean bill of health.** A VIOLATION reddens it; a `suspect` does
+> not, unless `--strict`. That split is deliberate: reddening on unclassified-but-plausible shapes
+> would flag legitimate rows on day one, and a gate red for a non-reason stops being read, which
+> takes the real failures with it. Registered as the seventeenth free gate, so CI runs its
+> self-test on every push; the LIVE run needs a deployment and is the pre-arming audit.)
 > Last verified: 2026-09-09 (45-04 — **THE REAPER HAS RUN. Production storage is clean.** Dry run
 > first (315 scanned, 140 orphans, 0 deleted), then live: **140 blobs / 68,385,711 bytes deleted**,
 > second pass confirms 0 orphans remaining and 0 dangling pointers created.

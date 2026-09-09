@@ -1,4 +1,10 @@
 # Playbook: CI gate (typecheck / lint / test / build)
+> Last verified: 2026-09-09 (47-03 — the free-gate registry grew to **seventeen**:
+> `check-audit-payloads.mjs` joined it. The registry is a hand-written ALLOWLIST that fails in
+> BOTH directions, and it earned that design here — the new script was written, and the very next
+> `check-free-gates.mjs` run printed `UNREGISTERED scripts/check-audit-payloads.mjs declares
+> --self-test — add it to GATES`, by name, before a human noticed. A registry derived from the
+> scan would have silently covered it and proved nothing.)
 > Last verified: 2026-09-09 (45-07 — **EVERY WORKFLOW NOW RUNS NODE 24, because CI was gating on
 > a runtime nothing ships.** The free-gates step reddened on its FIRST CI run — not from a bug in
 > the gate, but because `ci.yml` pinned `node-version: "20"` while `deploy-production.yml` built

@@ -1,6 +1,6 @@
 // EVERY FREE GATE MUST BE GREEN, AND CI MUST BE THE ONE ASKING.
 //
-// THE DEFECT THIS CLOSES. This repo has sixteen scripts carrying a `--self-test` / `--self-check` /
+// THE DEFECT THIS CLOSES. This repo has seventeen scripts carrying a `--self-test` / `--self-check` /
 // `--fixtures-only` mode: offline, zero-cost checks that exist to redden BEFORE anyone spends money
 // or touches a deployment. Nothing ran them. Two were found red by accident on 2026-09-08/09:
 //
@@ -56,6 +56,7 @@ const FREE_FLAGS = ["--self-test", "--self-check", "--fixtures-only"];
  */
 const GATES = [
   { path: "scripts/check-absence-guards.mjs", flag: "--self-test" },
+  { path: "scripts/check-audit-payloads.mjs", flag: "--self-test" },
   { path: "scripts/check-phase28-completion.mjs", flag: "--self-test" },
   { path: "scripts/check-phase28-readiness.mjs", flag: "--self-check" },
   { path: "scripts/check-provider-lane.mjs", flag: "--self-test" },
