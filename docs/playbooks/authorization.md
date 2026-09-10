@@ -1,5 +1,10 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-09-10 — `isolation.test.ts` now discovers `ownerAction` exports alongside
+> owner queries/mutations and invokes the action lane with a real typed Vault-id fixture.
+> The Data operator preview is covered by the derived non-owner rejection test; its own tests
+> also reject anonymous callers and foreign/sealed source files before any artifact write.
+
 > Last verified: 2026-09-03 (**`/ops` SPLIT INTO AN EMBEDDABLE VIEW AND THE RAIL NOW MOUNTS IT
 > UNDER APPROVALS. NO AUTHORIZATION DECISION CHANGED.** Working tree, uncommitted.)
 >

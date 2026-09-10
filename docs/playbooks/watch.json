@@ -1,6 +1,9 @@
 {
   "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
-  "tracing.md": ["packages/backend/convex/lib/foglamp.ts"],
+  "tracing.md": [
+    "packages/backend/convex/lib/foglamp.ts",
+    "packages/backend/convex/foglamp.test.ts"
+  ],
   "ci-gate.md": [
     ".github/workflows/ci.yml",
     "package.json",
@@ -78,6 +81,10 @@
     "packages/backend/convex/smoke.ts"
   ],
   "dashboard-pages.md": [
+    "apps/web/app/(app)/dashboard/profile/VerticalWorkloadConfirmation.tsx",
+    "apps/web/app/(app)/dashboard/profile/verticalWorkloadConfirmation.container.test.tsx",
+    "apps/web/app/(app)/_components/RunningWork.tsx",
+    "apps/web/app/(app)/_components/RunningWork.test.tsx",
     "packages/core/src/dashboard.ts",
     "packages/core/src/dashboard.test.ts",
     "packages/core/src/spend.ts",
@@ -160,6 +167,8 @@
     "packages/core/src/toolGrants.ts",
     "packages/core/src/toolGrants.test.ts",
     "packages/backend/convex/agentSteps.ts",
+    "packages/backend/convex/agentAuthoringInspection.test.ts",
+    "packages/backend/convex/smokeAssert.ts",
     "packages/backend/convex/agentSteps.test.ts",
     "packages/backend/convex/deliverApprovedPlan.ts",
     "packages/backend/convex/llm.ts",
@@ -328,6 +337,9 @@
   ],
   "guardrails.md": [
     "packages/backend/convex/guardrails.ts",
+    "packages/backend/convex/lib/evalBudgetModel.ts",
+    "packages/backend/convex/evalBudget",
+    "packages/cost/src/evalBudget.ts",
     "packages/backend/scripts/run-smoke-guardrails.mjs",
     "packages/cost/src/cost.ts",
     "packages/core/src/fallback.ts",
@@ -423,6 +435,30 @@
     "packages/backend/convex/knowledgeLlm",
     "packages/backend/scripts/collect-recurrence-evidence",
     "packages/backend/convex/schema.test.ts"
+  ],
+  "vertical-packs.md": [
+    "packages/backend/scripts/prepare-vertical-review.mjs",
+    "apps/web/e2e/vertical-packs.spec.ts",
+    "packages/backend/scripts/run-eval-vertical.mjs",
+    "packages/contracts/src/verticalEval.ts",
+    "packages/core/src/verticalPacks",
+    "packages/core/src/dataProfile",
+    "packages/backend/convex/verticalData",
+    "packages/backend/convex/verticalVisual",
+    "packages/backend/convex/verticalEval",
+    "packages/backend/scripts/vertical-eval-",
+    "packages/backend/scripts/smokeRun.mjs",
+    "packages/vault/src/dataWorkbook",
+    "packages/backend/convex/verticalPacks",
+    "packages/backend/convex/verticalPackTelemetry",
+    "packages/backend/convex/verticalPackBinding",
+    "packages/contracts/src/skills/vertical",
+    "packages/contracts/packs/vertical/",
+    "packages/backend/scripts/vertical-eval-cases/",
+    "packages/backend/convex/verticalEngineering.test.ts",
+    "packages/backend/convex/verticalProductDesign.test.ts",
+    "apps/web/app/(app)/dashboard/profile/VerticalPackRecommendations.tsx",
+    "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations"
   ],
   "revenue-crm.md": ["packages/revenue/src/crm", "packages/backend/convex/revenueCrm"],
   "revenue-finance.md": [

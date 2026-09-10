@@ -3,175 +3,90 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 
-// Mock the node-only S3 SDK so the real-export branch runs without a live bucket.
-// vi.hoisted lets the factory reference `s3Send` (vi.mock is hoisted above imports).
-// PutObjectCommand is captured as its raw input so the test can assert the headers.
 const { s3Send } = vi.hoisted(() => ({ s3Send: vi.fn() }));
 vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: vi.fn(() => ({ send: s3Send })),
   PutObjectCommand: vi.fn((input: unknown) => ({ input })),
 }));
-
-// Raw source for the static-shape assertions (edge-runtime has no node:fs, so we
-// inline file contents via Vite's ?raw loader instead of reading from disk).
-const sources = import.meta.glob("./**/*.ts", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
-
-// Runtime modules for convex-test (exclude *.test.ts so the harness does not try
-// to load the test files themselves).
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
+const ORIGINAL = process.env.WORM_BUCKET;
+const NOW = Date.UTC(2026, 8, 10);
 
-function src(name: string): string {
-  const entry = Object.entries(sources).find(([p]) => p.endsWith(`/${name}`));
-  if (!entry) throw new Error(`missing convex source: ${name}`);
-  return entry[1];
-}
-
-describe("WORM export cron stub — shape (SC-4)", () => {
-  test("worm.ts is a 'use node' action module (directive is the first statement)", () => {
-    const s = src("worm.ts").trimStart();
-    expect(s.startsWith('"use node"') || s.startsWith("'use node'")).toBe(true);
-  });
-
-  test("crons.ts registers a daily worm-export -> internal.worm.exportAudit", () => {
-    const s = src("crons.ts");
-    expect(/\.daily\(\s*["']worm-export["']/.test(s)).toBe(true);
-    expect(/internal\.worm\.exportAudit/.test(s)).toBe(true);
-  });
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
+  process.env.WORM_BUCKET = "test-worm-bucket";
+  s3Send.mockReset().mockResolvedValue({});
+});
+afterEach(() => {
+  vi.useRealTimers();
+  if (ORIGINAL === undefined) delete process.env.WORM_BUCKET;
+  else process.env.WORM_BUCKET = ORIGINAL;
 });
 
-describe("WORM cursor mechanics + stub safety (SC-4)", () => {
-  const ORIGINAL = process.env.WORM_BUCKET;
-  afterEach(() => {
-    if (ORIGINAL === undefined) delete process.env.WORM_BUCKET;
-    else process.env.WORM_BUCKET = ORIGINAL;
-  });
-
-  test("getCursor returns the 0 baseline for worm-audit when no cursor row exists", async () => {
-    const t = convexTest(schema, modules);
-    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(0);
-  });
-
-  test("advanceCursor upserts lastExportedTs (single row); getCursor reads it back", async () => {
-    const t = convexTest(schema, modules);
-    await t.mutation(internal.wormCursor.advanceCursor, { ts: 111 });
-    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(111);
-    await t.mutation(internal.wormCursor.advanceCursor, { ts: 222 });
-    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(222);
-    const rows = await t.run((ctx) => ctx.db.query("exportCursors").collect());
-    expect(rows).toHaveLength(1);
-  });
-
-  test("auditSince (by_ts index) returns only rows strictly after the cursor ts, oldest-first, bounded by limit", async () => {
-    const t = convexTest(schema, modules);
-    await t.run(async (ctx) => {
-      // Insert out of ts order and across tenants — the export window is CROSS-tenant
-      // and must come back ts-ascending from the by_ts index regardless of insert order.
-      for (const [ts, tenantId] of [
-        [30, "t1"],
-        [10, "t2"],
-        [20, "t1"],
-        [40, "t2"],
-        [15, "t1"],
-      ] as const) {
-        await ctx.db.insert("audit", {
-          tenantId,
-          correlationId: `c${ts}`,
-          eventType: "x",
-          actor: "system",
-          payload: { ref: `r${ts}` },
-          ts,
-        });
-      }
-    });
-
-    // Strictly after `since`, oldest-first, all tenants.
-    const window = await t.query(internal.wormCursor.auditSince, { since: 15 });
-    expect(window.map((r) => r.ts)).toEqual([20, 30, 40]);
-
-    // Boundary is EXCLUSIVE (ts > since): a row exactly at `since` is not re-exported.
-    const atBoundary = await t.query(internal.wormCursor.auditSince, { since: 20 });
-    expect(atBoundary.map((r) => r.ts)).toEqual([30, 40]);
-
-    // limit bounds the window to the oldest N rows after `since` (index take, not a scan+slice).
-    const limited = await t.query(internal.wormCursor.auditSince, { since: 15, limit: 2 });
-    expect(limited.map((r) => r.ts)).toEqual([20, 30]);
-  });
-
-  // THE critical correctness property (see worm.ts header): the stub path must
-  // NOT advance the cursor. Advancing it would mark audit rows as exported that
-  // never reached S3 — a permanent, unrecoverable hole in the compliance log
-  // once Phase 7 enables the real export.
-  test("exportAudit stub path does NOT advance the cursor", async () => {
-    delete process.env.WORM_BUCKET;
-    const t = convexTest(schema, modules);
-    await t.run((ctx) =>
-      ctx.db.insert("audit", {
+async function seedAudit(t: ReturnType<typeof convexTest>, tsList: number[], legacy = false) {
+  const ids = await t.run(async (ctx) => {
+    const ids = [];
+    for (const ts of tsList) {
+      const id = await ctx.db.insert("audit", {
         tenantId: "t1",
-        correlationId: "c1",
+        correlationId: `c${ts}`,
         eventType: "x",
         actor: "system",
-        payload: { ref: "r" },
-        ts: 42,
-      }),
-    );
-    await t.action(internal.worm.exportAudit, {});
-    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(0);
-    const cursors = await t.run((ctx) => ctx.db.query("exportCursors").collect());
-    expect(cursors).toHaveLength(0);
+        payload: { ref: `r${ts}` },
+        ts,
+        ...(legacy ? {} : { exportVersion: 2 as const }),
+      });
+      ids.push(id);
+      if (!legacy) await ctx.db.insert("auditExportQueue", { auditId: id });
+    }
+    return ids;
   });
+  vi.setSystemTime(Date.now() + 100);
+  return ids;
+}
 
-  test("exportAudit stub path returns a skipped marker and does not throw", async () => {
+function exportedRows() {
+  return s3Send.mock.calls.flatMap((call) =>
+    String(call[0].input.Body)
+      .trimEnd()
+      .split("\n")
+      .map((line) => JSON.parse(line)),
+  );
+}
+
+async function checkpoint(t: ReturnType<typeof convexTest>) {
+  return await t.run((ctx) => ctx.db.query("exportCursors").unique());
+}
+
+describe("WORM bounded lossless export", () => {
+  test("OFF gate makes no S3 call and creates no checkpoint", async () => {
     delete process.env.WORM_BUCKET;
     const t = convexTest(schema, modules);
-    const res = await t.action(internal.worm.exportAudit, {});
-    expect(res).toMatchObject({ skipped: true });
-  });
-});
-
-describe("WORM real export — advance only after a durable PutObject (OPSG-03)", () => {
-  const ORIGINAL = process.env.WORM_BUCKET;
-
-  beforeEach(() => {
-    process.env.WORM_BUCKET = "test-worm-bucket";
-    s3Send.mockReset();
-  });
-  afterEach(() => {
-    if (ORIGINAL === undefined) delete process.env.WORM_BUCKET;
-    else process.env.WORM_BUCKET = ORIGINAL;
+    await seedAudit(t, [42]);
+    expect(await t.action(internal.worm.exportAudit, {})).toMatchObject({ skipped: true });
+    expect(s3Send).not.toHaveBeenCalled();
+    expect(await checkpoint(t)).toBeNull();
+    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(0);
   });
 
-  async function seedAudit(t: ReturnType<typeof convexTest>, tsList: number[]) {
-    await t.run(async (ctx) => {
-      for (const ts of tsList) {
-        await ctx.db.insert("audit", {
-          tenantId: "t1",
-          correlationId: `c${ts}`,
-          eventType: "x",
-          actor: "system",
-          payload: { ref: `r${ts}` },
-          ts,
-        });
-      }
-    });
-  }
-
-  test("serializes the window → PutObject(COMPLIANCE, SHA256, retain-until) → advances the cursor to maxTs", async () => {
-    s3Send.mockResolvedValue({});
+  test("exports every equal-ts row across page boundaries with distinct keys", async () => {
     const t = convexTest(schema, modules);
-    await seedAudit(t, [10, 20, 30]);
-
-    const res = await t.action(internal.worm.exportAudit, {});
-
-    // Cursor advanced to the newest exported ts.
-    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(30);
-    expect(res).toMatchObject({ exported: 3, maxTs: 30 });
-
-    // Exactly one PutObject with the Object-Lock headers.
-    expect(s3Send).toHaveBeenCalledTimes(1);
+    const ids = await seedAudit(t, [42, 42, 42, 42, 42]);
+    expect(await t.action(internal.worm.exportAudit, { pageSize: 2 })).toMatchObject({
+      exported: 5,
+      pages: 3,
+      maxTs: 42,
+    });
+    expect(
+      exportedRows()
+        .map((row) => row._id)
+        .sort(),
+    ).toEqual(ids.sort());
+    expect(new Set(s3Send.mock.calls.map((call) => call[0].input.Key)).size).toBe(3);
+    expect(await checkpoint(t)).toMatchObject({ lastExportedTs: 42 });
+    expect((await checkpoint(t))?.pendingAuditIds).toBeUndefined();
+    expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toHaveLength(0);
     const put = s3Send.mock.calls[0]?.[0].input;
     expect(put).toMatchObject({
       Bucket: "test-worm-bucket",
@@ -179,46 +94,152 @@ describe("WORM real export — advance only after a durable PutObject (OPSG-03)"
       ObjectLockMode: "COMPLIANCE",
     });
     expect(put.ObjectLockRetainUntilDate).toBeInstanceOf(Date);
-    // NDJSON body: one line per row, ts-ascending.
-    expect(String(put.Body).trimEnd().split("\n")).toHaveLength(3);
   });
 
-  test("25.3: a backlog drains in ONE run — pageSize 2 over 3 rows is two objects and the cursor at the newest ts", async () => {
-    s3Send.mockResolvedValue({});
+  test("after completion, a new window exports new/backdated rows exactly once", async () => {
     const t = convexTest(schema, modules);
-    await seedAudit(t, [10, 20, 30]);
-    const res = await t.action(internal.worm.exportAudit, { pageSize: 2 });
-    expect(res).toMatchObject({ exported: 3, maxTs: 30, pages: 2 });
-    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(30);
-    expect(s3Send).toHaveBeenCalledTimes(2);
-    const keys = s3Send.mock.calls.map((c) => c[0].input.Key);
-    expect(new Set(keys).size).toBe(2); // two distinct objects, never one overwritten
-    const bodies = s3Send.mock.calls.map(
-      (c) => String(c[0].input.Body).trimEnd().split("\n").length,
-    );
-    expect(bodies).toEqual([2, 1]);
+    const old = await seedAudit(t, [100, 200]);
+    await t.action(internal.worm.exportAudit, { pageSize: 2 });
+    const added = await seedAudit(t, [10, 200, 300]);
+    expect(await t.action(internal.worm.exportAudit, { pageSize: 2 })).toMatchObject({
+      exported: 3,
+    });
+    expect(
+      exportedRows()
+        .map((row) => row._id)
+        .sort(),
+    ).toEqual([...old, ...added].sort());
+    vi.setSystemTime(Date.now() + 100);
+    expect(await t.action(internal.worm.exportAudit, {})).toEqual({ exported: 0 });
+    expect(exportedRows()).toHaveLength(5);
   });
 
-  test("PutObject throw → cursor is NOT advanced (next cron retries the same window)", async () => {
-    s3Send.mockRejectedValue(new Error("s3 down"));
+  test("rows inserted while uploading enter the durable queue and are drained", async () => {
+    const t = convexTest(schema, modules);
+    const old = await seedAudit(t, [42, 42, 42]);
+    let late: string[] = [];
+    s3Send.mockImplementationOnce(async () => {
+      late = await seedAudit(t, [1]);
+      return {};
+    });
+    expect(await t.action(internal.worm.exportAudit, { pageSize: 2 })).toMatchObject({
+      exported: 4,
+    });
+    expect(await t.action(internal.worm.exportAudit, {})).toEqual({ exported: 0 });
+    expect(
+      exportedRows()
+        .map((row) => row._id)
+        .sort(),
+    ).toEqual([...old, ...late].sort());
+  });
+
+  test("failed page resumes byte-identically despite new rows and a changed requested page size", async () => {
+    const t = convexTest(schema, modules);
+    await seedAudit(t, [42, 42, 42, 42, 42]);
+    s3Send.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("s3 down"));
+    await expect(t.action(internal.worm.exportAudit, { pageSize: 2 })).rejects.toThrow("s3 down");
+    const failedPut = s3Send.mock.calls[1]?.[0].input;
+    expect(await checkpoint(t)).toMatchObject({ revision: 2, lastExportedTs: 42 });
+    await seedAudit(t, [1]);
+    expect(await t.action(internal.worm.exportAudit, { pageSize: 5 })).toMatchObject({
+      exported: 4,
+    });
+    expect(s3Send.mock.calls[2]?.[0].input).toMatchObject({
+      Key: failedPut.Key,
+      Body: failedPut.Body,
+    });
+    expect(await t.action(internal.worm.exportAudit, {})).toEqual({ exported: 0 });
+  });
+
+  test("first PutObject failure persists retry bounds but never marks rows exported", async () => {
     const t = convexTest(schema, modules);
     await seedAudit(t, [42]);
-
+    s3Send.mockRejectedValueOnce(new Error("s3 down"));
     await expect(t.action(internal.worm.exportAudit, {})).rejects.toThrow("s3 down");
-
-    // The advance is unreachable when PutObject rejects.
+    expect(await checkpoint(t)).toMatchObject({ revision: 1, lastExportedTs: 0 });
     expect(await t.query(internal.wormCursor.getCursor, {})).toBe(0);
-    const cursors = await t.run((ctx) => ctx.db.query("exportCursors").collect());
-    expect(cursors).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toHaveLength(1);
   });
 
-  test("empty window → returns { exported: 0 }, no PutObject, no advance", async () => {
-    s3Send.mockResolvedValue({});
+  test("legacy timestamp checkpoint replays history to recover already-skipped ties", async () => {
     const t = convexTest(schema, modules);
-    // No audit rows past the 0 cursor.
-    const res = await t.action(internal.worm.exportAudit, {});
-    expect(res).toEqual({ exported: 0 });
+    const ids = await seedAudit(t, [1, 42, 42, 43], true);
+    await t.run((ctx) =>
+      ctx.db.insert("exportCursors", { name: "worm-audit", lastExportedTs: 42 }),
+    );
+    expect(await t.action(internal.worm.exportAudit, { pageSize: 2 })).toMatchObject({
+      exported: 4,
+    });
+    expect(
+      exportedRows()
+        .map((row) => row._id)
+        .sort(),
+    ).toEqual(ids.sort());
+    expect(await checkpoint(t)).toMatchObject({ lastExportedTs: 43 });
+  });
+
+  test("legacy ties drain across native cursor boundaries without timestamp skips", async () => {
+    const t = convexTest(schema, modules);
+    const ids = await seedAudit(t, [42, 42, 42, 42, 42], true);
+    expect(await t.action(internal.worm.exportAudit, { pageSize: 2 })).toMatchObject({
+      exported: 5,
+      pages: 3,
+    });
+    expect(
+      exportedRows()
+        .map((row) => row._id)
+        .sort(),
+    ).toEqual(ids.sort());
+    expect(await checkpoint(t)).toMatchObject({ legacyDone: true });
+  });
+
+  test("run budget expires between batches and the next run drains the remainder", async () => {
+    const t = convexTest(schema, modules);
+    const ids = await seedAudit(t, [42, 42, 42]);
+    s3Send.mockImplementationOnce(async () => {
+      vi.setSystemTime(Date.now() + 8 * 60 * 1000);
+      return {};
+    });
+    expect(await t.action(internal.worm.exportAudit, { pageSize: 2 })).toMatchObject({
+      exported: 2,
+    });
+    expect(await t.action(internal.worm.exportAudit, { pageSize: 2 })).toMatchObject({
+      exported: 1,
+    });
+    expect(
+      exportedRows()
+        .map((row) => row._id)
+        .sort(),
+    ).toEqual(ids.sort());
+  });
+
+  test("overlapping exporter cannot roll back or reuse an already-advanced checkpoint", async () => {
+    const t = convexTest(schema, modules);
+    await seedAudit(t, [42, 42, 42]);
+    const state = await t.mutation(internal.wormCursor.beginExport, { pageSize: 2 });
+    expect(state).not.toBeNull();
+    if (!state) throw new Error("missing scan");
+    const args = { revision: state.revision, ts: 42 };
+    expect(await t.mutation(internal.wormCursor.advanceCursor, args)).toBe(true);
+    expect(await t.mutation(internal.wormCursor.advanceCursor, args)).toBe(false);
+    expect((await checkpoint(t))?.revision).toBe(1);
+  });
+
+  test("empty scans upload nothing and reset terminal pagination state", async () => {
+    const t = convexTest(schema, modules);
+    expect(await t.action(internal.worm.exportAudit, {})).toEqual({ exported: 0 });
     expect(s3Send).not.toHaveBeenCalled();
-    expect(await t.query(internal.wormCursor.getCursor, {})).toBe(0);
+    expect((await checkpoint(t))?.pendingAuditIds).toBeUndefined();
+    await seedAudit(t, [0, -100]);
+    expect(await t.action(internal.worm.exportAudit, {})).toMatchObject({ exported: 2 });
+  });
+
+  test.each([
+    0, -1, 1.5, 10001,
+  ])("rejects unsafe page size %s before scanning", async (pageSize) => {
+    const t = convexTest(schema, modules);
+    await expect(t.action(internal.worm.exportAudit, { pageSize })).rejects.toThrow("pageSize");
+    expect(s3Send).not.toHaveBeenCalled();
+    expect(await checkpoint(t)).toBeNull();
   });
 });

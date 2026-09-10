@@ -17,6 +17,7 @@
     "probe:gemini:grounded": "node ./scripts/probe-gemini.mjs --grounded",
     "eval:golden": "node ./scripts/run-eval-golden.mjs",
     "eval:packs": "node ./scripts/run-workflow-pack-evals.mjs",
+    "eval:vertical": "node ./scripts/run-eval-vertical.mjs",
     "seed": "node ./scripts/run-seed.mjs",
     "smoke:dlq": "node ./scripts/run-smoke-dlq.mjs",
     "smoke:fanout": "node ./scripts/run-smoke-fanout.mjs",

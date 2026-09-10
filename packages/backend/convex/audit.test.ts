@@ -44,6 +44,26 @@ test("audit.log inserts exactly one row that round-trips", async () => {
   expect(row.actor).toBe(args.actor);
   expect(row.payload).toEqual(args.payload);
   expect(typeof row.ts).toBe("number");
+  expect(row.exportVersion).toBe(2);
+  const queued = await t.run((ctx) => ctx.db.query("auditExportQueue").collect());
+  expect(queued).toHaveLength(1);
+  expect(queued[0]?.auditId).toBe(row._id);
+});
+
+test("audit and export outbox roll back together when the writer transaction fails", async () => {
+  const t = convexTest(schema, modules);
+  // Deliberately omit the aggregate component: failure happens AFTER both inserts.
+  await expect(
+    t.mutation(internal.audit.log, {
+      tenantId: "t1",
+      correlationId: "c1",
+      eventType: "x",
+      actor: "system",
+      payload: {},
+    }),
+  ).rejects.toThrow();
+  expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toHaveLength(0);
 });
 
 // The READ side of a refusal diagnosis. The claim under test is the one the query exists for:

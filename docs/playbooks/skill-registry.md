@@ -1,5 +1,17 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-10 — Phase 30 native controls. Reserved `vertical-*` names cannot newly
+> activate until the executable vertical suite certifies exact-version evidence. `loadEffectiveSkill` checks
+> the tenant's disabled vertical ids before overlay or global fallback. The owner-only vertical
+> rollback is additionally same-tenant/name scoped and delegates to `transitionSkillActivation`:
+> it never writes eligibility or introduces a second active-status writer. Prior-active proof
+> remains mandatory and a rollback does not clear tenant disable. Native evidence inspection is
+> reused for discovery. Six dormant generated bodies now reuse explicit native publication with
+> actual body-SHA/provenance checks and independent immutable streams; publication never activates.
+> The native document-output flag explicitly includes the six closed vertical names so their
+> code-owned saveAsDocument tool is built and its saveRequest reaches the Vault writer.
+> Pilot ids/suite remain unchanged. Vertical candidates use their own deliberately closed eval gate.
+
 > Last verified: 2026-09-09 (45-07 — `skillopt.yml` moved from Node 20 to Node 24, matching
 > `ci.yml` and `deploy-production.yml`. Nothing about the skill registry changed; the workflow was
 > simply the last place in the repo still installing on a runtime nothing else uses, and

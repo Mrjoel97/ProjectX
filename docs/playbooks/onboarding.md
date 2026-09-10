@@ -1,5 +1,11 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> 2026-09-10: Business shape now hosts evidence-qualified vertical suggestions in a separate
+> error boundary. The server selects at most two; unqualified candidates remain absent. Turning
+> a suggestion off preserves artifacts and exposes a restore preference, which cannot bypass
+> release/source/review requirements. Ordinary starts never send owner preview pins. The
+> eight component/interaction tests verify these local controls; no authenticated UAT is claimed.
+
 > Last verified: 2026-09-07 (43-01b — **the in-flight figure was wrong in a THIRD way, and the
 > two remaining ways were both older than the fan-out.** 43-01 filtered the count to roots; this
 > pass windowed it and excluded the empty shell.

@@ -165,6 +165,80 @@ export const listInFlight = tenantQuery({
   },
 });
 
+/** G2: a bounded cross-thread read of work already owned by the plan and vault planes.
+ * At most two full rows in each of seven lanes: fourteen 1-MiB documents stay below the
+ * transaction's 16-MiB read ceiling. A full lane is conservatively marked partial without
+ * fetching an extra row. Upgrade to a metadata projection before increasing this ceiling.
+ * This is a status view, not a liveness claim; caption-only work on done plans is not covered. */
+export const runningWork = tenantQuery({
+  args: {},
+  handler: async (ctx) => {
+    const limit = 2;
+    const planWindows = await Promise.all(
+      (["collecting", "proposed", "approved", "delivering"] as const).map((status) =>
+        ctx.db
+          .query("plans")
+          .withIndex("by_tenant_status_createdAt", (q) =>
+            q.eq("tenantId", ctx.tenantId).eq("status", status),
+          )
+          .order("desc")
+          .take(limit),
+      ),
+    );
+    const documentWindows = await Promise.all(
+      (["pending_extraction", "extracting", "processing"] as const).map((status) =>
+        ctx.db
+          .query("vaultDocuments")
+          .withIndex("by_tenant_status", (q) => q.eq("tenantId", ctx.tenantId).eq("status", status))
+          .order("desc")
+          .take(limit),
+      ),
+    );
+    const plans = planWindows
+      .flatMap((rows) => rows.slice(0, limit))
+      .filter(
+        (plan) =>
+          plan.status === "delivering" ||
+          (plan.status === "collecting" && plan.kind === "memo" && !!plan.workflowId) ||
+          plan.renderStatus === "pending" ||
+          plan.renderStatus === "rendering",
+      )
+      .map((plan) => ({
+        id: String(plan._id),
+        threadId: plan.threadId,
+        kind: planKind(plan),
+        stage:
+          plan.renderStatus === "pending" || plan.renderStatus === "rendering"
+            ? ("rendering" as const)
+            : plan.status === "delivering"
+              ? ("delivering" as const)
+              : ("preparing" as const),
+        createdAt: plan.createdAt,
+      }));
+    const documents = documentWindows
+      .flatMap((rows) => rows.slice(0, limit))
+      .map((doc) => ({
+        id: String(doc._id),
+        threadId: null,
+        kind: "document" as const,
+        stage: doc.status === "pending_extraction" ? ("queued" as const) : ("processing" as const),
+        createdAt: doc.createdAt,
+      }));
+    const rows = [...plans, ...documents].sort((a, b) =>
+      compareDashboardOrder(
+        { createdAt: a.createdAt, id: a.id },
+        { createdAt: b.createdAt, id: b.id },
+      ),
+    );
+    return {
+      items: rows.slice(0, 20),
+      partial:
+        rows.length > 20 ||
+        [...planWindows, ...documentWindows].some((rows) => rows.length >= limit),
+    };
+  },
+});
+
 export const listCleared = tenantQuery({
   args: { sinceMs: v.number(), limit: v.number() },
   handler: async (ctx, { sinceMs, limit: requestedLimit }) => {

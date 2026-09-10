@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "packId": "design",
+  "workflowId": "design-artifact-critique",
+  "version": 1,
+  "status": "candidate",
+  "runtimeEnabled": false,
+  "skillName": "vertical-design",
+  "output": "document",
+  "outputContractId": "design-output.v1",
+  "disclaimerId": "design-review.v1",
+  "risk": "advisory",
+  "requiredReview": "human-review",
+  "requiredSources": ["vault"],
+  "connectorGate": "design-systems",
+  "disablePolicy": "block-new-starts-preserve-artifacts",
+  "rollbackPolicy": "exact-previously-active-version",
+  "provenance": {
+    "sourceRepo": "https://github.com/anthropics/knowledge-work-plugins",
+    "sourceCommit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
+    "sourcePaths": [
+      "design/skills/design-critique/SKILL.md",
+      "design/skills/accessibility-review/SKILL.md"
+    ],
+    "bodySha256": "94d93b40411027db99ebbe013668ce9cb65e0fe9a6f6282ebcd37f4ea1f54cd6",
+    "license": "Apache-2.0",
+    "modificationNotice": "Pikar candidate adaptation, 2026-09-10: retain evidence-scoped document method; remove connector authority, autonomous external changes and unsupported certainty. See method-review.md.",
+    "skillVersions": {
+      "vertical-design": 1
+    },
+    "ts": 1788998400000
+  },
+  "sourceFiles": [
+    {
+      "path": "design/skills/design-critique/SKILL.md",
+      "sha256": "3a4f260eb9f60b431782bf6d90f22afb480c0c67860267a032df58a3e1bd19cd",
+      "gitBlobSha": "b6eaac1535f0a7482e35d91e039239ceb6031157",
+      "bytes": 3923
+    },
+    {
+      "path": "design/skills/accessibility-review/SKILL.md",
+      "sha256": "ef42982af0d51238dda2ab16d08626712891bdd41864876c32d1e7b13fb3124f",
+      "gitBlobSha": "3ef332cd837da5b4f7089503eb93e14c04090ccf",
+      "bytes": 4278
+    }
+  ],
+  "hashEncoding": "LF-normalized UTF-8; pinned upstream downloads were LF bytes. Git blob hash verified against official pinned tree.",
+  "licenseEvidence": {
+    "governingPath": "LICENSE",
+    "redistributedCopy": "third_party/knowledge-work-plugins/LICENSE",
+    "governingSha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+    "rootLicenseAnomaly": true
+  },
+  "evidence": {
+    "methodReview": "draft",
+    "nativeEval": null,
+    "browserUat": null,
+    "activation": null
+  },
+  "releaseBlockedBy": [
+    "independent-method-review",
+    "exact-version-native-eval",
+    "authenticated-responsive-uat",
+    "runtime-binding"
+  ]
+}

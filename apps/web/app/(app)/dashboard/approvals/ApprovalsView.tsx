@@ -1013,8 +1013,7 @@ function ScheduledRow({ item }: { item: ScheduledItem }) {
             <strong>Cancel before this schedule fires?</strong>
           </legend>
           <p style={muted}>
-            If the scheduler already won the race, the result will say In flight instead of
-            canceled.
+            If sending has already started, the result will say In flight instead of canceled.
           </p>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button

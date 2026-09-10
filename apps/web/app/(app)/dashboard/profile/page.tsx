@@ -7,11 +7,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { BillingPanel } from "../settings/BillingPanel";
 import { DataControls } from "../settings/DataControls";
+import { ErrorBoundary } from "../workspace/ErrorBoundary";
 import { BlueprintPanel } from "./BlueprintPanel";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { NarrativePanel } from "./NarrativePanel";
 import { ShapePanel } from "./ShapePanel";
 import { label } from "./styles";
+import { VerticalPackRecommendations } from "./VerticalPackRecommendations";
 
 // ONBD-02 dedicated profile page — the post-onboarding EDIT surface. Editability is a locked
 // decision: a user (especially an idea-stage one who onboarded sparse — only oneLineDescription)
@@ -337,6 +339,15 @@ function ProfileSurface() {
             hidden={profileTab !== "shape"}
           >
             <ShapePanel oneLineDescription={profile.oneLineDescription} />
+            <ErrorBoundary
+              fallback={
+                <p style={{ color: "var(--ink-soft)" }}>
+                  Workflow suggestions are temporarily unavailable.
+                </p>
+              }
+            >
+              <VerticalPackRecommendations />
+            </ErrorBoundary>
           </div>
           <div
             role="tabpanel"

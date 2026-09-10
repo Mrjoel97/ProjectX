@@ -2142,3 +2142,25 @@ graded on. Their text is deliberately not in this playbook either.
 
 **NO PAID RUN OCCURRED in 23-04.** Nothing was seeded, no model was called, no evidence row was
 written, `$0.00`. Full protocol in `skill-registry.md` § 23-04.
+
+## Phase 30 evaluator seams (2026-09-10)
+
+The trusted vertical binding can pass `evalContext` and `expectedSkillBodyHash` to
+`runSpecialistTurn`. The hash is compared with the actual resolved registry body before model
+initialization. `evalContext` carries an existing spend-envelope id and a callback that reads only
+the provisioned owned fixture documents. The real `searchVault` tool records the ids and hashes
+of the chunks it actually used; raw chunks do not enter the audit record. A failed source read or
+shape check prevents the next paid model step even if the SDK returns the tool error to the model.
+This is controlled-source method evaluation, not evidence of live RAG retrieval quality.
+
+Every evaluation model call is wrapped by the native SDK budget middleware described in
+`guardrails.md`. Ordinary specialist calls keep their existing accounting behavior. Results expose
+`actualModelId` from the model that returned the answer, separately from configured `modelId` and
+`fallbackModelId`; configured names are not observations of which model executed.
+
+Only `vertical-design` accepts trusted `visualInput` containing an owned, verified PNG/JPEG
+`ArrayBuffer` and its MIME type. The shared loop passes it as a native user-message file part,
+alongside the ordinary text prompt, and reuses the same bytes for an explicit fallback. Image
+bytes are never inserted into the system prompt or audit metadata. The reader and shared loop
+both enforce a 1 MiB ceiling. Offline provider-wire tests verify the resulting image data URI
+and MIME type; live visual quality and release evidence still require their separate gates.

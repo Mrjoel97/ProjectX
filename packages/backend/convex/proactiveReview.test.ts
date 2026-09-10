@@ -5,8 +5,9 @@
 // The static SC#2 / SC#3 guards live in the SAME file (bottom) deliberately: the raw-source scan
 // idiom needs no `node` environment, so a second file would buy nothing but a second harness.
 import { NOTIFICATION_KINDS, REVIEW_THREAD_ID, serializeProfile } from "@pikar/core";
+import { getFunctionName } from "convex/server";
 import { convexTest } from "convex-test";
-import { beforeAll, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
 // component (relative import — the package blocks the deep specifier) or the REAL audit path
 // throws "component not registered" (the evaluations.test.ts idiom, copied verbatim).
@@ -16,18 +17,11 @@ import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/comp
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
-// 34: the review now stages its top gap through applyActOnGap, and the fixture's money-model gap
-// routes to a REGISTERED specialist. With no model key the dispatch lands its fallback memo
-// without a network call (dispatch.test.ts's own stub) — never a live model from this suite.
+// The review stages its top gap through applyActOnGap. This suite asserts the durable dispatch
+// handoff; the specialist/workflow's completion is exercised by its own registered harness.
 vi.stubEnv("OPENAI_API_KEY", "");
 vi.stubEnv("OPENROUTER_API_KEY", "");
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
-// The staging hop schedules `dispatch.runSpecialist`, whose module graph (llm, models, skills) takes
-// seconds to load the FIRST time. Inside the timer-pumped drain that first load reads as a
-// scheduled function that "did not complete after 10000 timer pumps"; warm it once, up front.
-beforeAll(async () => {
-  await modules["./dispatch.ts"]?.();
-});
 const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
@@ -91,20 +85,12 @@ async function seedDoc(
 }
 
 /**
- * Run the cron and drain the per-tenant fan-out.
- *
- * `finishInProgressScheduledFunctions` (the cockpit.test.ts:331 idiom) only awaits jobs that have
- * already STARTED; a `runAfter(0, …)` posted from a mutation is still `pending` when the mutation
- * resolves, so it needs one macrotask tick first. (`finishAllScheduledFunctions(vi.runAllTimers)`
- * is the documented alternative but deadlocks here: the review's module graph loads through
- * dynamic imports that fake timers never let settle.)
+ * Inspect the real cron queue and replay its exact review args (evaluations.test.ts precedent).
+ * Fake timers hold the randomized spread and downstream dispatch pending; no pump count is used.
+ * Draining everything also starts dispatchRun's unregistered workflow, outside this suite's scope,
+ * and made the first cold module import exhaust convex-test's timer-pump limit under suite load.
  */
 async function runCron(t: ReturnType<typeof convexTest>): Promise<void> {
-  // 25.3: the enumeration is a batch job; one synchronous batch (vaultSweep.test.ts idiom) and
-  // then drain the randomly-spread reviewOne jobs under fake timers.
-  // 34: fake ONLY setTimeout (the spread). The staging hop loads dispatch.ts's module graph on
-  // first use, and that settles through setImmediate/nextTick — the default fake set starves it
-  // into "did not complete after 10000 timer pumps".
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   try {
     await t.mutation(internal.proactiveReview.enumerateWeeklyReview, {
@@ -113,7 +99,40 @@ async function runCron(t: ReturnType<typeof convexTest>): Promise<void> {
       dryRun: false,
       oneBatchOnly: true,
     });
-    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const reviews = await t.run(async (ctx) =>
+      (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+        (row) => row.state.kind === "pending",
+      ),
+    );
+    const tenantIds = new Set<string>();
+    for (const row of reviews) {
+      expect(row.name.replace(/\.js:/, ":")).toBe(
+        getFunctionName(internal.proactiveReview.reviewOne),
+      );
+      const args = row.args[0] as { tenantId: string };
+      expect(Object.keys(args)).toEqual(["tenantId"]);
+      expect(typeof args.tenantId).toBe("string");
+      expect(tenantIds.has(args.tenantId), "duplicate scheduled tenant review").toBe(false);
+      tenantIds.add(args.tenantId);
+      await t.run((ctx) => ctx.scheduler.cancel(row._id));
+    }
+    for (const row of reviews)
+      await t.action(internal.proactiveReview.reviewOne, row.args[0] as { tenantId: string });
+
+    const staged = await t.run(async (ctx) =>
+      (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+        (row) => row.state.kind === "pending",
+      ),
+    );
+    for (const row of staged) {
+      expect(row.name.replace(/\.js:/, ":")).toBe(
+        getFunctionName(internal.dispatchRun.startDispatchRun),
+      );
+      const args = row.args[0] as { tenantId: string; threadId: string };
+      expect(tenantIds.has(args.tenantId)).toBe(true);
+      expect(args.threadId).toBe(REVIEW_THREAD_ID);
+      await t.run((ctx) => ctx.scheduler.cancel(row._id));
+    }
   } finally {
     vi.useRealTimers();
   }

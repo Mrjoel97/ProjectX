@@ -1115,7 +1115,14 @@ export const landSpecialistResult = internalMutation({
      *  and to nothing else; every audit payload on this path stays counts-only. Absent on the gap
      *  path and on any turn that retrieved nothing. */
     sources: v.optional(
-      v.array(v.object({ title: v.string(), url: v.string(), retrievedAt: v.number() })),
+      v.array(
+        v.object({
+          title: v.string(),
+          url: v.string(),
+          retrievedAt: v.number(),
+          pageReadAt: v.optional(v.number()),
+        }),
+      ),
     ),
   },
   handler: async (ctx, a): Promise<void> => {

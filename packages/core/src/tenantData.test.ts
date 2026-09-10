@@ -46,9 +46,10 @@ describe("tenant table classification registry", () => {
     // + the lane's five billing tables = 57. Counted from the merged schema.ts, not carried over.
     // + agenda (34-01, ADR-033 — the weekly review's gap lifecycle) = 58.
     // + vaultSheets (40-01, DOC-01 — a workbook's capped grid) = 59. RE-DERIVED, not bumped: this
-    // count and `schema.ts`'s own header index ("59 tables", asserted independently by
+    // + auditExportQueue (ADR-048, transactional export delivery state) = 60. This
+    // count and `schema.ts`'s own header index ("60 tables", asserted independently by
     // schema.test.ts against the same source) are two readers of one file that now agree.
-    expect(schemaTables).toHaveLength(59);
+    expect(schemaTables).toHaveLength(60);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -168,9 +169,10 @@ describe("tenant table classification registry", () => {
     // so the invite stays spent. `betaWaitlist` is NOT cleared by anything — see ADR-047.
     expect(surviving("admission_plane")).toEqual(["betaInvites", "betaWaitlist"]);
 
-    // Not tenant-scoped at all: no tenantId, so nothing here can be joined back to a person by
-    // an id on an audit row. That is why they are a different class and not an oversight.
+    // Deployment bookkeeping, including refs to the already-immutable audit log;
+    // tenant erasure must not discard pending export delivery state.
     expect(surviving("global")).toEqual([
+      "auditExportQueue",
       "billingStripeEvents",
       "exportCursors",
       "guardrailConfig",

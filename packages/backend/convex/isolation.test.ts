@@ -161,6 +161,7 @@ function indexesOf(table: string): { indexDescriptor: string; fields: string[] }
  */
 const NON_TENANT_LEADING: Record<string, string> = {
   "audit.by_correlation": "correlation trace; internal + owner plane, joins one workflow's rows",
+  "audit.by_export_version": "internal WORM legacy backfill; deployment-global export only",
   "audit.by_ts":
     "the OPSG-03 WORM export cron scans this ACROSS tenants by design; 26-15 added reportsGovernance.wormExport, an ownerQuery with no tenant-facing caller, reading the same range for lag",
   "deadLetters.by_status": "DLQ triage on the compliance surface; owner-plane only",
@@ -178,6 +179,8 @@ const NON_TENANT_LEADING: Record<string, string> = {
   "vaultDocuments.by_kind": "internal corpus maintenance; no tenant-facing caller",
   "feedback.by_skill": "skill-optimizer aggregation across tenants; owner/token plane",
   "spendEvents.by_correlation": "correlation trace, internal",
+  "spendEvents.by_eval_budget":
+    "internal evaluation budget groups only its explicitly registered fixture tenants",
   // 28-03. The OAuth callback arrives from the provider with a nonce and NOTHING else — no
   // session, no cookie, no tenant — so the lookup cannot lead with tenantId; that is the entire
   // reason a state row exists instead of a bare HMAC. The consumer is 28-04's callback handler,
@@ -265,7 +268,7 @@ describe("every tenant-owned index leads with tenantId, or names why it does not
  * be blind to.
  */
 const PUBLIC_EXPORT =
-  /export const ([a-zA-Z0-9_]+) = (tenantQuery|tenantMutation|tenantAction|ownerQuery|ownerMutation|query|mutation|action)\(/g;
+  /export const ([a-zA-Z0-9_]+) = (tenantQuery|tenantMutation|tenantAction|ownerQuery|ownerMutation|ownerAction|query|mutation|action)\(/g;
 
 type PublicFn = { module: string; name: string; builder: string };
 
@@ -332,7 +335,7 @@ describe("the public function surface is fully classified", () => {
  * the moment someone adds an endpoint; a scan does not.
  */
 const OWNER_SURFACE = PUBLIC_SURFACE.filter((f) =>
-  ["ownerQuery", "ownerMutation"].includes(f.builder),
+  ["ownerQuery", "ownerMutation", "ownerAction"].includes(f.builder),
 );
 
 /**
@@ -363,6 +366,8 @@ const OWNER_ARGS: Record<string, Record<string, unknown>> = {
   "skills.activateAgentCandidate": { candidateId: "id:tenantSkills" },
   "skills.activateTenantCandidate": { candidateId: "id:tenantSkills" },
   "skills.rollbackTenantSkill": { targetId: "id:tenantSkills" },
+  "verticalPacks.rollback": { verticalId: "legal", targetId: "id:tenantSkills" },
+  "verticalData.previewDataset": { sourceDocId: "id:vaultDocuments" },
   "invites.approve": { waitlistId: "id:betaWaitlist" },
   // 28-26. Both are HARMLESS on purpose: `sealGate` here would PARK hubspot on a `blocked`
   // admission with an already-expired review date, so if the owner wrapper ever let it through,
@@ -417,6 +422,8 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
       "providerGates",
       "reportsGovernance",
       "skills",
+      "verticalData",
+      "verticalPacks",
       "workflowPackDiscovery",
     ]);
     // The kill switches specifically: the highest-consequence owner endpoints in the repo.
@@ -456,22 +463,37 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
                   requestedAt: 0,
                 }),
               )
-            : await t.run((ctx) =>
-                ctx.db.insert("tenantSkills", {
-                  tenantId: "someone-else",
-                  name: "seed",
-                  version: 1,
-                  body: "seed",
-                  authoredBody: "seed",
-                  status: "candidate",
-                  author: "user",
-                  basedOnScope: "global",
-                  basedOnName: "seed",
-                  basedOnVersion: 1,
-                  rollbackEligible: false,
-                  createdAt: 0,
-                }),
-              );
+            : value === "id:vaultDocuments"
+              ? await t.run((ctx) =>
+                  ctx.db.insert("vaultDocuments", {
+                    tenantId: "someone-else",
+                    title: "owner fixture",
+                    kind: "upload",
+                    category: "my-uploads",
+                    source: "upload",
+                    mimeType: "text/csv",
+                    size: 0,
+                    contentHash: "fixture",
+                    status: "ready",
+                    createdAt: 0,
+                  }),
+                )
+              : await t.run((ctx) =>
+                  ctx.db.insert("tenantSkills", {
+                    tenantId: "someone-else",
+                    name: "seed",
+                    version: 1,
+                    body: "seed",
+                    authoredBody: "seed",
+                    status: "candidate",
+                    author: "user",
+                    basedOnScope: "global",
+                    basedOnName: "seed",
+                    basedOnVersion: 1,
+                    rollbackEligible: false,
+                    createdAt: 0,
+                  }),
+                );
       }
 
       // Branch the CALL, not the function reference: `query` and `mutation` are separately
@@ -480,7 +502,9 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
       const invoke =
         fn.builder === "ownerQuery"
           ? () => (asNonOwner.query as unknown as LooseCall)(ref, args)
-          : () => (asNonOwner.mutation as unknown as LooseCall)(ref, args);
+          : fn.builder === "ownerAction"
+            ? () => (asNonOwner.action as unknown as LooseCall)(ref, args)
+            : () => (asNonOwner.mutation as unknown as LooseCall)(ref, args);
 
       await expect(invoke()).rejects.toThrow(/OWNER_REQUIRED/);
     });

@@ -38,6 +38,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   pendingTimeouts: "global",
   // Singleton WORM cursor bookkeeping belongs to the deployment, not a tenant.
   exportCursors: "global",
+  auditExportQueue: "global", // Export delivery state: audit refs only, no content.
   requests: "tenant_owned",
   plans: "tenant_owned",
   briefings: "tenant_owned",

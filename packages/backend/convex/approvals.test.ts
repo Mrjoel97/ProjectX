@@ -41,6 +41,66 @@ async function seedPlan(
 const firstPage = { numItems: 1, cursor: null };
 
 describe("Approvals summary and plan lanes", () => {
+  test("running work includes background threads and ingestion without leaking content or foreign rows", async () => {
+    const t = convexTest(schema, modules);
+    await seedPlan(t, TENANT, "collecting", 100, { kind: "memo", workflowId: "run-a" });
+    await seedPlan(t, TENANT, "collecting", 101); // an idle draft is not running
+    await seedPlan(t, TENANT, "proposed", 102); // approval waits are not running
+    await seedPlan(t, TENANT, "approved", 103, { kind: "media", renderStatus: "rendering" });
+    await seedPlan(t, TENANT, "delivering", 104);
+    await seedPlan(t, OTHER, "delivering", 105);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("vaultDocuments", {
+        tenantId: TENANT,
+        title: "Private file",
+        contentHash: "test-hash",
+        text: "Private contents",
+        kind: "upload",
+        category: "general",
+        source: "upload",
+        mimeType: "text/plain",
+        size: 16,
+        status: "processing",
+        createdAt: 106,
+      });
+    });
+    await expect(t.query(api.approvals.runningWork, {})).rejects.toThrow(/UNAUTHENTICATED/);
+    const work = await t.withIdentity({ subject: TENANT }).query(api.approvals.runningWork, {});
+    expect(work.items.map((item) => item.stage)).toEqual([
+      "processing",
+      "delivering",
+      "rendering",
+      "preparing",
+    ]);
+    expect(work.partial).toBe(true); // full collecting window: conservatively partial
+    expect(JSON.stringify(work)).not.toMatch(/Private|private@example|tenant_b/);
+    expect(work.items.every((item) => !("tenantId" in item))).toBe(true);
+  });
+
+  test("running work signals truncation and removes a completed run", async () => {
+    const t = convexTest(schema, modules);
+    for (let i = 0; i < 6; i++) await seedPlan(t, TENANT, "delivering", i);
+    const viewer = t.withIdentity({ subject: TENANT });
+    const before = await viewer.query(api.approvals.runningWork, {});
+    expect(before.items).toHaveLength(2);
+    expect(before.partial).toBe(true);
+    await t.run(async (ctx) => {
+      const rows = await ctx.db.query("plans").collect();
+      for (const plan of rows) await ctx.db.patch(plan._id, { status: "done" });
+    });
+    expect(await viewer.query(api.approvals.runningWork, {})).toEqual({
+      items: [],
+      partial: false,
+    });
+  });
+
+  test("active rendering remains media creation even on a delivering plan", async () => {
+    const t = convexTest(schema, modules);
+    await seedPlan(t, TENANT, "delivering", 100, { kind: "media", renderStatus: "pending" });
+    const work = await t.withIdentity({ subject: TENANT }).query(api.approvals.runningWork, {});
+    expect(work.items[0]?.stage).toBe("rendering");
+  });
+
   test("fails closed without identity and never projects foreign or raw plan content", async () => {
     const t = convexTest(schema, modules);
     await seedPlan(t, TENANT, "proposed", 100);

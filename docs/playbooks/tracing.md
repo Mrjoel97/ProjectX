@@ -1,6 +1,7 @@
 # Playbook: LLM Tracing (Foglamp)
 
-> Last verified: 2026-08-22 against `01254a1`
+> Last verified: 2026-09-10 — seven local tests exercise the real AI SDK/Foglamp transport with
+> a mock model and intercepted fetch. No deployment or external telemetry request was made.
 > Build history: none (added outside a phase, on owner request) · Related ADRs: none
 
 ## Purpose
@@ -14,6 +15,8 @@ nothing, and is a silent no-op when `FOGLAMP_API_KEY` is unset.
 
 - `packages/backend/convex/lib/foglamp.ts` — the ONE `fog` instance. Exports `fogIntegration()`
   (per-call binding), `traced()` (ambient binding + drain), `flushTelemetry()`.
+- `packages/backend/convex/foglamp.test.ts` — actual serialized transport privacy regression,
+  including image input, tool output/error, model failure, abort reason and provider safety payload.
 - `packages/backend/convex/llm.ts` — 16 instrumented call sites; `traced()` at `runCockpitAgent`
   and at the offline script harness.
 - `packages/backend/convex/dispatch.ts` — `traced()` at `runSpecialist`, `runResearch`, `runMedia`
@@ -57,6 +60,16 @@ nothing, and is a silent no-op when `FOGLAMP_API_KEY` is unset.
 5. **No payload content leaves the process.** Trace context carries names, ids and counts only —
    the same refs-only discipline as CLAUDE.md §4. Never put draft bodies, prompts, recipient
    addresses or document text into `metadata`.
+   The collector sets native `recordInputs: false` and `recordOutputs: false`, and the per-call
+   `onStart` boundary overrides caller recording flags. Foglamp 0.9.0 exports errors, abort reasons
+   and provider safety arrays independently of those flags: the central integration substitutes
+   static `model_call_failed`, `tool_execution_failed` and `aborted` codes, and strips opaque
+   provider metadata at all text/object step-end aliases. Model identity, token usage, timing and
+   tool success/failure attribution remain. Detailed exceptions and provider safety payloads do
+   not belong in tracing; this filter does not change the actual model/tool result or exception.
+   Provider tool-call ids are replaced by local ordinal references in copied tracing start/end
+   events; the same local reference retains timing correlation without copying model-authored
+   strings into span ids. Unknown tool names produce no tool spans through the current AI SDK.
 
 ## How to change safely
 
@@ -71,6 +84,11 @@ nothing, and is a silent no-op when `FOGLAMP_API_KEY` is unset.
 
 ## How to verify
 
+- `cd packages/backend && npx vitest run convex/foglamp.test.ts` — seven offline transport tests
+  verify serialized traces contain no prompt, image bytes, tool result, raw exception, abort
+  reason or provider safety sentinel, even when a call requests input/output recording. They
+  also assert real tool execution, trace identifiers, usage and failure status remain observable,
+  and that `traced()` drains safe spans while propagating an ambient exception without serializing it.
 - `pnpm --filter @pikar/backend typecheck` — proves the `telemetry` option and `IntegrationInput`
   identity rule (exactly one of `traceName`/`agentName`; `workflowName`/`workflowRunId` both-or-
   neither) are satisfied at every site.
@@ -84,7 +102,8 @@ nothing, and is a silent no-op when `FOGLAMP_API_KEY` is unset.
 ## Operational notes
 
 - `FOGLAMP_API_KEY` must be set with `npx convex env set` on the deployment; `.env` only covers
-  local tooling. Vitest does not load `.env`, so tests are always keyless (and therefore silent).
+  local tooling. Vitest does not load `.env`; the dedicated privacy test sets a fake key and
+  intercepts fetch to exercise serialization without sending telemetry. Other tests stay keyless.
 - Convex is serverless but is NOT Vercel: the SDK's automatic `waitUntil` path never fires here,
   which is why `traced()` drains explicitly.
 

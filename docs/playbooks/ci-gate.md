@@ -1,4 +1,11 @@
 # Playbook: CI gate (typecheck / lint / test / build)
+
+> 2026-09-10 audit follow-up: CI runs the Phase 23 closed-artifact validator and the isolated
+> owner-boundary mutation check through the free-gate registry. It also executes
+> `node --test scripts/check-planning.test.mjs` and the planning hook with `--exit-code` so a
+> printed block cannot appear as a green process. Explicit partial/blocked/draft SUMMARY
+> frontmatter remains unfinished; legacy completed summaries retain compatibility. This is a
+> structural consistency gate, not proof of owner approval or current production behavior.
 > Last verified: 2026-09-09 (47-03 — the free-gate registry grew to **seventeen**:
 > `check-audit-payloads.mjs` joined it. The registry is a hand-written ALLOWLIST that fails in
 > BOTH directions, and it earned that design here — the new script was written, and the very next

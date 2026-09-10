@@ -49,6 +49,11 @@ const rateLimiterModules = import.meta.glob(
 const TENANT = "tenant_a";
 type DeliveryHarness = ReturnType<typeof convexTest>;
 const deliveryHarnesses = new Set<DeliveryHarness>();
+const workerProcess = process;
+
+// Workflow generations temporarily remove process/crypto while they execute. Own the scheduler
+// clock per test so a component callback cannot overlap another harness or outlive its assertions.
+beforeEach(() => vi.useFakeTimers());
 
 /** Stop zero-delay workflow/workpool callbacks from crossing the test boundary. A mutation can
  * return after arming a workflow but before its first scheduler tick; without this cleanup, that
@@ -75,7 +80,15 @@ async function quiesceDeliveryHarness(t: DeliveryHarness): Promise<void> {
 afterEach(async () => {
   const harnesses = [...deliveryHarnesses];
   deliveryHarnesses.clear();
-  await Promise.all(harnesses.map(quiesceDeliveryHarness));
+  try {
+    for (const harness of harnesses) await quiesceDeliveryHarness(harness);
+    expect(globalThis.process).toBe(workerProcess);
+  } finally {
+    // Pending component callbacks belong to discarded in-memory harnesses. In-progress callbacks
+    // were awaited above; never let a discarded harness start work in the next test's real clock.
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  }
 });
 
 /** A convex-test instance wired for both executePlan delivery arms. */
@@ -1080,250 +1093,216 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
   });
 
   test("future sendAt: freezes the requests rows, arms the scheduler, sends nothing before fire; fires the same fan-out at the send time", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      const sendAt = Date.now() + 60_000; // one minute out
-      const planId = await seedSchedulable(t, sendAt);
+    const t = withDelivery();
+    await seedMailbox(t);
+    const sendAt = Date.now() + 60_000; // one minute out
+    const planId = await seedSchedulable(t, sendAt);
 
-      const res = await t
-        .withIdentity({ subject: TENANT })
-        .mutation(api.cockpit.executePlan, { planId });
-      expect(res).toEqual({ ok: true, scheduled: true });
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(res).toEqual({ ok: true, scheduled: true });
 
-      // Content is frozen AT APPROVE (rows seeded) but nothing advanced past "approved".
-      const reqs = await countRequests(t);
-      expect(reqs).toHaveLength(2);
-      for (const r of reqs) expect(r.status).toBe("approved");
+    // Content is frozen AT APPROVE (rows seeded) but nothing advanced past "approved".
+    const reqs = await countRequests(t);
+    expect(reqs).toHaveLength(2);
+    for (const r of reqs) expect(r.status).toBe("approved");
 
-      const plan = await t.run((ctx) => ctx.db.get(planId));
-      expect(plan).toMatchObject({
-        status: "scheduled",
-        recipientTotal: 2,
-        queuedCount: 2,
-        sentCount: 0,
-        failedCount: 0,
-        counterComplete: true,
-      });
-      expect(plan?.scheduledFunctionId).toBeDefined();
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan).toMatchObject({
+      status: "scheduled",
+      recipientTotal: 2,
+      queuedCount: 2,
+      sentCount: 0,
+      failedCount: 0,
+      counterComplete: true,
+    });
+    expect(plan?.scheduledFunctionId).toBeDefined();
 
-      // A live scheduled-function system row exists (the scheduler is armed).
-      expect((await listScheduled(t)).length).toBeGreaterThanOrEqual(1);
+    // A live scheduled-function system row exists (the scheduler is armed).
+    expect((await listScheduled(t)).length).toBeGreaterThanOrEqual(1);
 
-      // Fire it → the SAME fan-out starts (status → delivering, set synchronously by startFanout).
-      vi.advanceTimersByTime(60_001);
-      await t.finishInProgressScheduledFunctions();
-      const after = await t.run((ctx) => ctx.db.get(planId));
-      expect(after?.status).toBe("delivering");
-    } finally {
-      vi.useRealTimers();
-    }
+    // Fire it → the SAME fan-out starts (status → delivering, set synchronously by startFanout).
+    vi.advanceTimersByTime(60_001);
+    await t.finishInProgressScheduledFunctions();
+    const after = await t.run((ctx) => ctx.db.get(planId));
+    expect(after?.status).toBe("delivering");
   });
 
   test("far-future refusal: a beyond-horizon sendAt returns send_time_too_far BEFORE seeding/arming (the authoritative chokepoint over every write path); a within-horizon control still schedules", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      // One hour PAST the horizon — arrived here from ANY write path (NL tool, picker, reschedule).
-      const tooFar = Date.now() + SEND_TIME_HORIZON_MS + 3_600_000;
-      const planId = await seedSchedulable(t, tooFar);
+    const t = withDelivery();
+    await seedMailbox(t);
+    // One hour PAST the horizon — arrived here from ANY write path (NL tool, picker, reschedule).
+    const tooFar = Date.now() + SEND_TIME_HORIZON_MS + 3_600_000;
+    const planId = await seedSchedulable(t, tooFar);
 
-      const res = await t
-        .withIdentity({ subject: TENANT })
-        .mutation(api.cockpit.executePlan, { planId });
-      expect(res).toEqual({ ok: false, reason: "send_time_too_far" });
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(res).toEqual({ ok: false, reason: "send_time_too_far" });
 
-      // Fail-before-mutate: status untouched, NO requests seeded, NO scheduler armed.
-      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
-      expect(await countRequests(t)).toHaveLength(0);
-      expect(await listScheduled(t)).toHaveLength(0);
+    // Fail-before-mutate: status untouched, NO requests seeded, NO scheduler armed.
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+    expect(await countRequests(t)).toHaveLength(0);
+    expect(await listScheduled(t)).toHaveLength(0);
 
-      // Within-horizon control: still schedules + arms (the guard sits upstream, in-window unaffected).
-      const okId = await seedSchedulable(t, Date.now() + 60_000);
-      const ok = await t
-        .withIdentity({ subject: TENANT })
-        .mutation(api.cockpit.executePlan, { planId: okId });
-      expect(ok).toEqual({ ok: true, scheduled: true });
-      expect((await t.run((ctx) => ctx.db.get(okId)))?.status).toBe("scheduled");
-    } finally {
-      vi.useRealTimers();
-    }
+    // Within-horizon control: still schedules + arms (the guard sits upstream, in-window unaffected).
+    const okId = await seedSchedulable(t, Date.now() + 60_000);
+    const ok = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId: okId });
+    expect(ok).toEqual({ ok: true, scheduled: true });
+    expect((await t.run((ctx) => ctx.db.get(okId)))?.status).toBe("scheduled");
   });
 
   test("cancelScheduledPlan halts a scheduled send: status canceled, scheduler row gone, refs-only plan.canceled audit, nothing sends after; double-cancel no-ops", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      const planId = await seedSchedulable(t, Date.now() + 60_000);
-      const asT = t.withIdentity({ subject: TENANT });
+    const t = withDelivery();
+    await seedMailbox(t);
+    const planId = await seedSchedulable(t, Date.now() + 60_000);
+    const asT = t.withIdentity({ subject: TENANT });
 
-      await asT.mutation(api.cockpit.executePlan, { planId }); // arm
-      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("scheduled");
+    await asT.mutation(api.cockpit.executePlan, { planId }); // arm
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("scheduled");
 
-      const res = await asT.mutation(api.cockpit.cancelScheduledPlan, { planId });
-      expect(res).toEqual({ ok: true, canceled: true });
+    const res = await asT.mutation(api.cockpit.cancelScheduledPlan, { planId });
+    expect(res).toEqual({ ok: true, canceled: true });
 
-      const plan = await t.run((ctx) => ctx.db.get(planId));
-      expect(plan).toMatchObject({
-        status: "canceled",
-        cancelKind: "scheduled_cancel",
-      });
-      expect(plan?.canceledAt).toEqual(expect.any(Number));
-      expect(plan?.scheduledFunctionId).toBeUndefined();
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan).toMatchObject({
+      status: "canceled",
+      cancelKind: "scheduled_cancel",
+    });
+    expect(plan?.canceledAt).toEqual(expect.any(Number));
+    expect(plan?.scheduledFunctionId).toBeUndefined();
 
-      // No live (pending) scheduled callback remains — the send was canceled before fire.
-      const pending = (await listScheduled(t)).filter((s) => s.state.kind === "pending");
-      expect(pending.some((s) => String(s.name).includes("startScheduledDelivery"))).toBe(false);
+    // No live (pending) scheduled callback remains — the send was canceled before fire.
+    const pending = (await listScheduled(t)).filter((s) => s.state.kind === "pending");
+    expect(pending.some((s) => String(s.name).includes("startScheduledDelivery"))).toBe(false);
 
-      // refs-only §4: the plan.canceled audit payload carries planId ONLY (no subject/body/recipients).
-      const audits = await t.run((ctx) =>
-        ctx.db
-          .query("audit")
-          .filter((q) => q.eq(q.field("eventType"), "plan.canceled"))
-          .collect(),
-      );
-      expect(audits).toHaveLength(1);
-      const payloadStr = JSON.stringify(audits[0]?.payload);
-      expect(payloadStr).toContain(planId);
-      expect(payloadStr).not.toContain("Q3 update"); // no subject
-      expect(payloadStr).not.toContain("Here is the Q3 update"); // no body
-      expect(payloadStr).not.toContain("a@example.com"); // no recipient
+    // refs-only §4: the plan.canceled audit payload carries planId ONLY (no subject/body/recipients).
+    const audits = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "plan.canceled"))
+        .collect(),
+    );
+    expect(audits).toHaveLength(1);
+    const payloadStr = JSON.stringify(audits[0]?.payload);
+    expect(payloadStr).toContain(planId);
+    expect(payloadStr).not.toContain("Q3 update"); // no subject
+    expect(payloadStr).not.toContain("Here is the Q3 update"); // no body
+    expect(payloadStr).not.toContain("a@example.com"); // no recipient
 
-      // Advancing past the send time sends NOTHING (the scheduler was canceled).
-      vi.advanceTimersByTime(60_001);
-      await t.finishInProgressScheduledFunctions();
-      for (const r of await countRequests(t)) expect(r.status).toBe("approved");
-      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("canceled");
+    // Advancing past the send time sends NOTHING (the scheduler was canceled).
+    vi.advanceTimersByTime(60_001);
+    await t.finishInProgressScheduledFunctions();
+    for (const r of await countRequests(t)) expect(r.status).toBe("approved");
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("canceled");
 
-      // Idempotent: a second cancel (a non-scheduled plan) no-ops without throwing.
-      expect(await asT.mutation(api.cockpit.cancelScheduledPlan, { planId })).toEqual({
-        ok: true,
-        alreadyResolved: true,
-      });
-    } finally {
-      vi.useRealTimers();
-    }
+    // Idempotent: a second cancel (a non-scheduled plan) no-ops without throwing.
+    expect(await asT.mutation(api.cockpit.cancelScheduledPlan, { planId })).toEqual({
+      ok: true,
+      alreadyResolved: true,
+    });
   });
 
   test("moveScheduledPlan atomically replaces only the current callback; replay is idempotent and the stale callback cannot fire", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      const originalAt = Date.now() + 60_000;
-      const movedAt = Date.now() + 120_000;
-      const planId = await seedSchedulable(t, originalAt);
-      const asT = t.withIdentity({ subject: TENANT });
-      await asT.mutation(api.cockpit.executePlan, { planId });
+    const t = withDelivery();
+    await seedMailbox(t);
+    const originalAt = Date.now() + 60_000;
+    const movedAt = Date.now() + 120_000;
+    const planId = await seedSchedulable(t, originalAt);
+    const asT = t.withIdentity({ subject: TENANT });
+    await asT.mutation(api.cockpit.executePlan, { planId });
 
-      expect(
-        await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt }),
-      ).toEqual({
-        result: "moved",
-      });
-      expect(
-        await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt }),
-      ).toEqual({
-        result: "moved",
-      });
+    expect(await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt })).toEqual({
+      result: "moved",
+    });
+    expect(await asT.mutation(api.cockpit.moveScheduledPlan, { planId, sendAt: movedAt })).toEqual({
+      result: "moved",
+    });
 
-      const moved = await t.run((ctx) => ctx.db.get(planId));
-      expect(moved?.status).toBe("scheduled");
-      expect(moved?.sendAt).toBe(movedAt);
-      const pending = (await listScheduled(t)).filter(
-        (s) => s.state.kind === "pending" && String(s.name).includes("startScheduledDelivery"),
-      );
-      expect(pending).toHaveLength(1);
+    const moved = await t.run((ctx) => ctx.db.get(planId));
+    expect(moved?.status).toBe("scheduled");
+    expect(moved?.sendAt).toBe(movedAt);
+    const pending = (await listScheduled(t)).filter(
+      (s) => s.state.kind === "pending" && String(s.name).includes("startScheduledDelivery"),
+    );
+    expect(pending).toHaveLength(1);
 
-      vi.advanceTimersByTime(60_001);
-      await t.finishInProgressScheduledFunctions();
-      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("scheduled");
+    vi.advanceTimersByTime(60_001);
+    await t.finishInProgressScheduledFunctions();
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("scheduled");
 
-      vi.advanceTimersByTime(60_000);
-      await t.finishInProgressScheduledFunctions();
-      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("delivering");
+    vi.advanceTimersByTime(60_000);
+    await t.finishInProgressScheduledFunctions();
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("delivering");
 
-      const audits = await t.run((ctx) =>
-        ctx.db
-          .query("audit")
-          .filter((q) => q.eq(q.field("eventType"), "plan.rescheduled"))
-          .collect(),
-      );
-      expect(audits).toHaveLength(1);
-      expect(audits[0]?.payload).toEqual({ planId });
-    } finally {
-      vi.useRealTimers();
-    }
+    const audits = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "plan.rescheduled"))
+        .collect(),
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.payload).toEqual({ planId });
   });
 
   test("moveScheduledPlan reports already_fired after the scheduler wins and not_scheduled after cancel wins", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      const asT = t.withIdentity({ subject: TENANT });
+    const t = withDelivery();
+    await seedMailbox(t);
+    const asT = t.withIdentity({ subject: TENANT });
 
-      const firedId = await seedSchedulable(t, Date.now() + 60_000);
-      await asT.mutation(api.cockpit.executePlan, { planId: firedId });
-      vi.advanceTimersByTime(60_001);
-      await t.finishInProgressScheduledFunctions();
-      expect(
-        await asT.mutation(api.cockpit.moveScheduledPlan, {
-          planId: firedId,
-          sendAt: Date.now() + 60_000,
-        }),
-      ).toEqual({ result: "already_fired" });
+    const firedId = await seedSchedulable(t, Date.now() + 60_000);
+    await asT.mutation(api.cockpit.executePlan, { planId: firedId });
+    vi.advanceTimersByTime(60_001);
+    await t.finishInProgressScheduledFunctions();
+    expect(
+      await asT.mutation(api.cockpit.moveScheduledPlan, {
+        planId: firedId,
+        sendAt: Date.now() + 60_000,
+      }),
+    ).toEqual({ result: "already_fired" });
 
-      const canceledId = await seedSchedulable(t, Date.now() + 60_000);
-      await asT.mutation(api.cockpit.executePlan, { planId: canceledId });
-      await asT.mutation(api.cockpit.cancelScheduledPlan, { planId: canceledId });
-      expect(
-        await asT.mutation(api.cockpit.moveScheduledPlan, {
-          planId: canceledId,
-          sendAt: Date.now() + 120_000,
-        }),
-      ).toEqual({ result: "not_scheduled" });
-    } finally {
-      vi.useRealTimers();
-    }
+    const canceledId = await seedSchedulable(t, Date.now() + 60_000);
+    await asT.mutation(api.cockpit.executePlan, { planId: canceledId });
+    await asT.mutation(api.cockpit.cancelScheduledPlan, { planId: canceledId });
+    expect(
+      await asT.mutation(api.cockpit.moveScheduledPlan, {
+        planId: canceledId,
+        sendAt: Date.now() + 120_000,
+      }),
+    ).toEqual({ result: "not_scheduled" });
   });
 
   test("cancel/move concurrency resolves to one truthful schedule state without duplicate callbacks", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      const planId = await seedSchedulable(t, Date.now() + 60_000);
-      const asT = t.withIdentity({ subject: TENANT });
-      await asT.mutation(api.cockpit.executePlan, { planId });
+    const t = withDelivery();
+    await seedMailbox(t);
+    const planId = await seedSchedulable(t, Date.now() + 60_000);
+    const asT = t.withIdentity({ subject: TENANT });
+    await asT.mutation(api.cockpit.executePlan, { planId });
 
-      const [cancel, move] = await Promise.all([
-        asT.mutation(api.cockpit.cancelScheduledPlan, { planId }),
-        asT.mutation(api.cockpit.moveScheduledPlan, {
-          planId,
-          sendAt: Date.now() + 120_000,
-        }),
-      ]);
-      const row = await t.run((ctx) => ctx.db.get(planId));
-      const pending = (await listScheduled(t)).filter(
-        (s) => s.state.kind === "pending" && String(s.name).includes("startScheduledDelivery"),
-      );
+    const [cancel, move] = await Promise.all([
+      asT.mutation(api.cockpit.cancelScheduledPlan, { planId }),
+      asT.mutation(api.cockpit.moveScheduledPlan, {
+        planId,
+        sendAt: Date.now() + 120_000,
+      }),
+    ]);
+    const row = await t.run((ctx) => ctx.db.get(planId));
+    const pending = (await listScheduled(t)).filter(
+      (s) => s.state.kind === "pending" && String(s.name).includes("startScheduledDelivery"),
+    );
 
-      if (row?.status === "canceled") {
-        expect(cancel).toEqual({ ok: true, canceled: true });
-        expect(["moved", "not_scheduled"]).toContain(move.result);
-        expect(pending).toHaveLength(0);
-      } else {
-        expect(row?.status).toBe("scheduled");
-        expect(move).toEqual({ result: "moved" });
-        expect(cancel).toEqual({ ok: true, alreadyResolved: true });
-        expect(pending).toHaveLength(1);
-      }
-    } finally {
-      vi.useRealTimers();
+    if (row?.status === "canceled") {
+      expect(cancel).toEqual({ ok: true, canceled: true });
+      expect(["moved", "not_scheduled"]).toContain(move.result);
+      expect(pending).toHaveLength(0);
+    } else {
+      expect(row?.status).toBe("scheduled");
+      expect(move).toEqual({ result: "moved" });
+      expect(cancel).toEqual({ ok: true, alreadyResolved: true });
+      expect(pending).toHaveLength(1);
     }
   });
 
@@ -1337,88 +1316,78 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
   });
 
   test("reschedule happy path: a canceled plan re-armed with a fresh future time re-approves through the SAME executePlan branch — orphans gone, no duplicate rows, refs-only plan.rescheduled audit, cancellable again", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      const planId = await seedSchedulable(t, Date.now() + 60_000);
-      const asT = t.withIdentity({ subject: TENANT });
+    const t = withDelivery();
+    await seedMailbox(t);
+    const planId = await seedSchedulable(t, Date.now() + 60_000);
+    const asT = t.withIdentity({ subject: TENANT });
 
-      await asT.mutation(api.cockpit.executePlan, { planId }); // arm (2 orphan requests rows)
-      await asT.mutation(api.cockpit.cancelScheduledPlan, { planId }); // halt
-      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("canceled");
-      expect(await countRequests(t)).toHaveLength(2); // orphaned "approved" rows from the first arm
+    await asT.mutation(api.cockpit.executePlan, { planId }); // arm (2 orphan requests rows)
+    await asT.mutation(api.cockpit.cancelScheduledPlan, { planId }); // halt
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("canceled");
+    expect(await countRequests(t)).toHaveLength(2); // orphaned "approved" rows from the first arm
 
-      // Pick a NEW future time, then reschedule → canceled becomes proposed, orphans deleted.
-      await asT.mutation(api.plans.setPlanSendTime, { planId, sendAt: Date.now() + 120_000 });
-      const res = await asT.mutation(api.cockpit.reschedulePlan, { planId });
-      expect(res).toEqual({ ok: true, rescheduled: true });
+    // Pick a NEW future time, then reschedule → canceled becomes proposed, orphans deleted.
+    await asT.mutation(api.plans.setPlanSendTime, { planId, sendAt: Date.now() + 120_000 });
+    const res = await asT.mutation(api.cockpit.reschedulePlan, { planId });
+    expect(res).toEqual({ ok: true, rescheduled: true });
 
-      const proposed = await t.run((ctx) => ctx.db.get(planId));
-      expect(proposed?.status).toBe("proposed");
-      expect(await countRequests(t)).toHaveLength(0); // orphans deleted — reportForPlan stays honest
+    const proposed = await t.run((ctx) => ctx.db.get(planId));
+    expect(proposed?.status).toBe("proposed");
+    expect(await countRequests(t)).toHaveLength(0); // orphans deleted — reportForPlan stays honest
 
-      // refs-only §4: the plan.rescheduled audit payload carries planId ONLY.
-      const audits = await t.run((ctx) =>
-        ctx.db
-          .query("audit")
-          .filter((q) => q.eq(q.field("eventType"), "plan.rescheduled"))
-          .collect(),
-      );
-      expect(audits).toHaveLength(1);
-      const payloadStr = JSON.stringify(audits[0]?.payload);
-      expect(payloadStr).toContain(planId);
-      expect(payloadStr).not.toContain("Q3 update"); // no subject
-      expect(payloadStr).not.toContain("Here is the Q3 update"); // no body
-      expect(payloadStr).not.toContain("a@example.com"); // no recipient
+    // refs-only §4: the plan.rescheduled audit payload carries planId ONLY.
+    const audits = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "plan.rescheduled"))
+        .collect(),
+    );
+    expect(audits).toHaveLength(1);
+    const payloadStr = JSON.stringify(audits[0]?.payload);
+    expect(payloadStr).toContain(planId);
+    expect(payloadStr).not.toContain("Q3 update"); // no subject
+    expect(payloadStr).not.toContain("Here is the Q3 update"); // no body
+    expect(payloadStr).not.toContain("a@example.com"); // no recipient
 
-      // Re-approve routes through the EXISTING executePlan scheduled branch — a FRESH set of exactly
-      // the recipient count (no duplicated orphans), status "scheduled", scheduler re-armed.
-      const reRes = await asT.mutation(api.cockpit.executePlan, { planId });
-      expect(reRes).toEqual({ ok: true, scheduled: true });
-      expect(await countRequests(t)).toHaveLength(2); // fresh fan-out only
-      const rearmed = await t.run((ctx) => ctx.db.get(planId));
-      expect(rearmed?.status).toBe("scheduled");
-      expect(rearmed?.scheduledFunctionId).toBeDefined();
-      expect((await listScheduled(t)).length).toBeGreaterThanOrEqual(1);
+    // Re-approve routes through the EXISTING executePlan scheduled branch — a FRESH set of exactly
+    // the recipient count (no duplicated orphans), status "scheduled", scheduler re-armed.
+    const reRes = await asT.mutation(api.cockpit.executePlan, { planId });
+    expect(reRes).toEqual({ ok: true, scheduled: true });
+    expect(await countRequests(t)).toHaveLength(2); // fresh fan-out only
+    const rearmed = await t.run((ctx) => ctx.db.get(planId));
+    expect(rearmed?.status).toBe("scheduled");
+    expect(rearmed?.scheduledFunctionId).toBeDefined();
+    expect((await listScheduled(t)).length).toBeGreaterThanOrEqual(1);
 
-      // Fire it → the SAME fan-out starts (status → delivering).
-      vi.advanceTimersByTime(120_001);
-      await t.finishInProgressScheduledFunctions();
-      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("delivering");
-    } finally {
-      vi.useRealTimers();
-    }
+    // Fire it → the SAME fan-out starts (status → delivering).
+    vi.advanceTimersByTime(120_001);
+    await t.finishInProgressScheduledFunctions();
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("delivering");
   });
 
   test("reschedule re-ask: a canceled plan with a PAST/absent sendAt refuses (needs_future_time) — status stays canceled, no requests deleted, no plan.rescheduled audit", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      const planId = await seedSchedulable(t, Date.now() + 60_000);
-      const asT = t.withIdentity({ subject: TENANT });
+    const t = withDelivery();
+    await seedMailbox(t);
+    const planId = await seedSchedulable(t, Date.now() + 60_000);
+    const asT = t.withIdentity({ subject: TENANT });
 
-      await asT.mutation(api.cockpit.executePlan, { planId }); // arm (2 rows)
-      await asT.mutation(api.cockpit.cancelScheduledPlan, { planId }); // halt
+    await asT.mutation(api.cockpit.executePlan, { planId }); // arm (2 rows)
+    await asT.mutation(api.cockpit.cancelScheduledPlan, { planId }); // halt
 
-      // sendAt is now in the PAST (advance past the frozen time) → the re-ask, no un-cancel.
-      vi.advanceTimersByTime(60_001);
-      const res = await asT.mutation(api.cockpit.reschedulePlan, { planId });
-      expect(res).toEqual({ ok: false, reason: "needs_future_time" });
+    // sendAt is now in the PAST (advance past the frozen time) → the re-ask, no un-cancel.
+    vi.advanceTimersByTime(60_001);
+    const res = await asT.mutation(api.cockpit.reschedulePlan, { planId });
+    expect(res).toEqual({ ok: false, reason: "needs_future_time" });
 
-      expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("canceled"); // stays terminal
-      expect(await countRequests(t)).toHaveLength(2); // orphans NOT deleted (write nothing on a re-ask)
-      const audits = await t.run((ctx) =>
-        ctx.db
-          .query("audit")
-          .filter((q) => q.eq(q.field("eventType"), "plan.rescheduled"))
-          .collect(),
-      );
-      expect(audits).toHaveLength(0); // no audit on a re-ask
-    } finally {
-      vi.useRealTimers();
-    }
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("canceled"); // stays terminal
+    expect(await countRequests(t)).toHaveLength(2); // orphans NOT deleted (write nothing on a re-ask)
+    const audits = await t.run((ctx) =>
+      ctx.db
+        .query("audit")
+        .filter((q) => q.eq(q.field("eventType"), "plan.rescheduled"))
+        .collect(),
+    );
+    expect(audits).toHaveLength(0); // no audit on a re-ask
   });
 
   test("reschedule idempotent: a non-canceled (proposed) plan no-ops (alreadyResolved) with no state change", async () => {
@@ -1443,28 +1412,23 @@ describe("executePlan deferred send (SCHD-01 — arm on a future sendAt, fire at
   });
 
   test("immediate path unchanged: an unset sendAt starts synchronously (status delivering, no scheduled row)", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = withDelivery();
-      await seedMailbox(t);
-      const planId = await seedSchedulable(t, undefined);
+    const t = withDelivery();
+    await seedMailbox(t);
+    const planId = await seedSchedulable(t, undefined);
 
-      const res = await t
-        .withIdentity({ subject: TENANT })
-        .mutation(api.cockpit.executePlan, { planId });
-      expect(res.ok).toBe(true);
-      expect("workflowId" in res && res.workflowId).toBeTruthy();
-      expect("scheduled" in res).toBe(false);
+    const res = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(res.ok).toBe(true);
+    expect("workflowId" in res && res.workflowId).toBeTruthy();
+    expect("scheduled" in res).toBe(false);
 
-      const plan = await t.run((ctx) => ctx.db.get(planId));
-      expect(plan?.status).toBe("delivering");
-      // No scheduler was armed on the immediate path (the workflow schedules its OWN steps, so
-      // assert there is no scheduled callback pointing at startScheduledDelivery specifically).
-      const scheduled = await listScheduled(t);
-      expect(scheduled.some((s) => String(s.name).includes("startScheduledDelivery"))).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    expect(plan?.status).toBe("delivering");
+    // No scheduler was armed on the immediate path (the workflow schedules its OWN steps, so
+    // assert there is no scheduled callback pointing at startScheduledDelivery specifically).
+    const scheduled = await listScheduled(t);
+    expect(scheduled.some((s) => String(s.name).includes("startScheduledDelivery"))).toBe(false);
   });
 
   test("the delivery workflow routes sent, failed AND suppressed terminals through the idempotent plan progress helper", () => {
@@ -1703,6 +1667,7 @@ function withFanoutOnly() {
   const t = convexTest(schema, modules);
   t.registerComponent("workflow", workflowSchema, workflowModules);
   t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+  deliveryHarnesses.add(t);
   return t;
 }
 

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "packId": "data",
+  "workflowId": "data-dataset-report",
+  "version": 1,
+  "status": "candidate",
+  "runtimeEnabled": false,
+  "skillName": "vertical-data",
+  "output": "document",
+  "outputContractId": "data-output.v1",
+  "disclaimerId": "data-review.v1",
+  "risk": "advisory",
+  "requiredReview": "human-review",
+  "requiredSources": ["vault"],
+  "connectorGate": "data-warehouse",
+  "disablePolicy": "block-new-starts-preserve-artifacts",
+  "rollbackPolicy": "exact-previously-active-version",
+  "provenance": {
+    "sourceRepo": "https://github.com/anthropics/knowledge-work-plugins",
+    "sourceCommit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
+    "sourcePaths": [
+      "data/skills/analyze/SKILL.md",
+      "data/skills/explore-data/SKILL.md",
+      "data/skills/validate-data/SKILL.md"
+    ],
+    "bodySha256": "bf826e37a1acddc4bdb98b7dd3690a7e87c943ac7ef47952337e3d844d71018c",
+    "license": "Apache-2.0",
+    "modificationNotice": "Pikar candidate adaptation, 2026-09-10: bounded deterministic file-only profiling; retain source/method/quality review and remove warehouse, code execution, repair and external operations. See method-review.md.",
+    "skillVersions": {
+      "vertical-data": 1
+    },
+    "ts": 1788998400000
+  },
+  "sourceFiles": [
+    {
+      "path": "data/skills/analyze/SKILL.md",
+      "sha256": "4ee816363d944c7a959e43384576d979a414f37fff7071c0bfb8935aae10143e",
+      "gitBlobSha": "31ce9c58dd4de3038643750373de5b71a2494fa2",
+      "bytes": 4432
+    },
+    {
+      "path": "data/skills/explore-data/SKILL.md",
+      "sha256": "af7590fa616360259da712b5ede5f79b817beb854c47a465f95774354988e8a2",
+      "gitBlobSha": "f1e7032d0abee77903fc3abbfdc7646e383d4993",
+      "bytes": 11520
+    },
+    {
+      "path": "data/skills/validate-data/SKILL.md",
+      "sha256": "1e424822043480375b80aef9416227b1c8083af749ca536568716265f79ca54b",
+      "gitBlobSha": "30a1bac41bf9679dc7d96b7ec59a116f03ec0575",
+      "bytes": 14916
+    }
+  ],
+  "hashEncoding": "LF-normalized UTF-8; pinned upstream downloads were LF bytes. Git blob hash verified against official pinned tree.",
+  "licenseEvidence": {
+    "governingPath": "data/LICENSE",
+    "redistributedCopy": "third_party/knowledge-work-plugins/LICENSE",
+    "governingSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "rootLicenseAnomaly": false
+  },
+  "evidence": {
+    "methodReview": "draft",
+    "nativeEval": null,
+    "browserUat": null,
+    "activation": null
+  },
+  "releaseBlockedBy": [
+    "independent-method-review",
+    "exact-version-native-eval",
+    "authenticated-responsive-uat",
+    "runtime-binding"
+  ]
+}

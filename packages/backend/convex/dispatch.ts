@@ -214,7 +214,7 @@ export type DispatchResult =
       skillVersion: number;
       /** CONTENT-PLANE (§4): these feed 16-07's vault document. `sources` may NEVER reach an
        *  `audit`/`telemetry` payload — those carry `sourceCount` and `retrievedAt` (a number). */
-      sources: readonly { url: string; title: string }[];
+      sources: readonly { url: string; title: string; pageReadAt?: number }[];
       /** A COUNT (§4-clean), unlike `sources` — the hosted-search calls this hop billed for. It
        *  rides the result because 22.1's evidence verdict needs "did it search?" alongside "did it
        *  find anything?", and it was previously audited and then dropped one function short of the
@@ -600,7 +600,7 @@ type Landing =
       incompleteReason?: "cost" | "steps" | "clock";
       /** 25.1-05 (D11): the pages this turn retrieved, travelling with the body they support.
        *  CONTENT PLANE — they ride the landing mutation and the plan row, never a payload (§4). */
-      sources?: { title: string; url: string; retrievedAt: number }[];
+      sources?: { title: string; url: string; retrievedAt: number; pageReadAt?: number }[];
     }
   | { incomplete: boolean; fallbackReason: string };
 
@@ -650,8 +650,7 @@ async function dispatchAndLand(
             ? {}
             : {
                 sources: result.sources.map((s) => ({
-                  title: s.title,
-                  url: s.url,
+                  ...s,
                   retrievedAt: result.retrievedAt,
                 })),
               }),
@@ -1213,7 +1212,7 @@ async function persistResearchFindings(
       question: args.question ?? "",
       body: res.body,
       // Copied to a mutable array: `sources` is readonly on the result, and a validator arg is not.
-      sources: res.sources.map((s) => ({ url: s.url, title: s.title })),
+      sources: res.sources.map((s) => ({ ...s })),
       webSearchCalls: res.webSearchCalls,
       declaredUnsupported: res.declaredUnsupported,
       retrievedAt: res.retrievedAt,
@@ -1342,7 +1341,7 @@ const MEDIA_GROUNDING_QUESTION = [
  *  restating forty fields it does not read. */
 export type GroundingTurn = {
   reply: string;
-  sources: readonly { url: string; title: string }[];
+  sources: readonly { url: string; title: string; pageReadAt?: number }[];
   webSearchCalls: number;
   declaredUnsupported: boolean;
   truncated: boolean;
@@ -1386,7 +1385,7 @@ export async function groundMediaBrief(
       tenantId: args.tenantId,
       question: brief,
       body: res.reply,
-      sources: res.sources.map((x) => ({ url: x.url, title: x.title })),
+      sources: res.sources.map((x) => ({ ...x })),
       webSearchCalls: res.webSearchCalls,
       declaredUnsupported: res.declaredUnsupported,
       retrievedAt: Date.now(),

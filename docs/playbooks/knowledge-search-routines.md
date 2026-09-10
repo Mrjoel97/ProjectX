@@ -1,5 +1,10 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-10 — The scheduler inventory drops `vaultDigest.ts` because explicit
+> rebuilds now invoke the transactional `vaultFolders.startDigest` mutation and synthesis runs
+> through the durable workflow. The module remains in the namespace inventory. Folder completion
+> still schedules its starter from `vaultFolders.ts`; no routine schedule or DST probe changed.
+
 > **ARMED ON PRODUCTION 2026-09-09 — FOUR PROBES, AND THE MODULE IS FROZEN UNTIL 2026-11-01.**
 > Verified `pending` in `_scheduled_functions` immediately after arming:
 >

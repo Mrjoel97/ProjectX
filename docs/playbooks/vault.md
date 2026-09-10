@@ -1,4 +1,29 @@
-> Last verified: 2026-09-08 (**`deleteVaultDoc` REMOVED EVERYTHING EXCEPT THE FILE.** It deleted
+> Last verified: 2026-09-10 — Data's subpath-only `dataWorkbook` reader uses pinned SheetJS and
+> fflate, preserving typed values and cached formula metadata. Source files cap at 5 MiB; ZIP
+> central-directory preflight caps 256 entries, 4 MiB per entry and 12 MiB declared expanded total.
+> CSV is strict UTF-8 and conservatively capped at 20,000 potential separators before parsing;
+> quoted delimiters count too, so some complex valid files are intentionally refused. SheetJS
+> receives nodim, 502-row and five-sheet bounds; the typed projection returns at most 30 columns.
+> No formula or macro evaluation, external fetch, disk extraction or formatted-preview reuse.
+> `verticalData` authenticates the owner preview and validates the exact tenant-owned, ready,
+> unsealed CSV/XLSX file before bytes are read. Its normal internal artifact is deterministic
+> verification evidence, never a pack activation or model-eval result.
+>
+> Previous verification: 2026-09-10 — Folder synthesis now starts through the transactional
+> `vaultFolders.startDigest` mutation and the existing WorkflowManager. The paid action has
+> workflow and SDK retries disabled: a lost provider response must not silently spend twice.
+> Completion checks both workflow id and `digestStatus: building`, then writes one terminal audit
+> and an in-app notification on failure/refusal. Exception text never enters either payload.
+> `built` means the summary document persisted; its separate ingest workflow owns search readiness.
+> The folder header exposes an explicit Rebuild after failure/refusal, including when the first
+> attempt created no document, and disables the control while synthesis runs. Rebuild atomically
+> claims the next workflow; concurrent clicks cannot queue duplicate paid attempts.
+> Verify: `node node_modules/vitest/vitest.mjs run convex/vaultDigest.test.ts convex/vaultFolders.test.ts`
+> from `packages/backend`; `VaultBrowseControls.test.ts` covers the rendered retry/disabled control.
+> Existing completed folders without digest state remain valid; this change does not automatically
+> re-spend on historical failed builds. Operator recovery uses the same explicit rebuild mutation.
+>
+> Previous verification: 2026-09-08 (**`deleteVaultDoc` REMOVED EVERYTHING EXCEPT THE FILE.** It deleted
 > the RAG chunks, the graph edges and nodes, and the sheet grid, then `ctx.db.delete(vaultDocId)` —
 > and never touched `doc.storageId`. So deleting ONE document orphaned its bytes exactly the way
 > deleting the whole account did, on the path a user actually walks every day.

@@ -42,7 +42,7 @@ let instance: Fog | undefined;
  * Lazily, a test file that never traces never builds the instance and never arms the timer.
  */
 function fog(): Fog {
-  instance ??= foglamp();
+  instance ??= foglamp({ recordInputs: false, recordOutputs: false });
   return instance;
 }
 
@@ -55,7 +55,61 @@ function fog(): Fog {
  * `sessionId`, or they explode trace cardinality.
  */
 export function fogIntegration(context: IntegrationInput) {
-  return fog().integration(context);
+  const integration = fog().integration(context);
+  const {
+    onStart,
+    onError,
+    onAbort,
+    onToolExecutionStart,
+    onToolExecutionEnd,
+    onStepEnd,
+    onStepFinish,
+    onObjectStepEnd,
+    onObjectStepFinish,
+  } = integration;
+  // Provider-supplied ids can themselves contain content. Local refs preserve the collector's
+  // start/end join without exporting those strings; application tool events remain untouched.
+  const toolRefs = new Map<string, string>();
+  const toolRef = (id: string): string => {
+    const existing = toolRefs.get(id);
+    if (existing) return existing;
+    const ref = `tool-${toolRefs.size + 1}`;
+    toolRefs.set(id, ref);
+    return ref;
+  };
+  // The SDK's event flags override collector defaults. Keep this boundary authoritative even
+  // when a caller enables recording. Errors/abort reasons bypass those flags in foglamp 0.9.0,
+  // and may contain provider echoes, tool inputs or document contents: retain only a static code.
+  integration.onStart = (event) => onStart({ ...event, recordInputs: false, recordOutputs: false });
+  integration.onError = () => onError(new Error("model_call_failed"));
+  integration.onAbort = (event) => onAbort({ ...event, reason: "aborted" });
+  integration.onToolExecutionStart = (event) =>
+    onToolExecutionStart({
+      ...event,
+      toolCall: { ...event.toolCall, toolCallId: toolRef(event.toolCall.toolCallId) },
+    });
+  integration.onToolExecutionEnd = (event) =>
+    onToolExecutionEnd({
+      ...event,
+      toolCall: { ...event.toolCall, toolCallId: toolRef(event.toolCall.toolCallId) },
+      toolOutput:
+        event.toolOutput.type === "tool-error"
+          ? { ...event.toolOutput, error: "tool_execution_failed" }
+          : event.toolOutput,
+    });
+  // Provider safety arrays are also serialized regardless of recording flags. Usage/timing stay
+  // in their native fields; opaque provider payloads are not part of the refs-only trace contract.
+  integration.onStepEnd = (event) => onStepEnd(withoutProviderPayload(event));
+  integration.onStepFinish = (event) => onStepFinish(withoutProviderPayload(event));
+  integration.onObjectStepEnd = (event) => onObjectStepEnd(withoutProviderPayload(event));
+  integration.onObjectStepFinish = (event) => onObjectStepFinish(withoutProviderPayload(event));
+  return integration;
+}
+
+function withoutProviderPayload<T>(event: T): T {
+  return event !== null && typeof event === "object"
+    ? { ...event, providerMetadata: {}, experimental_providerMetadata: {} }
+    : event;
 }
 
 /**

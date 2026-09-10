@@ -6,7 +6,7 @@
 //     block — gsd-tools' writer PREPENDS a fresh block whenever byte 0 is not a dash, which is how
 //     36 blocks accumulated before the repair.
 //  2. Every `### Phase N` heading in ROADMAP.md has a row in the progress table.
-//  3. A phase directory whose every PLAN has a SUMMARY must not sit behind a row that reads
+//  3. A phase directory whose every PLAN has a completed SUMMARY must not sit behind a row that reads
 //     anything but Complete/Superseded (gsd `phase complete` never writes this file), and a
 //     Complete row must not hide an open plan.
 //  4. The closure rule: a Complete row's REQUIREMENTS traceability rows must be Complete too,
@@ -88,7 +88,17 @@ if (roadmap !== null) {
     }
     const plans = files.filter((f) => /-PLAN\.md$/.test(f)).map((f) => f.replace(/-PLAN\.md$/, ""));
     const sums = new Set(
-      files.filter((f) => /-SUMMARY\.md$/.test(f)).map((f) => f.replace(/-SUMMARY\.md$/, "")),
+      files
+        .filter((f) => /-SUMMARY\.md$/.test(f))
+        .filter((f) => {
+          const summary = read(`.planning/phases/${d}/${f}`) ?? "";
+          const frontmatter = summary.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+          const status = frontmatter?.[1]?.match(/^status:\s*["']?([^\r\n"']+)/m)?.[1]?.trim();
+          // Legacy summaries have no status. Explicit partial/blocked/draft reports are evidence
+          // of unfinished work, never a reason to demand a false phase-completion declaration.
+          return status === undefined || /^(complete|completed|superseded)\b/i.test(status);
+        })
+        .map((f) => f.replace(/-SUMMARY\.md$/, "")),
     );
     if (!plans.length) continue;
     const st = rows.get(n);
@@ -96,11 +106,11 @@ if (roadmap !== null) {
     const open = plans.filter((p) => !sums.has(p));
     if (!open.length && !isComplete(st) && !isSuperseded(st))
       problems.push(
-        `ROADMAP: every plan in .planning/phases/${d} has a SUMMARY but row ${n} reads "${st.slice(0, 60)}" — mark it Complete (gsd \`phase complete\` does not write this file).`,
+        `ROADMAP: every plan in .planning/phases/${d} has a completed SUMMARY but row ${n} reads "${st.slice(0, 60)}" — reconcile the phase disposition (gsd \`phase complete\` does not write this file).`,
       );
     if (open.length && isComplete(st) && !isSuperseded(st))
       problems.push(
-        `ROADMAP: row ${n} reads Complete but ${open.join(", ")} ${open.length === 1 ? "has" : "have"} no SUMMARY.`,
+        `ROADMAP: row ${n} reads Complete but ${open.join(", ")} ${open.length === 1 ? "has" : "have"} no completed SUMMARY.`,
       );
 
     // 4. closure rule

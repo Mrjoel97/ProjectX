@@ -42,6 +42,24 @@ const manifest = JSON.parse(readFileSync(join(vendorRoot, "manifest.json"), "utf
   licenseFiles: FileRecord[];
 };
 
+const draft = JSON.parse(readFileSync(join(vendorRoot, "draft-manifest.json"), "utf8")) as {
+  status: string;
+  runtimeEnabled: boolean;
+  upstream: { repo: string; commit: string };
+  candidates: {
+    packId: string;
+    manifestPath: string;
+    sourcePaths: string[];
+    governingLicense: string;
+  }[];
+  files: FileRecord[];
+};
+const allSourceFiles = [
+  ...manifest.packs.flatMap((p) => p.files),
+  ...manifest.licenseFiles,
+  ...draft.files,
+];
+
 const sha256 = (buf: Buffer | string) => createHash("sha256").update(buf).digest("hex");
 /** The checkout-independent body identity — see the adapted-body test for why this is not raw bytes. */
 const lf = (s: string) => s.replace(/\r\n/g, "\n");
@@ -65,7 +83,7 @@ describe("the upstream pin is exact and reproducible", () => {
   });
 
   test("every declared file is on disk with exactly the recorded bytes and hash", () => {
-    const declared = [...manifest.packs.flatMap((p) => p.files), ...manifest.licenseFiles];
+    const declared = allSourceFiles;
     // Non-vacuity floor: an empty manifest must fail loudly rather than pass by having nothing to
     // check — the way a hash-checking test rots into decoration.
     expect(declared.length).toBeGreaterThan(10);
@@ -77,16 +95,87 @@ describe("the upstream pin is exact and reproducible", () => {
       expect(bytes.length, `${rec.path} byte count`).toBe(rec.bytes);
       expect(sha256(bytes), `${rec.path} sha256`).toBe(rec.sha256);
       expect(rec.gitBlobSha, `${rec.path} gitBlobSha`).toMatch(/^[0-9a-f]{40}$/);
+      expect(
+        createHash("sha1")
+          .update(Buffer.from(`blob ${bytes.length}\0`))
+          .update(bytes)
+          .digest("hex"),
+      ).toBe(rec.gitBlobSha);
     }
   });
 
   // BOTH directions. A file added to the snapshot but not the manifest is unattributed material
   // being redistributed, which is exactly what the manifest exists to prevent.
   test("the snapshot holds nothing the manifest does not declare", () => {
-    const declared = new Set(
-      [...manifest.packs.flatMap((p) => p.files), ...manifest.licenseFiles].map((f) => f.path),
-    );
+    const declared = new Set(allSourceFiles.map((f) => f.path));
     expect(walk(snapshotRoot).filter((p) => !declared.has(p))).toEqual([]);
+  });
+});
+
+describe("draft source inventory preserves full coverage without certifying release", () => {
+  test("six candidate source records remain separate from the six runtime packs", () => {
+    expect(draft.status).toBe("draft-source-inventory");
+    expect(draft.runtimeEnabled).toBe(false);
+    expect(draft.upstream).toEqual({
+      repo: manifest.upstream.repo,
+      commit: manifest.upstream.commit,
+    });
+    expect(draft.candidates.map((c) => c.packId).sort()).toEqual([
+      "data",
+      "design",
+      "engineering",
+      "hr",
+      "legal",
+      "product",
+    ]);
+    const declared = new Map<string, FileRecord>();
+    for (const file of allSourceFiles) {
+      if (declared.has(file.path)) expect(file).toEqual(declared.get(file.path));
+      declared.set(file.path, file);
+    }
+    const referenced = new Set<string>();
+    const notices = readFileSync(join(repoRoot, "THIRD_PARTY_NOTICES.md"), "utf8");
+    for (const entry of draft.candidates) {
+      expect(entry.manifestPath).toBe(
+        `packages/contracts/packs/vertical/${entry.packId}/manifest.json`,
+      );
+      const candidate = JSON.parse(readFileSync(join(repoRoot, entry.manifestPath), "utf8")) as {
+        packId: string;
+        status: string;
+        runtimeEnabled: boolean;
+        provenance: {
+          sourceRepo: string;
+          sourceCommit: string;
+          sourcePaths: string[];
+          bodySha256: string;
+        };
+        sourceFiles: FileRecord[];
+        licenseEvidence: { governingPath: string; governingSha256: string };
+      };
+      expect(candidate.packId).toBe(entry.packId);
+      expect(candidate.status).toBe("candidate");
+      expect(candidate.runtimeEnabled).toBe(false);
+      expect(candidate.provenance.sourceRepo).toBe(draft.upstream.repo);
+      expect(candidate.provenance.sourceCommit).toBe(draft.upstream.commit);
+      expect(candidate.provenance.sourcePaths).toEqual(entry.sourcePaths);
+      expect(candidate.sourceFiles.map((f) => f.path)).toEqual(entry.sourcePaths);
+      for (const file of candidate.sourceFiles) {
+        expect(file).toEqual(declared.get(file.path));
+        expect(notices).toContain(file.path.replace(/\/SKILL\.md$/, ""));
+        referenced.add(file.path);
+      }
+      expect(candidate.licenseEvidence.governingPath).toBe(entry.governingLicense);
+      expect(candidate.licenseEvidence.governingSha256).toBe(
+        declared.get(entry.governingLicense)?.sha256,
+      );
+      referenced.add(entry.governingLicense);
+      const body = readFileSync(
+        join(repoRoot, "packages/contracts/packs/vertical", entry.packId, "skill.md"),
+        "utf8",
+      );
+      expect(sha256(lf(body))).toBe(candidate.provenance.bodySha256);
+    }
+    expect(draft.files.filter((f) => !referenced.has(f.path))).toEqual([]);
   });
 });
 

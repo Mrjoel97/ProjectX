@@ -1,5 +1,10 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+> Last verified: 2026-09-10 — G17 notification regression: the expiry scan uses an exact indexed
+> tenant/kind/read existence check instead of inspecting only 50 unrelated unread messages.
+> `scaleConstants.test.ts` seeds 60 unrelated notifications before the existing warning and checks
+> repeated scans preserve that warning while still raising one for a second tenant.
+
 > Last verified: 2026-09-06 (39-01 — `@pikar/cost` gains `WEB_PAGE_READ_USD_TAVILY` = a fifth of the search proxy (Tavily /extract bills 1 credit per 5 URLs) and `pageReadFeeUsd()`; `runAgentLoop` adds `pageReads × pageReadFeeUsd()` to the SAME `web_search_fee` row as the searches, charged per call (over-count is the fail-safe direction). No new rail, no new kind.)
 >
 
@@ -643,6 +648,53 @@ instead of the limiter's `cents`; (2) correlate settle on `Date.now()` instead o
 Non-negotiable, and it is the same rule `dashboard-pages.md` states from the Finance side: the
 Finance UI may be disabled; **these writers may not be.** An append-only history has no backfill, so
 a dark window is a permanent hole in the record.
+
+## Phase 30 offline-proven evaluation reservations
+
+`openEvalBudget` creates a one-hour, non-renewing envelope in the existing append-only
+`spendEvents` table for at most 64 explicit fixture tenants and 1,000 cents. Each native SDK
+`doGenerate` call passes through `evalBudgetModel`: it reserves against that aggregate envelope,
+the tenant daily limiter, and the deployment limiter before contacting the provider. Loop steps
+and explicit fallback attempts reserve separately; SDK automatic retries are disabled for this
+evaluation path. At most 500 calls can be reserved, bounding their eventual reservation, refund,
+and actual rows to 1,500 even when outstanding calls settle concurrently.
+
+The closed model table in `@pikar/cost/evalBudget` reserves the entire advertised input context
+plus an explicit 8,192-token output ceiling, using conservative maximum input/output prices.
+Current ceilings are 54 cents for `or/openai/gpt-5.6-luna` and 44 cents for
+`or/openai/gpt-4.1-mini`. The provider request also fixes OpenAI routing, disables provider fallback,
+plugins and transforms, and supplies `provider.max_price` ceilings (including zero per-request and
+per-image fees). Native vision inputs consume input tokens within the advertised context. Only
+bounded inline PNG/JPEG bytes are accepted; URL inputs and cache-write controls are refused.
+
+These bounds were checked against the [OpenRouter model catalogue](https://openrouter.ai/api/v1/models),
+[maximum-price routing contract](https://openrouter.ai/docs/guides/routing/provider-selection#maximum-price),
+and [OpenAI image token accounting](https://developers.openai.com/api/docs/guides/images-vision)
+on 2026-09-10. Catalogue or provider-contract changes require revalidation of the closed table;
+an unlisted model fails before reservation or a provider call.
+
+Successful calls settle the exact `providerMetadata.openrouter.usage.cost` dollar value. Integer
+cents remain conservative enforcement units; the exact value is retained on the actual movement.
+An explicit zero is settled, whereas missing usage or a failed request retains the entire hold.
+Late settlement never refunds a newly opened daily window. A known over-ceiling provider charge
+is recorded truthfully with `evalBreach`, then the model action fails and future reservations are
+refused. A provider contract breach is not reported as a successfully enforced spending cap.
+
+The accounting scope is **OpenRouter credits**, as defined by its
+[usage accounting contract](https://openrouter.ai/docs/cookbook/administration/usage-accounting).
+External BYOK upstream invoices are not included or proven bounded. Real evaluation must remain
+closed until the runner can verify a supported billing mode; a local fixture assertion is not
+account-level proof. Offline tests exercise the actual limiter component and capture provider
+request bodies using an injected HTTP response; they make no paid calls and establish no live
+quality, invoice, or release evidence.
+
+Evaluation grants only `searchVault` and `saveAsDocument`. Controlled owned fixture hydration
+replaces RAG for this method evaluation, so no hidden embedding or paid search call can bypass the
+envelope. Extra tools, streaming, unsupported output/media paths, and failed source verification
+fail closed. This does not measure live retrieval quality. Preserve the evaluation spend history
+when removing throwaway fixture content; an envelope or outstanding hold must not disappear with
+its tenant. Status exposes `breached`, `unsettledCount` and `unresolvedCents` separately from known
+actual dollars; a zero known total does not mean an unresolved request was free.
 
 ## Known gaps & deferred work
 

@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "workflowId": "hr-onboarding-materials",
+  "runtimeEnabled": false,
+  "operations": [
+    {
+      "id": "ground-in-vault",
+      "state": "existing",
+      "tools": ["searchVault"],
+      "source": "vault"
+    },
+    {
+      "id": "save-sop",
+      "state": "existing",
+      "tools": ["saveAsDocument"],
+      "output": "document"
+    },
+    {
+      "id": "external-connector-read",
+      "state": "missing",
+      "tools": [],
+      "gate": "hr-systems",
+      "reason": "No reviewed native connector variant exists."
+    },
+    {
+      "id": "external-system-write",
+      "state": "forbidden",
+      "tools": [],
+      "reason": "external_write"
+    },
+    {
+      "id": "publish-or-send",
+      "state": "forbidden",
+      "tools": [],
+      "reason": "external_send"
+    },
+    {
+      "id": "delegate",
+      "state": "forbidden",
+      "tools": [],
+      "reason": "specialist_dispatch"
+    },
+    {
+      "id": "author-skill",
+      "state": "forbidden",
+      "tools": [],
+      "reason": "skill_authoring"
+    },
+    {
+      "id": "paid-generation",
+      "state": "forbidden",
+      "tools": [],
+      "reason": "paid_generation"
+    }
+  ],
+  "blockedDomainOperations": [
+    "rankApplicants",
+    "inferProtectedTraits",
+    "changeEmploymentState",
+    "recommendPay",
+    "writeAts",
+    "writeHris",
+    "sendOffer",
+    "notifyEmployee",
+    "createCalendarEvent"
+  ]
+}

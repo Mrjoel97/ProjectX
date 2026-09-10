@@ -1,7 +1,8 @@
 ---
 phase: 27-curated-knowledge-work-pack-pilot
 plan: 08
-status: partial
+status: complete
+reconciled: 2026-09-10
 completed: 2026-08-23
 requirements: [PACK-01, PACK-03, PACK-04]
 files_modified:
@@ -25,6 +26,10 @@ files_modified:
 ---
 
 # 27-08 — Final provenance, six DEV candidates, and an eval runner that can go red
+
+## Dated supersession — 2026-09-10
+
+The August 23 quota blocker below is historical. The later **2026-08-26** record in `docs/playbooks/workflow-packs.md` explicitly records all six pilot packs at 5/5 with valid provenance and exact-version eval evidence. Commit `a86daad` closes the last Customer Complaint gap (v3, 0/5 to 5/5, $0.045 across three runs); the surrounding dated playbook entries retain the other pack-specific fixture/body repairs and costs. ROADMAP already records `evidenceValid: true` for all six. This satisfies 27-08's publication/eval deliverable, so frontmatter is complete. These are historical DEV candidate results, not certification of today's bodies or a new paid run; 27-09's stronger per-pack browser protocol remains separate.
 
 **Deployment: DEV. Nothing prod was touched and no prod version number exists.**
 

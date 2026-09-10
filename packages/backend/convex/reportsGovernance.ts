@@ -162,8 +162,8 @@ export const auditPage = tenantQuery({
  *
  * `rowsAwaitingExport` is a FLOOR — `take(CAP + 1)` then slice, the house idiom — because an exact
  * count of an unbounded table is the read that fails first for the busiest deployment, which is
- * exactly the one whose lag matters. `oldestAwaitingMs` is exact and is the honest version of
- * "lag": one ascending row, no cap involved.
+ * exactly the one whose lag matters. `oldestAwaitingMs` is the oldest pending queue insertion
+ * (or legacy audit insertion), so a caller-controlled event timestamp cannot distort its age.
  *
  * Cross-tenant on purpose: the export is deployment-global, `audit.by_ts` is the named exception in
  * `isolation.test.ts`, and this is owner-gated with no tenant-facing caller.
@@ -175,18 +175,28 @@ export const wormExport = ownerQuery({
       .query("exportCursors")
       .withIndex("by_name", (q) => q.eq("name", CURSOR_NAME))
       .unique();
-    // `?? 0` matches `wormCursor.getCursor`'s baseline: nothing exported means everything is behind.
-    const since = row?.lastExportedTs ?? 0;
-    const awaiting = await ctx.db
-      .query("audit")
-      .withIndex("by_ts", (q) => q.gt("ts", since))
-      .take(AWAITING_CAP + 1);
+    const queued = await ctx.db.query("auditExportQueue").take(AWAITING_CAP + 1);
+    const legacy = row?.legacyDone
+      ? null
+      : await ctx.db
+          .query("audit")
+          .withIndex("by_export_version", (q) => q.eq("exportVersion", undefined))
+          .paginate({
+            cursor: row?.legacyCursor ?? null,
+            numItems: AWAITING_CAP + 1,
+            maximumBytesRead: 2_000_000,
+          });
+    const count = queued.length + (legacy?.page.length ?? 0);
+    const oldest = [queued[0]?._creationTime, legacy?.page[0]?._creationTime].filter(
+      (ts): ts is number => ts !== undefined,
+    );
 
     return {
-      lastCursorAdvanceMs: row?.lastExportedTs ?? null,
-      rowsAwaitingExport: Math.min(awaiting.length, AWAITING_CAP),
-      awaitingPartial: awaiting.length > AWAITING_CAP,
-      oldestAwaitingMs: awaiting[0]?.ts ?? null,
+      lastCursorAdvanceMs:
+        row?.lastExportedAt ?? (row?.revision === undefined ? (row?.lastExportedTs ?? null) : null),
+      rowsAwaitingExport: Math.min(count, AWAITING_CAP),
+      awaitingPartial: count > AWAITING_CAP || (legacy !== null && !legacy.isDone),
+      oldestAwaitingMs: oldest.length > 0 ? Math.min(...oldest) : null,
     };
   },
 });

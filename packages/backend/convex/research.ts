@@ -54,8 +54,8 @@ const TITLE_PREFIX = "Web research: ";
 // remains is real and is stated instead: a search provider chose the candidate pages, an extractor
 // chose the excerpt, and nothing here audited a source's own reliability.
 const LIMITS_FOOTER =
-  "**Limits of this research.** The queries were chosen and run by this system and the pages it" +
-  " cites were read by it, but a search provider chose which pages were candidates, an extractor" +
+  "**Limits of this research.** Page reads are confirmed only where the source above has a" +
+  " page-read date. Search results alone do not confirm page reads. A search provider chose which pages were candidates, an extractor" +
   " chose the excerpt of each page that was read, and no source was audited for its own" +
   " reliability. A claim marked snippet-only rests on a search result, not a read page. These" +
   " findings are NOT source-audited — treat them as a lead to verify, never as an established fact.";
@@ -76,7 +76,7 @@ const isoDate = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
  */
 function researchDocumentText(a: {
   body: string;
-  sources: readonly { url: string; title: string }[];
+  sources: readonly { url: string; title: string; pageReadAt?: number }[];
   /** 22.1: the provider-attested hosted-search count. Without it the header and the fence both
    *  claim "no web sources were retrieved" on a run that never looked — turning "we didn't look"
    *  into "we looked and the world is empty", which is a lie a user reads. */
@@ -105,7 +105,17 @@ function researchDocumentText(a: {
         a.webSearchCalls === 0
         ? ""
         : "No web sources were retrieved."
-      : ["Sources:", ...a.sources.map((s) => `- ${s.title.trim() || s.url} — ${s.url}`)].join("\n"),
+      : [
+          "Sources:",
+          ...a.sources.map(
+            (s) =>
+              `- ${s.title.trim() || s.url} — ${s.url} — ${
+                s.pageReadAt === undefined
+                  ? "Search result only (no confirmed page read)"
+                  : `Page excerpt read ${isoDate(s.pageReadAt)}`
+              }`,
+          ),
+        ].join("\n"),
   ]
     .filter((line) => line !== "")
     .join("\n\n");
@@ -142,7 +152,9 @@ export const persistFindings = internalMutation({
     tenantId: v.string(),
     question: v.string(),
     body: v.string(),
-    sources: v.array(v.object({ url: v.string(), title: v.string() })),
+    sources: v.array(
+      v.object({ url: v.string(), title: v.string(), pageReadAt: v.optional(v.number()) }),
+    ),
     /** 22.1: the hosted-search COUNT this run billed for (§4-clean — a number, never a URL). */
     webSearchCalls: v.number(),
     /** 22.1b: did the specialist CALL `declareUnsupported`? REQUIRED, never `v.optional` — an
@@ -191,6 +203,7 @@ export const persistFindings = internalMutation({
       text: markdown,
       status: "processing",
       retrievedAt: a.retrievedAt,
+      researchSources: a.sources.map((s) => ({ ...s, retrievedAt: a.retrievedAt })),
       sourceThreadId: a.sourceThreadId,
       sourcePlanId: a.sourcePlanId,
       createdAt: Date.now(),

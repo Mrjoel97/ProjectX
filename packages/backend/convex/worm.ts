@@ -13,8 +13,9 @@
 // query/mutation live in wormCursor.ts and are reached here via ctx.runQuery /
 // ctx.runMutation (actions cannot touch ctx.db). The pure serialization/key/retention
 // math lives in @pikar/core (CLAUDE.md §1).
+import { createHash } from "node:crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { retainUntilDate, serializeAuditNdjson, wormObjectKey } from "@pikar/core";
+import { retainUntilDate, serializeAuditNdjson } from "@pikar/core";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
@@ -23,7 +24,7 @@ const SKIP_MSG = "worm export skipped (stub)";
 // 25.3 (G17): one run exports as many pages as fit in its budget, not ONE 10k page per day — a
 // backlog after an outage drains instead of growing. Each page is its own Object-Lock object and
 // its own cursor advance, so a failure mid-run loses nothing already confirmed.
-export const WORM_PAGE_SIZE = 10_000;
+export const WORM_PAGE_SIZE = 1_000;
 export const WORM_RUN_BUDGET_MS = 8 * 60 * 1000; // inside the 10-minute action ceiling
 
 // One client per module instance, region from the Convex deployment env (NEVER Vercel).
@@ -35,10 +36,10 @@ const s3 = new S3Client({ region: process.env.AWS_REGION });
  *
  * When `WORM_BUCKET` is unset it takes the STUB-SKIP path: logs the skip line and
  * returns WITHOUT advancing the cursor. When set, it exports the incremental audit
- * window (rows past the cursor) to S3 as NDJSON under COMPLIANCE-mode Object Lock
+ * batch (frozen pending audit ids) to S3 as NDJSON under COMPLIANCE-mode Object Lock
  * with a SHA256 checksum, then — ONLY after a confirmed durable PutObject — advances
  * the cursor. On ANY throw the cursor stays put and the next cron retries the SAME
- * window (deterministic key ⇒ byte-identical body ⇒ idempotent overwrite).
+ * batch (stable content key and byte-identical body; S3 may retain another version).
  *
  * Advancing before a durable write would mark audit rows as exported when nothing
  * reached S3 — a permanent, unrecoverable hole in the compliance log. That is the
@@ -58,8 +59,6 @@ export const exportAudit = internalAction({
     | { skipped: true; reason: string }
     | { exported: number; maxTs?: number; key?: string; pages?: number }
   > => {
-    const since = await ctx.runQuery(internal.wormCursor.getCursor, {});
-
     if (!process.env.WORM_BUCKET) {
       // STUB PATH — deliberately DOES NOT call advanceCursor. See the doc comment.
       console.log(SKIP_MSG);
@@ -68,42 +67,49 @@ export const exportAudit = internalAction({
 
     const limit = pageSize ?? WORM_PAGE_SIZE;
     const deadline = Date.now() + WORM_RUN_BUDGET_MS;
-    let cursor = since;
+    let maxTs = 0;
     let exported = 0;
     let pages = 0;
     let key: string | undefined;
     while (Date.now() < deadline) {
-      const rows = await ctx.runQuery(internal.wormCursor.auditSince, { since: cursor, limit });
-      // Empty window — nothing (more) to archive. No PutObject, no advance.
-      if (rows.length === 0) break;
+      const state = await ctx.runMutation(internal.wormCursor.beginExport, { pageSize: limit });
+      if (!state) break;
+      const rows = state.rows;
 
       const ndjson = serializeAuditNdjson(rows);
-      const maxTs = rows.reduce((m, r) => Math.max(m, r.ts), cursor);
-      key = wormObjectKey(cursor, maxTs);
+      maxTs = rows.reduce((m, r) => Math.max(m, r.ts), state.lastExportedTs);
+      // Content-addressed keys distinguish equal-ts pages and remain stable on
+      // retry. S3 Object Lock preserves versions; it does not overwrite old bytes.
+      if (rows.length > 0) {
+        key = `audit/v2/${createHash("sha256").update(ndjson).digest("hex")}.ndjson`;
 
-      // Durable, immutable write. Object Lock retention REQUIRES a content checksum
-      // (AWS SDK v3 flexible checksums), and COMPLIANCE mode MUST be paired with a
-      // retain-until date. If this rejects, the error propagates and the cursor is
-      // NOT advanced below — the cron owns retry/logging; earlier pages stay confirmed.
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: process.env.WORM_BUCKET,
-          Key: key,
-          Body: ndjson,
-          ChecksumAlgorithm: "SHA256",
-          ObjectLockMode: "COMPLIANCE",
-          ObjectLockRetainUntilDate: retainUntilDate(Date.now()),
-        }),
-      );
+        // Durable, immutable write. Object Lock retention REQUIRES a content checksum
+        // (AWS SDK v3 flexible checksums), and COMPLIANCE mode MUST be paired with a
+        // retain-until date. If this rejects, the error propagates and the cursor is
+        // NOT advanced below — the cron owns retry/logging; earlier pages stay confirmed.
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: process.env.WORM_BUCKET,
+            Key: key,
+            Body: ndjson,
+            ChecksumAlgorithm: "SHA256",
+            ObjectLockMode: "COMPLIANCE",
+            ObjectLockRetainUntilDate: retainUntilDate(Date.now()),
+          }),
+        );
+      }
 
       // Reached ONLY after the PutObject promise resolves (a confirmed durable write).
-      await ctx.runMutation(internal.wormCursor.advanceCursor, { ts: maxTs });
+      // Empty pages need no object, but their scan position must still progress.
+      const advanced = await ctx.runMutation(internal.wormCursor.advanceCursor, {
+        ts: maxTs,
+        revision: state.revision,
+      });
       exported += rows.length;
-      pages += 1;
-      cursor = maxTs;
-      if (rows.length < limit) break; // a short page is the end of the backlog
+      if (rows.length > 0) pages += 1;
+      if (!advanced) break;
     }
     if (exported === 0) return { exported: 0 };
-    return { exported, maxTs: cursor, key, pages };
+    return { exported, maxTs, key, pages };
   },
 });

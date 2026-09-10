@@ -110,6 +110,50 @@ describe("the expiring-token scan raises ONE unread reconnect notice, not one pe
     );
     expect(notes).toHaveLength(0);
   });
+
+  test("an unread warning beyond 50 unrelated messages still dedupes, without suppressing another tenant", async () => {
+    const t = convexTest(schema, modules);
+    t.registerComponent("migrations", migrationsSchema, migrationsModules);
+    const existingId = await t.run(async (ctx) => {
+      for (const tenantId of ["t_busy", "t_other"]) {
+        await ctx.db.insert("gmailTokens", {
+          tenantId,
+          refreshToken: "r",
+          scope: "mail",
+          updatedAt: Date.now(),
+        });
+      }
+      for (let i = 0; i < 60; i++) {
+        await ctx.db.insert("notifications", {
+          tenantId: "t_busy",
+          kind: "other",
+          message: "Other work",
+          read: false,
+          createdAt: Date.now(),
+        });
+      }
+      return ctx.db.insert("notifications", {
+        tenantId: "t_busy",
+        kind: "gmail_reconnect",
+        message: "Existing warning",
+        read: false,
+        createdAt: Date.now(),
+      });
+    });
+    vi.setSystemTime(Date.now() + REFRESH_TOKEN_TTL_MS - 60 * 60 * 1000);
+    await oneBatch(t);
+    await oneBatch(t);
+    const notes = await t.run((ctx) => ctx.db.query("notifications").collect());
+    const busyWarnings = notes.filter(
+      (n) => n.tenantId === "t_busy" && n.kind === "gmail_reconnect",
+    );
+    expect(busyWarnings.map((n) => n._id)).toEqual([existingId]);
+    expect(busyWarnings[0]?.read).toBe(false);
+    expect(
+      notes.filter((n) => n.tenantId === "t_other" && n.kind === "gmail_reconnect"),
+    ).toHaveLength(1);
+    expect(notes.filter((n) => n.kind === "other" && !n.read)).toHaveLength(60);
+  });
 });
 
 describe("no cron or maintenance job reads a whole table in one transaction any more", () => {
@@ -135,6 +179,9 @@ describe("no cron or maintenance job reads a whole table in one transaction any 
     expect(au).not.toMatch(/query\("audit"\)\s*\.collect\(\)/);
     const worm = strip(src("worm.ts"));
     expect(worm).toContain("while (Date.now() < deadline)");
-    expect(worm).toContain("if (rows.length < limit) break;");
+    // The durable queue may return a short byte-bounded page with more work behind it.
+    // Stop on an empty queue or lost claim; worm.test.ts checks actual traversal and retries.
+    expect(worm).toContain("if (!state) break;");
+    expect(worm).toContain("if (!advanced) break;");
   });
 });

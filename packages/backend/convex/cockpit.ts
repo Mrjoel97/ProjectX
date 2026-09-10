@@ -31,6 +31,7 @@ import {
 // re-exported from the package root (media.ts:23 carries the same pair of lines).
 import type { ShotType } from "@pikar/core/storyboard";
 import { SHOT_TYPES } from "@pikar/core/storyboard";
+import { VERTICAL_IDS } from "@pikar/core/verticalPacks";
 import { DEFAULT_MODEL } from "@pikar/cost";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
@@ -307,6 +308,82 @@ export const startWorkflowPack = tenantAction({
     } finally {
       // `finally`, for the reason `sendCockpitMessage` documents: a step that starts must always end,
       // including on the governed-stop path that returns as DATA and never touches the catch.
+      await ctx.runMutation(internal.agentSteps.finish, {
+        tenantId: ctx.tenantId,
+        turnId: runId,
+        stepKey: "thinking",
+        phase: "done",
+        endedAt: Date.now(),
+      });
+    }
+    await cockpitAgent.saveMessage(ctx, {
+      threadId: tid,
+      message: { role: "assistant", content: reply },
+      skipEmbeddings: true,
+    });
+    return { threadId: tid, ok, ...(outcome === undefined ? {} : { outcome }) };
+  },
+});
+
+/** Evidence-qualified ordinary starts; exact candidate previews require server-side owner auth. */
+export const startVerticalPack = tenantAction({
+  args: {
+    verticalId: v.union(...VERTICAL_IDS.map((id) => v.literal(id))),
+    sourceDocId: v.optional(v.id("vaultDocuments")),
+    threadId: v.optional(v.string()),
+    text: v.string(),
+    previewVersion: v.optional(v.number()),
+  },
+  handler: async (
+    ctx,
+    { verticalId, threadId, text, sourceDocId, previewVersion },
+  ): Promise<{ threadId?: string; ok: boolean; outcome?: string; reason?: string }> => {
+    if (previewVersion !== undefined) await requireOwnerAction(ctx);
+    const ready = await ctx.runQuery(internal.verticalPacks.prepare, {
+      tenantId: ctx.tenantId,
+      verticalId,
+      previewVersion,
+    });
+    if (!ready.ok) return ready;
+
+    const { threadId: tid, planId } = await ensureThreadAndPlan(ctx, threadId, text);
+    await cockpitAgent.saveMessage(ctx, { threadId: tid, prompt: text, skipEmbeddings: true });
+
+    const runId = crypto.randomUUID();
+    await ctx.runMutation(internal.agentSteps.record, {
+      tenantId: ctx.tenantId,
+      threadId: tid,
+      turnId: runId,
+      stepKey: "thinking",
+      tool: "thinking",
+      startedAt: Date.now(),
+    });
+    let reply: string;
+    let outcome: string | undefined;
+    let ok = true;
+    try {
+      const res = await ctx.runAction(internal.verticalPackBinding.run, {
+        tenantId: ctx.tenantId,
+        verticalId,
+        threadId: tid,
+        planId,
+        text,
+        runId,
+        ...(sourceDocId === undefined ? {} : { sourceDocId }),
+        ...(previewVersion === undefined ? {} : { previewVersion }),
+      });
+      if (res.ok) {
+        reply = res.reply;
+        outcome = res.outcome;
+      } else {
+        ok = false;
+        reply = "That workflow isn't available. Pick one of the workflows shown in your workspace.";
+      }
+    } catch (e) {
+      ok = false;
+      reply = "Something went wrong on my side — nothing was sent. Please try that again.";
+      await notifyIfAgentTimeout(ctx, ctx.tenantId, e);
+    } finally {
       await ctx.runMutation(internal.agentSteps.finish, {
         tenantId: ctx.tenantId,
         turnId: runId,

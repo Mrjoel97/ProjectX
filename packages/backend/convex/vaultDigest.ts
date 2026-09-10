@@ -47,7 +47,7 @@ import { contentHash } from "./lib/hash";
 import { fixtureSeamFor, resolveModel } from "./lib/models";
 import { startIngest } from "./vaultIngest";
 
-// Per-call wall-clock ceiling + one retry budget (mirrors llm.ts / vaultLlm.ts).
+// Per-call wall-clock ceiling. Retrying synthesis requires an explicit user rebuild.
 const CALL_TIMEOUT_MS = 45_000;
 
 /** The excerpt budget. Mirrors `vaultGround.ts:29-30`'s PER_DOC_CHAR_CAP / TOTAL_CHAR_CAP, which
@@ -286,12 +286,12 @@ export const digestMembersPage = internalQuery({
 /**
  * Synthesise ONE completed folder into ONE vault document.
  *
- * Scheduled from `vaultFolders.tryComplete` (auto) and from `rebuildDigest` (the user's click).
+ * Run by `vaultFolders.digestWorkflow`, started automatically at completion or on a Rebuild click.
  * `tenantId` is an EXPLICIT arg because a scheduled function has no identity.
  *
  * ⚠ IT OBSERVES THE FOLDER AS `complete`, NEVER `ingesting`. `tryComplete`'s three steps are the
- * order of STATEMENTS in one transaction; this action is a `scheduler.runAfter(0, …)` and by
- * definition runs after that transaction commits — i.e. after the flip AND after
+ * order of STATEMENTS in one transaction; the workflow action runs only after that
+ * transaction commits — i.e. after the flip AND after
  * `guardrails.settleFolder` has already zeroed the reservation.
  */
 export const buildFolderDigest = internalAction({
@@ -405,7 +405,7 @@ export const buildFolderDigest = internalAction({
         system: skill.body,
         prompt: capGraphText(safePrompt),
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: 0,
       });
       const priced = priceUsage(DEFAULT_MODEL, usage);
       if (priced.ok) {
@@ -615,10 +615,10 @@ export const folderDigestState = tenantQuery({
 });
 
 /**
- * Rebuild on the user's click. A MUTATION that SCHEDULES the action — a mutation cannot run one,
- * and every cross-plane hand-off in the folder plane is a `scheduler.runAfter(0, internal.*)`.
+ * Rebuild on the user's click. Atomically claim a workflow before returning so concurrent clicks
+ * observe the building state and cannot queue a second paid attempt.
  *
- * This and `vaultFolders.tryComplete` are the ONLY two things that schedule `buildFolderDigest`,
+ * This and `vaultFolders.tryComplete` are the two production entry points to the digest workflow,
  * which is what "no model call fires until the user clicks" means structurally: staleness is a
  * pure read, and nothing reacts to it.
  */
@@ -630,11 +630,12 @@ export const rebuildDigest = tenantMutation({
     // Only a completed folder can be re-synthesised: an `ingesting` one is still sealed and its
     // automatic build has not happened yet, and a `reserving`/`refused` one has nothing to say.
     if (folder.status !== "complete") return { ok: false };
-    await ctx.scheduler.runAfter(0, internal.vaultDigest.buildFolderDigest, {
+    if (folder.organizational || folder.digestStatus === "building") return { ok: false };
+    const ok: boolean = await ctx.runMutation(internal.vaultFolders.startDigest, {
       tenantId: ctx.tenantId,
       folderId,
       rebuild: true,
     });
-    return { ok: true };
+    return { ok };
   },
 });

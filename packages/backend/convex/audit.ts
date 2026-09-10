@@ -36,7 +36,9 @@ export const log = internalMutation({
       actor: args.actor,
       payload,
       ts: Date.now(),
+      exportVersion: 2,
     });
+    await ctx.db.insert("auditExportQueue", { auditId: id });
     // OPSG-01: this is the SOLE audit insert surface, so counting the aggregate here
     // covers the invariant without Triggers. Still insert-only (CLAUDE.md §3) — the
     // aggregate mirrors inserts, it never mutates an audit row.

@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "packId": "hr",
+  "workflowId": "hr-onboarding-materials",
+  "version": 1,
+  "status": "candidate",
+  "runtimeEnabled": false,
+  "skillName": "vertical-hr",
+  "output": "document",
+  "outputContractId": "hr-output.v1",
+  "disclaimerId": "hr-review.v1",
+  "risk": "consequential",
+  "requiredReview": "qualified-hr",
+  "requiredSources": ["vault"],
+  "connectorGate": "hr-systems",
+  "disablePolicy": "block-new-starts-preserve-artifacts",
+  "rollbackPolicy": "exact-previously-active-version",
+  "provenance": {
+    "sourceRepo": "https://github.com/anthropics/knowledge-work-plugins",
+    "sourceCommit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
+    "sourcePaths": [
+      "human-resources/skills/onboarding/SKILL.md",
+      "human-resources/skills/interview-prep/SKILL.md",
+      "human-resources/skills/policy-lookup/SKILL.md"
+    ],
+    "bodySha256": "a0de6fa9b4cd3761271b1040cd47fc49b99752eee0dd452d667850b5d84a19b8",
+    "license": "Apache-2.0",
+    "modificationNotice": "Pikar candidate adaptation, 2026-09-10: assistive evidence organization only; remove local/MCP assumptions, generic defaults, consequential decisions, autonomous approval and external actions. See method-review.md.",
+    "skillVersions": {
+      "vertical-hr": 1
+    },
+    "ts": 1788998400000
+  },
+  "sourceFiles": [
+    {
+      "path": "human-resources/skills/onboarding/SKILL.md",
+      "sha256": "c9210cdd00f8c2998a01c6d1310a8742aafa82a5861fb7c1c18686b72a56da97",
+      "gitBlobSha": "98a45db739e8f1024615ba9f8bfe46ae4a2cfda1",
+      "bytes": 3195
+    },
+    {
+      "path": "human-resources/skills/interview-prep/SKILL.md",
+      "sha256": "c687311babdeccf086aa5f6d86dcbfc3a9d1b8bb7124f072450ffa4315d98c4c",
+      "gitBlobSha": "853cf0f9e4f395c76a21ac55d5c902fcdc8495f6",
+      "bytes": 1436
+    },
+    {
+      "path": "human-resources/skills/policy-lookup/SKILL.md",
+      "sha256": "5fc79b5e81922431b5665d33552dcce7de499e2680b4a81720cb4e2a68015edf",
+      "gitBlobSha": "d3a8e3baa4c49b6509d4a16516f2f25b2fb65d81",
+      "bytes": 4199
+    }
+  ],
+  "hashEncoding": "LF-normalized UTF-8; pinned upstream downloads were LF bytes. Git blob hash verified against official pinned tree.",
+  "licenseEvidence": {
+    "governingPath": "LICENSE",
+    "redistributedCopy": "third_party/knowledge-work-plugins/LICENSE",
+    "governingSha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+    "rootLicenseAnomaly": true
+  },
+  "evidence": {
+    "methodReview": "draft",
+    "nativeEval": null,
+    "browserUat": null,
+    "activation": null
+  },
+  "releaseBlockedBy": [
+    "independent-method-review",
+    "exact-version-native-eval",
+    "authenticated-responsive-uat",
+    "runtime-binding"
+  ],
+  "outputFlags": {
+    "assistive": true,
+    "review_required": true,
+    "reviewer": "qualified_hr"
+  },
+  "requiredInputs": ["explicit-role-criteria"],
+  "missingOutcomes": ["missing_role_criteria", "unsupported", "insufficient_evidence"],
+  "outputRestrictions": [
+    "protected-trait-inference",
+    "proxy-inference",
+    "applicant-ranking",
+    "individual-scoring",
+    "hire-fire-promotion-pay-recommendation",
+    "performance-analytics",
+    "compensation-analysis"
+  ]
+}

@@ -1,8 +1,10 @@
 // Integration assertions for the smoke workflows, runnable via `npx convex run`.
 // Each throws on failure so `npx convex run` surfaces a failure banner (the node
 // smoke scripts poll these, since workflow completion is asynchronous).
+import { grantsFor } from "@pikar/core";
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
+import { contentHash } from "./lib/hash";
 import { migrations } from "./migrations";
 
 /** OPSG-04: a failing pipeline produced a deadLetters row + a deadletter.written audit. */
@@ -754,20 +756,20 @@ export const agentAuthoringStateForThread = internalQuery({
               .eq("sourceThreadId", sourceThreadId)
               .eq("sourceTurnId", sourceTurnId),
       )
-      .collect();
+      .take(1001);
 
     // Every tenant row, so "the active row did not move" is answerable without a second read.
     const all = await ctx.db
       .query("tenantSkills")
       .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
-      .collect();
+      .take(1001);
     const active = all.filter((r) => r.status === "active");
 
     // The zero-send invariant, per tenant: an authoring turn must never reach a send path.
     const requests = await ctx.db
       .query("requests")
       .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId))
-      .collect();
+      .take(1001);
 
     // The POSITIVE WITNESS every absence assertion in the runner pairs with: did the tool actually
     // RUN this turn? A bound or an absence on a turn where the model never called the tool asserts
@@ -781,10 +783,70 @@ export const agentAuthoringStateForThread = internalQuery({
       .withIndex("by_tenant_tool_startedAt", (q) =>
         q.eq("tenantId", tenantId).eq("tool", "authorSkillCandidate"),
       )
-      .collect();
+      .take(1001);
     const authoringToolCalls = steps.filter((r) => r.threadId === sourceThreadId).length;
 
+    // Phase 23 browser refusal comparison excludes ordinary model/trace audit writes. It pins
+    // governing state only, and refuses a capped scan rather than certifying a partial snapshot.
+    const plans = await ctx.db
+      .query("plans")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .take(1001);
+    const auditRows = await ctx.db
+      .query("audit")
+      .withIndex("by_tenant_ts", (q) => q.eq("tenantId", tenantId))
+      .take(1001);
+    if (
+      rows.length > 1000 ||
+      steps.length > 1000 ||
+      plans.length > 1000 ||
+      auditRows.length > 1000 ||
+      all.length > 1000 ||
+      requests.length > 1000
+    )
+      throw new Error("AGENT_INSPECTION_WINDOW_EXCEEDED");
+    const governed = auditRows.filter((r) =>
+      [
+        "skill.user_candidate_activated",
+        "skill.agent_candidate_activated",
+        "skill.user_skill_rolled_back",
+      ].includes(r.eventType),
+    );
+    const approved = plans.filter((r) =>
+      ["approved", "scheduled", "delivering", "done"].includes(r.status),
+    );
+    const toolGrantSha256 = await contentHash(JSON.stringify(grantsFor({})));
+    const governance = {
+      sha256: await contentHash(
+        JSON.stringify({
+          skills: all
+            .map((r) => ({
+              id: String(r._id),
+              status: r.status,
+              rollbackEligible: r.rollbackEligible,
+              evidence: r.evidence ?? null,
+              approval: r.ownerApproval ?? null,
+            }))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+          plans: approved
+            .map((r) => ({ id: String(r._id), status: r.status }))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+          requests: requests
+            .map((r) => ({ id: String(r._id), status: r.status }))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+          auditIds: governed.map((r) => String(r._id)).sort(),
+          toolGrantSha256,
+        }),
+      ),
+      // This is a GOVERNANCE count, not countAudit's incidental model/trace count.
+      auditCount: governed.length,
+      requestCount: requests.length,
+      approvedPlanCount: approved.length,
+      toolGrantSha256,
+    };
+
     return {
+      governance,
       authoringToolCalls,
       // What THIS turn authored.
       candidateCount: rows.length,

@@ -9,6 +9,10 @@ requirements: [SKILL-01]
 
 # 21-08 — the free half of the live gate: executed, except the half that cannot be
 
+## Dated reconciliation — 2026-09-10: remains partial
+
+`21-VERIFICATION.md` (2026-08-20) expressly verifies SKILL-01 and all three phase success criteria while retaining the absent tenant-runtime observations and missing `21-LIVE-RESULT.json`. That later verification does not complete this plan's stronger steps 3/4/6/7. The ROADMAP execution count is corrected to **7/8 complete plans**, with 21-08 partial; the requirement-level proof remains valid within its recorded boundary. Finish with a controllable real author identity, exact candidate/baseline readbacks, authorized bounded runtime calls, foreign-tenant attribution refusal, fresh-thread prompt run/delete and the required privacy scan, then validate a complete live result. Do not treat synthetic eval attribution as the author's runtime or infer fresh credentials/approval from the August record.
+
 **Nothing was purchased.** The gate bought by 21-07 (`de976d8e`, 41/41, `$0.49466045`) was read, never
 re-run. Deployment `b8c08f7d…` (local), handoff sha256 `30c9062a…` unchanged throughout.
 

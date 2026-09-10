@@ -1,5 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const phase23Identities = process.env.PIKAR_PHASE23_TWO_IDENTITIES === "1";
+if (
+  phase23Identities &&
+  (process.env.PIKAR_E2E_PROVISION === "1" || process.env.PIKAR_E2E_STORAGE_STATE)
+) {
+  throw new Error(
+    "Phase 23 requires fresh non-owner auth setup; owner provisioning and storage-state overrides are incompatible.",
+  );
+}
+
 /**
  * First UI E2E harness for the repo (03.1-02). Feature specs land in later
  * cockpit plans (05, 09). Specs run against an ALREADY-RUNNING local stack:
@@ -12,7 +22,8 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  fullyParallel: !phase23Identities,
+  ...(phase23Identities ? { workers: 1, retries: 0 } : {}),
   forbidOnly: !!process.env.CI,
   reporter: "list",
   use: {
@@ -21,7 +32,8 @@ export default defineConfig({
     // — the same per-deployment rule that made `PIKAR_CONVEX_TARGET` necessary for the eval plane.
     // Local stays the default: an unflagged run can never point at production by accident.
     baseURL: process.env.PIKAR_E2E_BASE_URL ?? "http://127.0.0.1:3111",
-    trace: "on-first-retry",
+    // A Phase 23 adaptation is private; traces include input text and auth-bearing network data.
+    trace: phase23Identities ? "off" : "on-first-retry",
   },
   projects: [
     // 27-11: creates the OWNER account the pack candidate preview needs, on a machine that has

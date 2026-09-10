@@ -47,6 +47,26 @@ The upstream material is **reference input, not a runtime dependency**. Pikar lo
 no `.mcp.json`, and executes none of the upstream files. Updates enter only as a human-reviewed diff
 against a newly pinned commit; nothing auto-syncs, auto-publishes, or auto-activates.
 
+### Optional vertical candidate adaptations (2026-09-10)
+
+Pikar has also adapted the following material at the same pinned commit into separate candidate
+bodies under `packages/contracts/packs/vertical/`. Each directory contains the canonical body,
+exact source and body hashes, operation matrix and a draft method review. These are candidate
+artifacts; attribution does not imply activation, review approval or passing runtime evaluation.
+
+| Candidate | Upstream skill directories | Modifications |
+|---|---|---|
+| Legal | `legal/skills/review-contract` | Reframed as cited issue spotting against supplied playbooks for qualified counsel review; removed execution and legal-system authority. |
+| HR | `human-resources/skills/onboarding`, `human-resources/skills/interview-prep`, `human-resources/skills/policy-lookup` | Reframed as evidence-scoped onboarding materials for qualified human review; removed candidate ranking, employment decisions and HR-system authority. |
+| Product | `product-management/skills/write-spec`, `product-management/skills/roadmap-update` | Removed invented demand, capacity and scoring assumptions; produces a source-grounded brief with unknowns and no project-system changes. |
+| Design | `design/skills/design-critique`, `design/skills/accessibility-review` | Requires visible evidence for visual findings; separates observable issues from checks requiring testing and makes no accessibility certification or design-system changes. |
+| Engineering | `engineering/skills/documentation`, `engineering/skills/incident-response`, `engineering/skills/deploy-checklist` | Separates evidence, hypotheses and proposed verification; removes shell, repository, monitoring and deployment authority. |
+| Data | `data/skills/analyze`, `data/skills/explore-data`, `data/skills/validate-data` | Reframed around bounded deterministic file statistics and cited limitations; removes notebook, warehouse, query and connector execution. |
+
+The per-candidate manifests identify the exact received `SKILL.md` paths and governing license
+evidence. The source inventory verifier checks the additional snapshots alongside the original
+six-pack inventory. No upstream connector configuration or executable plugin code is included.
+
 ### Note on the upstream root `LICENSE` file
 
 The repository's root `LICENSE` at the pinned commit contains approximately 249 bytes of unrelated

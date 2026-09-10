@@ -6,7 +6,7 @@
 // (extractionKindFor) and, failing that, fails HONESTLY as "unsupported" — which after plan
 // 15.2-03 is a TERMINAL failed("unsupported_format"), never a silent pending_extraction row.
 // Upgrade path: add a row to SIGNATURES, or port a real container parser if the table grows legs.
-import { extractionKindFor } from "./extractKind";
+import { extractionKindFor } from "@pikar/vault/extractKind";
 
 export type Container = "pdf" | "zip" | "ole2" | "rtf" | "png" | "jpeg" | "gif" | "text" | "binary";
 

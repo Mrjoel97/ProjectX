@@ -25,7 +25,9 @@ import {
 } from "../(auth)/icons";
 import { NotificationsBanner } from "./_components/NotificationsBanner";
 import { ReconnectBanner } from "./_components/ReconnectBanner";
+import { RunningWork } from "./_components/RunningWork";
 import { AbnormalBriefBanner } from "./dashboard/voice/AbnormalBriefBanner";
+import { ErrorBoundary } from "./dashboard/workspace/ErrorBoundary";
 
 // The authenticated shell: the brand's dark-teal left nav rail + light canvas
 // (BRAND.md §4, brand-024016). The rail shows the full product nav; sections whose
@@ -289,6 +291,16 @@ function Shell({ children }: { children: ReactNode }) {
         {/* OPSG-05 in-app half: the general failure-notification matrix (timeouts, escalations,
             retry-limit breaches, dead-letter). gmail_reconnect stays with ReconnectBanner above. */}
         <NotificationsBanner />
+        <ErrorBoundary
+          label="running-work"
+          fallback={
+            <p role="status">
+              Work status is unavailable. Open your chat or Vault to check progress.
+            </p>
+          }
+        >
+          <RunningWork />
+        </ErrorBoundary>
         {/* The cockpit and the vault fuse full-bleed to the rail (no canvas padding — one
             surface, only the work floats); every other page stays cards-on-canvas. */}
         <main

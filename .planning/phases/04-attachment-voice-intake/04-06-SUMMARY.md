@@ -3,7 +3,8 @@ phase: 04-attachment-voice-intake
 plan: 06
 subsystem: docs/ops
 tags: [phase-close, decision-log, playbook, checkpoint]
-status: PAUSED_AT_CHECKPOINT
+status: complete
+reconciled: 2026-09-10
 
 # Dependency graph
 requires:
@@ -40,6 +41,10 @@ completed: 2026-07-14
 ---
 
 # Phase 4 Plan 06: Phase Close (Task 1 of 3 — PAUSED AT CHECKPOINT) Summary
+
+## Dated supersession — 2026-09-10
+
+The historical pause below was closed on **2026-07-15**, not by this reconciliation. Commit `609b928b4d2d21b333d6df80b9a24f5f12b4a80a` records the owner's live SC3 approval: attachment and dictation content appeared in the delivered email after the PII/cost/review guards. That commit updated both ROADMAP's 04-06 checkbox/6-of-6 status and STATE's owner-approval record. It supplies the missing Task 2 approval and Task 3 closure; frontmatter now reflects that later evidence. The original July 14 checkpoint narrative remains below as history. No new live run or approval is claimed.
 
 **Task 1 (autonomous, pre-checkpoint) is COMPLETE and committed: the full offline suite was
 reconfirmed green, the sidecar-killed architectural decision was logged, and `intake.md` was

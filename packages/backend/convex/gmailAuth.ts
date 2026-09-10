@@ -110,9 +110,11 @@ export const store = internalMutation({
     // disconnectGoogle's note), so clearing them here would claim a send that never happens.
     for (const n of await ctx.db
       .query("notifications")
-      .withIndex("by_tenant_read", (q) => q.eq("tenantId", args.tenantId).eq("read", false))
+      .withIndex("by_tenant_kind_read", (q) =>
+        q.eq("tenantId", args.tenantId).eq("kind", "gmail_reconnect").eq("read", false),
+      )
       .collect()) {
-      if (n.kind === "gmail_reconnect") await ctx.db.patch(n._id, { read: true });
+      await ctx.db.patch(n._id, { read: true });
     }
   },
 });
@@ -257,10 +259,6 @@ export const getForDelivery = internalQuery({
  * the last connect). In-app only, deliberately NOT email: an expiry alert must not
  * depend on the mail path it reports on (CONTEXT).
  *
- * ponytail: full-table scan + no per-day dedup — one row per tenant at beta scale, and a
- * daily cron flags at most ~once inside a 24h window. Add a `by_expiry` index + a
- * "last_notified" guard if tenant count or noise ever justifies it.
- *
  * ponytail: inserts the notification row directly rather than routing through
  * `notifications.notify`. The original reason was that importing `internal` here would trip
  * the gmailAuth⇄internal circular-type limit (guidelines §96); `disconnectGoogle` now imports
@@ -272,8 +270,8 @@ export const getForDelivery = internalQuery({
  */
 // 25.3 (G17): a BATCH JOB over `gmailTokens`, not a `.collect()` of the table, and ONE unread
 // reconnect notice per tenant — yesterday's scan may already have raised it, and a second identical
-// banner is noise the user learns to dismiss. The dedupe reads the tenant's unread notifications
-// through `by_tenant_read` with a bounded take; `read: true` (the user reconnected or dismissed)
+// banner is noise the user learns to dismiss. An exact tenant/kind/read index lookup keeps the
+// dedupe bounded without hiding warnings behind unrelated unread messages. `read: true` (the user reconnected or dismissed)
 // re-arms it, which is the behaviour the 7-day refresh window needs.
 export const scanExpiringTokens = migrations.define({
   table: "gmailTokens",
@@ -283,9 +281,11 @@ export const scanExpiringTokens = migrations.define({
     if (!isExpiringSoon(row._creationTime + REFRESH_TOKEN_TTL_MS, now)) return;
     const unread = await ctx.db
       .query("notifications")
-      .withIndex("by_tenant_read", (q) => q.eq("tenantId", row.tenantId).eq("read", false))
-      .take(50);
-    if (unread.some((n) => n.kind === "gmail_reconnect")) return;
+      .withIndex("by_tenant_kind_read", (q) =>
+        q.eq("tenantId", row.tenantId).eq("kind", "gmail_reconnect").eq("read", false),
+      )
+      .first();
+    if (unread) return;
     await ctx.db.insert("notifications", {
       tenantId: row.tenantId,
       kind: "gmail_reconnect",

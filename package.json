@@ -18,6 +18,7 @@
     "gate:lint": "biome ci . --diagnostic-level=error --max-diagnostics=none",
     "test:e2e": "pnpm --filter @pikar/web test:e2e",
     "eval:golden": "pnpm --filter @pikar/backend eval:golden",
+    "eval:vertical": "pnpm --filter @pikar/backend eval:vertical",
     "boot:check": "node scripts/boot-check.mjs"
   },
   "devDependencies": {

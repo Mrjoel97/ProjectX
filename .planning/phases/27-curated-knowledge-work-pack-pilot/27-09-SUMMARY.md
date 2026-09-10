@@ -32,6 +32,12 @@ files_modified:
 
 # 27-09 — The discovery surface, the owner primitive, and the deadlock they had to break
 
+## Dated reconciliation — 2026-09-10: remains partial
+
+Later evidence retires several historical blockers below. The **2026-08-26** entries in `docs/playbooks/workflow-packs.md` record all six pilot packs active after accepted provenance/eval/browser gates, rollback-to-dark from the owner control (`36c7b8d`), and a real Brand Review v4-to-v3 browser rollback that left the pack offered (`12ea37c`). The quota, absent owner control, and missing rollback statements below describe August 23, not the current implementation.
+
+They do **not** finish Task 2's stronger browser protocol. The same later playbook explicitly bounds browser evidence to each candidate card/preflight/enabled control at 1440 and 390 plus **one** real Preview press; it expressly does not claim every pack ran in the browser. The plan requires each candidate's positive and partial/refused paths, approval edit/reject, injection, and telemetry privacy through owner preview. No complete per-pack record of that protocol or explicit per-candidate Task 3 review decision was located in this bounded reconciliation. Accepted lifecycle gates cannot supply those missing observations. Keep this plan partial and Phase 27 at **8/9** until those records exist or an explicit, recorded scope amendment changes the requirement. Current provider/candidate versions need their own exact-version evidence; the historical activation is not reusable certification. No live action was taken here.
+
 **Tasks 1 and the server half of Task 2 are complete. Tasks 3 and 4 are not started, and cannot
 be until the six paid eval runs happen** (27-08's blocker: the dev key's OpenAI balance is
 exhausted). Everything below cost **$0.00** and nothing is activated. All six packs are still

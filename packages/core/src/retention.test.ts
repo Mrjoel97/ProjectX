@@ -34,6 +34,14 @@ describe("serializeAuditNdjson (WORM export body)", () => {
       .map((l) => JSON.parse(l));
     expect(parsed).toEqual(rows);
   });
+
+  test("preserves own prototype-shaped keys without changing the source", () => {
+    const row = JSON.parse('{"payload":{"__proto__":"ref123","constructor":"ref456"}}');
+    const original = JSON.stringify(row);
+    expect(JSON.parse(serializeAuditNdjson([row]))).toEqual(row);
+    expect(serializeAuditNdjson([row])).not.toBe(serializeAuditNdjson([{ payload: {} }]));
+    expect(JSON.stringify(row)).toBe(original);
+  });
 });
 
 describe("wormObjectKey", () => {

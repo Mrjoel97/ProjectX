@@ -260,6 +260,21 @@ export const AUDIT_VIEWER_EVENTS: Readonly<Record<string, readonly string[]>> = 
   "onboarding.profile_updated": ["vaultDocId", "fieldCount", "tierSource", "reembed"],
   "owner.granted": ["owner"],
   "owner.revoked": ["owner"],
+  "vertical_pack.control": ["verticalId", "disabled"],
+  "vertical_pack.outcome": [
+    "verticalId",
+    "candidateId",
+    "event",
+    "preview",
+    "artifactId",
+    "claimCount",
+    "citedClaimCount",
+    "unsupportedClaimCount",
+    "outcome",
+    "reason",
+    "costBucket",
+    "latencyBucket",
+  ],
   // 43-06: `childrenCanceled` is a COUNT (§4-clean) and it is the ONLY evidence that a batch
   // cancel disarmed its whole queue rather than just the parent. An unlisted key is written and
   // then invisible at read time — the evidence would exist and never render.

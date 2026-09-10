@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "status": "draft-source-inventory",
+  "runtimeEnabled": false,
+  "upstream": {
+    "repo": "https://github.com/anthropics/knowledge-work-plugins",
+    "commit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d"
+  },
+  "notice": "Source attribution and integrity only. These candidates are not in the Phase27 runtime manifest; no model eval, review approval or activation is certified.",
+  "candidates": [
+    {
+      "packId": "legal",
+      "manifestPath": "packages/contracts/packs/vertical/legal/manifest.json",
+      "sourcePaths": ["legal/skills/review-contract/SKILL.md"],
+      "governingLicense": "legal/LICENSE"
+    },
+    {
+      "packId": "hr",
+      "manifestPath": "packages/contracts/packs/vertical/hr/manifest.json",
+      "sourcePaths": [
+        "human-resources/skills/onboarding/SKILL.md",
+        "human-resources/skills/interview-prep/SKILL.md",
+        "human-resources/skills/policy-lookup/SKILL.md"
+      ],
+      "governingLicense": "LICENSE"
+    },
+    {
+      "packId": "product",
+      "manifestPath": "packages/contracts/packs/vertical/product/manifest.json",
+      "sourcePaths": [
+        "product-management/skills/write-spec/SKILL.md",
+        "product-management/skills/roadmap-update/SKILL.md"
+      ],
+      "governingLicense": "product-management/LICENSE"
+    },
+    {
+      "packId": "design",
+      "manifestPath": "packages/contracts/packs/vertical/design/manifest.json",
+      "sourcePaths": [
+        "design/skills/design-critique/SKILL.md",
+        "design/skills/accessibility-review/SKILL.md"
+      ],
+      "governingLicense": "LICENSE"
+    },
+    {
+      "packId": "engineering",
+      "manifestPath": "packages/contracts/packs/vertical/engineering/manifest.json",
+      "sourcePaths": [
+        "engineering/skills/documentation/SKILL.md",
+        "engineering/skills/incident-response/SKILL.md",
+        "engineering/skills/deploy-checklist/SKILL.md"
+      ],
+      "governingLicense": "LICENSE"
+    },
+    {
+      "packId": "data",
+      "manifestPath": "packages/contracts/packs/vertical/data/manifest.json",
+      "sourcePaths": [
+        "data/skills/analyze/SKILL.md",
+        "data/skills/explore-data/SKILL.md",
+        "data/skills/validate-data/SKILL.md"
+      ],
+      "governingLicense": "data/LICENSE"
+    }
+  ],
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 11607,
+      "sha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+      "gitBlobSha": "f53c679acba79cbb292961fd9fb9e87ca20eab22"
+    },
+    {
+      "path": "data/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "gitBlobSha": "d645695673349e3947e8e5ae42332d0ac3164cd7"
+    },
+    {
+      "path": "data/skills/analyze/SKILL.md",
+      "sha256": "4ee816363d944c7a959e43384576d979a414f37fff7071c0bfb8935aae10143e",
+      "gitBlobSha": "31ce9c58dd4de3038643750373de5b71a2494fa2",
+      "bytes": 4432
+    },
+    {
+      "path": "data/skills/explore-data/SKILL.md",
+      "sha256": "af7590fa616360259da712b5ede5f79b817beb854c47a465f95774354988e8a2",
+      "gitBlobSha": "f1e7032d0abee77903fc3abbfdc7646e383d4993",
+      "bytes": 11520
+    },
+    {
+      "path": "data/skills/validate-data/SKILL.md",
+      "sha256": "1e424822043480375b80aef9416227b1c8083af749ca536568716265f79ca54b",
+      "gitBlobSha": "30a1bac41bf9679dc7d96b7ec59a116f03ec0575",
+      "bytes": 14916
+    },
+    {
+      "path": "design/skills/accessibility-review/SKILL.md",
+      "sha256": "ef42982af0d51238dda2ab16d08626712891bdd41864876c32d1e7b13fb3124f",
+      "gitBlobSha": "3ef332cd837da5b4f7089503eb93e14c04090ccf",
+      "bytes": 4278
+    },
+    {
+      "path": "design/skills/design-critique/SKILL.md",
+      "sha256": "3a4f260eb9f60b431782bf6d90f22afb480c0c67860267a032df58a3e1bd19cd",
+      "gitBlobSha": "b6eaac1535f0a7482e35d91e039239ceb6031157",
+      "bytes": 3923
+    },
+    {
+      "path": "engineering/skills/deploy-checklist/SKILL.md",
+      "bytes": 2389,
+      "sha256": "85ca53dc471970e3e12c36ec814ebf5f6cb9419016c55adb05ff34789bae3be9",
+      "gitBlobSha": "91171a09d0a88742d49601794791abbe2c917b25"
+    },
+    {
+      "path": "engineering/skills/documentation/SKILL.md",
+      "bytes": 1507,
+      "sha256": "1d469418f786a05be83d2a05f04d68788aeed584d13863a650f5ad73c6c4cf50",
+      "gitBlobSha": "9a5a69394edd00e449625a928ec7e196db6feef4"
+    },
+    {
+      "path": "engineering/skills/incident-response/SKILL.md",
+      "bytes": 5669,
+      "sha256": "9eaa7a974c90395ac7116e82710f74546f38e69f735d78f684ee13fd79646e9a",
+      "gitBlobSha": "b483514f8745939ec41bc7c181121c3ae1fccdee"
+    },
+    {
+      "path": "human-resources/skills/interview-prep/SKILL.md",
+      "sha256": "c687311babdeccf086aa5f6d86dcbfc3a9d1b8bb7124f072450ffa4315d98c4c",
+      "gitBlobSha": "853cf0f9e4f395c76a21ac55d5c902fcdc8495f6",
+      "bytes": 1436
+    },
+    {
+      "path": "human-resources/skills/onboarding/SKILL.md",
+      "sha256": "c9210cdd00f8c2998a01c6d1310a8742aafa82a5861fb7c1c18686b72a56da97",
+      "gitBlobSha": "98a45db739e8f1024615ba9f8bfe46ae4a2cfda1",
+      "bytes": 3195
+    },
+    {
+      "path": "human-resources/skills/policy-lookup/SKILL.md",
+      "sha256": "5fc79b5e81922431b5665d33552dcce7de499e2680b4a81720cb4e2a68015edf",
+      "gitBlobSha": "d3a8e3baa4c49b6509d4a16516f2f25b2fb65d81",
+      "bytes": 4199
+    },
+    {
+      "path": "legal/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "gitBlobSha": "d645695673349e3947e8e5ae42332d0ac3164cd7"
+    },
+    {
+      "path": "legal/skills/review-contract/SKILL.md",
+      "sha256": "3a6413475f51adedbff130f4d5aabbeeacfb2abd323e0338bc91c21937fbfb76",
+      "gitBlobSha": "030204860ec70bf80254f9894721504df7c81bd5",
+      "bytes": 16708
+    },
+    {
+      "path": "product-management/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "gitBlobSha": "d645695673349e3947e8e5ae42332d0ac3164cd7"
+    },
+    {
+      "path": "product-management/skills/roadmap-update/SKILL.md",
+      "sha256": "bdb121e290b590d60b94bca84d1700a8803c78db9f68f2a28fd04ccfe8aceb9e",
+      "gitBlobSha": "b879e5b38b2c57a7bb8d45f97261d1e5c81f4b0d",
+      "bytes": 12372
+    },
+    {
+      "path": "product-management/skills/write-spec/SKILL.md",
+      "sha256": "ca6670913878b4ac4582727562bfced5271492a5a800d934f68c9e7bc1cd4dcc",
+      "gitBlobSha": "183cf053df391e761c21431bc0dfb791b6d52b80",
+      "bytes": 12326
+    }
+  ]
+}

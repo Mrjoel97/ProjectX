@@ -83,6 +83,10 @@ const movementArgs = {
   mediaJobId: v.optional(v.id("mediaJobs")),
   model: v.optional(v.string()),
   kind: v.optional(v.string()),
+  evalBudgetId: v.optional(v.id("spendEvents")),
+  evalEnvelope: v.optional(v.object({ tenantIds: v.array(v.string()), expiresAt: v.number() })),
+  evalActualUsd: v.optional(v.number()),
+  evalBreach: v.optional(v.boolean()),
 };
 
 export type SpendMovementArgs = ObjectType<typeof movementArgs>;

@@ -63,11 +63,12 @@ function invoke(fn, args) {
  * second model turn) and `skills:recordEvalEvidence` (a retry writes a DUPLICATE evidence row).
  * Only pass it for pure, free, idempotent reads.
  */
-export function must(fn, args = {}, { retryOnEmpty = false } = {}) {
+export function must(fn, args = {}, { retryOnEmpty = false, redactErrors = false } = {}) {
   try {
     const out = invoke(fn, args);
     return retryOnEmpty && out.trim() === "" ? invoke(fn, args) : out;
   } catch (e) {
+    if (redactErrors) throw new Error("CONVEX_FUNCTION_FAILED");
     console.error(e.message);
     throw e;
   }

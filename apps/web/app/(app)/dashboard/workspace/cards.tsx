@@ -563,6 +563,9 @@ export function MemoCardBody({ body, sources }: { body: string; sources?: readon
                 <div style={{ ...dim, fontSize: "0.75rem" }}>
                   {source.title.trim() ? `${source.url} · ` : ""}
                   {retrievedLabel(source.retrievedAt)}
+                  {source.pageReadAt === undefined
+                    ? " · Page read unconfirmed"
+                    : ` · Page excerpt read ${new Date(source.pageReadAt).toISOString().slice(0, 10)}`}
                 </div>
               </li>
             ))}

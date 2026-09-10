@@ -1,5 +1,17 @@
 # Playbook: Business Evaluation Engine
 
+> Verification follow-up, 2026-09-10: the weekly-review harness now inspects scheduled review
+> jobs, replays their exact arguments through the real review action, and verifies the durable
+> dispatch handoff. It no longer drains an unregistered downstream Workflow component or relies
+> on a timer-pump budget for cold module imports. Eight focused tests pass; specialist completion
+> remains covered by the registered dispatch/workflow suites.
+
+> Last verified: 2026-09-10 — merged-audit G4 repair. `landSpecialistResult` accepts optional
+> per-source `pageReadAt` evidence from the dispatcher and preserves it on the plan. The fan-out
+> join retains a confirmed read even when an earlier child found the same URL only in search.
+> Existing sources without that field remain readable and unconfirmed. See cockpit.md; exercised
+> by the real scripted search/read dispatch in research.test.ts and the parent join in fanOut.test.ts.
+
 > Last verified: 2026-09-07 (43-04 — **TWO defects in `landSpecialistResult`, one of them live in
 > production since 42.2.**
 >

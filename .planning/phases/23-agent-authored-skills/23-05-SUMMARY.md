@@ -103,6 +103,27 @@ Agent-authored tenant skills now become active only through an owner-authenticat
 
 The planned deliberate backend wrapper downgrade (`ownerMutation` to `tenantMutation`) was not applied: the execution safety reviewer rejected creating even a temporary privilege-escalating source state. The checked-in source-level regression test still directly asserts the owner wrapper and passed. The separate UI mount-removal mutation was executed, observed red, restored, and rerun green.
 
+### Supplementary offline mutation evidence — 2026-09-10
+
+The previously unexecuted backend mutation is now observed through an isolated Vitest module
+transform, without ever writing a weakened source file or exposing it to a deployment watcher.
+`node scripts/check-phase23-owner-boundary.mjs --self-check` runs the existing behavioral test
+`the four cells are non-vacuous: exact current eval AND a real owner are both required` in three
+fresh processes. The original module passes (exit 0); the in-memory replacement of precisely
+`activateAgentCandidate = ownerMutation` with `tenantMutation` fails (exit 1, `EVAL_GATE` received
+where `OWNER_REQUIRED` is required); the fresh original module passes again (exit 0). Thus the test
+detects crossing the authorization boundary before the handler's eval gate, rather than merely
+scanning source spelling. Fetch is disabled in the sandbox and provider/deployment credentials are
+not inherited. No mutation touched any deployment or user row outside convex-test's in-memory DB.
+
+Original source SHA-256 before and after:
+`acd5ad34a9011887f9259a28348e792e4be5b38cef08c94ad4196f7a347deded`.
+Transformed in-memory module SHA-256:
+`8144378667afe31ca97593646ada7aa4e6bc8770edded269c0049d0415b6f4a9`.
+The driver is registered in the CI free-gate registry and repeats the control/red/control proof on
+future source revisions. This supplements the historical refusal above; it does not rewrite that
+session or supply any browser, paid-eval, activation or rollback observation for Plans 23-06–09.
+
 ## Issues Encountered
 
 - Workspace-filtered `pnpm exec` did not resolve restored Vitest/TypeScript shims. Package-local binaries and the Vitest module entrypoint ran successfully instead.

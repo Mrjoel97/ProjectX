@@ -16,6 +16,7 @@ import { internalMutation, type MutationCtx } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { rag } from "./vaultRag";
+import { CURSOR_NAME } from "./wormCursor";
 
 export const TENANT_DELETE_BATCH_SIZE = 2;
 
@@ -751,7 +752,13 @@ export const deleteTenantData = tenantAction({
  * PAGED and IDEMPOTENT. Returns `done` when a full pass moved nothing, so a caller loops until then.
  */
 export const purgeEvalTenant = internalMutation({
-  args: { tenantId: v.string(), limit: v.optional(v.number()) },
+  args: {
+    tenantId: v.string(),
+    limit: v.optional(v.number()),
+    exact: v.optional(v.boolean()),
+    preserveAuditId: v.optional(v.id("audit")),
+    preserveSpendEvents: v.optional(v.boolean()),
+  },
   handler: async (
     ctx,
     args,
@@ -760,7 +767,9 @@ export const purgeEvalTenant = internalMutation({
     if (!/^(eval|packeval)-/.test(args.tenantId)) {
       throw new Error("NOT_AN_EVAL_TENANT");
     }
-    const budget = Math.min(args.limit ?? 200, 1000);
+    if (args.preserveSpendEvents && !args.exact)
+      throw new Error("EVAL_ACCOUNTING_RETENTION_REQUIRES_EXACT");
+    const budget = Math.max(args.preserveAuditId ? 2 : 1, Math.min(args.limit ?? 200, 1000));
     let deleted = 0;
     let blobs = 0;
 
@@ -768,11 +777,14 @@ export const purgeEvalTenant = internalMutation({
       // `users` is the identity table and an eval tenant has no row in it; the `by_tenant` index
       // does not exist there either, so asking would throw rather than return nothing.
       if (table === "users") continue;
+      if (table === "spendEvents" && args.preserveSpendEvents) continue;
       if (deleted >= budget) break;
       const rows = await ctx.db
         .query(table as Exclude<DeletableTenantTable, "users">)
         .withIndex("by_tenant", (q) =>
-          q.gte("tenantId", args.tenantId).lt("tenantId", `${args.tenantId}\uffff`),
+          args.exact
+            ? q.eq("tenantId", args.tenantId)
+            : q.gte("tenantId", args.tenantId).lt("tenantId", `${args.tenantId}\uffff`),
         )
         .take(budget - deleted);
       for (const row of rows) {
@@ -796,15 +808,36 @@ export const purgeEvalTenant = internalMutation({
     // insert-only rule protects a real tenant's history; it is not a reason to keep 1007 rows of
     // test exhaust in an archive somebody is about to freeze for seven years.
     if (deleted < budget) {
+      const checkpoint = await ctx.db
+        .query("exportCursors")
+        .withIndex("by_name", (q) => q.eq("name", CURSOR_NAME))
+        .unique();
+      const pending = new Set(checkpoint?.pendingAuditIds ?? []);
       const auditRows = await ctx.db
         .query("audit")
         .withIndex("by_tenant_ts", (q) =>
-          q.gte("tenantId", args.tenantId).lt("tenantId", `${args.tenantId}\uffff`),
+          args.exact
+            ? q.eq("tenantId", args.tenantId)
+            : q.gte("tenantId", args.tenantId).lt("tenantId", `${args.tenantId}\uffff`),
         )
-        .take(budget - deleted);
-      for (const row of auditRows) {
+        .take(budget - deleted + (args.preserveAuditId ? 1 : 0));
+      for (const row of auditRows.slice(0, budget - deleted)) {
+        // Freeze wins over teardown: a failed/ongoing upload must retain identical
+        // bytes. Reading its checkpoint also serializes this decision with beginExport.
+        if (pending.has(row._id)) throw new Error("EVAL_AUDIT_EXPORT_PENDING");
+        // Keep the case authority across pages and interrupted/frozen cleanup. Delete it only
+        // in the same transaction that proves every tenant table and every other audit is empty.
+        const terminalReceipt =
+          row._id === args.preserveAuditId && deleted === 0 && auditRows.length === 1;
+        if (row._id === args.preserveAuditId && !terminalReceipt) continue;
+        const queued = await ctx.db
+          .query("auditExportQueue")
+          .withIndex("by_audit", (q) => q.eq("auditId", row._id))
+          .unique();
+        if (queued) await ctx.db.delete(queued._id);
         await ctx.db.delete(row._id);
         deleted += 1;
+        if (terminalReceipt) return { deleted, blobs, done: true, tenantId: args.tenantId };
       }
     }
 

@@ -30,6 +30,53 @@ const row = (over: Partial<Row> = {}): Row => ({
 });
 
 describe("audit viewer projection — the payload boundary", () => {
+  test("vertical controls and outcomes expose bounded refs without document or dataset values", () => {
+    const control = projectAuditRow(
+      row({
+        eventType: "vertical_pack.control",
+        payload: {
+          verticalId: "engineering",
+          disabled: true,
+          filename: "private-runbook.md",
+        },
+      }),
+    );
+    expect(control.known).toBe(true);
+    expect(control.refs).toEqual({ verticalId: "engineering", disabled: true });
+    const outcome = projectAuditRow(
+      row({
+        eventType: "vertical_pack.outcome",
+        payload: {
+          verticalId: "data",
+          candidateId: "candidate_1",
+          event: "artifact_created",
+          artifactId: "doc_1",
+          claimCount: 3,
+          citedClaimCount: 2,
+          unsupportedClaimCount: 1,
+          outcome: "partial",
+          costBucket: "under_one_dollar",
+          filename: "private-payroll.csv",
+          values: ["Alice", 12345],
+        },
+      }),
+    );
+    expect(outcome.known).toBe(true);
+    expect(outcome.refs).toMatchObject({ artifactId: "doc_1", claimCount: 3, outcome: "partial" });
+    expect(outcome.refs).not.toHaveProperty("filename");
+    expect(outcome.refs).not.toHaveProperty("values");
+    expect(
+      projectAuditRow(
+        row({
+          eventType: "vertical_pack.outcome",
+          payload: {
+            reason: { nested: "private" },
+            artifactId: "A document containing prose",
+          },
+        }),
+      ).unsafeDrops,
+    ).toBe(2);
+  });
   test("a known event keeps only its allowlisted keys", () => {
     const p = projectAuditRow(row({ payload: { planId: "k17abc", kind: "media", secret: "x" } }));
     expect(p.known).toBe(true);

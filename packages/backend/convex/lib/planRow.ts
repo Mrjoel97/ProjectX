@@ -184,9 +184,12 @@ export async function flipParentWhenSiblingsDone(
   // attribute every finding under it. Direct `ctx.db.patch` for the same reason the single-run path
   // uses one: a source list is a PROVENANCE claim and `patchPlan` is the door the model writes
   // through. These come from the children's own rows, which only `landSpecialistResult` fills.
-  const seen = new Set<string>();
-  const sources = children
-    .flatMap((c) => c.sources ?? [])
-    .filter((src) => !seen.has(src.url) && seen.add(src.url));
+  const byUrl = new Map<string, NonNullable<Doc<"plans">["sources"]>[number]>();
+  for (const src of children.flatMap((c) => c.sources ?? [])) {
+    const prior = byUrl.get(src.url);
+    // A later worker may have read a page the first worker only found in search.
+    if (!prior || (src.pageReadAt ?? 0) > (prior.pageReadAt ?? 0)) byUrl.set(src.url, src);
+  }
+  const sources = [...byUrl.values()];
   if (sources.length > 0) await ctx.db.patch(parentPlanId, { sources });
 }

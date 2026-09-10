@@ -7,16 +7,16 @@
  * unit-testable — workflows/actions do NOT run under convex-test.
  *
  * The one non-obvious contract: serialization is DETERMINISTIC (keys sorted, recursively)
- * so re-exporting the same [sinceTs, maxTs] window produces a byte-identical body. That
- * makes PutObject idempotent under Object Lock — a retried export overwrites with the same
- * bytes instead of being rejected as a second version of a locked object.
+ * so re-exporting a frozen batch produces a byte-identical body and content-addressed key.
+ * S3 Object Lock preserves versions: retries can add identical versions, never overwrite
+ * a retained version. Readers can deduplicate by audit row id.
  */
 
 /** Recursively key-sort so a value's JSON is stable regardless of source key order. */
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value !== null && typeof value === "object") {
-    const out: Record<string, unknown> = {};
+    const out: Record<string, unknown> = Object.create(null);
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       out[key] = sortKeys((value as Record<string, unknown>)[key]);
     }
@@ -27,7 +27,7 @@ function sortKeys(value: unknown): unknown {
 
 /**
  * One JSON object per line, newline-terminated (NDJSON), with stable (sorted) key order.
- * Empty input → "" (nothing to PutObject; the cursor must not advance on an empty window).
+ * Empty input → "" (nothing to PutObject; legacy scan metadata may still advance).
  */
 export function serializeAuditNdjson(rows: readonly Record<string, unknown>[]): string {
   if (rows.length === 0) return "";

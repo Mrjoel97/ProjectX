@@ -34,7 +34,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 59 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 60 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -43,6 +43,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │ ── Governance & Audit ──────────────────────────────────── ~L150           │
 // │   audit, deadLetters, skills, tenantSkills, savedPrompts,                  │
 // │   knowledgeSearches, pendingTimeouts, exportCursors, guardrailConfig       │
+// │   auditExportQueue                                                       │
 // │                                                                            │
 // │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
 // │   requests, plans, briefings, intakeArtifacts, attachments,                │
@@ -272,13 +273,16 @@ export default defineSchema({
     actor: v.string(),
     payload: v.any(),
     ts: v.number(),
+    exportVersion: v.optional(v.literal(2)),
   })
     .index("by_tenant_ts", ["tenantId", "ts"])
+    .index("by_tenant_event_ts", ["tenantId", "eventType", "ts"])
     .index("by_correlation", ["correlationId"])
     // OPSG-03 WORM export windows CROSS-tenant by ts (by_tenant_ts is per-tenant, useless
     // for the global export). Adding an index is not a write path — Convex backfills it
     // (no migration; OPSG-06 moot). Backs auditSince, which previously full-scanned.
-    .index("by_ts", ["ts"]),
+    .index("by_ts", ["ts"])
+    .index("by_export_version", ["exportVersion"]),
 
   // Dead-letter queue. Redaction-safe payload.
   //
@@ -673,7 +677,18 @@ export default defineSchema({
   exportCursors: defineTable({
     name: v.string(),
     lastExportedTs: v.number(),
+    lastExportedAt: v.optional(v.number()),
+    legacyCursor: v.optional(v.string()),
+    legacyDone: v.optional(v.boolean()),
+    pendingAuditIds: v.optional(v.array(v.id("audit"))),
+    pendingQueueIds: v.optional(v.array(v.id("auditExportQueue"))),
+    pendingLegacyCursor: v.optional(v.string()),
+    pendingLegacyDone: v.optional(v.boolean()),
+    revision: v.optional(v.number()),
   }).index("by_name", ["name"]),
+
+  // Transactional export outbox; refs only. Dequeue only after durable S3 write.
+  auditExportQueue: defineTable({ auditId: v.id("audit") }).index("by_audit", ["auditId"]),
 
   // ── Phase-2 content + telemetry plane ──────────────────────────────────────
   // Every table is tenant-scoped and carries the index its reactive query needs.
@@ -791,7 +806,14 @@ export default defineSchema({
     // `retrievedAt` is per-source so a future per-result stamp needs no migration; today every
     // entry carries the landing time. Optional → no migration; `resetPlan` clears it.
     sources: v.optional(
-      v.array(v.object({ title: v.string(), url: v.string(), retrievedAt: v.number() })),
+      v.array(
+        v.object({
+          title: v.string(),
+          url: v.string(),
+          retrievedAt: v.number(),
+          pageReadAt: v.optional(v.number()),
+        }),
+      ),
     ),
     // Generated outbound attachments (CKPT-02). Inline on the plan = pre-approval source of truth
     // for the PLAN card; executePlan materializes attachments-table rows at fan-out. All optional → no migration.
@@ -1938,7 +1960,8 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_tenant", ["tenantId"])
-    .index("by_tenant_read", ["tenantId", "read"]),
+    .index("by_tenant_read", ["tenantId", "read"])
+    .index("by_tenant_kind_read", ["tenantId", "kind", "read"]),
 
   // Gmail OAuth tokens — the crown jewels. Read by internal functions ONLY;
   // never returned to a client query, never in the browser, never in an audit payload.
@@ -2102,6 +2125,17 @@ export default defineSchema({
     // this tenant recently?" without a substring match on a truncated title. Optional → no
     // backfill; a row without it never matches, which is the fail-CLOSED direction (research again).
     researchQuestionHash: v.optional(v.string()),
+    // System-attested search/read provenance; content plane only. Old documents remain unknown.
+    researchSources: v.optional(
+      v.array(
+        v.object({
+          url: v.string(),
+          title: v.string(),
+          retrievedAt: v.number(),
+          pageReadAt: v.optional(v.number()),
+        }),
+      ),
+    ),
     // Phase-26 Content provenance. Only authoritative write sites populate these; absence on
     // existing artifacts remains an explicit unknown and is never inferred by reverse scans.
     sourceThreadId: v.optional(v.string()),
@@ -2319,6 +2353,10 @@ export default defineSchema({
     digestDocId: v.optional(v.id("vaultDocuments")),
     digestSourceDocIds: v.optional(v.array(v.string())),
     digestBuiltAt: v.optional(v.number()),
+    digestWorkflowId: v.optional(v.string()),
+    digestStatus: v.optional(
+      v.union(v.literal("building"), v.literal("built"), v.literal("failed"), v.literal("refused")),
+    ),
     // Phase-15.3 (VALT-13) — the Drive rail's THREE fields. All optional ⇒ every upload-rail folder
     // is byte-unchanged and there is zero backfill. Only `vaultDrive` writes them.
     //
@@ -2519,6 +2557,60 @@ export default defineSchema({
      *  on every grounding call and every cockpit turn. One indexed row + one `ctx.db.get`. */
     blueprintDocId: v.optional(v.id("vaultDocuments")),
     blueprintConfirmedAt: v.optional(v.number()),
+    // Phase 30: tenant intent/control only; native skills retain all version and evidence state.
+    verticalPreferences: v.optional(
+      v.object({
+        needs: v.array(
+          v.union(
+            v.literal("legal"),
+            v.literal("hr"),
+            v.literal("product"),
+            v.literal("design"),
+            v.literal("engineering"),
+            v.literal("data"),
+          ),
+        ),
+        reviewReady: v.array(
+          v.union(
+            v.literal("legal"),
+            v.literal("hr"),
+            v.literal("product"),
+            v.literal("design"),
+            v.literal("engineering"),
+            v.literal("data"),
+          ),
+        ),
+        confirmedWorkloads: v.optional(
+          v.array(
+            v.object({
+              verticalId: v.union(
+                v.literal("legal"),
+                v.literal("hr"),
+                v.literal("product"),
+                v.literal("design"),
+                v.literal("engineering"),
+                v.literal("data"),
+              ),
+              artifactIds: v.array(v.id("vaultDocuments")),
+              confirmedAt: v.number(),
+            }),
+          ),
+        ),
+        legalPlaybookDocId: v.optional(v.id("vaultDocuments")),
+      }),
+    ),
+    disabledVerticals: v.optional(
+      v.array(
+        v.union(
+          v.literal("legal"),
+          v.literal("hr"),
+          v.literal("product"),
+          v.literal("design"),
+          v.literal("engineering"),
+          v.literal("data"),
+        ),
+      ),
+    ),
     // ── Phase-19 CAN-SPAM postal address (PIPE-01 SC#6) ───────────────────────
     // ALL optional ⇒ NO migration (convex-migration-helper: "Safe Changes → Adding Optional
     // Field"), and the table's own comment above already blesses optionality.
@@ -2571,12 +2663,18 @@ export default defineSchema({
     mediaJobId: v.optional(v.id("mediaJobs")),
     model: v.optional(v.string()),
     kind: v.optional(v.string()),
+    // Evaluation uses this same append-only ledger and the existing limiter, never a second bill.
+    evalBudgetId: v.optional(v.id("spendEvents")),
+    evalEnvelope: v.optional(v.object({ tenantIds: v.array(v.string()), expiresAt: v.number() })),
+    evalActualUsd: v.optional(v.number()),
+    evalBreach: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
-    .index("by_correlation", ["correlationId"]),
+    .index("by_correlation", ["correlationId"])
+    .index("by_eval_budget", ["evalBudgetId"]),
 
   // One durable start per tenant, created before the first paid movement. A missing row means
   // coverage has not begun; it never means historical spend was zero.

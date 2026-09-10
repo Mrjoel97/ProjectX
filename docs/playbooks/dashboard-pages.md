@@ -1,5 +1,40 @@
 # Playbook: Connected dashboard pages
 
+> Phase 30 workload confirmation (2026-09-10): the existing recommendation panel also offers a
+> collapsed `VerticalWorkloadConfirmation` form when discovery has no eligible recommendations.
+> It loads ready, unsealed, same-tenant Vault document titles through `workloadSources` in native
+> pages of five; an empty filtered page can still have more documents. The user selects two distinct
+> examples and explicitly confirms recurring need. Changing the examples clears that confirmation.
+> Saving preserves current needs, review approvals and the Legal playbook selection, and records
+> only the chosen workload through `configure.confirmWorkload`. Historical confirmation remains
+> visible through profile updates; a future start still needs current sources and release evidence.
+> Loading, pagination, mutation failures and query retry have local feedback. Seven DOM interaction
+> tests cover this form in addition to the recommendation tests below. No live workflow activation
+> or authenticated responsive UAT is implied by these local checks.
+
+> Phase 30 local UI preparation (2026-09-10): the existing Business shape panel mounts
+> `VerticalPackRecommendations` within its own render error boundary. It displays at most two
+> server-selected workflows, explains review/source prerequisites and provides independent disable
+> and restore controls. Empty or unqualified discovery renders no catalogue. Ordinary start calls
+> the dedicated native vertical action with no preview pin and navigates only after a successful
+> thread result; a stale eligibility refusal stays on the page. Transport errors never claim that
+> no work ran. Four SSR and five DOM interaction tests cover rendering, blocked starts, real action
+> wiring, disable/restore and the accessible loading-to-settled signal. Together with the seven
+> picker tests, all sixteen pass. The opt-in `vertical-packs.spec.ts` lists 24 authenticated
+> desktop/mobile control cases; it does not execute a model or establish all-six workflow UAT.
+
+> Last verified: 2026-09-10 — G2 cross-thread work status: `approvals.runningWork` projects only
+> refs, stages and timestamps from tenant/status indexes. The shell tray opens the originating
+> chat or Vault. Seven lanes read at most two rows each (fourteen full documents maximum); any
+> full lane is conservatively marked partial, without an extra probe row. This stays below the
+> 16-MiB read ceiling even with 1-MiB source rows. Raising the limit requires a metadata projection.
+> This is recorded status, not a worker heartbeat or an exact global count. Inactive
+> drafts and approval waits are excluded; specialist workers, deliveries, renders and document
+> extraction/ingestion are included. Caption-only work on completed plans is outside this bounded
+> projection. A failed status query cannot take down the shell. Four rendered UI tests cover
+> loading/empty, partial, stage labels and encoded destinations; backend tests cover tenant
+> isolation, exclusion, terminal removal and rendering precedence.
+
 > Last verified: 2026-09-09 (47-05 — the Settings erasure card and the privacy policy stopped
 > carrying their own PROSE COPIES of the audit-archive claim and now render
 > `AUDIT_ARCHIVE_STATEMENT` from `@pikar/core/tenantData`. Four copies is how three surfaces came
@@ -3120,3 +3155,5 @@ node scripts/check-playbooks.mjs
   index, or storing a pointer to the tenant's current Growth-OS row) is the deeper fix and needs a
   schema change. Do not simply lower the `200`: that silently reintroduces B1 for any tenant whose
   usable row sits further back than the new bound, and B1's failure mode was a page-wide crash.
+
+WORM governance report verified 2026-09-10 (ADR-048): pending counts now come from the durable export queue and unfinished legacy replay, not `ts > lastExportedTs`. The count remains a bounded floor. `lastCursorAdvanceMs` uses successful batch acknowledgement time for v2 checkpoints, with the old event-time value retained only for unmigrated checkpoints. `oldestAwaitingMs` is the oldest pending queue insertion or legacy audit insertion time; backdating does not distort pending age or control export coverage. Covered by `reportsGovernance.test.ts`.

@@ -791,6 +791,7 @@ test("readPage reads a page its own search returned, sends the focus as the rera
       url: PAGE_URL,
       content: "The plan costs $49 a month.",
       truncated: false,
+      pageReadAt: expect.any(Number),
     });
     const extractCall = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/extract"));
     expect(extractCall).toBeDefined();
@@ -816,6 +817,7 @@ test("readPage caps the reads per run and reports a failed extraction as a note,
     for (let i = 0; i < PAGE_READS_PER_RUN; i++) {
       const out = await read({ url: PAGE_URL, focus: "price" }, extractOpts);
       expect(String(out.note)).toMatch(/page read failed: 403/);
+      expect(out.pageReadAt).toBeUndefined();
     }
     const capped = await read({ url: PAGE_URL, focus: "price" }, extractOpts);
     expect(String(capped.note)).toMatch(new RegExp(`read its ${PAGE_READS_PER_RUN} pages`));
@@ -823,6 +825,22 @@ test("readPage caps the reads per run and reports a failed extraction as a note,
     expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/extract"))).toHaveLength(
       PAGE_READS_PER_RUN,
     );
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
+test("a successful HTTP response with an empty excerpt cannot attest a page read", async () => {
+  vi.stubEnv("TAVILY_API_KEY", "k");
+  vi.stubGlobal("fetch", tavilyFetch(extractPayload(" \n ")));
+  try {
+    const { search, read } = execs();
+    await search({ query: "vendor pricing" }, extractOpts);
+    const result = await read({ url: PAGE_URL, focus: "price" }, extractOpts);
+    expect(result.content).toBe("");
+    expect(result.pageReadAt).toBeUndefined();
+    expect(result.note).toContain("empty excerpt");
   } finally {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();

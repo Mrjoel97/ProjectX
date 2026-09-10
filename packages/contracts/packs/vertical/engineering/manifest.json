@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "packId": "engineering",
+  "workflowId": "engineering-runbook-review",
+  "version": 1,
+  "status": "candidate",
+  "runtimeEnabled": false,
+  "skillName": "vertical-engineering",
+  "output": "document",
+  "outputContractId": "engineering-output.v1",
+  "disclaimerId": "engineering-review.v1",
+  "risk": "advisory",
+  "requiredReview": "human-review",
+  "requiredSources": ["vault"],
+  "connectorGate": "source-control-monitoring",
+  "disablePolicy": "block-new-starts-preserve-artifacts",
+  "rollbackPolicy": "exact-previously-active-version",
+  "provenance": {
+    "sourceRepo": "https://github.com/anthropics/knowledge-work-plugins",
+    "sourceCommit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
+    "sourcePaths": [
+      "engineering/skills/documentation/SKILL.md",
+      "engineering/skills/incident-response/SKILL.md",
+      "engineering/skills/deploy-checklist/SKILL.md"
+    ],
+    "bodySha256": "b794b08a07d521de28f57e15bef6210c0a33f18c405493190962d3b118966e71",
+    "license": "Apache-2.0",
+    "modificationNotice": "Pikar candidate adaptation, 2026-09-10: retain evidence-scoped document method; remove connector authority, autonomous external changes and unsupported certainty. See method-review.md.",
+    "skillVersions": {
+      "vertical-engineering": 1
+    },
+    "ts": 1788998400000
+  },
+  "sourceFiles": [
+    {
+      "path": "engineering/skills/documentation/SKILL.md",
+      "bytes": 1507,
+      "sha256": "1d469418f786a05be83d2a05f04d68788aeed584d13863a650f5ad73c6c4cf50",
+      "gitBlobSha": "9a5a69394edd00e449625a928ec7e196db6feef4"
+    },
+    {
+      "path": "engineering/skills/incident-response/SKILL.md",
+      "bytes": 5669,
+      "sha256": "9eaa7a974c90395ac7116e82710f74546f38e69f735d78f684ee13fd79646e9a",
+      "gitBlobSha": "b483514f8745939ec41bc7c181121c3ae1fccdee"
+    },
+    {
+      "path": "engineering/skills/deploy-checklist/SKILL.md",
+      "bytes": 2389,
+      "sha256": "85ca53dc471970e3e12c36ec814ebf5f6cb9419016c55adb05ff34789bae3be9",
+      "gitBlobSha": "91171a09d0a88742d49601794791abbe2c917b25"
+    }
+  ],
+  "hashEncoding": "LF-normalized UTF-8; pinned upstream downloads were LF bytes. Git blob hash verified against official pinned tree.",
+  "licenseEvidence": {
+    "governingPath": "LICENSE",
+    "redistributedCopy": "third_party/knowledge-work-plugins/LICENSE",
+    "governingSha256": "a6946284993aeec75c7d75906064b66210c46051e562077efb30eb6dcfe72e26",
+    "rootLicenseAnomaly": true
+  },
+  "evidence": {
+    "methodReview": "draft",
+    "nativeEval": null,
+    "browserUat": null,
+    "activation": null
+  },
+  "releaseBlockedBy": [
+    "independent-method-review",
+    "exact-version-native-eval",
+    "authenticated-responsive-uat",
+    "runtime-binding"
+  ]
+}

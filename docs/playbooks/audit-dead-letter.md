@@ -1,6 +1,11 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
-> Last verified: 2026-09-09 (47-10 — **ADR-047: the billing ledger KEEPS its Stripe ids, and
+Last verified: 2026-09-10 — evaluator cleanup now supports exact tenant equality, preserving prefix-sharing
+sibling cases. Optional receipt retention keeps case authority until the final empty-table transaction,
+including across page interruptions and WORM export refusals. The vertical collector preserves all
+`spendEvents` accounting rows during content cleanup; existing purge defaults remain unchanged.
+
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (47-10 — **ADR-047: the billing ledger KEEPS its Stripe ids, and
 > ADR-044's survey missed two tables.** ADR-044 D3 left the `billingEvents` choice open and ADR-045
 > declined it; ADR-047 makes it. The finding that decided it: `billingEvents` carries the Stripe id
 > TWICE — once in `stripeObjectId` (which **nothing reads**: one write path, zero reads, zero index
@@ -28,7 +33,7 @@
 > `tenantData.test.ts` now pins the full membership of all three surviving classes with a positive
 > control, so the next addition fails by name — the defect was never a wrong answer, it was a
 > question asked of a list somebody remembered.)
-> Last verified: 2026-09-09 (47-08 — **T3'S EVIDENCE, FINAL NUMBER.** After the detector fix and a
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (47-08 — **T3'S EVIDENCE, FINAL NUMBER.** After the detector fix and a
 > redeploy, the production run is `audit scanned=672 complete findings=0` /
 > `deadLetters scanned=9 complete findings=0` — **0 violations AND 0 suspects**.
 >
@@ -40,7 +45,7 @@
 >
 > Cite this run as ADR-044 T3's evidence. Reproduce with
 > `node scripts/check-audit-payloads.mjs --prod` (add `--strict` to fail on suspects too).)
-> Last verified: 2026-09-09 (47-06 — **THE §4 GATE RAN AGAINST PRODUCTION AND §4 HOLDS.** 672 audit
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (47-06 — **THE §4 GATE RAN AGAINST PRODUCTION AND §4 HOLDS.** 672 audit
 > rows + 9 deadLetters rows, walk COMPLETE, **0 violations**. That is ADR-044 T3's evidence, and it
 > is the first time the “no content in the archive” assumption has been tested against a row rather
 > than against source.
@@ -65,7 +70,7 @@
 > as one that is red for a non-reason. Transport note: the convex CLI is NOT hoisted to the repo
 > root under pnpm; it resolves from `packages/backend/node_modules`, which is the path
 > `check-provider-lane.mjs` already used. One answer, not two.)
-> Last verified: 2026-09-09 (47-05 — **ADR-044 T1 CLOSED BY OPTION (c): the claim is narrowed to
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (47-05 — **ADR-044 T1 CLOSED BY OPTION (c): the claim is narrowed to
 > something TRUE, and it now has ONE definition.** `AUDIT_ARCHIVE_STATEMENT` no longer says “and no
 > personal data” — it says “and no directly identifying data”, which is ADR-044 T1's own suggested
 > wording. The old sentence was false and had been since the archive existed: `audit.tenantId` IS
@@ -88,7 +93,7 @@
 > That guard immediately earned itself: it went red on MY OWN replacement text, which explained
 > the change in a sentence that still contained the retired phrase. A scan cannot tell an
 > explanation from a claim — and the sentence was legalese anyway, so it was rewritten plainly.)
-> Last verified: 2026-09-09 (47-03 — **§4 IS NOW CHECKED AGAINST THE ROWS, NOT THE SOURCE.**
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (47-03 — **§4 IS NOW CHECKED AGAINST THE ROWS, NOT THE SOURCE.**
 > ADR-044 T3 gates WORM arming on exactly this and says why: “every latent §4 defect in the
 > history becomes permanent on arming day, and a source scan cannot see a single already-written
 > row. The honest check reads rows, not code.” `recentByType` states the same assumption from the
@@ -116,7 +121,7 @@
 > would flag legitimate rows on day one, and a gate red for a non-reason stops being read, which
 > takes the real failures with it. Registered as the seventeenth free gate, so CI runs its
 > self-test on every push; the LIVE run needs a deployment and is the pre-arming audit.)
-> Last verified: 2026-09-09 (45-04 — **THE REAPER HAS RUN. Production storage is clean.** Dry run
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (45-04 — **THE REAPER HAS RUN. Production storage is clean.** Dry run
 > first (315 scanned, 140 orphans, 0 deleted), then live: **140 blobs / 68,385,711 bytes deleted**,
 > second pass confirms 0 orphans remaining and 0 dangling pointers created.
 >
@@ -143,7 +148,7 @@
 > and the `billingEvents` bridge (C2, second count) is untouched. **WORM STAYS OFF** — a smaller
 > and cleaner decision than it was, but the same decision.)
 
-> Last verified: 2026-09-09 (45-03 — `tenantDelete.reapOrphanedBlobs`, for the 142 blobs (65.2 MB)
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (45-03 — `tenantDelete.reapOrphanedBlobs`, for the 142 blobs (65.2 MB)
 > that no tenant purge can reach. Until 44-01 erasure deleted a row and KEPT its blob, so those
 > bytes are referenced by nothing and were unremovable by any product path — the reference is
 > exactly what was lost, which is why this reaps by ABSENCE of a reference rather than by tenant.
@@ -169,7 +174,7 @@
 > `vi.setSystemTime` WITHOUT `useFakeTimers()` is a silent no-op, and the first draft of these tests
 > “passed” a backdate that never happened — a fixture that cannot express the condition it names.)
 
-> Last verified: 2026-09-09 (45-02 — **THE ARCHIVE IS CLEAN. The 45-01 entry below is now
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (45-02 — **THE ARCHIVE IS CLEAN. The 45-01 entry below is now
 > HISTORY, not the current state, and one of its sentences is FALSE as of this line:** it says
 > arming WORM would freeze a majority-synthetic archive. That was true when written and is not
 > true now, because the purge it describes has been RUN.
@@ -208,7 +213,7 @@
 > so no row-shaped cleanup can ever reach them. Removing them needs a deliberate orphan reaper and
 > an owner decision, because it permanently deletes production bytes.)
 
-> Last verified: 2026-09-09 (45-01 — **THE EVAL HARNESS NEVER CLEANED UP, AND IT IS THE SECOND
+> Last verified: 2026-09-10 — WORM transactional outbox and legacy replay verified locally; ADR-048. Prior: 2026-09-09 (45-01 — **THE EVAL HARNESS NEVER CLEANED UP, AND IT IS THE SECOND
 > AND STRONGER REASON WORM STAYS OFF.** Measured on production: `run-eval-golden.mjs` mints a
 > throwaway `eval-<runId>` tenant per run and has never removed it, so **472 of 632 `plans` rows,
 > 189 of 733 `vaultDocuments` and 1007 of 1894 AUDIT rows** belonged to 18 synthetic tenants,
@@ -1132,7 +1137,7 @@ request to a `failed` terminal state, and surfaces in the app shell's red badge.
 - `packages/core/src/notificationTemplates.ts` — `NotificationKind` union + `notificationMessage(kind)`: the §4 static-label firewall (no content parameter exists to interpolate a body through).
 - `apps/web/app/(app)/_components/NotificationsBanner.tsx` — the in-app **render surface** for the matrix: subscribes to `notifications.list` and renders every unread row (excluding `gmail_reconnect`, which `ReconnectBanner` owns) as a neutral dismissible banner row; Dismiss → `markRead`. Mounted in the app shell (`layout.tsx`), stacked with the sibling banners.
 - `packages/pii/src/scan.ts` — the redaction engine: `scanText` → `{ safeText, counts, entities }`; pure TS, fail-closed (see `.planning/design/pii-engine.md`)
-- `packages/backend/convex/worm.ts` + `wormCursor.ts` + `crons.ts` — WORM S3 export: daily 03:00 UTC cron. `worm.ts` ("use node") does the real `@aws-sdk/client-s3` PutObject; `wormCursor.ts` holds the cursor query/mutation + the index-backed `auditSince` window; the pure serialization/key/retention math is `@pikar/core` retention.ts
+- `packages/backend/convex/worm.ts` + `wormCursor.ts` + `crons.ts` — WORM S3 export: daily 03:00 UTC cron. `worm.ts` ("use node") does the real `@aws-sdk/client-s3` PutObject; `wormCursor.ts` freezes bounded batches and acknowledges durable exports; `auditExportQueue` holds pending refs; the pure serialization/key/retention math is `@pikar/core` retention.ts
 - Tests: `auditImmutability.test.ts`, `audit.test.ts`, `deadLetters.test.ts`, `worm.test.ts`, `llmRedaction.test.ts`, `packages/pii/src/scan.test.ts`
 
 ## Dependencies & blast radius
@@ -1146,11 +1151,11 @@ request to a `failed` terminal state, and surfaces in the app shell's red badge.
 
 ## Data flow
 
-1. **Audit write**: any internal mutation/action calls `internal.audit.log` with an already-redacted payload; `log` inserts the row and mirrors it into the `auditCounts` aggregate.
+1. **Audit write**: any internal mutation/action calls `internal.audit.log` with an already-redacted payload; `log` atomically inserts the immutable row, an `auditExportQueue` ref, and the `auditCounts` aggregate entry.
 2. **Workflow failure**: `onPipelineComplete` fires on workflow completion; on `failed`/`canceled` it inserts a `deadLetters` row (status `new`), writes a `deadletter.written` audit event, fires a `deadletter` **user notification** (OPSG-05 — only when a `requestId` ref is present in `context.payload`; synthetic smokes skip it), patches the request to `failed`, and writes exactly one `failed` telemetry row (idempotent by correlationId). Success returns early.
 3. **Per-recipient failure**: `deadLetterRecipient` does the same for one recipient row inside the fan-out loop (including the `deadletter` notification), so one bad recipient never poisons the batch.
 4. **Resolve**: operator calls `markResolved` (`new → resolved`, idempotent). There is NO replay — the `replayed` status enum member exists in the schema but is deliberately unwritten until idempotency is specified.
-5. **WORM export**: the daily cron reads audit rows past the cursor via the index-backed `auditSince` window and, when `WORM_BUCKET` is set, PutObjects them to S3 as NDJSON under COMPLIANCE-mode Object Lock with a SHA256 checksum, then advances the cursor **only after** the PutObject resolves. With `WORM_BUCKET` unset it takes the clean stub-skip path (no PutObject, no advance). An empty window returns `{ exported: 0 }` without a PutObject. **Export only** — the hot `audit` table is never deleted/swept (owner ruling; SC#4's sweep clause is deferred).
+5. **WORM export**: the cron freezes a bounded batch of immutable audit ids, uploads canonical NDJSON with a content-addressed key under S3 COMPLIANCE Object Lock, and only then acknowledges its revision and removes queue refs. Legacy unversioned rows replay once through native pagination. Each run has an eight-minute budget; pending work survives. OFF creates no export checkpoint or S3 write. Empty legacy pages advance scan metadata only. Audit rows are never changed or deleted.
 
 ## Notification matrix (OPSG-05)
 
@@ -1238,7 +1243,7 @@ Three registrations, each a one-liner delegating to a module that owns the logic
 - **Redaction-safe payloads** (CLAUDE.md §4): audit/DLQ/telemetry payloads carry refs, hashes, ids, counts only — never raw content or PII. Enforced by the `AuditPayload` type (no nested objects), `llmRedaction.test.ts` (static), and `assertNoRawPiiFanout` in `smoke:fanout` (runtime).
 - **Redact-then-write ordering**: `scanText` runs BEFORE any log write; only `safeText`/`safeTextHash`/`counts` cross into log planes. Raw `entities` from the scanner are never destructured in llm/guardrails/pipeline code (checked by `llmRedaction.test.ts`).
 - **Tenant scoping**: operator DLQ surface goes through `tenantQuery`/`tenantMutation`; cross-tenant `markResolved` rejection and unauth fail-closed are tested in `deadLetters.test.ts`.
-- **Advance only after a durable write** — the WORM cursor advances ONLY after the PutObject promise resolves. On any throw (or the `WORM_BUCKET`-unset stub-skip path) the cursor stays put and the next cron retries the SAME window; the deterministic object key ⇒ byte-identical NDJSON body ⇒ idempotent overwrite under Object Lock. Advancing before a durable write would mark unexported rows as exported — a permanent compliance hole. Tested in `worm.test.ts` (mocked S3 send: durable→advance, throw→no-advance, empty→skip).
+- **Advance only after a durable write** — frozen pending audit ids and queue ids persist before IO. PutObject failure leaves them pending. A successful write permits a revision-checked dequeue; stale exporters cannot erase another batch. Empty legacy pages need no object. Retry uses the same NDJSON and SHA256 object key. S3 may preserve identical versions, so archival consumers deduplicate by audit `_id`.
 - **Object-Lock bucket precondition** — the S3 bucket MUST be created with Object Lock ENABLED (it cannot be enabled after creation) and a default COMPLIANCE retention. Object-Lock retention requires the checksum header (SDK v3 flexible checksums), which the export sends. AWS creds + `WORM_BUCKET`/`AWS_REGION` live in the **Convex deployment env** (`npx convex env set`), NEVER Vercel (§7).
 - **DLQ writes idempotent by correlationId** — never a second terminal telemetry row.
 
@@ -1248,7 +1253,7 @@ Three registrations, each a one-liner delegating to a module that owns the logic
 - **New workflow**: always pass `onComplete: internal.deadLetter.onPipelineComplete` with a refs-only `context` payload, or failures are silent.
 - **New notification site**: add the kind to `NotificationKind` (`@pikar/core`, forces a `Record` message entry) and call `internal.notifications.notify` with `message: notificationMessage(kind)` — never interpolate content. The in-app + external channels come for free through the choke point; do NOT call `notifyExternal.dispatch` directly (it must only ever be the scheduled best-effort tail, never a caller-facing seam, or the loop guard is bypassed).
 - **Never** add a mutating audit function, a public audit writer, or a payload field that could carry user content. If a debugging need tempts you to store content, store it in the content plane (`requests`/`plans`) and put the ref in the payload.
-- **Changing the WORM export (OPSG-03)**: the real export lives in `worm.ts` ("use node", `@aws-sdk/client-s3`). Keep the two invariants intact: (1) the `WORM_BUCKET`-unset stub-skip branch never advances the cursor; (2) `advanceCursor` runs ONLY after the PutObject resolves — never move it before the `await s3.send(...)` or into a `.catch`. Serialization/key/retention math stays pure in `@pikar/core` retention.ts (`serializeAuditNdjson` sorts keys → byte-identical re-export → idempotent PutObject; `wormObjectKey`; `retainUntilDate`/`RETENTION_MS`) — do not inline it. Never add a delete/sweep of the hot `audit` table here (export-only, owner ruling).
+- **Changing the WORM export (OPSG-03)**: preserve the OFF gate, transactional outbox, bounded frozen batch, content-addressed key, and acknowledge-after-PutObject sequence. Do not derive coverage from event `ts` or `_creationTime`: neither is a safe commit-order cursor. Only queue refs and checkpoint metadata may be changed; audit remains insert-only. See ADR-048 for the legacy migration lane and concurrency precondition.
 - **DLQ replay**: blocked on specifying idempotency; the `replayed` status is reserved for it.
 
 ## How to verify
@@ -1268,5 +1273,16 @@ Three registrations, each a one-liner delegating to a module that owns the logic
 
 - WORM export is REAL (07-02): daily cron → S3 COMPLIANCE Object Lock + checksum, cursor advances only after a durable write. **SC#4 is PARTIALLY met — the WORM export is implemented; the hot-audit-copy sweep/delete is DEFERRED per owner ruling (2026-07-21, export-only; §3/ADR-002 stay literally intact, no new ADR). A future phase may add a §3-reconciling retention-delete path.** This is never a silent gap — the deferral is recorded here for the goal-backward verifier. Retention is specified: `RETENTION_MS` = 7 years (`@pikar/core`).
 - No DLQ replay path yet (`replayed` status reserved)
-- The `audit` table now has a global `by_ts` index (07-01) that backs `auditSince` (was a full scan) and the cross-tenant WORM export window
+- The global `audit.by_ts` index remains for governance event reads; WORM legacy replay uses `by_export_version`, and new events use the transactional outbox.
 - Not every `audit.log` caller's payload is covered by the static scan (e.g. `gmail.ts`, `deliverApprovedPlan.ts`) — extend `llmRedaction.test.ts` when touching those
+
+## WORM outbox operations (2026-09-10, ADR-048)
+
+Independent review, 2026-09-10: synthetic eval teardown now deletes each unexported queue reference atomically with its audit row. It refuses the entire teardown page with `EVAL_AUDIT_EXPORT_PENDING` when an audit row belongs to a frozen batch; finish or retry that upload before retrying teardown. This preserves pending bytes and avoids a dangling reference blocking all subsequent exports. Normal tenant erasure continues to retain audit and global delivery state. Canonical serialization also preserves own prototype-shaped keys; its round-trip regression runs in `packages/core/src/retention.test.ts`.
+
+- Keep `WORM_BUCKET` unset until ADR-044 arming triggers and real bucket verification are satisfied. This code change does not arm WORM.
+- Deploy the schema and new `audit.log` together while OFF. Wait for old writer invocations to finish before first legacy replay. All subsequent production writes must use `audit.log`; it atomically creates `exportVersion: 2` plus a queue ref. Unversioned inserts after the one-time legacy replay are unsupported.
+- Legacy timestamp-only checkpoints deliberately replay all unversioned history once to recover omitted equal-ts rows. No audit migration writes or deletes are needed. Frozen pending ids guarantee stable retries even if the requested page size changes.
+- The actual batch ceiling is 1,000 rows and approximately 2 MB of audit bodies (the last document can cross the threshold); the action stops starting batches after eight minutes. An in-flight S3 request may extend beyond that budget; its pending batch survives a timeout. OFF deployments intentionally accumulate one small queue ref per new audit row.
+- `lastExportedTs` is compatibility metadata, not coverage. `lastExportedAt` records successful nonempty batch acknowledgement. The owner report reads queue refs plus unfinished legacy pages and marks bounded counts partial.
+- Verify with `node node_modules/vitest/vitest.mjs run convex/worm.test.ts convex/audit.test.ts convex/auditImmutability.test.ts convex/isolation.test.ts convex/reportsGovernance.test.ts convex/schema.test.ts` from `packages/backend`. S3 is mocked; live retention and refusal of deletion remain separate evidence.

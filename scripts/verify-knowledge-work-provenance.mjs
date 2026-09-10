@@ -102,6 +102,22 @@ async function main(argv) {
 
   if (!existsSync(manifestPath)) throw new Error(`manifest.json is missing at ${manifestPath}`);
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  // Source inventory is distinct from the six published Phase-27 adaptations.
+  // Draft integrity must not imply a runtime mirror, eval pass, or activation.
+  const draft = JSON.parse(readFileSync(join(vendorRoot, "draft-manifest.json"), "utf8"));
+  if (draft.status !== "draft-source-inventory" || draft.runtimeEnabled !== false)
+    fail("draft source inventory must not claim runtime activation");
+  if (
+    draft.upstream?.commit !== manifest.upstream?.commit ||
+    draft.upstream?.repo !== manifest.upstream?.repo
+  )
+    fail("draft source inventory must use the same verified upstream pin");
+  const draftIds = ["data", "design", "engineering", "hr", "legal", "product"];
+  if (
+    JSON.stringify((draft.candidates ?? []).map((c) => c.packId).sort()) !==
+    JSON.stringify(draftIds)
+  )
+    fail("draft source inventory must name exactly the six closed vertical candidates");
 
   // ── the pin itself ────────────────────────────────────────────────────────
   const commit = manifest.upstream?.commit;
@@ -159,6 +175,86 @@ async function main(argv) {
     for (const f of pack.files ?? []) declared.set(f.path, f);
   }
   for (const f of manifest.licenseFiles ?? []) declared.set(f.path, f);
+  for (const f of draft.files ?? []) {
+    if (
+      typeof f.path !== "string" ||
+      f.path.startsWith("/") ||
+      f.path.includes("\\") ||
+      f.path.split("/").some((part) => !part || part === "." || part === "..")
+    ) {
+      fail("draft source inventory contains an invalid relative path");
+      continue;
+    }
+    const existing = declared.get(f.path);
+    if (
+      existing &&
+      (existing.sha256 !== f.sha256 ||
+        existing.bytes !== f.bytes ||
+        existing.gitBlobSha !== f.gitBlobSha)
+    )
+      fail(`draft and runtime source records disagree for ${f.path}`);
+    declared.set(f.path, f);
+  }
+  const draftReferenced = new Set();
+  for (const entry of draft.candidates ?? []) {
+    const expectedPath = `packages/contracts/packs/vertical/${entry.packId}/manifest.json`;
+    if (!draftIds.includes(entry.packId) || entry.manifestPath !== expectedPath) {
+      fail("draft candidate has an invalid manifest path");
+      continue;
+    }
+    const candidate = JSON.parse(readFileSync(join(repoRoot, entry.manifestPath), "utf8"));
+    if (
+      candidate.packId !== entry.packId ||
+      candidate.status !== "candidate" ||
+      candidate.runtimeEnabled !== false
+    )
+      fail(`${entry.packId}: draft candidate cannot claim activation`);
+    if (
+      candidate.provenance?.sourceCommit !== commit ||
+      candidate.provenance?.sourceRepo !== manifest.upstream.repo
+    )
+      fail(`${entry.packId}: candidate source pin disagrees with inventory`);
+    if (JSON.stringify(candidate.provenance?.sourcePaths) !== JSON.stringify(entry.sourcePaths))
+      fail(`${entry.packId}: source path inventory drift`);
+    if (
+      JSON.stringify(candidate.sourceFiles?.map((f) => f.path)) !==
+      JSON.stringify(entry.sourcePaths)
+    )
+      fail(`${entry.packId}: source files do not cover the candidate paths`);
+    for (const f of candidate.sourceFiles ?? []) {
+      const rec = declared.get(f.path);
+      if (
+        !rec ||
+        rec.sha256 !== f.sha256 ||
+        rec.bytes !== f.bytes ||
+        rec.gitBlobSha !== f.gitBlobSha
+      )
+        fail(`${entry.packId}: candidate source hash disagrees for ${f.path}`);
+      draftReferenced.add(f.path);
+    }
+    const license = declared.get(entry.governingLicense);
+    if (
+      !license ||
+      candidate.licenseEvidence?.governingPath !== entry.governingLicense ||
+      candidate.licenseEvidence?.governingSha256 !== license.sha256
+    )
+      fail(`${entry.packId}: governing license is not pinned consistently`);
+    draftReferenced.add(entry.governingLicense);
+    const body = readFileSync(
+      join(repoRoot, "packages/contracts/packs/vertical", entry.packId, "skill.md"),
+      "utf8",
+    );
+    if (sha256(lf(body)) !== candidate.provenance?.bodySha256)
+      fail(`${entry.packId}: draft canonical body hash drift`);
+    const notices = readFileSync(noticesPath, "utf8");
+    for (const path of entry.sourcePaths ?? []) {
+      if (!notices.includes(path.replace(/\/SKILL\.md$/, "")))
+        fail(`THIRD_PARTY_NOTICES.md does not attribute draft source ${path}`);
+    }
+  }
+  for (const f of draft.files ?? []) {
+    if (!draftReferenced.has(f.path)) fail(`draft source ${f.path} has no attributed candidate`);
+  }
   if (declared.size === 0) fail("the manifest declares no files at all");
 
   const onDisk = existsSync(snapshotRoot) ? snapshotFiles() : [];
@@ -179,6 +275,13 @@ async function main(argv) {
       fail(`${path}: sha256 ${actual} on disk, manifest says ${rec.sha256}`);
     if (typeof rec.gitBlobSha !== "string" || !/^[0-9a-f]{40}$/.test(rec.gitBlobSha))
       fail(`${path}: gitBlobSha is not a 40-character sha`);
+    else if (
+      createHash("sha1")
+        .update(Buffer.from(`blob ${bytes.length}\0`))
+        .update(bytes)
+        .digest("hex") !== rec.gitBlobSha
+    )
+      fail(`${path}: bytes do not match the recorded Git blob sha`);
   }
 
   // ── adapted bodies ────────────────────────────────────────────────────────
@@ -256,7 +359,7 @@ async function main(argv) {
       ? " (adapted bodies pending, as recorded)"
       : "";
   console.log(
-    `provenance OK: ${declared.size} files at ${commit.slice(0, 12)}, ${packs.length} packs${state}`,
+    `provenance OK: ${declared.size} files at ${commit.slice(0, 12)}, ${packs.length} runtime packs${state}; ${draft.candidates.length} draft source records (not release evidence)`,
   );
   return 0;
 }

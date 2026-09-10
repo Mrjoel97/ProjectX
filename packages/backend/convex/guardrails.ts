@@ -14,6 +14,12 @@ import {
   RateLimiter,
 } from "@convex-dev/rate-limiter";
 import { chooseModel } from "@pikar/cost";
+import {
+  EVAL_BUDGET_LIFETIME_MS,
+  EVAL_MAX_BUDGET_CENTS,
+  evalActualCents,
+  evalCallCeilingCents,
+} from "@pikar/cost/evalBudget";
 import { scanText } from "@pikar/pii";
 import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
 import { v } from "convex/values";
@@ -333,6 +339,258 @@ export const saveInstruction = internalMutation({
 // folder-less single-file uploads deliberately stay on the token rail (15.3-CONTEXT puts only
 // FOLDER ingest on the $25 window).
 const vRail = v.optional(v.literal("ingest"));
+
+// Evaluation is a bounded additional constraint over the SAME reasoning rails and spend ledger.
+// A persisted start + explicit expiry prevents the fixed window from ever replenishing this cap.
+export const openEvalBudget = internalMutation({
+  args: { tenantIds: v.array(v.string()), capCents: v.number() },
+  handler: async (ctx, { tenantIds, capCents }): Promise<Id<"spendEvents">> => {
+    if (!Number.isSafeInteger(capCents) || capCents < 1 || capCents > EVAL_MAX_BUDGET_CENTS)
+      throw new Error("EVAL_BUDGET_INVALID");
+    if (
+      tenantIds.length < 1 ||
+      tenantIds.length > 64 ||
+      new Set(tenantIds).size !== tenantIds.length ||
+      tenantIds.some((id) => !/^packeval-[a-f0-9]{8}-[a-z0-9-]{1,64}$/.test(id))
+    )
+      throw new Error("EVAL_TENANT_REQUIRED");
+    const now = Date.now();
+    return recordMovement(ctx, {
+      tenantId: tenantIds[0] as string,
+      rail: "reasoning",
+      phase: "estimated",
+      amountCents: capCents,
+      correlationId: `eval:${crypto.randomUUID()}`,
+      createdAt: now,
+      kind: "eval_envelope",
+      evalEnvelope: { tenantIds, expiresAt: now + EVAL_BUDGET_LIFETIME_MS },
+    });
+  },
+});
+
+async function evalEnvelopeFor(ctx: QueryCtx, budgetId: Id<"spendEvents">, tenantId?: string) {
+  const envelope = await ctx.db.get(budgetId);
+  if (
+    !envelope?.evalEnvelope ||
+    envelope.kind !== "eval_envelope" ||
+    envelope.phase !== "estimated" ||
+    (tenantId !== undefined && !envelope.evalEnvelope.tenantIds.includes(tenantId))
+  )
+    throw new Error("EVAL_BUDGET_NOT_FOUND");
+  const config = {
+    kind: "fixed window" as const,
+    rate: envelope.amountCents,
+    capacity: envelope.amountCents,
+    period: EVAL_BUDGET_LIFETIME_MS,
+    start: envelope.createdAt,
+  };
+  return { envelope, config };
+}
+
+export const reserveEvalCall = internalMutation({
+  args: {
+    tenantId: v.string(),
+    budgetId: v.id("spendEvents"),
+    callId: v.string(),
+    model: v.string(),
+    outputTokens: v.number(),
+  },
+  handler: async (
+    ctx,
+    { tenantId, budgetId, callId, model, outputTokens },
+  ): Promise<Id<"spendEvents">> => {
+    if (!/^[a-f0-9-]{36}$/.test(callId)) throw new Error("EVAL_CALL_ID_INVALID");
+    const { envelope, config } = await evalEnvelopeFor(ctx, budgetId, tenantId);
+    if (Date.now() >= (envelope.evalEnvelope?.expiresAt ?? 0))
+      throw new Error("EVAL_BUDGET_EXPIRED");
+    if ((await getGuardrailConfig(ctx)).killSwitch) throw new Error("EVAL_KILL_SWITCH");
+    const amountCents = evalCallCeilingCents(model, outputTokens);
+    const correlationId = `evalcall:${callId}`;
+    // Re-entry can never authorize another provider execution with a consumed reservation.
+    if (
+      await ctx.db
+        .query("spendEvents")
+        .withIndex("by_correlation", (q) => q.eq("correlationId", correlationId))
+        .first()
+    )
+      throw new Error("EVAL_CALL_ALREADY_RESERVED");
+    const rows = await ctx.db
+      .query("spendEvents")
+      .withIndex("by_eval_budget", (q) => q.eq("evalBudgetId", budgetId))
+      .take(1501);
+    if (rows.some((row) => row.evalBreach)) throw new Error("EVAL_BUDGET_BREACHED");
+    // Each authorized call can later append an actual and a refund, even concurrently. Limit
+    // CALLS, not current row count, so outstanding settlements can never overflow the status read.
+    if (rows.length > 1500 || rows.filter((row) => row.phase === "reserved").length >= 500)
+      throw new Error("EVAL_CALL_LIMIT");
+    // Check all rails before moving any; the writes and ledger insert share this transaction.
+    if (
+      !(
+        await rateLimiter.check(ctx, "evalBudgetCents", {
+          key: String(budgetId),
+          config,
+          count: amountCents,
+        })
+      ).ok
+    )
+      throw new Error("EVAL_BUDGET_EXHAUSTED");
+    if (
+      !(await rateLimiter.check(ctx, "dailySpendCents", { key: tenantId, count: amountCents })).ok
+    )
+      throw new Error("EVAL_DAILY_BUDGET_EXHAUSTED");
+    if (!(await rateLimiter.check(ctx, "deploymentSpendCents", { count: amountCents })).ok)
+      throw new Error("EVAL_DEPLOYMENT_BUDGET_EXHAUSTED");
+    await rateLimiter.limit(ctx, "evalBudgetCents", {
+      key: String(budgetId),
+      config,
+      count: amountCents,
+    });
+    await rateLimiter.limit(ctx, "dailySpendCents", { key: tenantId, count: amountCents });
+    await rateLimiter.limit(ctx, "deploymentSpendCents", { count: amountCents });
+    return recordMovement(ctx, {
+      tenantId,
+      rail: "reasoning",
+      phase: "reserved",
+      amountCents,
+      correlationId,
+      model,
+      kind: "eval_model",
+      createdAt: Date.now(),
+      evalBudgetId: budgetId,
+    });
+  },
+});
+
+export const settleEvalCall = internalMutation({
+  args: { tenantId: v.string(), reservationId: v.id("spendEvents"), costUsd: v.number() },
+  handler: async (ctx, { tenantId, reservationId, costUsd }) => {
+    const actualCents = evalActualCents(costUsd);
+    const reservation = await ctx.db.get(reservationId);
+    if (
+      !reservation ||
+      reservation.tenantId !== tenantId ||
+      reservation.phase !== "reserved" ||
+      reservation.kind !== "eval_model" ||
+      !reservation.evalBudgetId
+    )
+      throw new Error("EVAL_RESERVATION_NOT_FOUND");
+    const { envelope, config } = await evalEnvelopeFor(ctx, reservation.evalBudgetId, tenantId);
+    const siblings = await ctx.db
+      .query("spendEvents")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", reservation.correlationId))
+      .take(4);
+    const settled = siblings.find((row) => row.evalActualUsd !== undefined);
+    if (settled) {
+      if (settled.evalActualUsd !== costUsd) throw new Error("EVAL_SETTLEMENT_MISMATCH");
+      return { actualUsd: costUsd, settled: true, breached: settled.evalBreach === true };
+    }
+    // Preserve a known provider-contract breach in the bill. Throwing here would roll back the
+    // observed actual cost. The action throws AFTER this commits; all later reservations stop.
+    const breached = actualCents > reservation.amountCents;
+    if (breached) {
+      const debt = actualCents - reservation.amountCents;
+      await rateLimiter.limit(ctx, "dailySpendCents", {
+        key: tenantId,
+        count: debt,
+        reserve: true,
+      });
+      await rateLimiter.limit(ctx, "deploymentSpendCents", { count: debt, reserve: true });
+      if (Date.now() < (envelope.evalEnvelope?.expiresAt ?? 0))
+        await rateLimiter.limit(ctx, "evalBudgetCents", {
+          key: String(reservation.evalBudgetId),
+          config,
+          count: debt,
+          reserve: true,
+        });
+    }
+    const refund = reservation.amountCents - actualCents;
+    if (refund > 0) {
+      if (Date.now() < (envelope.evalEnvelope?.expiresAt ?? 0))
+        await rateLimiter.limit(ctx, "evalBudgetCents", {
+          key: String(reservation.evalBudgetId),
+          config,
+          count: -refund,
+          reserve: true,
+        });
+      const tenantWindow = await rateLimiter.getValue(ctx, "dailySpendCents", { key: tenantId });
+      const deploymentWindow = await rateLimiter.getValue(ctx, "deploymentSpendCents");
+      const tenantRefund = refundableCents(tenantWindow, refund, reservation.createdAt);
+      const deploymentRefund = refundableCents(deploymentWindow, refund, reservation.createdAt);
+      if (tenantRefund > 0)
+        await rateLimiter.limit(ctx, "dailySpendCents", {
+          key: tenantId,
+          count: -tenantRefund,
+          reserve: true,
+        });
+      if (deploymentRefund > 0)
+        await rateLimiter.limit(ctx, "deploymentSpendCents", {
+          count: -deploymentRefund,
+          reserve: true,
+        });
+      // Evaluation reservation reconciliation, even when a daily enforcement window has rolled.
+      await recordMovement(ctx, {
+        tenantId,
+        rail: "reasoning",
+        phase: "refunded",
+        amountCents: refund,
+        correlationId: reservation.correlationId,
+        model: reservation.model,
+        kind: "eval_model",
+        createdAt: Date.now(),
+        evalBudgetId: reservation.evalBudgetId,
+        ...(actualCents === 0 ? { evalActualUsd: costUsd } : {}),
+      });
+    }
+    if (actualCents > 0)
+      await recordMovement(ctx, {
+        tenantId,
+        rail: "reasoning",
+        phase: "actual",
+        amountCents: actualCents,
+        correlationId: reservation.correlationId,
+        model: reservation.model,
+        kind: "eval_model",
+        createdAt: Date.now(),
+        evalBudgetId: reservation.evalBudgetId,
+        evalActualUsd: costUsd,
+        ...(breached ? { evalBreach: true } : {}),
+      });
+    return { actualUsd: costUsd, settled: true, breached };
+  },
+});
+
+export const evalBudgetStatus = internalQuery({
+  args: { budgetId: v.id("spendEvents") },
+  handler: async (ctx, { budgetId }) => {
+    const { envelope, config } = await evalEnvelopeFor(ctx, budgetId);
+    const rows = await ctx.db
+      .query("spendEvents")
+      .withIndex("by_eval_budget", (q) => q.eq("evalBudgetId", budgetId))
+      .take(1501);
+    if (rows.length > 1500) throw new Error("EVAL_LEDGER_LIMIT");
+    const reserved = rows.filter((row) => row.phase === "reserved");
+    const settled = rows.filter((row) => row.evalActualUsd !== undefined);
+    const settledIds = new Set(settled.map((row) => row.correlationId));
+    const outstanding = reserved.filter((row) => !settledIds.has(row.correlationId));
+    const expired = Date.now() >= (envelope.evalEnvelope?.expiresAt ?? 0);
+    const window = await rateLimiter.getValue(ctx, "evalBudgetCents", {
+      key: String(budgetId),
+      config,
+    });
+    return {
+      budgetId,
+      capCents: envelope.amountCents,
+      expired,
+      breached: rows.some((row) => row.evalBreach === true),
+      remainingCents: expired ? 0 : Math.max(0, Math.floor(window.value)),
+      actualUsd: settled.reduce((sum, row) => sum + (row.evalActualUsd ?? 0), 0),
+      callCount: reserved.length,
+      settledCount: settled.length,
+      unsettledCount: outstanding.length,
+      unresolvedCents: outstanding.reduce((sum, row) => sum + row.amountCents, 0),
+    };
+  },
+});
 
 export const preCall = internalMutation({
   args: { tenantId: v.string(), rail: vRail, reserved: v.optional(v.boolean()) },

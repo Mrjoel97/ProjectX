@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "workflowId": "data-dataset-report",
+  "runtimeEnabled": false,
+  "operations": [
+    { "id": "ground-in-vault", "state": "existing", "tools": ["searchVault"], "source": "vault" },
+    {
+      "id": "computed-file-profile",
+      "state": "existing",
+      "tools": [],
+      "mode": "owner-only deterministic preview"
+    },
+    { "id": "save-sop", "state": "existing", "tools": ["saveAsDocument"], "output": "document" },
+    {
+      "id": "warehouse-query",
+      "state": "forbidden",
+      "tools": [],
+      "reason": "no reviewed data-warehouse adapter"
+    },
+    {
+      "id": "execute-code-or-formulas",
+      "state": "forbidden",
+      "tools": [],
+      "reason": "no executable data authority"
+    },
+    {
+      "id": "external-system-write",
+      "state": "forbidden",
+      "tools": [],
+      "reason": "external_write"
+    },
+    { "id": "publish-or-send", "state": "forbidden", "tools": [], "reason": "external_send" },
+    { "id": "delegate", "state": "forbidden", "tools": [], "reason": "specialist_dispatch" },
+    { "id": "author-skill", "state": "forbidden", "tools": [], "reason": "skill_authoring" },
+    { "id": "paid-generation", "state": "forbidden", "tools": [], "reason": "paid_generation" }
+  ]
+}

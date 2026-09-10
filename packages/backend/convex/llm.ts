@@ -96,6 +96,7 @@ import {
   toWinAnsi,
   validateFigureClaim,
 } from "@pikar/core";
+import { verticalIdForSkill } from "@pikar/core/verticalPacks";
 import {
   CHEAP_MODEL,
   DEFAULT_MODEL,
@@ -140,6 +141,7 @@ import {
 } from "./cockpitCapabilities";
 import { buildInvoiceReminderTool } from "./invoiceReminders";
 import { VARIANT_FAILED_MEMO } from "./lib/dispatchShared";
+import { type EvalContext, evalBudgetModel, type ImageInput } from "./lib/evalBudgetModel";
 import { fogIntegration, traced } from "./lib/foglamp";
 import { contentHash } from "./lib/hash";
 import {
@@ -554,7 +556,13 @@ export const buildWebResearchTool = (): ToolSet => {
       execute: async ({
         url,
         focus,
-      }): Promise<{ url: string; content: string; truncated?: boolean; note?: string }> => {
+      }): Promise<{
+        url: string;
+        content: string;
+        truncated?: boolean;
+        note?: string;
+        pageReadAt?: number;
+      }> => {
         const refused = (note: string) => ({ url, content: "", note });
         // Structural absence of a path to an arbitrary host: not a returned URL ⇒ not fetched.
         if (!returned.has(url))
@@ -585,7 +593,13 @@ export const buildWebResearchTool = (): ToolSet => {
         if (!res.ok) return refused(`page read failed: HTTP ${res.status}`);
         const parsed = parseExtractResult(await res.json(), url);
         if ("error" in parsed) return refused(`page read failed: ${parsed.error}`);
-        return { url, content: parsed.content, truncated: parsed.truncated };
+        if (!parsed.content.trim()) return refused("page read failed: empty excerpt");
+        return {
+          url,
+          content: parsed.content,
+          truncated: parsed.truncated,
+          pageReadAt: Date.now(),
+        };
       },
     }),
   };
@@ -1890,6 +1904,7 @@ export type ToolContext = {
   threadId?: string;
   rootRequestId?: string;
   evalRevenueFixtureId?: string;
+  evalContext?: EvalContext;
 };
 
 /**
@@ -4223,12 +4238,39 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         let origins: string[];
         let chunks: string[];
         try {
-          ({ docIds, titles, origins, chunks } = await ctx.runAction(
-            internal.vaultGround.vaultGroundHydrated,
-            { tenantId, query },
-          ));
+          ({ docIds, titles, origins, chunks } = toolCtx.evalContext
+            ? await toolCtx.evalContext.retrieveSources(query)
+            : await ctx.runAction(internal.vaultGround.vaultGroundHydrated, { tenantId, query }));
         } catch {
+          // An evaluator may never swallow failed controlled source hydration into fake no-match.
+          if (toolCtx.evalContext) {
+            toolCtx.evalContext.failure = "EVAL_SOURCE_READ_FAILED";
+            throw new Error("EVAL_SOURCE_READ_FAILED");
+          }
           return noMatch;
+        }
+        if (toolCtx.evalContext) {
+          if (
+            docIds.length !== chunks.length ||
+            docIds.length !== titles.length ||
+            docIds.length !== origins.length
+          ) {
+            toolCtx.evalContext.failure = "EVAL_SOURCE_READ_FAILED";
+            throw new Error("EVAL_SOURCE_SHAPE");
+          }
+          try {
+            toolCtx.evalContext.onSources(
+              await Promise.all(
+                docIds.map(async (docId, i) => ({
+                  docId,
+                  chunkHash: await contentHash(chunks[i] ?? ""),
+                })),
+              ),
+            );
+          } catch {
+            toolCtx.evalContext.failure = "EVAL_SOURCE_READ_FAILED";
+            throw new Error("EVAL_SOURCE_OBSERVATION_FAILED");
+          }
         }
 
         // ONE refs-only audit: a query FINGERPRINT + count, never the raw query or a chunk (§4).
@@ -4908,6 +4950,8 @@ async function runAgentLoop(
     planId: Id<"plans">;
     system: string;
     prompt: string;
+    visualInput?: ImageInput;
+    evalContext?: EvalContext;
     primary: PricedModel;
     fallback: PricedModel;
     // EVAL-01 pin — threads to buildCockpitTools so a pinned document-drafter rides the tool calls.
@@ -4991,9 +5035,10 @@ async function runAgentLoop(
   truncated: boolean;
   /** WHY it truncated. Absent when it did not. Feeds specialistMemoBody's closed reason union. */
   truncatedReason?: "steps" | "clock";
-  sources: readonly { url: string; title: string }[];
+  sources: readonly { url: string; title: string; pageReadAt?: number }[];
   modelId: string;
   fallbackModelId: string;
+  actualModelId: string;
 }> {
   const {
     tenantId,
@@ -5012,6 +5057,8 @@ async function runAgentLoop(
     toolNames,
     evalRevenueFixtureId,
     documentIsDeliverable,
+    visualInput,
+    evalContext,
     maxSteps,
     timeoutMs,
     softCutoffMs,
@@ -5038,6 +5085,7 @@ async function runAgentLoop(
       threadId,
       rootRequestId: turnId,
       evalRevenueFixtureId,
+      evalContext,
     },
     grants,
   );
@@ -5056,6 +5104,19 @@ async function runAgentLoop(
   // ONE accumulator across both attempts: a primary that recorded spend before an eligible throw
   // still counts toward the turn's total the eval runner caps on (Pattern 4).
   let costUsd = 0;
+  if (
+    evalContext &&
+    (toolNames === undefined ||
+      toolNames.some((name) => !["searchVault", "saveAsDocument"].includes(name)))
+  )
+    throw new Error("EVAL_TOOL_GRANT_UNSUPPORTED");
+  if (
+    visualInput &&
+    (!(visualInput.bytes instanceof ArrayBuffer) ||
+      visualInput.bytes.byteLength > 1_048_576 ||
+      !["image/png", "image/jpeg"].includes(visualInput.mimeType))
+  )
+    throw new Error("VISUAL_INPUT_INVALID");
   const stepBudget = maxSteps ?? 8;
   const budgetMs = timeoutMs ?? CALL_TIMEOUT_MS;
   // D11's wall-clock row. `stopWhen` accepts an ARRAY of conditions in ai@7, so this is a NATIVE
@@ -5104,22 +5165,53 @@ async function runAgentLoop(
     saveRequest?: { title: string };
     truncated: boolean;
     truncatedReason?: "steps" | "clock";
-    sources: readonly { url: string; title: string }[];
+    sources: readonly { url: string; title: string; pageReadAt?: number }[];
     modelId: string;
     fallbackModelId: string;
+    actualModelId: string;
   }> => {
     const res = await generateText({
       telemetry: { integrations: [fogIntegration({ traceName: "agent-loop" })] },
-      model: m.model,
+      model: evalContext
+        ? evalBudgetModel({
+            ctx,
+            tenantId,
+            budgetId: evalContext.budgetId,
+            model: m.model,
+            modelId: m.id,
+            beforeCall: () => {
+              if (evalContext.failure) throw new Error(evalContext.failure);
+            },
+            onCost: (cost) => {
+              costUsd += cost;
+            },
+          })
+        : m.model,
       system,
-      prompt,
+      ...(visualInput
+        ? {
+            messages: [
+              {
+                role: "user" as const,
+                content: [
+                  { type: "text" as const, text: prompt },
+                  {
+                    type: "file" as const,
+                    data: new Uint8Array(visualInput.bytes),
+                    mediaType: visualInput.mimeType,
+                  },
+                ],
+              },
+            ],
+          }
+        : { prompt }),
       tools,
       // Two conditions, whichever fires first. The soft clock stops BETWEEN steps and keeps the
       // partial findings; the hard abort below stays as the backstop for a single hung step.
       stopWhen: [stepCountIs(stepBudget), outOfClock],
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal: AbortSignal.timeout(budgetMs),
-      maxRetries,
+      maxRetries: evalContext ? 0 : maxRetries,
       // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────
       // ai@7 emits these natively, so not one of the 14 tool wrappers is edited (ponytail rung 4:
       // a native framework feature covers it). Both callbacks are AWAITED by the SDK
@@ -5165,14 +5257,15 @@ async function runAgentLoop(
         });
       },
     });
-    costUsd += await recordModelSpend(
-      ctx,
-      tenantId,
-      m.id,
-      res.usage,
-      "agent_loop",
-      `agentloop:${loopId}:a${attempt}`,
-    );
+    if (!evalContext)
+      costUsd += await recordModelSpend(
+        ctx,
+        tenantId,
+        m.id,
+        res.usage,
+        "agent_loop",
+        `agentloop:${loopId}:a${attempt}`,
+      );
     // R3: OpenAI bills the hosted search PER CALL on top of tokens, and priceUsage prices tokens
     // ONLY — so without this the shared envelope under-counts exactly the capability this phase
     // adds. NOT res.sources.length: one search yields many sources.
@@ -5310,12 +5403,30 @@ async function runAgentLoop(
     // tool's return string; they may NEVER reach an `audit` or `telemetry` payload. `AuditPayload`
     // permits `readonly string[]`, so an array of URLs would TYPE-CHECK — that is the trap. Audit
     // gets a COUNT.
-    const byUrl = new Map<string, { url: string; title: string }>();
+    const byUrl = new Map<string, { url: string; title: string; pageReadAt?: number }>();
     for (const part of res.steps.flatMap((st) => st.content)) {
       if (part.type !== "tool-result" || part.toolName !== "webResearch") continue;
       for (const r of sourcesFromToolOutput((part as { output?: unknown }).output)) {
         if (!byUrl.has(r.url)) byUrl.set(r.url, r);
       }
+    }
+    // Only our executable tool can attest a successful excerpt read. A citation in model prose,
+    // a refused read, or a search result alone cannot upgrade the source's evidence depth.
+    for (const part of res.steps.flatMap((st) => st.content)) {
+      if (part.type !== "tool-result" || part.toolName !== "readPage") continue;
+      const output = (part as { output?: unknown }).output as
+        | { url?: unknown; content?: unknown; pageReadAt?: unknown }
+        | undefined;
+      if (
+        typeof output?.url !== "string" ||
+        typeof output.content !== "string" ||
+        !output.content.trim() ||
+        typeof output.pageReadAt !== "number" ||
+        !Number.isFinite(output.pageReadAt)
+      )
+        continue;
+      const source = byUrl.get(output.url);
+      if (source) source.pageReadAt = Math.max(source.pageReadAt ?? 0, output.pageReadAt);
     }
     const sources = [...byUrl.values()];
     // The AND described above. It has to live HERE rather than beside `declaredQuestionScope`
@@ -5346,6 +5457,7 @@ async function runAgentLoop(
       // identical and the assertion both unwritable and meaningless.
       modelId: primary.id,
       fallbackModelId: fallback.id,
+      actualModelId: m.id,
     };
   };
   try {
@@ -5406,6 +5518,9 @@ export async function runSpecialistTurn(
     skillName: string;
     toolNames: readonly string[];
     prompt: string;
+    visualInput?: ImageInput;
+    evalContext?: EvalContext;
+    expectedSkillBodyHash?: string;
     turnId?: string;
     threadId?: string;
     skillVersions?: Record<string, number>;
@@ -5471,9 +5586,10 @@ export async function runSpecialistTurn(
   /** WHY it truncated — the `...res` spread already forwarded it; only this type omitted it, which
    *  made D11's three-way marker invisible to `governedDispatch` (16-06 consumes it). */
   truncatedReason?: "steps" | "clock";
-  sources: readonly { url: string; title: string }[];
+  sources: readonly { url: string; title: string; pageReadAt?: number }[];
   modelId: string;
   fallbackModelId: string;
+  actualModelId: string;
 }> {
   const {
     tenantId,
@@ -5487,6 +5603,10 @@ export async function runSpecialistTurn(
     evalRevenueFixtureId,
   } = args;
   const tenantSkillIds = args.tenantSkillIds;
+  if (args.visualInput && skillName !== "vertical-design")
+    throw new Error("VISUAL_SKILL_UNSUPPORTED");
+  if (args.evalContext && verticalIdForSkill(skillName) === null)
+    throw new Error("EVAL_SKILL_UNSUPPORTED");
   // The §5 loader, fail-closed on both branches (a missing pin throws NO_SUCH_SKILL_VERSION, a
   // never-seeded skill throws NO_ACTIVE_SKILL) — a specialist NEVER runs on a hardcoded prompt.
   //
@@ -5547,6 +5667,11 @@ export async function runSpecialistTurn(
               scope: row.scope,
               id: String(row.skillId),
             }));
+  if (
+    args.evalContext &&
+    (!args.expectedSkillBodyHash || (await contentHash(skill.body)) !== args.expectedSkillBodyHash)
+  )
+    throw new Error("EVAL_SKILL_BODY_CHANGED");
   const mock = args.mockScript;
   // The research specialist runs on its OWN pin: only these two models were PROVEN to accept
   // `openai.tools.webSearch` (the 16-02 probe, recorded in docs/playbooks/agent-runtime.md), and an
@@ -5559,7 +5684,7 @@ export async function runSpecialistTurn(
   // on 2026-08-08 as noise (the tombstone at RESEARCH_FALLBACK_MODEL in @pikar/cost has the four
   // configurations), so this one arrives with its own measurement and its own abort condition — see
   // `PACK_MODEL`. Derived from the skill NAME like every other decision at this seam.
-  const isPack = isWorkflowPackSkill(skillName);
+  const isPack = isWorkflowPackSkill(skillName) || verticalIdForSkill(skillName) !== null;
   // 33.2: THE FOURTH LANE. The storyboard turn fell through to the defaults — the VOLUME pin —
   // while carrying the heaviest rule load of any single turn. Its own pair, derived from the skill
   // name like the other two; the pin itself moves only on 33.2-03's measured rule (cost.ts).
@@ -5579,6 +5704,8 @@ export async function runSpecialistTurn(
     planId,
     system: skill.body,
     prompt,
+    visualInput: args.visualInput,
+    evalContext: args.evalContext,
     primary: {
       model: mock
         ? (new MockLanguageModelV4({
@@ -5606,9 +5733,10 @@ export async function runSpecialistTurn(
     evalRevenueFixtureId,
     // 27-10: derived HERE from the skill name, beside the model pin and the step budget, for the
     // reason stated above — it is a property of WHICH SPECIALIST is running, not a request the
-    // caller can make. `packOutputIsDocument` is false for every non-pack name, so every other
-    // caller keeps today's description byte-identically.
-    documentIsDeliverable: packOutputIsDocument(skillName),
+    // caller can make. The six closed vertical workflows also produce documents; all other
+    // callers keep their existing description and cannot request this capability.
+    documentIsDeliverable:
+      packOutputIsDocument(skillName) || verticalIdForSkill(skillName) !== null,
     // D10: decompose -> several deliberately varied searches -> synthesise does not fit the
     // cockpit's 8 steps. Raised for THIS route only; a run that still exhausts it comes back
     // MARKED (truncated), never as a confident partial answer.
@@ -6436,7 +6564,7 @@ export const __runCockpitAgentWithScript = internalAction({
     declaredUnsupported: boolean;
     truncated: boolean;
     truncatedReason?: "steps" | "clock";
-    sources: readonly { url: string; title: string }[];
+    sources: readonly { url: string; title: string; pageReadAt?: number }[];
     modelId: string;
     fallbackModelId: string;
   }> => {

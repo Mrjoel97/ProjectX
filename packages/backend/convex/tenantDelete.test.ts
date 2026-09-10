@@ -104,10 +104,21 @@ describe("tenant data deletion pages", () => {
   test("cannot reach audit/global tables and preserves immutable audit rows", async () => {
     const { t, tenantA, auditA, auditB } = await seedTwoTenants();
     expect(deletableTables()).not.toContain("audit");
+    const queue = await t.run((ctx) => ctx.db.insert("auditExportQueue", { auditId: auditA }));
+    const checkpoint = await t.run((ctx) =>
+      ctx.db.insert("exportCursors", {
+        name: "worm-audit",
+        lastExportedTs: 0,
+        revision: 0,
+        pendingAuditIds: [auditA],
+      }),
+    );
 
     await deleteAll(t, String(tenantA), tenantA);
 
     await t.run(async (ctx) => {
+      expect(await ctx.db.get(queue)).toMatchObject({ auditId: auditA });
+      expect(await ctx.db.get(checkpoint)).toMatchObject({ pendingAuditIds: [auditA] });
       expect(await ctx.db.get(auditA)).toMatchObject({ correlationId: "audit-a-immutable" });
       expect(await ctx.db.get(auditB)).toMatchObject({ correlationId: "audit-b-immutable" });
       expect(await ctx.db.query("audit").collect()).toHaveLength(2);
@@ -904,6 +915,181 @@ describe("erasure deletes stored files (2026-09-08)", () => {
 // eval tenants, because neither eval runner has ever cleaned up. The prefix check is the entire
 // safety argument, so it is the thing these tests are really about.
 describe("purgeEvalTenant only ever touches synthetic tenants", () => {
+  test("exact case cleanup preserves a sibling tenant sharing its prefix", async () => {
+    const t = convexTest(schema, modules);
+    const rows = await t.run(async (ctx) => {
+      const rows = [];
+      for (const tenantId of ["packeval-aabbccdd-case", "packeval-aabbccdd-case-extra"]) {
+        const planId = await ctx.db.insert("plans", {
+          tenantId,
+          threadId: tenantId,
+          status: "collecting",
+          createdAt: 1,
+        });
+        const auditId = await ctx.db.insert("audit", {
+          tenantId,
+          actor: "system",
+          eventType: "evaluation.ran",
+          payload: {},
+          ts: 1,
+          correlationId: tenantId,
+        });
+        rows.push({ planId, auditId });
+      }
+      return rows;
+    });
+    await t.mutation(internal.tenantDelete.purgeEvalTenant, {
+      tenantId: "packeval-aabbccdd-case",
+      exact: true,
+    });
+    expect(await t.run((ctx) => ctx.db.get(rows[0]!.planId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(rows[0]!.auditId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(rows[1]!.planId))).not.toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(rows[1]!.auditId))).not.toBeNull();
+  });
+  test("paged exact cleanup retains its receipt through an interrupted audit drain", async () => {
+    const t = convexTest(schema, modules);
+    const tenantId = "packeval-aabbccdd-receipt";
+    const receiptId = await t.run(async (ctx) => {
+      const receipt = await ctx.db.insert("audit", {
+        tenantId,
+        actor: "system",
+        eventType: "vertical_eval.provisioned",
+        payload: {},
+        ts: 0,
+        correlationId: tenantId,
+      });
+      for (let i = 1; i <= 6; i++)
+        await ctx.db.insert("audit", {
+          tenantId,
+          actor: "system",
+          eventType: "evaluation.ran",
+          payload: {},
+          ts: i,
+          correlationId: tenantId,
+        });
+      return receipt;
+    });
+    const args = { tenantId, exact: true, preserveAuditId: receiptId, limit: 2 };
+    const first = await t.mutation(internal.tenantDelete.purgeEvalTenant, args);
+    expect(first.done).toBe(false);
+    expect(await t.run((ctx) => ctx.db.get(receiptId))).not.toBeNull();
+    const checkpointId = await t.run(async (ctx) => {
+      const frozen = await ctx.db
+        .query("audit")
+        .withIndex("by_tenant_ts", (q) => q.eq("tenantId", tenantId))
+        .order("desc")
+        .first();
+      if (!frozen) throw new Error("fixture audit missing");
+      return ctx.db.insert("exportCursors", {
+        name: "worm-audit",
+        revision: 0,
+        lastExportedTs: 0,
+        legacyDone: true,
+        pendingAuditIds: [frozen._id],
+      });
+    });
+    await expect(
+      t.mutation(internal.tenantDelete.purgeEvalTenant, { ...args, limit: 200 }),
+    ).rejects.toThrow("EVAL_AUDIT_EXPORT_PENDING");
+    expect(await t.run((ctx) => ctx.db.get(receiptId))).not.toBeNull();
+    await t.run((ctx) => ctx.db.patch(checkpointId, { pendingAuditIds: [] }));
+    let result = first;
+    for (let i = 0; i < 10 && !result.done; i++)
+      result = await t.mutation(internal.tenantDelete.purgeEvalTenant, args);
+    expect(result.done).toBe(true);
+    expect(await t.run((ctx) => ctx.db.get(receiptId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+  });
+  test("teardown removes only its own queue references so later export remains readable", async () => {
+    const t = convexTest(schema, modules);
+    const ids = await t.run(async (ctx) => {
+      const ids = [];
+      for (const tenantId of ["eval-aabbccdd", "real-tenant"]) {
+        const auditId = await ctx.db.insert("audit", {
+          tenantId,
+          actor: "system",
+          eventType: "evaluation.ran",
+          payload: {},
+          ts: 1,
+          correlationId: "c1",
+          exportVersion: 2,
+        });
+        const queueId = await ctx.db.insert("auditExportQueue", { auditId });
+        ids.push({ auditId, queueId });
+      }
+      await ctx.db.insert("exportCursors", {
+        name: "worm-audit",
+        revision: 0,
+        lastExportedTs: 0,
+        legacyDone: true,
+      });
+      return ids;
+    });
+    await t.mutation(internal.tenantDelete.purgeEvalTenant, { tenantId: "eval-aabbccdd" });
+    const state = await t.mutation(internal.wormCursor.beginExport, { pageSize: 1000 });
+    expect(state?.rows.map((row) => row._id)).toEqual([ids[1]?.auditId]);
+    expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toEqual([
+      expect.objectContaining({ _id: ids[1]?.queueId }),
+    ]);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([
+      expect.objectContaining({ _id: ids[1]?.auditId }),
+    ]);
+  });
+
+  test.each([
+    false,
+    true,
+  ])("frozen legacy=%s audit refuses teardown atomically until acknowledgement", async (legacy) => {
+    const t = convexTest(schema, modules);
+    const ids = await t.run(async (ctx) => {
+      const planId = await ctx.db.insert("plans", {
+        tenantId: "eval-aabbccdd",
+        threadId: "t1",
+        status: "collecting",
+        createdAt: 1,
+      });
+      const auditId = await ctx.db.insert("audit", {
+        tenantId: "eval-aabbccdd",
+        actor: "system",
+        eventType: "evaluation.ran",
+        payload: {},
+        ts: 1,
+        correlationId: "c1",
+        ...(legacy ? {} : { exportVersion: 2 as const }),
+      });
+      if (!legacy) {
+        await ctx.db.insert("auditExportQueue", { auditId });
+        await ctx.db.insert("exportCursors", {
+          name: "worm-audit",
+          revision: 0,
+          lastExportedTs: 0,
+          legacyDone: true,
+        });
+      }
+      return { planId, auditId };
+    });
+    const frozen = await t.mutation(internal.wormCursor.beginExport, { pageSize: 1 });
+    await expect(
+      t.mutation(internal.tenantDelete.purgeEvalTenant, {
+        tenantId: "eval-aabbccdd",
+      }),
+    ).rejects.toThrow("EVAL_AUDIT_EXPORT_PENDING");
+    expect(await t.run((ctx) => ctx.db.get(ids.planId))).not.toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(ids.auditId))).not.toBeNull();
+    expect(await t.mutation(internal.wormCursor.beginExport, { pageSize: 1000 })).toEqual(frozen);
+    // Simulated acknowledged upload, only inside convex-test. Then teardown may proceed.
+    expect(
+      await t.mutation(internal.wormCursor.advanceCursor, {
+        revision: frozen?.revision ?? -1,
+        ts: 1,
+      }),
+    ).toBe(true);
+    await t.mutation(internal.tenantDelete.purgeEvalTenant, { tenantId: "eval-aabbccdd" });
+    expect(await t.run((ctx) => ctx.db.get(ids.auditId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.query("auditExportQueue").collect())).toEqual([]);
+  });
+
   test("it REFUSES a tenant id that is not an eval tenant, before reading anything", async () => {
     const t = convexTest(schema, modules);
     const seeded = await t.run(async (ctx) => {

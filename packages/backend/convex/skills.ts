@@ -99,8 +99,10 @@ import { styleCoachingSkillBody } from "@pikar/contracts/skills/styleCoaching";
 import { styleConciseSkillBody } from "@pikar/contracts/skills/styleConcise";
 import { styleDirectSkillBody } from "@pikar/contracts/skills/styleDirect";
 import { swotSkillBody } from "@pikar/contracts/skills/swot";
+import { VERTICAL_CANDIDATES } from "@pikar/contracts/skills/verticalCandidates";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
+import { hasPassingVerticalEvalEvidence } from "@pikar/contracts/verticalEval";
 import {
   type CustomizationError,
   canonicalCustomization,
@@ -114,6 +116,7 @@ import {
   validateCustomization,
   WORKFLOW_PACK_SKILL_NAMES,
 } from "@pikar/core";
+import { verticalIdForSkill } from "@pikar/core/verticalPacks";
 import { v } from "convex/values";
 import skillsLock from "../skills-lock.json";
 import { internal } from "./_generated/api";
@@ -250,7 +253,7 @@ async function planGlobalActivation(
   // PACK GATE (27-02, PACK-02). A SECOND, stricter choke point at the same place, keyed on the
   // closed pack id set rather than on `GATED_SKILLS` — see the pack lane below for why the two
   // lists must stay apart. Same `status === "candidate"` condition, so the same rollback exemption.
-  if (isWorkflowPackSkill(name) && target.status === "candidate") {
+  if (isNativePackSkill(name) && target.status === "candidate") {
     assertPackActivationEvidence(target, name, version);
   }
 
@@ -412,6 +415,12 @@ async function planTenantActivation(
   ownerUserId?: Id<"users">,
 ): Promise<ActivationPlan> {
   const row = await loadTenantCandidate(ctx, candidateId);
+  if (
+    mode !== "rollback" &&
+    verticalIdForSkill(row.name) !== null &&
+    !isWorkflowPackSkill(row.name)
+  )
+    throw new Error("VERTICAL_NOT_REGISTERED");
 
   // THE PACK GATE HAS NO TENANT LANE, SO THE TENANT LANE FAILS CLOSED (29-05 remediation).
   //
@@ -1040,13 +1049,16 @@ async function newestPackRow(ctx: MutationCtx, name: string): Promise<Doc<"skill
   return rows.length === 0 ? null : rows.reduce((a, b) => (b.version > a.version ? b : a));
 }
 
+const isNativePackSkill = (name: string): boolean =>
+  isWorkflowPackSkill(name) || verticalIdForSkill(name) !== null;
+
 async function publishPack(
   ctx: MutationCtx,
   name: string,
   body: string,
   provenance: string,
 ): Promise<{ name: string; version: number; inserted: boolean }> {
-  if (!isWorkflowPackSkill(name)) {
+  if (!isNativePackSkill(name)) {
     throw new Error(`${NOT_A_PACK_ERROR}: ${name} is not a workflow pack`);
   }
 
@@ -1067,6 +1079,11 @@ async function publishPack(
     throw new Error(
       `${PROVENANCE_PIN_ERROR}: provenance must be valid and pin ${name} v${version}`,
     );
+  }
+
+  if (verticalIdForSkill(name) !== null) {
+    const manifest = JSON.parse(provenance) as { bodySha256: string };
+    if ((await contentHash(body)) !== manifest.bodySha256) throw new Error("BODY_HASH_MISMATCH");
   }
 
   await ctx.db.insert("skills", {
@@ -1340,7 +1357,7 @@ export const inspectRevenueCandidates = internalQuery({
 export const deactivatePack = ownerMutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
-    if (!isWorkflowPackSkill(name)) {
+    if (!isNativePackSkill(name)) {
       throw new Error(`${NOT_A_PACK_ERROR}: ${name} is not a workflow pack`);
     }
     const active = await ctx.db
@@ -1363,7 +1380,7 @@ export const deactivatePack = ownerMutation({
 export const recordPackBrowserEvidence = internalMutation({
   args: { name: v.string(), version: v.number(), browserEvidence: v.string() },
   handler: async (ctx, { name, version, browserEvidence }) => {
-    if (!isWorkflowPackSkill(name)) {
+    if (!isNativePackSkill(name)) {
       throw new Error(`${NOT_A_PACK_ERROR}: ${name} is not a workflow pack`);
     }
     const row = await ctx.db
@@ -1433,7 +1450,13 @@ function assertPackActivationEvidence(target: Doc<"skills">, name: string, versi
     // The PACK predicate, not the global one: a global-scope evidence blob carries no suite
     // identity, so `hasPassingEvidence` alone would honour a row written by `run-eval-golden.mjs`
     // or by a pack run against a corpus that has since been rewritten.
-    hasPassingPackEvalEvidence(target.evidence, name, version) ? null : "eval",
+    (
+      verticalIdForSkill(name) !== null
+        ? hasPassingVerticalEvalEvidence(target.evidence, name, version)
+        : hasPassingPackEvalEvidence(target.evidence, name, version)
+    )
+      ? null
+      : "eval",
     hasPassingPackBrowserEvidence(target.browserEvidence, name, version) ? null : "browser",
   ].filter((plane): plane is string => plane !== null);
 
@@ -1475,6 +1498,14 @@ export async function loadEffectiveSkill(
   tenantId: string,
   name: string,
 ): Promise<EffectiveSkill> {
+  const verticalId = verticalIdForSkill(name);
+  if (verticalId !== null) {
+    const profile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    if (profile?.disabledVerticals?.includes(verticalId)) throw new Error("VERTICAL_DISABLED");
+  }
   const overlay = await ctx.db
     .query("tenantSkills")
     .withIndex("by_tenant_name_status", (q) =>
@@ -2648,6 +2679,46 @@ export const rollbackTenantSkill = ownerMutation({
   },
 });
 
+/** Same native transition, narrowed to the authenticated tenant and a reserved vertical name.
+ * Caller retains the owner gate; no new activation or rollback eligibility writer exists. */
+export async function rollbackVerticalForTenant(
+  ctx: MutationCtx & { tenantId: string; userId: Id<"users"> },
+  targetId: Id<"tenantSkills">,
+  name: string,
+): Promise<ActivationResult> {
+  const row = await ctx.db.get(targetId);
+  if (
+    !row ||
+    row.tenantId !== ctx.tenantId ||
+    row.name !== name ||
+    verticalIdForSkill(name) === null
+  )
+    throw new Error("NOT_FOUND");
+  const result = await transitionSkillActivation(ctx, {
+    scope: "tenant",
+    candidateId: targetId,
+    mode: "rollback",
+  });
+  if (result.changed) await logTenantActivation(ctx, "skill.user_skill_rolled_back", result);
+  return result;
+}
+
+/** Exposure reuses all native pack evidence planes, never a new release flag. */
+export async function nativePackExposureReady(
+  ctx: QueryCtx,
+  row: Doc<"skills"> | Doc<"tenantSkills">,
+): Promise<boolean> {
+  if (!isNativePackSkill(row.name) || row.status !== "active") return false;
+  if ("tenantId" in row) return (await tenantPackPlanesMissing(ctx, row)).length === 0;
+  return (
+    hasValidPackProvenance(row.provenance, row.name, row.version) &&
+    (verticalIdForSkill(row.name) !== null
+      ? hasPassingVerticalEvalEvidence(row.evidence, row.name, row.version)
+      : hasPassingPackEvalEvidence(row.evidence, row.name, row.version)) &&
+    hasPassingPackBrowserEvidence(row.browserEvidence, row.name, row.version)
+  );
+}
+
 /**
  * The one refs-only audit write for both owner transitions (CLAUDE.md §4): ids, tenant/name/version,
  * the author enum, the eval run id and the owner's user id. No body, no adaptation, no prose, no
@@ -2734,5 +2805,28 @@ export const newestTenantCustomization = internalQuery({
       templateVersion: newest.templateVersion,
       version: newest.version,
     };
+  },
+});
+
+/** Explicit operator publication only: immutable, idempotent, and never activates a body. */
+export const seedVerticalCandidates = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const results = [];
+    for (const [name, candidate] of Object.entries(VERTICAL_CANDIDATES)) {
+      const newest = await newestPackRow(ctx, name);
+      const provenanceFor = (version: number) =>
+        JSON.stringify({
+          ...candidate.provenance,
+          skillVersions: { [name]: version },
+        });
+      const unchanged =
+        newest !== null &&
+        newest.body === candidate.body &&
+        newest.provenance === provenanceFor(newest.version);
+      const version = unchanged ? newest.version : (newest?.version ?? 0) + 1;
+      results.push(await publishPack(ctx, name, candidate.body, provenanceFor(version)));
+    }
+    return results;
   },
 });

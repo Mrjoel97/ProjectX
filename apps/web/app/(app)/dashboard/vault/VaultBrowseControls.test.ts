@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { useQuery } from "convex/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
+import { FolderBreadcrumb } from "./FolderBreadcrumb";
 import {
   DigestRebuildControl,
   FolderOpenControl,
@@ -10,6 +12,36 @@ import {
   type VaultBrowseHandlers,
   vaultBrowseActions,
 } from "./VaultBrowseControls";
+
+vi.mock("convex/react", () => ({ useQuery: vi.fn(), useMutation: () => vi.fn() }));
+
+test.each([
+  "failed",
+  "refused",
+  "building",
+])("folder summary %s stays visible without a digest", (digestStatus) => {
+  vi.mocked(useQuery)
+    .mockReturnValueOnce({
+      name: "Documents",
+      memberCount: 2,
+      digestStatus,
+    })
+    .mockReturnValueOnce({ state: "none", unincorporatedCount: 0 });
+  const html = renderToStaticMarkup(
+    createElement(FolderBreadcrumb, {
+      folderId: "folder-test" as never,
+      onExit: vi.fn(),
+    }),
+  );
+  if (digestStatus === "building") {
+    expect(html).toContain("Rebuilding…");
+    expect(html).toContain('disabled=""');
+  } else {
+    expect(html).toContain("Rebuild digest");
+    expect(html).toContain("could not be completed");
+    expect(html).not.toContain('disabled=""');
+  }
+});
 
 const dropzoneSource = readFileSync(join(__dirname, "Dropzone.tsx"), "utf8");
 

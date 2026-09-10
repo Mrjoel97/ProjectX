@@ -230,7 +230,9 @@ describe("the vault surface", () => {
 
     // DERIVED from the reducer over the unincorporated count, never read off a stored flag.
     expect(block).toContain('viewState.digest.kind === "stale"');
-    expect(block).toMatch(/<DigestRebuildControl[\s\S]{0,400}stale=\{stale\}/);
+    const control = block.match(/<DigestRebuildControl[\s\S]*?\/>/)?.[0] ?? "";
+    // Keep the derived stale signal connected even when failure recovery also adds emphasis.
+    expect(control).toMatch(/\bstale=\{[^}]*\bstale\b[^}]*\}/);
 
     // ONE control on the whole surface: one definition, one mount, one label.
     expect(src.match(/export function DigestRebuildControl/g)?.length).toBe(1);

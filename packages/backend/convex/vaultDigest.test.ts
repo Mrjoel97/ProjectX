@@ -86,6 +86,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 /** rateLimiter for preCall/recordSpend, workflow + workpool for startIngest. Mandatory here. */
@@ -123,7 +124,7 @@ const docRow = (t: Harness, docId: Id<"vaultDocuments">) => t.run((ctx) => ctx.d
 const scheduledDigests = (t: Harness) =>
   t.run(async (ctx) =>
     (await ctx.db.system.query("_scheduled_functions").collect()).filter((s) =>
-      /buildFolderDigest/.test(s.name),
+      /startDigest/.test(s.name),
     ),
   );
 
@@ -361,16 +362,18 @@ describe("staleness fires on a new ready member and clears on rebuild", () => {
     expect(await stateOf(t, TENANT, folderId)).toEqual({ state: "stale", unincorporatedCount: 1 });
 
     // NOTHING has spent a cent to learn that: the state read is a pure diff and nothing reacts to
-    // it. The rebuild is the user's click, and it SCHEDULES the action (a mutation cannot run one).
-    const before = await scheduledDigests(t);
+    // it. The user's click atomically starts the durable workflow.
     expect(await asTenant(t, TENANT).mutation(api.vaultDigest.rebuildDigest, { folderId })).toEqual(
       {
         ok: true,
       },
     );
-    expect((await scheduledDigests(t)).length).toBe(before.length + 1);
-
-    await build(t, TENANT, folderId, true);
+    expect((await folderRow(t, folderId))?.digestStatus).toBe("building");
+    expect(await asTenant(t, TENANT).mutation(api.vaultDigest.rebuildDigest, { folderId })).toEqual(
+      { ok: false },
+    );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect((await folderRow(t, folderId))?.digestStatus).toBe("built");
     expect(await stateOf(t, TENANT, folderId)).toEqual({ state: "fresh", unincorporatedCount: 0 });
 
     // ONE digest document for one folder, patched in place — a second groundable digest would keep
@@ -569,6 +572,56 @@ describe("a refused digest build is never silent", () => {
       "memberCount",
       "reason",
     ]);
+  });
+});
+
+describe("durable digest terminal", () => {
+  test.each([
+    "missing_skill",
+    "provider_failure",
+    "budget_refusal",
+  ] as const)("%s ends visibly and duplicate delivery cannot re-notify", async (failure) => {
+    const tenantId = `tenant_digest_terminal_${failure}`;
+    const t = failure === "missing_skill" ? budgetHarness() : await seeded();
+    const folderId = await seedFolder(t, tenantId, { status: "complete", memberCount: 0 });
+    if (failure === "provider_failure") {
+      vi.stubEnv("OPENROUTER_API_KEY", "test-only-key");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ error: { message: "provider refused private input" } }), {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+      );
+    }
+    if (failure === "budget_refusal") {
+      await t.mutation(internal.guardrails.recordSpend, { tenantId, costUsd: 999, rail: "ingest" });
+    }
+    expect(await t.mutation(internal.vaultFolders.startDigest, { tenantId, folderId })).toBe(true);
+    expect(await t.mutation(internal.vaultFolders.startDigest, { tenantId, folderId })).toBe(false);
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const folder = await folderRow(t, folderId);
+    expect(folder?.digestStatus).toBe(failure === "budget_refusal" ? "refused" : "failed");
+    expect(folder?.digestDocId).toBeUndefined();
+    if (failure === "provider_failure") expect(fetch).toHaveBeenCalledTimes(1);
+    const notifications = () => t.run((ctx) => ctx.db.query("notifications").collect());
+    expect(await notifications()).toHaveLength(1);
+    await t.mutation(internal.vaultFolders.onDigestComplete, {
+      workflowId: folder?.digestWorkflowId as never,
+      context: { tenantId, folderId },
+      result: { kind: "failed", error: "private provider message" },
+    });
+    expect(await notifications()).toHaveLength(1);
+    const audit = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(JSON.stringify(audit)).not.toContain("private provider message");
+    // The user can explicitly retry; automatic redelivery cannot charge another attempt.
+    expect(await t.mutation(internal.vaultFolders.startDigest, { tenantId, folderId })).toBe(false);
+    expect(
+      await t.mutation(internal.vaultFolders.startDigest, { tenantId, folderId, rebuild: true }),
+    ).toBe(true);
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
   });
 });
 

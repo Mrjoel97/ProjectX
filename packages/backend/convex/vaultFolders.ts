@@ -2,7 +2,7 @@
 // 15.3-03 budget rail. A folder is a ROW PLUS COUNTERS, deliberately not a workflow: the workflow
 // journal caps at 8 MiB, steps pass ≤1 MB total, and 400 sequential `step.runAction` calls would
 // serialise the folder behind the shared pool with determinism risk on redeploy. One workflow per
-// document; this file only orchestrates.
+// document; this file orchestrates membership and a separate one-action workflow for synthesis.
 //
 // THE LIFECYCLE, and the ORDER is the design:
 //   1. `createFolder`  → `reserving`, zeroed counters.
@@ -22,6 +22,7 @@
 // uploaded would see `terminalCount === memberCount` at 1 === 1, settle, and synthesise a digest
 // over one third of itself. A status CAS does not help — it only stops a SECOND completion.
 // `reserveFolder` is therefore also the CLOSE SIGNAL: after it, `memberCount` is fixed.
+import { vResultValidator, vWorkflowId } from "@convex-dev/workflow";
 import {
   type EstimateInput,
   estimateFolderCents,
@@ -48,6 +49,7 @@ import {
   reserveFolderInner,
   vFileManifest,
 } from "./guardrails";
+import { workflow } from "./index";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { scheduleExtraction } from "./vault";
 import { startIngest } from "./vaultIngest";
@@ -65,6 +67,7 @@ type FolderView = {
   reservedCents: number;
   digestDocId?: Id<"vaultDocuments">;
   digestBuiltAt?: number;
+  digestStatus?: Doc<"vaultFolders">["digestStatus"];
   createdAt: number;
 };
 
@@ -80,6 +83,7 @@ const projectFolder = (f: Doc<"vaultFolders">): FolderView => ({
   reservedCents: f.reservedCents,
   digestDocId: f.digestDocId,
   digestBuiltAt: f.digestBuiltAt,
+  digestStatus: f.digestStatus,
   createdAt: f.createdAt,
 });
 
@@ -442,15 +446,15 @@ export async function tryComplete(
 
   await ctx.runMutation(internal.guardrails.settleFolder, { folderId });
 
-  // (2) THE DIGEST. SCHEDULED, not awaited: it is an ACTION (a model call) and a mutation cannot
-  //     run one. It therefore lands AFTER this transaction commits — i.e. after the folder is
+  // (2) Schedule the transactional workflow starter. Synthesis lands AFTER this transaction
+  //     commits — i.e. after the folder is
   //     already `complete` and after `settleFolder` has zeroed the reservation — which is why
   //     `buildFolderDigest` asserts `complete` and never `ingesting`. `tenantId` is EXPLICIT
   //     because a scheduled function has no identity (Pitfall 3).
   //     STILL DEFERRED: the 17.1 Stage-2 drift call plan 04 named as a sibling here. It needs an
   //     `internalAction` sibling of `blueprint.buildBlueprintDraft` (that one is a `tenantAction`)
   //     which does not exist yet — naming it here would be a typecheck failure, not a marker.
-  await ctx.scheduler.runAfter(0, internal.vaultDigest.buildFolderDigest, {
+  await ctx.scheduler.runAfter(0, internal.vaultFolders.startDigest, {
     tenantId: folder.tenantId,
     folderId,
   });
@@ -458,6 +462,88 @@ export async function tryComplete(
   await ctx.db.patch(folderId, { status: "complete" }); // (3) the unseal — always last
   return true;
 }
+
+/** A scheduled mutation retries transactionally; a paid synthesis action must not replay. */
+export const startDigest = internalMutation({
+  args: {
+    tenantId: v.string(),
+    folderId: v.id("vaultFolders"),
+    rebuild: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args): Promise<boolean> => {
+    const folder = await ctx.db.get(args.folderId);
+    if (
+      !folder ||
+      folder.tenantId !== args.tenantId ||
+      folder.status !== "complete" ||
+      folder.organizational ||
+      folder.digestStatus === "building" ||
+      (!args.rebuild && (folder.digestWorkflowId || folder.digestBuiltAt !== undefined))
+    ) {
+      return false;
+    }
+    const digestWorkflowId = await workflow.start(ctx, internal.vaultFolders.digestWorkflow, args, {
+      onComplete: internal.vaultFolders.onDigestComplete,
+      context: { tenantId: args.tenantId, folderId: args.folderId },
+    });
+    await ctx.db.patch(args.folderId, { digestWorkflowId, digestStatus: "building" });
+    return true;
+  },
+});
+
+export const digestWorkflow = workflow.define({
+  args: {
+    tenantId: v.string(),
+    folderId: v.id("vaultFolders"),
+    rebuild: v.optional(v.boolean()),
+  },
+  handler: async (step, args): Promise<{ ok: boolean }> => {
+    // The action writes spend and the digest; replay after an ambiguous failure could charge twice.
+    return await step.runAction(internal.vaultDigest.buildFolderDigest, args, { retry: false });
+  },
+});
+
+export const onDigestComplete = internalMutation({
+  args: {
+    workflowId: vWorkflowId,
+    result: vResultValidator,
+    context: v.object({ tenantId: v.string(), folderId: v.id("vaultFolders") }),
+  },
+  handler: async (ctx, { workflowId, result, context }): Promise<null> => {
+    const folder = await ctx.db.get(context.folderId);
+    if (
+      !folder ||
+      folder.tenantId !== context.tenantId ||
+      folder.digestWorkflowId !== workflowId ||
+      folder.digestStatus !== "building"
+    )
+      return null;
+    // Built means synthesis persisted. The document's own ingest workflow still owns readiness.
+    const status =
+      result.kind === "success"
+        ? result.returnValue?.ok === true
+          ? "built"
+          : "refused"
+        : "failed";
+    await ctx.db.patch(folder._id, { digestStatus: status });
+    await ctx.runMutation(internal.audit.log, {
+      tenantId: context.tenantId,
+      correlationId: workflowId,
+      eventType: `folder.digest_${status}`,
+      actor: "system",
+      payload: { folderId: folder._id, workflowId },
+    });
+    if (status !== "built") {
+      // In-app only: this unregistered kind cannot trigger an external notification send.
+      await ctx.runMutation(internal.notifications.notify, {
+        tenantId: context.tenantId,
+        kind: "folder.digest_incomplete",
+        message: "A folder summary could not be completed. Open the vault folder to retry.",
+      });
+    }
+    return null;
+  },
+});
 
 // ── Cancel ────────────────────────────────────────────────────────────────────
 

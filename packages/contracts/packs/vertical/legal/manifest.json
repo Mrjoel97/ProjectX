@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "packId": "legal",
+  "workflowId": "legal-contract-issues",
+  "version": 1,
+  "status": "candidate",
+  "runtimeEnabled": false,
+  "skillName": "vertical-legal",
+  "output": "document",
+  "outputContractId": "legal-output.v1",
+  "disclaimerId": "legal-review.v1",
+  "risk": "consequential",
+  "requiredReview": "qualified-counsel",
+  "requiredSources": ["vault"],
+  "connectorGate": "legal-systems",
+  "disablePolicy": "block-new-starts-preserve-artifacts",
+  "rollbackPolicy": "exact-previously-active-version",
+  "provenance": {
+    "sourceRepo": "https://github.com/anthropics/knowledge-work-plugins",
+    "sourceCommit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
+    "sourcePaths": ["legal/skills/review-contract/SKILL.md"],
+    "bodySha256": "f1c8e4dc72f8bc3a51578c06d71b775fe9c6524ed247daffb097968864f36960",
+    "license": "Apache-2.0",
+    "modificationNotice": "Pikar candidate adaptation, 2026-09-10: assistive evidence organization only; remove local/MCP assumptions, generic defaults, consequential decisions, autonomous approval and external actions. See method-review.md.",
+    "skillVersions": {
+      "vertical-legal": 1
+    },
+    "ts": 1788998400000
+  },
+  "sourceFiles": [
+    {
+      "path": "legal/skills/review-contract/SKILL.md",
+      "sha256": "3a6413475f51adedbff130f4d5aabbeeacfb2abd323e0338bc91c21937fbfb76",
+      "gitBlobSha": "030204860ec70bf80254f9894721504df7c81bd5",
+      "bytes": 16708
+    }
+  ],
+  "hashEncoding": "LF-normalized UTF-8; pinned upstream downloads were LF bytes. Git blob hash verified against official pinned tree.",
+  "licenseEvidence": {
+    "governingPath": "legal/LICENSE",
+    "redistributedCopy": "third_party/knowledge-work-plugins/LICENSE",
+    "governingSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "rootLicenseAnomaly": false
+  },
+  "evidence": {
+    "methodReview": "draft",
+    "nativeEval": null,
+    "browserUat": null,
+    "activation": null
+  },
+  "releaseBlockedBy": [
+    "independent-method-review",
+    "exact-version-native-eval",
+    "authenticated-responsive-uat",
+    "runtime-binding"
+  ],
+  "outputFlags": {
+    "assistive": true,
+    "review_required": true,
+    "reviewer": "qualified_counsel"
+  },
+  "requiredInputs": [
+    "confirmed-jurisdiction",
+    "user-side",
+    "readable-contract",
+    "confirmed-playbook"
+  ],
+  "missingOutcomes": [
+    "unknown_jurisdiction",
+    "missing_playbook",
+    "unreadable_contract",
+    "insufficient_evidence"
+  ],
+  "outputRestrictions": [
+    "legal-advice",
+    "definitive-disposition",
+    "autonomous-green-approval",
+    "redline-acceptance"
+  ]
+}

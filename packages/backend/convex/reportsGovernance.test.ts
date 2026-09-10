@@ -265,8 +265,10 @@ describe("reportsGovernance.wormExport — a cursor position, NOT a health verdi
 
     expect(worm.lastCursorAdvanceMs).toBe(NOW - 5_000);
     // Deployment-global on purpose — the export is not per tenant.
-    expect(worm.rowsAwaitingExport).toBe(2);
-    expect(worm.oldestAwaitingMs).toBe(NOW - 4_000);
+    // Legacy timestamp checkpoints must replay history, including previously skipped ties.
+    expect(worm.rowsAwaitingExport).toBe(3);
+    const firstLegacy = await t.run((ctx) => ctx.db.query("audit").first());
+    expect(worm.oldestAwaitingMs).toBe(firstLegacy?._creationTime);
     expect(worm.awaitingPartial).toBe(false);
   });
 });
@@ -348,7 +350,14 @@ describe("the allowlist against the write sites it claims to cover", () => {
    * inventing a row for an event production never writes is how 26-14's `DECISION_KEYS` shipped a
    * permanent `edit: 0`.
    */
-  const NOT_PRODUCTION = new Set(["test.control", "test.event", "test.before_delete", "x"]);
+  const NOT_PRODUCTION = new Set([
+    "test.control",
+    "test.event",
+    "test.before_delete",
+    "x",
+    // Exact synthetic-case receipt; only the internal packeval provisioning seam emits it.
+    "vertical_eval.provisioned",
+  ]);
 
   /**
    * WHAT THIS PAIR DOES AND DOES NOT CATCH, because a drift guard that is read as total is worse

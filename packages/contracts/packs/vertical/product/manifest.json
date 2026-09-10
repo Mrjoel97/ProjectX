@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "packId": "product",
+  "workflowId": "product-prd-brief",
+  "version": 1,
+  "status": "candidate",
+  "runtimeEnabled": false,
+  "skillName": "vertical-product",
+  "output": "document",
+  "outputContractId": "product-output.v1",
+  "disclaimerId": "product-review.v1",
+  "risk": "advisory",
+  "requiredReview": "human-review",
+  "requiredSources": ["vault"],
+  "connectorGate": "project-systems",
+  "disablePolicy": "block-new-starts-preserve-artifacts",
+  "rollbackPolicy": "exact-previously-active-version",
+  "provenance": {
+    "sourceRepo": "https://github.com/anthropics/knowledge-work-plugins",
+    "sourceCommit": "5267cf7bff3031921d4474b8e8f86ad02d2b8f6d",
+    "sourcePaths": [
+      "product-management/skills/write-spec/SKILL.md",
+      "product-management/skills/roadmap-update/SKILL.md"
+    ],
+    "bodySha256": "1c8fce876068f8fac41e61a6cfa98d72b15ee0067bc8c4154827428da51eef52",
+    "license": "Apache-2.0",
+    "modificationNotice": "Pikar candidate adaptation, 2026-09-10: retain evidence-scoped document method; remove connector authority, autonomous external changes and unsupported certainty. See method-review.md.",
+    "skillVersions": {
+      "vertical-product": 1
+    },
+    "ts": 1788998400000
+  },
+  "sourceFiles": [
+    {
+      "path": "product-management/skills/write-spec/SKILL.md",
+      "sha256": "ca6670913878b4ac4582727562bfced5271492a5a800d934f68c9e7bc1cd4dcc",
+      "gitBlobSha": "183cf053df391e761c21431bc0dfb791b6d52b80",
+      "bytes": 12326
+    },
+    {
+      "path": "product-management/skills/roadmap-update/SKILL.md",
+      "sha256": "bdb121e290b590d60b94bca84d1700a8803c78db9f68f2a28fd04ccfe8aceb9e",
+      "gitBlobSha": "b879e5b38b2c57a7bb8d45f97261d1e5c81f4b0d",
+      "bytes": 12372
+    }
+  ],
+  "hashEncoding": "LF-normalized UTF-8; pinned upstream downloads were LF bytes. Git blob hash verified against official pinned tree.",
+  "licenseEvidence": {
+    "governingPath": "product-management/LICENSE",
+    "redistributedCopy": "third_party/knowledge-work-plugins/LICENSE",
+    "governingSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "rootLicenseAnomaly": false
+  },
+  "evidence": {
+    "methodReview": "draft",
+    "nativeEval": null,
+    "browserUat": null,
+    "activation": null
+  },
+  "releaseBlockedBy": [
+    "independent-method-review",
+    "exact-version-native-eval",
+    "authenticated-responsive-uat",
+    "runtime-binding"
+  ]
+}

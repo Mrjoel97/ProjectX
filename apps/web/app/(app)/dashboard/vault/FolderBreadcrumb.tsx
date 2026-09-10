@@ -51,6 +51,15 @@ export function FolderBreadcrumb({
     unincorporatedCount: unincorporated,
   });
   const stale = viewState.digest.kind === "stale";
+  const digestFailed = folder.digestStatus === "failed" || folder.digestStatus === "refused";
+  const digestBuilding = folder.digestStatus === "building";
+  const outcome = digestBuilding
+    ? "Building this folder's summary."
+    : digestFailed
+      ? "The folder summary could not be completed. Rebuild to try again."
+      : folder.digestStatus === "built"
+        ? "The summary was created. Its document shows search indexing progress."
+        : rebuildStatus;
 
   async function onRebuild() {
     setRebuilding(true);
@@ -87,15 +96,17 @@ export function FolderBreadcrumb({
           </span>
         )}
         <DigestRebuildControl
-          available={digest !== undefined && digest.state !== "none"}
-          stale={stale}
-          rebuilding={rebuilding}
+          available={
+            digestFailed || digestBuilding || (digest !== undefined && digest.state !== "none")
+          }
+          stale={stale || digestFailed}
+          rebuilding={rebuilding || digestBuilding}
           onRebuild={() => void onRebuild()}
         />
       </div>
-      {rebuildStatus && (
+      {outcome && (
         <p role="status" aria-live="polite" className="vault-folder-outcome">
-          {rebuildStatus}
+          {outcome}
         </p>
       )}
     </section>

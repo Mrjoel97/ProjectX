@@ -1,3 +1,22 @@
+> Last verified: 2026-09-10 — G17 Gmail warning dedupe now uses `notifications.by_tenant_kind_read`
+> and `.first()`. An existing unread reconnect warning cannot fall outside a 50-message window
+> of unrelated notifications. Lookup and insert share the migration transaction, preserving
+> concurrency safety and tenant isolation. Fresh consent retires only matching Gmail warnings
+> through the same index. Dismissal still re-arms the next warning; expiry notices remain in-app
+> only, so they never depend on the expiring mailbox. `scaleConstants.test.ts` covers a warning
+> behind 60 unread messages plus a second tenant; calendar tests cover consent retirement.
+
+> Last verified: 2026-09-10 — merged-audit G4 repair. `readPage` stamps `pageReadAt` only after
+> a successful, nonempty extraction from a URL this run's own search returned. The loop joins
+> that tool-result evidence by URL; model citations and search results cannot attest a page read.
+> Dispatch preserves the stamp through memo landing, research persistence and media grounding.
+> `vaultDocuments.researchSources` stores the per-source evidence with retrieval time; URLs and
+> titles remain content-plane fields and never enter audit payloads. The memo card and stored
+> research header distinguish confirmed excerpts from unconfirmed reads, including legacy rows.
+> The footer no longer universally claims cited pages were read. Fan-out deduplication retains
+> a later child's confirmed read. Unsupported-claim verdicts and search-before-read restrictions
+> are unchanged. Verify with research, cockpitTools, fanOut and memoCard tests; no live proof implied.
+
 > Last verified: 2026-09-09 (45-06 — **AN ABSENCE ASSERTION NEEDS SOMETHING THAT PROVES THE
 > SURFACE RENDERED**, and `scripts/check-absence-guards.mjs` now enforces it as a registered free
 > gate. `toHaveCount(0)` SUCCEEDS ON ITS FIRST POLL — zero is already true of a page that has
@@ -6532,3 +6551,29 @@ tool description carries the usage guidance, and the hard boundary stays in code
 
 **Not yet observed:** that a real model picks this tool only on an explicit request, and what the
 user actually sees in the workspace trace when it does. Plan 23-06's browser gate owns both.
+
+## Phase 23 offline evidence preparation
+
+Last verified: 2026-09-10. The opt-in two-identity Playwright setup requires two distinct non-owners, seeds onboarding before fresh authentication, validates JWT subjects/expiry and saves separate gitignored states. It disables traces/retries and rejects owner-provisioning or auth overrides. It does not grant owner or perform authoring/eval/activation. The Phase 23 exact artifact validator and immutable writer bind candidate, deployment, suite, source, baseline and lifecycle identity across original artifact bytes. CI runs its adversarial offline tests. The real browser authoring/refusal/owner proof and all live artifacts remain pending; see apps/web/e2e/README.md.
+
+The opt-in agent-skill-authoring browser spec now runs free gates, verifies two real non-owner identities, performs the separately authorized primary-owner bootstrap, sends exactly two real cockpit turns, resolves the browser session thread by the tenant-qualified read-only inspector and requires double identical exact-candidate readbacks. It observes disabled owner activation at desktop/mobile and foreign refusal, then writes the handoff exclusively. Default runs skip this paid proof. No live run has been claimed.
+
+The read-only source inspector now returns a bounded governance fingerprint: candidate/evidence/approval state, approved plans, request state, governance activation/rollback audit ids and the deployed code-owned Executive grant. Its auditCount excludes incidental model/trace records so normal turns cannot manufacture false failures. Every contributing read refuses a window above1,000 rows. Unit tests prove tenant isolation, actual governance changes, approved-plan changes and truncation refusal. No raw body/evidence is returned; hashing happens inside the query.
+
+### Optional vertical native start
+
+`startVerticalPack` reuses owned thread/plan creation and the thinking/save-message lifecycle.
+Shared eligibility is checked before creation and again by the native binding before budget
+admission. Exact-version previews require owner auth; ordinary starts cannot bypass discovery
+evidence by supplying a known id. Governed refusals create no initial thread, and no vertical is
+ordinarily exposed until its native executable eval and authenticated browser evidence exist.
+
+### Scheduler ownership in mutation tests
+
+The native workflow component temporarily removes non-deterministic globals (`process`, crypto)
+while a workflow generation executes. In-memory test harnesses share a worker global, unlike live
+isolates. Cockpit tests therefore own fake time per test, register both full-delivery and fanout-only
+harnesses for sequential quiescence, await in-progress jobs, then discard remaining pending test
+timers before restoring real time. Every test asserts the original worker process was restored;
+no test repairs the global or suppresses worker errors. This prevents background workflow callbacks
+from another discarded harness corrupting the next test or Vitest's environment teardown.

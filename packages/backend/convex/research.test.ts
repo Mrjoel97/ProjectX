@@ -161,9 +161,23 @@ describe("the stored research document (ACTN-03, SC#2)", () => {
     // D10: the run states what it could NOT do. A consumer infers source auditing unless told.
     expect(text.trimEnd().endsWith("never as an established fact.")).toBe(true);
     // Phase 39: the footer names the limit that survives page reading, not the retired hosted one.
-    expect(text).toContain("a search provider chose which pages were candidates");
+    expect(text).toContain("A search provider chose which pages were candidates");
     expect(text).not.toContain("executed by the model provider");
     expect(text).toContain("NOT source-audited");
+  });
+
+  test("per-source read evidence survives storage and snippet-only sources never claim a page read", async () => {
+    const t = newTest();
+    const sources = [{ ...SOURCES[0]!, pageReadAt: RETRIEVED - 86_400_000 }, SOURCES[1]!];
+    await persist(t, { sources });
+    const doc = (await readDocs(t))[0]!;
+    expect(doc.researchSources).toEqual(sources.map((s) => ({ ...s, retrievedAt: RETRIEVED })));
+    expect(doc.text).toContain("Page excerpt read 2026-07-26");
+    expect(doc.text).toContain("Search result only (no confirmed page read)");
+    expect(doc.text).not.toContain("cites were read by it");
+    expect(JSON.stringify((await readAudit(t)).map((r) => r.payload))).not.toContain(
+      SOURCES[0]!.url,
+    );
   });
 
   test("SEARCHED, zero sources ⇒ 'insufficient evidence', however confident the body claims", async () => {
@@ -375,6 +389,7 @@ beforeEach(() => {
               url: "https://example.test/pricing",
               title: "Source 0",
               content: "retrieved snippet",
+              ...(String(input).endsWith("/extract") ? { raw_content: "Page evidence." } : {}),
             },
           ],
         }),
@@ -418,6 +433,32 @@ const dispatchArgs = (planId: Id<"plans">, over: Record<string, unknown> = {}) =
 });
 
 describe("the dispatcher — not the specialist — writes the findings", () => {
+  test("a real search then page read carries attested evidence through both landing terminals", async () => {
+    const t = newTest();
+    const planId = await stagedPlan(t);
+    const readStep = {
+      ...SEARCH_STEP,
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "read-1",
+          toolName: "readPage",
+          input: JSON.stringify({ url: "https://example.test/pricing", focus: "session price" }),
+        },
+      ],
+    };
+    const res = await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      dispatchArgs(planId, { primary: [SEARCH_STEP, readStep, ANSWER_STEP] }),
+    );
+    expect(res.ok).toBe(true);
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    const doc = (await readDocs(t))[0]!;
+    expect(plan?.sources?.[0]?.pageReadAt).toEqual(expect.any(Number));
+    expect(doc.researchSources).toEqual(plan?.sources);
+    expect(doc.text).toContain("Page excerpt read");
+  });
+
   test("a successful research dispatch leaves BOTH artifacts: the card AND one document", async () => {
     const t = newTest();
     const planId = await stagedPlan(t);
@@ -432,6 +473,8 @@ describe("the dispatcher — not the specialist — writes the findings", () => 
     expect(plan?.status).toBe("proposed");
     expect(plan?.kind).toBe("memo");
     expect(plan?.body).toContain(FINDINGS);
+    expect(plan?.sources?.[0]?.pageReadAt).toBeUndefined();
+    expect(docs[0]?.text).toContain("Search result only (no confirmed page read)");
   });
 
   // ── 16-09's structural floor ────────────────────────────────────────────────────────────────

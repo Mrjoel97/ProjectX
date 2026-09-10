@@ -13,7 +13,7 @@ import {
   SPREADSHEET_DRAFTER_SKILL,
 } from "@pikar/contracts/skill";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
@@ -32,6 +32,11 @@ const rateLimiterModules = import.meta.glob(
 
 const TENANT = "tenant_fanout";
 const THREAD = "thread_fanout";
+
+// Assert queued work without executing it. Cold imports can otherwise let a starter race
+// cancelQueued and reach the paid runtime before the test gets its scheduled-function ids.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 type T = ReturnType<typeof convexTest>;
 
@@ -325,6 +330,30 @@ describe("the fan-out lands as exactly one approval (ADR-037 Decision 4)", () =>
     expect(parent?.status).toBe("proposed");
     expect(parent?.body).toContain("## Lead engine");
     expect(parent?.body).toContain("stopped before it produced anything");
+  });
+
+  test("a later child's confirmed page read survives URL deduplication onto the parent", async () => {
+    const t = newTest();
+    const planId = await stagedRoot(t);
+    await startTeam(t, planId, ["offer-architect", "lead-engine"]);
+    await cancelQueued(t);
+    const kids = await childrenOf(t, planId);
+    const source = { url: "https://example.test/page", title: "Evidence", retrievedAt: 1000 };
+    for (let i = 0; i < kids.length; i++) {
+      await t.mutation(internal.evaluations.landSpecialistResult, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        planId: kids[i]!._id,
+        gapIndex: 0,
+        route: "research",
+        body: "Findings",
+        incomplete: false,
+        sources: [{ ...source, ...(i === 1 ? { pageReadAt: 900 } : {}) }],
+      });
+    }
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.sources).toEqual([
+      { ...source, pageReadAt: 900 },
+    ]);
   });
 });
 

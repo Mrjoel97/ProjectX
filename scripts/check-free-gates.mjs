@@ -57,6 +57,8 @@ const FREE_FLAGS = ["--self-test", "--self-check", "--fixtures-only"];
 const GATES = [
   { path: "scripts/check-absence-guards.mjs", flag: "--self-test" },
   { path: "scripts/check-audit-payloads.mjs", flag: "--self-test" },
+  { path: "scripts/check-phase23-artifacts.mjs", flag: "--self-check" },
+  { path: "scripts/check-phase23-owner-boundary.mjs", flag: "--self-check" },
   { path: "scripts/check-phase28-completion.mjs", flag: "--self-test" },
   { path: "scripts/check-phase28-readiness.mjs", flag: "--self-check" },
   { path: "scripts/check-provider-lane.mjs", flag: "--self-test" },
@@ -66,6 +68,11 @@ const GATES = [
   { path: "scripts/smoke-stripe-read.mjs", flag: "--self-test" },
   { path: "packages/backend/scripts/check-phase21-artifacts.mjs", flag: "--self-check" },
   { path: "packages/backend/scripts/check-routine-gate.mjs", flag: "--self-check" },
+  {
+    path: "packages/backend/scripts/run-eval-vertical.mjs",
+    flag: "--fixtures-only",
+    cwd: "packages/backend",
+  },
   { path: "packages/backend/scripts/collect-recurrence-evidence.mjs", flag: "--self-check" },
   { path: "packages/backend/scripts/compare-refs.mjs", flag: "--self-check" },
   { path: "packages/backend/scripts/run-eval-golden.mjs", flag: "--self-check" },

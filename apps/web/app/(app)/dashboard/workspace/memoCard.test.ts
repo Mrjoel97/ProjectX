@@ -100,6 +100,15 @@ describe("MemoCardBody — the references block", () => {
     expect(html.match(/data-testid="memo-source"/g)).toHaveLength(9);
   });
 
+  test("confirmed page excerpts and legacy sources have distinct evidence labels", () => {
+    const html = render({
+      body: MARKDOWN,
+      sources: [{ ...sources[0]!, pageReadAt: JUL }, sources[1]!],
+    });
+    expect(html).toContain(`Page excerpt read ${new Date(JUL).toISOString().slice(0, 10)}`);
+    expect(html).toContain("Page read unconfirmed");
+  });
+
   test("a source whose title came back empty links its URL rather than an empty anchor", () => {
     // `sourcesFromToolOutput` defaults a missing title to "" — a real shape, not a hypothetical.
     const html = render({

@@ -79,6 +79,11 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Planning evidence
+        run: |
+          node --test scripts/check-planning.test.mjs
+          printf '{}' | node scripts/check-planning.mjs --exit-code
+
       # The deployment half of SC3: prove the artifact a deploy would ship actually builds. Actual
       # Vercel deployment automation belongs to Phase 25, which owns the custom-domain/deploy call.
       - name: Build

@@ -36,7 +36,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **REVW-02**: Edit and reject retry counters enforce thresholds; breaches escalate, notify, and terminate the request safely
 - [x] **REVW-03**: Review inactivity timeout triggers an escalation notification (scheduled-event race on the review gate)
 - [x] **DLVR-01**: Approved responses can be delivered via Gmail through the provider-agnostic email adapter
-- [ ] **DLVR-02**: Approved responses can be delivered via Microsoft Graph (Outlook) through the same adapter *(open: the Graph send arm shipped in 25-05, but Microsoft is env-gated and its 2026-08-16 concurrency probe failed — no live delivery)*
+- [ ] **DLVR-02**: Approved responses can be delivered via Microsoft Graph (Outlook) through the same adapter *(open: the Graph send arm shipped in 25-05; fresh Outlook mailbox send/thread/read evidence is still required. The 2026-08-16 calendar concurrency probe does not qualify or disqualify Outlook mail transport)*
 - [x] **DLVR-03**: OAuth token lifecycle is managed (Google testing-mode 7-day refresh expiry handled; user prompted to re-auth before tokens break)
 
 ### Email Cockpit
@@ -162,7 +162,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 ### S4 — Governance & Open the Beta
 
 - [x] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
-- [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater *(open: 24-01 closed with Clause 10.2 Partial until 24-02, which has not run)*
+- [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater *(open: the 24-02 corrective-action index already exists and its mechanical checks passed 2026-09-10; named owner/reviewer semantic scope approval remains outstanding, and organization-wide/live WORM limitations remain)*
 - [x] **GOVN-03**: Every user-exercisable data and connection control the published privacy policy promises actually exists in the product and does what the policy says — the policy is the specification, not the marketing. Covers in-app disconnection of a connected account WITH revocation at the provider (not merely a local token delete), and tenant data deletion and export. Minted 2026-08-01 after `apps/web/app/privacy/page.tsx:312` was found promising an in-app Google disconnect that had no implementation anywhere in the repo.
 - [ ] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index *(open: the two-user isolation test needs a second tenant via the invite path; not run end to end)*
 
