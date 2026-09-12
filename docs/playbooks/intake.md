@@ -1,3 +1,9 @@
+> Last verified: 2026-09-12 — registered authoring-probe threads accept only their two budgeted
+> text turns. The shared intake entry refuses file attachment and dictation before extraction,
+> transcription, persistence or embedding; those provider paths are outside this probe envelope.
+> Other threads retain ordinary intake behavior. This refusal does not establish model policy
+> acceptance or authorize a paid probe.
+
 > Last verified: 2026-09-06 (36-01, G24 — `intake.ts`'s `SMOKE::transcribe::` / `SMOKE::extract::` byte
 > sniffs are now `&& fixtureSeamFor(tenantId)`. Every `SMOKE::` gate on a production path is now `prefix && fixtureSeamFor(tenantId)` (36-01, ADR-035): the string only SELECTS a fixture; WHETHER one may run is an operator fact — the keyless opt-in `PIKAR_OFFLINE_FIXTURES=1`, or this tenant listed in `PIKAR_FIXTURE_TENANT_IDS` (a comma-separated allowlist, set only by `convex env set`, which is how the browser and smoke suites keep their seams against the KEYED dev deployment). Production carries neither, and `ops.envCheck` reports NOT ready while any fixture-tier name is set. `intake.spec.ts` is unchanged.)
 

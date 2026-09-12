@@ -167,6 +167,9 @@ async function runIntake(
   ctx: GenericActionCtx<DataModel>,
   { tenantId, threadId, storageId, filename, mimeType, isDictation }: RunIntakeArgs,
 ): Promise<{ threadId: string }> {
+  // A registered authoring probe admits text turns only. Extraction happens before cockpit
+  // budget attachment, so refuse here before OCR, transcription, storage or embedding work.
+  await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, { tenantId, threadId });
   // The sole merge/reply channel — a governed stop and the eventual successful merge both flow
   // through the SAME public action (ZERO edits to cockpit.ts/llm.ts).
   const respond = async (text: string): Promise<{ threadId: string }> => {

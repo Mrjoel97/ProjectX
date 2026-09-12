@@ -1,5 +1,19 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+Last verified: 2026-09-12 — internal `authoringProbe.prepare` creates one native empty Agent
+thread/plan and one existing golden envelope for an already-owner identity, an explicit cap
+of 1–1000 cents and a single-use authorization hash. It grants no ownership and invokes no model.
+The ordinary authenticated cockpit claims at most two serialized root turns for that exact
+tenant/thread before provider work. Unknown, failed, expired, closed or exhausted probe state
+never falls through to unbudgeted execution. Root controls are append-only reserved audit refs;
+money remains on the existing ledger with its unchanged 500-call limit and pre-call ceilings.
+Closure checks root completion and the exact probe-thread plan inventory; unrelated owner
+documents/work cannot block it. Synthetic golden tenants retain their full pending-work scan.
+Pack/vertical starts, recipient-picker re-entry, approval and intake on the registered thread
+refuse rather than bypassing the two text-turn budget, including after closure or expiry.
+Read-only `authoringProbe.inspect` reports containment refusal counts separately; any such
+refusal is budget containment, not evidence that the ordinary policy rejected the request.
+
 Last verified: 2026-09-12 — verified Tavily Free accounts use
 `GOLDEN_TAVILY_BILLING=free` with `GOLDEN_TAVILY_CREDIT_USD=0`. Absent billing mode preserves
 the existing positive standard-rate contract; absent/blank rates never imply Free. The trusted

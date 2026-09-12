@@ -1,5 +1,12 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+Last verified: 2026-09-12 — authoring probe control receipts use the reserved
+`control:authoring-probe:v1` namespace, `authoring_probe.` events and `authoring-probe:`
+correlation prefix. Generic `audit.log` refuses each reserved identifier; only the code-level
+append primitive writes starts, completion/failure and containment. Receipts contain turn refs
+and bounded tool names, never prompts or provider content. They remain outside tenant erasure
+alongside retained immutable accounting; no live cleanup is part of this change.
+
 Last verified: 2026-09-12 — Phase31 funnels are tenant-owned export/erasure data. Their fixed
 `storageId` participates in the existing byte inventory so deleting a tenant cannot orphan
 downloadable link bytes after a Vault reference changes. Foreign tenants and immutable audit

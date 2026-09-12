@@ -341,6 +341,7 @@
     "apps/web/app/(app)/dashboard/pipeline/"
   ],
   "guardrails.md": [
+    "packages/backend/convex/authoringProbe",
     "packages/backend/convex/goldenBudget.test.ts",
     "packages/backend/convex/guardrails.ts",
     "packages/backend/convex/lib/evalBudgetModel.ts",

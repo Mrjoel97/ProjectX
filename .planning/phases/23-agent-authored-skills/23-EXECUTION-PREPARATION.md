@@ -1,5 +1,25 @@
 # Phase 23 execution preparation — 2026-09-11
 
+## September 12 continuation
+
+Both controlled accounts completed fresh password sign-in and authenticated non-owner `/ops`
+checks, independently confirmed by native owner-state reads. Private credentials remain locally
+encrypted; committed records contain no email or password. No owner grant, model authoring probe,
+candidate handoff, evaluation, activation or rollback has occurred for this Phase 23 acceptance.
+
+The owner confirmed ordinary OpenRouter API-key access with no upstream BYOK keys and instructed
+Tavily Free. Production `ba920a3` passed CI/deployment and its durable probe; the native production
+CLI then successfully set `GOLDEN_OPENROUTER_BILLING=standard`,
+`GOLDEN_TAVILY_BILLING=free`, and `GOLDEN_TAVILY_CREDIT_USD=0`. These are explicit owner
+attestations, not an independent inspection of provider balances. Free usage still requires observed
+credit counts and retains positive reservations when usage is unknown.
+
+A native aggregate budget for two ordinary browser submissions is under qualification. It binds
+one exact thread, refuses unsupported paid side paths and preserves unknown-cost holds. This is
+probe containment, not proof that unrestricted runtime policy refused an adversarial instruction.
+Final current-source pins, whole-tree checks and the concrete 23-06 Task 2 authorization still
+precede any owner grant or model turn. The synthetic golden-suite envelope below is a separate run.
+
 This is preparation, not a completion summary. No authored-candidate, paid-evaluation,
 owner-activation or rollback observation is created by these offline changes.
 
@@ -82,13 +102,13 @@ bounds on the provider wire. Unknown models/provider tools and unsupported paid 
 fail before the subcall, not after observing spend. Source or budget failures must poison later
 steps even where ordinary production code intentionally catches tool/grounding errors.
 
-The backend refuses golden envelope creation unless trusted deployment metadata declares
-`GOLDEN_OPENROUTER_BILLING=standard` and a positive `GOLDEN_TAVILY_CREDIT_USD <= 0.008`.
-These are operator attestations after examining the real provider account, not proof manufactured
-by setting environment variables. OpenRouter response usage must identify standard (non-BYOK)
-billing and an authoritative nonnegative cost. Tavily usage credits are converted using the
-verified rate; each extract request reserves whole credit batches, including a one-URL request.
-Provider pricing/account acceptance has not been performed in this continuation.
+The backend requires trusted `GOLDEN_OPENROUTER_BILLING=standard` metadata. Tavily standard
+billing requires a positive `GOLDEN_TAVILY_CREDIT_USD <= 0.008`; explicitly declared Free billing
+requires `GOLDEN_TAVILY_BILLING=free` and a nonblank zero rate. Missing rates never imply Free.
+Setting these values does not itself prove provider account terms. OpenRouter response usage must
+identify standard (non-BYOK) billing and an authoritative nonnegative cost. Tavily usage credits are
+retained separately from dollars, including zero-dollar Free settlements; unknown usage keeps its
+reservation. Each extract request reserves whole credit batches, including a one-URL request.
 
 Reusing a stored real corpus could save initial document embedding, but cannot remove live query
 embedding or paid research. Replacing RAG with fixed-source callbacks, or substituting tool fixture

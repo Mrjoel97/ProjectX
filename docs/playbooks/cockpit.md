@@ -1,3 +1,11 @@
+> Last verified: 2026-09-12 — exact internally registered authoring-probe threads claim at most
+> two serialized ordinary text turns against the existing native envelope. Matching expired,
+> closed, exhausted or unknown state refuses rather than silently running without its cap.
+> Pack/vertical starts, recipient-picker re-entry and plan approval on that thread refuse;
+> intake refuses before extraction. Tool descriptors stay visible, but unsupported execution
+> attempts (including the direct-video route) are explicitly counted as probe containment,
+> never as passing adversarial policy evidence. Ordinary unregistered threads are unchanged.
+
 > Last verified: 2026-09-12 — Phase 31-03 adds the isolated Convex funnel GET transport. See
 > [Marketing](marketing.md) for raw request counter semantics, HEAD rejection and link deactivation.
 > Marketing's draft/proposal handoff uses the governed workspace; the cockpit has no social

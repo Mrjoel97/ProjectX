@@ -257,6 +257,11 @@ export const startWorkflowPack = tenantAction({
     // of a turn that never ran. `requireOwnerAction` throws `OWNER_REQUIRED`.
     if (previewVersion !== undefined) await requireOwnerAction(ctx);
 
+    if (threadId)
+      await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
+        tenantId: ctx.tenantId,
+        threadId,
+      });
     const { threadId: tid, planId } = await ensureThreadAndPlan(ctx, threadId, text);
     await cockpitAgent.saveMessage(ctx, { threadId: tid, prompt: text, skipEmbeddings: true });
 
@@ -339,6 +344,11 @@ export const startVerticalPack = tenantAction({
     { verticalId, threadId, text, sourceDocId, previewVersion },
   ): Promise<{ threadId?: string; ok: boolean; outcome?: string; reason?: string }> => {
     if (previewVersion !== undefined) await requireOwnerAction(ctx);
+    if (threadId)
+      await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
+        tenantId: ctx.tenantId,
+        threadId,
+      });
     const ready = await ctx.runQuery(internal.verticalPacks.prepare, {
       tenantId: ctx.tenantId,
       verticalId,
@@ -425,6 +435,12 @@ export const sendCockpitMessage = tenantAction({
 
     // 2. Fetch the prior turns BEFORE saving the current one (UAT-E) — otherwise the current turn
     //    appears twice (as the last history row AND as "The user says:"). A fresh thread yields [].
+    const turnId = crypto.randomUUID();
+    const probeBudgetId = await ctx.runMutation(internal.authoringProbe.claimTurn, {
+      tenantId: ctx.tenantId,
+      threadId: tid,
+      turnId,
+    });
     const history = await fetchRecentHistory(ctx, tid);
 
     //    Persist the user's turn (the agent thread is a message store — DECISION #2 retired; the
@@ -437,7 +453,6 @@ export const sendCockpitMessage = tenantAction({
     //
     //    The activity trace's turn lifecycle (CKPT-05) wraps it: the driver mints the turnId and
     //    owns the `thinking` row; the SDK owns the per-tool rows inside the loop (llm.ts).
-    const turnId = crypto.randomUUID(); // server-minted, per turn — groups the trace
     // The `thinking` row is the trace's FLOOR, and it lands within ~ms of the send. preCall, the
     // skill-registry load and the first model round-trip ALL happen before any tool event could
     // fire — and many turns (the agent asking "who should I send this to?") call no tool at all,
@@ -451,6 +466,7 @@ export const sendCockpitMessage = tenantAction({
       startedAt: Date.now(),
     });
     let reply: string;
+    let probeFailed = true;
     try {
       const res = await ctx.runAction(internal.llm.runCockpitAgent, {
         tenantId: ctx.tenantId,
@@ -460,8 +476,10 @@ export const sendCockpitMessage = tenantAction({
         clientContext,
         turnId,
         history, // UAT-E: the model sees the conversation so far, not just this turn
+        ...(probeBudgetId ? { evalBudgetId: probeBudgetId } : {}),
       });
       reply = res.reply;
+      probeFailed = !!res.blocked;
     } catch (e) {
       reply = "Something went wrong on my side — nothing was sent. Please try that again.";
       // AGNT-04: an EXHAUSTED model timeout (primary + CHEAP_MODEL fallback both timed out) escalates
@@ -480,6 +498,13 @@ export const sendCockpitMessage = tenantAction({
         phase: "done",
         endedAt: Date.now(),
       });
+      if (probeBudgetId)
+        await ctx.runMutation(internal.authoringProbe.finishTurn, {
+          tenantId: ctx.tenantId,
+          budgetId: probeBudgetId,
+          turnId,
+          failed: probeFailed,
+        });
     }
 
     // 4. Save the assistant reply.
@@ -569,6 +594,10 @@ export const resolveRecipients = tenantAction({
     ),
   },
   handler: async (ctx, { threadId, picks }): Promise<{ threadId: string }> => {
+    await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
+      tenantId: ctx.tenantId,
+      threadId,
+    });
     const plan = await ctx.runQuery(api.plans.byThread, { threadId });
     if (!plan) throw new Error("cockpit: plan row missing for thread");
     // Picks + held pendingValid are already-valid addresses — fold them into recipients (deduped)
@@ -1223,6 +1252,10 @@ export const executePlan = tenantMutation({
   > => {
     const plan = await ctx.db.get(planId);
     if (!plan || plan.tenantId !== ctx.tenantId) throw new Error("plan not found"); // no cross-tenant approve
+    await ctx.runQuery(internal.authoringProbe.assertUnregisteredThread, {
+      tenantId: ctx.tenantId,
+      threadId: plan.threadId,
+    });
     // Idempotent no-op (double-approve): only "proposed" proceeds. Convex mutations are
     // serializable, so of two concurrent approves exactly one flips the status and seeds/starts.
     if (plan.status !== "proposed") return { ok: true, alreadyStarted: true };

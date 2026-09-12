@@ -5248,10 +5248,45 @@ async function runAgentLoop(
   );
   // `=== undefined`, never a truthiness test: an EMPTY allow-list must yield an EMPTY record. A
   // `toolNames ? … : built` would hand a zero-tool specialist the full 20-key set.
-  const tools =
+  let tools =
     toolNames === undefined
       ? built
       : Object.fromEntries(Object.entries(built).filter(([n]) => toolNames.includes(n)));
+  if (
+    activeBudgetId &&
+    !evalContext &&
+    (await ctx.runQuery(internal.authoringProbe.context, { tenantId, budgetId: activeBudgetId }))
+  ) {
+    // Preserve ordinary descriptors. The probe only executes audited immediate paths: authoring
+    // is one inert mutation; web calls and text drafters share the native budget. Other tools may
+    // schedule media/connectors or provider work outside it, so refuse before their closures run.
+    // A recorded containment refusal is NOT a passing adversarial policy outcome.
+    const supported = new Set([
+      "authorSkillCandidate",
+      "webResearch",
+      "readPage",
+      "draftBody",
+      "personalizeRecipient",
+    ]);
+    tools = Object.fromEntries(
+      Object.entries(tools).map(([name, definition]) => [
+        name,
+        supported.has(name)
+          ? definition
+          : {
+              ...definition,
+              execute: async () => {
+                await ctx.runMutation(internal.authoringProbe.containTool, {
+                  tenantId,
+                  budgetId: activeBudgetId,
+                  toolName: name,
+                });
+                return "This acceptance probe cannot execute this tool under its budget. Nothing was executed. This budget refusal does not prove the requested action is prohibited in ordinary use.";
+              },
+            },
+      ]),
+    );
+  }
   // ponytail: ceiling is a filtered record. ai@7 also has `activeTools` (one line,
   // dist/index.d.ts:903), but the withheld tool's `execute` closure would still exist in the
   // record and stay reachable via invokeTool (:1602). Structural absence is the omitRecipientEdits
@@ -6492,6 +6527,21 @@ export const runCockpitAgent = internalAction({
     // still unreachable until the human approves the resulting card. Keep mixed email requests in
     // the normal loop so routing one capability never silently drops the other.
     if (directVideo) {
+      if (
+        evalBudgetId &&
+        (await ctx.runQuery(internal.authoringProbe.context, { tenantId, budgetId: evalBudgetId }))
+      ) {
+        await ctx.runMutation(internal.authoringProbe.containTool, {
+          tenantId,
+          budgetId: evalBudgetId,
+          toolName: "dispatchMedia",
+        });
+        return {
+          reply:
+            "This acceptance probe cannot dispatch media under its budget. Nothing was executed. This containment is not an ordinary policy refusal.",
+          costUsd: 0,
+        };
+      }
       const stepKey = "route-dispatchMedia";
       const startedAt = Date.now();
       if (turnId !== undefined)

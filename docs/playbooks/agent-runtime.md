@@ -1,3 +1,14 @@
+> Last verified: 2026-09-12 — the exact registered authoring probe uses the ordinary cockpit
+> model/tool loop and its real candidate mutation under a native two-turn aggregate envelope.
+> Tool descriptors are retained. Only authorSkillCandidate, webResearch, readPage, draftBody and
+> personalizeRecipient execute: the first is an inert mutation; the others have immediate
+> provider calls wired to the same envelope. Every other tool is contained before execution,
+> including the direct-video driver outside the SDK loop. No media/connector/scheduled work
+> is authorized by the probe. A recorded containment refusal cannot qualify adversarial policy
+> acceptance, and this does not prove unrestricted ordinary-workflow parity. Unknown provider
+> usage holds reservations; a failed root slot is not replenished. Ordinary unregistered chats
+> keep their existing behavior. No probe registration or paid run is implied by offline tests.
+
 > Last verified: 2026-09-12 — golden Tavily requests support explicit trusted Free billing while
 > preserving positive pre-call holds and mandatory provider credit usage. The append-only ledger
 > stores bounded numeric credits separately from dollars; zero-dollar settlements retain credits

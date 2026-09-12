@@ -1,5 +1,15 @@
 # Optional vertical packs
 
+Last verified: 2026-09-12 — both evaluator source inventories now include the native authoring
+probe, its cockpit/intake entry guards and audit control authority. The shared corpus matcher and
+runtime changes retire prior exact-source evidence; regeneration does not create a semantic pass.
+Golden self-check and the six-lane/forty-case corpus check passed after repinning. Real collection,
+authenticated review and lifecycle acceptance remain separate outstanding work.
+
+Last verified: 2026-09-12 — evaluator inventories include the shared registered-thread budget
+control and its cockpit/intake/audit integration. Their source changes invalidate exact evaluator
+identity; they do not qualify the retained failed native run or change the forty source fixtures.
+
 Last verified: 2026-09-12 — unpaid native preflight and evidence issuance now share the
 same exact corpus case/request matcher. The collector checks all forty pins before provisioning
 any source or opening its spend envelope. Regression uses the real native query and collector:

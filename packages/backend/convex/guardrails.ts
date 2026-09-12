@@ -28,6 +28,7 @@ import { components } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { probeControl } from "./authoringProbe";
 import { dispatchWorkflowLive } from "./dispatchRun";
 import { contentHash } from "./lib/hash";
 // The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
@@ -349,8 +350,12 @@ export const openEvalBudget = internalMutation({
     tenantIds: v.array(v.string()),
     capCents: v.number(),
     family: v.optional(v.literal("golden")),
+    authoringProbe: v.optional(v.object({ threadId: v.string(), authorizationSha256: v.string() })),
   },
-  handler: async (ctx, { tenantIds, capCents, family }): Promise<Id<"spendEvents">> => {
+  handler: async (
+    ctx,
+    { tenantIds, capCents, family, authoringProbe },
+  ): Promise<Id<"spendEvents">> => {
     if (family === "golden") {
       try {
         if (process.env.GOLDEN_OPENROUTER_BILLING !== "standard") throw new Error();
@@ -369,23 +374,63 @@ export const openEvalBudget = internalMutation({
       tenantIds.length > 64 ||
       new Set(tenantIds).size !== tenantIds.length ||
       tenantIds.some((id) =>
-        family === "golden"
-          ? !/^eval-[a-f0-9]{8}(?:-[a-z0-9-]{1,24}-a[12])?$/.test(id) ||
-            id.slice(0, 13) !== tenantIds[0]?.slice(0, 13)
-          : !/^packeval-[a-f0-9]{8}-[a-z0-9-]{1,64}$/.test(id),
+        authoringProbe
+          ? false
+          : family === "golden"
+            ? !/^eval-[a-f0-9]{8}(?:-[a-z0-9-]{1,24}-a[12])?$/.test(id) ||
+              id.slice(0, 13) !== tenantIds[0]?.slice(0, 13)
+            : !/^packeval-[a-f0-9]{8}-[a-z0-9-]{1,64}$/.test(id),
       )
     )
       throw new Error("EVAL_TENANT_REQUIRED");
+    if (authoringProbe) {
+      const userId = ctx.db.normalizeId("users", tenantIds[0] ?? "");
+      const user = userId ? await ctx.db.get(userId) : null;
+      const plan = await ctx.db
+        .query("plans")
+        .withIndex("by_thread", (q) =>
+          q.eq("tenantId", tenantIds[0] as string).eq("threadId", authoringProbe.threadId),
+        )
+        .first();
+      if (
+        family !== "golden" ||
+        tenantIds.length !== 1 ||
+        !user?.owner ||
+        !plan ||
+        plan.status !== "collecting" ||
+        plan.kind !== undefined ||
+        !/^[a-f0-9]{64}$/.test(authoringProbe.authorizationSha256)
+      )
+        throw new Error("AUTHORING_PROBE_REGISTRATION_INVALID");
+      const previous = await ctx.db
+        .query("spendEvents")
+        .withIndex("by_correlation", (q) =>
+          q.eq("correlationId", `authoring-probe:${authoringProbe.authorizationSha256}`),
+        )
+        .first();
+      const sameThread = await ctx.db
+        .query("spendEvents")
+        .withIndex("by_probe_thread", (q) =>
+          q
+            .eq("tenantId", tenantIds[0] as string)
+            .eq("evalAuthoringProbe.threadId", authoringProbe.threadId),
+        )
+        .first();
+      if (previous || sameThread) throw new Error("AUTHORING_PROBE_ALREADY_REGISTERED");
+    }
     const now = Date.now();
     return recordMovement(ctx, {
       tenantId: tenantIds[0] as string,
       rail: "reasoning",
       phase: "estimated",
       amountCents: capCents,
-      correlationId: `eval:${crypto.randomUUID()}`,
+      correlationId: authoringProbe
+        ? `authoring-probe:${authoringProbe.authorizationSha256}`
+        : `eval:${crypto.randomUUID()}`,
       createdAt: now,
       kind: "eval_envelope",
       evalEnvelope: { tenantIds, expiresAt: now + EVAL_BUDGET_LIFETIME_MS },
+      ...(authoringProbe ? { evalAuthoringProbe: authoringProbe } : {}),
     });
   },
 });
@@ -472,6 +517,11 @@ export const reserveEvalCall = internalMutation({
     if (rows.some((row) => row.kind === "eval_budget_closed"))
       throw new Error("EVAL_BUDGET_CLOSED");
     if (rows.some((row) => row.evalBreach)) throw new Error("EVAL_BUDGET_BREACHED");
+    if (
+      envelope.evalAuthoringProbe &&
+      (await probeControl(ctx, budgetId)).some((row) => row.eventType === "authoring_probe.failed")
+    )
+      throw new Error("AUTHORING_PROBE_FAILED");
     // Each authorized call can later append an actual and a refund, even concurrently. Limit
     // CALLS, not current row count, so outstanding settlements can never overflow the status read.
     if (rows.length > 1500 || rows.filter((row) => row.phase === "reserved").length >= 500)
@@ -692,6 +742,35 @@ export const closeEvalBudget = internalMutation({
     // a queued dispatch/variant or ingest step may not have reserved its first call yet.
     // Read the durable tenant state in this closing transaction so staging cannot race it.
     // Vertical fixed-source runs retain their separate receipt-driven closure protocol.
+    if (envelope.evalAuthoringProbe) {
+      const control = await probeControl(ctx, budgetId);
+      const started = control.filter((row) => row.eventType === "authoring_probe.started");
+      const finished = control.filter(
+        (row) =>
+          row.eventType === "authoring_probe.finished" ||
+          row.eventType === "authoring_probe.failed",
+      );
+      if (
+        started.some((row) => !finished.some((done) => done.payload.turnId === row.payload.turnId))
+      )
+        throw new Error("AUTHORING_PROBE_TURN_UNRESOLVED");
+    }
+    if (envelope.evalAuthoringProbe) {
+      const probeThreadId = envelope.evalAuthoringProbe.threadId;
+      const plans = await ctx.db
+        .query("plans")
+        .withIndex("by_thread", (q) =>
+          q.eq("tenantId", envelope.tenantId).eq("threadId", probeThreadId),
+        )
+        .take(33);
+      if (plans.length > 32) throw new Error("AUTHORING_PROBE_GRAPH_LIMIT");
+      for (const plan of plans)
+        if (
+          (plan.kind === "memo" && plan.status === "collecting") ||
+          (plan.workflowId && (await dispatchWorkflowLive(ctx, plan.workflowId)) !== false)
+        )
+          throw new Error("AUTHORING_PROBE_GRAPH_NOT_SETTLED");
+    }
     if (envelope.tenantId.startsWith("eval-")) {
       const evaluation = envelope.evalEnvelope;
       if (!evaluation) throw new Error("EVAL_BUDGET_NOT_FOUND");

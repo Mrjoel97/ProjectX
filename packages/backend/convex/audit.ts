@@ -20,6 +20,7 @@ import { migrations } from "./migrations";
 /** Reserved owner control plane, never an authenticated user's tenant or an eval purge prefix. */
 export const VERTICAL_EVAL_AUDIT_NAMESPACE = "control:vertical-eval-evidence:v1";
 export const VERTICAL_EVAL_EVENT_PREFIX = "vertical_evidence.";
+export const AUTHORING_PROBE_AUDIT_NAMESPACE = "control:authoring-probe:v1";
 
 /** Code-only append primitive. Generic RPC writers cannot mint reserved evidence receipts. */
 export async function appendAudit(
@@ -52,7 +53,10 @@ export const log = internalMutation({
   handler: async (ctx, args) => {
     if (
       args.tenantId === VERTICAL_EVAL_AUDIT_NAMESPACE ||
-      args.eventType.startsWith(VERTICAL_EVAL_EVENT_PREFIX)
+      args.eventType.startsWith(VERTICAL_EVAL_EVENT_PREFIX) ||
+      args.tenantId === AUTHORING_PROBE_AUDIT_NAMESPACE ||
+      args.eventType.startsWith("authoring_probe.") ||
+      args.correlationId.startsWith("authoring-probe:")
     )
       throw new Error("RESERVED_EVIDENCE_NAMESPACE");
     await appendAudit(ctx, args);

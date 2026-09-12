@@ -2669,6 +2669,9 @@ export default defineSchema({
     // Evaluation uses this same append-only ledger and the existing limiter, never a second bill.
     evalBudgetId: v.optional(v.id("spendEvents")),
     evalEnvelope: v.optional(v.object({ tenantIds: v.array(v.string()), expiresAt: v.number() })),
+    evalAuthoringProbe: v.optional(
+      v.object({ threadId: v.string(), authorizationSha256: v.string() }),
+    ),
     evalActualUsd: v.optional(v.number()),
     evalTavilyCredits: v.optional(v.number()),
     evalBreach: v.optional(v.boolean()),
@@ -2678,7 +2681,8 @@ export default defineSchema({
     .index("by_tenant", ["tenantId"])
     .index("by_tenant_rail_createdAt", ["tenantId", "rail", "createdAt"])
     .index("by_correlation", ["correlationId"])
-    .index("by_eval_budget", ["evalBudgetId"]),
+    .index("by_eval_budget", ["evalBudgetId"])
+    .index("by_probe_thread", ["tenantId", "evalAuthoringProbe.threadId"]),
 
   // One durable start per tenant, created before the first paid movement. A missing row means
   // coverage has not begun; it never means historical spend was zero.

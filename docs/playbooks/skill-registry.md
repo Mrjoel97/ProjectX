@@ -1,5 +1,12 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-12 — the native authoring probe binds two ordinary submissions to one
+> trusted thread and aggregate budget. Unsupported paid routes are contained before egress;
+> containment is never a passing adversarial policy observation. Registration neither grants
+> owner authority nor activates/evaluates a candidate. Both source inventories include the driver,
+> intake guards and audit control authority; golden self-check and vertical corpus checks passed
+> after regeneration. No live probe or new exact-version qualification is claimed.
+
 > Last verified: 2026-09-12 — explicit Tavily Free accounting and the shared ledger writer are
 > pinned in the evaluator identities. Zero-dollar calls retain observed credits and exact replay
 > agreement. Golden and vertical evidence must match the refreshed evaluator revisions.

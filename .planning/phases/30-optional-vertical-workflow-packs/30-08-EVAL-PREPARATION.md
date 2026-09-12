@@ -1,5 +1,23 @@
 # Phase 30-08 native evaluation and review producer — release incomplete
 
+## September 12 live observation update
+
+One capped native run, `9bd1865a-58dd-4de0-be97-053383ca1a9b`, started against production
+`0c258885` and stopped incomplete after two Data observations. Its budget closed at
+`$0.00406801`, with four settled calls, zero unsettled calls and no breach. All forty fixtures
+remain retained for authenticated review. The third case failed the exact corpus pin before its
+model call: SheetJS mutated shared recipe metadata during compilation. The immutable-cell repair
+shipped in `232179c`; a shared case/request matcher now also rejects bad pins in unpaid preflight
+before provisioning (commit `e9d69f1`, awaiting the next qualified release).
+
+Both completed cases have immutable offline review packets and advisory numeric/source checks.
+Neither is authenticated semantic approval or qualification of a corrected evaluator revision.
+No automatic paid rerun occurred. Exact current-source evidence, authenticated semantic review,
+qualified Legal/HR attestations, six workflow acceptances and lifecycle drills remain open. See
+`.planning/audits/2026-09-12-production-acceptance.md` for the release and accounting record.
+
+## Original implementation record
+
 The local native evidence producer now exists. This implementation performed no paid run or owner
 semantic approval. Fixtures and SDK transport shims remain distinct from actual model evidence.
 

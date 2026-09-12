@@ -85,6 +85,9 @@ const movementArgs = {
   kind: v.optional(v.string()),
   evalBudgetId: v.optional(v.id("spendEvents")),
   evalEnvelope: v.optional(v.object({ tenantIds: v.array(v.string()), expiresAt: v.number() })),
+  evalAuthoringProbe: v.optional(
+    v.object({ threadId: v.string(), authorizationSha256: v.string() }),
+  ),
   evalActualUsd: v.optional(v.number()),
   evalTavilyCredits: v.optional(v.number()),
   evalBreach: v.optional(v.boolean()),
