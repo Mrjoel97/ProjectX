@@ -1,6 +1,11 @@
 {
   "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
-  "marketing.md": ["packages/core/src/marketing", "packages/backend/convex/funnels"],
+  "marketing.md": [
+    "packages/core/src/marketing",
+    "packages/backend/convex/funnels",
+    "apps/web/app/(app)/dashboard/marketing/",
+    "apps/web/app/(app)/dashboard/workspace/marketingPrefill"
+  ],
   "tracing.md": [
     "packages/backend/convex/lib/foglamp.ts",
     "packages/backend/convex/foglamp.test.ts"
@@ -85,6 +90,7 @@
     "packages/backend/convex/smoke.ts"
   ],
   "dashboard-pages.md": [
+    "apps/web/app/(app)/dashboard/marketing/",
     "apps/web/app/(app)/dashboard/profile/VerticalWorkloadConfirmation.tsx",
     "apps/web/app/(app)/dashboard/profile/verticalWorkloadConfirmation.container.test.tsx",
     "apps/web/app/(app)/_components/RunningWork.tsx",

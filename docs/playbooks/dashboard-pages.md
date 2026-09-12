@@ -1,5 +1,10 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-12 — Phase 31's core contracts distinguish unavailable channel data
+> and invalid/missing raw counters from real zero. The authenticated lead adapter reuses Contacts
+> consent and suppression; `approval_required` never means ready to send. Marketing's UI and
+> navigation acceptance remain pending the downstream implementation and live checks.
+
 > Last verified: 2026-09-12 — evaluation ledger rows may retain observed Tavily credit usage
 > separately from dollar spending. Verified Free calls settle at zero dollars; missing usage
 > retains a reservation. Existing dashboard dollar totals do not treat credits as money.
@@ -3168,3 +3173,9 @@ node scripts/check-playbooks.mjs
   usable row sits further back than the new bound, and B1's failure mode was a page-wide crash.
 
 WORM governance report verified 2026-09-10 (ADR-048): pending counts now come from the durable export queue and unfinished legacy replay, not `ts > lastExportedTs`. The count remains a bounded floor. `lastCursorAdvanceMs` uses successful batch acknowledgement time for v2 checkpoints, with the old event-time value retained only for unmigrated checkpoints. `oldestAwaitingMs` is the oldest pending queue insertion or legacy audit insertion time; backdating does not distort pending age or control export coverage. Covered by `reportsGovernance.test.ts`.
+
+## Marketing route qualification (31-05)
+
+The authenticated `/dashboard/marketing` route now implements independent Channels, Tracked links and Captured leads sections. It distinguishes unavailable data from empty/zero, displays only genuine Gmail configuration/connection state, and names both social-provider blockers in plain language. Outbound email still needs separate approval. Tokens are shown in ephemeral readonly copy controls after creation only; normal list rows cannot recover them. Native Vault pagination continues through empty filtered pages. Consent defaults absent and result copy preserves suppression/approval reasons.
+
+The channel CTA now populates an unsent workspace composer through a closed intent/channel pair; it never replaces a populated draft or invokes a model/send. Marketing remains absent from the sidebar until31-07 evidence because the current navigation model has no disabled-item renderer. See marketing.md for the token lifetime, file-revision caveats and acceptance procedure. Focused component tests and web typechecking qualify this implementation; live acceptance and navigation activation are still pending.

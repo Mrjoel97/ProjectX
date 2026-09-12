@@ -3,13 +3,14 @@
 import { useThreadMessages } from "@convex-dev/agent/react";
 import { api } from "@pikar/backend/api";
 import { useMutation, useQuery } from "convex/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BrainIcon, SendIcon, UserIcon } from "../../../(auth)/icons";
 import { MarkdownDocument } from "../MarkdownDocument";
 // The verb map lives in exactly ONE module (cards.tsx) and both surfaces read it through
 // stepText — a second copy WILL drift, and a drifted verb is a surface disagreeing with itself.
 import { stepText, traceText } from "./cards";
 import { IntakeControls, type IntakeControlsHandle } from "./IntakeControls";
+import { applyMarketingPrefill, marketingPrefill } from "./marketingPrefill";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
 
 // SC2 render: the left-pane conversation. The guided questions and the "review and Approve"
@@ -110,6 +111,19 @@ export function ChatPane({
   const savePrompt = useMutation(api.savedPrompts.save);
   const [pinned, setPinned] = useState<Record<string, PinState>>({});
   const [text, setText] = useState("");
+  const prefillConsumed = useRef(false);
+  useEffect(() => {
+    if (prefillConsumed.current) return;
+    prefillConsumed.current = true;
+    const incoming = marketingPrefill(window.location.search);
+    setText((current) => applyMarketingPrefill(current, incoming, sending));
+    if (incoming) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("intent");
+      url.searchParams.delete("channel");
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }, [sending]);
   const [hasPendingIntake, setHasPendingIntake] = useState(false);
   const intakeRef = useRef<IntakeControlsHandle>(null);
   const busy = sending;

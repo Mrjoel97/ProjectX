@@ -6641,3 +6641,7 @@ production browser origin and keep the explicit backend URL private in `CONVEX_U
 fingerprints. This corrects target selection; it does not manufacture non-owner, authoring, owner
 review or rollback witnesses. The exact handoff and read-only continuation preflight remain the
 required links between those observed steps.
+
+## Marketing composer handoff (2026-09-12)
+
+Last verified: 2026-09-12 — the Marketing channel CTA passes only a closed `intent=marketing` plus catalog channel ID to the workspace. ChatPane consumes it once on mount, inserts a static review-oriented prompt only into an empty idle composer, and removes those parameters while preserving the rest of the route. Unknown/duplicate values are ignored. It never invokes `useSendCockpitMessage`, overwrites an existing draft, queues a send, or copies recipients/tokens into a URL. Focused prefill tests cover closed values and draft/in-flight preservation; ordinary user send handling remains unchanged.
