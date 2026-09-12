@@ -88,6 +88,9 @@ const sourcesUnder = (root: string) =>
 // the merge, which is the same fact reached independently. So Phase 28's connector and billing
 // rails add no recurrence mechanism, and `decision: defer` survives the merge on evidence rather
 // than on the pin having been quietly refreshed.
+// Phase 31 adds only internal bounded operator probe controls and GET-driven aggregate
+// funnels. Neither module schedules work; the independent scheduler and token pins below
+// remain unchanged and prove recurrence is still deferred.
 const CONVEX_MODULES = [
   "_generated/api.d.ts",
   "_generated/dataModel.d.ts",
@@ -99,6 +102,7 @@ const CONVEX_MODULES = [
   "audit.ts",
   "auth.config.ts",
   "auth.ts",
+  "authoringProbe.ts",
   "billing.ts",
   "billingApi.ts",
   "billingLedger.ts",
@@ -133,6 +137,7 @@ const CONVEX_MODULES = [
   "evaluations.ts",
   "feedback.ts",
   "finance.ts",
+  "funnels.ts",
   "gmail.ts",
   "gmailAuth.ts",
   "goals.ts",

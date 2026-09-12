@@ -375,7 +375,10 @@ describe("25-06: no second OAuth surface exists, and mail readiness is derived n
     // PayPal deliberately did NOT get one — `paypalAuth.beginConnect` refuses by design and mints
     // no state — so a twelfth route here is a question, not a rounding error. Gated on
     // `providerGates.connectPermitted`; see docs/playbooks/revenue-connectors.md.
-    expect(routes).toBe(11);
+    // 11 -> 12 at 31-03: the approved GET-only /f/ bearer route increments fixed aggregate
+    // counters and redirects to trusted Vault bytes. It is not another OAuth callback.
+    expect(routes).toBe(12);
+    expect(httpSource.match(/pathPrefix:\s*"\/f\/"/g)).toHaveLength(1);
     const microsoftCallbacks = [...httpSource.matchAll(/microsoft/gi)].length;
     expect(microsoftCallbacks).toBeGreaterThan(0);
     // One path literal, however many times it is mentioned.

@@ -357,7 +357,32 @@ describe("the allowlist against the write sites it claims to cover", () => {
     "x",
     // Exact synthetic-case receipt; only the internal packeval provisioning seam emits it.
     "vertical_eval.provisioned",
+    // These execute in production only for explicitly registered operator acceptance probes,
+    // under the reserved control namespace. They are not ordinary business activity and must
+    // not expand the browser payload projection. The positive scope pin below guards this.
+    "authoring_probe.started",
+    "authoring_probe.finished",
+    "authoring_probe.failed",
+    "authoring_probe.contained",
   ]);
+
+  test("excluded authoring control events remain reserved operator probe receipts", () => {
+    const probe = readFileSync(join(convexDir, "authoringProbe.ts"), "utf8");
+    const writes = [...probe.matchAll(/await appendAudit\(ctx,\s*\{([\s\S]*?)\n\s*\}\);/g)];
+    expect(writes).toHaveLength(3);
+    for (const [, write] of writes) {
+      expect(write).toContain("tenantId: AUTHORING_PROBE_AUDIT_NAMESPACE");
+      expect(write).toContain("correlationId: `authoring-probe:");
+    }
+    expect(probe).toContain("export const prepare = internalMutation(");
+    expect(probe).toContain('throw new Error("AUTHORING_PROBE_OWNER_REQUIRED")');
+    expect(probe).toContain("internal.guardrails.openEvalBudget");
+    expect(probe).toContain("authoringProbe: { threadId, authorizationSha256 }");
+    expect(probe).toContain('.eq("evalAuthoringProbe.threadId", threadId)');
+    expect(probe).toContain("if (!envelope) return null;");
+    for (const event of ["started", "finished", "failed", "contained"])
+      expect(probe).toContain(`"authoring_probe.${event}"`);
+  });
 
   /**
    * WHAT THIS PAIR DOES AND DOES NOT CATCH, because a drift guard that is read as total is worse
