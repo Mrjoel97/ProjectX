@@ -39,6 +39,7 @@ export const EVALUATOR_FILES = [
   "packages/contracts/src/verticalEval.ts",
   "packages/core/src/dataProfile.ts",
   "packages/core/src/researchEvidence.ts",
+  "packages/core/src/documentGen.ts",
   "packages/core/src/specialists.ts",
   "packages/core/src/verticalPacks.ts",
   "packages/cost/src/evalBudget.ts",

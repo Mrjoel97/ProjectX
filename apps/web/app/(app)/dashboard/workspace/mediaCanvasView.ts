@@ -361,8 +361,7 @@ export function failureText(reason: string, noun: "scene" | "block"): string {
     missing_binary: "the render environment is missing a required tool",
     route_unreachable: "the render service could not be reached",
     route_rejected: "the render service refused the request",
-    sidecar_rejected_on_return:
-      "the render produced no valid assembly record, so nothing was published",
+    sidecar_rejected_on_return: "the render produced no valid assembly record, so no reel is ready",
     // ── 33-08: the other three closed vocabularies a card has to speak ─────────────────────────
     // The RETRIER's terminal (`onSubmitComplete`). Neither of these is the provider's opinion of
     // the request — they are the request never getting there — so neither is a rewrite lever.
@@ -544,7 +543,7 @@ const CAPTION_DETAIL: Record<string, { state: StageState; detail: string }> = {
   burning: { state: "active", detail: "Burning the captions in…" },
   captioned: { state: "done", detail: "Burned in." },
   // 20-17's rule, said out loud: a caption failure NEVER unpublishes the reel.
-  failed: { state: "failed", detail: "The captions failed — the reel is published without them." },
+  failed: { state: "failed", detail: "The captions could not be prepared." },
 };
 
 /**
@@ -791,7 +790,7 @@ export function heroState(
     return {
       mode: "failed",
       sentence:
-        "The render finished but did not produce a valid assembly record, so it was not published.",
+        "The render finished but did not produce a valid assembly record, so no reel is ready.",
     };
   }
 
@@ -1348,6 +1347,8 @@ const SWAP_ARMS = [
  */
 export function failureCards(
   plan: {
+    /** A current validated download exists; render status alone cannot attest an artifact. */
+    readyReel?: boolean;
     renderStatus?: string | null;
     renderReason?: string | null;
     renderRetriedAt?: number | null;
@@ -1441,7 +1442,7 @@ export function failureCards(
       key: "hero-captions",
       where: "hero",
       sceneIndex: null,
-      headline: `The reel is published without its captions — ${failureClause(plan.captionReason, noun)}.`,
+      headline: `${plan.readyReel ? "The reel is ready without captions" : "Captions could not be prepared"} — ${failureClause(plan.captionReason, noun)}.`,
       sceneRef: null,
       sunkLine: null,
       fixes: [],

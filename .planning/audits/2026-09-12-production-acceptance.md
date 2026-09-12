@@ -1,0 +1,101 @@
+# Production acceptance follow-up — 2026-09-12
+
+This continues [the merged audit review](2026-09-10-merged-audit-codebase-review.md) and
+[the live acceptance record](2026-09-10-live-acceptance-continuation.md). Results below are
+bounded observations, not completion of Phases 23, 30, 31 or the provider lanes.
+
+## Verified release
+
+Commit `1127573adb2ae8982e416dfd146eb1609e44711e` was committed and pushed to main.
+CI [34684218302](https://github.com/Mrjoel97/ProjectX/actions/runs/34684218302) and production
+deployment [34684438168](https://github.com/Mrjoel97/ProjectX/actions/runs/34684438168) succeeded.
+The durable production probe passed at `08:56:32Z`; GitHub production deployment `6407878477`
+reported success at `08:56:36Z` for `https://www.pikar-ai.com` and that exact commit.
+
+The full backend qualification before the final acceptance repairs passed 4,358 tests.
+The subsequent research repair passed 392 affected tests, media terminal repair passed 324,
+and media UI repair passed 142. CI then qualified the complete committed tree. The strict
+local Convex dry-run passed with native TypeScript enabled and no deleted indexes. Earlier
+compiler lookup failures led to declaring the existing TypeScript version in the backend.
+
+## Media: failure made durable, successful video still absent
+
+The single accepted synthetic render used plan `p573bm94xqt94mkv299msgcby98e932n`, thread
+`m57dytskag9wah3zjy2d63d4q18e9sg0`, and batch `8568f695-a20b-4072-9144-d9ed1796bbf7`.
+Two voice jobs were blocked by `tts_not_verbatim`; the submission path had left the parent
+pending. No retry, external send, or weakening of the integrity check was performed.
+
+At `08:57:44.731Z`, the reviewed bounded reconciliation verified the exact plan and terminal
+batch, then recorded `renderStatus=failed`, `renderReason=incomplete_batch`,
+`captionStatus=failed`, and `captionReason=incomplete_takes`. It cannot schedule rendering,
+transcription or another provider purchase. The browser subsequently showed failed voice,
+assembly and caption states instead of the unrelated email Sending/recipient report.
+
+That browser inspection exposed another presentation defect: captions copy said the reel was
+published even though no video existed. The follow-up copy repair requires a current rendered
+artifact and validated URL before saying a reel is ready without captions; otherwise it reports
+caption failure alone. It passed 145 focused tests and web TypeScript before promotion.
+The failed voice attempt is not completed-video, sidecar, Vault-video or publication evidence.
+
+## Research: provenance improved, semantic acceptance still failed
+
+One ordinary post-deployment research retest saved report `qh7225ppx7gpkq5byy6xgzc57n8e982p`
+and findings `qh7dhv2xn4w8ghbqg4jv2xb7zx8e9djn`; both were ready. Its visible code-owned
+labels distinguished matched page excerpts, matched search excerpts and unverified references.
+Claims remained explicitly model assessments with unverified support. This is an observed
+presentation improvement, not proof of correctness or independent corroboration.
+
+The run again read three pages despite the natural-language maximum of two. It also created
+unrequested PDF `qh76tt0sw6a6e4d3w8853fs58n8e8a73`, an acceptance-test plan containing an
+invented timeline and a 125-character rule. That parallel artifact did not satisfy the requested
+concise WAI research deliverable. No further paid attempt was made to erase the failure.
+
+The durable next controls are a typed per-request page budget enforced before extraction, and
+a requested-deliverable contract that binds parent completion/artifact saving to the delegated
+research result. Their tests must include duplicate/late results, explicitly requested parallel
+outputs, instruction injection and rejected saves. Prompt/method changes require exact-version
+semantic evaluation before activation; source-access labels alone cannot close these gaps.
+
+Live review also exposed duplicate notices and literal backslashes from the new safe literal
+encoder meeting the existing simplified Markdown parser. The follow-up parser repair decodes
+escaped punctuation within inline tokenization, after block classification, so escaped model
+text cannot become forged headings or formatting. General notices are assigned once to each
+outer artifact wrapper; claim-support and quote-matching limitations remain explicit.
+The parser/wrapper repair passed 111 tests and core TypeScript before promotion. Existing stored
+duplicate notices are retained as historical content; the corrected client parser renders their
+escaped punctuation without altering the stored evidence. No new paid run was used to qualify
+this follow-up presentation repair.
+
+## Phase 30: dormant publication and representative preflight
+
+The explicit candidate publisher created or reused the six immutable v1 candidates. At
+`08:59:40.026Z`, one representative native preflight per candidate passed under run
+`fd8f98ce-f1ee-462b-aaba-5a6cb844dad7`:
+
+| Candidate | Representative case |
+| --- | --- |
+| Data v1 | `data-typed-xlsx-profile` |
+| Product v1 | `product-supported-prd` |
+| Design v1 | `design-visible-artifact` |
+| Legal v1 | `legal-cited-comparison` |
+| HR v1 | `hr-role-brief` |
+| Engineering v1 | `engineering-architecture-evidence` |
+
+These reads checked immutable candidate identity/body and fresh isolated tenant references.
+They did not provision sources, run models, review semantic correctness or activate candidates.
+The local closed corpus still contains forty cases; six representative reads are not forty
+observed evaluations. Ignored local publication, preflight and repair receipts are in `.tmp/`.
+
+## Remaining gates
+
+Phase 23 requires two fresh controlled identities, genuine authored-candidate handoff, verified
+provider billing, approval of the concrete paid evaluation, and activation/rollback acceptance.
+Phase 30 requires actual bounded evaluations, authenticated semantic reviews (including required
+qualified Legal/HR reviewers), all-six workflow acceptance, two evaluated versions per vertical,
+and the six lifecycle drills. No human approval or expert attestation is inferred.
+
+Phase 31 application work still awaits the explicit stage, attribution and lead-capture contract
+in plan 31-00. Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
+worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
+remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the
+bounded full refresh timed out after extraction, while the Convex edge fixup succeeded.

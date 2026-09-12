@@ -2,6 +2,9 @@
 > including delivering and done. The canvas observes actual render/job failures; email reports,
 > recipient chrome and Sending/Sent chat milestones cannot replace it after Generate. Rendered
 > workspace regressions cover media lifecycle routing and preserve email delivery behavior.
+> Caption failure copy describes a ready reel only with current rendered storage evidence.
+> Shared Markdown inline rendering preserves escaped literal punctuation without exposing
+> backslashes or turning model text into forged headings/emphasis.
 
 > Last verified: 2026-09-11 — golden evaluation dispatch carries one trusted `evalBudgetId`
 > through the durable workflow, research/media grounding, and team/content fan-out. Every child

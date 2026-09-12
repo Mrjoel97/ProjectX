@@ -1,5 +1,11 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-12 — caption failure does not prove a reel exists. The tracker reports
+> only caption failure; the failure card says a reel is ready without captions only when the
+> current render is `rendered` and `media.reel` supplies its validated download URL. Missing,
+> invalid and previous assemblies use neutral caption-failure copy. Render readiness never
+> claims external publication. Focused canvas regressions cover both artifact states.
+
 > Last verified: 2026-09-12 — a final submission refusal now reevaluates the shared render
 > terminal in the same transaction. Previously only asset landings reevaluated it, so a final
 > `tts_not_verbatim` refusal left a finished batch showing `pending`. Terminal job rows reject

@@ -163,14 +163,22 @@ export function markdownToSheets(markdown: string): SheetSource[] {
  * generated prose; swap in a real inline parser (marked) if it starts mattering.
  */
 export function inlineRuns(text: string): InlineRun[] {
-  const clean = (s: string): string => s.replace(/[*`_]/g, "");
+  // Decode literal punctuation only after block classification, and before considering emphasis.
+  // Unescaping the document first would turn an escaped heading/badge back into markup.
+  const clean = (s: string): string =>
+    s.replace(
+      /\\([\\`*_{}[\]()#+.!|>~<-])|[*`_]/g,
+      (_match, escaped: string | undefined) => escaped ?? "",
+    );
   const runs: InlineRun[] = [];
-  const re = /(\*\*|__)(.+?)\1/g;
+  const re = /\\([\\`*_{}[\]()#+.!|>~<-])|(\*\*|__)(.+?)\2/g;
   let last = 0;
   let m = re.exec(text);
   while (m !== null) {
     if (m.index > last) runs.push({ text: clean(text.slice(last, m.index)), bold: false });
-    runs.push({ text: clean(m[2]!), bold: true });
+    runs.push(
+      m[1] !== undefined ? { text: m[1], bold: false } : { text: clean(m[3]!), bold: true },
+    );
     last = m.index + m[0].length;
     m = re.exec(text);
   }

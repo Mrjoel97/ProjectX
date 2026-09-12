@@ -1,5 +1,12 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-12 — The shared `MarkdownDocument` pipeline now recognizes escaped
+> punctuation as literal inline text after block parsing. Escaped research quotes and URLs render
+> without added backslashes, while escaped headings/emphasis remain plain and HTML stays text.
+> The same portable parser serves PDF/HTML exports. SSR regression exercises a structured
+> research claim through both memo and findings wrappers, preserving trusted reference labels
+> and one general provenance notice per newly produced artifact.
+
 > Phase 30 workload confirmation (2026-09-10): the existing recommendation panel also offers a
 > collapsed `VerticalWorkloadConfirmation` form when discovery has no eligible recommendations.
 > It loads ready, unsealed, same-tenant Vault document titles through `workloadSources` in native

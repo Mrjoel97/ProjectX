@@ -1,5 +1,10 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-09-12 — `renderResearchEvidence` emits claim/reference assessments and the
+> explicit legacy fallback; each independent outer memo/fence owns its general provenance notice.
+> This removes duplicate notices on new artifacts without parsing or changing model claims.
+> Existing stored research bodies retain their historical content.
+
 > Last verified: 2026-09-12 — Research claims now have a bounded structured reference contract.
 > `researchEvidence.ts` renders reference depth from executable tool outputs, matching exact
 > quotes against search snippets or successfully read excerpts. Quote occurrence is not semantic

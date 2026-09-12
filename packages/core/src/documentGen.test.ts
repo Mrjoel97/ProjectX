@@ -66,6 +66,20 @@ describe("tokenizeMarkdown", () => {
 });
 
 describe("inlineRuns", () => {
+  it("escaped punctuation remains literal while ordinary emphasis stays styled", () => {
+    const runs = inlineRuns(
+      "page\\-read \\(empty\\) \\`alt\\` \\*\\*unverified\\*\\* \\\\ **real bold**",
+    );
+    expect(runs.map((r) => r.text).join("")).toBe(
+      "page-read (empty) `alt` **unverified** \\ real bold",
+    );
+    expect(runs.filter((r) => r.bold)).toEqual([{ text: "real bold", bold: true }]);
+    expect(
+      inlineRuns(String.raw`C:\Users\file.txt`)
+        .map((r) => r.text)
+        .join(""),
+    ).toBe(String.raw`C:\Users\file.txt`);
+  });
   it("splits **bold** into bold runs and strips the markers", () => {
     expect(inlineRuns("plain **loud** tail")).toEqual([
       { text: "plain ", bold: false },

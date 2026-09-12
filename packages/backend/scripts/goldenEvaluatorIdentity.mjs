@@ -33,6 +33,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/vaultSmoke.ts",
   "packages/cost/src/evalBudget.ts",
   "packages/core/src/researchEvidence.ts",
+  "packages/core/src/documentGen.ts",
   "packages/core/src/specialists.ts",
   "packages/cost/src/goldenProviderBudget.ts",
 ].sort();

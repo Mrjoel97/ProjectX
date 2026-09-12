@@ -1,5 +1,11 @@
 # Optional vertical packs
 
+Last verified: 2026-09-12 — evaluator source pins now include the shared document renderer.
+The six v1 candidates were published dormant and one native preflight per candidate passed on
+production; no paid observations, authenticated semantic review or activation was performed.
+The inline escaping repair changes evaluator identity without turning those preflights into
+release evidence. See the September 12 production acceptance audit for exact boundaries.
+
 Last verified: 2026-09-11 — 72 focused native evidence, binding, provisioning, deletion and
 audit tests pass. SDK transport stubs verify actual zero-tool and search/save callback paths;
 complete-shaped ordinary audit receipts cannot forge issuance. These remain offline checks.

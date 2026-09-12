@@ -599,8 +599,8 @@ describe("the tracker is the four-stage spine, folded from the two job faces", (
 
     const failed = trackerView([scene()], "rendered", "failed", undefined);
     expect(stageOf(failed, "captions").state).toBe("failed");
-    // 20-17's rule, in words: the reel is published, just without burned-in captions.
-    expect(stageOf(failed, "captions").detail).toMatch(/without/);
+    // Caption status alone cannot attest that a usable reel exists.
+    expect(stageOf(failed, "captions").detail).toBe("The captions could not be prepared.");
     expect(stageOf(failed, "assemble").state).toBe("done");
   });
 
@@ -1407,15 +1407,38 @@ describe("the reel's own failures: retry, hold, and the degraded deliverable", (
     // 20-17's rule, said to the user: a caption failure NEVER unpublishes the reel, and there is
     // no retry arm because there is no mutation that re-burns them.
     const card = failureCards(
-      { renderStatus: "rendered", captionStatus: "failed", captionReason: "incomplete_takes" },
+      {
+        readyReel: true,
+        renderStatus: "rendered",
+        captionStatus: "failed",
+        captionReason: "incomplete_takes",
+      },
       [fscene()],
       anEstimate(),
     )[0];
     expect(card?.where).toBe("hero");
-    expect(card?.headline).toMatch(/reel is published|without them|captions/i);
+    expect(card?.headline).toContain("The reel is ready without captions");
+    expect(card?.headline).not.toContain("published");
     expect(card?.detailCode).toBe("incomplete_takes");
     expect(card?.fixes).toEqual([]);
     expect(failureText("incomplete_takes", "scene")).not.toBe("incomplete_takes");
+  });
+
+  test.each([
+    "failed",
+    "pending",
+    "rendered",
+  ])("caption failure with %s but no current artifact never claims a ready or published reel", (renderStatus) => {
+    const cards = failureCards(
+      { renderStatus, captionStatus: "failed", captionReason: "incomplete_takes" },
+      [fscene()],
+      anEstimate(),
+    );
+    const caption = cards.find((card) => card.detailCode === "incomplete_takes");
+    expect(caption?.headline).toContain("Captions could not be prepared");
+    expect(caption?.headline).not.toMatch(/published|reel is ready/);
+    expect(caption?.fixes).toEqual([]);
+    expect(source).toContain('readyReel: reel?.status === "rendered" && Boolean(reel?.url)');
   });
 
   test("every fix-menu refusal has a sentence in the SAME vocabulary the estimate rail uses", () => {

@@ -83,7 +83,7 @@ export function renderResearchEvidence(args: {
   toolOutputs: readonly { tool: string; output: unknown }[];
 }): string {
   if (!valid(args.output))
-    return `> ${RESEARCH_EVIDENCE_NOTICE}\n\n**Unverified research draft — structured references unavailable.**\n\n${literal(args.legacyBody)}`;
+    return `**Unverified research draft — structured references unavailable.**\n\n${literal(args.legacyBody)}`;
 
   const search = new Map<string, string[]>();
   const reads = new Map<string, string[]>();
@@ -123,7 +123,6 @@ export function renderResearchEvidence(args: {
     return `### Claim ${i + 1} — model assessment, support unverified\n\n${literal(claim.text)}\n\n${refs.length ? refs.join("\n") : "No references supplied."}`;
   });
   return [
-    `> ${RESEARCH_EVIDENCE_NOTICE}`,
     ...claims,
     `**Model-reported limitations:** ${literal(args.output.limitations)}`,
     "Excerpt matching verifies only that the quoted text occurred in a tool result. It does not verify truth, claim support, or independent corroboration.",

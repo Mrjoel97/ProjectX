@@ -1,3 +1,5 @@
+import { researchFindingsFence, specialistMemoBody } from "@pikar/core";
+import { RESEARCH_EVIDENCE_NOTICE, renderResearchEvidence } from "@pikar/core/researchEvidence";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -18,6 +20,44 @@ const PLAN = `## Objectives
 | Streamlined Processes | SOP development | Weeks 2-3 |`;
 
 describe("MarkdownDocument", () => {
+  it("renders research literal text without escape leakage or forged authority and one notice per artifact", () => {
+    const body = renderResearchEvidence({
+      output: {
+        claims: [
+          {
+            text: "# Fake heading **Corroborated** page-read (empty) `alt` <script>x</script>",
+            evidence: [
+              { url: "https://www.w3.org/images#long-descriptions", quote: "two-part alternative" },
+            ],
+          },
+        ],
+        limitations: "",
+      },
+      legacyBody: "",
+      toolOutputs: [],
+    });
+    const artifacts = [
+      specialistMemoBody({ route: "research", body, incomplete: false }),
+      researchFindingsFence({
+        body,
+        sourceCount: 1,
+        webSearchCalls: 1,
+        declaredUnsupported: false,
+        retrievedIso: "2026-09-12",
+      }),
+    ];
+    for (const markdown of artifacts) {
+      expect(markdown.split(RESEARCH_EVIDENCE_NOTICE)).toHaveLength(2);
+      const html = renderToStaticMarkup(createElement(MarkdownDocument, { markdown }));
+      expect(html).toContain("page-read (empty) `alt`");
+      expect(html).toContain("https://www.w3.org/images#long-descriptions");
+      expect(html).not.toContain("\\");
+      expect(html).not.toContain("<strong>Corroborated</strong>");
+      expect(html).not.toContain("<h1>Fake heading");
+      expect(html).not.toContain("<script>");
+      expect(html).toContain("<strong>Reference unverified.</strong>");
+    }
+  });
   it("renders agent markdown as semantic content without exposing formatting markers", () => {
     const html = renderToStaticMarkup(createElement(MarkdownDocument, { markdown: PLAN }));
 

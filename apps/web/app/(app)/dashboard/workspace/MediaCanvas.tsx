@@ -421,6 +421,7 @@ function ReelCanvas({ plan, threadId }: { plan: MediaPlan; threadId?: string }) 
   const citations = citationView(cites);
   const failures = failureCards(
     {
+      readyReel: reel?.status === "rendered" && Boolean(reel?.url),
       renderStatus: reel?.status ?? null,
       renderReason: reel?.reason ?? null,
       renderRetriedAt: plan.renderRetriedAt,

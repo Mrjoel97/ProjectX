@@ -1,3 +1,10 @@
+> Last verified: 2026-09-12 — Postdeployment research acceptance exposed literal escape characters
+> in the shared document renderer. `inlineRuns` now decodes escaped punctuation as plain text
+> after block classification, preserving ordinary emphasis and actual backslashes. Research
+> composition leaves the general provenance notice to each outer artifact wrapper, avoiding a
+> duplicate on newly produced drafts. Existing stored bodies are not rewritten. This is a
+> presentation repair; model method fidelity and natural-language page budgets remain unaccepted.
+
 > Last verified: 2026-09-12 — The research specialist selects native SDK structured output from
 > its trusted skill name while retaining its existing multi-step tool grant. The final claims
 > reference URLs and quotes; deterministic rendering checks them against this attempt's actual

@@ -1,5 +1,9 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-12 — the follow-up golden evaluator identity also pins the shared
+> document inline renderer. Its escape-handling change retires the prior evaluator revision;
+> candidate bodies, runtime activation and owner/semantic approval requirements are unchanged.
+
 > Last verified: 2026-09-11 — Vertical qualification now requires a native immutable issuance
 > receipt binding the current corpus, evaluator and exact candidate version. Generic evidence
 > submission cannot mint vertical qualification. Owner review records and a closed evaluation
