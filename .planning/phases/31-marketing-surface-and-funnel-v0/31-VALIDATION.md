@@ -3,7 +3,7 @@ phase: 31
 slug: marketing-surface-and-funnel-v0
 status: draft
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-08-10
 ---
 
@@ -43,7 +43,7 @@ created: 2026-08-10
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command / Evidence | File Exists | Status |
 |---------|------|------|-------------|-----------|------------------------------|-------------|--------|
-| 31-00-01 | 00 | 0 | MKTG-01/02/03 | decision contract | Owner approval in `31-00-SUMMARY.md`; stage/source/lead decisions and exact compatibility verdict recorded | ❌ W0 | ⬜ pending |
+| 31-00-01 | 00 | 0 | MKTG-01/02/03 | decision contract | Owner approval in `31-00-SUMMARY.md`; stage/source/lead decisions and exact compatibility verdict recorded | ✅ W0 | ✅ passing 2026-09-12 |
 | 31-01-01 | 01 | 1 | MKTG-01/02 | unit | `pnpm --filter @pikar/core test -- marketing.test.ts` — six-channel totality including TikTok, dual social blockers, raw counters, stage/source parsing | ❌ W1 | ⬜ pending |
 | 31-01-02 | 01 | 1 | MKTG-02 | structural + type | `pnpm --filter @pikar/backend test -- funnels.test.ts && pnpm --filter @pikar/backend typecheck` — exact three-counter schema/no event plane | ❌ W1 | ⬜ pending |
 | 31-01-03 | 01 | 1 | MKTG-01/02/03 | documentation guard | `node scripts/check-playbooks.mjs` | ✅ checker | ⬜ pending |
@@ -70,6 +70,15 @@ Legend: ⬜ pending · ✅ passing · ❌ missing/blocking · ⚠️ flaky
 ---
 
 ## Wave 0 Requirements
+
+Decision recorded 2026-09-12 in `31-00-SUMMARY.md`:
+
+| Field | Approved value |
+| --- | --- |
+| Stage grammar and counters | A1 THREE_STAGE_302_PATHS: GET visit/claim/download; one raw request counter increment and 302 to the fixed Vault bytes; no uniqueness/sequence claim. |
+| Source persistence | B1 TOKEN_PER_SOURCE: fixed bounded source per authenticated-created token; public `?s=` creates no keys and cannot override attribution. |
+| Lead actor and write boundary | C1 AUTHENTICATED_OPERATOR: existing tenant contacts upsert with explicit origin/consent and suppression rules; no public contact write or automatic sending. |
+| Compatibility verdict | PROCEED_COMPATIBLE; implementation may proceed. Already-issued file URLs are not revoked by funnel deactivation. Live acceptance and navigation activation remain pending. |
 
 Plan 31-00 is a decision Wave 0, not an application-scaffolding wave. It must produce `31-00-SUMMARY.md` with:
 
