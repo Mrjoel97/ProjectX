@@ -6645,3 +6645,5 @@ required links between those observed steps.
 ## Marketing composer handoff (2026-09-12)
 
 Last verified: 2026-09-12 — the Marketing channel CTA passes only a closed `intent=marketing` plus catalog channel ID to the workspace. ChatPane consumes it once on mount, inserts a static review-oriented prompt only into an empty idle composer, and removes those parameters while preserving the rest of the route. Unknown/duplicate values are ignored. It never invokes `useSendCockpitMessage`, overwrites an existing draft, queues a send, or copies recipients/tokens into a URL. Focused prefill tests cover closed values and draft/in-flight preservation; ordinary user send handling remains unchanged.
+
+Last verified: 2026-09-12 — the Marketing browser acceptance suite is collected with an explicitly exported signed-in browser state, no owner setup/JWT extraction, no model/provider invocation and an unsent handoff only. Its independent anonymous request contexts exercise file redirects; see marketing.md for recording redaction, explicit synthetic fixtures and retained-contact cleanup limits. This does not constitute live cockpit or Marketing acceptance.

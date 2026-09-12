@@ -110412,6 +110412,16 @@
       "id": "packages_backend_convex_schema_auditexportqueue_table",
       "community": 460,
       "norm_label": "auditExportQueue (table)"
+    },
+    {
+      "label": "funnels (table)",
+      "file_type": "code",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2814",
+      "_origin": "convex_table",
+      "id": "packages_backend_convex_schema_funnels_table",
+      "community": 460,
+      "norm_label": "funnels (table)"
     }
   ],
   "links": [
@@ -303744,6 +303754,16 @@
       "confidence_score": 1,
       "source": "apps_web_app_app_dashboard_workspace_mediacanvas",
       "target": "packages_backend_convex_plans_byid"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/schema.ts",
+      "source_location": "L2814",
+      "weight": 1,
+      "confidence_score": 1,
+      "source": "packages_backend_convex_schema",
+      "target": "packages_backend_convex_schema_funnels_table"
     }
   ],
   "hyperedges": []

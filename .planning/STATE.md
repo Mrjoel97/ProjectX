@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 47
-current_plan: Merged-audit implementation deployed; see .planning/audits/2026-09-12-production-acceptance.md. Phases 23 and 30 require semantic evaluation and live lifecycle evidence; six vertical v1 candidates are dormant. Phase 31 A1/B1/C1 approved and implementation started. Phase 47 remains deferred on real evidence.
+current_phase: 31
+current_plan: 31-07 live acceptance after production qualification. Phase 23 mutation-proof supplement is underway before a fresh bounded authoring checkpoint. Phase 30 semantic/lifecycle evidence remains open; six vertical v1 candidates are dormant. Phase 47 remains deferred on real evidence.
 status: in_progress
-stopped_at: "2026-09-12 — production ba920a3 verified; ordinary OpenRouter and Tavily Free accounting attestations configured. Both fresh Phase 23 accounts passed non-owner checks; no owner grant/model probe yet. Phase 31 foundation committed 7fa4fb2/71950e6; links and contacts Wave 2 underway. Shared corpus preflight repair committed e9d69f1. Semantic review, successful media and recurrence gates remain open."
+stopped_at: "2026-09-12 — production ba920a3 verified; OpenRouter/Tavily Free attestations configured. Phase31 UI committed64c6d70; acceptance spec prepared. Full local tests/types/build/lint and21freegates qualified after4 exact inventory corrections36e4c69. Native probe controls89b6fb5 remain unregistered; supplementary Phase23 mutation proof is underway. CI/deploy, live Marketing evidence, semantic review and recurrence gates remain open."
 last_updated: "2026-09-12"
 progress:
   total_phases: 73

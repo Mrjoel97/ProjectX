@@ -1,6 +1,7 @@
 {
   "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
   "marketing.md": [
+    "apps/web/e2e/marketing-uat.spec.ts",
     "packages/core/src/marketing",
     "packages/backend/convex/funnels",
     "apps/web/app/(app)/dashboard/marketing/",

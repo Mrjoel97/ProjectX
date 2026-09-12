@@ -183,8 +183,12 @@ The native production CLI then set the three explicit non-secret attestations:
 `GOLDEN_OPENROUTER_BILLING=standard`, `GOLDEN_TAVILY_BILLING=free`, and
 `GOLDEN_TAVILY_CREDIT_USD=0`. This records the owner's confirmed billing contract;
 it does not independently inspect provider account balances or upgrade Tavily.
-No model evaluation was triggered by these settings. Ordinary browser authoring still
-needs a server-owned aggregate budget attachment before a truthful capped probe checkpoint.
+No model evaluation was triggered by these settings. The server-owned two-turn budget attachment
+is now committed as `89b6fb5`. It binds an exact thread, refuses unsupported paid routes before
+egress, preserves unknown-cost holds and closes independently of unrelated owner work. Its 276
+focused tests and backend typecheck passed; both evaluator identities were regenerated and their
+free checks passed. Whole-tree qualification and production promotion remain pending. Budget
+containment is not passing adversarial policy evidence; no owner grant or probe ran.
 
 The shared exact-corpus preflight repair is committed as `e9d69f1`: all forty cases now
 pass the same case/request matcher before provisioning and evidence issuance. Thirty-nine
@@ -197,8 +201,12 @@ and the six lifecycle drills. No human approval or expert attestation is inferre
 Phase 31's explicit A1/B1/C1 contract is approved and recorded in plan 31-00 (commit `8b18a2b`).
 Plan 31-01 is qualified and committed in `7fa4fb2` and `71950e6`: six-channel availability,
 safe raw counters, fixed-source/hash-only funnel storage, and tenant export/erasure including
-retained file bytes. Its focused suites and core/backend typechecks passed. Link APIs and the
-existing-contact lead adapter are the next parallel wave; UI and live acceptance remain open.
+retained file bytes. Its focused suites and core/backend typechecks passed. Link lifecycle is
+committed in `1dac82f`, authenticated lead recording in `4b7eaf7`, and the public GET route plus
+paginated file picker in `9c8cbf7`. Tests cover tenant isolation, token secrecy, raw concurrent
+counts, missing/replaced files, uncached responses, HEAD refusal and both suppression convergence
+points. The narrow privacy guard follow-up is `223ca7d`. The frontend is under implementation;
+whole-tree tests, deployment, browser acceptance and navigation activation remain open.
 Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the

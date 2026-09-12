@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
 
 import { getFunctionName } from "convex/server";
 import { act } from "react";
@@ -54,6 +55,15 @@ afterEach(async () => {
   host.remove();
 });
 describe("Marketing surface", () => {
+  it("keeps writes confined to link management and lead capture without model or publisher hooks", () => {
+    const source = readFileSync("app/(app)/dashboard/marketing/MarketingView.tsx", "utf8");
+    expect(
+      [...source.matchAll(/useMutation\(api\.([\w.]+)\)/g)].map((match) => match[1]).sort(),
+    ).toEqual(["contacts.recordMarketingLead", "funnels.create", "funnels.deactivate"]);
+    expect(source).not.toMatch(
+      /\buseAction\b|\bfetch\s*\(|useSendCockpitMessage|api\.(?:gmail|cockpit|media)\./,
+    );
+  });
   it("creates once and holds secret URLs only until the panel closes", async () => {
     mocks.artifacts = [{ id: "doc", title: "Synthetic file", mimeType: "application/pdf" }];
     mocks.create.mockResolvedValue({
