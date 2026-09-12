@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AGENT_AUTHORABLE_SKILLS, AGENT_EVAL_SUITE } from "@pikar/contracts/skill";
 import { expect, type Page, test } from "@playwright/test";
+import { authenticate, nonOwner } from "./phase23NativeAuth";
 import { type ProbeExpectation, probeReadback, requestedCap } from "./phase23ProbeControls";
 
 // Opt-in paid browser proof. Listing/default E2E runs never author a candidate or grant owner.
@@ -15,7 +16,12 @@ const phase = resolve(root, ".planning/phases/23-agent-authored-skills");
 const handoffPath = resolve(phase, "23-LIVE-HANDOFF.json");
 const optedIn = process.env.PIKAR_PHASE23_BROWSER_PROBE === "1";
 test.describe.configure({ mode: "serial", retries: 0 });
-test.use({ trace: "off", screenshot: "off", video: "off" });
+test.use({
+  trace: "off",
+  screenshot: "off",
+  video: "off",
+  storageState: { cookies: [], origins: [] },
+});
 
 function demand(condition: unknown, code: string): asserts condition {
   if (!condition) throw new Error(code);
@@ -70,42 +76,6 @@ function stable<T>(read: () => T): T {
   const first = read();
   demand(canonical(first) === canonical(read()), "PHASE23_READBACK_CHANGED");
   return first;
-}
-async function authenticate(page: Page, foreign = false) {
-  const prefix = foreign ? "E2E_FOREIGN_USER" : "E2E_USER";
-  const email = process.env[`${prefix}_EMAIL`];
-  const password = process.env[`${prefix}_PASSWORD`];
-  demand(email && password, "PHASE23_AUTH_REQUIRED");
-  // Use the native sign-in boundary, never decode a browser token to establish identity.
-  // Starting with sign-out prevents an unrelated cached storageState from satisfying the witness.
-  await page.goto("/signin");
-  const signOut = page.getByRole("button", { name: /^sign out$/i });
-  const emailInput = page.getByLabel("Email Address", { exact: true });
-  await expect(signOut.or(emailInput)).toBeVisible({ timeout: 30_000 });
-  if (await signOut.isVisible()) await signOut.click();
-  await page.goto("/signin");
-  await page.getByLabel("Email Address").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 30_000 });
-}
-async function nonOwner(page: Page, foreign = false) {
-  const email = process.env[foreign ? "E2E_FOREIGN_USER_EMAIL" : "E2E_USER_EMAIL"];
-  demand(email, "PHASE23_AUTH_REQUIRED");
-  const user = query("owner:findUserIdByEmail", { email });
-  demand(user?.owner === false, "PHASE23_NON_OWNER_REQUIRED");
-  const expectedId =
-    process.env[foreign ? "PIKAR_PHASE23_FOREIGN_USER_ID" : "PIKAR_PHASE23_PRIMARY_USER_ID"];
-  demand(expectedId && user.userId === expectedId, "PHASE23_IDENTITY_MISMATCH");
-  // Local CLI reads can invalidate browser sessions, so authenticate AFTER inspection.
-  await authenticate(page, foreign);
-  await page.goto("/ops");
-  await expect(page.getByRole("heading", { name: "Compliance", exact: true })).toBeVisible();
-  await expect(page.getByText("Eval signals", { exact: true })).toBeVisible();
-  await expect(page.getByText("Tenant skill candidates", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Activate v/ })).toHaveCount(0);
-  // The fresh native login used the exact unique address whose server lookup matched expectedId.
-  return expectedId;
 }
 function readProbe(expected: ProbeExpectation, turns: 0 | 1 | 2, closed = false) {
   return probeReadback(
@@ -173,7 +143,10 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
   const validator = await import(pathToFileURL(resolve(phase, "validate-live-artifact.mjs")).href);
 
   // These are actual free gates, not an operator-supplied boolean. No seed/model/evidence path.
+  process.stdout.write("PHASE23_STAGE_FREE_GATES_STARTED\n");
   command(resolve(root, "scripts/check-free-gates.mjs"), [], root, "FREE_GATES", 60 * 60_000);
+  process.stdout.write("PHASE23_STAGE_FREE_GATES_PASSED\n");
+  process.stdout.write("PHASE23_STAGE_INTEGRATED_FREE_GATES_STARTED\n");
   command(
     resolve(root, "node_modules/turbo/bin/turbo"),
     ["run", "test", "typecheck", "build", "--concurrency=1"],
@@ -181,6 +154,7 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
     "INTEGRATED_FREE_GATES",
     60 * 60_000,
   );
+  process.stdout.write("PHASE23_STAGE_INTEGRATED_FREE_GATES_PASSED\n");
   for (let plan = 1; plan <= 5; plan++) {
     const summary = readFileSync(resolve(phase, `23-0${plan}-SUMMARY.md`), "utf8");
     demand(
@@ -194,7 +168,7 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
   );
 
   const foreignContext = await browser.newContext({
-    storageState: "e2e/.auth/foreign.json",
+    storageState: { cookies: [], origins: [] },
     baseURL: new URL(
       page.url() === "about:blank"
         ? (process.env.PIKAR_E2E_BASE_URL ?? "http://127.0.0.1:3111")

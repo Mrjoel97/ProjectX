@@ -1,3 +1,12 @@
+> Last verified: 2026-09-12 — Phase 23 authentication now shares one native helper between the
+> paid harness and a separately opt-in authentication-only test. Both start with empty browser
+> state; fresh exact-ID/non-owner checks precede fixed-path exports. The auth-only path has no
+> owner-grant, probe or model entry point. Six offline checks, web TypeScript and discovery of
+> both isolated tests passed. Closed authentication-stage diagnostics and prerequisite markers
+> expose progress without DOM, password, token or raw-error output. Live readiness remains
+> separate: the prior authorized run passed its free checks but stopped at pending sign-in,
+> with both accounts still non-owners and no candidate. Its original once-lock is preserved.
+>
 > Last verified: 2026-09-12 — the compact navigation regression now pins all five approved
 > routes, including Marketing, while retaining the original four. Six split-pane and nine
 > Marketing tests passed after the outdated four-tab CI assertion failed. Runtime unchanged.

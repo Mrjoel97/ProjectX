@@ -94,3 +94,41 @@ test("ordinary browser turns use the registered thread and close its budget befo
   assert.ok(!source.includes("__convexAuthJWT"));
   assert.ok(!source.includes('name: "New chat"'));
 });
+
+test("auth-only readiness cannot invoke the paid runner and both contexts start empty", () => {
+  const auth = readFileSync(
+    new URL("../apps/web/e2e/phase23-auth-only.spec.ts", import.meta.url),
+    "utf8",
+  );
+  const helper = readFileSync(
+    new URL("../apps/web/e2e/phase23NativeAuth.ts", import.meta.url),
+    "utf8",
+  );
+  const paid = readFileSync(
+    new URL("../apps/web/e2e/agent-skill-authoring.spec.ts", import.meta.url),
+    "utf8",
+  );
+  for (const source of [auth, helper]) {
+    for (const forbidden of [
+      "authoringProbe:",
+      "owner:bootstrapOwner",
+      "cockpit:send",
+      "__convexAuthJWT",
+      "agent-skill-authoring.spec",
+    ])
+      assert.ok(!source.includes(forbidden));
+  }
+  assert.equal((helper.match(/"owner:findUserIdByEmail"/g) ?? []).length, 1);
+  assert.ok(auth.includes('from "./phase23NativeAuth"'));
+  assert.ok(paid.includes('from "./phase23NativeAuth"'));
+  for (const source of [auth, paid]) {
+    assert.equal(
+      (source.match(/storageState: \{ cookies: \[\], origins: \[\] \}/g) ?? []).length,
+      2,
+    );
+    assert.ok(!source.includes('storageState: "e2e/.auth/'));
+  }
+  assert.match(helper, /throw new Error\(`PHASE23_AUTH_\$\{stage\}_FAILED`\)/);
+  assert.ok(!helper.includes("error.message"));
+  assert.ok(auth.indexOf("await nonOwner") < auth.indexOf(".storageState({ path:"));
+});

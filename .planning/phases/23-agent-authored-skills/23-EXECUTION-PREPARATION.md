@@ -2,6 +2,21 @@
 
 ## September 12 continuation
 
+The user subsequently authorized the exact $1/two-submission checkpoint with “do it”, recorded
+before execution in `23-06-SUMMARY.md`. The single attempt on qualified production `4df076db`
+passed its actual free prerequisite commands, then stopped at pending native sign-in before
+ownership or model work. Native A/B owner checks remained false and A's candidate/request
+counts remained zero. The original attempt, encrypted canary and once-lock are preserved.
+
+A bounded authentication-only repair now shares the exact native login helper with the paid
+test, starts primary and foreign contexts empty, verifies native exact IDs/non-owner UI, and
+exports the two fixed ignored state paths only afterward. It never loads the old exports or
+calls owner grants, probes or models. Six offline controls, web TypeScript and both Playwright
+discovery entries passed; actual authentication-only readiness remains pending. Safe role/stage
+codes replace hidden authentication failures, and fixed prerequisite progress markers distinguish
+free checks from later live work. A separately pinned ignored credential receiver/launcher is
+under review for this zero-model path; no full paid rerun follows automatically.
+
 Both controlled accounts completed fresh password sign-in and authenticated non-owner `/ops`
 checks, independently confirmed by native owner-state reads. Private credentials remain locally
 encrypted; committed records contain no email or password. No owner grant, model authoring probe,
@@ -18,7 +33,8 @@ The native aggregate budget for two ordinary browser submissions is deployed at 
 (CI `34692922592`, deployment `34693161766`). It binds one exact thread, refuses unsupported
 paid side paths and preserves unknown-cost holds. This is probe containment, not proof that
 unrestricted runtime policy refused an adversarial instruction. The concrete 23-06 Task 2
-authorization remains pending before any owner grant or model turn. The synthetic golden-suite
+authorization was subsequently recorded above; live readiness must qualify before its still
+unconsumed owner/model sequence resumes. The synthetic golden-suite
 envelope below is a separate run; historical qualification discussion below is not a new receipt.
 
 This is preparation, not a completion summary. No authored-candidate, paid-evaluation,
