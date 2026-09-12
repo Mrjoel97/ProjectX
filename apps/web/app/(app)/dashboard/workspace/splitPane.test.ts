@@ -52,12 +52,18 @@ describe("SplitPane wires the helper to a live media query and a visible toggle"
   });
 });
 
-describe("the compact bar has exactly four tabs, all drawn from NAV", () => {
-  test("TABBAR_HREFS is four hrefs and every one is a NAV entry", () => {
+describe("the compact bar has exactly five approved tabs, all drawn from NAV", () => {
+  test("TABBAR_HREFS preserves the original four routes and approved Marketing entry", () => {
     const m = layout.match(/const TABBAR_HREFS = \[([^\]]+)\];/);
     expect(m).not.toBeNull();
     const hrefs = [...(m?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((x) => x[1]);
-    expect(hrefs).toHaveLength(4);
+    expect(hrefs).toEqual([
+      "/dashboard",
+      "/dashboard/approvals",
+      "/dashboard/workspace",
+      "/dashboard/vault",
+      "/dashboard/marketing",
+    ]);
     for (const h of hrefs) expect(layout, h).toContain(`href: "${h}"`);
     expect(layout).toContain('<nav className="tabbar" aria-label="Primary (compact)">');
     expect(layout).toContain('aria-current={isActive(item.href) ? "page" : undefined}');

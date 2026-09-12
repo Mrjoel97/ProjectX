@@ -258,6 +258,20 @@ implemented and awaiting its final deployment/click checks. Direct-browser evide
 as a passing standalone three-test suite. `31-07-SUMMARY.md` retains timestamps, release scope,
 receipts, method deviation and cleanup. The owner separately authorized the Phase 23 bounded
 probe with **"do it"**; `23-06-SUMMARY.md` records the exact $1/two-submission scope before execution.
+
+Navigation release `7c1a15865c7df23ec9925ee1df1f69761f03884f` did not deploy. CI `34696425959`
+passed types, lint and free gates, then failed the existing compact-navigation assertion that
+expected four tabs; the approved Marketing entry makes five. Web reported 1,015 passes, that
+one failure, and the two existing recurrence skips. Deployment `34696530912` was skipped and
+production remained on `41d9551`. The failed release receipt is preserved separately as
+`.tmp/qualification-2026-09-12/marketing-nav-production-deployment-receipt.json`; the correction
+must retain an exact five-tab inventory rather than weaken the count or discard the old tabs.
+
+The first Phase 23 launch stopped before Node, browser, owner grant or model execution: encrypted
+credential unlocking failed in the escalated execution context. Matching original null-entropy,
+CurrentUser DPAPI parameters succeeded in the default context, without printing credentials or
+downgrading their storage. No attempt lock or native probe was created. Execution remains held
+until the navigation regression is corrected and the required free gates pass.
 Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the

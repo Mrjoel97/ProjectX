@@ -1,3 +1,7 @@
+> Last verified: 2026-09-12 — the compact navigation regression now pins all five approved
+> routes, including Marketing, while retaining the original four. Six split-pane and nine
+> Marketing tests passed after the outdated four-tab CI assertion failed. Runtime unchanged.
+>
 > Last verified: 2026-09-12 — the Phase 23 browser harness now uses exact native probe threads,
 > zero/one/two-turn budget readbacks and closure before its fixed handoff. Five offline control
 > tests, web TypeScript and Playwright discovery passed; no live authoring acceptance is claimed.

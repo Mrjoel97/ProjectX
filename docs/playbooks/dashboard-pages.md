@@ -1,5 +1,11 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-12 — the compact-navigation regression now pins the exact five approved
+> hrefs: Command Center, Approvals, Workspace, Vault and Marketing. The previous four-route pin
+> correctly caught the intentional mobile activation in CI; this correction retains all original
+> routes and asserts Marketing explicitly instead of weakening the inventory. Runtime navigation
+> is unchanged by this test correction.
+
 > Last verified: 2026-09-12 — Phase 31 Marketing navigation was activated after the exact user
 > response `APPROVE MARKETING NAV ACTIVATION`, following the direct-route live acceptance recorded
 > in `31-07-SUMMARY.md`. One native NAV entry links `/dashboard/marketing`; the compact bottom bar
