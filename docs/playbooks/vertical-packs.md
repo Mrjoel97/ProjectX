@@ -1,5 +1,12 @@
 # Optional vertical packs
 
+Last verified: 2026-09-12 — source compilation now copies recipe cells before SheetJS
+serialization, which otherwise adds nested hyperlink display metadata and changes the
+collector's case hash after the corpus generator has pinned the pristine recipe. The full
+forty-case offline regression checks recipe immutability, repeatable manifests and collector
+case/request/source agreement. The failed production collection remains historical evidence;
+this repair requires evaluator repinning and does not establish semantic acceptance.
+
 Last verified: 2026-09-12 — evaluator source pins now include the shared document renderer.
 The six v1 candidates were published dormant and one native preflight per candidate passed on
 production; no paid observations, authenticated semantic review or activation was performed.

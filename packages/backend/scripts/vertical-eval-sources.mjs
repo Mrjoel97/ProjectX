@@ -56,7 +56,9 @@ export function compileSources(verticalId, fixture) {
           const sheet = utils.aoa_to_sheet(spec.rows);
           for (const [address, cell] of Object.entries(spec.cells ?? {})) {
             assert(/^[A-Z]{1,2}[1-9][0-9]{0,2}$/.test(address), "fixture cell address limit");
-            sheet[address] = cell;
+            // SheetJS writes nested hyperlink display metadata during serialization. Keep
+            // recipe cells private so compilation cannot change the caller's case hash.
+            sheet[address] = structuredClone(cell);
             const range = utils.decode_range(sheet["!ref"] ?? address),
               position = utils.decode_cell(address);
             range.e.r = Math.max(range.e.r, position.r);

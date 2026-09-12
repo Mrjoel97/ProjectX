@@ -29,7 +29,7 @@ All three observed documents belong to thread `m57dytskag9wah3zjy2d63d4q18e9sg0`
 | Approved research memo saved | 09:02:32.690 | `qh7225ppx7gpkq5byy6xgzc57n8e982p` |
 
 The independent document names root plan `p573bm94xqt94mkv299msgcby98e932n` as its source.
-The raw findings and approved memo name child plan `p576mvfz76jzh4eyhv555ewacx8e9960`.
+The raw findings and approved memo name research plan `p576mvfz76jzh4eyhv555ewacx8e9960`.
 The bounded inspection found these exact documents within the newest 50 document rows and the
 matching tool records within the newest 100 step rows. It is not an exhaustive account history.
 
@@ -38,6 +38,12 @@ The source path is root `createDocument` → `draftDocument` → `vault.insertCr
 The research specialist's read-only tool grant did not gain document-writing capability.
 The two paths did not have an explicit result dependency. Tool timing alone does not identify
 which particular prompt sentence caused the model's incorrect method or content.
+
+Subsequent source tracing distinguishes this research root from a fan-out child: when the
+existing media plan is non-collecting, `stageResearchPlan` inserts a new root memo. The document
+tool retains the root ID pinned at turn entry as contextual lineage without changing its kind.
+The newer research root then becomes the default thread view. The exact-plan browser check
+after release `0c258885` recovered the preserved media row; research had not erased that media.
 
 ## Existing controls and missing contract
 

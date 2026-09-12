@@ -18,6 +18,11 @@ deployment [34685680915](https://github.com/Mrjoel97/ProjectX/actions/runs/34685
 Its durable probe passed at `09:25:06Z`; deployment `6408100993` reported success at
 `09:25:09Z`. This promotes the parser, notice and caption-copy repairs described below.
 
+Exact-plan navigation release `0c258885e51181f2b76b2394a0538a27cb0b376b` passed
+CI [34687054541](https://github.com/Mrjoel97/ProjectX/actions/runs/34687054541) and deployment
+[34687271971](https://github.com/Mrjoel97/ProjectX/actions/runs/34687271971). The durable probe
+passed at `10:02:23Z`; production deployment `6408389517` reported success at `10:02:26Z`.
+
 The full backend qualification before the final acceptance repairs passed 4,358 tests.
 The subsequent research repair passed 392 affected tests, media terminal repair passed 324,
 and media UI repair passed 142. CI then qualified the complete committed tree. The strict
@@ -97,6 +102,15 @@ changed into another kind of plan. A read-only browser check after promotion rem
 The route/navigation repair passed eighteen focused route/layout tests and web TypeScript;
 the existing media tests had already passed. Formatting, planning and playbook checks passed.
 
+After promotion, the authenticated exact-plan desktop check reopened the preserved media
+artifact and showed failed voices, `incomplete_batch` assembly and `incomplete_takes` captions.
+The caption copy correctly stated that captions could not be prepared; it made no publication
+claim. This closes the narrow historical-navigation/caption-presentation check, not successful
+video-generation acceptance. No generation, retry or save was performed in this check.
+Mobile also passed: Show work opened the exact canvas without document overflow, and Back
+to workspace removed the plan pin while preserving the thread and Work view. The local closed
+receipt is `output/playwright/production-acceptance/exact-media-final-result.json`.
+
 ## Phase 30: dormant publication and representative preflight
 
 The explicit candidate publisher created or reused the six immutable v1 candidates. At
@@ -122,6 +136,35 @@ A later query-only pass completed at `09:43:11.732Z`: all forty corpus cases pas
 is `.tmp/phase30-full-dormant-preflight-2026-09-12.json`. This extends preflight coverage to
 the whole corpus without provisioning sources, calling models, reviewing semantics, publishing
 again or activating anything. Forty preflight passes remain distinct from forty evaluations.
+
+The owner subsequently clarified that Pikar uses only an ordinary OpenRouter API key, with no
+separate upstream keys in OpenRouter's BYOK settings, and instructed that Tavily remain on Free.
+This resolves the operator billing-mode prerequisite; no provider credentials or account settings
+were changed. The Phase 30 collector uses fixed synthetic sources and does not call Tavily,
+embeddings or connectors. One native observation run started at `10:05:03.541Z` against
+release `0c258885`, with an aggregate ceiling of 1,000 cents and activation disabled.
+Run `9bd1865a-58dd-4de0-be97-053383ca1a9b` terminated incomplete after two qualified Data
+observations (`data-typed-xlsx-profile` and `data-truncated-multisheet`), each retaining a native
+receipt and output archive. The aggregate ledger closed at `$0.00406801`: four settled calls,
+zero unsettled calls and no breach. All forty fixtures remain retained for authenticated review.
+The collector recorded `COLLECTION_OPERATION_FAILED` and an unknown remote outcome; later
+bounded production-log inspection identified `VERTICAL_EVIDENCE_CORPUS_PIN` in the third
+case's `beginCase` and `evaluateCase`, before its model execution. No automatic rerun occurred.
+The first case's offline numeric/source comparison found no mismatch against the recomputed
+profile, but this is review preparation, not an authenticated semantic pass or a complete lane.
+
+The pin failure was reproduced locally: SheetJS added hyperlink display metadata to a shared
+fixture cell during compilation. The collector then hashed the mutated recipe, while the native
+corpus retained the pristine recipe hash. Cloning each supplied cell before serialization fixes
+the shared compiler without weakening the native guard. All forty source manifests remain
+byte-identical, and the full-corpus regression checks recipe immutability and collector/native
+pin equality. Only the vertical evaluator revision changes; the golden evaluator's dependencies
+and revision remain unchanged. The two earlier observations remain historical and cannot stand
+in for evaluation of the corrected revision. No paid rerun has been made after the repair.
+
+Both completed Data cases have immutable offline review packets. Advisory inspection found no
+obvious numeric, source or truncation-scope mismatch; neither inspection is an authenticated
+human review, expert attestation or release approval.
 
 ## Remaining gates
 

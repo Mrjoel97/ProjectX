@@ -5,6 +5,7 @@ import { readDataWorkbook } from "@pikar/vault/dataWorkbook";
 import { describe, expect, test, vi } from "vitest";
 import { inspectPreparation } from "../scripts/run-eval-vertical.mjs";
 import { collectObservations } from "../scripts/vertical-eval-collect.mjs";
+import { buildCorpus } from "../scripts/vertical-eval-corpus.mjs";
 import { compileSources } from "../scripts/vertical-eval-sources.mjs";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -22,6 +23,47 @@ const fixtures = Object.fromEntries(
 );
 const runId = "abcdef12-1234-4567-8123-123456789012";
 describe("vertical source compiler and collection coordination", () => {
+  test("compilation preserves all fixture recipes and collector pins match the native corpus", async () => {
+    const fresh = Object.fromEntries(
+      candidates.map((candidate) => {
+        const id = candidate.name.replace("vertical-", "");
+        return [
+          id,
+          JSON.parse(
+            readFileSync(
+              new URL(`../scripts/vertical-eval-cases/${id}.json`, import.meta.url),
+              "utf8",
+            ),
+          ),
+        ];
+      }),
+    );
+    const original = JSON.stringify(fresh);
+    const corpus = buildCorpus(fresh);
+    expect(JSON.stringify(fresh)).toBe(original);
+    expect(buildCorpus(fresh)).toEqual(corpus);
+    const report = await collectObservations({
+      candidates,
+      fixtures: fresh,
+      capCents: 500,
+      creditBillingOnly: true,
+      runId,
+      // Capture the real collection manifest before any remote operation or paid execution.
+      transport: async () => {
+        throw new Error("offline-preflight-stop");
+      },
+    });
+    expect(report.manifest).toHaveLength(40);
+    for (const { pin, sourceManifest } of report.manifest) {
+      const expected = corpus[pin.verticalId].find(
+        (item: { caseId: string }) => item.caseId === pin.caseId,
+      );
+      expect(pin.caseHash).toBe(expected.caseHash);
+      expect(pin.requestHash).toBe(expected.requestHash);
+      expect(sourceManifest).toEqual(expected.sources);
+    }
+    expect(JSON.stringify(fresh)).toBe(original);
+  });
   test.each([
     "provision",
     "openEvalBudget",
