@@ -2,6 +2,7 @@ import { eventFacts } from "@pikar/billing/events";
 import { reconcileEvent } from "@pikar/billing/reconcile";
 import { invoiceTaxabilityReason } from "@pikar/billing/tax";
 import { GOOGLE_SCOPES, type MicrosoftCallbackError, notificationMessage } from "@pikar/core";
+import { FUNNEL_SOURCE_MAX_LENGTH, normalizeFunnelSource } from "@pikar/core/marketing";
 import type { ConnectorEnvironment, Provider } from "@pikar/revenue";
 import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
@@ -9,6 +10,7 @@ import { type ActionCtx, httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { verifyStripeSignature } from "./billingWebhook";
 import { type ConnectResult, callbackRedirectPath, DEFAULT_REDIRECT_PATH } from "./connectorOAuth";
+import { isTrustedFunnelStorageUrl } from "./funnels";
 import { verifyState } from "./gmailAuth";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
@@ -16,6 +18,40 @@ const http = httpRouter();
 
 // Wire Convex Auth sign-in/callback httpAction routes.
 auth.addHttpRoutes(http);
+
+// Bearer links are the only public funnel surface. HEAD is routed to GET by Convex,
+// so inspect the actual method before any aggregate mutation.
+http.route({
+  pathPrefix: "/f/",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
+    if (req.method !== "GET")
+      return new Response(null, { status: 405, headers: { ...headers, Allow: "GET" } });
+    const unavailable = () => new Response(null, { status: 404, headers });
+    const url = new URL(req.url);
+    const match = /^\/f\/([A-Za-z0-9_-]{43})\/(visit|claim|download)$/.exec(url.pathname);
+    const token = match?.[1];
+    const stage = match?.[2];
+    if (!token || !stage || url.search.length > 256) return unavailable();
+    const sources = url.searchParams.getAll("s");
+    if ([...url.searchParams.keys()].some((key) => key !== "s") || sources.length > 1)
+      return unavailable();
+    const source = sources[0];
+    if (
+      source !== undefined &&
+      (source.length > FUNNEL_SOURCE_MAX_LENGTH || normalizeFunnelSource(source) === null)
+    )
+      return unavailable();
+    const result = await ctx.runMutation(internal.funnels.resolveAndIncrement, {
+      token,
+      stage,
+      ...(source !== undefined ? { source } : {}),
+    });
+    if (!result || !isTrustedFunnelStorageUrl(result.location)) return unavailable();
+    return new Response(null, { status: 302, headers: { ...headers, Location: result.location } });
+  }),
+});
 
 // Gmail OAuth callback: validate `state`, exchange `code` for tokens, store internally.
 // The crown-jewel refresh token never touches the browser — it flows code → server → DB.

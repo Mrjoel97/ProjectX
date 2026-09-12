@@ -1,3 +1,8 @@
+> Last verified: 2026-09-12 — Phase 31-03 adds the isolated Convex funnel GET transport. See
+> [Marketing](marketing.md) for raw request counter semantics, HEAD rejection and link deactivation.
+> Marketing's draft/proposal handoff uses the governed workspace; the cockpit has no social
+> publisher or funnel metric rollup in Phase 31. Existing HTTP integrations remain unchanged.
+>
 > Last verified: 2026-09-12 — Phase 31-04's offline regression captures a Marketing lead with
 > explicit consent while its independent suppression remains set. `executePlan` withholds that
 > address before immediate request fan-out; `gmail.send` returns a permanent suppression refusal

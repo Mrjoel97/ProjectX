@@ -7,6 +7,7 @@ import {
   parseFunnelCounters,
   parseFunnelStage,
 } from "@pikar/core/marketing";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { tenantMutation, tenantQuery } from "./lib/functions";
@@ -15,6 +16,28 @@ import { contentHash } from "./lib/hash";
 const TOKEN_DOMAIN = "pikar:funnel:v1:";
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const LIST_LIMIT = 100;
+
+/** Page the tenant inventory before filtering so older and folder-owned files remain reachable. */
+export const downloadableArtifacts = tenantQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    const result = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", ctx.tenantId))
+      .order("desc")
+      .paginate({
+        ...paginationOpts,
+        numItems: Math.min(50, Math.max(1, paginationOpts.numItems)),
+      });
+    const page = [];
+    for (const doc of result.page) {
+      if (doc.status !== "ready" || !doc.storageId || !(await ctx.db.system.get(doc.storageId)))
+        continue;
+      page.push({ id: doc._id, title: doc.title, mimeType: doc.mimeType });
+    }
+    return { ...result, page };
+  },
+});
 
 function siteOrigin(): string | null {
   try {

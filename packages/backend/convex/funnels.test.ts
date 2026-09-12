@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import {
   deletableTables,
   exportableTables,
@@ -10,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { isTrustedFunnelStorageUrl } from "./funnels";
+import http from "./http";
 import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
@@ -57,6 +59,143 @@ async function linkFixture() {
 }
 
 describe("native funnel lifecycle", () => {
+  test("paginated artifact picker crosses ineligible pages and never exposes storage or foreign rows", async () => {
+    const f = await linkFixture();
+    await f.t.run(async (ctx) => {
+      const folderId = await ctx.db.insert("vaultFolders", {
+        tenantId: f.tenant,
+        name: "Filed",
+        source: "upload",
+        status: "complete",
+        memberCount: 1,
+        terminalCount: 1,
+        failedCount: 0,
+        reservedCents: 0,
+        spentCents: 0,
+        createdAt: 1,
+      });
+      await ctx.db.patch(f.doc, { folderId });
+      const original = await ctx.db.get(f.doc);
+      if (!original) throw new Error("fixture missing");
+      const { _id, _creationTime, ...fields } = original;
+      for (let index = 0; index < 3; index++)
+        await ctx.db.insert("vaultDocuments", { ...fields, status: "failed" });
+      await ctx.db.insert("vaultDocuments", { ...fields, tenantId: f.foreign, title: "Foreign" });
+    });
+    await expect(
+      f.t.query(api.funnels.downloadableArtifacts, {
+        paginationOpts: { cursor: null, numItems: 2 },
+      }),
+    ).rejects.toThrow();
+    const first = await f.client.query(api.funnels.downloadableArtifacts, {
+      paginationOpts: { cursor: null, numItems: 2 },
+    });
+    expect(first.page).toEqual([]);
+    expect(first.isDone).toBe(false);
+    const second = await f.client.query(api.funnels.downloadableArtifacts, {
+      paginationOpts: { cursor: first.continueCursor, numItems: 2 },
+    });
+    expect(second.page).toEqual([{ id: f.doc, title: "Fixture", mimeType: "text/plain" }]);
+    expect(second.isDone).toBe(true);
+    await f.t.run((ctx) => ctx.storage.delete(f.storageId));
+    expect(
+      (
+        await f.client.query(api.funnels.downloadableArtifacts, {
+          paginationOpts: { cursor: null, numItems: 50 },
+        })
+      ).page,
+    ).toEqual([]);
+  });
+  test("public HTTP stages redirect to identical bytes and refuse HEAD without counting", async () => {
+    const f = await linkFixture();
+    const made = await f.client.mutation(createLink, {
+      vaultDocId: f.doc,
+      title: "Guide",
+      source: "web",
+    });
+    const location = await f.t.run((ctx) => ctx.storage.getUrl(f.storageId));
+    for (const stage of ["download", "visit", "claim"]) {
+      const response = await f.t.fetch(`/f/${made.token}/${stage}?s=other`);
+      expect(response.status).toBe(302);
+      expect(response.headers.get("Location")).toBe(location);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+      expect(response.headers.get("Set-Cookie")).toBeNull();
+      expect(await response.text()).toBe("");
+    }
+    const head = await f.t.fetch(`/f/${made.token}/visit`, { method: "HEAD" });
+    expect(head.status).toBe(405);
+    expect(head.headers.get("Cache-Control")).toBe("no-store");
+    for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      expect((await f.t.fetch(`/f/${made.token}/visit`, { method })).status).toBe(404);
+    }
+    expect((await f.client.query(listLinks, {})).items[0]?.counters).toEqual({
+      visits: 1,
+      claims: 1,
+      downloads: 1,
+    });
+  });
+  test("HTTP malformed, unknown, deactivated and missing-asset requests are uniform no-store 404", async () => {
+    const f = await linkFixture();
+    const made = await f.client.mutation(createLink, {
+      vaultDocId: f.doc,
+      title: "Guide",
+      source: "web",
+    });
+    const root = `/f/${made.token}`;
+    for (const path of [
+      "/f/short/visit",
+      `/f/${"a".repeat(43)}/visit`,
+      `${root}/VISIT`,
+      `${root}/visit/`,
+      `${root}/visit?s=`,
+      `${root}/visit?s=a&s=b`,
+      `${root}/visit?s=${"a".repeat(65)}`,
+      `${root}/visit?destination=https://example.com`,
+      `${root}/visit?s=%0A`,
+      `${root}/visit?s=${"%61".repeat(100)}`,
+    ]) {
+      const response = await f.t.fetch(path);
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(response.headers.get("Location")).toBeNull();
+      expect(await response.text()).toBe("");
+    }
+    await f.t.run((ctx) => ctx.storage.delete(f.storageId));
+    expect((await f.t.fetch(`${root}/visit`)).status).toBe(404);
+    await f.client.mutation(deactivateLink, { id: made.id });
+    expect((await f.t.fetch(`${root}/claim`)).status).toBe(404);
+    expect((await f.client.query(listLinks, {})).items[0]?.counters).toEqual({
+      visits: 0,
+      claims: 0,
+      downloads: 0,
+    });
+  });
+  test("router mounts only funnel GET and preserves existing integration routes", () => {
+    const middleware = readFileSync(
+      new URL("../../../apps/web/middleware.ts", import.meta.url),
+      "utf8",
+    );
+    expect(middleware).not.toMatch(/["']\/(?:f|funnels|contacts)(?:\/|["'])/);
+    expect(existsSync(new URL("../../../apps/web/app/f", import.meta.url))).toBe(false);
+    const source = readFileSync(new URL("./http.ts", import.meta.url), "utf8");
+    const funnelBlock = source.slice(
+      source.indexOf('pathPrefix: "/f/"'),
+      source.indexOf("// Gmail OAuth callback"),
+    );
+    expect(funnelBlock.match(/ctx\.runMutation\(/g)).toHaveLength(1);
+    expect(funnelBlock).toContain("internal.funnels.resolveAndIncrement");
+    expect(funnelBlock).not.toMatch(/console\.|ctx\.runAction|ctx\.db|contacts\./);
+    const routes = http.getRoutes();
+    expect(routes.filter(([path]) => path.startsWith("/f/"))).toHaveLength(1);
+    expect(http.lookup("/f/token/visit", "GET")?.[1]).toBe("GET");
+    for (const [path, method] of [
+      ["/gmail/callback", "GET"],
+      ["/microsoft/callback", "GET"],
+      ["/billing/stripe/webhook", "POST"],
+    ] as const)
+      expect(http.lookup(path, method)).not.toBeNull();
+  });
   test("actual revision seam never repoints a link and old-byte cleanup invalidates without a count", async () => {
     const f = await linkFixture();
     await f.t.run(async (ctx) => {
