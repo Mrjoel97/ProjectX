@@ -4,7 +4,7 @@ import { api } from "@pikar/backend/api";
 // BEVL-03: the ONE deterministic thread the weekly review writes to, per tenant.
 import { REVIEW_THREAD_ID } from "@pikar/core";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
 import { BrainIcon, ClockIcon, DotsIcon, StarIcon, TrashIcon } from "../../../(auth)/icons";
 import { ChatPane } from "./ChatPane";
 import { CardList } from "./cards";
@@ -17,6 +17,8 @@ import { useSendCockpitMessage } from "./useSendCockpitMessage";
 import { WorkflowPackOwnerControls } from "./WorkflowPackOwnerControls";
 import { WorkflowPackOwnerPreview } from "./WorkflowPackOwnerPreview";
 import { WorkflowPackQuickStarts } from "./WorkflowPackQuickStarts";
+import { WorkspaceRoute } from "./WorkspaceRoute";
+import { conversationUrl, workspaceView, workspaceViewUrl } from "./workspaceNavigation";
 
 // The cockpit, wired (plan 08 over the plan-05 shell). LEFT = the live chat pane (guided
 // questions + drafted-plan copy via the agent thread); RIGHT = the PLAN/DRAFT/REPORT card
@@ -299,6 +301,14 @@ function PinnedPromptsFallback() {
 export default function WorkspacePage() {
   const [tabs, setTabs] = useState<Tab[]>([REVIEW_TAB]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>();
+  const selectThread = useCallback((id: string | undefined) => {
+    setSelectedPlanId(undefined);
+    setThreadId(id);
+    const url = conversationUrl(window.location.href, id);
+    // Next preserves its internal history state and updates useSearchParams for native writes.
+    window.history.replaceState(null, "", url);
+  }, []);
   const [workspaceRestored, setWorkspaceRestored] = useState(false);
   // "A turn is in flight" — lifted here so BOTH trace surfaces (ChatPane's bubble + CardList's
   // ActivityCard) share ONE signal (FIX 4). It is the difference between "no thread, nothing sent"
@@ -314,15 +324,22 @@ export default function WorkspacePage() {
         ? t
         : [...t, { id, label: firstText.trim().slice(0, 24) || "New chat" }],
     );
-    setThreadId(id);
+    selectThread(id);
   };
   // Open a past chat from the history menu — add a session tab if it isn't already showing.
-  const openThread = useCallback((id: string, label: string) => {
-    setTabs((t) =>
-      t.some((x) => x.id === id) ? t : [...t, { id, label: label.slice(0, 24) || "New chat" }],
-    );
-    setThreadId(id);
-  }, []);
+  const openThread = useCallback(
+    (id: string, label: string, exactPlanId?: string) => {
+      setTabs((t) =>
+        t.some((x) => x.id === id) ? t : [...t, { id, label: label.slice(0, 24) || "New chat" }],
+      );
+      if (exactPlanId === undefined) selectThread(id);
+      else {
+        setThreadId(id);
+        setSelectedPlanId(exactPlanId);
+      }
+    },
+    [selectThread],
+  );
 
   // Preserve the open conversation and tab strip across reloads and route changes in this browser
   // tab. The durable message history itself remains in Convex; sessionStorage only remembers which
@@ -345,26 +362,32 @@ export default function WorkspacePage() {
 
   // The voice brief→plan handoff (VOIC-04) navigates here as /workspace?thread=<id> — sendCockpitMessage
   // already minted the thread + its PLAN card, so we just re-open it at the existing Approve gate. Read
-  // once on mount (client-only — avoids the useSearchParams Suspense boundary for a redirect-only value,
-  // the connect-gmail precedent). Nothing sends: the user still crosses the same single Approve.
+  // through WorkspaceRoute's native search-parameter subscription, isolated in Suspense.
+  // Nothing sends: the user still crosses the same single Approve.
   // 35-02: the Command Center's first-thing card links here as ?thread=<id>&label=<pack title>;
   // `openThread` caps the label at 24 chars and React escapes it, so a URL cannot smuggle markup.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+  const applyRoute = useCallback((params: URLSearchParams, initial: boolean) => {
     const id = params.get("thread");
-    if (id) openThread(id, params.get("label") || "Voice brief");
-  }, [openThread]);
+    if (id) {
+      const label = (params.get("label") || "Conversation").slice(0, 24);
+      setTabs((tabs) => (tabs.some((tab) => tab.id === id) ? tabs : [...tabs, { id, label }]));
+    }
+    if (id || params.has("plan") || !initial) setThreadId(id || undefined);
+    setSelectedPlanId(params.has("plan") ? (params.get("plan") ?? "") : undefined);
+    setView(workspaceView(params));
+  }, []);
   // THE CANVAS VIEW (20-10 follow-up). The right pane shows either the agent's work stream or the
   // media canvas, full-width. It is a VIEWPORT, not a route: the thread, the tab strip and every
   // in-flight cockpit subscription are untouched by the toggle, which is the whole reason it is
   // local state and not a `<Link>` to a second page.
   //
-  // `?view=canvas` is read from `window.location.search` — the repo idiom, never `useSearchParams`
-  // (which forces a Suspense boundary on this page for a value that never changes after mount).
+  // WorkspaceRoute observes exact links and view changes on navigation and browser history.
   const [view, setView] = useState<"work" | "canvas">("work");
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("view") === "canvas") setView("canvas");
-  }, []);
+  const selectView = (next: "work" | "canvas") => {
+    setView(next);
+    if (next === "work") setSelectedPlanId(undefined);
+    window.history.replaceState(null, "", workspaceViewUrl(window.location.href, next));
+  };
   // SKILL-01: the skill-authoring card, opened from the existing Chat options menu. Session state,
   // not a route — the thread, the tabs and every open subscription survive the toggle.
   const [authoring, setAuthoring] = useState(false);
@@ -496,13 +519,13 @@ export default function WorkspacePage() {
       .finally(() => setTurningOff(null));
   };
 
-  const newChat = () => setThreadId(undefined);
+  const newChat = () => selectThread(undefined);
   const clearWorkspace = () => {
     window.sessionStorage.removeItem(WORKSPACE_SESSION_KEY);
     setTabs([REVIEW_TAB]);
-    setThreadId(undefined);
+    selectThread(undefined);
     setAuthoring(false);
-    setView("work");
+    selectView("work");
   };
   const clearChatHistory = async (): Promise<boolean> => {
     if (
@@ -534,7 +557,7 @@ export default function WorkspacePage() {
     if (idx === -1) return;
     const next = tabs.filter((t) => t.id !== id);
     setTabs(next);
-    if (id === threadId) setThreadId(next[idx]?.id ?? next[idx - 1]?.id);
+    if (id === threadId) selectThread(next[idx]?.id ?? next[idx - 1]?.id);
   };
 
   const hour = new Date().getHours();
@@ -545,6 +568,11 @@ export default function WorkspacePage() {
     // the panes touch the rail, the top, and the bottom of the viewport (plan 05's
     // concrete-height requirement, now supplied by the fixed-height shell chain).
     <div style={{ height: "100%" }}>
+      {workspaceRestored && (
+        <Suspense fallback={null}>
+          <WorkspaceRoute onChange={applyRoute} />
+        </Suspense>
+      )}
       <SplitPane
         left={
           <section data-testid="chat-pane" className="pane-chat" style={panel}>
@@ -677,7 +705,7 @@ export default function WorkspacePage() {
                       type="button"
                       className="chat-tab-label"
                       title={t.label}
-                      onClick={() => setThreadId(t.id)}
+                      onClick={() => selectThread(t.id)}
                     >
                       {t.label}
                     </button>
@@ -845,7 +873,7 @@ export default function WorkspacePage() {
                     ? "Back to the agent's work stream"
                     : "Show the storyboard and reel for this thread"
                 }
-                onClick={() => setView((v) => (v === "canvas" ? "work" : "canvas"))}
+                onClick={() => selectView(view === "canvas" ? "work" : "canvas")}
               >
                 {view === "canvas" ? "Back to workspace" : "Open canvas"}
               </button>
@@ -868,7 +896,7 @@ export default function WorkspacePage() {
               </button>
             </header>
             {view === "canvas" ? (
-              <CanvasPane threadId={threadId} />
+              <CanvasPane threadId={threadId} planId={selectedPlanId} />
             ) : (
               <CardList threadId={threadId} sending={sending} />
             )}

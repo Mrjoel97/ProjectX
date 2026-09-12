@@ -12,6 +12,12 @@ deployment [34684438168](https://github.com/Mrjoel97/ProjectX/actions/runs/34684
 The durable production probe passed at `08:56:32Z`; GitHub production deployment `6407878477`
 reported success at `08:56:36Z` for `https://www.pikar-ai.com` and that exact commit.
 
+Follow-up commit `000bbace92b12c59f19e2d0e97db8eef666b74e6` also passed full
+CI [34685394403](https://github.com/Mrjoel97/ProjectX/actions/runs/34685394403) and production
+deployment [34685680915](https://github.com/Mrjoel97/ProjectX/actions/runs/34685680915).
+Its durable probe passed at `09:25:06Z`; deployment `6408100993` reported success at
+`09:25:09Z`. This promotes the parser, notice and caption-copy repairs described below.
+
 The full backend qualification before the final acceptance repairs passed 4,358 tests.
 The subsequent research repair passed 392 affected tests, media terminal repair passed 324,
 and media UI repair passed 142. CI then qualified the complete committed tree. The strict
@@ -46,15 +52,25 @@ Claims remained explicitly model assessments with unverified support. This is an
 presentation improvement, not proof of correctness or independent corroboration.
 
 The run again read three pages despite the natural-language maximum of two. It also created
-unrequested PDF `qh76tt0sw6a6e4d3w8853fs58n8e8a73`, an acceptance-test plan containing an
+wrong-content PDF `qh76tt0sw6a6e4d3w8853fs58n8e8a73`, an acceptance-test plan containing an
 invented timeline and a 125-character rule. That parallel artifact did not satisfy the requested
 concise WAI research deliverable. No further paid attempt was made to erase the failure.
+
+The exact trace identifies premature independent drafting by the root cockpit, not a breach
+of the researcher's read-only grant. The root dispatched research at `09:00:44.779Z` and
+started document drafting two milliseconds later. The PDF existed at `09:00:56.927Z`, before
+the researcher's page reads at `09:00:59.125Z` and final findings at `09:01:15.234Z`.
+The prompt did request a draft; the defect is its content and missing research dependency,
+not proof that creating any artifact was unauthorized. Unrelated parallel drafting should
+remain supported.
 
 The durable next controls are a typed per-request page budget enforced before extraction, and
 a requested-deliverable contract that binds parent completion/artifact saving to the delegated
 research result. Their tests must include duplicate/late results, explicitly requested parallel
 outputs, instruction injection and rejected saves. Prompt/method changes require exact-version
 semantic evaluation before activation; source-access labels alone cannot close these gaps.
+The [request-control implementation plan](2026-09-12-research-request-controls.md) records
+the concrete admission, reservation, dependency, lifecycle and regression-test work still required.
 
 Live review also exposed duplicate notices and literal backslashes from the new safe literal
 encoder meeting the existing simplified Markdown parser. The follow-up parser repair decodes
@@ -65,6 +81,21 @@ The parser/wrapper repair passed 111 tests and core TypeScript before promotion.
 duplicate notices are retained as historical content; the corrected client parser renders their
 escaped punctuation without altering the stored evidence. No new paid run was used to qualify
 this follow-up presentation repair.
+
+The authenticated post-promotion mobile preview at 390 by 844 rendered the exact saved
+research document with zero added literal backslashes. Historical duplicate notices remain.
+The historical media plan could not be reopened through the existing latest-plan thread
+view after research replaced the visible plan; therefore the final caption-copy browser
+check remains unverified at this checkpoint. A successful current video is still absent.
+
+The next frontend repair adds an exact-plan Canvas link using the existing tenant-scoped
+`plans.byId` query: `/dashboard/workspace?thread=<thread>&plan=<plan>&view=canvas`.
+Missing, malformed, inaccessible and wrong-thread IDs never fall back to a newer plan.
+Navigation and conversation selection keep the URL and selected artifact consistent.
+This opens the currently stored row; it cannot reconstruct media if that row itself was later
+changed into another kind of plan. A read-only browser check after promotion remains necessary.
+The route/navigation repair passed eighteen focused route/layout tests and web TypeScript;
+the existing media tests had already passed. Formatting, planning and playbook checks passed.
 
 ## Phase 30: dormant publication and representative preflight
 
@@ -86,6 +117,12 @@ They did not provision sources, run models, review semantic correctness or activ
 The local closed corpus still contains forty cases; six representative reads are not forty
 observed evaluations. Ignored local publication, preflight and repair receipts are in `.tmp/`.
 
+A later query-only pass completed at `09:43:11.732Z`: all forty corpus cases passed native
+`verticalEvalSources:preflight` against the same six candidate references. The closed receipt
+is `.tmp/phase30-full-dormant-preflight-2026-09-12.json`. This extends preflight coverage to
+the whole corpus without provisioning sources, calling models, reviewing semantics, publishing
+again or activating anything. Forty preflight passes remain distinct from forty evaluations.
+
 ## Remaining gates
 
 Phase 23 requires two fresh controlled identities, genuine authored-candidate handoff, verified
@@ -99,3 +136,7 @@ in plan 31-00. Provider eligibility/consent/read/revoke conditions remain open. 
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the
 bounded full refresh timed out after extraction, while the Convex edge fixup succeeded.
+
+The final read-only Intuit developer-app check redirected to Intuit sign-in. This establishes
+an authentication prerequisite for renewed diagnosis; it does not independently reconfirm
+the older app-record defect. The tab was preserved without credentials or consent actions.

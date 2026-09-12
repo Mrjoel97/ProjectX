@@ -303733,6 +303733,17 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_vaultrag",
       "target": "packages_backend_convex_guardrails"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "apps/web/app/(app)/dashboard/workspace/MediaCanvas.tsx",
+      "source_location": "L2478",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "apps_web_app_app_dashboard_workspace_mediacanvas",
+      "target": "packages_backend_convex_plans_byid"
     }
   ],
   "hyperedges": []

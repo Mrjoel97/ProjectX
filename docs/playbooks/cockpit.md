@@ -1,3 +1,14 @@
+> Last verified: 2026-09-12 — workspace accepts an exact media `plan` alongside its `thread`.
+> Exact selection opens the canvas and is cleared when opening another conversation, creating
+> a new chat, clearing the workspace, or closing its active tab. Tenant and thread checks apply;
+> an unavailable exact row never silently resolves to another plan.
+> Native Next search parameters observe same-mounted navigation and browser history through
+> a small Suspense boundary after session restoration. Selecting another chat updates the URL
+> thread and clears the artifact pin, so reload cannot reopen the prior conversation.
+> View toggles also update the URL. Work clears an exact pin; absent or explicit `view=work`
+> selects Work, while a retained plan pin selects Canvas. Clear workspace writes Work so a
+> later URL observation cannot restore a stale Canvas selection.
+
 > Last verified: 2026-09-12 — media plans keep their existing canvas across every plan status,
 > including delivering and done. The canvas observes actual render/job failures; email reports,
 > recipient chrome and Sending/Sent chat milestones cannot replace it after Generate. Rendered

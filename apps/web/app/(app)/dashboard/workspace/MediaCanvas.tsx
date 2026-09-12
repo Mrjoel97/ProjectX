@@ -3,6 +3,7 @@
 import { api } from "@pikar/backend/api";
 import { landsPictureRow } from "@pikar/core/render";
 import { useMutation, useQuery } from "convex/react";
+import type { GenericId } from "convex/values";
 import { useState } from "react";
 import {
   briefingSheet,
@@ -12,6 +13,7 @@ import {
   typeBadge,
   VaultDocButton,
 } from "./cards";
+import { ErrorBoundary } from "./ErrorBoundary";
 import {
   adjustmentNotes,
   asVisualKind,
@@ -2452,8 +2454,35 @@ function GenerateBar({
  * The empty states are HONEST (BRAND §1/§5): a thread with no media plan says so and says what
  * would produce one, rather than rendering an encouraging shell around nothing.
  */
-export function CanvasPane({ threadId }: { threadId?: string }) {
-  const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
+export function CanvasPane({ threadId, planId }: { threadId?: string; planId?: string }) {
+  return (
+    <ErrorBoundary
+      key={`${threadId}:${planId}`}
+      label="media-plan"
+      fallback={
+        <p role="alert">This media plan could not be opened. Check the link or try again.</p>
+      }
+    >
+      <CanvasPlan threadId={threadId} planId={planId} />
+    </ErrorBoundary>
+  );
+}
+
+export function CanvasPlan({ threadId, planId }: { threadId?: string; planId?: string }) {
+  // Shape validation avoids obvious malformed requests; the native query validates the ID
+  // and tenant. Its errors remain inside the boundary, never a fallback to another plan.
+  const exact = planId !== undefined;
+  const valid = !exact || /^[a-z0-9]{32}$/.test(planId);
+  const latest = useQuery(api.plans.byThread, !exact && threadId ? { threadId } : "skip");
+  const selected = useQuery(
+    api.plans.byId,
+    exact && valid && threadId ? { planId: planId as GenericId<"plans"> } : "skip",
+  );
+  const plan = exact ? selected : latest;
+  if (exact && (!valid || !threadId)) return <p role="alert">This media plan link is invalid.</p>;
+  if (exact && plan !== undefined && (!plan || plan.threadId !== threadId)) {
+    return <p role="alert">This media plan is unavailable in this conversation.</p>;
+  }
 
   if (!threadId) {
     return (
@@ -2472,8 +2501,9 @@ export function CanvasPane({ threadId }: { threadId?: string }) {
   if (plan?.kind !== "media") {
     return (
       <p style={{ ...dimText, marginTop: "1rem" }} data-testid="canvas-empty">
-        No image or reel in this thread yet. Ask the agent for an image or video; nothing is
-        generated until you review the proposal and approve the cost.
+        {exact
+          ? "This plan does not contain an image or reel."
+          : "No image or reel in this thread yet. Ask the agent for an image or video; nothing is generated until you review the proposal and approve the cost."}
       </p>
     );
   }

@@ -1,5 +1,12 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-12 — `/dashboard/workspace?thread=<thread>&plan=<plan>&view=canvas`
+> selects the exact tenant-owned plan through `plans.byId`. Missing, inaccessible, malformed
+> or wrong-thread IDs never fall back to the newest root. Query validation errors stay inside
+> the canvas boundary. Switching conversations clears the selection and URL plan parameter.
+> This opens the current stored row, not a historical snapshot of a row later modified in place.
+> `exactMediaPlan.test.tsx` verifies exact/latest query selection and unavailable-link handling.
+
 > Last verified: 2026-09-12 — caption failure does not prove a reel exists. The tracker reports
 > only caption failure; the failure card says a reel is ready without captions only when the
 > current render is `rendered` and `media.reel` supplies its validated download URL. Missing,
