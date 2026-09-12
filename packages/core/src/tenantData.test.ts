@@ -49,7 +49,8 @@ describe("tenant table classification registry", () => {
     // + auditExportQueue (ADR-048, transactional export delivery state) = 60. This
     // count and `schema.ts`'s own header index ("60 tables", asserted independently by
     // schema.test.ts against the same source) are two readers of one file that now agree.
-    expect(schemaTables).toHaveLength(60);
+    // + funnels (31-01): tenant-owned fixed-source aggregate links =61.
+    expect(schemaTables).toHaveLength(61);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });

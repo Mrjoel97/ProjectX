@@ -34,7 +34,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 60 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 61 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -47,7 +47,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │                                                                            │
 // │ ── Content & Pipeline ──────────────────────────────────── ~L334           │
 // │   requests, plans, briefings, intakeArtifacts, attachments,                │
-// │   telemetry, demoItems                                                     │
+// │   telemetry, demoItems, funnels                                            │
 // │                                                                            │
 // │ ── Agent ───────────────────────────────────────────────── ~L998           │
 // │   evaluations, agenda, agentSteps                                          │
@@ -2809,6 +2809,25 @@ export default defineSchema({
   // "no contacts cache at rest" invariant (`plans.candidates`, above): nothing accretes as a side
   // effect of reading the mailbox. See `docs/playbooks/contacts-crm.md`.
   // New table ⇒ NO migration (prior-phase discipline, the `tenantProfiles` comment above).
+  // Phase31 B1: one fixed source per link; no event or visitor plane. Counter integer
+  // and overflow validation belongs to the atomic write seam (v.number alone is insufficient).
+  funnels: defineTable({
+    tenantId: v.string(),
+    vaultDocId: v.id("vaultDocuments"),
+    storageId: v.id("_storage"),
+    title: v.string(),
+    source: v.string(),
+    tokenHash: v.string(),
+    status: v.union(v.literal("active"), v.literal("deactivated")),
+    createdAt: v.number(),
+    deactivatedAt: v.optional(v.number()),
+    visits: v.number(),
+    claims: v.number(),
+    downloads: v.number(),
+  })
+    .index("by_tenant", ["tenantId", "createdAt"])
+    .index("by_token_hash", ["tokenHash"]),
+
   contacts: defineTable({
     tenantId: v.string(),
     /** Identity. ALREADY normalized by the write boundary (`normalizeAddress` from @pikar/core —

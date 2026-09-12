@@ -76,6 +76,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   spendCoverage: "tenant_owned",
   mediaJobs: "tenant_owned",
   contacts: "tenant_owned",
+  funnels: "tenant_owned", // Link/source/counters belong in export and erasure, never immutable audit.
   followUps: "tenant_owned",
   suppressions: "tenant_owned",
   financeInputs: "tenant_owned",
@@ -303,6 +304,7 @@ export const STORAGE_ID_FIELDS = {
   attachments: ["storageId"],
   intakeArtifacts: ["storageId"],
   vaultDocuments: ["storageId"],
+  funnels: ["storageId"], // Fixed artifact bytes can outlive a changed/deleted Vault reference.
   mediaJobs: ["assetStorageId"],
 } as const satisfies Record<string, readonly string[]>;
 

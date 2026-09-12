@@ -160,6 +160,8 @@ function indexesOf(table: string): { indexDescriptor: string; fields: string[] }
  * Adding an index without adding it here fails the suite. That is the whole mechanism.
  */
 const NON_TENANT_LEADING: Record<string, string> = {
+  "funnels.by_token_hash":
+    "31-00 approved bearer-link resolution: planned internal funnels.resolveAndIncrement resolves a domain-separated token hash, never a caller-selected tenant; management uses by_tenant",
   "audit.by_correlation": "correlation trace; internal + owner plane, joins one workflow's rows",
   "audit.by_export_version": "internal WORM legacy backfill; deployment-global export only",
   "audit.by_ts":

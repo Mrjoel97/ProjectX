@@ -1,5 +1,11 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+Last verified: 2026-09-12 — Phase31 funnels are tenant-owned export/erasure data. Their fixed
+`storageId` participates in the existing byte inventory so deleting a tenant cannot orphan
+downloadable link bytes after a Vault reference changes. Foreign tenants and immutable audit
+remain outside that tenant's deletion walk. The source and three aggregate counters export;
+there is no raw bearer token in the schema. No live erasure is part of this qualification.
+
 Last verified: 2026-09-10 — native vertical evaluation receipts use the explicitly reserved
 `control:vertical-eval-evidence:v1` audit namespace and `vertical_evidence.` event family.
 Only the code-level `appendAudit` primitive can write these receipts; the generic `audit.log`
