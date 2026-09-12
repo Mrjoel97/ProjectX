@@ -29,5 +29,8 @@ remains deferred. The subsequently added UI negative-space assertion passed in t
 Marketing/prefill run. Web typecheck and the production Next build passed; existing middleware
 deprecation and local-render file-tracing warnings remain. All 21 registered free gates, their
 registry self-test, and the three planning/operator-control tests passed. Native codegen and exact
-evaluator pins were already qualified. CI, deployed browser/HTTP evidence and owner navigation
-approval remain separate from these local results.
+evaluator pins were already qualified. Exact release `644408df4c2c630346c5909aac23f9a352ede287`
+then passed CI `34692922592`, deployment `34693161766`, and the durable production probe at
+`12:17:48Z`. Production deployment `6409489035` succeeded at `12:17:51Z`; the receipt is
+`.tmp/qualification-2026-09-12/marketing-production-deployment-receipt.json`.
+Deployed browser/HTTP evidence and owner navigation approval remain separate from these results.

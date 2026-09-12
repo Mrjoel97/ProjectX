@@ -168,6 +168,16 @@ human review, expert attestation or release approval.
 
 ## Remaining gates
 
+The later Phase 23 mutation supplement adds five direct writer/independent-entry proofs to the
+seventeen preserved historical-target receipts. Each new case passed clean, deliberately rejected,
+and byte-restored controls. The owning skills suite passed 187 tests; the mutation harness passed
+six checks over 22 anchors. The browser probe now uses an explicit native envelope and exact
+thread for its two submissions, rejects containment or unresolved cost as acceptance, and closes
+the envelope before freezing the existing handoff schema. Its five offline control tests pass;
+this is prepared browser plumbing, not an owner grant or a paid/live observation. The artifact
+validator passed 1,338 checks again, and the accepted Phase 21 prerequisite bundle was rechecked.
+The new probe-control check is explicitly registered as the twenty-second free gate.
+
 Phase 23 now has two distinct controlled accounts with fresh password sign-in and authenticated
 non-owner `/ops` observations, independently confirmed by native `owner:false` reads. Credentials
 are DPAPI-encrypted locally; no owner grant or model probe has occurred. The genuine authored
@@ -212,9 +222,16 @@ Whole-tree local qualification is recorded in `31-06-SUMMARY.md`. Release
 `34693161766`; the durable production probe passed at `12:17:48Z`, followed by production
 deployment `6409489035`, status `18262186525`, at `12:17:51Z`. The ignored receipt is
 `.tmp/qualification-2026-09-12/marketing-production-deployment-receipt.json`.
-Live acceptance is underway using the existing authenticated browser and a verified synthetic
-243-byte stored file. Navigation remains absent pending actual evidence and the separate
-31-07 owner activation checkpoint. No live pass is inferred from CI or prerequisite preparation.
+Live preparation verified the original synthetic 243-byte stored file against its independent
+SHA-256. The first browser scenario passed desktop/mobile, keyboard and channel checks. The
+next scenario failed authenticated readiness before creating any funnel; a continuous-context
+rerun also failed, and the original browser subsequently required sign-in. Correct-origin
+diagnostics rule out an apex/www mismatch; refresh replay is a possible cause, not an established
+diagnosis. Fresh owner sign-in is requested. A synthetic contact created before session loss
+remains deliberately suppressed and retained, with no consent or send. No funnel was created.
+See `31-07-SUMMARY.md` for the preserved failed-run and partial-evidence records. Navigation
+remains absent pending complete live evidence and the separate owner activation checkpoint.
+No live lifecycle pass is inferred from CI, prerequisite preparation, or the first UI scenario.
 Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the

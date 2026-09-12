@@ -33,6 +33,44 @@ const setNeedle = "  LEAD_ENGINE_SKILL,\n] as const;";
 const authorRegion = "export const publishAgentCandidate";
 const evidenceRegion = "export function hasPassingAgentTenantEvidence";
 const cases = [
+  ...["sourceThreadId", "sourceTurnId"].map((field) => ({
+    id: `23-01-persisted-${field}`,
+    command: backend(
+      "agent writer requires input lineage and persists exact server-owned lineage and author",
+    ),
+    edits: [
+      edit(writer, `\n      ${field},\n`, `\n      // isolated omission: ${field}\n`, authorRegion),
+    ],
+  })),
+  {
+    id: "23-02-caller-derived-author",
+    command: backend(
+      "agent writer requires input lineage and persists exact server-owned lineage and author",
+    ),
+    qualification:
+      "persisted author derived from existing caller-controlled authoredBody; no invented public tenant argument",
+    edits: [
+      edit(writer, '\n      author: "agent",', "\n      author: authoredBody,", authorRegion),
+    ],
+  },
+  ...["live", "revenue"].map((entry) => ({
+    id: `23-04-preflight-${entry}`,
+    command: { kind: "entry-preflight", entry },
+    expected: `PHASE23_PREFLIGHT_${entry.toUpperCase()}_REQUIRED`,
+    edits: [
+      entry === "live"
+        ? edit(
+            runner,
+            "  selfCheck();\n  await runLive(",
+            "  /* isolated missing live preflight */\n  await runLive(",
+          )
+        : edit(
+            runner,
+            "    selfCheck();\n    process.exit(await runRevenueCandidateMode",
+            "    /* isolated missing revenue preflight */\n    process.exit(await runRevenueCandidateMode",
+          ),
+    ],
+  })),
   {
     id: "23-01-ungated-set",
     command: contracts("keeps the agent set closed"),
@@ -274,8 +312,8 @@ function apply(base, changes) {
     writeFileSync(join(base, change.path), patched(read(base, change.path), change));
 }
 export function plan() {
-  assert.equal(cases.length, 17);
-  assert.equal(new Set(cases.map((item) => item.id)).size, 17);
+  assert.equal(cases.length, 22);
+  assert.equal(new Set(cases.map((item) => item.id)).size, 22);
   for (const item of cases) {
     const sources = new Map();
     for (const change of [...(item.setup ?? []), ...item.edits]) {
@@ -323,6 +361,19 @@ const env = Object.fromEntries(
     .filter((key) => process.env[key] !== undefined)
     .map((key) => [key, process.env[key]]),
 );
+/** Each entry is pinned independently: a check in another branch cannot satisfy it. */
+export function assertEntryPreflight(source, entry) {
+  const clean = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+  const needle =
+    entry === "live"
+      ? /selfCheck\(\);\s*await runLive\(parseSkillPins\(argv\)/g
+      : /selfCheck\(\);\s*process\.exit\(await runRevenueCandidateMode\(revenueMode\)\)/g;
+  assert.equal(
+    [...clean.matchAll(needle)].length,
+    1,
+    `PHASE23_PREFLIGHT_${entry.toUpperCase()}_REQUIRED`,
+  );
+}
 function execute(command, base, preload) {
   let args;
   const workspace = command.workspace ?? ".";
@@ -337,6 +388,8 @@ function execute(command, base, preload) {
       "-t",
       command.test,
     ];
+  else if (command.kind === "entry-preflight")
+    args = [fileURLToPath(import.meta.url), "--check-entry", base, command.entry];
   else if (command.kind === "compile")
     args = [join(root, "node_modules/typescript/bin/tsc"), "--noEmit"];
   else
@@ -430,6 +483,10 @@ function configure(base) {
 
 async function main() {
   const args = process.argv.slice(2);
+  if (args[0] === "--check-entry" && args.length === 3 && ["live", "revenue"].includes(args[2])) {
+    assertEntryPreflight(read(args[1], runner), args[2]);
+    return;
+  }
   if (args.length === 1 && args[0] === "--self-check") {
     plan();
     const result = spawnSync(
@@ -439,7 +496,7 @@ async function main() {
     );
     assert.equal(result.status, 0, "lightweight mutation harness checks must pass");
     process.stdout.write(
-      "Phase 23 mutation harness: 17 anchors and patch-engine checks passed; deliberate mutants NOT executed.\n",
+      `Phase 23 mutation harness: ${cases.length} anchors and patch-engine checks passed; deliberate mutants NOT executed.\n`,
     );
     return;
   }

@@ -1,11 +1,21 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
 > Phase 23 supplementary mutation evidence: `scripts/check-phase23-mutation-proofs.mjs --plan`
-> checks 17 current target anchors without execution; `--self-check` adds lightweight harness
+> checks 22 current target anchors without execution; `--self-check` adds lightweight harness
 > checks. Explicit `--run` creates only ignored disposable copies and executes serial
 > clean/rejected/restored controls with hashes. It does not rewrite historical observations or
 > qualify live behavior. See `23-MUTATION-SUPPLEMENT-2026-09-12.md` in the Phase 23 directory for
 > compile-rejection and composite-witness limits; a target count alone never completes Task 1.
+
+> Last verified: 2026-09-12 — five additional isolated clean/rejected/restored receipts prove
+> each stored agent lineage field, refusal of caller-derived persisted authorship, and independent
+> main/revenue entry preflight assertions. The native writer test also rejects missing input
+> lineage before any row exists. Clean skills tests passed 187/187; six lightweight harness tests
+> passed. Exact immutable receipt and executing-harness hashes are recorded in the supplement.
+> Runtime source, legacy optional provenance schema and evaluator identities are unchanged.
+> Historical subset-assertion deletion remains explicitly composite evidence, and tenant-prefix
+> removal remains TypeScript compiler enforcement. Auth setup, artifact validation, integrated
+> free gates and inspector/Phase 21 prerequisites must still be verified before Task 1 closes.
 
 > Last verified: 2026-09-12 — the native authoring probe binds two ordinary submissions to one
 > trusted thread and aggregate budget. Unsupported paid routes are contained before egress;

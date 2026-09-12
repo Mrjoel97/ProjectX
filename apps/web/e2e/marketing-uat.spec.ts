@@ -1,11 +1,41 @@
 import { createHash } from "node:crypto";
-import { type APIRequestContext, expect, type Locator, type Page, test } from "@playwright/test";
+import {
+  type APIRequestContext,
+  type BrowserContext,
+  test as base,
+  expect,
+  type Locator,
+  type Page,
+} from "@playwright/test";
+
+// Native auth refresh state must survive serial scenarios; reloading an old export for each
+// test can replay a rotated refresh token. This is one browser context, with fresh pages.
+let acceptanceContext: BrowserContext | undefined;
+const test = base.extend({
+  page: async ({ browser, baseURL }, use) => {
+    acceptanceContext ??= await browser.newContext({
+      baseURL,
+      storageState: process.env.PIKAR_E2E_STORAGE_STATE ?? { cookies: [], origins: [] },
+    });
+    const page = await acceptanceContext.newPage();
+    try {
+      await use(page);
+    } finally {
+      await clearPrivatePage(page);
+      await page.close();
+    }
+  },
+});
+test.afterAll(async () => {
+  await acceptanceContext?.close();
+  acceptanceContext = undefined;
+});
 
 // Deliberately no auth extraction, operator CLI, model call, send, account provisioning or traces.
 // Run with --no-deps --workers=1 and an actual browser-exported private storageState.
 // Required private fixture inputs are an exact synthetic Vault ID + known original SHA256,
 // and an explicitly retained @example.test contact. Never pick the first real Vault/contact row.
-test.describe.configure({ mode: "serial", retries: 0 });
+test.describe.configure({ mode: "serial", retries: 0, timeout: 90_000 });
 test.use({
   trace: "off",
   screenshot: "off",
@@ -51,9 +81,21 @@ function prerequisites() {
 }
 async function openMarketing(page: Page) {
   await page.goto(marketing);
-  await expect(
-    page.getByRole("heading", { name: "Build reach with a clear next step" }),
-  ).toBeVisible();
+  try {
+    await expect(
+      page.getByRole("heading", { name: "Build reach with a clear next step" }),
+    ).toBeVisible({ timeout: 30_000 });
+  } catch {
+    const surface =
+      page.url().includes("/login") || page.url().includes("/signin")
+        ? "login"
+        : page.url().includes(marketing)
+          ? "marketing"
+          : "other";
+    throw new Error(
+      `Marketing readiness failed on ${surface} surface; no private page content retained.`,
+    );
+  }
 }
 async function counts(row: Locator): Promise<number[]> {
   const text = await row.innerText();

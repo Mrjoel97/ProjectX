@@ -154,6 +154,7 @@
     "apps/web/app/(app)/deleteFirst.test.ts"
   ],
   "cockpit.md": [
+    "scripts/check-phase23-probe-controls",
     "apps/web/app/(app)/dashboard/workspace/",
     "apps/web/app/(app)/connect-gmail/",
     "apps/web/app/(app)/_components/DisconnectGoogle.tsx",

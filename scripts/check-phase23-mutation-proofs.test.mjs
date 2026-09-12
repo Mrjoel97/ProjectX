@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
+  assertEntryPreflight,
   exactExportAliases,
   patched,
   plan,
@@ -23,9 +24,9 @@ test("bounded export patch preserves neighbouring exports and CRLF bytes", () =>
   );
 });
 
-test("all 17 exact current targets are patchable without running tests or models", () => {
+test("all 22 exact current targets are patchable without running tests or models", () => {
   const targets = plan();
-  assert.equal(targets.length, 17);
+  assert.equal(targets.length, 22);
   assert.equal(targets.filter((target) => target.command.kind === "compile").length, 1);
   assert.ok(
     targets
@@ -57,4 +58,26 @@ test("generated backend API uses its actual package export instead of invented s
   assert.ok(entries[0].find.test("@pikar/backend/api"));
   assert.ok(!entries[0].find.test("@pikar/backend/api/other"));
   assert.equal(entries[0].replacement, join("isolated/backend", "convex/_generated/api.js"));
+});
+
+test("paid entry preflights are independent and comments cannot satisfy them", () => {
+  const both =
+    "selfCheck();\n await runLive(parseSkillPins(argv));\n selfCheck();\n process.exit(await runRevenueCandidateMode(revenueMode));";
+  for (const entry of ["live", "revenue"])
+    assert.doesNotThrow(() => assertEntryPreflight(both, entry));
+  const liveMissing = both.replace(
+    "selfCheck();\n await runLive",
+    "/* selfCheck(); */\n await runLive",
+  );
+  assert.throws(() => assertEntryPreflight(liveMissing, "live"), /PREFLIGHT_LIVE_REQUIRED/);
+  assert.doesNotThrow(() => assertEntryPreflight(liveMissing, "revenue"));
+  const revenueMissing = both.replace(
+    "selfCheck();\n process.exit",
+    "/* selfCheck(); */\n process.exit",
+  );
+  assert.throws(
+    () => assertEntryPreflight(revenueMissing, "revenue"),
+    /PREFLIGHT_REVENUE_REQUIRED/,
+  );
+  assert.doesNotThrow(() => assertEntryPreflight(revenueMissing, "live"));
 });

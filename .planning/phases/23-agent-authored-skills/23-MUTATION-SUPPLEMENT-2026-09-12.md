@@ -100,3 +100,56 @@ control/restored copies. This is evidence across two stated harness revisions, n
 one uninterrupted execution completed 17 cases. No production source or evaluator manifest was
 modified. No provider/model spend occurred. The composite and required-lineage limitations
 above still apply; Task 1 and subsequent live acceptance are not automatically marked complete.
+
+## Direct guard corrections after independent review
+
+The earlier receipts remain immutable and keep their original, narrower claims. Five additional
+targets address the identified gaps without changing runtime behavior or evaluator identities:
+
+- `23-01-persisted-sourceThreadId` and `23-01-persisted-sourceTurnId` separately remove each
+  persisted provenance field from the real writer. The added native test first proves missing
+  input arguments are rejected before any row exists, then creates a candidate and asserts its
+  exact stored thread, turn, tenant, agent author and Executive-Agent identity. Legacy schema
+  provenance remains optional; this is a writer guarantee, not a new universal schema constraint.
+- `23-02-caller-derived-author` changes only the inserted author to the existing caller-controlled
+  `authoredBody` argument. The exact persisted-author assertion rejects this assignment. Together
+  with the prior forbidden-author-argument check, this protects both input authority and stored
+  authorship without inventing a publicly supplied tenant argument.
+- `23-04-preflight-live` and `23-04-preflight-revenue` remove one entry's actual preflight call
+  independently. Separate offline source oracles require the self-check immediately before that
+  entry's invocation; a different branch's check cannot satisfy them. Lightweight controls prove
+  each missing call fails only its corresponding oracle and commented calls do not count. These
+  are structural preflight guarantees, not simulated provider execution.
+
+Two historical targets are explicitly reconciled rather than relabelled as behavioral proof.
+Deleting a redundant test assertion changes no production behavior; the closed-set/subset
+relationship is protected by independent exact-set and rejection assertions, and the composite
+receipt establishes sensitivity to widening under removed redundant assertions. Removing a typed
+tenant index prefix is rejected by TypeScript TS2345 before execution; it is compiler enforcement,
+paired with native foreign-tenant tests and the required clean typecheck gate. Neither record is
+described as a direct behavioral red. Task 1's auth, validator, integrated clean gates, inspector
+and Phase 21 prerequisites remain separately required.
+
+### Observed correction receipts
+
+All five new targets completed isolated clean/rejected/restored sequences with exits `0/1/0`.
+Their single executing harness SHA-256 is
+`e5597d5535394e559f87d987de32f706a25fa568d0aef200fea74842830d9206`.
+Independent readback verified captured harness hashes, canonical snapshot manifest hashes,
+control/restored byte equality and current-source/source-after equality. No earlier receipt was
+modified. These direct writer and independent-entry proofs supersede the stated *coverage gaps*,
+not the earlier historical observations or their narrower claims.
+
+| Target | Immutable ignored receipt | SHA-256 |
+| --- | --- | --- |
+| Persisted thread required | `.tmp/phase23-mutation-1789216503175/receipts.json` | `2a1b974b0bd87e1855a9da8bc9d05b567d5c38d11c4d231d22ef24c900eb0480` |
+| Persisted turn required | `.tmp/phase23-mutation-1789216603899/receipts.json` | `e198342cd12e4e0f8e8d2ec5c0f9205bb775eba32dc4b0ec243d6c379a2519f5` |
+| Caller-derived persisted author rejected | `.tmp/phase23-mutation-1789216731358/receipts.json` | `e6af32bfdb94c9b44e04e0c3d2f8fe9aa05b0c04779aa6feadd9e29993cc2a02` |
+| Main live entry preflight | `.tmp/phase23-mutation-1789216809461/receipts.json` | `57aa5af848679e373c9a62f1657307116ee48f862ba285bb30276c9925f55bef` |
+| Revenue entry preflight | `.tmp/phase23-mutation-1789216831804/receipts.json` | `65c8933bbd33e975d34162a8aa1cc2b29cc739f06cfa0ff3d3ffe7c747c88fa8` |
+
+The full clean owning skills suite passed **187/187** tests; the lightweight harness passed all
+**six** tests and validates **22** exact anchors. Focused Biome and whitespace checks passed
+(existing unrelated test-file lint warnings remain). Runtime source and evaluator pins were
+unchanged. This evidence strengthens the mutation prerequisite only; it does not itself authorize
+or complete browser authoring, evaluation, activation or rollback.

@@ -14,16 +14,39 @@ CLI then successfully set `GOLDEN_OPENROUTER_BILLING=standard`,
 attestations, not an independent inspection of provider balances. Free usage still requires observed
 credit counts and retains positive reservations when usage is unknown.
 
-A native aggregate budget for two ordinary browser submissions is under qualification. It binds
-one exact thread, refuses unsupported paid side paths and preserves unknown-cost holds. This is
-probe containment, not proof that unrestricted runtime policy refused an adversarial instruction.
-Final current-source pins, whole-tree checks and the concrete 23-06 Task 2 authorization still
-precede any owner grant or model turn. The synthetic golden-suite envelope below is a separate run.
+The native aggregate budget for two ordinary browser submissions is deployed at `644408df`
+(CI `34692922592`, deployment `34693161766`). It binds one exact thread, refuses unsupported
+paid side paths and preserves unknown-cost holds. This is probe containment, not proof that
+unrestricted runtime policy refused an adversarial instruction. The concrete 23-06 Task 2
+authorization remains pending before any owner grant or model turn. The synthetic golden-suite
+envelope below is a separate run; historical qualification discussion below is not a new receipt.
 
 This is preparation, not a completion summary. No authored-candidate, paid-evaluation,
 owner-activation or rollback observation is created by these offline changes.
 
+The nonmutation prerequisite review confirmed the 1,338-probe artifact validator, checked
+`SKILL-01`, and the Phase 21 exact passing run `de976d8e` on candidate
+`qx73bwshbfds5nk7hd40vsf5y18cm7z0`. Its live records contain non-owner refusal, owner activation,
+and exact-baseline rollback; the explicitly unobserved runtime-attribution limitation remains
+accepted. The current golden self-check covers no-model inspector ordering. The A/B baseline
+at `2026-09-12T10:32:30Z` on `0c258885` witnessed both fresh sign-ins and native owner=false,
+but is historical authentication evidence, not fresh `644408df` storage-state verification.
+Actual fixed-path export and fresh reauthentication remain separate readiness checks.
+
 ## Ready locally
+
+- The browser spec now prepares one native `authoringProbe` only after its authorization/free-gate
+  checks and fresh non-owner witnesses, then navigates the exact returned thread before both
+  ordinary sends. Native zero/one/two-turn controls, exact tenant/thread/authorization/cap binding,
+  settled usage and zero containment are mandatory. Native closure precedes the unchanged immutable
+  handoff. A separate bounded attachment links budget facts and their hash to the handoff hash;
+  it does not add fields to the fixed handoff schema or certify policy from counters alone.
+- On failure, native closure is attempted only for terminal controls with no unresolved usage or
+  breach. Unknown work remains held. No paid retry, re-registration, force-close, grant rollback,
+  candidate deletion, evaluation, or activation is part of recovery.
+- Five offline probe-control tests and a web TypeScript check passed. Playwright `--list --no-deps`
+  discovers exactly one intended spec without executing auth or model work. These are harness
+  checks, not authenticated acceptance.
 
 - The existing candidate-only browser spec and its two-user auth setup now forward
   `PIKAR_CONVEX_TARGET=prod` to their direct Convex CLI calls, matching the golden inspector.
@@ -38,6 +61,55 @@ owner-activation or rollback observation is created by these offline changes.
   leave the attempted run's server state intact, and never retry that paid attempt or write passing
   evidence. Receipts contain an attempt id, function name, request/response hashes, timestamps and
   known returned cost only. They are not a second spend ledger and are not release evidence.
+
+## Concrete future two-turn checkpoint — proposed, not authorized
+
+Tenant A is `qd7bqyyt3yked865nd2b3fm1s18e917z`; tenant B is
+`qd79msa8e29c2nkg629cvxp5xd8e8gk1`. The proposal grants A owner after its fresh non-owner UI
+witness, keeps B non-owner, and allows exactly two ordinary Executive submissions: one inert
+business-skill candidate request and one adversarial activation/self-evaluation/grant request.
+No evaluation evidence or activation is permitted. Proposed aggregate cap: **100 cents ($1)**,
+explicitly selected through `PIKAR_PHASE23_CAP_CENTS`, expiring one hour after native registration.
+This amount is not approved by this document. Native maximum remains 1,000 cents.
+
+The ordinary primary is `or/openai/gpt-4o-mini`, with eligible fallback
+`or/openai/gpt-4.1-nano`; at most eight SDK steps per loop, bounded 8,192 output tokens and
+45-second attempts apply. Two submissions do not mean two provider calls. Supported immediate
+descendants share the aggregate envelope; unsupported execution is contained and disqualifies
+adversarial acceptance. Ambiguous provider attempts retain holds and do not trigger an automatic
+paid retry. Tavily remains explicitly Free with observed-credit accounting.
+
+Required local preparation uses the existing controlled credentials; do not ask the user to
+repeat credentials they never received. The bundle is
+`output/playwright/phase23-acceptance/credentials.dpapi` (Windows CurrentUser DPAPI), with A/B
+email/password fields. A trusted local launcher can decrypt it directly into child process
+environment variables `E2E_USER_EMAIL`, `E2E_USER_PASSWORD`, `E2E_FOREIGN_USER_EMAIL`, and
+`E2E_FOREIGN_USER_PASSWORD`, without printing values or creating plaintext credential configs.
+Do not rerun the credential-generation helper. The live agent owns the already authenticated
+`phase23-a`/`phase23-b` browser profiles; export actual native Playwright storage states to
+`apps/web/e2e/.auth/user.json` and `apps/web/e2e/.auth/foreign.json` before invocation. Their fixed
+handoff labels are unchanged and must name real files, not placeholder references.
+
+The spec signs out and performs a fresh native password sign-in with each exact address after
+the server's unique email-to-user lookup matches the separately supplied exact A/B IDs. It never
+extracts or decodes a stored JWT. Storage-state reuse alone is not treated as a fresh durable-ID
+witness. Existing `auth.setup.ts` is deliberately bypassed: it still contains legacy JWT decoding
+and profile seeding, which are not part of this acceptance continuation.
+
+After all Task 1 prerequisites are accepted and the fresh Task 2 approval is recorded, set
+`PIKAR_PHASE23_BROWSER_PROBE=1`, `PIKAR_PHASE23_TWO_IDENTITIES=1`,
+`PIKAR_PHASE23_ALLOW_OWNER_BOOTSTRAP=1`, exact `PIKAR_PHASE23_PRIMARY_USER_ID` /
+`PIKAR_PHASE23_FOREIGN_USER_ID`, the explicit cap, the recorded authorization SHA-256, and a
+private canary. Set the production base URL, `PIKAR_CONVEX_TARGET=prod`, and the existing private
+production `CONVEX_URL`; do not set provisioning or storage-state override flags. From `apps/web`:
+
+```text
+node node_modules/@playwright/test/cli.js test e2e/agent-skill-authoring.spec.ts --project=chromium --no-deps --workers=1
+```
+
+`--no-deps` is required, not optional. Listing that command with `--list` is free; executing it
+requires the pending approval and performs the disclosed owner/candidate writes. The remaining
+user action is that concrete authorization after prerequisite review, not a credential request.
 
 ## Required live prerequisites
 

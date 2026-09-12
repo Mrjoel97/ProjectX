@@ -3146,6 +3146,34 @@ describe("publishAgentCandidate — the inert agent writer (23-02)", () => {
     t.run((ctx) => ctx.db.query("tenantSkills").collect());
   const audits = (t: TestConvex<typeof schema>) => t.run((ctx) => ctx.db.query("audit").collect());
 
+  test("agent writer requires input lineage and persists exact server-owned lineage and author", async () => {
+    const { t, tenantA } = await setup();
+    const args = {
+      tenantId: tenantA,
+      sourceThreadId: THREAD,
+      sourceTurnId: TURN,
+      name: AGENT_NAME,
+      authoredBody: DRAFT,
+    };
+    for (const key of ["sourceThreadId", "sourceTurnId"] as const) {
+      const incomplete: Record<string, unknown> = { ...args };
+      delete incomplete[key];
+      await expect(
+        t.mutation(internal.skills.publishAgentCandidate, incomplete as typeof args),
+      ).rejects.toThrow();
+      expect(await rows(t)).toHaveLength(0);
+    }
+    await t.mutation(internal.skills.publishAgentCandidate, args);
+    const candidate = (await rows(t)).find((row) => row.status === "candidate");
+    expect(candidate).toMatchObject({
+      tenantId: tenantA,
+      author: "agent",
+      authorAgentId: "executive-agent",
+      sourceThreadId: THREAD,
+      sourceTurnId: TURN,
+    });
+  });
+
   test("mints ONE inert candidate plus the rollback baseline, with server-owned provenance", async () => {
     const { t, globalId, tenantA } = await setup();
 

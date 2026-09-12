@@ -1,3 +1,9 @@
+> Last verified: 2026-09-12 — the Phase 23 browser harness now uses exact native probe threads,
+> zero/one/two-turn budget readbacks and closure before its fixed handoff. Five offline control
+> tests, web TypeScript and Playwright discovery passed; no live authoring acceptance is claimed.
+> Native password sign-in replaces token decoding; execution must bypass legacy auth setup with
+> `--no-deps`. Proposed $1 cap remains unapproved; containment never proves policy acceptance.
+>
 > Last verified: 2026-09-12 — exact internally registered authoring-probe threads claim at most
 > two serialized ordinary text turns against the existing native envelope. Matching expired,
 > closed, exhausted or unknown state refuses rather than silently running without its cap.
