@@ -1,5 +1,6 @@
 {
   "_unassigned": ["packages/backend/vitest.diag.setup.ts", "packages/backend/convex/schema.ts"],
+  "marketing.md": ["packages/core/src/marketing", "packages/backend/convex/funnels"],
   "tracing.md": [
     "packages/backend/convex/lib/foglamp.ts",
     "packages/backend/convex/foglamp.test.ts"

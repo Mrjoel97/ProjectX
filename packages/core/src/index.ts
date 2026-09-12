@@ -24,6 +24,7 @@ export * from "./goals";
 export * from "./home";
 export * from "./knowledgeSearch";
 export * from "./logger";
+export * from "./marketing";
 export * from "./microsoft";
 export * from "./notificationTemplates";
 export * from "./optimizerBreach";
