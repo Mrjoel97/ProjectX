@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 31
-current_plan: 31-07 live acceptance on verified production 644408df awaits renewed sign-in. Phase 23 mutation coverage corrections passed; browser probe preparation precedes its fresh authorization checkpoint. Phase 30 semantic/lifecycle evidence remains open; six vertical v1 candidates are dormant. Phase 47 remains deferred on real evidence.
+current_plan: 31-07 navigation activation approved after direct live acceptance; deployment and normal-nav checks pending. Phase 23 bounded two-turn probe authorized with $1 cap; execution preparation underway. Phase 30 semantic/lifecycle evidence remains open; six vertical v1 candidates are dormant. Phase 47 remains deferred on real evidence.
 status: in_progress
-stopped_at: "2026-09-12 — production644408df verified. Marketing desktop/mobile check passed once; subsequent session restoration failed and originalbrowser now requires sign-in. No funnel created; synthetic suppressedcontact retained, nav absent. Phase23 five additional direct mutation proofs passed with187skills tests; total22targets retain separate immutable receipts and historical qualifications. Native probes remain unregistered. Userfreshsignin pending; semantic/lifecycle/provider/recurrence gates open."
+stopped_at: "2026-09-12 — production 41d9551 verified. After renewed sign-in, direct Marketing browser/anonymous HTTP acceptance passed and the test link was deactivated. Owner approved Marketing navigation activation and separately authorized Phase 23 A-owner/B-nonowner, two submissions, $1 aggregate cap. Navigation code qualified locally; final deployment/checks pending. Phase 23 live execution is preparing, with no full evaluation or activation authorized. Phase 30/provider/recurrence gates remain open."
 last_updated: "2026-09-12"
 progress:
   total_phases: 73

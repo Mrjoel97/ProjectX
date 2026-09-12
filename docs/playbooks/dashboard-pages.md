@@ -1,9 +1,15 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-09-12 — Phase 31's core contracts distinguish unavailable channel data
-> and invalid/missing raw counters from real zero. The authenticated lead adapter reuses Contacts
-> consent and suppression; `approval_required` never means ready to send. Marketing's UI and
-> navigation acceptance remain pending the downstream implementation and live checks.
+> Last verified: 2026-09-12 — Phase 31 Marketing navigation was activated after the exact user
+> response `APPROVE MARKETING NAV ACTIVATION`, following the direct-route live acceptance recorded
+> in `31-07-SUMMARY.md`. One native NAV entry links `/dashboard/marketing`; the compact bottom bar
+> derives the same entry so it remains discoverable below 48rem. Both surfaces use the existing
+> active-route styling and current-page accessibility indication; collapsed rail labels retain
+> their native title. Rollback removes the NAV entry and compact href only, without changing
+> funnel links, counters, contacts or file access. No social publisher or new metrics were enabled.
+> Marketing still distinguishes unknown counters from zero and preserves existing contact consent
+> and suppression rules. The disclosed standalone browser-session restoration limitation remains;
+> navigation activation does not turn that limitation into a passing session-persistence claim.
 
 > Last verified: 2026-09-12 — evaluation ledger rows may retain observed Tavily credit usage
 > separately from dollar spending. Verified Free calls settle at zero dollars; missing usage

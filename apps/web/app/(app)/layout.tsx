@@ -12,6 +12,7 @@ import {
   BrainIcon,
   ChevronLeftIcon,
   FileIcon,
+  GlobeIcon,
   GridIcon,
   MailIcon,
   MicIcon,
@@ -59,6 +60,9 @@ const NAV: Array<{ label: string; icon: ReactNode; href: string; ownerOnly?: boo
   // revise a document it had already been told to treat as a source.
   { label: "Content", href: "/dashboard/content", icon: <FileIcon /> },
   { label: "Sales Pipeline", href: "/dashboard/pipeline", icon: <TrendIcon /> },
+  // 31-07: activated after the explicit Marketing navigation approval, 2026-09-12.
+  // Remove this entry and its compact href to hide discovery without altering links or contacts.
+  { label: "Marketing", href: "/dashboard/marketing", icon: <GlobeIcon /> },
   // Compliance is a TAB on the approvals page now, not its own route. `/ops` still resolves
   // (ops/page.tsx keeps a default export) so old bookmarks survive, but the rail sends people
   // to the consolidated surface. The owner gate travels with `ComplianceView` itself, so this
@@ -82,13 +86,14 @@ const NAV: Array<{ label: string; icon: ReactNode; href: string; ownerOnly?: boo
 
 const RAIL_KEY = "pikar:rail-collapsed";
 
-// 25.2 (G15): below 48rem the rail is hidden by CSS and these four NAV entries become a labelled
+// Below 48rem the rail is hidden by CSS and these NAV entries become a labelled
 // bottom bar. Derived from NAV, so a renamed rail entry renames its tab.
 const TABBAR_HREFS = [
   "/dashboard",
   "/dashboard/approvals",
   "/dashboard/workspace",
   "/dashboard/vault",
+  "/dashboard/marketing",
 ];
 
 // OPSG-07: a failure nobody sees is a failure nobody fixes. This is an unread-mail
@@ -199,6 +204,7 @@ function Shell({ children }: { children: ReactNode }) {
               key={item.label}
               href={item.href}
               className={`rail-item${isActive(item.href) ? " is-active" : ""}`}
+              aria-current={isActive(item.href) ? "page" : undefined}
               title={collapsed ? item.label : undefined}
             >
               {item.icon}

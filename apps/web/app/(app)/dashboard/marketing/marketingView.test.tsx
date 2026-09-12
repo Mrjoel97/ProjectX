@@ -55,6 +55,21 @@ afterEach(async () => {
   host.remove();
 });
 describe("Marketing surface", () => {
+  it("exposes one approved Marketing entry through desktop and compact navigation", () => {
+    const layout = readFileSync("app/(app)/layout.tsx", "utf8");
+    const nav = layout.slice(layout.indexOf("const NAV:"), layout.indexOf("const RAIL_KEY"));
+    expect(nav.match(/label: "Marketing"/g)).toHaveLength(1);
+    expect(nav).toMatch(/label: "Marketing", href: "\/dashboard\/marketing", icon: <GlobeIcon \/>/);
+    const compact = layout.slice(
+      layout.indexOf("const TABBAR_HREFS"),
+      layout.indexOf("// OPSG-07"),
+    );
+    expect(compact.match(/"\/dashboard\/marketing"/g)).toHaveLength(1);
+    expect(layout).toContain("title={collapsed ? item.label : undefined}");
+    expect(
+      layout.match(/aria-current=\{isActive\(item.href\) \? "page" : undefined\}/g),
+    ).toHaveLength(2);
+  });
   it("keeps writes confined to link management and lead capture without model or publisher hooks", () => {
     const source = readFileSync("app/(app)/dashboard/marketing/MarketingView.tsx", "utf8");
     expect(

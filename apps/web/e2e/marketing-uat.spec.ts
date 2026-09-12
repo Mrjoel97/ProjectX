@@ -187,7 +187,7 @@ test("isolated public stages preserve original bytes and aggregate attribution, 
   const urls: string[] = [];
   try {
     await openMarketing(page);
-    const picker = page.getByLabel("Original Vault file", { exact: true });
+    const picker = page.getByRole("combobox", { name: /^Original Vault file/ });
     await expect(page.getByText("Loading files…", { exact: true })).toHaveCount(0);
     let found = false;
     for (let i = 0; i < 100; i++) {

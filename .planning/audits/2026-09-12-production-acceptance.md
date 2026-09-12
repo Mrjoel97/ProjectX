@@ -178,6 +178,16 @@ this is prepared browser plumbing, not an owner grant or a paid/live observation
 validator passed 1,338 checks again, and the accepted Phase 21 prerequisite bundle was rechecked.
 The new probe-control check is explicitly registered as the twenty-second free gate.
 
+Release `41d9551b35ee9508015767cb03084679c5a7ebcf` subsequently passed CI `34694946587`
+and automatic deployment `34695175270`. The durable production probe passed at `13:02:16Z`;
+production deployment `6409885713`, status `18263065577`, succeeded at `13:02:19Z`.
+The separate receipt is `.tmp/qualification-2026-09-12/acceptance-controls-production-deployment-receipt.json`.
+This release contains test, harness and evidence changes; runtime code and evaluator identities
+remain those previously qualified. Fresh native A/B sign-in and non-owner readback also passed;
+fixed private auth states were exported without decoding or replaying tokens. Their readiness
+receipt is `output/playwright/phase23-acceptance/fixed-auth-state-readiness.json`. A subsequent
+sign-in-first/case-insensitive-button harness correction is separately qualified for commit.
+
 Phase 23 now has two distinct controlled accounts with fresh password sign-in and authenticated
 non-owner `/ops` observations, independently confirmed by native `owner:false` reads. Credentials
 are DPAPI-encrypted locally; no owner grant or model probe has occurred. The genuine authored
@@ -232,6 +242,22 @@ remains deliberately suppressed and retained, with no consent or send. No funnel
 See `31-07-SUMMARY.md` for the preserved failed-run and partial-evidence records. Navigation
 remains absent pending complete live evidence and the separate owner activation checkpoint.
 No live lifecycle pass is inferred from CI, prerequisite preparation, or the first UI scenario.
+
+The owner then renewed sign-in. Direct Playwright assertions in that existing browser passed
+desktop/mobile, keyboard and channel-state checks; the anonymous three-stage matrix returned
+the exact original bytes and counters `[1,0,0]`, `[1,1,0]`, `[1,1,1]`. HEAD returned 405 with no
+increment. A source-tampered visit retained the fixed source and changed only visits, yielding
+`[2,1,1]`. After deactivation, all three stages returned empty 404s and the counters stayed fixed.
+Separate unknown-token, invalid-stage and malformed-token requests returned empty uncached 404s.
+Suppressed lead recapture preserved one user-entered row and absent consent; the workspace handoff
+produced an unsent draft, consumed its closed intent, and was cleared without sending.
+
+The owner replied exactly `APPROVE MARKETING NAV ACTIVATION` after reviewing this evidence and
+the disclosed standalone-session-restoration limitation. Normal desktop/mobile navigation is now
+implemented and awaiting its final deployment/click checks. Direct-browser evidence is not relabelled
+as a passing standalone three-test suite. `31-07-SUMMARY.md` retains timestamps, release scope,
+receipts, method deviation and cleanup. The owner separately authorized the Phase 23 bounded
+probe with **"do it"**; `23-06-SUMMARY.md` records the exact $1/two-submission scope before execution.
 Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the

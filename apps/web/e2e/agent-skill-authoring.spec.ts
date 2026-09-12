@@ -20,11 +20,17 @@ test.use({ trace: "off", screenshot: "off", video: "off" });
 function demand(condition: unknown, code: string): asserts condition {
   if (!condition) throw new Error(code);
 }
-function command(file: string, args: string[], cwd: string, label: string): string {
+function command(
+  file: string,
+  args: string[],
+  cwd: string,
+  label: string,
+  timeoutMs = 600_000,
+): string {
   const result = spawnSync(process.execPath, [file, ...args], {
     cwd,
     encoding: "utf8",
-    timeout: 600_000,
+    timeout: timeoutMs,
     maxBuffer: 32 * 1024 * 1024,
   });
   demand(result.status === 0 && !result.error, `PHASE23_${label}_FAILED`);
@@ -148,7 +154,8 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
     !optedIn,
     "Set PIKAR_PHASE23_BROWSER_PROBE=1 only after the explicit Phase 23 browser-spend checkpoint.",
   );
-  test.setTimeout(1_200_000);
+  // Free whole-tree checks precede native registration; their duration cannot consume its hour.
+  test.setTimeout(90 * 60_000);
   demand(process.env.PIKAR_PHASE23_TWO_IDENTITIES === "1", "PHASE23_TWO_IDENTITIES_REQUIRED");
   demand(process.env.PIKAR_E2E_PROVISION !== "1", "PHASE23_PROVISIONING_FORBIDDEN");
   const capCents = requestedCap(process.env.PIKAR_PHASE23_CAP_CENTS);
@@ -166,12 +173,13 @@ test("authorized Executive authoring stays candidate-only and freezes exact refs
   const validator = await import(pathToFileURL(resolve(phase, "validate-live-artifact.mjs")).href);
 
   // These are actual free gates, not an operator-supplied boolean. No seed/model/evidence path.
-  command(resolve(root, "scripts/check-free-gates.mjs"), [], root, "FREE_GATES");
+  command(resolve(root, "scripts/check-free-gates.mjs"), [], root, "FREE_GATES", 60 * 60_000);
   command(
     resolve(root, "node_modules/turbo/bin/turbo"),
     ["run", "test", "typecheck", "build", "--concurrency=1"],
     root,
     "INTEGRATED_FREE_GATES",
+    60 * 60_000,
   );
   for (let plan = 1; plan <= 5; plan++) {
     const summary = readFileSync(resolve(phase, `23-0${plan}-SUMMARY.md`), "utf8");

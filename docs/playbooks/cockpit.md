@@ -7,6 +7,11 @@
 > exported without replay. The owner authorized the $1/two-submission probe in `23-06-SUMMARY.md`;
 > execution remains separate evidence, and containment never proves policy acceptance.
 >
+> The subsequently authorized run has bounded 60-minute free prerequisite commands within a
+> 90-minute test limit. Native registration still occurs afterward, retaining its separate
+> one-hour/$1 ceiling. Windows launchers normalize duplicate PATH/Path entries to one Path so
+> pnpm resolves existing shims; no dependency reinstall or free-gate bypass is needed.
+>
 > Last verified: 2026-09-12 — exact internally registered authoring-probe threads claim at most
 > two serialized ordinary text turns against the existing native envelope. Matching expired,
 > closed, exhausted or unknown state refuses rather than silently running without its cap.
@@ -6655,4 +6660,4 @@ required links between those observed steps.
 
 Last verified: 2026-09-12 — the Marketing channel CTA passes only a closed `intent=marketing` plus catalog channel ID to the workspace. ChatPane consumes it once on mount, inserts a static review-oriented prompt only into an empty idle composer, and removes those parameters while preserving the rest of the route. Unknown/duplicate values are ignored. It never invokes `useSendCockpitMessage`, overwrites an existing draft, queues a send, or copies recipients/tokens into a URL. Focused prefill tests cover closed values and draft/in-flight preservation; ordinary user send handling remains unchanged.
 
-Last verified: 2026-09-12 — the Marketing browser acceptance suite is collected with an explicitly exported signed-in browser state, no owner setup/JWT extraction, no model/provider invocation and an unsent handoff only. Its independent anonymous request contexts exercise file redirects; see marketing.md for recording redaction, explicit synthetic fixtures and retained-contact cleanup limits. This does not constitute live cockpit or Marketing acceptance.
+Last verified: 2026-09-12 — direct Marketing acceptance in the renewed signed-in browser passed the anonymous file/counter/deactivation matrix, suppressed-lead recapture and unsent workspace prefill. The draft was cleared without sending. The standalone exported-session suite failed authentication restoration; its picker locator now matches the native combobox label prefix. See `31-07-SUMMARY.md` for the separate real receipts, method limitation and exact navigation approval. This narrow handoff evidence does not certify broader cockpit workflows.

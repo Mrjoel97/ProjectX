@@ -61,8 +61,8 @@ created: 2026-08-10
 | 31-06-01 | 06 | 5 | MKTG-01/02/03 | e2e authoring | `pnpm --filter @pikar/web test:e2e -- marketing-uat.spec.ts --list` — disposable authenticated setup and unauthenticated three-stage 302 journey | ✅ exists | ✅ passing 2026-09-12; see 31-06-SUMMARY |
 | 31-06-02 | 06 | 5 | MKTG-01/02/03 | regression/negative-space | `pnpm --filter @pikar/backend test -- funnels.test.ts contacts.test.ts cockpit.test.ts gmail.test.ts && pnpm --filter @pikar/web test -- marketingView.test.ts` | ✅ exists | ✅ passing 2026-09-12; see 31-06-SUMMARY |
 | 31-06-03 | 06 | 5 | MKTG-01/02/03 | repository gate | `pnpm test && pnpm typecheck && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` | ✅ commands | ✅ passing 2026-09-12; see 31-06-SUMMARY |
-| 31-07-01 | 07 | 6 | MKTG-01/02/03 | live HTTP/browser | `pnpm --filter @pikar/web test:e2e -- marketing-uat.spec.ts` plus redacted manual matrix for three independent 302/counter deltas | ❌ W6 | ⬜ pending |
-| 31-07-02 | 07 | 6 | MKTG-01/02/03 | manual UAT | Owner verifies six honest channel states, one-time token disclosure, three 302s/counters, Phase 19 provenance/suppression, and no publishing | N/A manual | ⬜ pending |
+| 31-07-01 | 07 | 6 | MKTG-01/02/03 | live HTTP/browser | `pnpm --filter @pikar/web test:e2e -- marketing-uat.spec.ts` plus redacted manual matrix for three independent 302/counter deltas | ✅ exists | ✅ direct-context live checks passed; standalone session restoration unqualified |
+| 31-07-02 | 07 | 6 | MKTG-01/02/03 | manual UAT | Owner verifies six honest channel states, one-time token disclosure, three 302s/counters, Phase 19 provenance/suppression, and no publishing | N/A manual | ✅ exact owner approval 2026-09-12; see 31-07-SUMMARY |
 | 31-07-03 | 07 | 6 | MKTG-01/02/03 | activation regression | `pnpm --filter @pikar/web test -- marketingView.test.ts && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` | ❌ W4 | ⬜ pending |
 
 Legend: ⬜ pending · ✅ passing · ❌ missing/blocking · ⚠️ flaky
@@ -72,7 +72,9 @@ plan summaries and consolidated qualification in `31-06-SUMMARY.md`. Exact relea
 `644408df4c2c630346c5909aac23f9a352ede287` subsequently passed CI `34692922592`, production
 deployment `34693161766`, and the durable URL probe. The original local four structural-test
 failures and their 57-test remediation remain disclosed in that summary. These results establish
-automated qualification only; all 31-07 live, owner-review, and navigation rows remain open.
+automated qualification only. Subsequent direct-context Playwright UI/HTTP checks and the exact
+owner activation approval are recorded in `31-07-SUMMARY.md`; the standalone exported-session
+suite remains unqualified. Navigation deployment and normal desktop/mobile clicks remain open.
 
 ---
 
@@ -147,8 +149,8 @@ The following validation files are then created alongside their production seams
 - [x] Wave-specific automated test files exist and pass; live execution is separately pending below
 - [x] Convex codegen succeeds and generated API parity covers both `api.funnels` and `internal.funnels`
 - [x] Targeted tests, full tests, typecheck, and web production build pass (local remediation disclosed above; exact CI passed)
-- [ ] Live unauthenticated HTTP and browser UAT pass
+- [x] Live unauthenticated HTTP and browser UAT pass through direct-context Playwright assertions; standalone session-restoration limitation is disclosed in 31-07-SUMMARY
 - [ ] Negative-space and threat-model checklist pass
 - [ ] `nyquist_compliant: true` remains accurate after implementation changes
 
-**Approval:** pending
+**Approval:** `APPROVE MARKETING NAV ACTIVATION` received 2026-09-12; post-activation deployment and navigation checks pending.
