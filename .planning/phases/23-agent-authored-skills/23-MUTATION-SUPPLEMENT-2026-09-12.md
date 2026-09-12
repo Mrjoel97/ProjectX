@@ -1,6 +1,6 @@
 # Phase 23 current-boundary mutation supplement
 
-Status: final hash-bound run pending; preliminary partial observations are not final proof. This record
+Status: 17 current targets have hash-bound controls across two explicit harness revisions; prerequisite acceptance still requires review of the limits below. This record
 does not certify Task 1, authorize Task 2, or amend historical 23-01 through 23-05 observations.
 No provider, deployment, owner grant, candidate, or evaluation evidence is involved.
 
@@ -64,9 +64,9 @@ test is installed only in the copied test file, identically for both clean contr
 
 ## Initial free validation
 
-- Four patch-engine tests passed, including fail-closed snapshot/control drift; all 17 current anchors resolve.
+- Five patch-engine tests passed, including fail-closed snapshot/control drift and explicit package export resolution; all 17 current anchors resolve.
 - Prior handoff validator passed 1,338 probes during prerequisite review.
-- Full release suite and deliberate mutation receipts remain separate pending observations.
+- Full release suite remains separately owned; this supplement does not replace its results.
 
 The preliminary run completed five controls before stopping because the harness expected TypeScript
 exit 2, while the actual `--noEmit` TS2345 rejection correctly exited 1. Its source hashes matched
@@ -75,3 +75,28 @@ occurred during that run. Those ignored records remain unchanged as limited obse
 final frozen harness captures its own bytes, rejects changes during execution, verifies active
 source hashes against the snapshot before every case, and expects the correct compiler exit.
 A complete fresh run is required; preliminary rows are not substituted into final proof.
+
+## Observed final controls
+
+The fresh frozen run completed the first 16 targets, including native filtered/zero-case writer
+rejections, the explicit TS2345 compiler rejection, and restored controls. Its last UI clean
+control failed before mutation because the isolated alias generator assumed every package
+subpath lived under `src/`; the generated backend API actually has an explicit package export.
+That failure was a harness defect and generated no UI proof.
+
+The narrow harness correction gives explicit package exports precedence and has an independent
+resolution regression. The UI target was then run with the corrected frozen harness and passed
+clean/rejected/restored controls. The two receipt files remain separate and unchanged:
+
+| Receipt | Targets | Receipt SHA-256 | Executing harness SHA-256 |
+| --- | --- | --- | --- |
+| `.tmp/phase23-mutation-1789214899970/receipts.json` | First 16 | `b404d6cf6df9eb97c0dc5f01891ee25023068b217f7dae93ab1383d0996669d5` | `c5d4b83be4ac22d299b1bc87245678d94acda6146bfc9b47b3a139bd150b5554` |
+| `.tmp/phase23-mutation-1789215449370/receipts.json` | UI mount only | `4a3a5b33fc1bd618df372f66371dd0aa3fa9e6ac900e50a6c8f2aecc58503cbb` | `ed774bd085f8f61daf632c8bfc0a796a19fda65fed105465fc8979acc9e607b3` |
+
+Independent read-only validation confirmed 17 distinct target IDs, all clean/restored exits 0,
+all deliberate rejection exits 1, captured harness hash agreement, snapshot manifest hash
+agreement, source-before/snapshot/source-after/current-source equality, and byte-identical
+control/restored copies. This is evidence across two stated harness revisions, not a claim that
+one uninterrupted execution completed 17 cases. No production source or evaluator manifest was
+modified. No provider/model spend occurred. The composite and required-lineage limitations
+above still apply; Task 1 and subsequent live acceptance are not automatically marked complete.

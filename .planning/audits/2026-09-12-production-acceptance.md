@@ -187,12 +187,12 @@ No model evaluation was triggered by these settings. The server-owned two-turn b
 is now committed as `89b6fb5`. It binds an exact thread, refuses unsupported paid routes before
 egress, preserves unknown-cost holds and closes independently of unrelated owner work. Its 276
 focused tests and backend typecheck passed; both evaluator identities were regenerated and their
-free checks passed. Whole-tree qualification and production promotion remain pending. Budget
+free checks passed. Whole-tree qualification and production promotion passed in `644408df`. Budget
 containment is not passing adversarial policy evidence; no owner grant or probe ran.
 
 The shared exact-corpus preflight repair is committed as `e9d69f1`: all forty cases now
 pass the same case/request matcher before provisioning and evidence issuance. Thirty-nine
-native tests and backend TypeScript passed. This code awaits the next qualified release;
+native tests and backend TypeScript passed. This code is deployed in `644408df`;
 its passing tests do not change the failed run's historical outcome or authorize a rerun.
 Phase 30 requires actual bounded evaluations, authenticated semantic reviews (including required
 qualified Legal/HR reviewers), all-six workflow acceptance, two evaluated versions per vertical,
@@ -205,8 +205,16 @@ retained file bytes. Its focused suites and core/backend typechecks passed. Link
 committed in `1dac82f`, authenticated lead recording in `4b7eaf7`, and the public GET route plus
 paginated file picker in `9c8cbf7`. Tests cover tenant isolation, token secrecy, raw concurrent
 counts, missing/replaced files, uncached responses, HEAD refusal and both suppression convergence
-points. The narrow privacy guard follow-up is `223ca7d`. The frontend is under implementation;
-whole-tree tests, deployment, browser acceptance and navigation activation remain open.
+points. The narrow privacy guard follow-up is `223ca7d`. The frontend and unsent workspace
+prefill are implemented in `64c6d70`, with the three-scenario live suite prepared in `ffb03e2`.
+Whole-tree local qualification is recorded in `31-06-SUMMARY.md`. Release
+`644408df4c2c630346c5909aac23f9a352ede287` passed CI `34692922592` and deployment
+`34693161766`; the durable production probe passed at `12:17:48Z`, followed by production
+deployment `6409489035`, status `18262186525`, at `12:17:51Z`. The ignored receipt is
+`.tmp/qualification-2026-09-12/marketing-production-deployment-receipt.json`.
+Live acceptance is underway using the existing authenticated browser and a verified synthetic
+243-byte stored file. Navigation remains absent pending actual evidence and the separate
+31-07 owner activation checkpoint. No live pass is inferred from CI or prerequisite preparation.
 Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the

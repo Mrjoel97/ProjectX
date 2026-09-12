@@ -381,6 +381,19 @@ function copySnapshot(destination) {
   }
   return hash(JSON.stringify(manifest));
 }
+/** Explicit package exports precede the generic source wildcard in the isolated Vitest copy. */
+export function exactExportAliases(packageName, packageDirectory, exports) {
+  return Object.entries(exports ?? {}).flatMap(([key, value]) => {
+    if (key.includes("*") || typeof value !== "string" || !value.startsWith("./")) return [];
+    const specifier = key === "." ? packageName : `${packageName}/${key.slice(2)}`;
+    return [
+      {
+        find: new RegExp(`^${specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+        replacement: join(packageDirectory, value),
+      },
+    ];
+  });
+}
 function configure(base) {
   const preload = join(base, "offline.mjs");
   writeFileSync(
@@ -391,9 +404,12 @@ function configure(base) {
     .flatMap((name) => {
       const manifest = join(base, "packages", name, "package.json");
       if (!existsSync(manifest)) return [];
-      const { name: packageName } = JSON.parse(readFileSync(manifest, "utf8"));
+      const { name: packageName, exports } = JSON.parse(readFileSync(manifest, "utf8"));
       if (!packageName?.startsWith("@pikar/")) return [];
       return [
+        ...exactExportAliases(packageName, join(base, "packages", name), exports).map(
+          (entry) => `{find:${entry.find},replacement:${JSON.stringify(entry.replacement)}}`,
+        ),
         `{find:/^${packageName.replaceAll("/", "\\/")}$/,replacement:${JSON.stringify(join(base, "packages", name, "src/index.ts"))}}`,
         `{find:/^${packageName.replaceAll("/", "\\/")}\\/(.+)$/,replacement:${JSON.stringify(join(base, "packages", name, "src/$1.ts"))}}`,
       ];
