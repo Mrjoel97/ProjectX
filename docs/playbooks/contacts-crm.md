@@ -1,5 +1,29 @@
 # Playbook: Contacts, CRM & follow-ups
 
+> Last verified: 2026-09-12 — Phase 31-04 adds `contacts.recordMarketingLead`, a tenant-authenticated
+> manual-entry adapter over `upsertContactRow`. It accepts email, optional name/company, and optional
+> explicit consent `{ wording, context? }`. Identity uses the existing normalizer/email validator;
+> bounds are 320/160/200/4000/1000 characters respectively. Origin is code-owned `user-entered` and
+> consent source is code-owned `asserted-by-user`; a manual entry never claims `inbound-form`.
+> Wording is retained verbatim, context is trimmed by the existing writer, and time is server-recorded.
+> Duplicate saves retain first origin and first consent; nonblank name/company retain normal hand-entry
+> update semantics. Missing consent stays missing. Suppression is read from the independent suppression
+> store even if the contact has consent, and is never removed by capture.
+>
+> The result reports `suppressed`, `consentRecorded`, `outboundAllowed`, and a reason of `suppressed`,
+> `consent_missing`, or `approval_required`. Allowed means only this capture-time posture: every later
+> outbound action still needs its existing checks and an explicit approved plan. No public lead form,
+> second lead store, follow-up, campaign, automatic email or social action is created.
+>
+> The Marketing-specific regressions in `contacts.test.ts`, `cockpit.test.ts`, and `gmail.test.ts`
+> exercise real capture and both convergence points: `executePlan` excludes the suppressed address
+> before immediate fan-out; `gmail.send` returns `suppressed` before any provider request. The latter
+> deliberately does not own request-state mutation. `deliverApprovedPlan` calls
+> `plans.recordDeliveryTerminal(outcome: "suppressed")`; the standalone pipeline sets `blocked`.
+> Existing cockpit delivery-terminal regression pins this ownership. This corrects the older plan's
+> expectation that `gmail.send` itself blocks the row. See [Marketing](marketing.md) for link/UI scope.
+> Offline verification: 246 backend tests and 8 pure input-contract tests passed; no live capture/send.
+
 > Last verified: 2026-09-01 (28-16 verification — unsubscribe configuration now fails closed when
 > the runtime does not expose `process`, as well as when either deployment variable is absent.
 > The literal `UNSUBSCRIBE_SECRET` and `CONVEX_SITE_URL` reads retain the environment-manifest

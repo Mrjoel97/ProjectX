@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // component (relative import — the package blocks the deep specifier) so the REAL audit path runs
 // under convex-test instead of throwing "component not registered" (cockpitTools.test.ts precedent).
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { buildMime, escapeGmailQuery, pickPlainText, SEND_ENDPOINT } from "./gmail";
 import schema from "./schema";
 
@@ -716,6 +716,37 @@ describe("gmail.send — the suppression backstop + the CAN-SPAM footer (19-05)"
     });
     // Not one call — the refusal lands before the token refresh, so no credential is even minted.
     expect(g.calls).toHaveLength(0);
+  });
+
+  test("Marketing-captured consent never overrides the suppression send backstop", async () => {
+    const t = plain();
+    await seedTokens(t);
+    await seedProfile(t);
+    await t.run((ctx) =>
+      ctx.db.insert("suppressions", {
+        tenantId: SEND_TENANT,
+        address: RECIPIENT,
+        suppressedAt: BASE_MS,
+        source: "unsubscribe-link",
+      }),
+    );
+    const lead = await t
+      .withIdentity({ subject: SEND_TENANT })
+      .mutation(api.contacts.recordMarketingLead, {
+        email: RECIPIENT.toUpperCase(),
+        consent: { wording: "Operator asserts per-person consent" },
+      });
+    expect(lead).toMatchObject({ consentRecorded: true, suppressed: true, outboundAllowed: false });
+    const requestId = await seedRequest(t);
+    const g = mockGoogle();
+    expect(await t.action(internal.gmail.send, { requestId })).toEqual({
+      delivered: false,
+      reason: "suppressed",
+    });
+    // The caller owns the blocked terminal; send returns a permanent refusal without mutation.
+    expect((await t.run((ctx) => ctx.db.get(requestId)))?.status).toBe("approved");
+    expect(g.calls).toHaveLength(0);
+    expect(g.posted()).toHaveLength(0);
   });
 
   test("a suppressed MEMBER of a group recipient string refuses the whole row (the join's ceiling)", async () => {

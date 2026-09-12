@@ -1726,6 +1726,30 @@ describe("executePlan suppression + postal-address gates (19-05, PIPE-01)", () =
     "five@example.com",
   ];
 
+  test("Marketing-captured suppressed contact is withheld before immediate fan-out", async () => {
+    const t = withFanoutOnly();
+    await seedMailbox(t);
+    await suppress(t, "three@example.com");
+    const lead = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.contacts.recordMarketingLead, {
+        email: "THREE@example.com",
+        consent: { wording: "Operator asserts per-person consent" },
+      });
+    expect(lead).toMatchObject({ suppressed: true, outboundAllowed: false });
+    const planId = await seedEmailPlan(t, FIVE, "individual", false);
+    const result = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(result).toMatchObject({ ok: true, withheld: ["three@example.com"] });
+    const requests = await countRequests(t);
+    expect(requests).toHaveLength(4);
+    expect(requests.some((row) => row.recipient === "three@example.com")).toBe(false);
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.withheldRecipients).toEqual([
+      "three@example.com",
+    ]);
+  });
+
   // Row 16a. The tenant, not the deployment, is missing configuration — so the refusal names the
   // field and leaves the plan exactly where the user can fix it and press Approve again.
   test("no postalAddress: the plan refuses, stays proposed, and seeds ZERO request rows", async () => {

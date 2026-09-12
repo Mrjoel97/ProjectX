@@ -331,6 +331,7 @@
     "packages/backend/scripts/storyboard-briefs.json"
   ],
   "contacts-crm.md": [
+    "packages/core/src/marketingLead",
     "packages/core/src/contacts.ts",
     "packages/core/src/contacts.test.ts",
     "packages/core/src/contactImport.ts",

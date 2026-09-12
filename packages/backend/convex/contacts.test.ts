@@ -63,6 +63,91 @@ const suppressionRows = (h: Harness) => h.t.run((ctx) => ctx.db.query("suppressi
 const followUpRows = (h: Harness) => h.t.run((ctx) => ctx.db.query("followUps").collect());
 const auditRows = (h: Harness) => h.t.run((ctx) => ctx.db.query("audit").collect());
 
+describe("recordMarketingLead C1 single-store boundary", () => {
+  test("requires authentication and validates before writing", async () => {
+    const h = await harness();
+    await expect(
+      h.t.mutation(api.contacts.recordMarketingLead, { email: "a@example.com" }),
+    ).rejects.toThrow("UNAUTHENTICATED");
+    await expect(
+      h.asA.mutation(api.contacts.recordMarketingLead, { email: "invalid" }),
+    ).rejects.toThrow("MARKETING_EMAIL_INVALID");
+    await expect(
+      h.asA.mutation(api.contacts.recordMarketingLead, {
+        email: "a@example.com",
+        consent: { wording: " " },
+      }),
+    ).rejects.toThrow("CONSENT_WORDING_REQUIRED");
+    expect(await contactRows(h)).toEqual([]);
+  });
+  test("normalizes once, preserves original evidence on duplicates, and isolates tenants", async () => {
+    const h = await harness();
+    const first = await h.asA.mutation(api.contacts.recordMarketingLead, {
+      email: " Lead@Example.com ",
+      name: "Lead",
+      company: " Company ",
+      consent: { wording: WORDING, context: " Trade show " },
+    });
+    expect(first).toMatchObject({
+      created: true,
+      consentRecorded: true,
+      suppressed: false,
+      outboundAllowed: true,
+      reason: "approval_required",
+    });
+    const duplicate = await h.asA.mutation(api.contacts.recordMarketingLead, {
+      email: "lead@example.com",
+      name: "Updated",
+      consent: { wording: "different" },
+    });
+    expect(duplicate.contactId).toBe(first.contactId);
+    const other = await h.asB.mutation(api.contacts.recordMarketingLead, {
+      email: "lead@example.com",
+    });
+    expect(other).toMatchObject({
+      created: true,
+      consentRecorded: false,
+      outboundAllowed: false,
+      reason: "consent_missing",
+    });
+    expect(other.contactId).not.toBe(first.contactId);
+    const row = await h.t.run((ctx) => ctx.db.get(first.contactId));
+    expect(row).toMatchObject({
+      email: "lead@example.com",
+      company: "Company",
+      origin: "user-entered",
+      consentSource: "asserted-by-user",
+      consentWording: WORDING,
+      consentContext: "Trade show",
+      name: "Updated",
+    });
+    expect(await contactRows(h)).toHaveLength(2);
+    expect(await auditRows(h)).toEqual([]);
+    expect(await followUpRows(h)).toEqual([]);
+  });
+  test("existing inbound origin and suppression survive recording with consent", async () => {
+    const h = await harness();
+    const id = await h.asA.mutation(api.contacts.upsertContact, {
+      email: "lead@example.com",
+      origin: "inbound",
+    });
+    await h.asA.mutation(api.contacts.markSuppressed, { address: "lead@example.com" });
+    const result = await h.asA.mutation(api.contacts.recordMarketingLead, {
+      email: "LEAD@example.com",
+      consent: { wording: WORDING },
+    });
+    expect(result).toMatchObject({
+      contactId: id,
+      created: false,
+      suppressed: true,
+      outboundAllowed: false,
+      reason: "suppressed",
+    });
+    expect((await h.t.run((ctx) => ctx.db.get(id)))?.origin).toBe("inbound");
+    expect(await suppressionRows(h)).toHaveLength(1);
+  });
+});
+
 /** The token shape `footerFor` mints and the route splits: `<base64url(tenantId|recipient)>.<hmac>`. */
 async function signed(tenantId: string, recipient: string, secret = SECRET) {
   const raw = btoa(`${tenantId}|${recipient}`)
@@ -1702,6 +1787,7 @@ describe("PIPE-01/BETA-05: the public surface is exactly what the isolation bloc
     // 19.1-04: the import preview's read. Isolation-tested in the block above.
     "matchExisting",
     "pipelineTiles",
+    "recordMarketingLead",
     "setFollowUpStatus",
     "unsuppress",
     "upsertContact",

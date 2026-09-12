@@ -1,3 +1,10 @@
+> Last verified: 2026-09-12 — Phase 31-04's offline regression captures a Marketing lead with
+> explicit consent while its independent suppression remains set. `executePlan` withholds that
+> address before immediate request fan-out; `gmail.send` returns a permanent suppression refusal
+> before any provider call. Terminal mutation remains with `deliverApprovedPlan` / the pipeline.
+> All 246 contacts/cockpit/Gmail tests passed. This is no live send or general approval of the
+> concurrent authoring-budget changes. See [Contacts/CRM](contacts-crm.md).
+>
 > Last verified: 2026-09-12 — golden research requests support explicit trusted Tavily Free
 > billing with a zero dollar rate. Both paid and Free calls require observed usage credits;
 > unknown usage retains the positive reservation. This changes no ordinary cockpit tool grants.

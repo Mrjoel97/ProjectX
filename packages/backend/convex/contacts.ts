@@ -34,6 +34,7 @@ import {
   rankCandidates,
   renderFooter,
 } from "@pikar/core";
+import { parseMarketingLead } from "@pikar/core/marketingLead";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -326,6 +327,35 @@ export const upsertContact = tenantMutation({
     // No `fillEmptyOnly` — hand-add keeps the "don't erase" rule it has always had: a typed name
     // still overwrites. The mutation's contract is unchanged; only the helper's shape moved.
     (await upsertContactRow(ctx, ctx.tenantId, args)).id,
+});
+
+/** C1 uses the existing contact and suppression stores; capture schedules no outreach. */
+export const recordMarketingLead = tenantMutation({
+  args: {
+    email: v.string(),
+    name: v.optional(v.string()),
+    company: v.optional(v.string()),
+    consent: v.optional(v.object({ wording: v.string(), context: v.optional(v.string()) })),
+  },
+  handler: async (ctx, args) => {
+    const input = parseMarketingLead(args);
+    const { id, created } = await upsertContactRow(ctx, ctx.tenantId, input);
+    const row = await ctx.db.get(id);
+    const suppressed = !!(await suppressionByAddress(ctx, ctx.tenantId, input.email));
+    const consentRecorded = row?.consentAt !== undefined;
+    return {
+      contactId: id,
+      created,
+      consentRecorded,
+      suppressed,
+      outboundAllowed: !suppressed && consentRecorded,
+      reason: suppressed
+        ? ("suppressed" as const)
+        : consentRecorded
+          ? ("approval_required" as const)
+          : ("consent_missing" as const),
+    };
+  },
 });
 
 /**
