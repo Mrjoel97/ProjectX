@@ -1,5 +1,19 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
+> Last verified: 2026-09-12 — a final submission refusal now reevaluates the shared render
+> terminal in the same transaction. Previously only asset landings reevaluated it, so a final
+> `tts_not_verbatim` refusal left a finished batch showing `pending`. Terminal job rows reject
+> duplicate submission callbacks. The verbatim check and provider verdict distinction remain
+> enforced. `media.reconcileSubmissionFailure` accepts an exact tenant/plan/batch and only
+> terminalizes a pending batch with a required failed/blocked job and no in-flight renderable
+> jobs; it never schedules a render or retries a provider. Repeated reconciliation is a no-op.
+> Both refusal and repair decisions require the newest batch by the existing `createdAt` clock;
+> ambiguous batch ties or more than 100 plan jobs refuse repair. A final refused voice also
+> closes reserved captions as `incomplete_takes` through the shared captions decision, without
+> starting transcription. Historical failures cannot terminate a newer pending generation.
+> Verify with `convex/mediaSubmissionTerminal.test.ts` plus the existing media suite. No live
+> row repair is part of the offline verification.
+
 > Last verified: 2026-09-08 (**`expectNoRenderPost` WAS REPORTING ANOTHER TEST'S PURCHASE AS THIS
 > ONE'S**, and it had been filed as a load flake four times before anyone read the failure
 > direction.

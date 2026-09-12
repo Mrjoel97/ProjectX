@@ -1714,23 +1714,27 @@ test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and 
   expect([...succeeders]).toEqual(["mediaComplete.ts"]);
 });
 
-test("storage.getUrl is only ever called inside a tenantQuery", () => {
+test("storage.getUrl is only ever called inside an authenticated tenant or owner query", () => {
   // A storage URL is a BEARER CAPABILITY. Reached from anything but a tenant-guarded read it is one
   // step from a log line or an unguarded return.
   // THIS SCAN IS WHAT PLAN 20-17 MUST NOT BREAK: handing fal a `ctx.storage.getUrl()` result as the
   // STT `audio_url` would give a third party a bearer capability to a tenant's asset. If 20-17
   // needs the bytes at a provider, it uploads them - it does not hand over a URL.
+  // ownerQuery enforces requireOwner (including requireScope) before its handler. Native
+  // evaluation review is deliberately deployment-owner scoped; exact synthetic source/storage
+  // binding is exercised in verticalEvalEvidence.test.ts before its URLs can be returned.
+  // Include the non-query owner builders too, so a move to ownerAction cannot pass this scan.
   const builder =
-    /=\s*(tenantQuery|tenantMutation|tenantAction|internalQuery|internalMutation|internalAction|httpAction|action|mutation|query)\s*\(/g;
+    /=\s*(tenantQuery|tenantMutation|tenantAction|ownerQuery|ownerMutation|ownerAction|internalQuery|internalMutation|internalAction|httpAction|action|mutation|query)\s*\(/g;
   let sites = 0;
   for (const [rel, code] of allConvexSources()) {
     for (const call of code.matchAll(/storage\.getUrl/g)) {
       sites++;
       const enclosing = [...code.slice(0, call.index).matchAll(builder)].pop();
       expect(
-        enclosing?.[1],
-        `${rel}: storage.getUrl is not inside a tenantQuery (found ${enclosing?.[1] ?? "top level"})`,
-      ).toBe("tenantQuery");
+        ["tenantQuery", "ownerQuery"],
+        `${rel}: storage.getUrl is not inside an authenticated query (found ${enclosing?.[1] ?? "top level"})`,
+      ).toContain(enclosing?.[1]);
     }
   }
   expect(sites, "no storage.getUrl call sites found - the scan is vacuous").toBeGreaterThan(0);

@@ -3291,7 +3291,7 @@ export function CardList({
   );
 }
 
-/** The existing plan-status dispatch, unchanged — lifted out so CardList can render the trace above it. */
+/** Media owns its lifecycle; delivery status dispatch belongs to the remaining plan cards. */
 function PlanCards({
   plan,
   threadId,
@@ -3301,19 +3301,27 @@ function PlanCards({
   threadId: string;
   briefing: Briefing | null;
 }) {
+  // Generate moves media to delivering, but it never sends to recipients. Keep the same
+  // canvas mounted so its reactive render/job failures and completed artifacts stay visible.
+  if (plan.kind === "media") {
+    return (
+      <div data-plan-id={plan._id} style={{ display: "grid", gap: "1rem" }}>
+        <MediaCanvas plan={plan} threadId={threadId} />
+        {briefing && <BriefingCard briefing={briefing} demoted />}
+      </div>
+    );
+  }
   const reporting = plan.status === "delivering" || plan.status === "done";
   // A scheduled/canceled plan is dominated by its own card (Open Question 3) — suppress the DraftCard.
   const halted = plan.status === "scheduled" || plan.status === "canceled";
   // A memo's body IS the card above it — a DRAFT card would just print the same memo twice.
-  // `media` excluded for the same reason `memo` is: a DRAFT card printing an email body beside the
-  // canvas would be email chrome on a reel. `crm_write` likewise (19-06): a plan row can carry a
+  // Media already returned its canvas above. `crm_write` likewise (19-06): a plan row can carry a
   // leftover subject/body from an earlier compose in the same thread, and a DRAFT card would print
   // an email beside a card that promises nothing is sent.
   const hasDraft =
     (Boolean(plan.body) || Boolean(plan.subject)) &&
     !halted &&
     plan.kind !== "memo" &&
-    plan.kind !== "media" &&
     plan.kind !== "crm_write" &&
     // Task 8: `finance_write` for the same reason as `crm_write` — a plan row can carry a leftover
     // subject/body from an earlier compose in the same thread, and a DRAFT card would print an

@@ -268,6 +268,7 @@ type DispatchArgs = {
    *  evaluate the tenant's ACTIVE (or the global) body and then write evidence onto the candidate.
    *  Absent on the production `actOnGap` path, which must keep running the effective row. */
   tenantSkillIds?: Record<string, Id<"tenantSkills">>;
+  evalBudgetId?: Id<"spendEvents">;
 };
 
 /** The Convex validators for the above now live in `lib/dispatchShared.ts` as `DISPATCH_ARGS`
@@ -719,6 +720,7 @@ export const runSpecialist = internalAction({
             planId: args.planId,
             skillVersions: args.skillVersions,
             tenantSkillIds: args.tenantSkillIds,
+            ...(args.evalBudgetId ? { evalBudgetId: args.evalBudgetId } : {}),
           }),
       ),
     ),
@@ -1220,6 +1222,7 @@ async function persistResearchFindings(
       sourceThreadId: args.threadId,
       sourcePlanId: args.planId,
       rootRequestId: args.rootRequestId,
+      ...(args.evalBudgetId ? { evalBudgetId: args.evalBudgetId } : {}),
       incomplete: res.incomplete,
       incompleteReason: res.incompleteReason,
     });
@@ -1271,6 +1274,7 @@ export const runResearch = internalAction({
                 planId: args.planId,
                 skillVersions: args.skillVersions,
                 tenantSkillIds: args.tenantSkillIds,
+                ...(args.evalBudgetId ? { evalBudgetId: args.evalBudgetId } : {}),
               }),
           ),
         RESEARCH_FAILED_MEMO,
@@ -1392,6 +1396,7 @@ export async function groundMediaBrief(
       sourceThreadId: args.threadId,
       sourcePlanId: args.planId,
       rootRequestId: args.rootRequestId,
+      ...(args.evalBudgetId ? { evalBudgetId: args.evalBudgetId } : {}),
       incomplete: res.truncated,
       ...(res.truncatedReason === undefined ? {} : { incompleteReason: res.truncatedReason }),
     });
@@ -1428,6 +1433,7 @@ export const runMedia = internalAction({
         threadId: args.threadId,
         skillVersions: args.skillVersions,
         tenantSkillIds: args.tenantSkillIds,
+        ...(args.evalBudgetId ? { evalBudgetId: args.evalBudgetId } : {}),
       }),
     );
     return persistStoryboard(
@@ -1452,6 +1458,7 @@ export const runMedia = internalAction({
                 planId: args.planId,
                 skillVersions: args.skillVersions,
                 tenantSkillIds: args.tenantSkillIds,
+                ...(args.evalBudgetId ? { evalBudgetId: args.evalBudgetId } : {}),
               }),
           ),
         MEDIA_FAILED_MEMO,
@@ -1503,6 +1510,7 @@ export const __runSpecialistWithScript = internalAction({
             planId: args.planId,
             skillVersions: args.skillVersions,
             tenantSkillIds: args.tenantSkillIds,
+            ...(args.evalBudgetId ? { evalBudgetId: args.evalBudgetId } : {}),
             mockScript: {
               primary: args.primary,
               fallback: args.fallback,

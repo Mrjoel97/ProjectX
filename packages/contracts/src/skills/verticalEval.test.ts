@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest";
 import { hasPassingVerticalEvalEvidence, VERTICAL_EVAL_SUITE } from "../verticalEval";
 
 describe("vertical native evaluation release lock", () => {
-  test("closes exactly six source candidates without declaring an executable suite", () => {
-    expect(VERTICAL_EVAL_SUITE.executable).toBe(false);
+  test("registers exactly six executable owner-reviewed suites without trusting loose evidence", () => {
+    expect(VERTICAL_EVAL_SUITE.executable).toBe(true);
     expect([...VERTICAL_EVAL_SUITE.names].sort()).toEqual([
       "vertical-data",
       "vertical-design",

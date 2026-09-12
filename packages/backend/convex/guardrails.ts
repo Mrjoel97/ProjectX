@@ -20,6 +20,7 @@ import {
   evalActualCents,
   evalCallCeilingCents,
 } from "@pikar/cost/evalBudget";
+import { goldenProviderCeilingCents } from "@pikar/cost/goldenProviderBudget";
 import { scanText } from "@pikar/pii";
 import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
 import { v } from "convex/values";
@@ -27,6 +28,7 @@ import { components } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { dispatchWorkflowLive } from "./dispatchRun";
 import { contentHash } from "./lib/hash";
 // The PLAIN-FUNCTION half of the ledger writer, not `ctx.runMutation`: the limiter movement and
 // its ledger row must commit or fail TOGETHER (FIN-01). A second transaction could leave the
@@ -343,15 +345,33 @@ const vRail = v.optional(v.literal("ingest"));
 // Evaluation is a bounded additional constraint over the SAME reasoning rails and spend ledger.
 // A persisted start + explicit expiry prevents the fixed window from ever replenishing this cap.
 export const openEvalBudget = internalMutation({
-  args: { tenantIds: v.array(v.string()), capCents: v.number() },
-  handler: async (ctx, { tenantIds, capCents }): Promise<Id<"spendEvents">> => {
+  args: {
+    tenantIds: v.array(v.string()),
+    capCents: v.number(),
+    family: v.optional(v.literal("golden")),
+  },
+  handler: async (ctx, { tenantIds, capCents, family }): Promise<Id<"spendEvents">> => {
+    if (
+      family === "golden" &&
+      (process.env.GOLDEN_OPENROUTER_BILLING !== "standard" ||
+        !(
+          Number(process.env.GOLDEN_TAVILY_CREDIT_USD) > 0 &&
+          Number(process.env.GOLDEN_TAVILY_CREDIT_USD) <= 0.008
+        ))
+    )
+      throw new Error("GOLDEN_PROVIDER_BILLING_UNVERIFIED");
     if (!Number.isSafeInteger(capCents) || capCents < 1 || capCents > EVAL_MAX_BUDGET_CENTS)
       throw new Error("EVAL_BUDGET_INVALID");
     if (
       tenantIds.length < 1 ||
       tenantIds.length > 64 ||
       new Set(tenantIds).size !== tenantIds.length ||
-      tenantIds.some((id) => !/^packeval-[a-f0-9]{8}-[a-z0-9-]{1,64}$/.test(id))
+      tenantIds.some((id) =>
+        family === "golden"
+          ? !/^eval-[a-f0-9]{8}(?:-[a-z0-9-]{1,24}-a[12])?$/.test(id) ||
+            id.slice(0, 13) !== tenantIds[0]?.slice(0, 13)
+          : !/^packeval-[a-f0-9]{8}-[a-z0-9-]{1,64}$/.test(id),
+      )
     )
       throw new Error("EVAL_TENANT_REQUIRED");
     const now = Date.now();
@@ -394,17 +414,46 @@ export const reserveEvalCall = internalMutation({
     callId: v.string(),
     model: v.string(),
     outputTokens: v.number(),
+    providerCall: v.optional(
+      v.union(
+        v.object({ kind: v.literal("chat"), model: v.string(), maxOutputTokens: v.number() }),
+        v.object({
+          kind: v.literal("embedding"),
+          model: v.literal("openai/text-embedding-3-small"),
+          inputCount: v.number(),
+        }),
+        v.object({ kind: v.literal("tavily-search"), depth: v.literal("basic") }),
+        v.object({
+          kind: v.literal("tavily-extract"),
+          depth: v.literal("basic"),
+          urlCount: v.number(),
+        }),
+      ),
+    ),
   },
   handler: async (
     ctx,
-    { tenantId, budgetId, callId, model, outputTokens },
+    { tenantId, budgetId, callId, model, outputTokens, providerCall },
   ): Promise<Id<"spendEvents">> => {
     if (!/^[a-f0-9-]{36}$/.test(callId)) throw new Error("EVAL_CALL_ID_INVALID");
     const { envelope, config } = await evalEnvelopeFor(ctx, budgetId, tenantId);
     if (Date.now() >= (envelope.evalEnvelope?.expiresAt ?? 0))
       throw new Error("EVAL_BUDGET_EXPIRED");
     if ((await getGuardrailConfig(ctx)).killSwitch) throw new Error("EVAL_KILL_SWITCH");
-    const amountCents = evalCallCeilingCents(model, outputTokens);
+    if (providerCall) {
+      const expectedModel =
+        providerCall.kind === "chat"
+          ? providerCall.model
+          : providerCall.kind === "embedding"
+            ? `or/${providerCall.model}`
+            : providerCall.kind;
+      const expectedOutput = providerCall.kind === "chat" ? providerCall.maxOutputTokens : 0;
+      if (model !== expectedModel || outputTokens !== expectedOutput)
+        throw new Error("EVAL_PROVIDER_DESCRIPTOR_MISMATCH");
+    }
+    const amountCents = providerCall
+      ? goldenProviderCeilingCents(providerCall)
+      : evalCallCeilingCents(model, outputTokens);
     const correlationId = `evalcall:${callId}`;
     // Re-entry can never authorize another provider execution with a consumed reservation.
     if (
@@ -418,6 +467,8 @@ export const reserveEvalCall = internalMutation({
       .query("spendEvents")
       .withIndex("by_eval_budget", (q) => q.eq("evalBudgetId", budgetId))
       .take(1501);
+    if (rows.some((row) => row.kind === "eval_budget_closed"))
+      throw new Error("EVAL_BUDGET_CLOSED");
     if (rows.some((row) => row.evalBreach)) throw new Error("EVAL_BUDGET_BREACHED");
     // Each authorized call can later append an actual and a refund, even concurrently. Limit
     // CALLS, not current row count, so outstanding settlements can never overflow the status read.
@@ -454,7 +505,7 @@ export const reserveEvalCall = internalMutation({
       amountCents,
       correlationId,
       model,
-      kind: "eval_model",
+      kind: providerCall && providerCall.kind !== "chat" ? "eval_provider" : "eval_model",
       createdAt: Date.now(),
       evalBudgetId: budgetId,
     });
@@ -470,7 +521,7 @@ export const settleEvalCall = internalMutation({
       !reservation ||
       reservation.tenantId !== tenantId ||
       reservation.phase !== "reserved" ||
-      reservation.kind !== "eval_model" ||
+      !["eval_model", "eval_provider"].includes(reservation.kind ?? "") ||
       !reservation.evalBudgetId
     )
       throw new Error("EVAL_RESERVATION_NOT_FOUND");
@@ -535,7 +586,7 @@ export const settleEvalCall = internalMutation({
         amountCents: refund,
         correlationId: reservation.correlationId,
         model: reservation.model,
-        kind: "eval_model",
+        kind: reservation.kind,
         createdAt: Date.now(),
         evalBudgetId: reservation.evalBudgetId,
         ...(actualCents === 0 ? { evalActualUsd: costUsd } : {}),
@@ -549,7 +600,7 @@ export const settleEvalCall = internalMutation({
         amountCents: actualCents,
         correlationId: reservation.correlationId,
         model: reservation.model,
-        kind: "eval_model",
+        kind: reservation.kind,
         createdAt: Date.now(),
         evalBudgetId: reservation.evalBudgetId,
         evalActualUsd: costUsd,
@@ -566,8 +617,8 @@ export const evalBudgetStatus = internalQuery({
     const rows = await ctx.db
       .query("spendEvents")
       .withIndex("by_eval_budget", (q) => q.eq("evalBudgetId", budgetId))
-      .take(1501);
-    if (rows.length > 1500) throw new Error("EVAL_LEDGER_LIMIT");
+      .take(1502);
+    if (rows.length > 1501) throw new Error("EVAL_LEDGER_LIMIT");
     const reserved = rows.filter((row) => row.phase === "reserved");
     const settled = rows.filter((row) => row.evalActualUsd !== undefined);
     const settledIds = new Set(settled.map((row) => row.correlationId));
@@ -579,6 +630,7 @@ export const evalBudgetStatus = internalQuery({
     });
     return {
       budgetId,
+      closed: rows.some((row) => row.kind === "eval_budget_closed"),
       capCents: envelope.amountCents,
       expired,
       breached: rows.some((row) => row.evalBreach === true),
@@ -589,6 +641,73 @@ export const evalBudgetStatus = internalQuery({
       unsettledCount: outstanding.length,
       unresolvedCents: outstanding.reduce((sum, row) => sum + row.amountCents, 0),
     };
+  },
+});
+
+/** Terminal append-only closure; races with new reservations serialize on the same budget index. */
+export const closeEvalBudget = internalMutation({
+  args: { budgetId: v.id("spendEvents") },
+  handler: async (ctx, { budgetId }) => {
+    const { envelope } = await evalEnvelopeFor(ctx, budgetId);
+    const rows = await ctx.db
+      .query("spendEvents")
+      .withIndex("by_eval_budget", (q) => q.eq("evalBudgetId", budgetId))
+      .take(1502);
+    if (rows.length > 1501) throw new Error("EVAL_LEDGER_LIMIT");
+    if (rows.some((row) => row.kind === "eval_budget_closed")) return { budgetId, closed: true };
+    const settled = new Set(
+      rows.filter((row) => row.evalActualUsd !== undefined).map((row) => row.correlationId),
+    );
+    if (
+      rows.some(
+        (row) => row.evalBreach || (row.phase === "reserved" && !settled.has(row.correlationId)),
+      )
+    )
+      throw new Error("EVAL_BUDGET_NOT_SETTLED");
+    // Golden runs own isolated tenants. A settled ledger alone does not prove completion:
+    // a queued dispatch/variant or ingest step may not have reserved its first call yet.
+    // Read the durable tenant state in this closing transaction so staging cannot race it.
+    // Vertical fixed-source runs retain their separate receipt-driven closure protocol.
+    if (envelope.tenantId.startsWith("eval-")) {
+      const evaluation = envelope.evalEnvelope;
+      if (!evaluation) throw new Error("EVAL_BUDGET_NOT_FOUND");
+      let planCount = 0;
+      let docCount = 0;
+      for (const tenantId of evaluation.tenantIds) {
+        const plans = await ctx.db
+          .query("plans")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+          .take(257 - planCount);
+        planCount += plans.length;
+        if (planCount > 256) throw new Error("GOLDEN_GRAPH_SCAN_LIMIT");
+        for (const plan of plans) {
+          if (plan.kind === "memo" && plan.status === "collecting")
+            throw new Error("GOLDEN_GRAPH_NOT_SETTLED");
+          if (plan.workflowId && (await dispatchWorkflowLive(ctx, plan.workflowId)) !== false)
+            throw new Error("GOLDEN_GRAPH_NOT_SETTLED");
+        }
+        // Vault documents may contain large text; keep the entire run below 32 reads.
+        const docs = await ctx.db
+          .query("vaultDocuments")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+          .take(33 - docCount);
+        docCount += docs.length;
+        if (docCount > 32) throw new Error("GOLDEN_GRAPH_SCAN_LIMIT");
+        if (docs.some((doc) => doc.evalBudgetId === budgetId && doc.status !== "ready"))
+          throw new Error("GOLDEN_GRAPH_NOT_SETTLED");
+      }
+    }
+    await ctx.db.insert("spendEvents", {
+      tenantId: envelope.tenantId,
+      rail: "reasoning",
+      phase: "adjustment",
+      amountCents: 0,
+      correlationId: `evalclosed:${budgetId}`,
+      kind: "eval_budget_closed",
+      evalBudgetId: budgetId,
+      createdAt: Date.now(),
+    });
+    return { budgetId, closed: true };
   },
 });
 

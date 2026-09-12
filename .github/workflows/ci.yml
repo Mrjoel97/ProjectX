@@ -79,6 +79,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Operator control regressions
+        run: node --test packages/backend/scripts/goldenPaidAttempt.test.mjs packages/backend/scripts/goldenEvaluatorIdentity.test.mjs .planning/phases/23-agent-authored-skills/phase23-operator.test.mjs scripts/smoke-quickbooks-read.test.mjs
+
       - name: Planning evidence
         run: |
           node --test scripts/check-planning.test.mjs

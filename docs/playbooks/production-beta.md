@@ -1,5 +1,12 @@
 # Playbook: Production Beta Readiness (25-10)
 
+Last verified: 2026-09-11 — `GOLDEN_OPENROUTER_BILLING` and
+`GOLDEN_TAVILY_CREDIT_USD` are optional `feature`-tier manifest entries for paid golden
+evaluations. They are nonsecret operator attestations of independently verified provider account
+terms. Their absence disables that evaluation path without failing ordinary production readiness;
+their presence does not activate a fabricated provider seam. No deployment values were set by
+this change. The budget opener validates the actual attestation values separately.
+
 > Last verified: 2026-09-06 (40-02, DOC-01 — one new in-band switch on the fixture seam, declared here
 > and in `fixtureSeam.test.ts`. `parseSmoke` gains `noTable`, which makes the spreadsheet drafter's offline
 > fixture answer with PROSE instead of a table, so the no-table refusal is reachable without a paid call.

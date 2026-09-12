@@ -19,7 +19,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { contentHash } from "./lib/hash";
-import { rag } from "./vaultRag";
+import { rag, ragForEvaluation } from "./vaultRag";
 
 const byteLen = (s: string): number => new TextEncoder().encode(s).length;
 
@@ -49,10 +49,10 @@ export const insertBrief = internalMutation({
  * (and hash) unique so a re-run never hash-dedups against a prior run's rag entry.
  */
 export const seedCorpus = internalAction({
-  args: { tenantId: v.string(), needle: v.string() },
+  args: { tenantId: v.string(), needle: v.string(), evalBudgetId: v.optional(v.id("spendEvents")) },
   handler: async (
     ctx,
-    { tenantId, needle },
+    { tenantId, needle, evalBudgetId },
   ): Promise<{
     docIds: Id<"vaultDocuments">[];
     seedDocId: Id<"vaultDocuments">;
@@ -60,6 +60,9 @@ export const seedCorpus = internalAction({
     query: string;
     shared: string;
   }> => {
+    const activeRag = evalBudgetId
+      ? ragForEvaluation({ ctx, tenantId, budgetId: evalBudgetId })
+      : rag;
     const shared = `Northwind-${needle}`;
     const briefs = [
       {
@@ -125,7 +128,7 @@ export const seedCorpus = internalAction({
         hash,
       });
       // REAL embed — namespace = tenantId (VALT-03 isolation), keyed by the content hash like ingest.
-      const { entryId } = await rag.add(ctx, {
+      const { entryId } = await activeRag.add(ctx, {
         namespace: tenantId,
         text: b.text,
         key: hash,

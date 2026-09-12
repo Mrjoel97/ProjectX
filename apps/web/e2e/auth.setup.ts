@@ -33,7 +33,13 @@ function preparePhase23Users(emails: string[]): [string, string] {
   const run = (fn: string, args: Record<string, unknown>) => {
     const result = spawnSync(
       process.execPath,
-      [resolve(backend, "node_modules/convex/bin/main.js"), "run", fn, JSON.stringify(args)],
+      [
+        resolve(backend, "node_modules/convex/bin/main.js"),
+        "run",
+        ...(process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : []),
+        fn,
+        JSON.stringify(args),
+      ],
       { cwd: backend, encoding: "utf8", timeout: 60_000 },
     );
     if (result.status !== 0 || result.error)

@@ -1,5 +1,12 @@
 # Playbook: Business Evaluation Engine
 
+> Last verified: 2026-09-11 — the internal evaluation and gap-action paths preserve an optional
+> trusted `evalBudgetId`. Retrieval receives the same ledger reference, and gap dispatch carries
+> it across the scheduled durable starter into the specialist. The public `actOnGap` validator
+> rejects this argument; neither a browser nor a model chooses or replaces the evaluation cap.
+> Offline `evaluations.test.ts` covers grounding success/failure, the queued reference and the
+> public rejection. This is propagation coverage, not paid semantic acceptance.
+
 > Verification follow-up, 2026-09-10: the weekly-review harness now inspects scheduled review
 > jobs, replays their exact arguments through the real review action, and verifies the durable
 > dispatch handoff. It no longer drains an unregistered downstream Workflow component or relies

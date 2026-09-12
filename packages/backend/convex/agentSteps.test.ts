@@ -49,6 +49,42 @@ function latestTurn(t: T, tenantId = TENANT) {
 }
 
 describe("agentSteps.record / finish (the step lifecycle)", () => {
+  test("completion and refusal reach steps beyond the display cap and preserve first duplicate identity", async () => {
+    const t = convexTest(schema, modules);
+    for (let index = 0; index < 20; index++)
+      await record(t, { stepKey: `earlier_${index}`, tool: "draftBody" });
+    const target = await record(t, { stepKey: "late_call", tool: "draftBody" });
+    const duplicate = await record(t, { stepKey: "late_call", tool: "draftBody" });
+    const foreign = await record(t, { tenantId: OTHER, stepKey: "late_call", tool: "draftBody" });
+    const otherTurn = await record(t, {
+      turnId: "other_turn",
+      stepKey: "late_call",
+      tool: "draftBody",
+    });
+    await t.mutation(internal.agentSteps.refuse, {
+      tenantId: TENANT,
+      turnId: TURN,
+      stepKey: "late_call",
+      refusal: "invalid_claim",
+    });
+    await t.mutation(internal.agentSteps.finish, {
+      tenantId: TENANT,
+      turnId: TURN,
+      stepKey: "late_call",
+      phase: "done",
+      endedAt: NOW + 100,
+    });
+    expect(await t.run((ctx) => ctx.db.get(target))).toMatchObject({
+      phase: "done",
+      refusal: "invalid_claim",
+    });
+    for (const id of [duplicate, foreign, otherTurn]) {
+      const row = await t.run((ctx) => ctx.db.get(id));
+      expect(row?.phase).toBe("running");
+      expect(row?.refusal).toBeUndefined();
+    }
+  });
+
   test("record inserts a running row with no endedAt", async () => {
     const t = convexTest(schema, modules);
     await record(t, { stepKey: "call_1", tool: "listInbox", startedAt: NOW });

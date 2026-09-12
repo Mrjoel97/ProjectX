@@ -1,5 +1,14 @@
 # Playbook: QuickBooks Online connector (REVN-02)
 
+> Last verified: 2026-09-12 — the smoke CLI now forwards the explicit
+> `PIKAR_CONVEX_TARGET=prod` selection through Node to Convex with no shell, preserving JSON
+> arguments on Windows. `--environment production` selects the provider environment only;
+> it does not select the Convex deployment. Run `node --test scripts/smoke-quickbooks-read.test.mjs`
+> for the offline targeting regression checks. The v1 evidence field `requestCount` is retained
+> for compatibility but counts successful entity reads, not HTTP requests: pagination and token
+> refresh requests are unmeasured. It cannot establish the unresolved partner tier/poll budget.
+> No live QuickBooks read, revoke, OAuth consent, or gate sealing was performed by these checks.
+
 > Last verified: 2026-09-09 (45-10 — DIAGNOSIS CLOSED. The app's ONLY registered redirect URI is
 > Intuit's Playground default; production was pointed at that exact string and consent STILL
 > failed. A registered URI is refused, so the redirect URI was never the variable.

@@ -379,6 +379,7 @@ export type VerticalEvaluationResult = {
     unresolvedCents: number;
   };
   releaseEvidenceRecorded: false;
+  nativeCaseReceiptId?: Id<"audit">;
 };
 
 async function runEvaluation(
@@ -487,7 +488,19 @@ async function runEvaluation(
 
 export const evaluateCase = internalAction({
   args: evaluationArgs,
-  handler: async (ctx, args): Promise<VerticalEvaluationResult> => runEvaluation(ctx, args),
+  handler: async (ctx, args): Promise<VerticalEvaluationResult> => {
+    const { text, ...pin } = args;
+    const startId = await ctx.runMutation(internal.verticalEvalEvidence.beginCase, {
+      ...pin,
+      requestHash: await contentHash(text),
+    });
+    const observation = await runEvaluation(ctx, args);
+    const nativeCaseReceiptId = await ctx.runMutation(internal.verticalEvalEvidence.sealCase, {
+      startId,
+      observation,
+    });
+    return { ...observation, nativeCaseReceiptId };
+  },
 });
 
 export const __evaluateCaseWithScript = internalAction({

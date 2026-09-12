@@ -102,7 +102,6 @@ import { swotSkillBody } from "@pikar/contracts/skills/swot";
 import { VERTICAL_CANDIDATES } from "@pikar/contracts/skills/verticalCandidates";
 import { voiceBriefSkillBody } from "@pikar/contracts/skills/voiceBrief";
 import { voiceSessionSkillBody } from "@pikar/contracts/skills/voiceSession";
-import { hasPassingVerticalEvalEvidence } from "@pikar/contracts/verticalEval";
 import {
   type CustomizationError,
   canonicalCustomization,
@@ -129,6 +128,7 @@ import {
 } from "./_generated/server";
 import { ownerMutation, ownerQuery, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
+import { hasNativeVerticalEvidence } from "./verticalEvalEvidence";
 
 /**
  * Load the currently active skill by name. Reads the single status==="active"
@@ -254,7 +254,7 @@ async function planGlobalActivation(
   // closed pack id set rather than on `GATED_SKILLS` — see the pack lane below for why the two
   // lists must stay apart. Same `status === "candidate"` condition, so the same rollback exemption.
   if (isNativePackSkill(name) && target.status === "candidate") {
-    assertPackActivationEvidence(target, name, version);
+    await assertPackActivationEvidence(ctx, target, name, version);
   }
 
   const current = await ctx.db
@@ -681,6 +681,8 @@ export const candidatesForReview = ownerQuery({
 export const recordEvalEvidence = internalMutation({
   args: { name: v.string(), version: v.number(), evidence: v.string() },
   handler: async (ctx, { name, version, evidence }) => {
+    if (verticalIdForSkill(name) !== null)
+      throw new Error("VERTICAL_EVIDENCE_NATIVE_ISSUER_REQUIRED");
     const row = await ctx.db
       .query("skills")
       .withIndex("by_name_version", (q) => q.eq("name", name).eq("version", version))
@@ -1444,7 +1446,12 @@ export const recordTenantPackBrowserEvidence = internalMutation({
  * inherited unchanged: `archived` / `rolled_back` were active before and stay exempt BY STATUS.
  * Rollback must work mid-incident and must never be blocked by a broken eval or browser harness.
  */
-function assertPackActivationEvidence(target: Doc<"skills">, name: string, version: number): void {
+async function assertPackActivationEvidence(
+  ctx: QueryCtx,
+  target: Doc<"skills">,
+  name: string,
+  version: number,
+): Promise<void> {
   const missing = [
     hasValidPackProvenance(target.provenance, name, version) ? null : "provenance",
     // The PACK predicate, not the global one: a global-scope evidence blob carries no suite
@@ -1452,7 +1459,7 @@ function assertPackActivationEvidence(target: Doc<"skills">, name: string, versi
     // or by a pack run against a corpus that has since been rewritten.
     (
       verticalIdForSkill(name) !== null
-        ? hasPassingVerticalEvalEvidence(target.evidence, name, version)
+        ? await hasNativeVerticalEvidence(ctx, target)
         : hasPassingPackEvalEvidence(target.evidence, name, version)
     )
       ? null
@@ -2713,7 +2720,7 @@ export async function nativePackExposureReady(
   return (
     hasValidPackProvenance(row.provenance, row.name, row.version) &&
     (verticalIdForSkill(row.name) !== null
-      ? hasPassingVerticalEvalEvidence(row.evidence, row.name, row.version)
+      ? await hasNativeVerticalEvidence(ctx, row)
       : hasPassingPackEvalEvidence(row.evidence, row.name, row.version)) &&
     hasPassingPackBrowserEvidence(row.browserEvidence, row.name, row.version)
   );

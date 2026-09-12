@@ -1,5 +1,16 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-11 — Vertical qualification now requires a native immutable issuance
+> receipt binding the current corpus, evaluator and exact candidate version. Generic evidence
+> submission cannot mint vertical qualification. Owner review records and a closed evaluation
+> budget precede issuance; issuance does not activate a candidate. Real semantic acceptance and
+> activation/rollback drills remain separate obligations.
+
+> Golden agent evidence also pins evaluator source through its code-owned suite revision.
+> Regenerate the fixture manifest only after deliberately updating that revision from
+> `goldenEvaluatorIdentity.mjs`; the runner rejects source drift before paid execution.
+> This retires earlier qualification without changing active skill rows or activating candidates.
+
 > Last verified: 2026-09-10 — Phase 30 native controls. Reserved `vertical-*` names cannot newly
 > activate until the executable vertical suite certifies exact-version evidence. `loadEffectiveSkill` checks
 > the tenant's disabled vertical ids before overlay or global fallback. The owner-only vertical

@@ -1,4 +1,8 @@
 import { EVAL_MAX_OUTPUT_TOKENS, EVAL_MODEL_BOUNDS } from "@pikar/cost/evalBudget";
+import {
+  goldenChatWireOptions,
+  goldenOpenRouterObservedUsage,
+} from "@pikar/cost/goldenProviderBudget";
 import { type LanguageModel, wrapLanguageModel } from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
@@ -41,20 +45,30 @@ export function evalBudgetModel(args: {
   modelId: string;
   onCost: (costUsd: number) => void;
   beforeCall?: () => void;
+  /** General golden suite uses real local tools/RAG; native vertical grants stay closed. */
+  mode?: "golden";
 }): ReturnType<typeof wrapLanguageModel> {
+  const goldenCall = {
+    kind: "chat",
+    model: args.modelId,
+    maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
+  } as const;
+  const goldenOptions = args.mode === "golden" ? goldenChatWireOptions(goldenCall) : undefined;
   const bound = EVAL_MODEL_BOUNDS[args.modelId];
-  if (!bound || typeof args.model === "string") throw new Error("EVAL_MODEL_UNSUPPORTED");
+  if ((!bound && !goldenOptions) || typeof args.model === "string")
+    throw new Error("EVAL_MODEL_UNSUPPORTED");
   return wrapLanguageModel({
     model: args.model,
     middleware: {
       specificationVersion: "v4",
       transformParams: async ({ params }) => {
-        if (params.maxOutputTokens !== EVAL_MAX_OUTPUT_TOKENS)
+        if (!goldenOptions && params.maxOutputTokens !== EVAL_MAX_OUTPUT_TOKENS)
           throw new Error("EVAL_OUTPUT_LIMIT_REQUIRED");
         if (
           params.tools?.some(
             (tool) =>
-              tool.type !== "function" || !["searchVault", "saveAsDocument"].includes(tool.name),
+              tool.type !== "function" ||
+              (!goldenOptions && !["searchVault", "saveAsDocument"].includes(tool.name)),
           )
         )
           throw new Error("EVAL_PAID_TOOL_UNSUPPORTED");
@@ -76,8 +90,9 @@ export function evalBudgetModel(args: {
         }
         return {
           ...params,
+          maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
           providerOptions: {
-            openrouter: {
+            openrouter: goldenOptions ?? {
               max_tokens: EVAL_MAX_OUTPUT_TOKENS,
               n: 1,
               plugins: [],
@@ -87,8 +102,8 @@ export function evalBudgetModel(args: {
                 allow_fallbacks: false,
                 require_parameters: true,
                 max_price: {
-                  prompt: bound.promptPerMillion,
-                  completion: bound.completionPerMillion,
+                  prompt: bound?.promptPerMillion ?? 0,
+                  completion: bound?.completionPerMillion ?? 0,
                   request: 0,
                   image: 0,
                 },
@@ -105,11 +120,31 @@ export function evalBudgetModel(args: {
           callId: crypto.randomUUID(),
           model: args.modelId,
           outputTokens: EVAL_MAX_OUTPUT_TOKENS,
+          ...(goldenOptions ? { providerCall: goldenCall } : {}),
         });
-        const result = await doGenerate();
-        const usage = result.providerMetadata?.openrouter?.usage as { cost?: unknown } | undefined;
+        let result: Awaited<ReturnType<typeof doGenerate>>;
+        try {
+          result = await doGenerate();
+        } catch (error) {
+          // Ambiguous golden requests retain their hold; neither SDK nor model fallback may
+          // silently submit the same paid operation again after an uncertain provider response.
+          if (goldenOptions) throw new Error("EVAL_MODEL_RESPONSE_UNRESOLVED");
+          throw error;
+        }
+        const usage = result.providerMetadata?.openrouter?.usage as
+          | { cost?: unknown; is_byok?: unknown }
+          | undefined;
         if (typeof usage?.cost !== "number" || !Number.isFinite(usage.cost) || usage.cost < 0)
           throw new Error("EVAL_COST_UNKNOWN");
+        // Unsupported billing has unknown external cost. Keep the entire hold so a swallowed
+        // tool error cannot leave a clean ledger capable of issuing passing evidence.
+        if (goldenOptions) {
+          // Pinned OpenRouter SDK preserves raw response.body but omits is_byok from its
+          // derived providerMetadata. Inspect the same response, without a second request.
+          const observed = goldenOpenRouterObservedUsage(result.response?.body);
+          if (observed?.isByok !== false || observed.costUsd !== usage.cost)
+            throw new Error("EVAL_MODEL_BILLING_MODE_UNVERIFIED");
+        }
         const settlement = await args.ctx.runMutation(internal.guardrails.settleEvalCall, {
           tenantId: args.tenantId,
           reservationId,

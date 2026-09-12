@@ -24,6 +24,7 @@ const runId = "abcdef12-1234-4567-8123-123456789012";
 describe("vertical source compiler and collection coordination", () => {
   test.each([
     "provision",
+    "openEvalBudget",
     "evaluateCase",
   ])("lost %s response preserves remote state despite clean accounting", async (operation) => {
     const call = transport();
@@ -45,6 +46,7 @@ describe("vertical source compiler and collection coordination", () => {
       },
     });
     expect(report.remoteOutcomeKnown).toBe(false);
+    expect(report.status).toBe("observations-incomplete");
     expect(fault.mock.calls.some(([name]) => name.endsWith(":purgeCase"))).toBe(false);
     expect(checkpoints[0]).toMatchObject({ manifest: expect.any(Array), observations: [] });
     expect(report.manifest).toHaveLength(40);
@@ -107,6 +109,7 @@ describe("vertical source compiler and collection coordination", () => {
       budgetId: "budget-id",
       capCents: 500,
       expired: false,
+      closed: false,
       breached: false,
       remainingCents: 500,
       actualUsd: 0,
@@ -135,18 +138,24 @@ describe("vertical source compiler and collection coordination", () => {
         return row;
       }
       if (name.endsWith(":openEvalBudget")) return "budget-id";
-      if (name.endsWith(":evalBudgetStatus")) return budget;
+      if (name.endsWith(":evalBudgetStatus")) return { ...budget };
+      if (name.endsWith(":closeEvalBudget")) {
+        budget.closed = true;
+        return { budgetId: budget.budgetId, closed: true };
+      }
       if (name.endsWith(":purgeCase")) return { done: true };
       if (name.endsWith(":evaluateCase")) {
         const row = prepared.get(String(args.caseId));
         if (!row) throw new Error("Missing provision");
         return {
+          // Synthetic transport receipts test coordination only, never native release proof.
+          nativeCaseReceiptId: `mock-native-receipt-${args.caseId}`,
           caseHash: String(args.caseHash),
           inputSha256: hash(String(args.text)),
           sourceMode: "fixed-owned-fixtures",
           releaseEvidenceRecorded: false,
           sourceReads: [],
-          budget,
+          budget: { ...budget },
           caseBinding: {
             tenantId: row.tenantId,
             threadId: row.threadId,
@@ -162,7 +171,7 @@ describe("vertical source compiler and collection coordination", () => {
       throw new Error(`Unexpected transport ${name}`);
     });
   }
-  test("all cases share one budget, observed blocked remains blocked, checkpoint precedes every cleanup", async () => {
+  test("all cases share one closed budget and retain mocked receipts and sources for owner review", async () => {
     const call = transport();
     const checkpoint = vi.fn(async () => {});
     const report = await collectObservations({
@@ -174,7 +183,7 @@ describe("vertical source compiler and collection coordination", () => {
       runId,
       checkpoint,
     });
-    expect(report.status).toBe("observations-collected-review-required");
+    expect(report.status).toBe("observations-retained-for-owner-review");
     expect(report.observations).toHaveLength(40);
     for (const item of report.observations)
       expect(item.observation).toMatchObject({
@@ -182,19 +191,147 @@ describe("vertical source compiler and collection coordination", () => {
         blockedReason: "missing-source",
       });
     expect(report.releaseEvidenceRecorded).toBe(false);
+    expect(report.activated).toBe(false);
+    expect(report.retention).toBe("authenticated-owner-review-required");
+    expect(report.nativeReceipts).toEqual(
+      report.manifest.map(({ pin }: { pin: { caseId: string } }) => ({
+        caseId: pin.caseId,
+        receiptId: `mock-native-receipt-${pin.caseId}`,
+      })),
+    );
+    expect(report.cleanup).toEqual(
+      report.manifest.map(({ pin }: { pin: { caseId: string } }) => ({
+        caseId: pin.caseId,
+        done: false,
+        reason: "RETAINED_FOR_AUTHENTICATED_REVIEW",
+      })),
+    );
+    expect(report.budget).toMatchObject({ closed: true, unsettledCount: 0 });
     const calls = call.mock.calls;
     const open = calls.filter(([name]) => name.endsWith(":openEvalBudget"));
     expect(open).toHaveLength(1);
     expect(open[0]?.[1].tenantIds).toHaveLength(40);
     const lastEvaluate = calls.map(([name]) => name.endsWith(":evaluateCase")).lastIndexOf(true);
-    const firstPurge = calls.findIndex(([name]) => name.endsWith(":purgeCase"));
-    expect(firstPurge).toBeGreaterThan(lastEvaluate);
-    expect(checkpoint.mock.invocationCallOrder.at(-1)).toBeLessThan(
-      call.mock.invocationCallOrder[firstPurge] ?? 0,
+    expect(calls.slice(lastEvaluate + 1).map(([name]) => name)).toEqual([
+      "guardrails:evalBudgetStatus",
+      "guardrails:closeEvalBudget",
+      "guardrails:evalBudgetStatus",
+    ]);
+    expect(checkpoint.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      call.mock.invocationCallOrder.at(-1) ?? 0,
     );
-    expect(calls.some(([name]) => /seedCandidates|record.*Evidence|activate/.test(name))).toBe(
-      false,
-    );
+    expect(
+      calls.some(([name]) => /purgeCase|seedCandidates|record.*Evidence|activate|seal/.test(name)),
+    ).toBe(false);
+  });
+  test.each([
+    undefined,
+    "",
+  ])("missing native receipt %s retains execution state without qualifying a result", async (receipt) => {
+    const call = transport();
+    const fault = vi.fn(async (name: string, args: Record<string, unknown>) => {
+      const result = await call(name, args);
+      return name.endsWith(":evaluateCase")
+        ? { ...(typeof result === "object" ? result : {}), nativeCaseReceiptId: receipt }
+        : result;
+    });
+    const report = await collectObservations({
+      candidates,
+      fixtures,
+      capCents: 500,
+      creditBillingOnly: true,
+      transport: fault,
+      runId,
+    });
+    expect(report.status).toBe("observations-incomplete");
+    expect(report.remoteOutcomeKnown).toBe(false);
+    expect(report.nativeReceipts).toEqual([]);
+    expect(report.observations).toEqual([]);
+    expect(report.budget).toMatchObject({ closed: true });
+    expect(report.cleanup).toHaveLength(40);
+    expect(
+      report.cleanup.every((item) => item.reason === "RETAINED_FOR_AUTHENTICATED_REVIEW"),
+    ).toBe(true);
+    expect(call.mock.calls.filter(([name]) => name.endsWith(":evaluateCase"))).toHaveLength(1);
+    expect(call.mock.calls.some(([name]) => name.endsWith(":purgeCase"))).toBe(false);
+  });
+  test.each([
+    "lost-close-response",
+    "wrong-budget",
+    "not-closed",
+    "stale-readback",
+  ])("%s prevents collection success and retains every source", async (failure) => {
+    const call = transport();
+    let closeAttempted = false;
+    const fault = vi.fn(async (name: string, args: Record<string, unknown>) => {
+      const result = await call(name, args);
+      if (name.endsWith(":closeEvalBudget")) {
+        closeAttempted = true;
+        if (failure === "lost-close-response") throw new Error("private closure error");
+        if (failure === "wrong-budget") return { budgetId: "other-budget", closed: true };
+        if (failure === "not-closed") return { budgetId: "budget-id", closed: false };
+      }
+      if (name.endsWith(":evalBudgetStatus") && closeAttempted && failure === "stale-readback")
+        return { ...(typeof result === "object" ? result : {}), closed: false };
+      return result;
+    });
+    const report = await collectObservations({
+      candidates,
+      fixtures,
+      capCents: 500,
+      creditBillingOnly: true,
+      transport: fault,
+      runId,
+    });
+    expect(report.status).toBe("observations-incomplete");
+    expect(report.budgetStatusUnavailable).toBe(true);
+    expect(report.nativeReceipts).toHaveLength(40);
+    expect(report.cleanup).toHaveLength(40);
+    expect(
+      report.cleanup.every((item) => item.reason === "RETAINED_FOR_AUTHENTICATED_REVIEW"),
+    ).toBe(true);
+    expect(call.mock.calls.some(([name]) => name.endsWith(":purgeCase"))).toBe(false);
+    expect(JSON.stringify(report)).not.toContain("private closure error");
+  });
+  test("breached accounting is retained without attempting budget closure", async () => {
+    const call = transport();
+    const fault = vi.fn(async (name: string, args: Record<string, unknown>) => {
+      const result = await call(name, args);
+      return name.endsWith(":evalBudgetStatus")
+        ? { ...(typeof result === "object" ? result : {}), breached: true }
+        : result;
+    });
+    const report = await collectObservations({
+      candidates,
+      fixtures,
+      capCents: 500,
+      creditBillingOnly: true,
+      transport: fault,
+      runId,
+    });
+    expect(report.status).toBe("observations-incomplete");
+    expect(report.budget).toMatchObject({ breached: true, closed: false });
+    expect(call.mock.calls.some(([name]) => /closeEvalBudget|purgeCase/.test(name))).toBe(false);
+    expect(report.cleanup).toHaveLength(40);
+  });
+  test("checkpoint failure before provisioning prevents all remote mutations", async () => {
+    const call = transport();
+    const report = await collectObservations({
+      candidates,
+      fixtures,
+      capCents: 500,
+      creditBillingOnly: true,
+      transport: call,
+      runId,
+      checkpoint: async () => {
+        throw new Error("private checkpoint failure");
+      },
+    });
+    expect(call).not.toHaveBeenCalled();
+    expect(report.status).toBe("observations-incomplete");
+    expect(report.cleanup).toEqual([]);
+    expect(report.nativeReceipts).toEqual([]);
+    expect(JSON.stringify(report)).not.toContain("private checkpoint failure");
   });
   test("unknown charges preserve all case state and missing credit billing attestation performs no call", async () => {
     const call = transport(1);
@@ -208,6 +345,7 @@ describe("vertical source compiler and collection coordination", () => {
     });
     expect(report.status).toBe("observations-incomplete");
     expect(call.mock.calls.some(([name]) => name.endsWith(":purgeCase"))).toBe(false);
+    expect(call.mock.calls.some(([name]) => name.endsWith(":closeEvalBudget"))).toBe(false);
     expect(report.cleanup.every((item) => item.done === false)).toBe(true);
     call.mockClear();
     await expect(
@@ -252,19 +390,25 @@ describe("vertical source compiler and collection coordination", () => {
       },
     ]);
     expect(JSON.stringify(report)).not.toContain(rawReply);
-    call.mockClear();
+    const archiveFailureCall = transport(0, rawReply);
     const retained = await collectObservations({
       candidates,
       fixtures,
       capCents: 500,
       creditBillingOnly: true,
-      transport: call,
+      transport: archiveFailureCall,
       runId,
       saveOutput: async () => {
         throw new Error("secret-error-never-report");
       },
     });
-    expect(call.mock.calls.some(([name]) => name.endsWith(":purgeCase"))).toBe(false);
+    expect(archiveFailureCall.mock.calls.some(([name]) => name.endsWith(":purgeCase"))).toBe(false);
+    expect(retained.nativeReceipts).toHaveLength(1);
+    expect(retained.budget).toMatchObject({ closed: true });
+    expect(retained.cleanup).toHaveLength(40);
+    expect(
+      retained.cleanup.every((item) => item.reason === "RETAINED_FOR_AUTHENTICATED_REVIEW"),
+    ).toBe(true);
     expect(JSON.stringify(retained)).not.toContain("secret-error");
   });
 });

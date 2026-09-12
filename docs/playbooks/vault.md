@@ -1,4 +1,23 @@
-> Last verified: 2026-09-10 — Data's subpath-only `dataWorkbook` reader uses pinned SheetJS and
+> Last verified: 2026-09-11 — Golden evaluation uses the same RAG component and provider routes,
+> with redaction verified at the actual RAG `add` boundary for both ordinary and evaluation
+> instances. `vaultRedaction.test.ts` runs the production embedding action with synthetic private
+> text, intercepts the RAG boundary before provider access, and asserts only redacted text arrives.
+> This replaces the obsolete source-name assertion after the contextual RAG adapter was introduced.
+>
+> Golden evaluation uses the same RAG component and provider routes,
+> with a trusted internal `evalBudgetId` shared by query embeddings, seed embeddings and research
+> ingest. Research documents retain that reference; `startIngest` preserves it on explicit recovery
+> and refuses replacement. The automatic stuck-ingest sweep skips evaluated documents because an
+> interrupted provider call may already have been charged. Paid workflow steps and SDK calls disable
+> retries in evaluation mode. Every call reserves before transport and settles authoritative cost;
+> ambiguous embedding responses retain their hold. Closed/expired budgets refuse before fetch.
+> Classification failures propagate during evaluation instead of becoming a free cosmetic fallback,
+> and ingest does not double-record costs already settled by middleware. Ordinary ingestion keeps
+> its existing retry and graceful classification behavior. These are offline implementation checks,
+> not paid semantic evidence or live acceptance.
+> Verify: `node node_modules/vitest/vitest.mjs run convex/vaultEmbeddingBudget.test.ts convex/vaultRag.test.ts convex/vaultClassify.test.ts convex/research.test.ts convex/vaultSweep.test.ts convex/vaultGround.test.ts`.
+>
+> Previous verification: 2026-09-10 — Data's subpath-only `dataWorkbook` reader uses pinned SheetJS and
 > fflate, preserving typed values and cached formula metadata. Source files cap at 5 MiB; ZIP
 > central-directory preflight caps 256 entries, 4 MiB per entry and 12 MiB declared expanded total.
 > CSV is strict UTF-8 and conservatively capped at 20,000 potential separators before parsing;

@@ -15,6 +15,7 @@ import {
   serializeProfile,
 } from "@pikar/core";
 import { emptyScorecard } from "@pikar/core/growth/index";
+import { v } from "convex/values";
 import { convexTest, type TestConvex } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 // The engine's refs-only evaluation.ran audit hits the auditCounts aggregate; register the
@@ -28,6 +29,7 @@ import workflowSchema from "../node_modules/@convex-dev/workflow/src/component/s
 import workpoolSchema from "../node_modules/@convex-dev/workpool/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { internalAction } from "./_generated/server";
 import { applyScorecardAnswer, latestScorecardRow } from "./evaluations";
 import schema from "./schema";
 
@@ -52,6 +54,49 @@ vi.setConfig({ testTimeout: 30_000 });
 
 const TENANT = "tenant_a";
 const THREAD = "thread_1";
+
+test.each([
+  false,
+  true,
+])("evaluation grounding preserves the trusted budget (retrieval throws: %s)", async (fails) => {
+  const calls: { tenantId: string; evalBudgetId?: Id<"spendEvents"> }[] = [];
+  const t = convexTest(schema, {
+    ...modules,
+    "./vaultGround.ts": async () => ({
+      vaultGroundHydrated: internalAction({
+        args: {
+          tenantId: v.string(),
+          query: v.string(),
+          evalBudgetId: v.optional(v.id("spendEvents")),
+        },
+        handler: async (_ctx, args) => {
+          calls.push(args);
+          if (fails) throw new Error("mock retrieval failure");
+          return { docIds: [], titles: [], origins: [], chunks: [], spine: null };
+        },
+      }),
+    }),
+  });
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  await t.mutation(internal.skills.seedSkills, {});
+  const evalBudgetId = await t.run((ctx) =>
+    ctx.db.insert("spendEvents", {
+      tenantId: TENANT,
+      rail: "reasoning",
+      phase: "estimated",
+      amountCents: 100,
+      correlationId: "mock-evaluation-budget",
+      createdAt: Date.now(),
+    }),
+  );
+  await t.action(internal.evaluations.runEvaluation, {
+    tenantId: TENANT,
+    threadId: THREAD,
+    evalBudgetId,
+  });
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({ tenantId: TENANT, evalBudgetId });
+});
 
 // Shared FieldProvenance fixtures (cash-business-finance Task 2) — reused by the pre-existing
 // carry-forward/delta tests below (which need a GENUINELY user-attributed write, now that
@@ -976,6 +1021,46 @@ async function cancelQueued(t: TestConvex<typeof schema>): Promise<void> {
 }
 
 describe("actOnGap dispatches the specialist (DISP-01)", () => {
+  test("only the internal gap door can carry the trusted budget into the durable child", async () => {
+    vi.useFakeTimers();
+    const t = newTest();
+    try {
+      await seedGapEvaluation(t);
+      const evalBudgetId = await t.run((ctx) =>
+        ctx.db.insert("spendEvents", {
+          tenantId: TENANT,
+          rail: "reasoning",
+          phase: "estimated",
+          amountCents: 100,
+          correlationId: "mock-budget-propagation",
+          createdAt: Date.now(),
+        }),
+      );
+      await expect(
+        t.withIdentity({ subject: TENANT }).mutation(api.evaluations.actOnGap, {
+          threadId: THREAD,
+          gapIndex: 0,
+          evalBudgetId,
+        } as never),
+      ).rejects.toThrow();
+      expect(await readScheduled(t)).toHaveLength(0);
+      expect(
+        await t.mutation(internal.evaluations.actOnGapInternal, {
+          tenantId: TENANT,
+          threadId: THREAD,
+          gapIndex: 0,
+          evalBudgetId,
+        }),
+      ).toMatchObject({ ok: true });
+      const queued = await readScheduled(t);
+      expect(queued).toHaveLength(1);
+      expectDispatchStarter(queued[0]);
+      expect(dispatchArgsOf(queued[0] as ScheduledRow).evalBudgetId).toBe(evalBudgetId);
+    } finally {
+      await cancelQueued(t);
+      vi.useRealTimers();
+    }
+  });
   test("a dispatchable gap stages `collecting` and queues exactly ONE runSpecialist", async () => {
     const t = newTest();
     const asT = t.withIdentity({ subject: TENANT });

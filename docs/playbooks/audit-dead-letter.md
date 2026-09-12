@@ -1,5 +1,20 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+Last verified: 2026-09-10 — native vertical evaluation receipts use the explicitly reserved
+`control:vertical-eval-evidence:v1` audit namespace and `vertical_evidence.` event family.
+Only the code-level `appendAudit` primitive can write these receipts; the generic `audit.log`
+RPC refuses both reserved identifiers. The primitive retains the transactional export outbox
+and aggregate count update. It provides no update or delete operation. Start, case, review,
+issuance, abandonment and cleanup receipts carry only identifiers, hashes, counts and closed
+decisions. Actual output, source text and human-readable review material remain in Vault.
+
+Synthetic case cleanup must obtain native cleanup authority before every destructive page.
+Pending review retains its fixtures and spend ledger; either completed issuance or explicit
+authenticated owner abandonment permits cleanup. The evidence control namespace is outside
+the synthetic tenant being purged, so case deletion cannot erase release authority. Ordinary
+tenant erasure remains governed by the existing tenant-data classification. Local tests cover
+the authority boundary; no live evidence was issued and WORM remains off.
+
 Last verified: 2026-09-10 — evaluator cleanup now supports exact tenant equality, preserving prefix-sharing
 sibling cases. Optional receipt retention keeps case authority until the final empty-table transaction,
 including across page interruptions and WORM export refusals. The vertical collector preserves all

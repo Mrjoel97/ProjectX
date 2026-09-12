@@ -367,6 +367,21 @@ const OWNER_ARGS: Record<string, Record<string, unknown>> = {
   "skills.activateTenantCandidate": { candidateId: "id:tenantSkills" },
   "skills.rollbackTenantSkill": { targetId: "id:tenantSkills" },
   "verticalPacks.rollback": { verticalId: "legal", targetId: "id:tenantSkills" },
+  "verticalEvalEvidence.inspectCase": { receiptId: "id:audit" },
+  "verticalEvalEvidence.inspectRun": { runId: "00000000-0000-4000-8000-000000000001" },
+  "verticalEvalEvidence.reviewCase": {
+    receiptId: "id:audit",
+    sourceHashes: [],
+    outcome: "blocked",
+    qualifiedRole: "owner",
+    decisions: [],
+  },
+  "verticalEvalEvidence.abandonCase": { startId: "id:audit" },
+  "verticalEvalEvidence.finalize": {
+    runId: "00000000-0000-4000-8000-000000000001",
+    name: "vertical-engineering",
+    version: 1,
+  },
   "verticalData.previewDataset": { sourceDocId: "id:vaultDocuments" },
   "invites.approve": { waitlistId: "id:betaWaitlist" },
   // 28-26. Both are HARMLESS on purpose: `sealGate` here would PARK hubspot on a `blocked`
@@ -423,6 +438,7 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
       "reportsGovernance",
       "skills",
       "verticalData",
+      "verticalEvalEvidence",
       "verticalPacks",
       "workflowPackDiscovery",
     ]);
@@ -478,22 +494,33 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
                     createdAt: 0,
                   }),
                 )
-              : await t.run((ctx) =>
-                  ctx.db.insert("tenantSkills", {
-                    tenantId: "someone-else",
-                    name: "seed",
-                    version: 1,
-                    body: "seed",
-                    authoredBody: "seed",
-                    status: "candidate",
-                    author: "user",
-                    basedOnScope: "global",
-                    basedOnName: "seed",
-                    basedOnVersion: 1,
-                    rollbackEligible: false,
-                    createdAt: 0,
-                  }),
-                );
+              : value === "id:audit"
+                ? await t.run((ctx) =>
+                    ctx.db.insert("audit", {
+                      tenantId: "someone-else",
+                      correlationId: "owner-boundary-fixture",
+                      eventType: "owner-boundary-fixture",
+                      actor: "system",
+                      payload: {},
+                      ts: 0,
+                    }),
+                  )
+                : await t.run((ctx) =>
+                    ctx.db.insert("tenantSkills", {
+                      tenantId: "someone-else",
+                      name: "seed",
+                      version: 1,
+                      body: "seed",
+                      authoredBody: "seed",
+                      status: "candidate",
+                      author: "user",
+                      basedOnScope: "global",
+                      basedOnName: "seed",
+                      basedOnVersion: 1,
+                      rollbackEligible: false,
+                      createdAt: 0,
+                    }),
+                  );
       }
 
       // Branch the CALL, not the function reference: `query` and `mutation` are separately

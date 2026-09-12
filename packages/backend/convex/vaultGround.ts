@@ -30,7 +30,7 @@ import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
 import { fixtureSeamFor } from "./lib/models";
-import { rag } from "./vaultRag";
+import { rag, ragForEvaluation } from "./vaultRag";
 
 const SMOKE_PREFIX = "SMOKE::";
 
@@ -46,6 +46,7 @@ async function runVaultGround(
   ctx: GenericActionCtx<DataModel>,
   tenantId: string,
   query: string,
+  evalBudgetId?: Id<"spendEvents">,
 ): Promise<{ docIds: string[]; context: string[]; matchedByDoc: Record<string, string> }> {
   let hits: VectorHit[];
   let seedDocIds: Id<"vaultDocuments">[];
@@ -55,7 +56,7 @@ async function runVaultGround(
   // matched chunk and still fall back to the doc-text slice.
   const matchedByDoc: Record<string, string> = {};
 
-  if (fixtureSeamFor(tenantId) && query.startsWith(SMOKE_PREFIX)) {
+  if (!evalBudgetId && fixtureSeamFor(tenantId) && query.startsWith(SMOKE_PREFIX)) {
     // Offline: the seed doc ids ride in the sentinel; resolve them tenant-scoped (a cross-tenant
     // seed drops out exactly as namespace scoping would exclude it — no embedding call).
     //
@@ -83,7 +84,10 @@ async function runVaultGround(
       if (seed.passage !== undefined && ownedIds.has(seed.id)) matchedByDoc[seed.id] = seed.passage;
     hits = seedDocIds.map((docId, i) => ({ docId, score: 1 - i * 0.01 }));
   } else {
-    const { results, entries } = await rag.search(ctx, {
+    const activeRag = evalBudgetId
+      ? ragForEvaluation({ ctx, tenantId, budgetId: evalBudgetId })
+      : rag;
+    const { results, entries } = await activeRag.search(ctx, {
       namespace: tenantId, // per-user scope (VALT-03)
       query,
       limit: 8,
@@ -195,10 +199,10 @@ export const vaultGround = tenantAction({
 // from its first PER_DOC_CHAR_CAP characters, so a long PDF was answered from its title page no
 // matter where the match was (observed: a 300-page book grounded as its copyright notice).
 export const vaultGroundHydrated = internalAction({
-  args: { tenantId: v.string(), query: v.string() },
+  args: { tenantId: v.string(), query: v.string(), evalBudgetId: v.optional(v.id("spendEvents")) },
   handler: async (
     ctx,
-    { tenantId, query },
+    { tenantId, query, evalBudgetId },
   ): Promise<{
     docIds: string[];
     titles: string[];
@@ -232,7 +236,7 @@ export const vaultGroundHydrated = internalAction({
     chunks: string[];
     spine: string | null;
   }> => {
-    const { docIds, matchedByDoc } = await runVaultGround(ctx, tenantId, query);
+    const { docIds, matchedByDoc } = await runVaultGround(ctx, tenantId, query, evalBudgetId);
 
     // Titles: one tenant-scoped batch read; map _id → title so titles stay parallel to docIds.
     const meta = await ctx.runQuery(internal.vault.ownedDocsMeta, {

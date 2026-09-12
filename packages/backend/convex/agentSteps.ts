@@ -27,8 +27,8 @@ const TOOL = schema.tables.agentSteps.validator.fields.tool;
 const REFUSAL = AGENT_STEP_REFUSAL;
 
 /**
- * A turn is bounded at <=9 rows by the loop's `stopWhen: stepCountIs(8)` (8 tool steps + the one
- * driver-owned `thinking` row), so 12 is a real ceiling rather than a truncation. Reads are
+ * The activity card shows at most 12 rows. Parallel tool calls and fallback attempts can exceed
+ * that display bound; writers therefore join by the exact indexed step identity. Reads are
  * ALWAYS bounded — a `.collect()` here is the exact failure Phase 2 documented for `audit`:
  * it eventually exceeds Convex read limits and hard-fails rather than degrading.
  */
@@ -78,12 +78,13 @@ export const finish = internalMutation({
     endedAt: v.number(),
   },
   handler: async (ctx, { tenantId, turnId, stepKey, phase, durationMs, endedAt }) => {
-    // Indexed + bounded, then found in JS — never an un-indexed .filter (research Pitfall 7).
-    const page = await ctx.db
+    // Preserve the original first-recorded match for duplicate keys; do not require uniqueness.
+    const row = await ctx.db
       .query("agentSteps")
-      .withIndex("by_turn", (q) => q.eq("tenantId", tenantId).eq("turnId", turnId))
-      .take(TURN_STEP_CAP);
-    const row = page.find((r) => r.stepKey === stepKey);
+      .withIndex("by_turn_step", (q) =>
+        q.eq("tenantId", tenantId).eq("turnId", turnId).eq("stepKey", stepKey),
+      )
+      .first();
     if (!row) return; // no-op
     await ctx.db.patch(row._id, { phase, durationMs, endedAt });
   },
@@ -111,12 +112,13 @@ export const refuse = internalMutation({
     refusal: REFUSAL,
   },
   handler: async (ctx, { tenantId, turnId, stepKey, refusal }) => {
-    // Indexed + bounded, then found in JS — `finish`'s shape, never an un-indexed .filter.
-    const page = await ctx.db
+    // Same exact join and duplicate-key behavior as finish, independent of the UI row cap.
+    const row = await ctx.db
       .query("agentSteps")
-      .withIndex("by_turn", (q) => q.eq("tenantId", tenantId).eq("turnId", turnId))
-      .take(TURN_STEP_CAP);
-    const row = page.find((r) => r.stepKey === stepKey);
+      .withIndex("by_turn_step", (q) =>
+        q.eq("tenantId", tenantId).eq("turnId", turnId).eq("stepKey", stepKey),
+      )
+      .first();
     if (!row) return; // no-op
     await ctx.db.patch(row._id, { refusal });
   },

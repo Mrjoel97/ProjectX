@@ -1,5 +1,13 @@
 # Playbook: Growth Diagnostic (pure-TS math)
 
+> Last verified: 2026-09-12 — Research claims now have a bounded structured reference contract.
+> `researchEvidence.ts` renders reference depth from executable tool outputs, matching exact
+> quotes against search snippets or successfully read excerpts. Quote occurrence is not semantic
+> support; the renderer never certifies corroboration or truth. Missing/legacy structured output
+> is explicitly unverified. The shared research memo and stored findings fence carry the same
+> limit, and a search-result count no longer gets called “Grounded”. The separate ADR-043
+> unsupported-claim verdict and dispatch eligibility remain unchanged.
+
 > Last verified: 2026-09-07 (43-04 — `specialistMemoBody`'s `route` is OPTIONAL now, and the
 > ABSENCE is the fact: no specialist produced this, it is a content-batch variant. No sentinel
 > route string and no second formatter.

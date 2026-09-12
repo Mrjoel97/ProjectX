@@ -1,6 +1,32 @@
 # Optional vertical packs
 
-Last verified: 2026-09-10 (policy, native controls, runtime binding and controlled observation collection; release qualification remains pending).
+Last verified: 2026-09-11 — 72 focused native evidence, binding, provisioning, deletion and
+audit tests pass. SDK transport stubs verify actual zero-tool and search/save callback paths;
+complete-shaped ordinary audit receipts cannot forge issuance. These remain offline checks.
+
+Owner inspection returns source bearer URLs only after owner authentication and exact synthetic
+provision/document/storage hash checks. Ordinary users, unauthenticated callers and substituted
+storage blobs are rejected. These URLs stay in the review content plane, never model or audit
+payloads. The structural URL scan recognizes the owner query builder as an authenticated read.
+
+The native corpus mirror is regenerated with
+`node packages/backend/scripts/vertical-eval-corpus.mjs --write` and checked with `--check`.
+It pins all forty current cases, request-only hashes, actual compiled source bytes, original
+semantic expectations and the closed evaluator source/dependency inventory. The generator
+performs no provider or deployment calls. Regenerate after evaluator edits, review the changed
+pins, and rerun the native evidence tests; an older evaluator's evidence cannot release the
+new code. Engineering's original `must` and forbidden lists remain verbatim, without an invented
+expected state. Workbook fixtures use an explicit per-workbook number-format table because
+SheetJS's shared mutable table otherwise makes bytes depend on prior fixture compilation.
+
+For a lost evaluation response, the authenticated owner can call
+`verticalEvalEvidence.inspectRun` with the exact run UUID. It returns bounded recovery IDs and
+distinguishes a start with unknown outcome from sealed, reviewed, issued and discarded cases.
+It returns no audit payload or source content and never treats a start as successful completion.
+`inspectCase` is the separate authenticated content review path. Recovery tests also cover stale
+pins and ordinary audit rows that happen to share a correlation identifier.
+
+Last verified: 2026-09-10 (native receipt/review/issuance implementation and offline falsification; actual semantic qualification and UAT remain pending).
 
 Local evaluation preparation now materializes all 40 controlled source cases: typed Data workbook bytes,
 meaningful Design PNGs, and synthetic Product/Legal/HR/Engineering text. `verticalEvalSources` binds exact
@@ -8,8 +34,9 @@ candidate/run/case/request hashes and actual owned storage metadata, refuses cha
 and never embeds or reads a connector. Native evaluation uses explicit fixed sources; it does not prove
 retrieval. The opt-in `--collect-observations --all-candidates --no-activate --max-cost-cents N
 --credit-billing-only` diagnostic requires the operator to verify non-BYOK credit billing. It reserves
-one aggregate budget, archives output markdown separately from the refs-only report, checkpoints before
-cleanup, and retains fixtures when accounting is unresolved. Exact paged cleanup preserves accounting
+one aggregate budget, archives output markdown separately from the refs-only report, and retains actual
+case sources/output for authenticated owner review. Settled budgets are explicitly closed against new
+reservations. Exact paged cleanup after issuance or explicit owner abandonment preserves accounting
 and its authority receipt until completion; frozen WORM exports refuse cleanup. CLI errors are redacted.
 Observation collection still exits 2 and cannot write release evidence; no paid run was performed here.
 
@@ -47,7 +74,7 @@ Phase 30-02 stores explicit needs/reviewer choices and disabled ids on `tenantPr
 duplicate version/evidence rows. `verticalPacks.configure` checks the legal playbook's Vault ref
 against the caller's tenant. `discover` reads exact native names and derives release from native
 provenance/eval/browser predicates. It returns at most two recommendations; today it returns none
-because the executable vertical eval suite and authenticated exact-version UAT remain pending. Six bounded control
+because actual owner-reviewed full-corpus evidence and authenticated exact-version UAT remain pending. Six bounded control
 rows expose candidate ids/versions and named prerequisites, never bodies. Profile prose is never
 interpreted as a vertical need. Data readiness requires an unsealed ready CSV/XLSX; the actual owned-file profile is generated before any model call.
 
@@ -171,8 +198,10 @@ source cases without backend calls; it remains registered in the free-gate inven
 observation collection uses the controlled native source, reservation and mechanical qualification
 paths described above. A full refs-only takeover manifest is checkpointed before any mutation;
 unknown remote operation outcomes retain all remaining case state even if accounting looks settled.
-`hasPassingVerticalEvalEvidence` and the original full-release command remain closed pending measured
-semantic assertions and reviewed evidence. The current foundation and specific remaining gates are
+`hasPassingVerticalEvalEvidence` checks the current exact corpus/evaluator/model/candidate envelope;
+native activation and exposure additionally require its immutable native issuance receipt. Local JSON,
+partial corpus, scripted observations and unsigned review packets cannot satisfy that authority.
+The original full-release command remains closed; paid collection is explicitly opt-in. Remaining gates are
 recorded in `.planning/phases/30-optional-vertical-workflow-packs/30-08-EVAL-PREPARATION.md`.
 
 ### Explicit historical workload confirmation
@@ -216,3 +245,50 @@ hold; known provider-contract breaches persist actual spend and close the budget
 reject unsettled or breached budgets. The cap covers the documented provider billing contract;
 unsupported separate BYOK billing must not be represented as zero or an all-in economic guarantee.
 No paid evaluation or activation was performed during local scripted verification.
+
+### Native review and exact-version issuance
+
+`verticalEvalEvidence.beginCase` records a single durable start before the actual shared model loop.
+It verifies the deployed closed corpus, input/source byte hashes and current candidate body. Replay,
+stale fixtures and a closed budget are refused before provider execution. Only the real evaluator
+calls this path; the scripted test shim cannot mint receipts. `sealCase` independently reads the
+actual plan, source/storage metadata, output artifact, bounded tool traces and settled model ledger.
+Model-only partial replies are retained as separate Vault review documents. Zero-tool replies can
+be observed; a receipt still makes no semantic quality claim. Ambiguous tool/fallback traces or
+unsettled/unknown/breached costs fail closed, retaining the run for investigation.
+
+The collector returns native receipt IDs and `observations-retained-for-owner-review`, still exit 2.
+It explicitly closes the settled aggregate budget and verifies closure. A lost response does not
+authorize deletion. `inspectRun` lets an authenticated owner recover start/receipt/budget references
+from the original run ID; `inspectCase` returns actual retained output and owned source readbacks.
+The offline packet remains useful for recomputing Data profiles and organizing exact byte spans,
+but cannot authenticate reviews or import a passing result.
+
+`reviewCase` is an owner mutation requiring an explicit outcome and one closed decision for every
+code-owned criterion and every actual fixture expectation key. Output evidence uses verified UTF-8
+byte spans and SHA-256; source references must belong to the exact provision and have actually been
+read by the evaluated run. Legal and HR additionally require explicit qualified-role attestation;
+this records the owner's professional-role assertion, not independent credential verification.
+Unresolved, contradicted, incomplete or mismatched judgments remain closed. Mechanical `useful`
+never substitutes for these human judgments, and a request to finish implementation is not a review.
+
+`finalize` rechecks the complete lane corpus, every authenticated accepted review, retained output
+and sources, current candidate body, evaluator/model pins and closed settled accounting. It alone
+writes native vertical evidence on the exact existing skill version; it does not activate anything.
+The generic evidence writer rejects all vertical names. Activation and runtime exposure independently
+verify the immutable issuance row, so forged or imported JSON cannot grant authority. Exact-version
+browser/UAT evidence, provenance and normal release controls remain separate gates.
+
+The reserved audit namespace is `control:vertical-eval-evidence:v1`, with event family
+`vertical_evidence.*`. It is deployment owner control-plane metadata, outside authenticated user IDs
+and synthetic `eval-`/`packeval-` purge prefixes. The generic audit RPC rejects either reserved name.
+Code-only writes still use the sole audit insert/outbox/aggregate primitive, preserving WORM export.
+Receipts contain IDs, hashes, counts, closed decisions and span references; output/source content stays
+in Vault. Native receipt readers use owner builders. This namespace is a deliberate cross-tenant
+control-plane exception, not a second tenant identity or a general-purpose log channel.
+
+Every synthetic deletion page rechecks native review retention. Prefix cleanup cannot bypass it;
+pending cases require owner review and issuance or explicit `abandonCase` before native `purgeCase`.
+Cleanup tombstones and issuance remain immutable, accounting is preserved, and WORM freeze still wins.
+Actual complete six-lane semantic reviews, responsive UAT and release/rollback drills are outstanding;
+offline SDK transport shims and authorization tests are implementation verification only.

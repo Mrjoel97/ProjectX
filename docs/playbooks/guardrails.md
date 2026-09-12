@@ -1,5 +1,26 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+Last verified: 2026-09-10 — native evaluation budgets now have an append-only terminal closure.
+`closeEvalBudget` refuses unsettled reservations or recorded breaches and writes one
+`eval_budget_closed` adjustment. New reservations consult that same durable marker; closing and
+reserving race through the existing transactional indexes. Closure is idempotent, does not erase
+accounting, and cannot turn an unknown provider charge into a settled result. Native semantic
+evidence issuance requires the closed ledger and rereads its exact case charges.
+
+Last verified: 2026-09-11 — the golden runner opens one envelope before corpus embedding and
+carries it through executive, nested drafting, dispatch, RAG, ingest and Tavily requests. The
+closed provider descriptor computes a worst-case pre-call reservation; unknown charges retain
+their hold. Golden envelopes accept only one `eval-<run>` family and refuse opening without
+operator-verified `GOLDEN_OPENROUTER_BILLING=standard` and a positive
+`GOLDEN_TAVILY_CREDIT_USD <= 0.008`. These environment values attest independently checked
+account terms; setting them is not billing evidence. Provider response billing metadata must also
+agree. Source revision, native closure and settled ledger are required before passing evidence.
+Live billing/semantic acceptance remains unobserved. Recurrence and WORM remain deferred.
+Golden closure additionally scans the isolated run's durable plans/documents (at most 256 plans
+and 32 documents). Collecting memo work, running or unknown workflow state, unfinished linked
+ingest and incomplete inventory refuse closure. A retry of that free closure check is safe;
+replaying the paid workflow is not a recovery step.
+
 > Last verified: 2026-09-10 — G17 notification regression: the expiry scan uses an exact indexed
 > tenant/kind/read existence check instead of inspecting only 50 unrelated unread messages.
 > `scaleConstants.test.ts` seeds 60 unrelated notifications before the existing warning and checks

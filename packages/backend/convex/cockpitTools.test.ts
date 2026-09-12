@@ -3613,7 +3613,7 @@ test("createVariants stages the batch root as a VAULT terminal, and never blames
     .filter((line) => !line.trim().startsWith("//"))
     .join("\n");
   expect(
-    said,
+    said.slice(said.indexOf("return batch.workerCount")),
     "the truncation reply blames the budget for a count the budget may not explain",
   ).not.toMatch(/budget/i);
 

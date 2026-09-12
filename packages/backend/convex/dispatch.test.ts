@@ -349,7 +349,8 @@ describe("SC#1 — a named specialist runs in THE governed loop", () => {
     );
     // Positive half #2: the PROVIDER-executed hosted search contributed its source and prose.
     expect(res.sources).toEqual([{ url: urls[0], title: "Source 0" }]);
-    expect(res.body).toBe(REPLY);
+    expect(res.body).toContain(REPLY);
+    expect(res.body).toContain("structured references unavailable");
 
     // Mutation that turns this RED: add the current `withheld` name to RESEARCH_TOOLS.
     expect(await readPlan(t, planId), "a withheld write tool moved the plan row").toEqual(before);
@@ -1277,7 +1278,8 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     const recovered = await ctxBackedTurn(async () => {
       throw providerError(503, true);
     });
-    expect(recovered.reply).toBe("Recovered on the research fallback.");
+    expect(recovered.reply).toContain("Recovered on the research fallback.");
+    expect(recovered.reply).toContain("structured references unavailable");
     expect(recovered.fallbackModelId).toBe(RESEARCH_FALLBACK_MODEL);
 
     await expect(
@@ -1368,7 +1370,8 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     );
 
     expect(res.route).toBe("research");
-    expect(res.body).toBe(REPLY);
+    expect(res.body).toContain(REPLY);
+    expect(res.body).toContain("structured references unavailable");
     expect(res.incomplete).toBe(false);
     expect(res.incompleteReason).toBeUndefined();
     expect(res.sources).toEqual([]); // the mock retrieves none — the FIELD travels, which is the point
@@ -1735,7 +1738,8 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     );
     expect(cost.incomplete).toBe(true);
     expect(cost.incompleteReason).toBe("cost");
-    expect(cost.body).toBe(REPLY);
+    expect(cost.body).toContain(REPLY);
+    expect(cost.body).toContain("structured references unavailable");
     const card = (await readPlan(t, planId))?.body ?? "";
     expect(card).toContain(INCOMPLETE_MARKER.cost.trim());
     // Mutation that turns this RED: collapse the cost marker onto steps or clock.

@@ -954,7 +954,7 @@ describe("purgeEvalTenant only ever touches synthetic tenants", () => {
       const receipt = await ctx.db.insert("audit", {
         tenantId,
         actor: "system",
-        eventType: "vertical_eval.provisioned",
+        eventType: "ordinary_eval.provisioned",
         payload: {},
         ts: 0,
         correlationId: tenantId,

@@ -121,7 +121,7 @@ importers:
         version: 0.3.1(convex@1.42.1(react@19.2.7))
       '@convex-dev/agent':
         specifier: 0.6.4
-        version: 0.6.4(@ai-sdk/provider-utils@5.0.23(zod@4.4.3))(ai@7.0.20(zod@4.4.3))(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))(react@19.2.7)
+        version: 0.6.4(@ai-sdk/provider-utils@5.0.23(zod@4.4.3))(ai@7.0.20(zod@4.4.3))(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))(react@19.2.7)
       '@convex-dev/aggregate':
         specifier: 0.2.2
         version: 0.2.2(convex@1.42.1(react@19.2.7))
@@ -130,19 +130,19 @@ importers:
         version: 0.0.94(@auth/core@0.41.2)(convex@1.42.1(react@19.2.7))(react@19.2.7)
       '@convex-dev/migrations':
         specifier: 0.3.5
-        version: 0.3.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
+        version: 0.3.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
       '@convex-dev/rag':
         specifier: 0.7.5
-        version: 0.7.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))(zod@4.4.3)
+        version: 0.7.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))(zod@4.4.3)
       '@convex-dev/rate-limiter':
         specifier: 0.3.2
         version: 0.3.2(convex@1.42.1(react@19.2.7))(react@19.2.7)
       '@convex-dev/workflow':
         specifier: 0.4.4
-        version: 0.4.4(@convex-dev/workpool@0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7)))(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
+        version: 0.4.4(@convex-dev/workpool@0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7)))(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
       '@convex-dev/workpool':
         specifier: 0.4.7
-        version: 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
+        version: 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
       '@openrouter/ai-sdk-provider':
         specifier: 3.0.0
         version: 3.0.0(ai@7.0.20(zod@4.4.3))(zod@4.4.3)
@@ -181,7 +181,7 @@ importers:
         version: 1.42.1(react@19.2.7)
       convex-helpers:
         specifier: 0.1.120
-        version: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3)
+        version: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3)
       foglamp:
         specifier: 0.9.0
         version: 0.9.0(ai@7.0.20(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -201,6 +201,9 @@ importers:
       convex-test:
         specifier: 0.0.54
         version: 0.0.54(convex@1.42.1(react@19.2.7))
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
       vitest:
         specifier: ^3.2.7
         version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@26.1.1)(jsdom@27.4.0)
@@ -2488,6 +2491,16 @@ snapshots:
       '@ungap/structured-clone': 1.3.2
       react: 19.2.7
 
+  '@convex-dev/agent@0.6.4(@ai-sdk/provider-utils@5.0.23(zod@4.4.3))(ai@7.0.20(zod@4.4.3))(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))(react@19.2.7)':
+    dependencies:
+      '@ai-sdk/provider-utils': 5.0.23(zod@4.4.3)
+      ai: 7.0.20(zod@4.4.3)
+      convex: 1.42.1(react@19.2.7)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3)
+    optionalDependencies:
+      '@ungap/structured-clone': 1.3.2
+      react: 19.2.7
+
   '@convex-dev/aggregate@0.2.2(convex@1.42.1(react@19.2.7))':
     dependencies:
       convex: 1.42.1(react@19.2.7)
@@ -2509,17 +2522,17 @@ snapshots:
     optionalDependencies:
       react: 19.2.7
 
-  '@convex-dev/migrations@0.3.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))':
+  '@convex-dev/migrations@0.3.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))':
     dependencies:
       convex: 1.42.1(react@19.2.7)
-      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3)
 
-  '@convex-dev/rag@0.7.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))(zod@4.4.3)':
+  '@convex-dev/rag@0.7.5(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))(zod@4.4.3)':
     dependencies:
-      '@convex-dev/workpool': 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
+      '@convex-dev/workpool': 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
       ai: 6.0.221(zod@4.4.3)
       convex: 1.42.1(react@19.2.7)
-      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3)
     transitivePeerDependencies:
       - zod
 
@@ -2529,17 +2542,17 @@ snapshots:
     optionalDependencies:
       react: 19.2.7
 
-  '@convex-dev/workflow@0.4.4(@convex-dev/workpool@0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7)))(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))':
+  '@convex-dev/workflow@0.4.4(@convex-dev/workpool@0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7)))(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))':
     dependencies:
-      '@convex-dev/workpool': 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
+      '@convex-dev/workpool': 0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))
       async-channel: 0.2.0
       convex: 1.42.1(react@19.2.7)
-      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3)
 
-  '@convex-dev/workpool@0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3))(convex@1.42.1(react@19.2.7))':
+  '@convex-dev/workpool@0.4.7(convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3))(convex@1.42.1(react@19.2.7))':
     dependencies:
       convex: 1.42.1(react@19.2.7)
-      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@5.9.3)(zod@4.4.3)
+      convex-helpers: 0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3)
 
   '@csstools/color-helpers@6.1.1': {}
 
@@ -3162,6 +3175,15 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       react: 19.2.7
       typescript: 5.9.3
+      zod: 4.4.3
+
+  convex-helpers@0.1.120(@standard-schema/spec@1.1.0)(convex@1.42.1(react@19.2.7))(react@19.2.7)(typescript@7.0.2)(zod@4.4.3):
+    dependencies:
+      convex: 1.42.1(react@19.2.7)
+    optionalDependencies:
+      '@standard-schema/spec': 1.1.0
+      react: 19.2.7
+      typescript: 7.0.2
       zod: 4.4.3
 
   convex-test@0.0.54(convex@1.42.1(react@19.2.7)):

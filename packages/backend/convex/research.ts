@@ -169,6 +169,7 @@ export const persistFindings = internalMutation({
      *  poison the field the Phase-26 artifact shelf joins on. v.optional: no backfill. */
     sourceThreadId: v.optional(v.string()),
     sourcePlanId: v.optional(v.id("plans")),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     incomplete: v.boolean(),
     incompleteReason: v.optional(
       v.union(v.literal("cost"), v.literal("steps"), v.literal("clock")),
@@ -192,6 +193,7 @@ export const persistFindings = internalMutation({
     const questionHash = await contentHash(a.question);
     const vaultDocId = await ctx.db.insert("vaultDocuments", {
       tenantId: a.tenantId,
+      ...(a.evalBudgetId ? { evalBudgetId: a.evalBudgetId } : {}),
       title: researchTitle(a.question, a.retrievedAt),
       researchQuestionHash: questionHash,
       kind: "web_research", // the queryable class marker (`kind` is v.string() — no schema change)
@@ -211,7 +213,12 @@ export const persistFindings = internalMutation({
     // The SOLE legal way to start ingest — it wires the `onComplete` that prevents a stranded
     // `processing` row. `rootRequestId` as the correlation id, NOT a fresh uuid: it is the lineage
     // key, and it makes the ingest workflow joinable to the dispatch audit trail.
-    await startIngest(ctx, { vaultDocId, tenantId: a.tenantId, correlationId: a.rootRequestId });
+    await startIngest(ctx, {
+      vaultDocId,
+      tenantId: a.tenantId,
+      correlationId: a.rootRequestId,
+      ...(a.evalBudgetId ? { evalBudgetId: a.evalBudgetId } : {}),
+    });
     // §4 — the `vault.searched` shape: a query HASH, counts, and refs. NEVER the question, NEVER a
     // URL, NEVER any prose. `AuditPayload` permits `readonly string[]`, so an array of URLs would
     // type-check here — that is precisely the trap.

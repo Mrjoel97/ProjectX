@@ -64,6 +64,7 @@
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^26.1.1",
     "convex-test": "0.0.54",
+    "typescript": "7.0.2",
     "vitest": "^3.2.7",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }

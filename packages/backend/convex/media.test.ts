@@ -7743,11 +7743,19 @@ describe("stock scenes: free, and still a LINE on the same rail", () => {
     // The 422 arm — the one `blocked` was named for — still IS a verdict.
     expect(row).toBeDefined();
     if (!row) return;
+    // A new request can receive a provider verdict; a late callback cannot rewrite
+    // the earlier, already-terminal configuration refusal.
+    const freshJobId = await t.run(async (ctx) => {
+      const { _id, _creationTime, failureReason, verdict, ...fields } = row;
+      return ctx.db.insert("mediaJobs", { ...fields, status: "submitted" });
+    });
     await t.mutation(internal.media.recordSubmission, {
-      jobId: row._id,
+      jobId: freshJobId,
       result: { ok: false, blocked: true, code: "http_422" },
     });
-    expect((await rows(t))[0]?.verdict).toBe("provider_blocked");
+    expect(await t.run(async (ctx) => (await ctx.db.get(freshJobId))?.verdict)).toBe(
+      "provider_blocked",
+    );
   });
 
   test("submitBatch ROUTES ON PROVIDER: a stock row is fetched, never POSTed as a generation", async () => {

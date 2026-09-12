@@ -1,3 +1,27 @@
+> Last verified: 2026-09-12 — The research specialist selects native SDK structured output from
+> its trusted skill name while retaining its existing multi-step tool grant. The final claims
+> reference URLs and quotes; deterministic rendering checks them against this attempt's actual
+> tool results. Search matches and page matches remain distinct, and neither verifies the claim.
+> Missing/malformed final output falls back to an explicitly unverified draft without a formatting
+> retry. Offline SDK integration covers search → read → structured answer → card and Vault.
+> Live acceptance found three confirmed page reads despite a natural-language request for two:
+> that request budget remains unmet; the global read limit is not a per-request typed budget.
+> No semantic acceptance, new skill activation, or change to ADR-043 eligibility is implied.
+
+> Last verified: 2026-09-11 — Golden evaluator identity hashes the explicit source inventory,
+> independently of fixture content. A source edit changes the required revision even when the
+> corpus is unchanged; LF and CRLF checkouts produce the same revision. Missing pinned files
+> fail closed. `node --test packages/backend/scripts/goldenEvaluatorIdentity.test.mjs` exercises
+> these properties in isolated temporary files, without provider calls or evidence issuance.
+
+Last verified: 2026-09-11 — golden evaluations now carry one trusted optional `evalBudgetId`
+through the existing tools and child actions. Native SDK middleware brackets each chat call;
+Tavily search/extract reserve verified credit ceilings before egress and settle authoritative usage.
+Unknown transport cost retains its hold and poisons repeat requests in that tool record. Ordinary
+runtime calls omit this context. Golden evidence additionally requires exact evaluator revision,
+settled aggregate ledger and completed descendant work before terminal closure. No live candidate
+evaluation, semantic acceptance, owner activation or rollback is implied by these offline checks.
+
 > Last verified: 2026-09-09 (45-01 — **`run-eval-golden.mjs` NOW CLEANS UP AFTER ITSELF.** It has
 > always minted a throwaway `eval-<runId>` tenant and never removed it; measured on production
 > that was 472 of 632 `plans` rows, 189 of 733 `vaultDocuments` and 1007 of 1894 AUDIT rows across
@@ -2164,3 +2188,17 @@ alongside the ordinary text prompt, and reuses the same bytes for an explicit fa
 bytes are never inserted into the system prompt or audit metadata. The reader and shared loop
 both enforce a 1 MiB ceiling. Offline provider-wire tests verify the resulting image data URI
 and MIME type; live visual quality and release evidence still require their separate gates.
+## Phase 23 golden-run recovery (2026-09-10)
+
+Golden evaluator model-driving CLI calls use `goldenPaidAttempt.mjs` to persist a refs/hash-only
+started receipt before invoking the action once. A missing, malformed or failed response leaves an
+unresolved receipt and stops with exit 2; it cannot trigger the ordinary failed-case retry, passing
+evidence, or successful-run cleanup. A response receipt records only a response hash and known
+returned cost. These local files under `.tmp/golden-paid-attempts` are recovery aids, not a new
+spend ledger or outcome evidence. Read the attempted turn's native state before deciding whether a
+new paid attempt is appropriate; never treat an unresolved receipt as a zero-cost failure.
+
+The golden runner's $2 post-turn stop remains distinct from a hard aggregate cap: embedding,
+Tavily, and paid child-action reservations are not yet complete. The Phase 23 continuation preflight
+reports this explicitly. See `23-EXECUTION-PREPARATION.md` in the phase directory for the current
+paid-call graph and prerequisites. No new paid evaluation is certified by these offline checks.

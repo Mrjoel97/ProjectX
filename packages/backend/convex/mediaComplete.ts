@@ -167,19 +167,37 @@ async function maybeStartRender(ctx: MutationCtx, row: Doc<"mediaJobs">): Promis
  * flight. For a deck that still needs every row it bought — every deck the landing path has ever
  * seen — both checks reduce to the original `every(succeeded)`.
  */
+async function latestBatch(
+  ctx: MutationCtx,
+  a: { tenantId: string; planId: Id<"plans">; batchId: string },
+): Promise<boolean> {
+  const rows = await ctx.db
+    .query("mediaJobs")
+    .withIndex("by_plan", (q) => q.eq("tenantId", a.tenantId).eq("planId", a.planId))
+    .take(101);
+  if (rows.length === 0 || rows.length > 100) return false;
+  const newest = Math.max(...rows.map((r) => r.createdAt));
+  // Same trusted creation clock as media.rearmAfterFix. Ambiguous ties across
+  // batches fail closed instead of choosing a historical batch arbitrarily.
+  return rows.filter((r) => r.createdAt === newest).every((r) => r.batchId === a.batchId);
+}
+
 export async function evaluateRenderTrigger(
   ctx: MutationCtx,
   a: { tenantId: string; planId: Id<"plans">; batchId: string },
+  options: { terminalOnly?: boolean } = {},
 ): Promise<void> {
   const plan = await ctx.db.get(a.planId);
   // The GUARD. Anything other than `pending` means either the render has already been started by a
   // sibling landing, or this batch was never approved for one.
-  if (plan?.renderStatus !== "pending") return;
+  if (plan?.renderStatus !== "pending" || plan.tenantId !== a.tenantId) return;
+  if (options.terminalOnly && !(await latestBatch(ctx, a))) return;
 
   const siblings = await ctx.db
     .query("mediaJobs")
     .withIndex("by_batch", (q) => q.eq("tenantId", a.tenantId).eq("batchId", a.batchId))
     .collect();
+  if (siblings.some((s) => s.planId !== a.planId)) return;
   const renderable = siblings.filter(
     (s) => s.kind === "video" || s.kind === "image" || s.kind === "tts",
   );
@@ -198,6 +216,7 @@ export async function evaluateRenderTrigger(
   const deckReady = (shots ?? []).every((s) => hasAssetSource(s));
 
   if (deckReady && renderable.filter(needed).every((s) => s.status === "succeeded")) {
+    if (options.terminalOnly) return;
     // 25.1-01 (D2): under the retrier, never a bare runAfter — a renderReel crash after
     // `markRendering` used to strand the plan at "rendering" forever. The run id lands on the
     // plan in the SAME mutation, so `onRenderComplete` can resolve its own plan (`by_render_run`).
@@ -210,6 +229,12 @@ export async function evaluateRenderTrigger(
     await ctx.db.patch(a.planId, { renderStatus: "rendering", renderRunId: String(runId) });
     return;
   }
+
+  if (
+    options.terminalOnly &&
+    !renderable.some((s) => needed(s) && (s.status === "failed" || s.status === "blocked"))
+  )
+    return;
 
   // A needed sibling failed or was blocked (or a scene still names no asset source) and nothing is
   // in flight. **Do not start a render that will produce a reel with a missing block** — D8's
@@ -236,10 +261,15 @@ export async function evaluateRenderTrigger(
  * the render: two concurrent last-tts-landings cannot both observe an unset status, so they cannot
  * both submit — and a double submit is a double spend against one reservation.
  */
-async function maybeStartCaptions(ctx: MutationCtx, row: Doc<"mediaJobs">): Promise<void> {
+export async function maybeStartCaptions(
+  ctx: MutationCtx,
+  row: Doc<"mediaJobs">,
+  options: { terminalOnly?: boolean } = {},
+): Promise<void> {
   if (row.kind !== "tts") return;
   const plan = await ctx.db.get(row.planId);
   if (!plan || plan.captionStatus !== undefined) return; // already started, finished or failed
+  if (options.terminalOnly && !(await latestBatch(ctx, row))) return;
 
   const siblings = await ctx.db
     .query("mediaJobs")
@@ -262,6 +292,7 @@ async function maybeStartCaptions(ctx: MutationCtx, row: Doc<"mediaJobs">): Prom
     return;
   }
 
+  if (options.terminalOnly) return;
   await ctx.db.patch(row.planId, { captionStatus: "transcribing" });
   await ctx.scheduler.runAfter(0, internal.media.submitCaptions, {
     tenantId: row.tenantId,

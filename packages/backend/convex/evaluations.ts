@@ -204,10 +204,11 @@ export const runEvaluation = internalAction({
     ),
     query: v.optional(v.string()),
     withDelta: v.optional(v.boolean()),
+    evalBudgetId: v.optional(v.id("spendEvents")),
   },
   handler: async (
     ctx,
-    { tenantId, threadId, framework, query, withDelta },
+    { tenantId, threadId, framework, query, withDelta, evalBudgetId },
   ): Promise<{
     verdict: "gaps" | "healthy" | "insufficient";
     findingCount: number;
@@ -295,7 +296,7 @@ export const runEvaluation = internalAction({
       try {
         ({ docIds, titles, origins, chunks, spine } = await ctx.runAction(
           internal.vaultGround.vaultGroundHydrated,
-          { tenantId, query: query ?? DEFAULT_QUERY },
+          { tenantId, query: query ?? DEFAULT_QUERY, ...(evalBudgetId ? { evalBudgetId } : {}) },
         ));
       } catch {
         // fail open — no grounding this run; carried values still stand.
@@ -923,6 +924,7 @@ export async function applyActOnGap(
   // specialist — drop it here and the dispatched turn silently runs the tenant's effective body
   // while the run writes evidence onto the candidate (16-09's defect, one registry scope down).
   tenantSkillIds?: Record<string, Id<"tenantSkills">>,
+  evalBudgetId?: Id<"spendEvents">,
 ): Promise<ActOnGapResult> {
   const row = await ctx.db
     .query("evaluations")
@@ -1026,6 +1028,7 @@ export async function applyActOnGap(
     // Without this the specialist ran the ACTIVE row while the eval evidence claimed the pin.
     skillVersions,
     tenantSkillIds,
+    ...(evalBudgetId ? { evalBudgetId } : {}),
   });
   // 34-01: the agenda row (review thread only) records the proposal under this plan.
   await markAgendaProposed(ctx, tenantId, threadId, row, gapIndex, planId);
@@ -1059,12 +1062,13 @@ export const actOnGapInternal = internalMutation({
     skillVersions: v.optional(v.record(v.string(), v.number())),
     // 21-03: the tenant twin, on the SAME identity-less twin and for the same reason.
     tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
+    evalBudgetId: v.optional(v.id("spendEvents")),
   },
   handler: (
     ctx,
-    { tenantId, threadId, gapIndex, skillVersions, tenantSkillIds },
+    { tenantId, threadId, gapIndex, skillVersions, tenantSkillIds, evalBudgetId },
   ): Promise<ActOnGapResult> =>
-    applyActOnGap(ctx, tenantId, threadId, gapIndex, skillVersions, tenantSkillIds),
+    applyActOnGap(ctx, tenantId, threadId, gapIndex, skillVersions, tenantSkillIds, evalBudgetId),
 });
 
 /** Both the evaluation row and the gap are gone (a fresh thread, a cleared history). Say so in one

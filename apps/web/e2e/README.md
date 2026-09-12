@@ -180,3 +180,16 @@ Clean/red/fresh-clean processes and unchanged source-byte hashes must all pass.
 - **Plan 05** (SC1) — `cockpit-render` (two panes render under the auth gate) +
   `cockpit-split` (divider drags, clamps ≥20%, keyboard-nudges, persists across reload).
 - **Plan 09** — cockpit-report / connect-gmail (SC5) — pending.
+
+## Phase 23 production continuation
+
+For the opted-in two-identity authoring probe, set `PIKAR_CONVEX_TARGET=prod` together with the
+production `PIKAR_E2E_BASE_URL`. Auth preparation and all direct source/owner queries now forward
+the same explicit target as the golden inspector. Keep the actual deployment URL privately in
+`CONVEX_URL` for consistent inspector fingerprints. No environment value belongs in evidence.
+
+After a real handoff exists, the read-only continuation check is
+`node .planning/phases/23-agent-authored-skills/phase23-operator.mjs preflight handoff
+.planning/phases/23-agent-authored-skills/23-LIVE-HANDOFF.json --forbid-env PHASE23_PRIVATE_NEEDLE`
+from the repository root. It observes exact stored state; it does not authorize or execute paid
+evaluation. See `23-EXECUTION-PREPARATION.md` for the remaining aggregate-budget prerequisites.

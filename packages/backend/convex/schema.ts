@@ -1818,6 +1818,7 @@ export default defineSchema({
     refusal: v.optional(AGENT_STEP_REFUSAL),
   })
     .index("by_turn", ["tenantId", "turnId"])
+    .index("by_turn_step", ["tenantId", "turnId", "stepKey"])
     // by_tenant is ["tenantId"] ALONE, and that is load-bearing. latestTurn finds the newest turn
     // via `.order("desc").first()`, which relies on _creationTime being the first sort dimension
     // AFTER the eq'd prefix. An index of ["tenantId", "threadId"] eq'd on tenantId only would sort
@@ -2061,6 +2062,8 @@ export default defineSchema({
   // extraction runs off the redacted text at ingest.
   vaultDocuments: defineTable({
     tenantId: v.string(),
+    // Internal evaluation lineage survives ingest recovery; no public upload accepts this ref.
+    evalBudgetId: v.optional(v.id("spendEvents")),
     title: v.string(),
     kind: v.string(), // logical kind (e.g. brief, brain_dump, upload)
     category: v.string(), // one of the 6 vault categories (categoryFor)

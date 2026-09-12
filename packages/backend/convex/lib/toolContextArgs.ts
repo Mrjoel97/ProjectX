@@ -19,6 +19,9 @@
 import { v } from "convex/values";
 
 export const TOOL_CONTEXT_ARGS = {
+  // Trusted evaluation envelope, never a model tool parameter or public client argument.
+  // Every paid descendant shares this same ledger row; a child must never mint a new cap.
+  evalBudgetId: v.optional(v.id("spendEvents")),
   skillVersions: v.optional(v.record(v.string(), v.number())),
   tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
 };

@@ -20,6 +20,7 @@
 import { DOCUMENT_CLASSIFIER_SKILL, GRAPH_EXTRACTOR_SKILL } from "@pikar/contracts/skill";
 import { DOC_TYPES, type DocType, isDocType } from "@pikar/core";
 import { DEFAULT_MODEL, priceUsage } from "@pikar/cost";
+import { EVAL_MAX_OUTPUT_TOKENS } from "@pikar/cost/evalBudget";
 import { scanText } from "@pikar/pii";
 // The `/constants` SUBPATH, not the barrel: the barrel re-exports the extractors, which pull xlsx
 // and fflate into this module's graph for two head-slice helpers.
@@ -29,6 +30,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { internalAction, internalQuery } from "./_generated/server";
+import { evalBudgetModel } from "./lib/evalBudgetModel";
 import { fixtureSeamFor, resolveModel } from "./lib/models";
 
 // Per-call wall-clock ceiling (mirrors llm.ts). One retry budget: SDK maxRetries:1.
@@ -111,8 +113,12 @@ function smokeGraphFixture(safeText: string): ExtractedGraph {
  * DEFAULT_MODEL. The returned `{nodes, edges}` carry names/rels ONLY — no raw text (§4).
  */
 export const extractGraph = internalAction({
-  args: { vaultDocId: v.id("vaultDocuments"), tenantId: v.string() },
-  handler: async (ctx, { vaultDocId, tenantId }): Promise<ExtractedGraph> => {
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
+  },
+  handler: async (ctx, { vaultDocId, tenantId, evalBudgetId }): Promise<ExtractedGraph> => {
     // Load the extractor prompt FIRST (no hardcoded prompt — §5); fails closed (throws
     // NO_ACTIVE_SKILL) when unseeded, so a hardcoded fallback can never sneak in.
     const skill: { body: string; version: number } = await ctx.runQuery(
@@ -134,23 +140,42 @@ export const extractGraph = internalAction({
     // Stays ABOVE the cap so the offline fixture path is unaffected by it.
     // 36-01 (ADR-035): the sentinel SELECTS the fixture; the operator fact decides WHETHER. A Drive
     // file a stranger shared in used to be able to write this tenant's graph by starting with it.
-    if (safeText.startsWith(SMOKE_GRAPH_PREFIX) && fixtureSeamFor(tenantId))
+    if (!evalBudgetId && safeText.startsWith(SMOKE_GRAPH_PREFIX) && fixtureSeamFor(tenantId))
       return smokeGraphFixture(safeText);
+    if (evalBudgetId && safeText.trim() === "") throw new Error("EVAL_SOURCE_MISSING");
 
     // REDACT-THEN-CAP, never cap-then-redact: the scan above must see the WHOLE document, or PII
     // living in the tail escapes both the scan and its audit counts. The cap only bounds what is
     // SENT (VAULT_EXTRACT_CHAR_CAP lets 400k chars be stored) — see GRAPH_EXTRACT_CHAR_CAP for the
     // head-slice ceiling and its upgrade path.
+    let actualUsd = 0;
     const { object, usage } = await generateObject({
-      model: resolveModel(DEFAULT_MODEL),
+      model: evalBudgetId
+        ? evalBudgetModel({
+            ctx,
+            tenantId,
+            budgetId: evalBudgetId,
+            model: resolveModel(DEFAULT_MODEL),
+            modelId: DEFAULT_MODEL,
+            mode: "golden",
+            onCost: (cost) => {
+              actualUsd += cost;
+            },
+          })
+        : resolveModel(DEFAULT_MODEL),
       schema: graphSchema,
       system: skill.body,
       prompt: capGraphText(safeText),
       abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-      maxRetries: 1,
+      maxRetries: evalBudgetId ? 0 : 1,
+      ...(evalBudgetId ? { maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS } : {}),
     });
     const priced = priceUsage(DEFAULT_MODEL, usage);
-    return { nodes: object.nodes, edges: object.edges, costUsd: priced.ok ? priced.value : 0 };
+    return {
+      nodes: object.nodes,
+      edges: object.edges,
+      costUsd: evalBudgetId ? actualUsd : priced.ok ? priced.value : 0,
+    };
   },
 });
 
@@ -243,8 +268,12 @@ function smokeIdentityFixture(safeText: string): DocIdentity {
  * is an ops query counting `unclassified` rows, not a new column.
  */
 export const classifyDoc = internalAction({
-  args: { vaultDocId: v.id("vaultDocuments"), tenantId: v.string() },
-  handler: async (ctx, { vaultDocId, tenantId }): Promise<DocIdentity> => {
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
+  },
+  handler: async (ctx, { vaultDocId, tenantId, evalBudgetId }): Promise<DocIdentity> => {
     try {
       // Load the classifier prompt FIRST, and BEFORE the offline seam (the `vaultDigest.ts:282`
       // ordering): the SMOKE path has to exercise the registry too, or the seam hides an unseeded
@@ -265,7 +294,7 @@ export const classifyDoc = internalAction({
       const safeText = scan.value.safeText;
 
       // Offline deterministic path, ABOVE the cap so the fixture is unaffected by it.
-      if (safeText.startsWith(SMOKE_PREFIX) && fixtureSeamFor(tenantId))
+      if (!evalBudgetId && safeText.startsWith(SMOKE_PREFIX) && fixtureSeamFor(tenantId))
         return smokeIdentityFixture(safeText);
 
       // A doc with no text has nothing to identify. `getDocText` returns "" for a missing or
@@ -275,13 +304,27 @@ export const classifyDoc = internalAction({
       // REDACT-THEN-CAP, never cap-then-redact — the scan above saw the WHOLE document; the cap
       // bounds only what is SENT (DOC_CLASSIFY_CHAR_CAP, ~15× under the extractor's: identity
       // lives in the first page).
+      let actualUsd = 0;
       const { object, usage } = await generateObject({
-        model: resolveModel(DEFAULT_MODEL),
+        model: evalBudgetId
+          ? evalBudgetModel({
+              ctx,
+              tenantId,
+              budgetId: evalBudgetId,
+              model: resolveModel(DEFAULT_MODEL),
+              modelId: DEFAULT_MODEL,
+              mode: "golden",
+              onCost: (cost) => {
+                actualUsd += cost;
+              },
+            })
+          : resolveModel(DEFAULT_MODEL),
         schema: classifySchema,
         system: skill.body,
         prompt: capClassifyText(safeText),
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: evalBudgetId ? 0 : 1,
+        ...(evalBudgetId ? { maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS } : {}),
       });
       const priced = priceUsage(DEFAULT_MODEL, usage);
       return {
@@ -299,9 +342,12 @@ export const classifyDoc = internalAction({
         // never fail the document" rule this function exists to keep, broken by the one field
         // nobody coerced.
         identityLine: typeof object.identityLine === "string" ? object.identityLine : "",
-        costUsd: priced.ok ? priced.value : 0,
+        costUsd: evalBudgetId ? actualUsd : priced.ok ? priced.value : 0,
       };
-    } catch {
+    } catch (error) {
+      // Ordinary classification may degrade cosmetically. Evaluation must preserve unknown
+      // paid outcomes and stop the workflow, not report a free successful classification.
+      if (evalBudgetId) throw error;
       return UNIDENTIFIED;
     }
   },

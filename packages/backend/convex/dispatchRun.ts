@@ -300,6 +300,7 @@ export const startTeamRun = internalMutation({
     rootRequestId: v.string(),
     skillVersions: v.optional(v.record(v.string(), v.number())),
     tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
+    evalBudgetId: v.optional(v.id("spendEvents")),
   },
   handler: async (ctx, a): Promise<TeamRunResult> => {
     const assignments = legalAssignments(a.assignments);
@@ -357,6 +358,7 @@ export const startTeamRun = internalMutation({
         spentCents: 0,
         ...(a.skillVersions === undefined ? {} : { skillVersions: a.skillVersions }),
         ...(a.tenantSkillIds === undefined ? {} : { tenantSkillIds: a.tenantSkillIds }),
+        ...(a.evalBudgetId === undefined ? {} : { evalBudgetId: a.evalBudgetId }),
       });
     }
 
@@ -491,6 +493,7 @@ export const startContentBatch = internalMutation({
     rootRequestId: v.string(),
     skillVersions: v.optional(v.record(v.string(), v.number())),
     tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
+    evalBudgetId: v.optional(v.id("spendEvents")),
   },
   handler: async (ctx, a): Promise<TeamRunResult> => {
     const wanted = legalVariants(a.piece, a.variants);
@@ -541,6 +544,7 @@ export const startContentBatch = internalMutation({
         rootRequestId: a.rootRequestId,
         ...(a.skillVersions === undefined ? {} : { skillVersions: a.skillVersions }),
         ...(a.tenantSkillIds === undefined ? {} : { tenantSkillIds: a.tenantSkillIds }),
+        ...(a.evalBudgetId === undefined ? {} : { evalBudgetId: a.evalBudgetId }),
       });
     }
 

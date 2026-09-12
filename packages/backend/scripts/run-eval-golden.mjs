@@ -46,6 +46,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
+import { computeEvaluatorRevision } from "./goldenEvaluatorIdentity.mjs";
+import { invokePaidOnce, PaidCallUnresolved } from "./goldenPaidAttempt.mjs";
 import { must } from "./smokeRun.mjs";
 
 const parse = (out) => JSON.parse(out);
@@ -55,25 +57,20 @@ const parse = (out) => JSON.parse(out);
 // retry bills a second model turn) or skills:recordEvalEvidence (a duplicate evidence row).
 const RETRY_READ = { retryOnEmpty: true };
 
-// 2026-08-10: the PAID turn now retries on EMPTY stdout too, reversing the note above — not because
-// the double-billing risk went away, but because it was measured and it is the cheaper side.
-//
-// `must()` retries only when stdout is EMPTY and no failure banner printed, which on this box means
-// exactly one thing: the Windows/Node-24 `UV_HANDLE_CLOSING` teardown crash, where `convex run`
-// completes and dies before flushing. A REAL error still prints a banner and still fails hard, so
-// this cannot mask a genuine refusal, a governed stop, or a model error.
-//
-// The economics, both measured this session: a duplicated turn bills ~$0.01. The hard fail it
-// replaces costs a ~$0.42 full-gate re-run, because evidence writes only on an all-green unfiltered
-// run — so ONE teardown crash on ONE fixture discards the whole gate. It hit twice in three
-// attempts (fixture 18 local, fixture 10 cloud), both at $0.0000.
-//
-// The durable fix is to stop shelling out to `npx convex run` and use ConvexHttpClient in
-// `smokeRun.mjs`'s `must()`, which removes the crash for every script in the repo. Deferred: that
-// is a refactor of a shared helper and wants its own test pass, and this flag buys the same
-// outcome for one line. ponytail: retry-on-empty here, ConvexHttpClient in `must()` when someone
-// touches that helper for another reason.
-const RETRY_TURN = { retryOnEmpty: true };
+// Phase 23: an empty/failed paid response is an unresolved charge, never a free failed case.
+// Checkpoint before the action; retain refs/hash receipts and abort without retry or evidence.
+const paidAttemptDirectory = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../.tmp/golden-paid-attempts",
+);
+const mustPaid = (fn, args) =>
+  invokePaidOnce({
+    invoke: must,
+    directory: paidAttemptDirectory,
+    fn,
+    args,
+    attemptId: args.turnId ?? randomUUID(),
+  });
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 const costSrcPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../cost/src/cost.ts");
 const skillsLockPath = resolve(dirname(fileURLToPath(import.meta.url)), "../skills-lock.json");
@@ -358,6 +355,11 @@ function assertSuiteIdentity() {
   const computed = computeSuiteIdentity();
   const manifest = readSuiteManifest();
   const owned = codeOwnedSuite();
+  assert.equal(
+    owned.revision,
+    computeEvaluatorRevision(),
+    "golden evaluator changed; refresh exact evaluator revision before a paid run",
+  );
 
   const byFile = new Map((manifest.cases ?? []).map((c) => [c.file, c.sha256]));
   const added = computed.cases.filter((c) => !byFile.has(c.file)).map((c) => c.file);
@@ -2074,20 +2076,16 @@ async function liveRevenueDiagnostic(pins, stateSuite) {
         const seed = parse(must("smoke:seedRevenueEvalCase", { tenantId, fixtureId: fixture.id }));
         const turnId = randomUUID();
         const run = parse(
-          must(
-            "llm:runRevenueCandidateEval",
-            {
-              tenantId,
-              threadId: seed.threadId,
-              turnId,
-              planId: seed.planId,
-              fixtureId: fixture.id,
-              skillName: pin.name,
-              skillVersion: pin.version,
-              prompt: fixture.turns.join("\n\n"),
-            },
-            RETRY_TURN,
-          ),
+          mustPaid("llm:runRevenueCandidateEval", {
+            tenantId,
+            threadId: seed.threadId,
+            turnId,
+            planId: seed.planId,
+            fixtureId: fixture.id,
+            skillName: pin.name,
+            skillVersion: pin.version,
+            prompt: fixture.turns.join("\n\n"),
+          }),
         );
         const caseCostUsd = Number(run.costUsd ?? 0);
         pinCostUsd += caseCostUsd;
@@ -2121,6 +2119,7 @@ async function liveRevenueDiagnostic(pins, stateSuite) {
         casesPassed++;
         console.log(`[eval:golden] PASS ${pin.name}@${pin.version} / ${fixture.id}`);
       } catch (error) {
+        if (error instanceof PaidCallUnresolved) throw error;
         failures.push(`${fixture.id}: ${error.message}`);
         console.error(
           `[eval:golden] FAIL ${pin.name}@${pin.version} / ${fixture.id}: ${error.message}`,
@@ -4516,7 +4515,7 @@ function waitForResearchLanding(planId, tenantId, threadId) {
 const authoringTenantFor = (runTenant, fixture, attempt) =>
   fixture.authoring === true ? `${runTenant}-${fixture.id.slice(0, 24)}-a${attempt}` : runTenant;
 
-function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1) {
+function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1, evalBudgetId) {
   // THE ATTEMPT NUMBER IS PART OF THE TENANT, and it has to be. The flake policy re-runs a failed
   // case once; on an authoring case the first attempt has already left an immutable pending
   // candidate, and the v1 writer correctly refuses a changed draft while one is pending — so a
@@ -4554,33 +4553,30 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1)
   const history = [];
   for (const text of fixture.turns) {
     const res = parse(
-      must(
-        "llm:runCockpitAgent",
-        {
-          tenantId: tenant,
-          threadId,
-          planId,
-          text,
-          // 16-09: MINT A TURN ID, exactly as the production driver does (`cockpit.ts` — "the driver
-          // mints the turnId"). This is not just trace plumbing. `dispatchResearch` is built only
-          // under `grantDispatch && threadId && rootRequestId`, and `rootRequestId` IS this value
-          // (llm.ts:2069) — so omitting it silently REMOVED the research tool from the record for
-          // every fixture. Cases 32-34 could not pass no matter what the skill body said, and the
-          // failure was invisible because the arg is optional and its documented effect ("undefined
-          // ⇒ the loop emits nothing") sounds harmless. Per TURN, like production — not per case.
-          turnId: randomUUID(),
-          // Phase 19 (ACTN-05): the OPT-IN clock. Spread away entirely unless the fixture sets
-          // `clock: true`, so every pre-19 case's request is byte-identical to the one that passed
-          // the last gate. `nowMs` is the real clock, not a pinned instant: "tomorrow" and a weekday
-          // name must resolve FORWARD (parseSendTime returns `past` otherwise), and the assertion is
-          // a COUNT, so nothing here depends on which instant it lands on.
-          ...(fixture.clock ? { clientContext: { tz: "UTC", nowMs: Date.now() } } : {}),
-          ...(history.length ? { history } : {}),
-          ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
-          ...tenantPinArg,
-        },
-        RETRY_TURN,
-      ),
+      mustPaid("llm:runCockpitAgent", {
+        tenantId: tenant,
+        ...(evalBudgetId ? { evalBudgetId } : {}),
+        threadId,
+        planId,
+        text,
+        // 16-09: MINT A TURN ID, exactly as the production driver does (`cockpit.ts` — "the driver
+        // mints the turnId"). This is not just trace plumbing. `dispatchResearch` is built only
+        // under `grantDispatch && threadId && rootRequestId`, and `rootRequestId` IS this value
+        // (llm.ts:2069) — so omitting it silently REMOVED the research tool from the record for
+        // every fixture. Cases 32-34 could not pass no matter what the skill body said, and the
+        // failure was invisible because the arg is optional and its documented effect ("undefined
+        // ⇒ the loop emits nothing") sounds harmless. Per TURN, like production — not per case.
+        turnId: randomUUID(),
+        // Phase 19 (ACTN-05): the OPT-IN clock. Spread away entirely unless the fixture sets
+        // `clock: true`, so every pre-19 case's request is byte-identical to the one that passed
+        // the last gate. `nowMs` is the real clock, not a pinned instant: "tomorrow" and a weekday
+        // name must resolve FORWARD (parseSendTime returns `past` otherwise), and the assertion is
+        // a COUNT, so nothing here depends on which instant it lands on.
+        ...(fixture.clock ? { clientContext: { tz: "UTC", nowMs: Date.now() } } : {}),
+        ...(history.length ? { history } : {}),
+        ...(pins.length ? { skillVersions: skillVersionsOf(pins) } : {}),
+        ...tenantPinArg,
+      }),
     );
     if (res.blocked) {
       // 22.1-02 made `dailySpendCents` KEYED per tenant, so `smoke:resetDailySpend` gained a
@@ -4623,8 +4619,9 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1)
   let dispatchFailures = null;
   if (fixture.actOnGap !== undefined) {
     const tap = parse(
-      must("evaluations:actOnGapInternal", {
+      mustPaid("evaluations:actOnGapInternal", {
         tenantId: tenant,
+        ...(evalBudgetId ? { evalBudgetId } : {}),
         threadId,
         gapIndex: fixture.actOnGap,
         // 16-09: the pins have to ride the TAP too, exactly as they ride the turn at :1074. The
@@ -4922,6 +4919,33 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
   );
   const { tenantSkillIds } = mergePinScopes(pins, tenantTargets);
 
+  // One persistent envelope covers seed embeddings, every case/attempt, nested models and
+  // scheduled work. The server verifies standard provider billing before opening it.
+  const tenantIds = [
+    ...new Set([
+      tenant,
+      ...fixtures.flatMap((fixture) =>
+        [1, 2].map((attempt) => authoringTenantFor(tenant, fixture, attempt)),
+      ),
+    ]),
+  ];
+  const evalBudgetId = parse(
+    must("guardrails:openEvalBudget", {
+      tenantIds,
+      capCents: Math.round(COST_CAP_USD * 100),
+      family: "golden",
+    }),
+  );
+  console.log(`[eval:golden] budget ${evalBudgetId}; unresolved calls retain their reservation`);
+  const assertSettledBudget = () => {
+    const status = parse(
+      must("guardrails:evalBudgetStatus", { budgetId: evalBudgetId }, RETRY_READ),
+    );
+    if (status.unsettledCount || status.breached || status.expired || status.closed)
+      throw new PaidCallUnresolved("GOLDEN_BUDGET_UNRESOLVED");
+    return status;
+  };
+
   console.log(
     `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${COST_CAP_USD.toFixed(2)}` +
       (pins.length ? `, pins ${pins.map((p) => `${p.name}@${p.version}`).join(" ")}` : "") +
@@ -4951,7 +4975,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
   // "Northwind-evalgrd" logistics briefs. The eval tenant is throwaway (`eval-${runId}`) — no purge
   // (the inbox seed isn't purged either). Needs the deployment OPENAI_API_KEY the eval already requires.
   const { docIds: vaultDocIds } = parse(
-    must("vaultSmoke:seedCorpus", { tenantId: tenant, needle: VAULT_NEEDLE }),
+    mustPaid("vaultSmoke:seedCorpus", { tenantId: tenant, needle: VAULT_NEEDLE, evalBudgetId }),
   );
   console.log(`[eval:golden] seeded vault corpus: ${vaultDocIds.length} doc(s), live embed`);
 
@@ -4982,8 +5006,9 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
     let outcome;
     let retried = false;
     try {
-      outcome = attemptCase(fixture, tenant, pins, tenantSkillIds, 1);
+      outcome = attemptCase(fixture, tenant, pins, tenantSkillIds, 1, evalBudgetId);
     } catch (e) {
+      if (e instanceof PaidCallUnresolved) throw e;
       outcome = {
         pass: false,
         failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
@@ -4991,13 +5016,15 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
         specialistCost: 0,
       };
     }
+    assertSettledBudget();
     if (!outcome.pass) {
       // Flake policy (locked): exactly ONE automatic re-run on a FRESH seeded plan.
       retried = true;
       let second;
       try {
-        second = attemptCase(fixture, tenant, pins, tenantSkillIds, 2);
+        second = attemptCase(fixture, tenant, pins, tenantSkillIds, 2, evalBudgetId);
       } catch (e) {
+        if (e instanceof PaidCallUnresolved) throw e;
         second = {
           pass: false,
           failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
@@ -5005,6 +5032,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
           specialistCost: 0,
         };
       }
+      assertSettledBudget();
       // Both attempts' money is real — the specialist half of it too.
       const merged = {
         caseCost: outcome.caseCost + second.caseCost,
@@ -5047,6 +5075,13 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
     }
   }
 
+  const budgetStatus = assertSettledBudget();
+  // Closing is a required evidence gate, not best-effort cleanup. Scheduled late callers are
+  // refused by this same durable envelope, and unresolved work prevents closure/evidence.
+  must("guardrails:closeEvalBudget", { budgetId: evalBudgetId });
+  console.log(
+    `[eval:golden] closed budget ${evalBudgetId}; authoritative spend $${budgetStatus.actualUsd.toFixed(6)}`,
+  );
   const casesPassed = results.filter((r) => r.pass).length;
   const casesTotal = results.length;
   const allGreen = casesPassed === casesTotal;
@@ -5202,7 +5237,7 @@ function teardownEvalTenant(tenantId, allGreen) {
   if (!allGreen) {
     console.log(
       `[eval:golden] tenant ${tenantId} KEPT — a failed run's rows are the evidence for why. ` +
-        `Remove it with: npx convex run tenantDelete:purgeEvalTenant '{"tenantId":"${tenantId}"}'`,
+        `Remove fixture data with exact tenant cleanup while preserving spendEvents; budget evidence must remain.`,
     );
     return;
   }
@@ -5212,7 +5247,13 @@ function teardownEvalTenant(tenantId, allGreen) {
     // Paged: the mutation bounds its own batch, so loop until a full pass moves nothing. The cap is
     // a runaway guard, not an expected limit.
     for (let i = 0; i < 200; i++) {
-      const out = JSON.parse(must("tenantDelete:purgeEvalTenant", { tenantId }) || "{}");
+      const out = JSON.parse(
+        must("tenantDelete:purgeEvalTenant", {
+          tenantId,
+          exact: true,
+          preserveSpendEvents: true,
+        }) || "{}",
+      );
       deleted += out.deleted ?? 0;
       blobs += out.blobs ?? 0;
       if (out.done) break;
@@ -5363,6 +5404,12 @@ try {
   selfCheck();
   await runLive(parseSkillPins(argv), parseOnlyFilters(argv), parseTenantSkillIds(argv));
 } catch (e) {
+  if (e instanceof PaidCallUnresolved) {
+    console.error(
+      "[eval:golden] GOLDEN_PAID_CALL_UNRESOLVED; retained recovery checkpoints; no retry, evidence, or cleanup.",
+    );
+    process.exit(2);
+  }
   console.error(`[eval:golden] ${e.message}`);
   process.exit(1);
 }

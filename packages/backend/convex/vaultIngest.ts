@@ -36,6 +36,7 @@ export async function startIngest(
     correlationId,
     rail,
     reserved,
+    evalBudgetId,
   }: {
     vaultDocId: Id<"vaultDocuments">;
     tenantId: string;
@@ -44,12 +45,32 @@ export async function startIngest(
      *  today's token-rail behaviour. Folder ingest passes `"ingest"` + `reserved: true`. */
     rail?: "ingest";
     reserved?: boolean;
+    /** Trusted internal evaluation lineage; never accepted from a public upload. */
+    evalBudgetId?: Id<"spendEvents">;
   },
 ): Promise<void> {
+  // Recovery callers have only the document. Retain its original envelope rather than
+  // restarting evaluated work on ordinary daily budget after a crash or manual retry.
+  const doc = await ctx.db.get(vaultDocId);
+  if (evalBudgetId && (!doc || doc.tenantId !== tenantId))
+    throw new Error("EVAL_INGEST_SCOPE_MISMATCH");
+  if (doc?.evalBudgetId) {
+    if (doc.tenantId !== tenantId || (evalBudgetId && evalBudgetId !== doc.evalBudgetId))
+      throw new Error("EVAL_INGEST_SCOPE_MISMATCH");
+    evalBudgetId = doc.evalBudgetId;
+  }
+  if (evalBudgetId && doc && !doc.evalBudgetId) await ctx.db.patch(vaultDocId, { evalBudgetId });
   await workflow.start(
     ctx,
     internal.vaultIngest.ingestDoc,
-    { vaultDocId, tenantId, correlationId, rail, reserved },
+    {
+      vaultDocId,
+      tenantId,
+      correlationId,
+      rail,
+      reserved,
+      ...(evalBudgetId ? { evalBudgetId } : {}),
+    },
     {
       onComplete: internal.vaultIngest.onIngestComplete,
       context: { tenantId, vaultDocId, correlationId },
@@ -102,7 +123,10 @@ export const retryStuckIngestsBatch = migrations.define({
   migrateOne: async (ctx, d) => {
     const cutoff = Date.now() - STUCK_INGEST_MS;
     {
-      if (d.status !== "processing" || d.ragEntryId || d.createdAt > cutoff) return;
+      // Evaluation outcomes may be ambiguous after interruption. Never turn an operator
+      // recovery sweep into a second paid attempt; retained fixtures require explicit review.
+      if (d.evalBudgetId || d.status !== "processing" || d.ragEntryId || d.createdAt > cutoff)
+        return;
       // A folder member re-started by this sweep must NOT go back to spending the cockpit's
       // budget — the rail is derived from the row, because the sweep has no other context.
       // 15.3-04: RESOLVE the id, never test it for truthiness. Cancel DELETES the folder row and
@@ -151,8 +175,9 @@ export const ingestDoc = workflow.define({
     // behaviour every pre-15.3 caller had.
     rail: v.optional(v.literal("ingest")),
     reserved: v.optional(v.boolean()),
+    evalBudgetId: v.optional(v.id("spendEvents")),
   },
-  handler: async (step, { vaultDocId, tenantId, rail, reserved }): Promise<null> => {
+  handler: async (step, { vaultDocId, tenantId, rail, reserved, evalBudgetId }): Promise<null> => {
     // (1) Governed gate BEFORE any spend. A kill-switch / daily-budget stop marks the row failed
     // and returns — the governed stop halts ingest, never a DLQ throw (kill switch stops it).
     // Reserved folder work reaches only the kill-switch branch (guardrails.preCall).
@@ -163,10 +188,12 @@ export const ingestDoc = workflow.define({
     }
 
     // (2) Embed the redacted text (rag.add, hash-dedup) → entryId + cost.
-    const embed = await step.runAction(internal.vaultRag.embedDoc, { vaultDocId, tenantId });
+    const paidArgs = { vaultDocId, tenantId, ...(evalBudgetId ? { evalBudgetId } : {}) };
+    const paidOptions = evalBudgetId ? { retry: false as const } : undefined;
+    const embed = await step.runAction(internal.vaultRag.embedDoc, paidArgs, paidOptions);
 
     // (3) Extract typed entities + relationships from the redacted text (redact-then-extract, §4).
-    const graph = await step.runAction(internal.vaultLlm.extractGraph, { vaultDocId, tenantId });
+    const graph = await step.runAction(internal.vaultLlm.extractGraph, paidArgs, paidOptions);
 
     // (4) Upsert the graph with cross-doc dedup + degree bookkeeping (sourceDocId = this doc).
     await step.runMutation(internal.vaultGraph.upsertGraph, {
@@ -186,7 +213,7 @@ export const ingestDoc = workflow.define({
     // (see its handler: a throw here would retry three times and then fail the whole document for
     // a cosmetic label). `applyClassification` is the write boundary, and it is the thing that
     // refuses to overwrite an identity the USER set.
-    const identity = await step.runAction(internal.vaultLlm.classifyDoc, { vaultDocId, tenantId });
+    const identity = await step.runAction(internal.vaultLlm.classifyDoc, paidArgs, paidOptions);
     await step.runMutation(internal.vault.applyClassification, {
       vaultDocId,
       tenantId,
@@ -212,20 +239,23 @@ export const ingestDoc = workflow.define({
     // No `model` — this one row folds an embedding, an extraction and a classification call, so no
     // single model id would be honest. No `folderId` either: the workflow never loads the doc row,
     // and a read purely to label the ledger is a transaction the ingest spine does not need.
-    await step.runMutation(
-      internal.guardrails.recordSpend,
-      {
-        tenantId,
-        costUsd: embed.costUsd + graph.costUsd + identity.costUsd,
-        rail,
-        correlationId: `vault:ingest:${vaultDocId}:${step.workflowId}`,
-        kind: "vault.ingest", // code-owned token, refs only (§4)
-      },
-      // A journaled step validates its args on replay, so ADDING a field throws "Journal entry
-      // mismatch" for every ingest already in flight at deploy. `unstableArgs` waives that check
-      // for this step only — the args stay deterministic, they are just no longer compared.
-      { unstableArgs: true },
-    );
+    // Evaluation middleware settles every provider call into the shared envelope already.
+    // A second folded record would double-count spend; missing usage never becomes a zero.
+    if (!evalBudgetId)
+      await step.runMutation(
+        internal.guardrails.recordSpend,
+        {
+          tenantId,
+          costUsd: embed.costUsd + graph.costUsd + identity.costUsd,
+          rail,
+          correlationId: `vault:ingest:${vaultDocId}:${step.workflowId}`,
+          kind: "vault.ingest", // code-owned token, refs only (§4)
+        },
+        // A journaled step validates its args on replay, so ADDING a field throws "Journal entry
+        // mismatch" for every ingest already in flight at deploy. `unstableArgs` waives that check
+        // for this step only — the args stay deterministic, they are just no longer compared.
+        { unstableArgs: true },
+      );
 
     // (7) Terminal: the doc is embedded + extracted → groundable.
     await step.runMutation(internal.vault.markReady, { vaultDocId, ragEntryId: embed.entryId });

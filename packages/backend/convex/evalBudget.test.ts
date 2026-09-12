@@ -21,6 +21,123 @@ const harness = () => {
 };
 afterEach(() => vi.useRealTimers());
 
+async function goldenEnvelope(t: ReturnType<typeof harness>) {
+  return t.run((ctx) =>
+    ctx.db.insert("spendEvents", {
+      tenantId: "eval-abcdef12",
+      rail: "reasoning",
+      phase: "estimated",
+      amountCents: 200,
+      correlationId: "offline-golden-close",
+      kind: "eval_envelope",
+      createdAt: Date.now(),
+      evalEnvelope: {
+        tenantIds: ["eval-abcdef12"],
+        expiresAt: Date.now() + EVAL_BUDGET_LIFETIME_MS,
+      },
+    }),
+  );
+}
+
+test("golden closure refuses queued descendants before their first reservation", async () => {
+  const t = harness();
+  const budgetId = await goldenEnvelope(t);
+  const planId = await t.run((ctx) =>
+    ctx.db.insert("plans", {
+      tenantId: "eval-abcdef12",
+      threadId: "queued",
+      kind: "memo",
+      status: "collecting",
+      recipients: [],
+      subject: "",
+      body: "",
+      createdAt: Date.now(),
+    }),
+  );
+  await expect(t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).rejects.toThrow(
+    "GOLDEN_GRAPH_NOT_SETTLED",
+  );
+  await t.run((ctx) =>
+    ctx.db.patch(planId, { status: "proposed", workflowId: "unknown-workflow" }),
+  );
+  await expect(t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).rejects.toThrow(
+    "GOLDEN_GRAPH_NOT_SETTLED",
+  );
+  await t.run(async (ctx) => {
+    await ctx.db.patch(planId, { workflowId: undefined });
+    // Ordinary incomplete composition and another tenant's paid work do not block this run.
+    await ctx.db.insert("plans", {
+      tenantId: "eval-abcdef12",
+      threadId: "draft",
+      status: "collecting",
+      recipients: [],
+      subject: "",
+      body: "",
+      createdAt: Date.now(),
+    });
+    await ctx.db.insert("plans", {
+      tenantId: "eval-ffffffff",
+      threadId: "other",
+      kind: "memo",
+      status: "collecting",
+      recipients: [],
+      subject: "",
+      body: "",
+      createdAt: Date.now(),
+    });
+  });
+  expect(await t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).toMatchObject({
+    closed: true,
+  });
+});
+
+test("golden closure waits for the final ingest step even with an empty spend ledger", async () => {
+  const t = harness();
+  const budgetId = await goldenEnvelope(t);
+  const docId = await t.run((ctx) =>
+    ctx.db.insert("vaultDocuments", {
+      tenantId: "eval-abcdef12",
+      evalBudgetId: budgetId,
+      title: "Research",
+      kind: "web_research",
+      category: "market",
+      source: "seam",
+      mimeType: "text/markdown",
+      size: 0,
+      contentHash: "offline",
+      status: "processing",
+      createdAt: Date.now(),
+    }),
+  );
+  await expect(t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).rejects.toThrow(
+    "GOLDEN_GRAPH_NOT_SETTLED",
+  );
+  await t.run((ctx) => ctx.db.patch(docId, { status: "ready" }));
+  expect(await t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).toMatchObject({
+    closed: true,
+  });
+});
+
+test("golden closure cannot turn a partial graph inventory into success", async () => {
+  const t = harness();
+  const budgetId = await goldenEnvelope(t);
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 257; i++)
+      await ctx.db.insert("plans", {
+        tenantId: "eval-abcdef12",
+        threadId: `draft-${i}`,
+        status: "proposed",
+        recipients: [],
+        subject: "",
+        body: "",
+        createdAt: Date.now(),
+      });
+  });
+  await expect(t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).rejects.toThrow(
+    "GOLDEN_GRAPH_SCAN_LIMIT",
+  );
+});
+
 describe("aggregate evaluation reservation in existing spend plane", () => {
   test("known provider breach persists exact actual, closes budget, and rejects foreign settlement", async () => {
     const t = harness();

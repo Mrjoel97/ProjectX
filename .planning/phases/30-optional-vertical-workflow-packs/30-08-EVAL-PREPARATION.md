@@ -1,7 +1,7 @@
-# Phase 30-08 evaluation preparation — release incomplete
+# Phase 30-08 native evaluation and review producer — release incomplete
 
-The local evaluation foundation now exists. No paid run, deployment, publication, activation or
-owner approval was performed. Fixtures and scripted tests remain distinct from model evidence.
+The local native evidence producer now exists. This implementation performed no paid run or owner
+semantic approval. Fixtures and SDK transport shims remain distinct from actual model evidence.
 
 ## Implemented locally
 
@@ -60,18 +60,42 @@ offsets are UTF-8 byte offsets; `referenceProfileText` defines the exact Data-pr
 unverified and release closed. This is review preparation, not automated semantic adjudication.
 
 The original `--all-candidates --no-activate` release command remains closed and exits **2** before
-any model call. `VERTICAL_EVAL_SUITE.executable` remains false; pilot evidence, fixtures, scripted tests
-and observation JSON cannot unlock a vertical.
+any model call. `VERTICAL_EVAL_SUITE.executable` now identifies the native owner-reviewed producer;
+pilot evidence, fixtures, scripted tests and observation JSON still cannot unlock a vertical.
+
+## 2026-09-10 native authority implementation
+
+The real evaluator now acquires a durable reserved start and seals a refs-only case receipt after
+actual candidate/plan/source/artifact/tool/ledger readback. It enforces the deployed case/request/source
+corpus and evaluator hashes. The collector retains actual case assets for authenticated review and
+closes the settled budget against subsequent calls. Owner inspection exposes actual output/source
+readbacks; explicit review validates closed criteria and quote spans, while high-stakes role claims
+remain explicit self-attestations. The owner finalizer rechecks every case in the lane corpus before
+issuing existing exact-version skill evidence. Generic audit/evidence writers cannot forge this
+authority; native activation/exposure additionally verify the immutable issuance row.
+
+Pending reviews survive routine synthetic cleanup. Each deletion page checks native authority;
+explicit owner abandonment or completed issuance precedes cleanup. Reserved control-plane receipts,
+cleanup tombstones and the accounting ledger persist after content cleanup. This adds no table or
+new tool grant. Local tests drive the actual SDK loop with an unpaid transport shim and verify
+authorization, complete-corpus issuance, replay/mutation/forgery failures and retained cleanup.
+These tests do not satisfy the phase's actual semantic review or UAT requirements.
 
 ## Remaining gates
+
+Verification resumed 2026-09-11: 72 focused backend tests passed across native evidence,
+source provisioning, native binding, tenant cleanup and audit immutability. These include
+real SDK lifecycle callbacks with transport-only stubs for zero-tool and search/save paths,
+complete-shaped imported-evidence rejection, and complete-corpus authenticated test reviews.
+The stubs and synthetic owner identities remain implementation tests, not live acceptance.
 
 1. Run the exact native collection in an authorized environment and inspect real billing/model/output
    observations. All six candidates remain unpaid during this implementation task.
 2. Complete measured semantic assertions: unsupported claims, cited reasoning, review/disclaimers,
    Legal jurisdiction/playbook rules, HR prohibited decisions, Data numeric consistency and visual
    review quality. Existing partial expectations cannot overwrite observed adapter-blocked results.
-3. Pin evaluator/model/source/corpus revisions and record native versioned evidence only after the
-   complete required corpus passes. Keep the release predicate closed until that producer is tested;
-   filtered or scripted runs cannot satisfy it.
+3. Use the implemented native owner finalizer only after the actual complete required corpus has
+   accepted explicit semantic reviews. The producer now pins evaluator/model/source/corpus revisions;
+   filtered, scripted, stale, contradicted or incomplete runs cannot satisfy it.
 4. Obtain the plan's owner review and authenticated responsive UAT for exact versions. Do not create
    the phase completion summary or activate candidates before those gates are earned.

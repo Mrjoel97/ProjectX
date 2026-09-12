@@ -1,4 +1,4 @@
-// Observation collection is a PAID diagnostic, never semantic release evidence.
+// Opt-in paid native observations; retained for authenticated review, never automatic semantic pass.
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { convexToJson, jsonToConvex } from "convex/values";
@@ -91,7 +91,10 @@ export async function collectObservations({
       /** @type {Array<{caseId:string,caseHash:string,sourceManifest:ReturnType<typeof sourceManifest>,observation:Record<string,unknown>}>} */ ([]),
     cleanup: /** @type {Array<{caseId:string,done:boolean,reason?:string}>} */ ([]),
     outputArchives: /** @type {Array<{caseId:string,outputRef:string,sha256:string}>} */ ([]),
+    nativeReceipts: /** @type {Array<{caseId:string,receiptId:string}>} */ ([]),
+    retention: "authenticated-owner-review-required",
     budget: null,
+    budgetStatusUnavailable: false,
   };
   const provisioned = [];
   const attempted = [];
@@ -133,6 +136,15 @@ export async function collectObservations({
         budgetId,
         text: item.text,
       });
+      assert(
+        typeof observation.nativeCaseReceiptId === "string" &&
+          observation.nativeCaseReceiptId.length > 0,
+        "NATIVE_CASE_RECEIPT_REQUIRED",
+      );
+      report.nativeReceipts.push({
+        caseId: item.pin.caseId,
+        receiptId: observation.nativeCaseReceiptId,
+      });
       // Keep actual output for review even when mechanical qualification rejects this result.
       if (typeof observation.result?.reply === "string") {
         outputsArchived = false;
@@ -172,7 +184,7 @@ export async function collectObservations({
       });
       await checkpoint(report);
     }
-    report.status = "observations-collected-review-required";
+    report.status = "observations-retained-for-owner-review";
   } catch {
     report.failureCode = "COLLECTION_OPERATION_FAILED";
   } finally {
@@ -187,6 +199,12 @@ export async function collectObservations({
         );
         if (report.budget.breached || report.budget.unsettledCount > 0)
           report.status = "observations-incomplete";
+        else {
+          const closure = await transport("guardrails:closeEvalBudget", { budgetId });
+          assert(closure.closed === true && closure.budgetId === budgetId, "BUDGET_CLOSE_REQUIRED");
+          report.budget = await transport("guardrails:evalBudgetStatus", { budgetId });
+          assert(report.budget.closed === true, "BUDGET_CLOSE_READBACK_REQUIRED");
+        }
       } catch {
         report.budgetStatusUnavailable = true;
         report.status = "observations-incomplete";
@@ -207,6 +225,17 @@ export async function collectObservations({
         report.budget.unsettledCount === 0 &&
         Number.isFinite(report.budget.actualUsd));
     for (const item of attempted) {
+      // All real executions acquire a native start before the provider. Even a lost response may
+      // have retained output. Owner review/issuance or explicit authenticated abandonment grants
+      // cleanup; a local checkpoint or a blanket request to finish does not grant semantic approval.
+      if (budgetId) {
+        report.cleanup.push({
+          caseId: item.pin.caseId,
+          done: false,
+          reason: "RETAINED_FOR_AUTHENTICATED_REVIEW",
+        });
+        continue;
+      }
       if (!checkpointSaved || !quiescent || !outputsArchived || !remoteOutcomeKnown) {
         report.cleanup.push({
           caseId: item.pin.caseId,

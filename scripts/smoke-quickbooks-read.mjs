@@ -51,6 +51,12 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const backendDir = fileURLToPath(new URL("../packages/backend/", import.meta.url));
+const convexBin = fileURLToPath(
+  new URL("../packages/backend/node_modules/convex/bin/main.js", import.meta.url),
+);
 
 const SCHEMA = "quickbooks-read-lane/v1";
 const PROVIDER = "quickbooks";
@@ -201,8 +207,8 @@ export function buildEvidence({ mode, environment, reads, revocation, requestCou
     recordedAt: new Date().toISOString(),
     reads,
     revocation,
-    // Raw material for the open condition: how many requests four bounded reads actually cost.
-    // A number, not a verdict — the budget it has to fit inside is the unknown.
+    // Legacy v1 field: successful entity reads, NOT HTTP requests. Pagination and refresh
+    // calls are not measured here, so this count cannot establish a provider poll budget.
     requestCount,
     openCondition: {
       id: OPEN_CONDITION,
@@ -212,19 +218,21 @@ export function buildEvidence({ mode, environment, reads, revocation, requestCou
       observed:
         mode === "self-test"
           ? "NOT OBSERVED — this file came from a stub, no request reached Intuit"
-          : `four bounded reads cost ${requestCount} request(s) against an unstated tier budget`,
+          : `${requestCount} entity read(s) returned data coverage; provider HTTP request count and tier budget are unmeasured`,
     },
   };
 }
 
 // ── The live run ──────────────────────────────────────────────────────────────────────────
 
-function convexRun(fn, args) {
-  const out = execFileSync(
-    "npx",
-    ["convex", "run", fn, JSON.stringify(args)],
-    // The Convex CLI only works from the backend package (a standing repo gotcha).
-    { cwd: "packages/backend", encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: true },
+export function convexRun(fn, args, run = execFileSync, target = process.env.PIKAR_CONVEX_TARGET) {
+  // Match the seal runner: production is an explicit per-invocation opt-in. The
+  // provider environment is independent of the Convex deployment selection.
+  // No shell: Windows must receive the JSON payload as one unchanged argv element.
+  const out = run(
+    process.execPath,
+    [convexBin, "run", ...(target === "prod" ? ["--prod"] : []), fn, JSON.stringify(args)],
+    { cwd: backendDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: false },
   );
   // `convex run` prints the return value as the last JSON-ish block.
   const start = out.indexOf("{");
@@ -503,6 +511,9 @@ function main(argv) {
   const doRevoke = flag("--revoke");
   console.log(
     `smoke-quickbooks-read — ${environment}, ${doRevoke ? "read + REVOKE" : "read only"}`,
+  );
+  console.log(
+    `  Convex deployment: ${process.env.PIKAR_CONVEX_TARGET === "prod" ? "production (--prod)" : "CLI default (no --prod)"}`,
   );
   if (doRevoke) {
     console.log("  WARNING: --revoke DESTROYS the grant. Use a disposable sandbox company.");

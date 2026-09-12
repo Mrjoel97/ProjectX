@@ -12,7 +12,7 @@ import {
 import { contentHash } from "./lib/hash";
 import { sealedIn } from "./vaultFolders";
 
-const pinArgs = {
+export const pinArgs = {
   runId: v.string(),
   caseId: v.string(),
   caseHash: v.string(),
@@ -21,7 +21,7 @@ const pinArgs = {
   candidateVersion: v.number(),
   bodyHash: v.string(),
 };
-type Pin = {
+export type Pin = {
   runId: string;
   caseId: string;
   caseHash: string;
@@ -135,6 +135,7 @@ export const purgeCase = internalAction({
     args,
   ): Promise<{ tenantId: string; deleted: number; blobs: number; done: true }> => {
     const { tenantId, receiptId } = await ctx.runQuery(internal.verticalEvalSources.receipt, args);
+    await ctx.runMutation(internal.verticalEvalEvidence.claimCleanup, args);
     let deleted = 0;
     let blobs = 0;
     for (let page = 0; page < 50; page++) {
@@ -154,79 +155,77 @@ export const purgeCase = internalAction({
 });
 
 /** Actual immutable provision record and current owned source state, never runner claims. */
-export const verifyCase = internalQuery({
-  args: pinArgs,
-  handler: async (ctx, args) => {
-    const ids = identity(args);
-    const marker = await ctx.db
-      .query("audit")
-      .withIndex("by_tenant_event_ts", (q) =>
-        q.eq("tenantId", ids.tenantId).eq("eventType", "vertical_eval.provisioned"),
-      )
-      .unique();
-    const payload = marker?.payload;
-    if (
-      !marker ||
-      marker.correlationId !== ids.threadId ||
-      marker.tenantId !== ids.tenantId ||
-      payload.runId !== args.runId ||
-      payload.caseId !== args.caseId ||
-      payload.verticalId !== args.verticalId ||
-      payload.caseHash !== args.caseHash ||
-      payload.requestHash !== args.requestHash ||
-      payload.bodyHash !== args.bodyHash ||
-      payload.candidateVersion !== args.candidateVersion
+export async function verifyCaseState(ctx: QueryCtx, args: Pin) {
+  const ids = identity(args);
+  const marker = await ctx.db
+    .query("audit")
+    .withIndex("by_tenant_event_ts", (q) =>
+      q.eq("tenantId", ids.tenantId).eq("eventType", "vertical_eval.provisioned"),
     )
-      throw new Error("VERTICAL_EVAL_PROVISION_MISMATCH");
-    const candidate = await ctx.db.get(payload.candidateId as Id<"skills">);
-    const plan = await ctx.db.get(payload.planId as Id<"plans">);
+    .unique();
+  const payload = marker?.payload;
+  if (
+    !marker ||
+    marker.correlationId !== ids.threadId ||
+    marker.tenantId !== ids.tenantId ||
+    payload.runId !== args.runId ||
+    payload.caseId !== args.caseId ||
+    payload.verticalId !== args.verticalId ||
+    payload.caseHash !== args.caseHash ||
+    payload.requestHash !== args.requestHash ||
+    payload.bodyHash !== args.bodyHash ||
+    payload.candidateVersion !== args.candidateVersion
+  )
+    throw new Error("VERTICAL_EVAL_PROVISION_MISMATCH");
+  const candidate = await ctx.db.get(payload.candidateId as Id<"skills">);
+  const plan = await ctx.db.get(payload.planId as Id<"plans">);
+  if (
+    !candidate ||
+    candidate.status !== "candidate" ||
+    candidate.name !== `vertical-${args.verticalId}` ||
+    candidate.version !== args.candidateVersion ||
+    (await contentHash(candidate.body)) !== args.bodyHash ||
+    !plan ||
+    plan.tenantId !== ids.tenantId ||
+    plan.threadId !== ids.threadId
+  )
+    throw new Error("VERTICAL_EVAL_CANDIDATE_MISMATCH");
+  const sourceRefs = payload.sourceRefs as {
+    ref: string;
+    docId: Id<"vaultDocuments">;
+    hash: string;
+    storageId: Id<"_storage">;
+    mimeType: string;
+    size: number;
+  }[];
+  for (const source of sourceRefs) {
+    const doc = await ctx.db.get(source.docId);
+    const metadata = await ctx.db.system.get("_storage", source.storageId);
+    const digest = btoa(
+      String.fromCharCode(
+        ...(source.hash.match(/../g) ?? []).map((byte) => Number.parseInt(byte, 16)),
+      ),
+    );
     if (
-      !candidate ||
-      candidate.status !== "candidate" ||
-      candidate.name !== `vertical-${args.verticalId}` ||
-      candidate.version !== args.candidateVersion ||
-      (await contentHash(candidate.body)) !== args.bodyHash ||
-      !plan ||
-      plan.tenantId !== ids.tenantId ||
-      plan.threadId !== ids.threadId
+      !doc ||
+      doc.tenantId !== ids.tenantId ||
+      doc.status !== "ready" ||
+      doc.contentHash !== source.hash ||
+      doc.storageId !== source.storageId ||
+      doc.mimeType !== source.mimeType ||
+      doc.size !== source.size ||
+      !metadata ||
+      metadata.size !== source.size ||
+      metadata.sha256 !== digest ||
+      (metadata.contentType !== undefined && metadata.contentType !== source.mimeType) ||
+      (doc.mimeType === "text/plain" && (await contentHash(doc.text ?? "")) !== source.hash) ||
+      (await sealedIn(ctx, [doc])).size > 0
     )
-      throw new Error("VERTICAL_EVAL_CANDIDATE_MISMATCH");
-    const sourceRefs = payload.sourceRefs as {
-      ref: string;
-      docId: Id<"vaultDocuments">;
-      hash: string;
-      storageId: Id<"_storage">;
-      mimeType: string;
-      size: number;
-    }[];
-    for (const source of sourceRefs) {
-      const doc = await ctx.db.get(source.docId);
-      const metadata = await ctx.db.system.get("_storage", source.storageId);
-      const digest = btoa(
-        String.fromCharCode(
-          ...(source.hash.match(/../g) ?? []).map((byte) => Number.parseInt(byte, 16)),
-        ),
-      );
-      if (
-        !doc ||
-        doc.tenantId !== ids.tenantId ||
-        doc.status !== "ready" ||
-        doc.contentHash !== source.hash ||
-        doc.storageId !== source.storageId ||
-        doc.mimeType !== source.mimeType ||
-        doc.size !== source.size ||
-        !metadata ||
-        metadata.size !== source.size ||
-        metadata.sha256 !== digest ||
-        (metadata.contentType !== undefined && metadata.contentType !== source.mimeType) ||
-        (doc.mimeType === "text/plain" && (await contentHash(doc.text ?? "")) !== source.hash) ||
-        (await sealedIn(ctx, [doc])).size > 0
-      )
-        throw new Error("VERTICAL_EVAL_SOURCE_CHANGED");
-    }
-    return { ...ids, planId: plan._id, candidateId: candidate._id, sourceRefs };
-  },
-});
+      throw new Error("VERTICAL_EVAL_SOURCE_CHANGED");
+  }
+  return { ...ids, planId: plan._id, candidateId: candidate._id, sourceRefs };
+}
+export const verifyCase = internalQuery({ args: pinArgs, handler: verifyCaseState });
 
 const sourceArgs = { ref: v.string(), mimeType: mime, bytes: v.bytes() };
 /** Bytes are exact synthetic fixtures supplied by the operator runner, never fetched from a URL. */
@@ -461,6 +460,7 @@ export const commit = internalMutation({
 export const cleanup = internalMutation({
   args: pinArgs,
   handler: async (ctx, args) => {
+    await ctx.runMutation(internal.verticalEvalEvidence.claimCleanup, args);
     const ids = identity(args);
     const marker = await ctx.db
       .query("audit")

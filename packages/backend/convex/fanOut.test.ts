@@ -12,12 +12,14 @@ import {
   drafterSkillFor,
   SPREADSHEET_DRAFTER_SKILL,
 } from "@pikar/contracts/skill";
+import { v } from "convex/values";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { internalAction } from "./_generated/server";
 import { MAX_FAN_OUT, narrowFanOut } from "./lib/dispatchShared";
 import { ROOT_SCAN } from "./lib/planRow";
 import schema from "./schema";
@@ -69,6 +71,104 @@ const childrenOf = (t: T, parentPlanId: Id<"plans">) =>
   );
 
 const UMBRELLA = "What should I fix first before launch?";
+
+test("a scheduled variant keeps its evaluation budget through the nested drafter", async () => {
+  const calls: { tenantId: string; evalBudgetId?: Id<"spendEvents"> }[] = [];
+  const t = convexTest(schema, {
+    ...modules,
+    "./llm.ts": async () => ({
+      ...(await import("./llm")),
+      draftDocument: internalAction({
+        args: {
+          tenantId: v.string(),
+          evalBudgetId: v.optional(v.id("spendEvents")),
+          safeText: v.string(),
+          safeTextHash: v.string(),
+          skillName: v.string(),
+          skillVersion: v.optional(v.number()),
+        },
+        handler: async (_ctx, args) => {
+          calls.push(args);
+          return { ok: false as const, reason: "offline_drafter" };
+        },
+      }),
+    }),
+  });
+  const planId = await stagedRoot(t);
+  const evalBudgetId = await t.run((ctx) =>
+    ctx.db.insert("spendEvents", {
+      tenantId: TENANT,
+      rail: "reasoning",
+      phase: "estimated",
+      amountCents: 100,
+      correlationId: "mock-variant-budget",
+      createdAt: Date.now(),
+    }),
+  );
+  await t.action(internal.llm.runVariant, {
+    tenantId: TENANT,
+    threadId: THREAD,
+    planId,
+    brief: "Draft a short launch announcement",
+    form: "short",
+    rootRequestId: "budget-tree",
+    evalBudgetId,
+  });
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({ tenantId: TENANT, evalBudgetId });
+  expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("proposed");
+});
+
+test.each([
+  "team",
+  "content",
+])("%s children all retain the same trusted evaluation budget", async (kind) => {
+  const t = newTest();
+  const planId = await stagedRoot(t);
+  const evalBudgetId = await t.run((ctx) =>
+    ctx.db.insert("spendEvents", {
+      tenantId: TENANT,
+      rail: "reasoning",
+      phase: "estimated",
+      amountCents: 100,
+      correlationId: "mock-fanout-budget",
+      createdAt: Date.now(),
+    }),
+  );
+  try {
+    const shared = {
+      tenantId: TENANT,
+      threadId: THREAD,
+      planId,
+      rootRequestId: "budget-tree",
+      evalBudgetId,
+    };
+    const result =
+      kind === "team"
+        ? await t.mutation(internal.dispatchRun.startTeamRun, {
+            ...shared,
+            question: UMBRELLA,
+            assignments: [
+              { route: "research", question: "Market size" },
+              { route: "lead-engine", question: "Channels" },
+            ],
+          })
+        : await t.mutation(internal.dispatchRun.startContentBatch, {
+            ...shared,
+            piece: "Launch post",
+            form: "long",
+            variants: ["Numbers", "Customer story"],
+          });
+    expect(result.ok).toBe(true);
+    const queued = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+    expect(queued).toHaveLength(2);
+    for (const row of queued) expect(row.args[0]).toMatchObject({ evalBudgetId, tenantId: TENANT });
+    const envelopes = await t.run((ctx) => ctx.db.query("spendEvents").collect());
+    expect(envelopes).toHaveLength(1);
+  } finally {
+    await cancelQueued(t);
+  }
+});
 
 /** Routes only, every one carrying the SAME sub-question. That is deliberate: it is the shape
  *  ADR-037 could express, so every pre-ADR-040 assertion below keeps its exact meaning — and

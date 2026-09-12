@@ -34,6 +34,20 @@ export type EnvSpec = {
 };
 
 export const ENV_MANIFEST: readonly EnvSpec[] = [
+  // Operator attestations for real golden evaluations, not credentials or fixture switches.
+  // Ordinary production readiness never requires running a paid evaluation.
+  {
+    name: "GOLDEN_OPENROUTER_BILLING",
+    tier: "feature",
+    whatBreaks:
+      "Paid golden evaluations remain disabled until standard OpenRouter account billing is independently verified.",
+  },
+  {
+    name: "GOLDEN_TAVILY_CREDIT_USD",
+    tier: "feature",
+    whatBreaks:
+      "Paid golden evaluations remain disabled until the Tavily account's per-credit cost is independently verified.",
+  },
   // ── Identity and the app's own origin ───────────────────────────────────────────────────────
   {
     name: "CONVEX_SITE_URL",

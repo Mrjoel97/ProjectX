@@ -6,6 +6,7 @@
 // 15.1-05 adds the per-tenant PROMPT BLOCK (`tierBriefing`) the dispatcher prepends — ADR-009.
 
 import { type BehaviorPreset, sanitizeAgentName, type Tier } from "./businessProfile";
+import { RESEARCH_EVIDENCE_NOTICE } from "./researchEvidence";
 
 /**
  * The closed set of routes the SYSTEM can dispatch. **The routes `diagnose()` emits are a strict
@@ -330,8 +331,8 @@ export function specialistMemoBody(args: {
     args.route === undefined
       ? ceiling.trimStart()
       : `> Produced by the **${args.route}** specialist.${ceiling}`;
-  // Route present => byte-identical to every shipped output (same template, same order).
-  return header === "" ? args.body : `${header}\n\n${args.body}`;
+  const notice = args.route === "research" ? `\n\n> ${RESEARCH_EVIDENCE_NOTICE}` : "";
+  return header === "" ? args.body : `${header}${notice}\n\n${args.body}`;
 }
 
 /**
@@ -506,11 +507,12 @@ export function researchFindingsFence(args: {
   const verdict = evidenceVerdict(args);
   if (verdict !== "sourced") {
     const label = verdict === "not_researched" ? NOT_RESEARCHED_LABEL : INSUFFICIENT_EVIDENCE_LABEL;
-    return `${label}\n\n${fence}\n${reminder}`;
+    return `${label}\n\n${RESEARCH_EVIDENCE_NOTICE}\n\n${fence}\n${reminder}`;
   }
   return (
+    `${RESEARCH_EVIDENCE_NOTICE}\n\n` +
     fence +
-    `\n\nGrounded in ${args.sourceCount} web source(s), retrieved ${args.retrievedIso}.` +
+    `\n\nRetrieved ${args.sourceCount} web source(s), retrieved ${args.retrievedIso}. Claim support is unverified.` +
     reminder
   );
 }

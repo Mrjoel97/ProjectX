@@ -10,7 +10,7 @@ import {
 import type { RevocationUpstream } from "@pikar/revenue";
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
-import { api, components } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
@@ -772,6 +772,32 @@ export const purgeEvalTenant = internalMutation({
     const budget = Math.max(args.preserveAuditId ? 2 : 1, Math.min(args.limit ?? 200, 1000));
     let deleted = 0;
     let blobs = 0;
+    const checkedVerticalTenants = new Set<string>();
+    const checkVerticalRetention = async (tenantId: string) => {
+      if (checkedVerticalTenants.has(tenantId)) return;
+      const provision = await ctx.db
+        .query("audit")
+        .withIndex("by_tenant_event_ts", (q) =>
+          q.eq("tenantId", tenantId).eq("eventType", "vertical_eval.provisioned"),
+        )
+        .unique();
+      if (provision) {
+        // Every page checks this authority in the same transaction as deletion. Prefix cleanup
+        // cannot destroy pending review assets or the accounting needed by native issuance.
+        if (!args.exact || !args.preserveSpendEvents || args.preserveAuditId !== provision._id)
+          throw new Error("VERTICAL_EVAL_REQUIRES_NATIVE_CLEANUP");
+        await ctx.runMutation(internal.verticalEvalEvidence.claimCleanup, {
+          runId: provision.payload.runId,
+          caseId: provision.payload.caseId,
+          caseHash: provision.payload.caseHash,
+          requestHash: provision.payload.requestHash,
+          verticalId: provision.payload.verticalId,
+          candidateVersion: provision.payload.candidateVersion,
+          bodyHash: provision.payload.bodyHash,
+        });
+      }
+      checkedVerticalTenants.add(tenantId);
+    };
 
     for (const table of deletableTables()) {
       // `users` is the identity table and an eval tenant has no row in it; the `by_tenant` index
@@ -788,6 +814,7 @@ export const purgeEvalTenant = internalMutation({
         )
         .take(budget - deleted);
       for (const row of rows) {
+        await checkVerticalRetention(row.tenantId);
         for (const storageId of storageIdsIn(table, row as unknown as Record<string, unknown>)) {
           const id = storageId as Id<"_storage">;
           if ((await ctx.db.system.get("_storage", id)) !== null) {
@@ -822,6 +849,7 @@ export const purgeEvalTenant = internalMutation({
         )
         .take(budget - deleted + (args.preserveAuditId ? 1 : 0));
       for (const row of auditRows.slice(0, budget - deleted)) {
+        await checkVerticalRetention(row.tenantId);
         // Freeze wins over teardown: a failed/ongoing upload must retain identical
         // bytes. Reading its checkpoint also serializes this decision with beginExport.
         if (pending.has(row._id)) throw new Error("EVAL_AUDIT_EXPORT_PENDING");

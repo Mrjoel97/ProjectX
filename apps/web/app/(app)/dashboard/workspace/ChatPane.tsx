@@ -126,15 +126,19 @@ export function ChatPane({
   // This is COMPLEMENTARY to the step trace below, not redundant: it reports milestones and only
   // lights AFTER the wait is over, whereas the trace is the live one. Both are kept.
   const plan = useQuery(api.plans.byThread, threadId ? { threadId } : "skip");
-  const milestone = plan?.candidates?.length
-    ? "Searching your mailbox… pick a contact →"
-    : plan?.status === "delivering"
-      ? "Sending…"
-      : plan?.status === "done"
-        ? "Sent ✓"
-        : plan?.status === "proposed"
-          ? "Plan ready — review it →"
-          : null;
+  // Media's canvas owns actual render progress/failure; delivering does not mean email sending.
+  const milestone =
+    plan?.kind === "media"
+      ? null
+      : plan?.candidates?.length
+        ? "Searching your mailbox… pick a contact →"
+        : plan?.status === "delivering"
+          ? "Sending…"
+          : plan?.status === "done"
+            ? "Sent ✓"
+            : plan?.status === "proposed"
+              ? "Plan ready — review it →"
+              : null;
 
   // The in-progress agent bubble (CKPT-05). The SAME query the workspace ActivityCard subscribes
   // to — one query feeds both surfaces, so the bubble and the canvas can never disagree. NO args:

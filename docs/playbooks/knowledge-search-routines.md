@@ -1,5 +1,9 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-11 — The closed Convex namespace inventory includes
+> `verticalEvalEvidence.ts`, which records manual evaluation evidence and schedules no recurring
+> work. Recurrence remains deferred; the existing DST and OAuth evidence gates still apply.
+
 > Last verified: 2026-09-10 — The scheduler inventory drops `vaultDigest.ts` because explicit
 > rebuilds now invoke the transactional `vaultFolders.startDigest` mutation and synthesis runs
 > through the durable workflow. The module remains in the namespace inventory. Folder completion

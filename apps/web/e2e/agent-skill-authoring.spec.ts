@@ -32,7 +32,12 @@ function query(name: string, args: Record<string, unknown>) {
   return JSON.parse(
     command(
       resolve(backend, "node_modules/convex/bin/main.js"),
-      ["run", name, JSON.stringify(args)],
+      [
+        "run",
+        ...(process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : []),
+        name,
+        JSON.stringify(args),
+      ],
       backend,
       "INSPECTION",
     ),

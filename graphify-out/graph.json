@@ -303700,6 +303700,39 @@
       "confidence_score": 1,
       "source": "packages_backend_convex_wormcursor",
       "target": "packages_backend_convex_schema_auditexportqueue_table"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/guardrails.ts",
+      "source_location": "L700",
+      "weight": 1,
+      "context": "db_write",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_guardrails",
+      "target": "packages_backend_convex_schema_spendevents_table"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/llm.ts",
+      "source_location": "L511",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_llm",
+      "target": "packages_backend_convex_guardrails"
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "packages/backend/convex/vaultRag.ts",
+      "source_location": "L327",
+      "weight": 1,
+      "context": "convex_ref",
+      "confidence_score": 1,
+      "source": "packages_backend_convex_vaultrag",
+      "target": "packages_backend_convex_guardrails"
     }
   ],
   "hyperedges": []

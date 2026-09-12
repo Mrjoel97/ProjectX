@@ -230,6 +230,7 @@ const CONVEX_MODULES = [
   "vaultSweep.ts",
   "vaultTranscribe.ts",
   "verticalData.ts",
+  "verticalEvalEvidence.ts",
   "verticalEvalSources.ts",
   "verticalPackBinding.ts",
   "verticalPackTelemetry.ts",

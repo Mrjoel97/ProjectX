@@ -9,7 +9,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "vitest";
+import { RAG } from "@convex-dev/rag";
+import { scanText } from "@pikar/pii";
+import { convexTest } from "convex-test";
+import { afterEach, expect, test, vi } from "vitest";
+import { internal } from "./_generated/api";
+import schema from "./schema";
 
 const convexDir = dirname(fileURLToPath(import.meta.url));
 const readSource = (file: string): string => readFileSync(join(convexDir, file), "utf8");
@@ -47,22 +52,69 @@ test("the graph plane stores NO raw document text — only vaultDocuments.text h
   );
 });
 
-test("extract + embed steps redact (scanText) BEFORE any model / embedding call (redact-then-write)", () => {
+test("extract steps redact (scanText) BEFORE any model call (redact-then-write)", () => {
   // extractGraph: scanText must precede generateObject (redact-then-extract, §4).
   const llm = readSource("vaultLlm.ts");
   expect(llm.indexOf("scanText("), "vaultLlm does not call scanText").toBeGreaterThanOrEqual(0);
   expect(llm.indexOf("scanText("), "scanText must run before generateObject").toBeLessThan(
     llm.indexOf("generateObject("),
   );
-  // embedDoc: scanText must precede rag.add (redact-then-embed — the vault embeds the redacted text).
-  const ragSrc = readSource("vaultRag.ts");
-  expect(
-    ragSrc.indexOf("scanText("),
-    "vaultRag embedDoc does not call scanText",
-  ).toBeGreaterThanOrEqual(0);
-  expect(ragSrc.indexOf("scanText("), "scanText must run before rag.add").toBeLessThan(
-    ragSrc.indexOf("rag.add("),
-  );
+});
+
+afterEach(() => vi.restoreAllMocks());
+
+test.each([
+  false,
+  true,
+])("embedding adapter receives only redacted text (evaluation: %s)", async (evaluation) => {
+  const raw = "Send the private report to alice@example.com.";
+  const scanned = scanText(raw);
+  expect(scanned.ok).toBe(true);
+  if (!scanned.ok) throw new Error("redaction fixture rejected");
+  expect(scanned.value.safeText).not.toContain("alice@example.com");
+  // Intercept the actual RAG boundary for both the ordinary instance and the contextual
+  // evaluation instance. No embedding provider is contacted; the production action runs.
+  vi.spyOn(RAG.prototype, "findEntryByContentHash").mockResolvedValue(null as never);
+  const add = vi.spyOn(RAG.prototype, "add").mockResolvedValue({
+    entryId: "offline-redaction-entry",
+    usage: { tokens: 0 },
+  } as never);
+  const t = convexTest(schema, import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]));
+  const tenantId = "packeval-abcdef12-redaction";
+  const { vaultDocId, budgetId } = await t.run(async (ctx) => ({
+    vaultDocId: await ctx.db.insert("vaultDocuments", {
+      tenantId,
+      title: "Private report",
+      kind: "brief",
+      category: "market",
+      source: "seam",
+      mimeType: "text/plain",
+      size: raw.length,
+      contentHash: "offline-redaction",
+      text: raw,
+      status: "processing",
+      createdAt: Date.now(),
+    }),
+    budgetId: await ctx.db.insert("spendEvents", {
+      tenantId,
+      rail: "reasoning",
+      phase: "estimated",
+      amountCents: 1,
+      correlationId: "offline-redaction-budget",
+      createdAt: Date.now(),
+    }),
+  }));
+  await t.action(internal.vaultRag.embedDoc, {
+    tenantId,
+    vaultDocId,
+    ...(evaluation ? { evalBudgetId: budgetId } : {}),
+  });
+  expect(add).toHaveBeenCalledTimes(1);
+  expect(add.mock.calls[0]?.[1]).toMatchObject({
+    namespace: tenantId,
+    text: scanned.value.safeText,
+  });
+  expect(JSON.stringify(add.mock.calls[0]?.[1])).not.toContain("alice@example.com");
 });
 
 test("the RAG instance is built with a v2-spec embedding model (ai@6 compat, NOT the v4 provider)", () => {

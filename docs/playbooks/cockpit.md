@@ -1,3 +1,21 @@
+> Last verified: 2026-09-12 — media plans keep their existing canvas across every plan status,
+> including delivering and done. The canvas observes actual render/job failures; email reports,
+> recipient chrome and Sending/Sent chat milestones cannot replace it after Generate. Rendered
+> workspace regressions cover media lifecycle routing and preserve email delivery behavior.
+
+> Last verified: 2026-09-11 — golden evaluation dispatch carries one trusted `evalBudgetId`
+> through the durable workflow, research/media grounding, and team/content fan-out. Every child
+> receives the same ledger reference rather than a new spending allowance. The content variant
+> forwards it to its nested drafter. These are internal context arguments, not model tool inputs.
+> `fanOut.test.ts` exercises sibling scheduling and nested variant drafting without provider calls;
+> live acceptance and paid evaluation remain separate evidence gates.
+
+> Last verified: 2026-09-11 — Step completion and refusal use the additive `by_turn_step`
+> index for exact tenant/turn/step lookup. Parallel tool calls and fallbacks can exceed the
+> 12-row activity-card display cap; that cap no longer prevents later callbacks from finishing.
+> Duplicate keys retain the original first-recorded match, so existing rows need no cleanup.
+> The lifecycle regression covers a late step, duplicate key, foreign tenant and another turn.
+
 > Last verified: 2026-09-10 — G17 Gmail warning dedupe now uses `notifications.by_tenant_kind_read`
 > and `.first()`. An existing unread reconnect warning cannot fall outside a 50-message window
 > of unrelated notifications. Lookup and insert share the migration transaction, preserving
@@ -6577,3 +6595,11 @@ harnesses for sequential quiescence, await in-progress jobs, then discard remain
 timers before restoring real time. Every test asserts the original worker process was restored;
 no test repairs the global or suppresses worker errors. This prevents background workflow callbacks
 from another discarded harness corrupting the next test or Vitest's environment teardown.
+## Phase 23 production probe targeting — last verified 2026-09-10
+
+The two-identity agent-authoring browser setup and spec forward `PIKAR_CONVEX_TARGET=prod` to
+their direct Convex CLI calls, matching the evaluator's selected deployment. Pair it with the
+production browser origin and keep the explicit backend URL private in `CONVEX_URL` for inspector
+fingerprints. This corrects target selection; it does not manufacture non-owner, authoring, owner
+review or rollback witnesses. The exact handoff and read-only continuation preflight remain the
+required links between those observed steps.

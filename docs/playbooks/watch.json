@@ -32,6 +32,7 @@
     "apps/web/app/(app)/ops/"
   ],
   "growth-diagnostic.md": [
+    "packages/core/src/researchEvidence",
     "packages/core/src/growth/",
     "packages/core/src/specialists.ts",
     "packages/core/src/specialists.test.ts"
@@ -75,6 +76,8 @@
     "packages/backend/convex/opsSignals.ts",
     "packages/backend/convex/opsSignals.test.ts",
     "packages/backend/scripts/run-eval-golden.mjs",
+    "packages/backend/scripts/goldenPaidAttempt.mjs",
+    "packages/backend/scripts/goldenEvaluatorIdentity",
     "packages/backend/scripts/eval-cases/",
     "packages/backend/scripts/run-probe-websearch.mjs",
     "packages/backend/scripts/launch-detached.ps1",
@@ -336,10 +339,12 @@
     "apps/web/app/(app)/dashboard/pipeline/"
   ],
   "guardrails.md": [
+    "packages/backend/convex/goldenBudget.test.ts",
     "packages/backend/convex/guardrails.ts",
     "packages/backend/convex/lib/evalBudgetModel.ts",
     "packages/backend/convex/evalBudget",
     "packages/cost/src/evalBudget.ts",
+    "packages/cost/src/goldenProviderBudget",
     "packages/backend/scripts/run-smoke-guardrails.mjs",
     "packages/cost/src/cost.ts",
     "packages/core/src/fallback.ts",
@@ -398,7 +403,7 @@
   "connector-quickbooks.md": [
     "packages/revenue/src/providers/quickbooks",
     "packages/backend/convex/quickbooks",
-    "scripts/smoke-quickbooks-read.mjs",
+    "scripts/smoke-quickbooks-read",
     "docs/connectors/quickbooks-suitability.md"
   ],
   "connector-stripe.md": [
@@ -440,7 +445,7 @@
     "packages/backend/scripts/prepare-vertical-review.mjs",
     "apps/web/e2e/vertical-packs.spec.ts",
     "packages/backend/scripts/run-eval-vertical.mjs",
-    "packages/contracts/src/verticalEval.ts",
+    "packages/contracts/src/verticalEval",
     "packages/core/src/verticalPacks",
     "packages/core/src/dataProfile",
     "packages/backend/convex/verticalData",

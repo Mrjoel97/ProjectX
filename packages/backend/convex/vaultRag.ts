@@ -20,9 +20,15 @@
 
 import { RAG } from "@convex-dev/rag";
 import { priceUsage } from "@pikar/cost";
+import {
+  goldenEmbeddingRequest,
+  goldenOpenRouterObservedUsage,
+} from "@pikar/cost/goldenProviderBudget";
 import { scanText } from "@pikar/pii";
+import type { GenericActionCtx } from "convex/server";
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
+import type { DataModel, Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { fixtureSeamFor } from "./lib/models";
 
@@ -228,129 +234,193 @@ export const embeddingContentHash = (contentHash: string): string =>
 // embed threw. This adapter implements the tiny v2 contract ai@6 checks by calling the
 // provider's REST API directly, decoupling RAG from the provider-major skew (no new dep, no §6
 // bump). Drop when the pinned RAG realigns to ai@7.
-const embeddingV2 = {
-  specificationVersion: "v2" as const,
-  provider: usingGemini()
-    ? "google.embedding"
-    : usingOpenRouter()
-      ? "openrouter.embedding"
-      : "openai.embedding",
-  modelId: EMBEDDING_MODEL,
-  maxEmbeddingsPerCall: MAX_EMBEDDINGS_PER_CALL,
-  supportsParallelCalls: true,
-  async doEmbed({
-    values,
-    abortSignal,
-    headers,
-  }: {
-    values: string[];
-    abortSignal?: AbortSignal;
-    headers?: Record<string, string | undefined>;
-  }): Promise<{ embeddings: number[][]; usage: { tokens: number } }> {
-    const gemini = usingGemini();
-    const router = usingOpenRouter();
-    // The env NAME is carried beside the value so the refusal can say which one to set. Three
-    // routes, three keys — and an unset key is a governed throw before any request, not a 401 from
-    // a line that reads as though it set the header.
-    const keyName = gemini
-      ? "GOOGLE_GENERATIVE_AI_API_KEY"
-      : router
-        ? "OPENROUTER_API_KEY"
-        : "OPENAI_API_KEY";
-    const apiKey = process.env[keyName];
-    if (!apiKey) throw new Error(`vault: ${keyName} unset for embeddings`);
-    // Narrowed BEFORE the closure below. The `if (!apiKey) throw` above narrows `apiKey` in this
-    // scope, but that narrowing does not reach inside `fetchOnce` — TypeScript cannot know when a
-    // hoisted function runs, so it widens back to `string | undefined` there.
-    const key: string = apiKey;
-    // OpenRouter reuses the OpenAI `Authorization: Bearer` header below unchanged, which is why the
-    // header ternary stays two-way while this one is three-way.
-    const url = gemini
-      ? `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_EMBEDDING_MODEL}:batchEmbedContents`
-      : router
-        ? "https://openrouter.ai/api/v1/embeddings"
-        : "https://api.openai.com/v1/embeddings";
-    // RETRY ON RATE LIMIT, because the provider WILL rate-limit and a hard throw here loses the
-    // whole ingest. Measured on production 2026-08-27: a burst of vault seeds returned
-    // `embeddings API 429` on contact and every caller failed outright. That is not an eval-harness
-    // quirk — a user importing a batch of documents drives the SAME path, so without this the vault
-    // silently stops accepting work whenever someone ingests more than a trickle.
-    //
-    // 429 and 5xx only. A 400/401/403 is a REQUEST or CREDENTIAL fault: retrying cannot fix it,
-    // and retrying a bad key just burns the deployment's time before failing identically.
-    // Honours `Retry-After` when the provider sends one — it knows its own window better than a
-    // guess does — and otherwise backs off exponentially with jitter so parallel callers do not
-    // re-collide in lockstep.
-    // SIX ATTEMPTS AT A 30s CEILING, so the retries can outlast a WHOLE per-minute window:
-    // 1+2+4+8+16+30 ≈ 61s. The first version capped at 8s over 5 attempts (~23s total) and STILL
-    // failed every time — measured against production, where the rate limit is per-minute and a
-    // window that has not rolled over yet returns 429 to every one of those attempts. A backoff
-    // that cannot span the limiter's window is not a retry, it is a slower failure.
-    const MAX_ATTEMPTS = 6;
-    let res!: Response;
-    let lastBody: string | undefined;
-    for (let attempt = 1; ; attempt++) {
-      res = await fetchOnce();
-      if (res.ok || !isRetriableEmbedStatus(res.status) || attempt === MAX_ATTEMPTS) break;
-      // Read the body ONCE and keep it: a Response body can only be consumed a single time, and the
-      // final throw below needs the same text this parse reads.
-      lastBody = await res.text();
-      const asked = parseRetryAfterSeconds(lastBody, res.headers.get("retry-after"));
-      await new Promise((r) => setTimeout(r, embedBackoffMs(attempt, asked, Math.random())));
-    }
-
-    async function fetchOnce() {
-      return await fetch(url, {
-        method: "POST",
-        // `...headers` FIRST: the auth and content-type below are TRANSPORT-level and must win over
-        // anything the caller injects. With the spread last, a caller-supplied auth key — including
-        // present-but-undefined — silently replaces or blanks our key, and the call 401s from a line
-        // that reads as though it set the auth header. `headers` is the optional bag from the
-        // @convex-dev/rag `doEmbed` contract, so nothing populates it today; this is the same
-        // spread-after-explicit shape that cost a paid eval fixture at dispatch.ts (5460a81).
-        headers: {
-          ...headers,
-          "Content-Type": "application/json",
-          ...(gemini ? { "x-goog-api-key": key } : { Authorization: `Bearer ${key}` }),
-        },
-        body: JSON.stringify(
-          gemini
-            ? buildGeminiEmbedRequest(values)
-            : router
-              ? buildOpenRouterEmbedRequest(values)
-              : buildOpenAIEmbedRequest(values),
-        ),
-        signal: abortSignal,
-      });
-    }
-    if (!res.ok)
-      throw new Error(`vault: embeddings API ${res.status} ${lastBody ?? (await res.text())}`);
-    const json = (await res.json()) as {
-      embeddings?: Array<{ values: number[] }>;
-      data?: Array<{ embedding: number[] }>;
-      usage?: { prompt_tokens?: number };
-    };
-    const embeddings = gemini
-      ? (json.embeddings ?? []).map((e) => e.values)
-      : (json.data ?? []).map((d) => d.embedding);
-    // FAIL CLOSED on a length mismatch. The component pairs these positionally with the chunks it
-    // sent, so a short or reordered response would attach the WRONG vector to a chunk — a silent
-    // corruption of the index that no later query could distinguish from bad retrieval.
-    if (embeddings.length !== values.length) {
-      throw new Error(
-        `vault: embeddings API returned ${embeddings.length} vectors for ${values.length} inputs`,
-      );
-    }
-    return {
-      embeddings: embeddings.map(l2Normalize),
-      // Google's `batchEmbedContents` reports NO usage at all (measured: the response carries only
-      // `embeddings`); OpenAI reports `prompt_tokens`. Reporting whatever the provider gives is
-      // honest rather than invented — and it costs nothing downstream, because `priceUsage` has no
-      // row for embeddings either way (see the note at the call site in embedDoc).
-      usage: { tokens: json.usage?.prompt_tokens ?? 0 },
-    };
-  },
+export type VaultEmbeddingEvaluation = {
+  ctx: Pick<GenericActionCtx<DataModel>, "runMutation">;
+  tenantId: string;
+  budgetId: Id<"spendEvents">;
+  onCost?: (costUsd: number) => void;
 };
+
+/** Same provider transport/component as production, with a per-operation trusted budget closure.
+ * Evaluation refuses ambiguous requests without retrying; their reservation remains outstanding.
+ * The caller must verify an OpenRouter credit-funded account before enabling this path.
+ */
+export function createVaultEmbeddingModel(evaluation?: VaultEmbeddingEvaluation) {
+  let failed = false;
+  return {
+    specificationVersion: "v2" as const,
+    provider: usingGemini()
+      ? "google.embedding"
+      : usingOpenRouter()
+        ? "openrouter.embedding"
+        : "openai.embedding",
+    modelId: EMBEDDING_MODEL,
+    maxEmbeddingsPerCall: MAX_EMBEDDINGS_PER_CALL,
+    supportsParallelCalls: !evaluation,
+    async doEmbed({
+      values,
+      abortSignal,
+      headers,
+    }: {
+      values: string[];
+      abortSignal?: AbortSignal;
+      headers?: Record<string, string | undefined>;
+    }): Promise<{ embeddings: number[][]; usage: { tokens: number } }> {
+      if (failed) throw new Error("EVAL_EMBEDDING_PREVIOUS_FAILURE");
+      const gemini = usingGemini();
+      const router = usingOpenRouter();
+      if (evaluation && !router) throw new Error("EVAL_EMBEDDING_PROVIDER_UNSUPPORTED");
+      // The env NAME is carried beside the value so the refusal can say which one to set. Three
+      // routes, three keys — and an unset key is a governed throw before any request, not a 401 from
+      // a line that reads as though it set the header.
+      const keyName = gemini
+        ? "GOOGLE_GENERATIVE_AI_API_KEY"
+        : router
+          ? "OPENROUTER_API_KEY"
+          : "OPENAI_API_KEY";
+      const apiKey = process.env[keyName];
+      if (!apiKey) throw new Error(`vault: ${keyName} unset for embeddings`);
+      // Narrowed BEFORE the closure below. The `if (!apiKey) throw` above narrows `apiKey` in this
+      // scope, but that narrowing does not reach inside `fetchOnce` — TypeScript cannot know when a
+      // hoisted function runs, so it widens back to `string | undefined` there.
+      const key: string = apiKey;
+      // OpenRouter reuses the OpenAI `Authorization: Bearer` header below unchanged, which is why the
+      // header ternary stays two-way while this one is three-way.
+      const url = gemini
+        ? `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_EMBEDDING_MODEL}:batchEmbedContents`
+        : router
+          ? "https://openrouter.ai/api/v1/embeddings"
+          : "https://api.openai.com/v1/embeddings";
+      // RETRY ON RATE LIMIT, because the provider WILL rate-limit and a hard throw here loses the
+      // whole ingest. Measured on production 2026-08-27: a burst of vault seeds returned
+      // `embeddings API 429` on contact and every caller failed outright. That is not an eval-harness
+      // quirk — a user importing a batch of documents drives the SAME path, so without this the vault
+      // silently stops accepting work whenever someone ingests more than a trickle.
+      //
+      // 429 and 5xx only. A 400/401/403 is a REQUEST or CREDENTIAL fault: retrying cannot fix it,
+      // and retrying a bad key just burns the deployment's time before failing identically.
+      // Honours `Retry-After` when the provider sends one — it knows its own window better than a
+      // guess does — and otherwise backs off exponentially with jitter so parallel callers do not
+      // re-collide in lockstep.
+      // SIX ATTEMPTS AT A 30s CEILING, so the retries can outlast a WHOLE per-minute window:
+      // 1+2+4+8+16+30 ≈ 61s. The first version capped at 8s over 5 attempts (~23s total) and STILL
+      // failed every time — measured against production, where the rate limit is per-minute and a
+      // window that has not rolled over yet returns 429 to every one of those attempts. A backoff
+      // that cannot span the limiter's window is not a retry, it is a slower failure.
+      const MAX_ATTEMPTS = evaluation ? 1 : 6;
+      let res!: Response;
+      let lastBody: string | undefined;
+      for (let attempt = 1; ; attempt++) {
+        res = await fetchOnce();
+        if (res.ok || !isRetriableEmbedStatus(res.status) || attempt === MAX_ATTEMPTS) break;
+        // Read the body ONCE and keep it: a Response body can only be consumed a single time, and the
+        // final throw below needs the same text this parse reads.
+        lastBody = await res.text();
+        const asked = parseRetryAfterSeconds(lastBody, res.headers.get("retry-after"));
+        await new Promise((r) => setTimeout(r, embedBackoffMs(attempt, asked, Math.random())));
+      }
+
+      async function fetchOnce() {
+        const pricedRequest = evaluation ? goldenEmbeddingRequest(values) : undefined;
+        const reservationId =
+          evaluation && pricedRequest
+            ? await evaluation.ctx.runMutation(internal.guardrails.reserveEvalCall, {
+                tenantId: evaluation.tenantId,
+                budgetId: evaluation.budgetId,
+                callId: crypto.randomUUID(),
+                model: `or/${pricedRequest.call.model}`,
+                outputTokens: 0,
+                providerCall: pricedRequest.call,
+              })
+            : undefined;
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            // `...headers` FIRST: the auth and content-type below are TRANSPORT-level and must win over
+            // anything the caller injects. With the spread last, a caller-supplied auth key — including
+            // present-but-undefined — silently replaces or blanks our key, and the call 401s from a line
+            // that reads as though it set the auth header. `headers` is the optional bag from the
+            // @convex-dev/rag `doEmbed` contract, so nothing populates it today; this is the same
+            // spread-after-explicit shape that cost a paid eval fixture at dispatch.ts (5460a81).
+            headers: {
+              ...headers,
+              "Content-Type": "application/json",
+              ...(gemini ? { "x-goog-api-key": key } : { Authorization: `Bearer ${key}` }),
+            },
+            body: JSON.stringify(
+              pricedRequest?.body ??
+                (gemini
+                  ? buildGeminiEmbedRequest(values)
+                  : router
+                    ? buildOpenRouterEmbedRequest(values)
+                    : buildOpenAIEmbedRequest(values)),
+            ),
+            signal: abortSignal,
+          });
+          if (evaluation && reservationId) {
+            // A status alone does not prove a request was free. Read an independent clone so the
+            // normal vector decoder below still sees the real transport response unchanged.
+            const observed = goldenOpenRouterObservedUsage(await response.clone().json());
+            if (!observed) throw new Error("EVAL_COST_UNKNOWN");
+            // Router cost cannot bound an external BYOK invoice. Keep the full hold so a
+            // caller that catches this error cannot finalize evidence on a clean ledger.
+            if (observed.isByok !== false)
+              throw new Error("EVAL_EMBEDDING_BILLING_MODE_UNVERIFIED");
+            const settlement = await evaluation.ctx.runMutation(
+              internal.guardrails.settleEvalCall,
+              {
+                tenantId: evaluation.tenantId,
+                reservationId,
+                costUsd: observed.costUsd,
+              },
+            );
+            evaluation.onCost?.(observed.costUsd);
+            if (settlement.breached) throw new Error("EVAL_PROVIDER_EXCEEDED_RESERVATION");
+            if (!response.ok) throw new Error("EVAL_EMBEDDING_PROVIDER_FAILED");
+          }
+          return response;
+        } catch (error) {
+          if (evaluation) {
+            failed = true;
+            // Never reflect provider response bodies, request text or credentials into action logs.
+            const message =
+              error instanceof Error && error.message.startsWith("EVAL_")
+                ? error.message
+                : "EVAL_EMBEDDING_RESPONSE_UNRESOLVED";
+            throw new Error(message);
+          }
+          throw error;
+        }
+      }
+      if (!res.ok)
+        throw new Error(`vault: embeddings API ${res.status} ${lastBody ?? (await res.text())}`);
+      const json = (await res.json()) as {
+        embeddings?: Array<{ values: number[] }>;
+        data?: Array<{ embedding: number[] }>;
+        usage?: { prompt_tokens?: number };
+      };
+      const embeddings = gemini
+        ? (json.embeddings ?? []).map((e) => e.values)
+        : (json.data ?? []).map((d) => d.embedding);
+      // FAIL CLOSED on a length mismatch. The component pairs these positionally with the chunks it
+      // sent, so a short or reordered response would attach the WRONG vector to a chunk — a silent
+      // corruption of the index that no later query could distinguish from bad retrieval.
+      if (embeddings.length !== values.length) {
+        throw new Error(
+          `vault: embeddings API returned ${embeddings.length} vectors for ${values.length} inputs`,
+        );
+      }
+      return {
+        embeddings: embeddings.map(l2Normalize),
+        // Google's `batchEmbedContents` reports NO usage at all (measured: the response carries only
+        // `embeddings`); OpenAI reports `prompt_tokens`. Reporting whatever the provider gives is
+        // honest rather than invented — and it costs nothing downstream, because `priceUsage` has no
+        // row for embeddings either way (see the note at the call site in embedDoc).
+        usage: { tokens: json.usage?.prompt_tokens ?? 0 },
+      };
+    },
+  };
+}
 
 // The two provider majors (ai@6 in RAG, ai@7 in the backend) declare structurally-divergent
 // `EmbeddingModel` types, so the cast is still needed to satisfy the constructor — but unlike
@@ -358,9 +428,17 @@ const embeddingV2 = {
 type RagEmbeddingModel = ConstructorParameters<typeof RAG>[1]["textEmbeddingModel"];
 
 export const rag = new RAG(components.rag, {
-  textEmbeddingModel: embeddingV2 as unknown as RagEmbeddingModel,
+  textEmbeddingModel: createVaultEmbeddingModel() as unknown as RagEmbeddingModel,
   embeddingDimension: EMBEDDING_DIM,
 });
+
+/** Reuses the existing component, index, model and credentials; only accounting is scoped. */
+export function ragForEvaluation(evaluation: VaultEmbeddingEvaluation) {
+  return new RAG(components.rag, {
+    textEmbeddingModel: createVaultEmbeddingModel(evaluation) as unknown as RagEmbeddingModel,
+    embeddingDimension: EMBEDDING_DIM,
+  });
+}
 
 // ── The ingest embed step (Plan 04) ──────────────────────────────────────────
 // The offline seam (Pitfall 4): a `SMOKE::`-prefixed doc never touches the embedding network, so
@@ -378,8 +456,26 @@ const SMOKE_PREFIX = "SMOKE::";
  * + the priced embedding spend for the workflow's recordSpend.
  */
 export const embedDoc = internalAction({
-  args: { vaultDocId: v.id("vaultDocuments"), tenantId: v.string() },
-  handler: async (ctx, { vaultDocId, tenantId }): Promise<{ entryId: string; costUsd: number }> => {
+  args: {
+    vaultDocId: v.id("vaultDocuments"),
+    tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
+  },
+  handler: async (
+    ctx,
+    { vaultDocId, tenantId, evalBudgetId },
+  ): Promise<{ entryId: string; costUsd: number }> => {
+    let actualUsd = 0;
+    const activeRag = evalBudgetId
+      ? ragForEvaluation({
+          ctx,
+          tenantId,
+          budgetId: evalBudgetId,
+          onCost: (cost) => {
+            actualUsd += cost;
+          },
+        })
+      : rag;
     const doc = await ctx.runQuery(internal.vault.getDoc, { vaultDocId, tenantId });
 
     // Redact BEFORE embedding (§4). Fail CLOSED so raw text can never reach the embedding model.
@@ -390,7 +486,7 @@ export const embedDoc = internalAction({
     // Offline deterministic path: NO network call, a fixed fake entryId keyed to the content hash.
     // 36-01 (ADR-035): content alone never selects it — a `ready` row with a fake entry id and no
     // vector was reachable from any ingested document that began with the prefix.
-    if (safeText.startsWith(SMOKE_PREFIX) && fixtureSeamFor(tenantId))
+    if (!evalBudgetId && safeText.startsWith(SMOKE_PREFIX) && fixtureSeamFor(tenantId))
       return { entryId: `smoke::${doc.contentHash}`, costUsd: 0 };
 
     // Dedup precheck (query-safe): a second ingest of identical content reuses the existing entry.
@@ -400,14 +496,14 @@ export const embedDoc = internalAction({
     // in place (`rag.add`: "if you provide a key, it will replace an existing entry with the same
     // key") instead of leaving an orphan to pollute future searches.
     const contentHash = embeddingContentHash(doc.contentHash);
-    const existing = await rag.findEntryByContentHash(ctx, {
+    const existing = await activeRag.findEntryByContentHash(ctx, {
       namespace: tenantId,
       key: doc.contentHash,
       contentHash,
     });
     if (existing) return { entryId: existing.entryId, costUsd: 0 };
 
-    const { entryId, usage } = await rag.add(ctx, {
+    const { entryId, usage } = await activeRag.add(ctx, {
       namespace: tenantId,
       text: safeText,
       key: doc.contentHash,
@@ -422,6 +518,6 @@ export const embedDoc = internalAction({
     // count together if embedding spend ever becomes material — one without the other is the silent
     // under-draw that packages/cost/src/cost.ts exists to prevent.
     const priced = priceUsage(EMBEDDING_MODEL, { inputTokens: usage.tokens });
-    return { entryId, costUsd: priced.ok ? priced.value : 0 };
+    return { entryId, costUsd: evalBudgetId ? actualUsd : priced.ok ? priced.value : 0 };
   },
 });

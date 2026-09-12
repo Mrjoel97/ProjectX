@@ -75,7 +75,12 @@ describe("controlled vertical evaluation sources", () => {
     });
     expect(await t.run((ctx) => ctx.storage.get(doc!.storageId!))).toBeNull();
     expect(await t.run((ctx) => ctx.db.get(prepared.planId))).toBeNull();
-    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(1);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eventType: "vertical_eval.provisioned" }),
+        expect.objectContaining({ eventType: "vertical_evidence.cleanup" }),
+      ]),
+    );
     await expect(
       t.action(internal.verticalEvalSources.provision, { ...pin, sources: [], reviewReady: true }),
     ).rejects.toThrow("NOT_FRESH");
@@ -187,6 +192,11 @@ describe("controlled vertical evaluation sources", () => {
     expect(purged.done).toBe(true);
     expect(await t.run((ctx) => ctx.db.get(prepared.sourceRefs[0]!.docId))).toBeNull();
     expect(await t.run((ctx) => ctx.db.get(ledgerId))).not.toBeNull();
-    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toHaveLength(0);
+    expect(await t.run((ctx) => ctx.db.query("audit").collect())).toEqual([
+      expect.objectContaining({
+        eventType: "vertical_evidence.cleanup",
+        tenantId: "control:vertical-eval-evidence:v1",
+      }),
+    ]);
   });
 });

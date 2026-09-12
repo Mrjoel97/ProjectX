@@ -1,5 +1,15 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> 2026-09-12: backend declares the existing TypeScript 7.0.2 compiler directly. Convex 1.42.1
+> checks `node_modules/typescript/bin/tsc` relative to the backend; a root-only declaration
+> let its default `try` mode skip the compiler even while workspace `tsc` passed. Production
+> dry-run qualification uses `--typecheck enable` and must find the backend compiler.
+
+> Last verified: 2026-09-12 — CI runs the isolated golden paid-attempt, evaluator-source identity,
+> Phase 23 operator and explicit-target QuickBooks smoke regressions. These Node tests sit outside the package Vitest patterns;
+> the explicit workflow step prevents their omission from the release gate. They perform no
+> provider calls and do not establish live evaluation or browser acceptance.
+
 > 2026-09-10 audit follow-up: CI runs the Phase 23 closed-artifact validator and the isolated
 > owner-boundary mutation check through the free-gate registry. It also executes
 > `node --test scripts/check-planning.test.mjs` and the planning hook with `--exit-code` so a

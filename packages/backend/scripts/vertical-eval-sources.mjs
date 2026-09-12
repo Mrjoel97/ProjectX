@@ -45,6 +45,9 @@ export function compileSources(verticalId, fixture) {
           "actual bounded workbook required",
         );
         const workbook = utils.book_new();
+        // SheetJS otherwise copies its mutable process-global number format table. A prior
+        // currency workbook would change these fixture bytes and invalidate exact source pins.
+        workbook.SSF = { 0: "General" };
         for (const spec of source.sheets) {
           assert(
             spec.rows.length <= 510 && spec.rows.every((row) => row.length <= 31),

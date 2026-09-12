@@ -96,6 +96,11 @@ import {
   toWinAnsi,
   validateFigureClaim,
 } from "@pikar/core";
+import {
+  type ResearchClaims,
+  renderResearchEvidence,
+  researchClaimsSchema,
+} from "@pikar/core/researchEvidence";
 import { verticalIdForSkill } from "@pikar/core/verticalPacks";
 import {
   CHEAP_MODEL,
@@ -111,6 +116,11 @@ import {
   RESEARCH_MODEL,
   searchFeeUsd,
 } from "@pikar/cost";
+import {
+  goldenTavilyExtractRequest,
+  goldenTavilyObservedUsd,
+  goldenTavilySearchRequest,
+} from "@pikar/cost/goldenProviderBudget";
 import { scanText } from "@pikar/pii";
 // Subpath import (NOT the barrel), the vaultExtract discipline: SheetJS is ~1 MB and enters only
 // the `use node` modules that write or read a workbook. STATIC, per Pitfall 9 — see sheets.ts.
@@ -121,6 +131,8 @@ import {
   generateText,
   jsonSchema,
   type LanguageModel,
+  NoObjectGeneratedError,
+  Output,
   RetryError,
   stepCountIs,
   type ToolSet,
@@ -478,13 +490,59 @@ export const sourcesFromToolOutput = (output: unknown): { url: string; title: st
  * research loop does — a probe that builds its own tool proves a fiction (the 15.3 `classifyOne`
  * lesson).
  */
-export const buildWebResearchTool = (): ToolSet => {
+export const buildWebResearchTool = (evaluation?: {
+  ctx: GenericActionCtx<DataModel>;
+  tenantId: string;
+  budgetId: Id<"spendEvents">;
+}): ToolSet => {
   // Phase 39 (RSCH-01). THE CONTAINMENT for page reads, and it is structural: `readPage` accepts
   // ONLY a URL that `webResearch` returned in THIS record's lifetime (one build = one run). An
   // injected page cannot steer the specialist to an arbitrary host, because the model never gets to
   // name a host — it can only pick from what the search provider returned. `reads` caps the count.
   const returned = new Set<string>();
   let reads = 0;
+  let unresolvedProviderCall = false;
+  const fetchBudgeted = async (
+    endpoint: "search" | "extract",
+    apiKey: string,
+    request:
+      | ReturnType<typeof goldenTavilySearchRequest>
+      | ReturnType<typeof goldenTavilyExtractRequest>,
+  ) => {
+    // Trusted deployment account attestation, never a model/tool argument. Missing metadata
+    // refuses before transport; an ambiguous response retains its full reservation.
+    const creditUsd = Number(process.env.GOLDEN_TAVILY_CREDIT_USD);
+    goldenTavilyObservedUsd({ usage: { credits: 0 } }, creditUsd);
+    if (!evaluation) throw new Error("EVAL_BUDGET_REQUIRED");
+    if (unresolvedProviderCall) throw new Error("EVAL_TAVILY_RESPONSE_UNRESOLVED");
+    const reservationId = await evaluation.ctx.runMutation(internal.guardrails.reserveEvalCall, {
+      tenantId: evaluation.tenantId,
+      budgetId: evaluation.budgetId,
+      callId: crypto.randomUUID(),
+      model: request.call.kind,
+      outputTokens: 0,
+      providerCall: request.call,
+    });
+    unresolvedProviderCall = true;
+    const response = await fetch(`https://api.tavily.com/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(request.body),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    });
+    const body: unknown = await response.json();
+    const costUsd = goldenTavilyObservedUsd(body, creditUsd);
+    if (costUsd === null) throw new Error("EVAL_COST_UNKNOWN");
+    const settled = await evaluation.ctx.runMutation(internal.guardrails.settleEvalCall, {
+      tenantId: evaluation.tenantId,
+      reservationId,
+      costUsd,
+    });
+    if (settled.breached) throw new Error("EVAL_PROVIDER_EXCEEDED_RESERVATION");
+    if (!response.ok) throw new Error("EVAL_TAVILY_PROVIDER_FAILED");
+    unresolvedProviderCall = false;
+    return body;
+  };
   return {
     webResearch: tool({
       description:
@@ -517,6 +575,16 @@ export const buildWebResearchTool = (): ToolSet => {
         const scan = scanText(query);
         if (!scan.ok)
           return { results: [], note: "web search skipped: query failed redaction scan" };
+        if (evaluation) {
+          const body = await fetchBudgeted(
+            "search",
+            apiKey,
+            goldenTavilySearchRequest(scan.value.safeText, WEB_RESULTS_PER_SEARCH),
+          );
+          const results = parseWebResults(body);
+          for (const r of results) returned.add(r.url);
+          return { results };
+        }
         const res = await fetch("https://api.tavily.com/search", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -576,6 +644,22 @@ export const buildWebResearchTool = (): ToolSet => {
         const scan = scanText(focus);
         if (!scan.ok) return refused("page read skipped: focus failed redaction scan");
         reads += 1;
+        if (evaluation) {
+          const body = await fetchBudgeted(
+            "extract",
+            apiKey,
+            goldenTavilyExtractRequest([url], scan.value.safeText),
+          );
+          const parsed = parseExtractResult(body, url);
+          if ("error" in parsed) return refused(`page read failed: ${parsed.error}`);
+          if (!parsed.content.trim()) return refused("page read failed: empty excerpt");
+          return {
+            url,
+            content: parsed.content,
+            truncated: parsed.truncated,
+            pageReadAt: Date.now(),
+          };
+        }
         const res = await fetch("https://api.tavily.com/extract", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -1072,13 +1156,14 @@ type DraftResult =
 export const routeUncached = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     safeTextHash: v.string(),
     model: v.string(),
     skillVersion: v.number(),
   },
   handler: async (
     ctx,
-    { tenantId, safeTextHash, model, skillVersion },
+    { tenantId, evalBudgetId, safeTextHash, model, skillVersion },
   ): Promise<{ routing: RoutingDecision; usage: GenUsage; generatedAt: number }> => {
     const { safeText }: SafeRead = await ctx.runQuery(internal.guardrails.getSafeTextByHash, {
       tenantId,
@@ -1118,12 +1203,12 @@ export const routeUncached = internalAction({
     try {
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "request-router" })] },
-        model: resolveModel(model),
+        model: goldenModel(ctx, tenantId, model, evalBudgetId),
         schema: routingSchema,
         system: skill.body,
         prompt: safeText,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: evalBudgetId ? 0 : 1,
       });
       const parsed = parseRouting(object);
       if (!parsed.ok) throw new Error(parsed.reason); // "unknown_route" — plain Error → DLQ
@@ -1145,7 +1230,7 @@ export const routeUncached = internalAction({
       });
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "request-router" })] },
-        model: resolveModel(CHEAP_MODEL),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
         schema: routingSchema,
         system: skill.body,
         prompt: safeText,
@@ -1169,6 +1254,7 @@ export const routeUncached = internalAction({
 export const draftUncached = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     safeTextHash: v.string(),
     model: v.string(),
     skillVersion: v.number(),
@@ -1176,7 +1262,7 @@ export const draftUncached = internalAction({
   },
   handler: async (
     ctx,
-    { tenantId, safeTextHash, model, skillVersion, instructionHash },
+    { tenantId, evalBudgetId, safeTextHash, model, skillVersion, instructionHash },
   ): Promise<{ subject: string; body: string; usage: GenUsage; generatedAt: number }> => {
     const { safeText, lastInstruction }: SafeRead = await ctx.runQuery(
       internal.guardrails.getSafeTextByHash,
@@ -1216,12 +1302,12 @@ export const draftUncached = internalAction({
       }
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "email-drafter" })] },
-        model: resolveModel(model),
+        model: goldenModel(ctx, tenantId, model, evalBudgetId),
         schema: draftSchema,
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: evalBudgetId ? 0 : 1,
       });
       await auditCalled(model);
       return { subject: object.subject, body: object.body, usage, generatedAt: Date.now() };
@@ -1249,7 +1335,7 @@ export const draftUncached = internalAction({
         };
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "email-drafter" })] },
-        model: resolveModel(CHEAP_MODEL),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
         schema: draftSchema,
         system: skill.body,
         prompt,
@@ -1279,6 +1365,7 @@ export const draftUncached = internalAction({
 export const draftCockpit = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     safeText: v.string(),
     safeTextHash: v.string(),
     // The RESOLVED display name ONLY (SC3) — for a personalized greeting. NEVER a header hint
@@ -1287,7 +1374,7 @@ export const draftCockpit = internalAction({
   },
   handler: async (
     ctx,
-    { tenantId, safeText, safeTextHash, greetingName },
+    { tenantId, evalBudgetId, safeText, safeTextHash, greetingName },
   ): Promise<{ subject: string; body: string }> => {
     // Load the drafter FIRST (no hardcoded prompt — CLAUDE.md §5); fails closed
     // (throws NO_ACTIVE_SKILL) when unseeded, so a hardcoded fallback can never sneak in.
@@ -1317,12 +1404,12 @@ export const draftCockpit = internalAction({
       }
       const { object } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "email-drafter" })] },
-        model: resolveModel(DEFAULT_MODEL),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
         schema: draftSchema,
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: evalBudgetId ? 0 : 1,
       });
       return { subject: object.subject, body: object.body };
     } catch (e) {
@@ -1330,7 +1417,7 @@ export const draftCockpit = internalAction({
       if (smoke) return { subject: "Smoke Fallback Subject", body: "smoke fallback" };
       const { object } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "email-drafter" })] },
-        model: resolveModel(CHEAP_MODEL),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
         schema: draftSchema,
         system: skill.body,
         prompt,
@@ -1905,6 +1992,7 @@ export type ToolContext = {
   rootRequestId?: string;
   evalRevenueFixtureId?: string;
   evalContext?: EvalContext;
+  evalBudgetId?: Id<"spendEvents">;
 };
 
 /**
@@ -1934,8 +2022,11 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     skillVersions,
     tenantSkillIds,
     evalRevenueFixtureId,
+    evalBudgetId,
   } = toolCtx;
-  const webResearchTool = buildWebResearchTool();
+  const webResearchTool = buildWebResearchTool(
+    evalBudgetId ? { ctx, tenantId, budgetId: evalBudgetId } : undefined,
+  );
   const saveAsDocumentTool = buildSaveAsDocumentTool();
 
   // 19-11 (ACTN-05). THE DEGRADE GRADIENT, and the actual root cause of the measured defect.
@@ -2066,6 +2157,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         if (!staged.ok) return RESEARCH_REFUSAL_REPLY[staged.reason];
 
         const team = await ctx.runMutation(internal.dispatchRun.startTeamRun, {
+          evalBudgetId,
           tenantId,
           threadId,
           planId: staged.planId,
@@ -2170,6 +2262,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         if (!staged.ok) return RESEARCH_REFUSAL_REPLY[staged.reason];
 
         const batch = await ctx.runMutation(internal.dispatchRun.startContentBatch, {
+          evalBudgetId,
           tenantId,
           threadId,
           planId: staged.planId,
@@ -2233,6 +2326,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // of re-billing the model. The extra hop is the one that existed before this change, and the
         // reliability sweep covers it the same way.
         await ctx.scheduler.runAfter(0, internal.dispatchRun.startDispatchRun, {
+          evalBudgetId,
           kind: "research",
           tenantId,
           threadId,
@@ -2304,6 +2398,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // of re-billing the model. The extra hop is the one that existed before this change, and the
         // reliability sweep covers it the same way.
         await ctx.scheduler.runAfter(0, internal.dispatchRun.startDispatchRun, {
+          evalBudgetId,
           kind: "media",
           tenantId,
           threadId,
@@ -2412,6 +2507,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     // new ungated row rather than an edit to it (the Phase 18 content-drafter precedent).
     const drafter = format === "xlsx" ? SPREADSHEET_DRAFTER_SKILL : DOCUMENT_DRAFTER_SKILL;
     const drafted = await ctx.runAction(internal.llm.draftDocument, {
+      evalBudgetId,
       tenantId,
       safeText,
       safeTextHash: await contentHash(safeText),
@@ -2929,6 +3025,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         const draft: { subject: string; body: string } = await ctx.runAction(
           internal.llm.draftCockpit,
           {
+            evalBudgetId,
             tenantId,
             safeText,
             safeTextHash: await contentHash(safeText),
@@ -2974,7 +3071,12 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         const safeText = scan.value.safeText;
         const draft: { subject: string; body: string } = await ctx.runAction(
           internal.llm.draftCockpit,
-          { tenantId, safeText, safeTextHash: await contentHash(safeText) },
+          {
+            evalBudgetId,
+            tenantId,
+            safeText,
+            safeTextHash: await contentHash(safeText),
+          },
           // ponytail: OMIT greetingName — the shared greetingName is pick-#1's name and would open a
           // DIFFERENT recipient's tailored body with the wrong "Hi <name>,". Let the instructions
           // carry any greeting intent. Ceiling: a per-recipient greeting map (Pitfall 4).
@@ -4071,6 +4173,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         }));
 
         const digest: DigestBatch = await ctx.runAction(internal.llm.digestInbox, {
+          evalBudgetId,
           tenantId,
           messages: digestInput,
           // EVAL-01 pin (renderAndStore precedent) — undefined = the active skill row.
@@ -4240,7 +4343,11 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         try {
           ({ docIds, titles, origins, chunks } = toolCtx.evalContext
             ? await toolCtx.evalContext.retrieveSources(query)
-            : await ctx.runAction(internal.vaultGround.vaultGroundHydrated, { tenantId, query }));
+            : await ctx.runAction(internal.vaultGround.vaultGroundHydrated, {
+                evalBudgetId,
+                tenantId,
+                query,
+              }));
         } catch {
           // An evaluator may never swallow failed controlled source hydration into fake no-match.
           if (toolCtx.evalContext) {
@@ -4411,6 +4518,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         let sheetRows: { name: string; rows: string[][] }[] = [];
         try {
           const drafted = await ctx.runAction(internal.llm.draftDocument, {
+            evalBudgetId,
             tenantId,
             safeText,
             safeTextHash: await contentHash(safeText),
@@ -4609,7 +4717,12 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         try {
           const { verdict, findingCount, gapCount } = await ctx.runAction(
             internal.evaluations.runEvaluation,
-            { tenantId, threadId: plan.threadId, framework },
+            {
+              evalBudgetId,
+              tenantId,
+              threadId: plan.threadId,
+              framework,
+            },
           );
           const scope = framework ?? "your business";
           return (
@@ -4839,6 +4952,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         const scan = scanText(intent);
         if (!scan.ok) throw new Error("cockpit: reply-intent scan failed");
         const draft: { body: string } = await ctx.runAction(internal.llm.draftReply, {
+          evalBudgetId,
           tenantId,
           safeText: scan.value.safeText,
           originalBody,
@@ -4870,6 +4984,20 @@ const PAUSED_REPLY =
 // A model paired with the pricing id used for recordSpend. An injected mock model is not a gateway
 // string, so pricing needs the id explicitly (priceUsage keys on the model string).
 type PricedModel = { model: LanguageModel; id: string };
+
+/** Existing resolver and SDK middleware, scoped by an internal envelope. The ledger is the
+ * authoritative aggregate; standalone drafters must not record the same spend a second time. */
+function goldenModel(
+  ctx: GenericActionCtx<DataModel>,
+  tenantId: string,
+  modelId: string,
+  budgetId?: Id<"spendEvents">,
+): LanguageModel {
+  const model = resolveModel(modelId);
+  return budgetId
+    ? evalBudgetModel({ ctx, tenantId, budgetId, model, modelId, mode: "golden", onCost: () => {} })
+    : model;
+}
 
 // The activity trace's closed tool union, DERIVED from the schema (agentSteps.ts does the same with
 // the validator) — a hand-copied literal list is a duplicate that WILL drift, and since the SDK eats
@@ -4943,15 +5071,33 @@ function isTimeoutError(e: unknown): boolean {
 // mock-model test shim (a scripted mock — Convex args cannot carry a LanguageModel). Runs the
 // loop, records spend, and on an eligible primary failure retries once on the fallback model.
 // Explicit return type keeps this out of the `internal`-graph circular inference (§96).
+const researchObjectOutput = Output.object({
+  schema: jsonSchema<ResearchClaims>(researchClaimsSchema),
+});
+const researchOutput = {
+  ...researchObjectOutput,
+  async parseCompleteOutput(...args: Parameters<typeof researchObjectOutput.parseCompleteOutput>) {
+    try {
+      return await researchObjectOutput.parseCompleteOutput(...args);
+    } catch (error) {
+      // Preserve completed steps and usage on format failure; never pay again to reformat.
+      if (NoObjectGeneratedError.isInstance(error)) return undefined;
+      throw error;
+    }
+  },
+};
+
 async function runAgentLoop(
   ctx: GenericActionCtx<DataModel>,
   args: {
     tenantId: string;
     planId: Id<"plans">;
     system: string;
+    structuredResearch?: boolean;
     prompt: string;
     visualInput?: ImageInput;
     evalContext?: EvalContext;
+    evalBudgetId?: Id<"spendEvents">;
     primary: PricedModel;
     fallback: PricedModel;
     // EVAL-01 pin — threads to buildCockpitTools so a pinned document-drafter rides the tool calls.
@@ -5059,10 +5205,14 @@ async function runAgentLoop(
     documentIsDeliverable,
     visualInput,
     evalContext,
+    evalBudgetId,
     maxSteps,
     timeoutMs,
     softCutoffMs,
   } = args;
+  if (evalContext && evalBudgetId && evalContext.budgetId !== evalBudgetId)
+    throw new Error("EVAL_BUDGET_CONTEXT_MISMATCH");
+  const activeBudgetId = evalContext?.budgetId ?? evalBudgetId;
   // This is the ONE place `toolNames` is in scope, so this is where the grants are derived — by
   // `grantsFor` (@pikar/core, ADR-007), never by buildCockpitTools: an allow-list is a REQUEST from
   // the caller, the executive-only capabilities derive from its ABSENCE, and a listed-but-ungranted
@@ -5086,6 +5236,7 @@ async function runAgentLoop(
       rootRequestId: turnId,
       evalRevenueFixtureId,
       evalContext,
+      evalBudgetId,
     },
     grants,
   );
@@ -5172,19 +5323,20 @@ async function runAgentLoop(
   }> => {
     const res = await generateText({
       telemetry: { integrations: [fogIntegration({ traceName: "agent-loop" })] },
-      model: evalContext
+      model: activeBudgetId
         ? evalBudgetModel({
             ctx,
             tenantId,
-            budgetId: evalContext.budgetId,
+            budgetId: activeBudgetId,
             model: m.model,
             modelId: m.id,
             beforeCall: () => {
-              if (evalContext.failure) throw new Error(evalContext.failure);
+              if (evalContext?.failure) throw new Error(evalContext.failure);
             },
             onCost: (cost) => {
               costUsd += cost;
             },
+            ...(evalContext ? {} : { mode: "golden" as const }),
           })
         : m.model,
       system,
@@ -5206,12 +5358,17 @@ async function runAgentLoop(
           }
         : { prompt }),
       tools,
+      ...(args.structuredResearch
+        ? {
+            output: researchOutput,
+          }
+        : {}),
       // Two conditions, whichever fires first. The soft clock stops BETWEEN steps and keeps the
       // partial findings; the hard abort below stays as the backstop for a single hung step.
       stopWhen: [stepCountIs(stepBudget), outOfClock],
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal: AbortSignal.timeout(budgetMs),
-      maxRetries: evalContext ? 0 : maxRetries,
+      maxRetries: activeBudgetId ? 0 : maxRetries,
       // ── The activity trace (CKPT-05) — this IS the whole emitter ──────────────────────────────
       // ai@7 emits these natively, so not one of the 14 tool wrappers is edited (ponytail rung 4:
       // a native framework feature covers it). Both callbacks are AWAITED by the SDK
@@ -5257,7 +5414,7 @@ async function runAgentLoop(
         });
       },
     });
-    if (!evalContext)
+    if (!activeBudgetId)
       costUsd += await recordModelSpend(
         ctx,
         tenantId,
@@ -5381,7 +5538,7 @@ async function runAgentLoop(
     // SAME attempt as the token cost recorded above — bare `agentloop:${loopId}:a${attempt}` would
     // be that row's identity, so the fee would return the token row and be silently dropped,
     // under-drawing the ledger by exactly the per-call fee this block exists to charge.
-    if (feeUsd > 0)
+    if (!activeBudgetId && feeUsd > 0)
       await ctx.runMutation(internal.guardrails.recordSpend, {
         tenantId,
         costUsd: feeUsd,
@@ -5389,7 +5546,7 @@ async function runAgentLoop(
         model: m.id,
         kind: "web_search_fee",
       });
-    costUsd += feeUsd;
+    if (!activeBudgetId) costUsd += feeUsd;
     // READ FROM THE TOOL'S OWN RESULTS, not `res.sources` (changed 2026-08-07 with Tavily).
     // `res.sources` is populated from provider `url_citation` annotations, which ONLY a hosted tool
     // emits — with a local tool it is permanently empty, and an empty `sources` array silently makes
@@ -5429,6 +5586,16 @@ async function runAgentLoop(
       if (source) source.pageReadAt = Math.max(source.pageReadAt ?? 0, output.pageReadAt);
     }
     const sources = [...byUrl.values()];
+    let structuredOutput: unknown;
+    if (args.structuredResearch) {
+      // A legacy response or a step/clock stop may lack final JSON;
+      // keep the already-billed findings as explicitly unverified, never retry for formatting.
+      try {
+        structuredOutput = res.output;
+      } catch {
+        structuredOutput = undefined;
+      }
+    }
     // The AND described above. It has to live HERE rather than beside `declaredQuestionScope`
     // because `sources` is only built two lines up — and `sources`, not the model, is the half
     // of this conjunction that cannot be talked into anything.
@@ -5436,7 +5603,13 @@ async function runAgentLoop(
     const hitStepCap = res.steps.length >= stepBudget && res.finishReason !== "stop";
     const hitClock = outOfClock() && res.finishReason !== "stop";
     return {
-      reply: res.text,
+      reply: args.structuredResearch
+        ? renderResearchEvidence({
+            output: structuredOutput,
+            legacyBody: res.text,
+            toolOutputs,
+          })
+        : res.text,
       costUsd,
       webSearchCalls,
       toolTrace,
@@ -5520,6 +5693,7 @@ export async function runSpecialistTurn(
     prompt: string;
     visualInput?: ImageInput;
     evalContext?: EvalContext;
+    evalBudgetId?: Id<"spendEvents">;
     expectedSkillBodyHash?: string;
     turnId?: string;
     threadId?: string;
@@ -5703,9 +5877,11 @@ export async function runSpecialistTurn(
     tenantId,
     planId,
     system: skill.body,
+    structuredResearch: isResearch,
     prompt,
     visualInput: args.visualInput,
     evalContext: args.evalContext,
+    evalBudgetId: args.evalBudgetId,
     primary: {
       model: mock
         ? (new MockLanguageModelV4({
@@ -6162,6 +6338,7 @@ export const runCockpitAgent = internalAction({
       clientContext,
       skillVersions,
       tenantSkillIds,
+      evalBudgetId,
       turnId,
       history,
       omitRecipientEdits,
@@ -6432,6 +6609,7 @@ export const runCockpitAgent = internalAction({
             id: CHEAP_MODEL,
           },
           skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
+          evalBudgetId,
           tenantSkillIds, // …and so must the tenant pin (21-03), for the specialists it dispatches
           turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
           threadId,
@@ -6617,11 +6795,12 @@ export const __runCockpitAgentWithScript = internalAction({
 export const route = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     requestId: v.id("requests"),
     safeTextHash: v.string(),
     model: v.string(),
   },
-  handler: async (ctx, { tenantId, safeTextHash, model }): Promise<RouteResult> => {
+  handler: async (ctx, { tenantId, evalBudgetId, safeTextHash, model }): Promise<RouteResult> => {
     const { safeText }: SafeRead = await ctx.runQuery(internal.guardrails.getSafeTextByHash, {
       tenantId,
       safeTextHash,
@@ -6654,7 +6833,13 @@ export const route = internalAction({
 
     const tStart = Date.now();
     const value: { routing: RoutingDecision; usage: GenUsage; generatedAt: number } =
-      await routeCache.fetch(ctx, { tenantId, safeTextHash, model, skillVersion: skill.version });
+      await routeCache.fetch(ctx, {
+        tenantId,
+        safeTextHash,
+        model,
+        skillVersion: skill.version,
+        evalBudgetId,
+      });
     // An entry created before this fetch began was served from cache; a miss generates
     // DURING the fetch so generatedAt > tStart.
     // ponytail: timestamp inference — swap to the component's native hit signal if the
@@ -6673,6 +6858,7 @@ export const route = internalAction({
 export const draft = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     requestId: v.id("requests"),
     safeTextHash: v.string(),
     model: v.string(),
@@ -6681,7 +6867,7 @@ export const draft = internalAction({
   },
   handler: async (
     ctx,
-    { tenantId, requestId, safeTextHash, model, instruction, force },
+    { tenantId, evalBudgetId, requestId, safeTextHash, model, instruction, force },
   ): Promise<DraftResult> => {
     const { safeText }: SafeRead = await ctx.runQuery(internal.guardrails.getSafeTextByHash, {
       tenantId,
@@ -6715,7 +6901,8 @@ export const draft = internalAction({
       model: string;
       skillVersion: number;
       instructionHash?: string;
-    } = { tenantId, safeTextHash, model, skillVersion: skill.version };
+      evalBudgetId?: Id<"spendEvents">;
+    } = { tenantId, safeTextHash, model, skillVersion: skill.version, evalBudgetId };
     if (instruction) {
       const scan = scanText(instruction);
       if (!scan.ok) throw new Error("guardrails: instruction_scan_failed"); // fail closed, content-free
@@ -6780,6 +6967,7 @@ const DRAFT_BLOCKED_MESSAGE =
 export const draftDocument = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     safeText: v.string(),
     safeTextHash: v.string(),
     // EVAL-01 version pin (internal-only): the eval runner evaluates a pinned drafter CANDIDATE.
@@ -6799,7 +6987,7 @@ export const draftDocument = internalAction({
   },
   handler: async (
     ctx,
-    { tenantId, safeText, safeTextHash, skillVersion, skillName },
+    { tenantId, evalBudgetId, safeText, safeTextHash, skillVersion, skillName },
   ): Promise<
     | { ok: true; title: string; markdown: string }
     | {
@@ -6878,25 +7066,26 @@ export const draftDocument = internalAction({
       }
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "document-drafter" })] },
-        model: resolveModel(DEFAULT_MODEL),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
         schema: documentSchema,
         system: skill.body,
         prompt: safeText,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: evalBudgetId ? 0 : 1,
       });
       // `:a0` / `:a1` — the CHEAP_MODEL retry in the catch is a SECOND fully-billed call, not a
       // replay of this one. Sharing `document:${runId}` would make the ledger keep whichever
       // landed first and silently drop the other (recordSpend's identity is
       // (tenantId, correlationId, phase)).
-      await recordModelSpend(
-        ctx,
-        tenantId,
-        DEFAULT_MODEL,
-        usage,
-        "document_draft",
-        `document:${runId}:a0`,
-      );
+      if (!evalBudgetId)
+        await recordModelSpend(
+          ctx,
+          tenantId,
+          DEFAULT_MODEL,
+          usage,
+          "document_draft",
+          `document:${runId}:a0`,
+        );
       return { ok: true, title: object.title, markdown: object.markdown };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
@@ -6908,21 +7097,22 @@ export const draftDocument = internalAction({
         };
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "document-drafter" })] },
-        model: resolveModel(CHEAP_MODEL),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
         schema: documentSchema,
         system: skill.body,
         prompt: safeText,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(
-        ctx,
-        tenantId,
-        CHEAP_MODEL,
-        usage,
-        "document_draft",
-        `document:${runId}:a1`,
-      );
+      if (!evalBudgetId)
+        await recordModelSpend(
+          ctx,
+          tenantId,
+          CHEAP_MODEL,
+          usage,
+          "document_draft",
+          `document:${runId}:a1`,
+        );
       return { ok: true, title: object.title, markdown: object.markdown };
     }
   },
@@ -6943,6 +7133,7 @@ export const draftDocument = internalAction({
 export const runVariant = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     threadId: v.string(),
     planId: v.id("plans"),
     /** The piece and the angle, already welded together by `legalVariants`. */
@@ -6964,6 +7155,7 @@ export const runVariant = internalAction({
     const scan = scanText(a.brief);
     const drafted = scan.ok
       ? await ctx.runAction(internal.llm.draftDocument, {
+          evalBudgetId: a.evalBudgetId,
           tenantId: a.tenantId,
           safeText: scan.value.safeText,
           safeTextHash: await contentHash(scan.value.safeText),
@@ -7064,6 +7256,7 @@ type DigestInput = { index: number; from: string; subject: string; body: string 
 export const digestInbox = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     messages: v.array(
       v.object({
         index: v.number(),
@@ -7080,7 +7273,10 @@ export const digestInbox = internalAction({
   },
   // EXPLICIT return type is mandatory (Pitfall 1: an inferred type here re-trips the "use node"
   // circular-inference cliff). DigestBatch = { items, synopsis } from @pikar/core.
-  handler: async (ctx, { tenantId, messages, skillVersion, smoke }): Promise<DigestBatch> => {
+  handler: async (
+    ctx,
+    { tenantId, evalBudgetId, messages, skillVersion, smoke },
+  ): Promise<DigestBatch> => {
     // FIN-01: this action has NO stable ref to correlate on — no requestId, no planId, and the
     // message list is content-plane (§4). A nonce is the RIGHT answer anyway: re-entering this
     // action re-runs generateObject, so the second digest is real money and must get its own row.
@@ -7145,44 +7341,46 @@ export const digestInbox = internalAction({
     try {
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "inbox-digest" })] },
-        model: resolveModel(DEFAULT_MODEL),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
         schema: digestSchema,
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: evalBudgetId ? 0 : 1,
       });
       // `:a0` / `:a1` below — the CHEAP_MODEL retry in the catch is a SECOND fully-billed call, not
       // a replay of this one. Sharing `digest:${runId}` would make the ledger record whichever
       // landed first and drop the other.
-      await recordModelSpend(
-        ctx,
-        tenantId,
-        DEFAULT_MODEL,
-        usage,
-        "inbox_digest",
-        `digest:${runId}:a0`,
-      );
+      if (!evalBudgetId)
+        await recordModelSpend(
+          ctx,
+          tenantId,
+          DEFAULT_MODEL,
+          usage,
+          "inbox_digest",
+          `digest:${runId}:a0`,
+        );
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "inbox-digest" })] },
-        model: resolveModel(CHEAP_MODEL),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
         schema: digestSchema,
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(
-        ctx,
-        tenantId,
-        CHEAP_MODEL,
-        usage,
-        "inbox_digest",
-        `digest:${runId}:a1`,
-      );
+      if (!evalBudgetId)
+        await recordModelSpend(
+          ctx,
+          tenantId,
+          CHEAP_MODEL,
+          usage,
+          "inbox_digest",
+          `digest:${runId}:a1`,
+        );
       return { items: inRange(object.items), synopsis: (object.synopsis ?? "").trim() };
     }
   },
@@ -7201,6 +7399,7 @@ export const digestInbox = internalAction({
 export const draftReply = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     // The user's REDACTED reply intent (the replyToMessage tool scanText's it first — GRDL-01).
     safeText: v.string(),
     // Untrusted third-party original; truncated below; NEVER returned to the loop, NEVER logged.
@@ -7212,7 +7411,7 @@ export const draftReply = internalAction({
   // circular-inference cliff — the digestInbox/draftCockpit precedent).
   handler: async (
     ctx,
-    { tenantId, safeText, originalBody, skillVersion },
+    { tenantId, evalBudgetId, safeText, originalBody, skillVersion },
   ): Promise<{ body: string }> => {
     // FIN-01: no stable ref here either (the caller owns correlation, as the header says), and
     // `safeText`/`originalBody` are content-plane — a nonce is both the safe and the correct
@@ -7247,33 +7446,42 @@ export const draftReply = internalAction({
     try {
       const { text, usage } = await generateText({
         telemetry: { integrations: [fogIntegration({ agentName: "reply-drafter" })] },
-        model: resolveModel(DEFAULT_MODEL),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: evalBudgetId ? 0 : 1,
       });
       // `:a0` / `:a1` — the fallback below is a second billed draft, not a replay of this one.
-      await recordModelSpend(
-        ctx,
-        tenantId,
-        DEFAULT_MODEL,
-        usage,
-        "reply_draft",
-        `reply:${runId}:a0`,
-      );
+      if (!evalBudgetId)
+        await recordModelSpend(
+          ctx,
+          tenantId,
+          DEFAULT_MODEL,
+          usage,
+          "reply_draft",
+          `reply:${runId}:a0`,
+        );
       return { body: text.trim() };
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { text, usage } = await generateText({
         telemetry: { integrations: [fogIntegration({ agentName: "reply-drafter" })] },
-        model: resolveModel(CHEAP_MODEL),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage, "reply_draft", `reply:${runId}:a1`);
+      if (!evalBudgetId)
+        await recordModelSpend(
+          ctx,
+          tenantId,
+          CHEAP_MODEL,
+          usage,
+          "reply_draft",
+          `reply:${runId}:a1`,
+        );
       return { body: text.trim() };
     }
   },
@@ -7324,6 +7532,7 @@ type BriefTurn = { speaker: string; text: string };
 export const draftVoiceBrief = internalAction({
   args: {
     tenantId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
     // The kept, text-only transcript (voice.storeBrief filters non-final turns before calling).
     transcript: v.array(v.object({ speaker: v.string(), text: v.string() })),
     // The spoken-language hint — the brief is written in this language (skill body owns the rule).
@@ -7331,7 +7540,7 @@ export const draftVoiceBrief = internalAction({
   },
   // EXPLICIT return type is mandatory (Pitfall 1 — an inferred type re-trips the circular-inference
   // cliff; the digestInbox/draftReply precedent). Final brief markdown, ready to ingest.
-  handler: async (ctx, { tenantId, transcript, language }): Promise<string> => {
+  handler: async (ctx, { tenantId, evalBudgetId, transcript, language }): Promise<string> => {
     // FIN-01: no stable ref (the transcript is content-plane), and a re-entry re-writes the brief
     // for real money — nonce, same as digestInbox and draftReply.
     const runId = crypto.randomUUID();
@@ -7358,35 +7567,44 @@ export const draftVoiceBrief = internalAction({
     try {
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "voice-brief-drafter" })] },
-        model: resolveModel(DEFAULT_MODEL),
+        model: goldenModel(ctx, tenantId, DEFAULT_MODEL, evalBudgetId),
         schema: briefSchema,
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        maxRetries: 1,
+        maxRetries: evalBudgetId ? 0 : 1,
       });
       // `:a0` / `:a1` — the fallback below is a second billed brief, not a replay of this one.
-      await recordModelSpend(
-        ctx,
-        tenantId,
-        DEFAULT_MODEL,
-        usage,
-        "voice_brief",
-        `brief:${runId}:a0`,
-      );
+      if (!evalBudgetId)
+        await recordModelSpend(
+          ctx,
+          tenantId,
+          DEFAULT_MODEL,
+          usage,
+          "voice_brief",
+          `brief:${runId}:a0`,
+        );
       return buildBriefMarkdown(object, transcript, language);
     } catch (e) {
       if (!isFallbackEligible(e)) throw e;
       const { object, usage } = await generateObject({
         telemetry: { integrations: [fogIntegration({ agentName: "voice-brief-drafter" })] },
-        model: resolveModel(CHEAP_MODEL),
+        model: goldenModel(ctx, tenantId, CHEAP_MODEL, evalBudgetId),
         schema: briefSchema,
         system: skill.body,
         prompt,
         abortSignal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         maxRetries: 0,
       });
-      await recordModelSpend(ctx, tenantId, CHEAP_MODEL, usage, "voice_brief", `brief:${runId}:a1`);
+      if (!evalBudgetId)
+        await recordModelSpend(
+          ctx,
+          tenantId,
+          CHEAP_MODEL,
+          usage,
+          "voice_brief",
+          `brief:${runId}:a1`,
+        );
       return buildBriefMarkdown(object, transcript, language);
     }
   },

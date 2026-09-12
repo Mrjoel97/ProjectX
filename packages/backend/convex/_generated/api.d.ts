@@ -143,6 +143,7 @@ import type * as vaultSources from "../vaultSources.js";
 import type * as vaultSweep from "../vaultSweep.js";
 import type * as vaultTranscribe from "../vaultTranscribe.js";
 import type * as verticalData from "../verticalData.js";
+import type * as verticalEvalEvidence from "../verticalEvalEvidence.js";
 import type * as verticalEvalSources from "../verticalEvalSources.js";
 import type * as verticalPackBinding from "../verticalPackBinding.js";
 import type * as verticalPackTelemetry from "../verticalPackTelemetry.js";
@@ -300,6 +301,7 @@ declare const fullApi: ApiFromModules<{
   vaultSweep: typeof vaultSweep;
   vaultTranscribe: typeof vaultTranscribe;
   verticalData: typeof verticalData;
+  verticalEvalEvidence: typeof verticalEvalEvidence;
   verticalEvalSources: typeof verticalEvalSources;
   verticalPackBinding: typeof verticalPackBinding;
   verticalPackTelemetry: typeof verticalPackTelemetry;

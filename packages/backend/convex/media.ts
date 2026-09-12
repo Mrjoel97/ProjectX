@@ -60,7 +60,7 @@ import { getGuardrailConfig, mediaRemainingCentsInner, rateLimiter } from "./gua
 import { retrier } from "./index";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
-import { evaluateRenderTrigger } from "./mediaComplete";
+import { evaluateRenderTrigger, maybeStartCaptions } from "./mediaComplete";
 // The plain-function half of the ledger writer: the limiter movement and its row must commit
 // or fail together (FIN-01). A separate ctx.runMutation would be a second transaction.
 import { ensureCoverage, recordMovement } from "./spendLedger";
@@ -1421,6 +1421,8 @@ export const recordSubmission = internalMutation({
     ),
   },
   handler: async (ctx, { jobId, result }): Promise<null> => {
+    const row = await ctx.db.get(jobId);
+    if (!row || ["succeeded", "failed", "blocked"].includes(row.status)) return null;
     const updatedAt = Date.now();
     if (result.ok) {
       await ctx.db.patch(jobId, { providerRequestId: result.providerRequestId, updatedAt });
@@ -1435,7 +1437,40 @@ export const recordSubmission = internalMutation({
     } else {
       await ctx.db.patch(jobId, { status: "failed", failureReason: result.code, updatedAt });
     }
+    if (!result.ok) {
+      // Submission refusals are terminal arrivals too. If the final take is refused,
+      // no landResult call follows it to release the render's pending state.
+      await evaluateRenderTrigger(
+        ctx,
+        {
+          tenantId: row.tenantId,
+          planId: row.planId,
+          batchId: row.batchId,
+        },
+        { terminalOnly: true },
+      );
+      await maybeStartCaptions(ctx, row, { terminalOnly: true });
+    }
     return null;
+  },
+});
+
+/** Repair a historical terminal refusal without scheduling a render or buying new assets. */
+export const reconcileSubmissionFailure = internalMutation({
+  args: { tenantId: v.string(), planId: v.id("plans"), batchId: v.string() },
+  handler: async (ctx, args) => {
+    const plan = await ctx.db.get(args.planId);
+    if (!plan || plan.tenantId !== args.tenantId || plan.renderStatus !== "pending") return false;
+    await evaluateRenderTrigger(ctx, args, { terminalOnly: true });
+    const takes = await ctx.db
+      .query("mediaJobs")
+      .withIndex("by_batch", (q) => q.eq("tenantId", args.tenantId).eq("batchId", args.batchId))
+      .take(101);
+    if (takes.length <= 100 && takes.every((r) => r.planId === args.planId)) {
+      const take = takes.find((r) => r.kind === "tts");
+      if (take) await maybeStartCaptions(ctx, take, { terminalOnly: true });
+    }
+    return (await ctx.db.get(args.planId))?.renderStatus === "failed";
   },
 });
 

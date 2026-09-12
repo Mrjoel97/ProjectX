@@ -433,6 +433,55 @@ const dispatchArgs = (planId: Id<"plans">, over: Record<string, unknown> = {}) =
 });
 
 describe("the dispatcher — not the specialist — writes the findings", () => {
+  test("native multi-step structured output renders each reference against actual tool evidence", async () => {
+    const t = newTest();
+    const planId = await stagedPlan(t);
+    const readStep = {
+      ...SEARCH_STEP,
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "read-structured",
+          toolName: "readPage",
+          input: JSON.stringify({ url: "https://example.test/pricing", focus: "price" }),
+        },
+      ],
+    };
+    const answer = {
+      ...ANSWER_STEP,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            claims: [
+              {
+                text: "The excerpt is not proof of this claim",
+                evidence: [
+                  { url: "https://example.test/pricing", quote: "Page evidence." },
+                  { url: "https://example.test/pricing", quote: "invented support" },
+                ],
+              },
+            ],
+            limitations: "Claim support remains unverified",
+          }),
+        },
+      ],
+    };
+    const res = await t.action(
+      internal.dispatch.__runSpecialistWithScript,
+      dispatchArgs(planId, { primary: [SEARCH_STEP, readStep, answer] }),
+    );
+    expect(res.ok).toBe(true);
+    const plan = await t.run((ctx) => ctx.db.get(planId));
+    const doc = (await readDocs(t))[0]!;
+    for (const body of [plan?.body, doc.text]) {
+      expect(body).toContain("**Page excerpt matched.**");
+      expect(body).toContain("**Reference unverified.**");
+      expect(body).toContain("support unverified");
+    }
+    expect(plan?.sources?.[0]?.pageReadAt).toEqual(expect.any(Number));
+  });
+
   test("a real search then page read carries attested evidence through both landing terminals", async () => {
     const t = newTest();
     const planId = await stagedPlan(t);
@@ -473,6 +522,16 @@ describe("the dispatcher — not the specialist — writes the findings", () => 
     expect(plan?.status).toBe("proposed");
     expect(plan?.kind).toBe("memo");
     expect(plan?.body).toContain(FINDINGS);
+    expect(plan?.body).toContain("structured references unavailable");
+    expect(res.ok && res.costUsd).toBeGreaterThan(0);
+    expect(res.ok && res.webSearchCalls).toBe(1);
+    const spend = await t.run((ctx) =>
+      ctx.db
+        .query("spendEvents")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", TENANT))
+        .collect(),
+    );
+    expect(spend.some((row) => row.phase === "actual" && row.amountCents > 0)).toBe(true);
     expect(plan?.sources?.[0]?.pageReadAt).toBeUndefined();
     expect(docs[0]?.text).toContain("Search result only (no confirmed page read)");
   });
