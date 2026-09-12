@@ -1714,7 +1714,7 @@ test("only media.ts and mediaComplete.ts write a TERMINAL mediaJobs status, and 
   expect([...succeeders]).toEqual(["mediaComplete.ts"]);
 });
 
-test("storage.getUrl is only ever called inside an authenticated tenant or owner query", () => {
+test("storage.getUrl stays in authenticated queries or the two approved funnel capability seams", () => {
   // A storage URL is a BEARER CAPABILITY. Reached from anything but a tenant-guarded read it is one
   // step from a log line or an unguarded return.
   // THIS SCAN IS WHAT PLAN 20-17 MUST NOT BREAK: handing fal a `ctx.storage.getUrl()` result as the
@@ -1725,19 +1725,38 @@ test("storage.getUrl is only ever called inside an authenticated tenant or owner
   // binding is exercised in verticalEvalEvidence.test.ts before its URLs can be returned.
   // Include the non-query owner builders too, so a move to ownerAction cannot pass this scan.
   const builder =
-    /=\s*(tenantQuery|tenantMutation|tenantAction|ownerQuery|ownerMutation|ownerAction|internalQuery|internalMutation|internalAction|httpAction|action|mutation|query)\s*\(/g;
+    /(?:const\s+(\w+)\s*)?=\s*(tenantQuery|tenantMutation|tenantAction|ownerQuery|ownerMutation|ownerAction|internalQuery|internalMutation|internalAction|httpAction|action|mutation|query)\s*\(/g;
+  // 31-00 explicitly approved a bearer URL surface. These are EXACT named exceptions,
+  // not permission for mutation/action builders generally. create authenticates and checks
+  // tenant ownership before validating the file; it returns a new link, not the storage URL.
+  // resolveAndIncrement is internal and checks the 256-bit token hash, active state and
+  // fixed source bytes before returning their URL. Native funnels tests exercise auth,
+  // foreign tenant rejection, unknown/deactivated tokens and missing/replaced bytes.
+  const funnelExceptions = new Map([
+    ["create", "tenantMutation"],
+    ["resolveAndIncrement", "internalMutation"],
+  ]);
+  const seenFunnelExceptions: string[] = [];
   let sites = 0;
   for (const [rel, code] of allConvexSources()) {
     for (const call of code.matchAll(/storage\.getUrl/g)) {
       sites++;
       const enclosing = [...code.slice(0, call.index).matchAll(builder)].pop();
+      const name = enclosing?.[1];
+      const kind = enclosing?.[2];
+      if (rel === "funnels.ts" && name && funnelExceptions.has(name)) {
+        expect(kind).toBe(funnelExceptions.get(name));
+        seenFunnelExceptions.push(name);
+        continue;
+      }
       expect(
         ["tenantQuery", "ownerQuery"],
-        `${rel}: storage.getUrl is not inside an authenticated query (found ${enclosing?.[1] ?? "top level"})`,
-      ).toContain(enclosing?.[1]);
+        `${rel}: storage.getUrl is not inside an authenticated query (found ${kind ?? "top level"})`,
+      ).toContain(kind);
     }
   }
   expect(sites, "no storage.getUrl call sites found - the scan is vacuous").toBeGreaterThan(0);
+  expect(seenFunnelExceptions.sort()).toEqual(["create", "resolveAndIncrement"]);
 });
 
 // ── 20-15 (MEDIA-01 / D11): the render stage's structural guarantees ──────────────────────────
