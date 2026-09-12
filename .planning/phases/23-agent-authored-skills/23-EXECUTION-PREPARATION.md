@@ -31,7 +31,19 @@ and exact-baseline rollback; the explicitly unobserved runtime-attribution limit
 accepted. The current golden self-check covers no-model inspector ordering. The A/B baseline
 at `2026-09-12T10:32:30Z` on `0c258885` witnessed both fresh sign-ins and native owner=false,
 but is historical authentication evidence, not fresh `644408df` storage-state verification.
-Actual fixed-path export and fresh reauthentication remain separate readiness checks.
+Subsequent controlled A/B native password sign-ins succeeded, each `/ops` view excluded owner
+controls, and exact native `owner:ownsDeployment` reads returned false for both IDs. Actual
+Playwright exports now exist at the fixed ignored paths. The refs/hash-only local receipt is
+`output/playwright/phase23-acceptance/fixed-auth-state-readiness.json`. Neither state was replayed;
+parallel refresh-token reuse is not proved or recommended. The eventual spec establishes another
+fresh native sign-in rather than treating these exports as timeless authentication proof.
+
+The readiness attempt exposed two harness issues: opening a protected workspace first could
+wait on a stale auth-loading surface, and the visible button is `Sign Out`, not the exact-case
+`Sign out`. The harness now opens `/signin` first and matches the bounded case-insensitive button
+label. Earlier readiness timeouts are not counted as successful sign-ins. Final five offline
+checks and one-spec Playwright discovery passed after this narrow correction; no owner grant
+or model call occurred during readiness work.
 
 ## Ready locally
 

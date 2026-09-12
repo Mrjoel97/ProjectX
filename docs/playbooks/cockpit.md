@@ -2,7 +2,10 @@
 > zero/one/two-turn budget readbacks and closure before its fixed handoff. Five offline control
 > tests, web TypeScript and Playwright discovery passed; no live authoring acceptance is claimed.
 > Native password sign-in replaces token decoding; execution must bypass legacy auth setup with
-> `--no-deps`. Proposed $1 cap remains unapproved; containment never proves policy acceptance.
+> `--no-deps`. Fresh A/B readiness confirmed the harness must start at `/signin` and match the
+> native Sign Out button case-insensitively. Both accounts remain non-owners; auth states were
+> exported without replay. The owner authorized the $1/two-submission probe in `23-06-SUMMARY.md`;
+> execution remains separate evidence, and containment never proves policy acceptance.
 >
 > Last verified: 2026-09-12 — exact internally registered authoring-probe threads claim at most
 > two serialized ordinary text turns against the existing native envelope. Matching expired,

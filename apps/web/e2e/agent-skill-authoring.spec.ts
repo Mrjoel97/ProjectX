@@ -72,8 +72,8 @@ async function authenticate(page: Page, foreign = false) {
   demand(email && password, "PHASE23_AUTH_REQUIRED");
   // Use the native sign-in boundary, never decode a browser token to establish identity.
   // Starting with sign-out prevents an unrelated cached storageState from satisfying the witness.
-  await page.goto("/dashboard/workspace");
-  const signOut = page.getByRole("button", { name: "Sign out", exact: true });
+  await page.goto("/signin");
+  const signOut = page.getByRole("button", { name: /^sign out$/i });
   const emailInput = page.getByLabel("Email Address", { exact: true });
   await expect(signOut.or(emailInput)).toBeVisible({ timeout: 30_000 });
   if (await signOut.isVisible()) await signOut.click();
