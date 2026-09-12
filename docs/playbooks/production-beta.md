@@ -1,5 +1,10 @@
 # Playbook: Production Beta Readiness (25-10)
 
+Last verified: 2026-09-12 — optional feature attestation `GOLDEN_TAVILY_BILLING=free` permits
+an explicitly verified Free account only with `GOLDEN_TAVILY_CREDIT_USD=0`. Omitted mode keeps
+the existing positive standard-rate behavior. Missing/blank rates remain unverified. This adds
+no provider upgrade, credential path or mandatory ordinary-production environment setting.
+
 Last verified: 2026-09-11 — `GOLDEN_OPENROUTER_BILLING` and
 `GOLDEN_TAVILY_CREDIT_USD` are optional `feature`-tier manifest entries for paid golden
 evaluations. They are nonsecret operator attestations of independently verified provider account

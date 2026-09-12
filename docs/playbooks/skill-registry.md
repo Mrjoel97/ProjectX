@@ -1,5 +1,9 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-12 — explicit Tavily Free accounting and the shared ledger writer are
+> pinned in the evaluator identities. Zero-dollar calls retain observed credits and exact replay
+> agreement. Golden and vertical evidence must match the refreshed evaluator revisions.
+
 > Last verified: 2026-09-12 — the follow-up golden evaluator identity also pins the shared
 > document inline renderer. Its escape-handling change retires the prior evaluator revision;
 > candidate bodies, runtime activation and owner/semantic approval requirements are unchanged.

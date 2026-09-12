@@ -28,6 +28,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/verticalData.ts",
   "packages/backend/convex/verticalVisual.ts",
   "packages/backend/convex/guardrails.ts",
+  "packages/backend/convex/spendLedger.ts",
   "packages/backend/convex/audit.ts",
   "packages/backend/convex/agentSteps.ts",
   "packages/backend/convex/lib/functions.ts",

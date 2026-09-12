@@ -1,5 +1,9 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-12 — evaluation ledger rows may retain observed Tavily credit usage
+> separately from dollar spending. Verified Free calls settle at zero dollars; missing usage
+> retains a reservation. Existing dashboard dollar totals do not treat credits as money.
+
 > Last verified: 2026-09-12 — The shared `MarkdownDocument` pipeline now recognizes escaped
 > punctuation as literal inline text after block parsing. Escaped research quotes and URLs render
 > without added backslashes, while escaped headings/emphasis remain plain and HTML stays text.

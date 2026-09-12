@@ -20,7 +20,7 @@ import {
   evalActualCents,
   evalCallCeilingCents,
 } from "@pikar/cost/evalBudget";
-import { goldenProviderCeilingCents } from "@pikar/cost/goldenProviderBudget";
+import { goldenProviderCeilingCents, goldenTavilyBilling } from "@pikar/cost/goldenProviderBudget";
 import { scanText } from "@pikar/pii";
 import { clampRefundCents, type EstimateInput, estimateFolderCents } from "@pikar/vault";
 import { v } from "convex/values";
@@ -351,15 +351,17 @@ export const openEvalBudget = internalMutation({
     family: v.optional(v.literal("golden")),
   },
   handler: async (ctx, { tenantIds, capCents, family }): Promise<Id<"spendEvents">> => {
-    if (
-      family === "golden" &&
-      (process.env.GOLDEN_OPENROUTER_BILLING !== "standard" ||
-        !(
-          Number(process.env.GOLDEN_TAVILY_CREDIT_USD) > 0 &&
-          Number(process.env.GOLDEN_TAVILY_CREDIT_USD) <= 0.008
-        ))
-    )
-      throw new Error("GOLDEN_PROVIDER_BILLING_UNVERIFIED");
+    if (family === "golden") {
+      try {
+        if (process.env.GOLDEN_OPENROUTER_BILLING !== "standard") throw new Error();
+        goldenTavilyBilling(
+          process.env.GOLDEN_TAVILY_BILLING,
+          process.env.GOLDEN_TAVILY_CREDIT_USD,
+        );
+      } catch {
+        throw new Error("GOLDEN_PROVIDER_BILLING_UNVERIFIED");
+      }
+    }
     if (!Number.isSafeInteger(capCents) || capCents < 1 || capCents > EVAL_MAX_BUDGET_CENTS)
       throw new Error("EVAL_BUDGET_INVALID");
     if (
@@ -513,8 +515,13 @@ export const reserveEvalCall = internalMutation({
 });
 
 export const settleEvalCall = internalMutation({
-  args: { tenantId: v.string(), reservationId: v.id("spendEvents"), costUsd: v.number() },
-  handler: async (ctx, { tenantId, reservationId, costUsd }) => {
+  args: {
+    tenantId: v.string(),
+    reservationId: v.id("spendEvents"),
+    costUsd: v.number(),
+    tavilyCredits: v.optional(v.number()),
+  },
+  handler: async (ctx, { tenantId, reservationId, costUsd, tavilyCredits }) => {
     const actualCents = evalActualCents(costUsd);
     const reservation = await ctx.db.get(reservationId);
     if (
@@ -532,9 +539,20 @@ export const settleEvalCall = internalMutation({
       .take(4);
     const settled = siblings.find((row) => row.evalActualUsd !== undefined);
     if (settled) {
-      if (settled.evalActualUsd !== costUsd) throw new Error("EVAL_SETTLEMENT_MISMATCH");
+      if (settled.evalActualUsd !== costUsd || settled.evalTavilyCredits !== tavilyCredits)
+        throw new Error("EVAL_SETTLEMENT_MISMATCH");
       return { actualUsd: costUsd, settled: true, breached: settled.evalBreach === true };
     }
+    const isTavily = ["tavily-search", "tavily-extract"].includes(reservation.model ?? "");
+    if (
+      isTavily
+        ? tavilyCredits === undefined ||
+          !Number.isFinite(tavilyCredits) ||
+          tavilyCredits < 0 ||
+          tavilyCredits > Number.MAX_SAFE_INTEGER
+        : tavilyCredits !== undefined
+    )
+      throw new Error("EVAL_PROVIDER_USAGE_INVALID");
     // Preserve a known provider-contract breach in the bill. Throwing here would roll back the
     // observed actual cost. The action throws AFTER this commits; all later reservations stop.
     const breached = actualCents > reservation.amountCents;
@@ -589,7 +607,12 @@ export const settleEvalCall = internalMutation({
         kind: reservation.kind,
         createdAt: Date.now(),
         evalBudgetId: reservation.evalBudgetId,
-        ...(actualCents === 0 ? { evalActualUsd: costUsd } : {}),
+        ...(actualCents === 0
+          ? {
+              evalActualUsd: costUsd,
+              ...(tavilyCredits === undefined ? {} : { evalTavilyCredits: tavilyCredits }),
+            }
+          : {}),
       });
     }
     if (actualCents > 0)
@@ -604,6 +627,7 @@ export const settleEvalCall = internalMutation({
         createdAt: Date.now(),
         evalBudgetId: reservation.evalBudgetId,
         evalActualUsd: costUsd,
+        ...(tavilyCredits === undefined ? {} : { evalTavilyCredits: tavilyCredits }),
         ...(breached ? { evalBreach: true } : {}),
       });
     return { actualUsd: costUsd, settled: true, breached };

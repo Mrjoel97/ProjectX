@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 47
-current_plan: Merged-audit implementation deployed; see .planning/audits/2026-09-12-production-acceptance.md. Phases 23 and 30 require semantic evaluation and live lifecycle evidence; six vertical v1 candidates are dormant. Phase 31 awaits its explicit owner contract. Phase 47 remains deferred on real evidence.
+current_plan: Merged-audit implementation deployed; see .planning/audits/2026-09-12-production-acceptance.md. Phases 23 and 30 require semantic evaluation and live lifecycle evidence; six vertical v1 candidates are dormant. Phase 31 A1/B1/C1 approved and implementation started. Phase 47 remains deferred on real evidence.
 status: in_progress
-stopped_at: "2026-09-12 — production 0c258885 passed CI/deploy and authenticated desktop/mobile media navigation checks. Forty vertical preflights passed; live collection stopped after two observations, $0.00406801 settled. Fixture mutation repair qualified for promotion. Fresh Phase 23 accounts are being prepared; semantic review, successful media and recurrence gates remain open."
+stopped_at: "2026-09-12 — production 232179c passed CI/deploy with fixture mutation repair. Both fresh Phase 23 accounts passed authenticated non-owner checks; no owner grant/model probe yet. Tavily Free accounting qualified for promotion. Phase 31 contract approved in 8b18a2b; Wave 1 implementation underway. Semantic review, successful media and recurrence gates remain open."
 last_updated: "2026-09-12"
 progress:
   total_phases: 73
@@ -44,7 +44,7 @@ Last three closes, newest first:
 | 39 Research engine (Track C step 11, G4, RSCH-01) | 2026-09-06 | `4b8fe5b` `[deploy]` | `readPage` bounded to the run's own search results, page-read/snippet-only labels, shared staleness window, honest footer, research-specialist v4 gated 46/46 and active locally |
 | 38 Tool registry (Track C step 10) | 2026-09-06 | `23351ff` `[deploy]` | `buildCockpitTools(ToolContext, ToolGrants)`, `grantsFor` in core, shared validator at both doors, 23-class snapshot held, tenant pin now reaches dispatched specialists |
 
-Current owner priority: complete live acceptance and the evidence gates for Phases 23/30, then continue Phase 31/provider work. Recurrence remains deferred until real DST/OAuth evidence passes; do not build its table first. Phase 31 plan 31-00 still requires the explicit stage/attribution/lead-capture contract. The Sep 12 Intuit app check redirected to sign-in, so renewed provider diagnosis first needs authentication; that check does not reconfirm the older app-record failure.
+Current owner priority: complete live acceptance and the evidence gates for Phases 23/30, then continue Phase 31/provider work. Recurrence remains deferred until real DST/OAuth evidence passes; do not build its table first. Phase 31 plan 31-00 now records the owner's explicit compatible A1/B1/C1 contract; implement its remaining waves. The Sep 12 Intuit app check redirected to sign-in, so renewed provider diagnosis first needs authentication; that check does not reconfirm the older app-record failure.
 
 **LIVE ACCEPTANCE STILL OPEN.** Phase 44 and the updated merged-audit G19 row record successful production activations; the former claim that fixture 33 blocks every activation was stale. New candidates still require fresh exact-version evidence. QuickBooks remains unconnected; Phase 45 records an app-record failure, while the latest developer-app check needs Intuit sign-in before renewed diagnosis. WORM remains OFF under ADR-044; recurrence remains deferred pending real DST and OAuth expiry/reauth traces. Phase 24 semantic review, Phase 23 real author/eval/activation/rollback, current-provider media proof and Phase 25 self-service release qualification remain open. See the 2026-09-12 acceptance audit for current release and evidence work.
 

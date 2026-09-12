@@ -96,10 +96,30 @@ test("golden envelope requires verified billing and one bounded tenant family", 
   ).toBeTruthy();
 });
 
-test("Tavily reserves before egress; unknown usage cannot retry or close the ledger", async () => {
+test("Free envelopes refuse absent, blank or positive rate attestations", async () => {
   const t = harness();
   vi.stubEnv("GOLDEN_OPENROUTER_BILLING", "standard");
-  vi.stubEnv("GOLDEN_TAVILY_CREDIT_USD", "0.008");
+  vi.stubEnv("GOLDEN_TAVILY_BILLING", "free");
+  for (const rate of [undefined, "", " ", "0.008"]) {
+    vi.stubEnv("GOLDEN_TAVILY_CREDIT_USD", rate);
+    await expect(
+      t.mutation(internal.guardrails.openEvalBudget, {
+        tenantIds: [tenantId],
+        capCents: 200,
+        family: "golden",
+      }),
+    ).rejects.toThrow("BILLING_UNVERIFIED");
+  }
+});
+
+test.each([
+  "standard",
+  "free",
+])("Tavily %s reserves before egress; unknown usage cannot retry or close the ledger", async (mode) => {
+  const t = harness();
+  vi.stubEnv("GOLDEN_OPENROUTER_BILLING", "standard");
+  vi.stubEnv("GOLDEN_TAVILY_BILLING", mode);
+  vi.stubEnv("GOLDEN_TAVILY_CREDIT_USD", mode === "free" ? "0" : "0.008");
   vi.stubEnv("TAVILY_API_KEY", "test-key");
   const budgetId = await t.mutation(internal.guardrails.openEvalBudget, {
     tenantIds: [tenantId],
@@ -130,10 +150,14 @@ test("Tavily reserves before egress; unknown usage cannot retry or close the led
   );
 });
 
-test("known Tavily cost settles actual credit value under the same aggregate cap", async () => {
+test.each([
+  "standard",
+  "free",
+])("known Tavily %s cost settles dollars and credits with exact replay agreement", async (mode) => {
   const t = harness();
   vi.stubEnv("GOLDEN_OPENROUTER_BILLING", "standard");
-  vi.stubEnv("GOLDEN_TAVILY_CREDIT_USD", "0.008");
+  vi.stubEnv("GOLDEN_TAVILY_BILLING", mode);
+  vi.stubEnv("GOLDEN_TAVILY_CREDIT_USD", mode === "free" ? "0" : "0.008");
   vi.stubEnv("TAVILY_API_KEY", "test-key");
   const budgetId = await t.mutation(internal.guardrails.openEvalBudget, {
     tenantIds: [tenantId],
@@ -149,8 +173,34 @@ test("known Tavily cost settles actual credit value under the same aggregate cap
   const search = tools.webResearch?.execute as unknown as Search;
   await search({ query: "public research" }, { toolCallId: "test", messages: [] });
   expect(await t.query(internal.guardrails.evalBudgetStatus, { budgetId })).toMatchObject({
-    actualUsd: 0.008,
+    actualUsd: mode === "free" ? 0 : 0.008,
     unsettledCount: 0,
     callCount: 1,
   });
+  const rows = await t.run((ctx) =>
+    ctx.db
+      .query("spendEvents")
+      .withIndex("by_eval_budget", (q) => q.eq("evalBudgetId", budgetId))
+      .collect(),
+  );
+  const reserved = rows.find((row) => row.phase === "reserved");
+  expect(reserved?.amountCents).toBe(1);
+  expect(rows.find((row) => row.evalActualUsd !== undefined)).toMatchObject({
+    evalTavilyCredits: 1,
+    evalActualUsd: mode === "free" ? 0 : 0.008,
+  });
+  if (!reserved) throw new Error("missing reservation");
+  const settlement = {
+    tenantId,
+    reservationId: reserved._id,
+    costUsd: mode === "free" ? 0 : 0.008,
+    tavilyCredits: 1,
+  };
+  await expect(t.mutation(internal.guardrails.settleEvalCall, settlement)).resolves.toMatchObject({
+    settled: true,
+  });
+  await expect(
+    t.mutation(internal.guardrails.settleEvalCall, { ...settlement, tavilyCredits: 2 }),
+  ).rejects.toThrow("SETTLEMENT_MISMATCH");
+  await expect(t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).resolves.toBeTruthy();
 });

@@ -43,6 +43,12 @@ export const ENV_MANIFEST: readonly EnvSpec[] = [
       "Paid golden evaluations remain disabled until standard OpenRouter account billing is independently verified.",
   },
   {
+    name: "GOLDEN_TAVILY_BILLING",
+    tier: "feature",
+    whatBreaks:
+      "Free golden Tavily usage requires verified free billing with a zero credit rate; absent mode preserves standard paid billing validation.",
+  },
+  {
     name: "GOLDEN_TAVILY_CREDIT_USD",
     tier: "feature",
     whatBreaks:

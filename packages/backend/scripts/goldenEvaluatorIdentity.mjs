@@ -15,6 +15,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/convex/smokeAssert.ts",
   "packages/backend/convex/llm.ts",
   "packages/backend/convex/guardrails.ts",
+  "packages/backend/convex/spendLedger.ts",
   "packages/backend/convex/lib/evalBudgetModel.ts",
   "packages/backend/convex/lib/models.ts",
   "packages/backend/convex/lib/toolContextArgs.ts",

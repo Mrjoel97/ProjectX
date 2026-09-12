@@ -117,7 +117,9 @@ import {
   searchFeeUsd,
 } from "@pikar/cost";
 import {
+  goldenTavilyBilling,
   goldenTavilyExtractRequest,
+  goldenTavilyObservedCredits,
   goldenTavilyObservedUsd,
   goldenTavilySearchRequest,
 } from "@pikar/cost/goldenProviderBudget";
@@ -511,8 +513,10 @@ export const buildWebResearchTool = (evaluation?: {
   ) => {
     // Trusted deployment account attestation, never a model/tool argument. Missing metadata
     // refuses before transport; an ambiguous response retains its full reservation.
-    const creditUsd = Number(process.env.GOLDEN_TAVILY_CREDIT_USD);
-    goldenTavilyObservedUsd({ usage: { credits: 0 } }, creditUsd);
+    const { creditUsd, billingMode } = goldenTavilyBilling(
+      process.env.GOLDEN_TAVILY_BILLING,
+      process.env.GOLDEN_TAVILY_CREDIT_USD,
+    );
     if (!evaluation) throw new Error("EVAL_BUDGET_REQUIRED");
     if (unresolvedProviderCall) throw new Error("EVAL_TAVILY_RESPONSE_UNRESOLVED");
     const reservationId = await evaluation.ctx.runMutation(internal.guardrails.reserveEvalCall, {
@@ -531,12 +535,14 @@ export const buildWebResearchTool = (evaluation?: {
       signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
     const body: unknown = await response.json();
-    const costUsd = goldenTavilyObservedUsd(body, creditUsd);
-    if (costUsd === null) throw new Error("EVAL_COST_UNKNOWN");
+    const costUsd = goldenTavilyObservedUsd(body, creditUsd, billingMode);
+    const tavilyCredits = goldenTavilyObservedCredits(body);
+    if (costUsd === null || tavilyCredits === null) throw new Error("EVAL_COST_UNKNOWN");
     const settled = await evaluation.ctx.runMutation(internal.guardrails.settleEvalCall, {
       tenantId: evaluation.tenantId,
       reservationId,
       costUsd,
+      tavilyCredits,
     });
     if (settled.breached) throw new Error("EVAL_PROVIDER_EXCEEDED_RESERVATION");
     if (!response.ok) throw new Error("EVAL_TAVILY_PROVIDER_FAILED");

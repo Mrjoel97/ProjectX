@@ -168,14 +168,20 @@ human review, expert attestation or release approval.
 
 ## Remaining gates
 
-Phase 23 requires two fresh controlled identities, genuine authored-candidate handoff, verified
-provider billing, approval of the concrete paid evaluation, and activation/rollback acceptance.
+Phase 23 now has two distinct controlled accounts with fresh password sign-in and authenticated
+non-owner `/ops` observations, independently confirmed by native `owner:false` reads. Credentials
+are DPAPI-encrypted locally; no owner grant or model probe has occurred. The genuine authored
+candidate handoff, concrete bounded-probe/evaluation approvals and activation/rollback remain open.
+The owner confirmed ordinary OpenRouter access and Tavily Free. Explicit Free accounting support
+now qualifies zero-dollar calls only with observed credit counts, retaining positive reservations
+and unknown-usage holds. Its 56 focused tests passed; this separate accounting change refreshes
+both evaluator identities and includes the ledger writer in their source inventories.
 Phase 30 requires actual bounded evaluations, authenticated semantic reviews (including required
 qualified Legal/HR reviewers), all-six workflow acceptance, two evaluated versions per vertical,
 and the six lifecycle drills. No human approval or expert attestation is inferred.
 
-Phase 31 application work still awaits the explicit stage, attribution and lead-capture contract
-in plan 31-00. Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
+Phase 31's explicit A1/B1/C1 contract is approved and recorded in plan 31-00 (commit `8b18a2b`);
+application implementation has started. Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the
 bounded full refresh timed out after extraction, while the Convex edge fixup succeeded.

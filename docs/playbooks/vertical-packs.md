@@ -1,5 +1,11 @@
 # Optional vertical packs
 
+Last verified: 2026-09-12 — shared accounting changes for verified Tavily Free refresh both
+evaluator identities and add the actual ledger writer to their source inventories. Native
+vertical collection still uses fixed sources without Tavily. The two observed Data cases from
+the interrupted production run are preserved in the dated acceptance audit; they cannot qualify
+the changed evaluator or replace complete authenticated semantic review.
+
 Last verified: 2026-09-12 — source compilation now copies recipe cells before SheetJS
 serialization, which otherwise adds nested hyperlink display metadata and changes the
 collector's case hash after the corpus generator has pinned the pristine recipe. The full

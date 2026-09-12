@@ -1,3 +1,9 @@
+> Last verified: 2026-09-12 — golden Tavily requests support explicit trusted Free billing while
+> preserving positive pre-call holds and mandatory provider credit usage. The append-only ledger
+> stores bounded numeric credits separately from dollars; zero-dollar settlements retain credits
+> on the refund row and reject conflicting replay. Both evaluator inventories include the ledger
+> writer. Unknown usage stays unresolved; no paid retry or activation is implied by offline checks.
+
 > Last verified: 2026-09-12 — Postdeployment research acceptance exposed literal escape characters
 > in the shared document renderer. `inlineRuns` now decodes escaped punctuation as plain text
 > after block classification, preserving ordinary emphasis and actual backslashes. Research

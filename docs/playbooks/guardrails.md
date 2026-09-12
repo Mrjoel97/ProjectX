@@ -1,5 +1,15 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+Last verified: 2026-09-12 — verified Tavily Free accounts use
+`GOLDEN_TAVILY_BILLING=free` with `GOLDEN_TAVILY_CREDIT_USD=0`. Absent billing mode preserves
+the existing positive standard-rate contract; absent/blank rates never imply Free. The trusted
+attestation means the account remains Free with no paid overage enabled, not that credits are
+unlimited. The same positive reservation ceilings, 500-call envelope limit and request bounds
+remain in force; provider quota exhaustion must not trigger an upgrade. Even Free responses
+must include finite nonnegative bounded `usage.credits`; missing usage retains the full hold.
+Settlements preserve `evalTavilyCredits` separately from actual USD (zero for Free), and replays
+must agree on both. Offline transport/ledger checks do not establish live billing acceptance.
+
 Last verified: 2026-09-10 — native evaluation budgets now have an append-only terminal closure.
 `closeEvalBudget` refuses unsettled reservations or recorded breaches and writes one
 `eval_budget_closed` adjustment. New reservations consult that same durable marker; closing and

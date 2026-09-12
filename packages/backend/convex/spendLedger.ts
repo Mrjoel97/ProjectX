@@ -86,6 +86,7 @@ const movementArgs = {
   evalBudgetId: v.optional(v.id("spendEvents")),
   evalEnvelope: v.optional(v.object({ tenantIds: v.array(v.string()), expiresAt: v.number() })),
   evalActualUsd: v.optional(v.number()),
+  evalTavilyCredits: v.optional(v.number()),
   evalBreach: v.optional(v.boolean()),
 };
 

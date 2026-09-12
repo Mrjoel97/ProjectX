@@ -194,14 +194,36 @@ export function goldenOpenRouterObservedUsage(response: unknown) {
 export function goldenTavilyObservedUsd(
   response: unknown,
   verifiedCreditUsd: number,
+  billingMode: "standard" | "free" = "standard",
 ): number | null {
   if (
     !Number.isFinite(verifiedCreditUsd) ||
-    verifiedCreditUsd <= 0 ||
+    (billingMode === "free" ? verifiedCreditUsd !== 0 : verifiedCreditUsd <= 0) ||
     verifiedCreditUsd > GOLDEN_TAVILY_CREDIT_USD_CEILING
   )
     throw new Error("GOLDEN_TAVILY_ACCOUNT_UNSUPPORTED");
-  const credits = object(object(response)?.usage)?.credits;
-  if (typeof credits !== "number" || !Number.isFinite(credits) || credits < 0) return null;
+  const credits = goldenTavilyObservedCredits(response);
+  if (credits === null) return null;
   return credits * verifiedCreditUsd;
+}
+
+/** Deployment attestation only. An absent/blank rate must never coerce into Free billing. */
+export function goldenTavilyBilling(mode: string | undefined, rawRate: string | undefined) {
+  if ((mode !== undefined && mode !== "standard" && mode !== "free") || !rawRate?.trim())
+    throw new Error("GOLDEN_TAVILY_ACCOUNT_UNSUPPORTED");
+  const billingMode = mode === "free" ? "free" : "standard";
+  const creditUsd = Number(rawRate);
+  goldenTavilyObservedUsd({ usage: { credits: 0 } }, creditUsd, billingMode);
+  return { billingMode, creditUsd } as const;
+}
+
+/** Credits remain observable resource usage even when verified Free billing costs zero USD. */
+export function goldenTavilyObservedCredits(response: unknown): number | null {
+  const credits = object(object(response)?.usage)?.credits;
+  return typeof credits === "number" &&
+    Number.isFinite(credits) &&
+    credits >= 0 &&
+    credits <= Number.MAX_SAFE_INTEGER
+    ? credits
+    : null;
 }

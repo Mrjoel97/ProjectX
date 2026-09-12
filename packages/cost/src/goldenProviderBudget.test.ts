@@ -7,12 +7,43 @@ import {
   goldenEmbeddingRequest,
   goldenOpenRouterObservedUsage,
   goldenProviderCeilingCents,
+  goldenTavilyBilling,
   goldenTavilyExtractRequest,
+  goldenTavilyObservedCredits,
   goldenTavilyObservedUsd,
   goldenTavilySearchRequest,
 } from "./goldenProviderBudget";
 
 describe("golden provider reservation policy (offline, no ledger or transport)", () => {
+  it("Free billing requires explicit metadata and still requires bounded observed credits", () => {
+    expect(goldenTavilyBilling("free", "0")).toEqual({ billingMode: "free", creditUsd: 0 });
+    expect(goldenTavilyBilling(undefined, "0.008")).toEqual({
+      billingMode: "standard",
+      creditUsd: 0.008,
+    });
+    for (const [mode, rate] of [
+      [undefined, "0"],
+      ["free", undefined],
+      ["free", ""],
+      ["free", " "],
+      ["free", "0.008"],
+      ["unknown", "0"],
+    ])
+      expect(() => goldenTavilyBilling(mode, rate)).toThrow("ACCOUNT_UNSUPPORTED");
+    for (const response of [
+      {},
+      { usage: { credits: "1" } },
+      { usage: { credits: -1 } },
+      { usage: { credits: Infinity } },
+      { usage: { credits: Number.MAX_SAFE_INTEGER + 1 } },
+    ]) {
+      expect(goldenTavilyObservedUsd(response, 0, "free")).toBeNull();
+      expect(goldenTavilyObservedCredits(response)).toBeNull();
+    }
+    expect(goldenTavilyObservedUsd({ usage: { credits: 1 } }, 0, "free")).toBe(0);
+    expect(goldenTavilyObservedCredits({ usage: { credits: 1 } })).toBe(1);
+    expect(goldenProviderCeilingCents({ kind: "tavily-search", depth: "basic" })).toBe(1);
+  });
   it("covers whole model contexts and preserves existing native model bounds", () => {
     const chat = (model: string) =>
       goldenProviderCeilingCents({ kind: "chat", model, maxOutputTokens: 8192 });

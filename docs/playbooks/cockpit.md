@@ -1,3 +1,7 @@
+> Last verified: 2026-09-12 — golden research requests support explicit trusted Tavily Free
+> billing with a zero dollar rate. Both paid and Free calls require observed usage credits;
+> unknown usage retains the positive reservation. This changes no ordinary cockpit tool grants.
+
 > Last verified: 2026-09-12 — workspace accepts an exact media `plan` alongside its `thread`.
 > Exact selection opens the canvas and is cleared when opening another conversation, creating
 > a new chat, clearing the workspace, or closing its active tab. Tenant and thread checks apply;
