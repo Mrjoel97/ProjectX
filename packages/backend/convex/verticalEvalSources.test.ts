@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { VERTICAL_CORPUS } from "@pikar/contracts/verticalEvalCorpus";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { utils, write } from "xlsx";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import { collectObservations } from "../scripts/vertical-eval-collect.mjs";
 import { internal } from "./_generated/api";
 import schema from "./schema";
 
@@ -12,10 +15,10 @@ const aggregateModules = import.meta.glob(
 );
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const pin = {
-  runId: "abcdef12-1234-4567-8123-123456789012",
-  caseId: "typed-xlsx",
-  caseHash: hash("fixture bytes"),
-  requestHash: hash("testrequest"),
+  runId: "abcdef12-1234-4567-8123-123456789012" as const,
+  caseId: VERTICAL_CORPUS.data[0].caseId,
+  caseHash: VERTICAL_CORPUS.data[0].caseHash,
+  requestHash: VERTICAL_CORPUS.data[0].requestHash,
   verticalId: "data" as const,
   candidateVersion: 1,
   bodyHash: hash("candidate body"),
@@ -51,6 +54,76 @@ function xlsxSource() {
   };
 }
 describe("controlled vertical evaluation sources", () => {
+  test.each([
+    [2, "caseHash"],
+    [2, "requestHash"],
+    [39, "caseHash"],
+    [39, "requestHash"],
+  ] as const)("native preflight rejects case index %i changed %s before any provisioning or spend", async (badIndex, field) => {
+    const t = await setup();
+    const ids = Object.keys(VERTICAL_CORPUS);
+    for (const id of ids.filter((id) => id !== "data"))
+      await t.run((ctx) =>
+        ctx.db.insert("skills", {
+          name: `vertical-${id}`,
+          version: 1,
+          body: "candidate body",
+          status: "candidate",
+          createdAt: 1,
+        }),
+      );
+    const fixtures = Object.fromEntries(
+      ids.map((id) => [
+        id,
+        JSON.parse(
+          readFileSync(
+            new URL(`../scripts/vertical-eval-cases/${id}.json`, import.meta.url),
+            "utf8",
+          ),
+        ),
+      ]),
+    );
+    // Every real pin is accepted by the native query without provisioning a tenant.
+    for (const [verticalId, cases] of Object.entries(VERTICAL_CORPUS))
+      for (const item of cases)
+        await t.query(internal.verticalEvalSources.preflight, {
+          ...pin,
+          verticalId: verticalId as typeof pin.verticalId,
+          caseId: item.caseId,
+          caseHash: item.caseHash,
+          requestHash: item.requestHash,
+        });
+    const calls: string[] = [];
+    const report = await collectObservations({
+      candidates: ids.map((id) => ({
+        name: `vertical-${id}`,
+        candidateVersion: 1,
+        bodyHash: pin.bodyHash,
+      })),
+      fixtures,
+      capCents: 100,
+      creditBillingOnly: true,
+      runId: pin.runId,
+      transport: async (name: string, args: typeof pin) => {
+        calls.push(name);
+        expect(name).toBe("verticalEvalSources:preflight");
+        const submitted =
+          calls.length === badIndex + 1 ? { ...args, [field]: hash("changed") } : args;
+        return t.query(internal.verticalEvalSources.preflight, submitted);
+      },
+    });
+    expect(report.status).toBe("observations-incomplete");
+    expect(calls).toHaveLength(badIndex + 1);
+    expect(report.manifest).toHaveLength(40);
+    for (const table of [
+      "vaultDocuments",
+      "tenantProfiles",
+      "plans",
+      "spendEvents",
+      "audit",
+    ] as const)
+      expect(await t.run((ctx) => ctx.db.query(table).collect())).toHaveLength(0);
+  });
   test("real dataset bytes reach the owned deterministic profile, exact pins verify and unpaid cleanup retains audit", async () => {
     const t = await setup();
     const prepared = await t.action(internal.verticalEvalSources.provision, {
@@ -87,7 +160,13 @@ describe("controlled vertical evaluation sources", () => {
   });
   test("text refs carry actual stored content hashes and mutation after provision is rejected", async () => {
     const t = await setup("product");
-    const productPin = { ...pin, verticalId: "product" as const };
+    const productPin = {
+      ...pin,
+      verticalId: "product" as const,
+      caseId: VERTICAL_CORPUS.product[0].caseId,
+      caseHash: VERTICAL_CORPUS.product[0].caseHash,
+      requestHash: VERTICAL_CORPUS.product[0].requestHash,
+    };
     const text = "Synthetic research: three observed sessions failed the export task.";
     const prepared = await t.action(internal.verticalEvalSources.provision, {
       ...productPin,

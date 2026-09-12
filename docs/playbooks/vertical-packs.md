@@ -1,5 +1,12 @@
 # Optional vertical packs
 
+Last verified: 2026-09-12 — unpaid native preflight and evidence issuance now share the
+same exact corpus case/request matcher. The collector checks all forty pins before provisioning
+any source or opening its spend envelope. Regression uses the real native query and collector:
+all canonical pins pass, while altered third/final case or request hashes stop before source,
+plan, audit or spend writes. Candidate/version/freshness checks and issuance checks remain in
+force. This is fail-fast validation, not semantic acceptance or permission to replay a failed run.
+
 Last verified: 2026-09-12 — shared accounting changes for verified Tavily Free refresh both
 evaluator identities and add the actual ledger writer to their source inventories. Native
 vertical collection still uses fixed sources without Tavily. The two observed Data cases from

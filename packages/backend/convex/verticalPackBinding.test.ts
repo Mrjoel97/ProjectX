@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { VERTICAL_CANDIDATES } from "@pikar/contracts/skills/verticalCandidates";
+import { VERTICAL_CORPUS } from "@pikar/contracts/verticalEvalCorpus";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -139,11 +140,17 @@ describe("six dormant native vertical candidates", () => {
   test("fixed-source evaluation traverses real owned files, reserved calls and an actual artifact without recording a release pass", async () => {
     const { t } = await setup();
     const sourceText = "Synthetic research: three observed users could not find Export.";
-    const requestText = "Review the controlled research and save a draft with source references.";
+    const fixture = JSON.parse(
+      readFileSync(new URL("../scripts/vertical-eval-cases/product.json", import.meta.url), "utf8"),
+    ).cases[0];
+    const { sources: _sources, request, ...context } = fixture.input;
+    const requestText = Object.keys(context).length
+      ? `${request}\n\nSupplied fixture context:\n${JSON.stringify(context)}`
+      : request;
     const pin = {
       runId: "00112233-4455-4677-8899-aabbccddeeff",
-      caseId: "grounded-product",
-      caseHash: createHash("sha256").update("controlled product case").digest("hex"),
+      caseId: VERTICAL_CORPUS.product[0].caseId,
+      caseHash: VERTICAL_CORPUS.product[0].caseHash,
       verticalId: "product" as const,
       candidateVersion: 1,
       bodyHash: VERTICAL_CANDIDATES["vertical-product"].provenance.bodySha256,

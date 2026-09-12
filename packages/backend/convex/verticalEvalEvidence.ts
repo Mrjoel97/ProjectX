@@ -2,6 +2,7 @@
 
 import type { AuditPayload } from "@pikar/contracts/audit";
 import {
+  requireVerticalCorpusCase as corpusCase,
   hasPassingVerticalEvalEvidence,
   VERTICAL_EVAL_MODELS,
   VERTICAL_EVAL_SUITE,
@@ -48,14 +49,6 @@ async function rowsFor(ctx: QueryCtx, id: string) {
       row.tenantId === VERTICAL_EVAL_AUDIT_NAMESPACE &&
       row.eventType.startsWith(VERTICAL_EVAL_EVENT_PREFIX),
   );
-}
-function corpusCase(pin: Pin) {
-  const item = verticalCorpus(`vertical-${pin.verticalId}`)?.find((c) => c.caseId === pin.caseId);
-  check(
-    item && item.caseHash === pin.caseHash && item.requestHash === pin.requestHash,
-    "CORPUS_PIN",
-  );
-  return item;
 }
 function criteriaFor(pin: Pin) {
   return [

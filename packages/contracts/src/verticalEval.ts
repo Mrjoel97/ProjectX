@@ -42,6 +42,18 @@ export function verticalCorpus(name: string) {
     ? VERTICAL_CORPUS[lane]
     : undefined;
 }
+/** One exact corpus gate shared by unpaid preparation and native evidence issuance. */
+export function requireVerticalCorpusCase(pin: {
+  verticalId: string;
+  caseId: string;
+  caseHash: string;
+  requestHash: string;
+}) {
+  const item = verticalCorpus(`vertical-${pin.verticalId}`)?.find((c) => c.caseId === pin.caseId);
+  if (!item || item.caseHash !== pin.caseHash || item.requestHash !== pin.requestHash)
+    throw new Error("VERTICAL_EVIDENCE_CORPUS_PIN");
+  return item;
+}
 /** Structural check only. Native activation/exposure MUST also verify immutable issuance. */
 export function hasPassingVerticalEvalEvidence(
   evidence: string | undefined,

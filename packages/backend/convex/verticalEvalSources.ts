@@ -1,4 +1,5 @@
 // Controlled, unpaid source provisioning for the native vertical evaluator. Internal CLI only.
+import { requireVerticalCorpusCase } from "@pikar/contracts/verticalEval";
 import { VERTICAL_IDS, type VerticalId } from "@pikar/core/verticalPacks";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -63,6 +64,7 @@ function identity(pin: Pin) {
 }
 async function checkFresh(ctx: QueryCtx, pin: Pin) {
   const ids = identity(pin);
+  requireVerticalCorpusCase(pin);
   const candidate = await ctx.db
     .query("skills")
     .withIndex("by_name_version", (q) =>
