@@ -5,7 +5,7 @@ milestone_name: - Platform -> Private Beta
 current_phase: 47
 current_plan: Merged-audit implementation deployed; see .planning/audits/2026-09-12-production-acceptance.md. Phases 23 and 30 require semantic evaluation and live lifecycle evidence; six vertical v1 candidates are dormant. Phase 31 A1/B1/C1 approved and implementation started. Phase 47 remains deferred on real evidence.
 status: in_progress
-stopped_at: "2026-09-12 — production 232179c passed CI/deploy with fixture mutation repair. Both fresh Phase 23 accounts passed authenticated non-owner checks; no owner grant/model probe yet. Tavily Free accounting qualified for promotion. Phase 31 contract approved in 8b18a2b; Wave 1 implementation underway. Semantic review, successful media and recurrence gates remain open."
+stopped_at: "2026-09-12 — production ba920a3 verified; ordinary OpenRouter and Tavily Free accounting attestations configured. Both fresh Phase 23 accounts passed non-owner checks; no owner grant/model probe yet. Phase 31 foundation committed 7fa4fb2/71950e6; links and contacts Wave 2 underway. Shared corpus preflight repair committed e9d69f1. Semantic review, successful media and recurrence gates remain open."
 last_updated: "2026-09-12"
 progress:
   total_phases: 73

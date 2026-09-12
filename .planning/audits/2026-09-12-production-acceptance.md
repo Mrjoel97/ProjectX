@@ -176,12 +176,30 @@ The owner confirmed ordinary OpenRouter access and Tavily Free. Explicit Free ac
 now qualifies zero-dollar calls only with observed credit counts, retaining positive reservations
 and unknown-usage holds. Its 56 focused tests passed; this separate accounting change refreshes
 both evaluator identities and includes the ledger writer in their source inventories.
+Release `ba920a3e79bbf2b4d91761848af6af4824f4d5ca` is verified in production: CI
+`34689434764` and deployment `34689700017` succeeded, the durable probe passed at
+`10:57:49Z`, and production receipt `6408832408` succeeded at `10:57:51Z`.
+The native production CLI then set the three explicit non-secret attestations:
+`GOLDEN_OPENROUTER_BILLING=standard`, `GOLDEN_TAVILY_BILLING=free`, and
+`GOLDEN_TAVILY_CREDIT_USD=0`. This records the owner's confirmed billing contract;
+it does not independently inspect provider account balances or upgrade Tavily.
+No model evaluation was triggered by these settings. Ordinary browser authoring still
+needs a server-owned aggregate budget attachment before a truthful capped probe checkpoint.
+
+The shared exact-corpus preflight repair is committed as `e9d69f1`: all forty cases now
+pass the same case/request matcher before provisioning and evidence issuance. Thirty-nine
+native tests and backend TypeScript passed. This code awaits the next qualified release;
+its passing tests do not change the failed run's historical outcome or authorize a rerun.
 Phase 30 requires actual bounded evaluations, authenticated semantic reviews (including required
 qualified Legal/HR reviewers), all-six workflow acceptance, two evaluated versions per vertical,
 and the six lifecycle drills. No human approval or expert attestation is inferred.
 
-Phase 31's explicit A1/B1/C1 contract is approved and recorded in plan 31-00 (commit `8b18a2b`);
-application implementation has started. Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
+Phase 31's explicit A1/B1/C1 contract is approved and recorded in plan 31-00 (commit `8b18a2b`).
+Plan 31-01 is qualified and committed in `7fa4fb2` and `71950e6`: six-channel availability,
+safe raw counters, fixed-source/hash-only funnel storage, and tenant export/erasure including
+retained file bytes. Its focused suites and core/backend typechecks passed. Link APIs and the
+existing-contact lead adapter are the next parallel wave; UI and live acceptance remain open.
+Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the
 bounded full refresh timed out after extraction, while the Convex edge fixup succeeded.
