@@ -1,17 +1,19 @@
 # Playbook: Marketing and aggregate funnel links
 
-> Last verified: 2026-09-12 — Phase 31-01 shared contracts and aggregate schema; downstream API, UI and live acceptance remain pending.
+> Last verified: 2026-09-12 — Phase 31-02 native funnel lifecycle, atomic resolver and generated API; HTTP, UI and live acceptance remain pending.
 > Build history: `.planning/phases/31-marketing-surface-and-funnel-v0/` · Authority: ADR-015 and `31-00-SUMMARY.md`.
 
 ## Purpose and current status
 
-Marketing will show honest channel availability, shareable Vault links and authenticated lead recording. The owner approved A1/B1/C1 with `PROCEED_COMPATIBLE`. This initial plan defines the contract and aggregate schema only; no public endpoint, lead adapter, navigation activation or live acceptance is claimed.
+Marketing will show honest channel availability, shareable Vault links and authenticated lead recording. The owner approved A1/B1/C1 with `PROCEED_COMPATIBLE`. The shared contracts, aggregate schema, authenticated funnel lifecycle and internal atomic resolver are implemented. Public HTTP routing, navigation activation and live acceptance remain downstream gates.
 
 ## Key files and dependencies
 
 - `packages/core/src/marketing.ts`: six-channel catalog, `marketingChannelState`, exact stages/counter map, bounded source normalization, safe-integer parsing and missing-value formatting.
 - `packages/core/src/marketing.test.ts`: channel totality, dual social blockers, Gmail unknown-state behavior, missing-vs-zero counts and parser bounds.
 - `packages/backend/convex/schema.ts` and `funnels.test.ts`: minimal tenant/source/token-hash/asset schema and forbidden-field inventory.
+- `packages/backend/convex/funnels.ts`: native tenant `create`, bounded `list`, idempotent `deactivate`, and internal `resolveAndIncrement`; generated API references are exercised directly by lifecycle tests.
+- `packages/core/src/marketingLead.ts` and `packages/backend/convex/contacts.ts`: authenticated lead contract and adapter; see the Contacts/CRM playbook for provenance and suppression qualification.
 - `31-00-SUMMARY.md`: exact question/owner answer and semantic contract. `31-VALIDATION.md`: requirement-to-evidence matrix.
 
 Current authentication is Convex Auth with tenant wrappers; old plan references to Clerk must not introduce another auth provider. Downstream consumers use native generated Convex API declarations; no handwritten codegen. Vault ownership, fixed storage IDs, existing Phase19 contacts/suppressions and the configured Convex HTTP origin are the runtime dependencies.
@@ -61,4 +63,8 @@ Run `pnpm --filter @pikar/core test -- marketing.test.ts`, core typecheck, `pnpm
 
 Deactivation prevents future funnel resolutions; it cannot revoke an already-issued storage URL or downloaded/copied bytes. Do not promise file revocation. Replace compromised/lost links and review the underlying artifact separately using existing Vault controls. Live checks must redact tokens and disable secret-bearing traces, then deactivate disposable links and remove only their owned fixtures.
 
-Plans31-02/03 implement token lifecycle/atomic resolution/HTTP;31-04 adds authenticated lead recording;31-05 builds a directly accessible authenticated route with navigation disabled;31-06 qualifies it;31-07 records live evidence and explicit navigation activation. No event analytics, public lead form, outbound send or social publisher is authorized in this phase.
+Creation validates the ready, tenant-owned Vault document and actual storage metadata before issuing a token. Links retain the exact storage ID captured at creation. Revising or deleting the source may delete those original bytes and invalidate the link; a link never silently redirects to replacement bytes. The resolver checks both the source document and original storage metadata before counting. Native tests exercise `vault.patchCreatedDoc` plus its old-byte cleanup and `vault.deleteVaultDoc`, not only synthetic status changes.
+
+`CONVEX_SITE_URL` must be an HTTPS `*.convex.site` origin, never the app URL or `*.convex.cloud`. Storage redirects use the configured deployment's HTTPS cloud storage origin. Insecure localhost public links are deliberately unsupported; tests configure trusted deployment origins. Management listing returns at most 100 safe display rows plus `hasMore`, excluding token hashes and storage IDs. Missing/invalid counters remain unknown; they are not repaired to zero. Atomic increments reject unsafe integers and overflow; concurrent requests are covered by native transaction tests.
+
+Plan31-02 implements token lifecycle/atomic resolution;31-03 adds public HTTP with no-store responses;31-04 adds authenticated lead recording;31-05 builds a directly accessible authenticated route with navigation disabled;31-06 qualifies it;31-07 records live evidence and explicit navigation activation. No event analytics, public lead form, outbound send or social publisher is authorized in this phase.

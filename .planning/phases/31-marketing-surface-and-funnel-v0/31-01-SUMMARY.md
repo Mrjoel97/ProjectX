@@ -73,4 +73,4 @@ The six-channel catalog, safe-integer counter parsing and minimal funnel table a
 
 ## Self-check
 
-All listed files exist and focused checks passed. Commit hashes are pending the coordinator's atomic commits; no commit success is fabricated here.
+All listed files exist and focused checks passed. The coordinator committed contracts and the watched runbook in `7fa4fb2`, then schema, tenant lifecycle coverage and this summary in `71950e6`. Downstream APIs and live acceptance remain separate gates.
