@@ -1,5 +1,11 @@
 # Playbook: Production Beta Readiness (25-10)
 
+Last verified: 2026-09-12 — the free-gate registry also runs the Phase 23 mutation harness's
+lightweight patch-engine/anchor self-check. Its isolated full mutation replay requires explicit
+`--run`; CI does not start that replay, models or operator actions through the free mode.
+Marketing's local production build passed while its navigation remains absent pending real
+browser/HTTP acceptance. The standard successful-CI deployment path remains authoritative.
+
 Last verified: 2026-09-12 — optional feature attestation `GOLDEN_TAVILY_BILLING=free` permits
 an explicitly verified Free account only with `GOLDEN_TAVILY_CREDIT_USD=0`. Omitted mode keeps
 the existing positive standard-rate behavior. Missing/blank rates remain unverified. This adds

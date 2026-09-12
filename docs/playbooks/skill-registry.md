@@ -1,5 +1,12 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Phase 23 supplementary mutation evidence: `scripts/check-phase23-mutation-proofs.mjs --plan`
+> checks 17 current target anchors without execution; `--self-check` adds lightweight harness
+> checks. Explicit `--run` creates only ignored disposable copies and executes serial
+> clean/rejected/restored controls with hashes. It does not rewrite historical observations or
+> qualify live behavior. See `23-MUTATION-SUPPLEMENT-2026-09-12.md` in the Phase 23 directory for
+> compile-rejection and composite-witness limits; a target count alone never completes Task 1.
+
 > Last verified: 2026-09-12 — the native authoring probe binds two ordinary submissions to one
 > trusted thread and aggregate budget. Unsupported paid routes are contained before egress;
 > containment is never a passing adversarial policy observation. Registration neither grants

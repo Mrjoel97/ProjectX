@@ -58,6 +58,7 @@ const GATES = [
   { path: "scripts/check-absence-guards.mjs", flag: "--self-test" },
   { path: "scripts/check-audit-payloads.mjs", flag: "--self-test" },
   { path: "scripts/check-phase23-artifacts.mjs", flag: "--self-check" },
+  { path: "scripts/check-phase23-mutation-proofs.mjs", flag: "--self-check" },
   { path: "scripts/check-phase23-owner-boundary.mjs", flag: "--self-check" },
   { path: "scripts/check-phase28-completion.mjs", flag: "--self-test" },
   { path: "scripts/check-phase28-readiness.mjs", flag: "--self-check" },
