@@ -247,9 +247,9 @@ a TENANT’s Stripe account read-only. Opposite direction, opposite trust bounda
 line. ADR-015 is the override record. MKTG-04/05/06 are gated on the legal entity — see the EXTERNAL
 BLOCKER section of `ROADMAP.md`.*
 
-- [ ] **MKTG-01**: A Marketing surface renders every planned outbound channel with an honest state — connected, connectable, or blocked-with-reason naming the external gate — and never renders an unconnectable channel as a zero; the Executive Agent assists on this surface by proposing, never by publishing
-- [ ] **MKTG-02**: Funnel v0 is link-only on the Convex `httpAction` plane: one unguessable token increments three integer counters (visits/claims/downloads) with `?s=` source attribution and 302s to stored bytes; it is the product's first unauthenticated read and does not widen `apps/web/middleware.ts`, add a public write, or ship an event table
-- [ ] **MKTG-03**: A captured lead writes into Phase 19's single tenant-scoped person store with `origin`, `consentAt` and `consentSource` — never a second CRM plane — and the SEND-path suppression guard continues to refuse suppressed addresses in every product-email terminal
+- [x] **MKTG-01**: A Marketing surface renders every planned outbound channel with an honest state — connected, connectable, or blocked-with-reason naming the external gate — and never renders an unconnectable channel as a zero; the Executive Agent assists on this surface by proposing, never by publishing
+- [x] **MKTG-02**: Funnel v0 is link-only on the Convex `httpAction` plane: one unguessable token increments three integer counters (visits/claims/downloads) with `?s=` source attribution and 302s to stored bytes; it is the product's first unauthenticated read and does not widen `apps/web/middleware.ts`, add a public write, or ship an event table
+- [x] **MKTG-03**: A captured lead writes into Phase 19's single tenant-scoped person store with `origin`, `consentAt` and `consentSource` — never a second CRM plane — and the SEND-path suppression guard continues to refuse suppressed addresses in every product-email terminal
 - [ ] **MKTG-04** *(gated on the legal entity)*: Each social channel passes an independent suitability/OAuth/security/terms review and exposes tenant-scoped, encrypted, revocable credentials with honest re-auth and error states, plus provider-side revocation on disconnect (GOVN-03's standard)
 - [ ] **MKTG-05** *(gated on the legal entity)*: Publishing and scheduling to a channel stage into the existing plan gate and reuse the shipped deferred-send machinery; no new unattended authority is minted and approve-once-for-many remains deferred per ADR-004
 - [ ] **MKTG-06** *(gated on the legal entity)*: Per-post engagement metrics store provider-issued ids, counts and timestamps only — never post text or recipient identity — under the same refs-and-counts contract that governs audit, and the table arrives with a connected channel rather than empty and ahead of one
@@ -409,9 +409,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VERT-02 | Phase 30 | Pending |
 | VERT-03 | Phase 30 | Pending |
 | VERT-04 | Phase 30 | Pending |
-| MKTG-01 | Phase 31 | Pending |
-| MKTG-02 | Phase 31 | Pending |
-| MKTG-03 | Phase 31 | Pending |
+| MKTG-01 | Phase 31 | Complete — 2026-09-12, production 4df076db; 31-VERIFICATION.md |
+| MKTG-02 | Phase 31 | Complete — approved A1/B1/C1, native boundaries and direct anonymous HTTP evidence; 31-VERIFICATION.md |
+| MKTG-03 | Phase 31 | Complete — existing contacts, live suppressed recapture and unsent assistance; 31-VERIFICATION.md |
 | MKTG-04 | Phase 32 | **BLOCKED** (legal entity) |
 | MKTG-05 | Phase 32 | **BLOCKED** (legal entity) |
 | MKTG-06 | Phase 32 | **BLOCKED** (legal entity) |

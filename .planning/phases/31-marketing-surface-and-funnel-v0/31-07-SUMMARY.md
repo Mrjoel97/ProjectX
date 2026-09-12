@@ -2,14 +2,14 @@
 phase: 31-marketing-surface-and-funnel-v0
 plan: "07"
 subsystem: acceptance
-status: activation-authorized-pending-deployment
+status: complete
 requirements-addressed: [MKTG-01, MKTG-02, MKTG-03]
-requirements-completed: []
+requirements-completed: [MKTG-01, MKTG-02, MKTG-03]
 ---
 
-# Phase31-07 — live acceptance passed; activation authorized
+# Phase31-07 — live acceptance and approved activation verified
 
-The user explicitly replied **APPROVE MARKETING NAV ACTIVATION** on2026-09-12 after the concrete acceptance packet. This records authorization before the navigation change. Navigation implementation, qualification, deployment and real desktop/mobile navigation clicks remain outstanding at this checkpoint; no completed-phase claim is made yet.
+The user explicitly replied **APPROVE MARKETING NAV ACTIVATION** on2026-09-12 after the concrete acceptance packet. This records authorization before the navigation change. Navigation implementation, qualification, deployment and actual desktop/mobile navigation checks are now verified below. The coordinating root owns final requirement/phase status.
 
 ## Release and method
 
@@ -36,4 +36,11 @@ Native tests cover cryptographic token/hash persistence, authenticated tenant ow
 
 Ignored receipts under `output/playwright/production-acceptance`: `marketing-prerequisites.json`, `marketing-contact-fixture.json`, both original suite logs and `marketing-export-diagnostic.json`, `marketing-direct-layout-result.json`, `marketing-direct-matrix-final-result.json`, `marketing-direct-lead-final-result.json`, `marketing-direct-prefill-result.json`, `marketing-direct-negative-result.json`, and `marketing-direct-final-review-result.json`. Token-free screenshots: `marketing-live-desktop-top.png`, `marketing-live-mobile-top.png`, `marketing-live-mobile-leads.png`, `marketing-live-deactivated.png`. Earlier partial receipts remain as history.
 
-Pending after explicit authorization: navigation-only change, regression/type/build/deploy qualification, then real desktop/mobile navigation clicks. The coordinating root owns final requirement/phase status and release receipts.
+The approved navigation change passed its release gates and the postdeployment checks below. The coordinating root owns final requirement/phase status and release receipts.
+
+
+## Approved activation verification
+
+Production`4df076dbdc8330c54ace5a3996259f3e71318024` passed CI`34696845981`, deployment`34697141228`, durable probe at13:44:19Z and production status at13:44:23Z. At2026-09-12T13:48:12.226Z, direct Playwright checks in the existing signed-in context verified desktop1440 and mobile390 Marketing navigation. Each viewport navigated from Vault through keyboard focus/Enter and through an actual pointer click; Marketing rendered, `aria-current="page"` was present, and the document fit the viewport. The existing synthetic link remained deactivated with counts `[2,1,1]`; no token panel/recovery control was present. The original workspace tab and its route were preserved. No export/replay, new funnel, model/provider/send or full HTTP-matrix repeat occurred.
+
+Evidence: ignored `marketing-postactivation-result.json` plus `marketing-activated-nav-1440.png` and `marketing-activated-nav-390.png`. The mobile screenshot was visually reviewed: Marketing is visible and active in the compact bar, with no document-width clipping. These checks establish actual deployed navigation, while the earlier failed standalone exported-session suite and authorized direct-context method remain disclosed above. No further browser acceptance work remains for this activation.

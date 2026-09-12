@@ -1,10 +1,11 @@
 # Merged audit versus current code — 2026-09-10
 
 Current continuation: [September 12 production acceptance](2026-09-12-production-acceptance.md)
-records the later repairs and exact release evidence. Marketing implementation through 31-06,
-native bounded authoring probes, and exact vertical-corpus preflight shipped in production
-`644408df`; live Marketing acceptance, Phase 23/30 semantic and lifecycle gates, and provider
-evidence remain open. The findings and qualification below retain their September 10 scope;
+records the later repairs and exact release evidence. Phase 31 is complete on production
+`4df076db`, including approved navigation and direct live desktop/mobile/file/lead acceptance.
+Native bounded authoring probes and exact vertical-corpus preflight are deployed; the authorized
+Phase 23 probe and remaining Phase 23/30 semantic/lifecycle/provider evidence are still open.
+The findings and qualification below retain their September 10 scope;
 their statements that no deployment occurred and Phase 31 was unimplemented are historical.
 
 Baseline: `3caa762` plus the working-tree repairs documented below. Authority: [System Audit rev 5](../design/system-audit-2026-09-03-merged.md), its merged build order in §5, and owner decisions in §6. Four parallel investigations examined reliability, product flows, release evidence and remaining phases. Source files and executable checks take precedence over retrospective completion prose.

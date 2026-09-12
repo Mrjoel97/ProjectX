@@ -1,7 +1,7 @@
 ---
 phase: 31
 slug: marketing-surface-and-funnel-v0
-status: draft
+status: complete
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-08-10
@@ -63,7 +63,7 @@ created: 2026-08-10
 | 31-06-03 | 06 | 5 | MKTG-01/02/03 | repository gate | `pnpm test && pnpm typecheck && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` | ✅ commands | ✅ passing 2026-09-12; see 31-06-SUMMARY |
 | 31-07-01 | 07 | 6 | MKTG-01/02/03 | live HTTP/browser | `pnpm --filter @pikar/web test:e2e -- marketing-uat.spec.ts` plus redacted manual matrix for three independent 302/counter deltas | ✅ exists | ✅ direct-context live checks passed; standalone session restoration unqualified |
 | 31-07-02 | 07 | 6 | MKTG-01/02/03 | manual UAT | Owner verifies six honest channel states, one-time token disclosure, three 302s/counters, Phase 19 provenance/suppression, and no publishing | N/A manual | ✅ exact owner approval 2026-09-12; see 31-07-SUMMARY |
-| 31-07-03 | 07 | 6 | MKTG-01/02/03 | activation regression | `pnpm --filter @pikar/web test -- marketingView.test.ts && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` | ❌ W4 | ⬜ pending |
+| 31-07-03 | 07 | 6 | MKTG-01/02/03 | activation regression | `pnpm --filter @pikar/web test -- marketingView.test.ts && pnpm --filter @pikar/web typecheck && pnpm --filter @pikar/web build && node scripts/check-playbooks.mjs` | ✅ exists | ✅ 4df076db CI/deploy and live desktop/mobile nav passed |
 
 Legend: ⬜ pending · ✅ passing · ❌ missing/blocking · ⚠️ flaky
 
@@ -74,7 +74,12 @@ deployment `34693161766`, and the durable URL probe. The original local four str
 failures and their 57-test remediation remain disclosed in that summary. These results establish
 automated qualification only. Subsequent direct-context Playwright UI/HTTP checks and the exact
 owner activation approval are recorded in `31-07-SUMMARY.md`; the standalone exported-session
-suite remains unqualified. Navigation deployment and normal desktop/mobile clicks remain open.
+suite remains unqualified. Navigation release `4df076dbdc8330c54ace5a3996259f3e71318024`
+passed CI `34696845981` and deployment `34697141228`; its durable probe passed at `13:44:19Z`.
+Real desktop/mobile keyboard and pointer navigation, active state, focus, page fit, and retired
+link readback passed at `13:48:12.226Z`. See `31-07-SUMMARY.md` for the exact receipts and
+preserved earlier four-tab CI failure. The completed product contract uses the owner's accepted
+direct-context evidence method; it does not certify reusable exported-session automation.
 
 ---
 
@@ -128,16 +133,16 @@ The following validation files are then created alongside their production seams
 
 ## Threat-Model Validation Checklist
 
-- [ ] Raw funnel token is generated with cryptographic entropy, returned once, never logged, and persisted only as a hash.
-- [ ] Funnel management mutations/queries require native Convex Auth identity and enforce tenant ownership through the Vault artifact boundary.
-- [ ] Public route accepts only the approved GET grammar, has no public contact-write path, and does not broaden `apps/web/middleware.ts`.
-- [ ] Redirect location is obtained from a trusted Convex storage lookup, not a caller-supplied URL; unsafe or missing targets fail closed.
-- [ ] Counter mutations are atomic, integer-only, non-negative, and protected against unsafe-integer overflow.
-- [ ] Source attribution follows the Plan 31-00 decision without adding per-visitor/event rows or unbounded attacker-controlled keys.
-- [ ] Unknown/deactivated tokens and invalid stages return indistinguishable minimal 404 responses.
-- [ ] Lead capture uses the Phase 19 `contacts` store, normalized email, approved provenance literals, and existing suppression/consent logic.
-- [ ] No `funnelEvents`, visitor identity, IP address, user-agent, per-click timestamp, or equivalent event-level table exists.
-- [ ] No social publisher, outbound-send mutation, or Phase 32 campaign/metric machinery is introduced.
+- [x] Raw funnel token is generated with cryptographic entropy, returned once, never logged, and persisted only as a hash.
+- [x] Funnel management mutations/queries require native Convex Auth identity and enforce tenant ownership through the Vault artifact boundary.
+- [x] Public route accepts only the approved GET grammar, has no public contact-write path, and does not broaden `apps/web/middleware.ts`.
+- [x] Redirect location is obtained from a trusted Convex storage lookup, not a caller-supplied URL; unsafe or missing targets fail closed.
+- [x] Counter mutations are atomic, integer-only, non-negative, and protected against unsafe-integer overflow.
+- [x] Source attribution follows the Plan 31-00 decision without adding per-visitor/event rows or unbounded attacker-controlled keys.
+- [x] Unknown/deactivated tokens and invalid stages return indistinguishable minimal 404 responses.
+- [x] Lead capture uses the Phase 19 `contacts` store, normalized email, approved provenance literals, and existing suppression/consent logic.
+- [x] No `funnelEvents`, visitor identity, IP address, user-agent, per-click timestamp, or equivalent event-level table exists.
+- [x] No social publisher, outbound-send mutation, or Phase 32 campaign/metric machinery is introduced.
 
 ---
 
@@ -146,11 +151,11 @@ The following validation files are then created alongside their production seams
 - [x] Plan 31-00 decision record approved and compatible with current requirements
 - [x] Every task has an automated check or an explicit manual-only rationale
 - [x] No three consecutive implementation tasks lack automated verification
-- [x] Wave-specific automated test files exist and pass; live execution is separately pending below
+- [x] Wave-specific automated tests and direct-context live checks pass; standalone session restoration remains explicitly unqualified
 - [x] Convex codegen succeeds and generated API parity covers both `api.funnels` and `internal.funnels`
 - [x] Targeted tests, full tests, typecheck, and web production build pass (local remediation disclosed above; exact CI passed)
 - [x] Live unauthenticated HTTP and browser UAT pass through direct-context Playwright assertions; standalone session-restoration limitation is disclosed in 31-07-SUMMARY
-- [ ] Negative-space and threat-model checklist pass
-- [ ] `nyquist_compliant: true` remains accurate after implementation changes
+- [x] Negative-space and threat-model checklist pass
+- [x] `nyquist_compliant: true` remains accurate after implementation changes
 
-**Approval:** `APPROVE MARKETING NAV ACTIVATION` received 2026-09-12; post-activation deployment and navigation checks pending.
+**Approval:** `APPROVE MARKETING NAV ACTIVATION` received 2026-09-12; post-activation deployment and desktop/mobile navigation checks passed on `4df076db`.

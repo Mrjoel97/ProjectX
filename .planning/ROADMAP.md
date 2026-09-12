@@ -462,7 +462,10 @@ the SEND-path suppression guard). **No dependency on the legal entity.**
      into the existing plan gate.
   5. No `funnelEvents`-style event table ships in this phase — three integer columns only
      (`growth-surfaces...md` §4 item 8, relaxed by ADR-015 §4 for tranche B metrics ONLY).
-**Plans**: TBD
+**Plans**: 8/8 complete (2026-09-12). Production `4df076db`; approved A1/B1/C1 contract,
+direct live UI/HTTP evidence, exact owner navigation approval, and deployed desktop/mobile
+navigation checks are recorded in `31-VERIFICATION.md`. Standalone exported-session automation
+remains unqualified; its disclosed method deviation does not close provider or Phase 32 gates.
 
 ### Phase 32: Channel connection, publishing and metrics (TRANCHE B — GATED)
 
@@ -1638,7 +1641,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 28.2. Unpark ONE connector + invoice reminders (INSERTED 2026-09-06) | 1/1 | Complete | 2026-09-06 |
 | 29. Unified Knowledge and Routines | 13/13 | Complete (VERIFICATION present) | 2026-08-29 |
 | 30. Optional Vertical Workflow Packs | 1/10 | Partial — 30-01 verified; six draft candidates, guarded native binding, Data validation and tenant controls implemented locally. Method review, executable evaluation, remaining selection UI and authenticated release remain | - |
-| 31. Marketing surface and funnel v0 (TRANCHE A — buildable now) | 0/8 | Not started — 8 plans on disk, none executed | - |
+| 31. Marketing surface and funnel v0 (TRANCHE A — buildable now) | 8/8 | Complete — approved contract and navigation, direct live acceptance and deployed desktop/mobile checks; see 31-VERIFICATION.md for method and cleanup limits | 2026-09-12 |
 | 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — legal entity not started.** Do not plan | - |
 | 33. Media creation UX overhaul: guided intake, storyboard variations, auto-assembled reel, reel-first canvas, clear failure retry, grounded citations | 10/10 | Complete | 2026-08-16 |
 | 33.1. Media provider migration to OpenRouter: grok-imagine-video replaces sora-2 before the Videos API withdrawal, gpt-image-2 onto OpenRouter with native batching, and the persistDeck music-field fix (INSERTED) | 5/6 | Partial — open: 33.1-06 | - |

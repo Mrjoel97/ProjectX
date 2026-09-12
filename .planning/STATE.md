@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 31
-current_plan: 31-07 navigation activation approved after direct live acceptance; deployment and normal-nav checks pending. Phase 23 bounded two-turn probe authorized with $1 cap; execution preparation underway. Phase 30 semantic/lifecycle evidence remains open; six vertical v1 candidates are dormant. Phase 47 remains deferred on real evidence.
+current_phase: 23
+current_plan: 23-06 authorized two-turn $1 probe; reviewed local credential handoff and fresh free prerequisites precede execution. Phase 31 complete on production 4df076db. Phase 30 semantic/lifecycle evidence remains open; six vertical v1 candidates are dormant. Phase 47 remains deferred on real evidence.
 status: in_progress
-stopped_at: "2026-09-12 — production 41d9551 verified. After renewed sign-in, direct Marketing browser/anonymous HTTP acceptance passed and the test link was deactivated. Owner approved Marketing navigation activation and separately authorized Phase 23 A-owner/B-nonowner, two submissions, $1 aggregate cap. Navigation code qualified locally; final deployment/checks pending. Phase 23 live execution is preparing, with no full evaluation or activation authorized. Phase 30/provider/recurrence gates remain open."
+stopped_at: "2026-09-12 — Phase 31 complete: production 4df076db CI/deploy and actual desktop/mobile navigation passed; direct live file/counter/suppression/prefill evidence and exact owner approval retained. MKTG-01/02/03 closed with method and cleanup limits. Phase 23 two-turn $1 probe authorized; encrypted local credential handoff reviewed after zero-mutation launcher failure. No full evaluation or candidate activation authorized. Phase 30/provider/recurrence gates remain open."
 last_updated: "2026-09-12"
 progress:
-  total_phases: 73
-  completed_phases: 52
-  total_plans: 475
-  completed_plans: 449
-  percent: 95
+  total_phases: 74
+  completed_phases: 55
+  total_plans: 457
+  completed_plans: 419
+  percent: 92
 ---
 
 # Project State
@@ -44,11 +44,13 @@ Last three closes, newest first:
 | 39 Research engine (Track C step 11, G4, RSCH-01) | 2026-09-06 | `4b8fe5b` `[deploy]` | `readPage` bounded to the run's own search results, page-read/snippet-only labels, shared staleness window, honest footer, research-specialist v4 gated 46/46 and active locally |
 | 38 Tool registry (Track C step 10) | 2026-09-06 | `23351ff` `[deploy]` | `buildCockpitTools(ToolContext, ToolGrants)`, `grantsFor` in core, shared validator at both doors, 23-class snapshot held, tenant pin now reaches dispatched specialists |
 
-Current owner priority: complete live acceptance and the evidence gates for Phases 23/30, then continue Phase 31/provider work. Recurrence remains deferred until real DST/OAuth evidence passes; do not build its table first. Phase 31 plan 31-00 now records the owner's explicit compatible A1/B1/C1 contract; implement its remaining waves. The Sep 12 Intuit app check redirected to sign-in, so renewed provider diagnosis first needs authentication; that check does not reconfirm the older app-record failure.
+Current owner priority: complete Phase 23's authorized bounded probe and the remaining Phase 23/30 evidence gates, then provider work. Phase 31 is complete on production `4df076db`; its direct-context acceptance method and cleanup limits are in `31-VERIFICATION.md`. Recurrence remains deferred until real DST/OAuth evidence passes; do not build its table first. The Sep 12 Intuit app check redirected to sign-in, so renewed provider diagnosis first needs authentication; that check does not reconfirm the older app-record failure.
 
 **LIVE ACCEPTANCE STILL OPEN.** Phase 44 and the updated merged-audit G19 row record successful production activations; the former claim that fixture 33 blocks every activation was stale. New candidates still require fresh exact-version evidence. QuickBooks remains unconnected; Phase 45 records an app-record failure, while the latest developer-app check needs Intuit sign-in before renewed diagnosis. WORM remains OFF under ADR-044; recurrence remains deferred pending real DST and OAuth expiry/reauth traces. Phase 24 semantic review, Phase 23 real author/eval/activation/rollback, current-provider media proof and Phase 25 self-service release qualification remain open. See the 2026-09-12 acceptance audit for current release and evidence work.
 
 ## Session Continuity
+
+Progress totals were regenerated from current roadmap dispositions and matching completed plan summaries; they replace stale counters rather than reopening completed work. Pending/in-progress summaries do not count as completed plans.
 
 2026-09-12 continuation: implementation shipped in `1127573`, `000bbace` and `0c258885`, with successful exact CI/production probes. Historical media navigation/caption copy passed authenticated desktop/mobile checks. Forty dormant vertical preflights passed; one capped live run stopped at the third corpus pin after two Data observations, with its budget closed at $0.00406801. A shared-cell mutation was reproduced and repaired without changing source bytes; a new vertical evaluator revision requires fresh evidence. Owner confirmed ordinary OpenRouter access and Tavily Free, and supplied two unused controlled addresses for Phase 23 setup. See the dated acceptance report for source, semantic and lifecycle gaps. No phase was marked complete from code or preflight alone.
 

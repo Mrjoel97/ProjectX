@@ -272,6 +272,21 @@ credential unlocking failed in the escalated execution context. Matching origina
 CurrentUser DPAPI parameters succeeded in the default context, without printing credentials or
 downgrading their storage. No attempt lock or native probe was created. Execution remains held
 until the navigation regression is corrected and the required free gates pass.
+
+The correction shipped in `4df076dbdc8330c54ace5a3996259f3e71318024`. CI `34696845981`
+and deployment `34697141228` passed; the durable probe passed at `13:44:19Z`, followed by
+production deployment `6410261035`, status `18263904787`, at `13:44:23Z`. Actual desktop
+1440px and mobile 390px navigation checks passed at `13:48:12.226Z`, including keyboard,
+pointer, active state, focus, fit and retired-link readback. Phase 31 and MKTG-01/02/03 are
+complete, as certified in `31-VERIFICATION.md`. The failed release and standalone auth-restoration
+results remain preserved rather than rewritten.
+
+The Phase 23 runner subsequently received its credentials through a reviewed one-use local
+encrypted handoff. Eleven synthetic cross-context and rejection checks preceded the actual
+handoff; no private key or plaintext credential file was written. Attempt
+`3de192cf-9ffa-427e-a7f7-83a0d33910f0` is running its real free prerequisites on frozen
+`4df076db`. Its once-only lock is retained. No owner/probe/model result is inferred from the
+successful handoff; `23-06-SUMMARY.md` owns subsequent execution evidence.
 Provider eligibility/consent/read/revoke conditions remain open. Google Drive read
 worked, but no reconnect drill was manufactured by disconnecting a usable account. Recurrence
 remains deferred until its DST/OAuth evidence gates pass. Graph maintenance remains partial: the
