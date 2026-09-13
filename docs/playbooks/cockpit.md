@@ -1,3 +1,10 @@
+> Last verified: 2026-09-12 — the typed chat composer exposes a research page-attempt selector
+> from zero through six, initially six. Its numeric `maxPageReadAttempts` travels through the
+> shared send hook alongside the trusted clock. Copy explicitly counts failed reads, scopes
+> the allowance to this typed message, and explains that prose numbers do not configure it.
+> File and voice intake remain separate turns. Focused rendered interaction checks verify the
+> actual action arguments for default, reduced and zero allowances; live acceptance is separate.
+>
 > Last verified: 2026-09-12 — Phase 23 authentication now shares one native helper between the
 > paid harness and a separately opt-in authentication-only test. Both start with empty browser
 > state; fresh exact-ID/non-owner checks precede fixed-path exports. The auth-only path has no

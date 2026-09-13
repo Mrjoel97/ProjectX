@@ -170,6 +170,49 @@ test.each([
   }
 });
 
+test("team fan-out preserves one admitted research identity and rejects incomplete pairs before child writes", async () => {
+  const t = newTest();
+  const planId = await stagedRoot(t);
+  const requestId = crypto.randomUUID();
+  const researchControlId = await t.mutation(internal.researchControl.admit, {
+    tenantId: TENANT,
+    requestId,
+    limit: 2,
+  });
+  try {
+    await expect(
+      t.mutation(internal.dispatchRun.startTeamRun, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        planId,
+        question: UMBRELLA,
+        assignments: [{ route: "research", question: "Market size" }],
+        rootRequestId: "fanout-incomplete",
+        researchControlId,
+      }),
+    ).rejects.toThrow("RESEARCH_CONTROL_CONTEXT_INCOMPLETE");
+    expect(await childrenOf(t, planId)).toHaveLength(0);
+
+    await expect(
+      t.mutation(internal.dispatchRun.startTeamRun, {
+        tenantId: TENANT,
+        threadId: THREAD,
+        planId,
+        question: UMBRELLA,
+        assignments: [{ route: "research", question: "Market size" }],
+        rootRequestId: "fanout-complete",
+        researchControlId,
+        researchRequestId: requestId,
+      }),
+    ).resolves.toMatchObject({ ok: true, workerCount: 1 });
+    const queued = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+    const child = queued.find((row) => String(row.name).includes("startDispatchRun"));
+    expect(child?.args[0]).toMatchObject({ researchControlId, researchRequestId: requestId });
+  } finally {
+    await cancelQueued(t);
+  }
+});
+
 /** Routes only, every one carrying the SAME sub-question. That is deliberate: it is the shape
  *  ADR-037 could express, so every pre-ADR-040 assertion below keeps its exact meaning — and
  *  the repeated-route test still proves the identical-paid-turn guard, because same route AND

@@ -34,7 +34,12 @@ function browserTimeZone(): string {
 export function useSendCockpitMessage() {
   const send = useAction(api.cockpit.sendCockpitMessage);
   return useCallback(
-    (args: { threadId?: string; text: string }): Promise<{ threadId: string }> =>
+    (args: {
+      threadId?: string;
+      text: string;
+      // Typed composer allowance; omitted callers retain the server default.
+      maxPageReadAttempts?: number;
+    }): Promise<{ threadId: string }> =>
       send({ ...args, clientContext: { nowMs: Date.now(), tz: browserTimeZone() } }),
     [send],
   );

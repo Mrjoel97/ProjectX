@@ -1292,6 +1292,8 @@ Three registrations, each a one-liner delegating to a module that owns the logic
 
 ## Operational notes
 
+- Research request controls are mutable tenant-owned allowance rows, separate from immutable audit. Their `by_tenant` index feeds the existing authenticated export, tenant erasure, and guarded synthetic evaluation cleanup walks. Expiry denies claims without refilling capacity; the expired row remains a replay tombstone for 24 hours, then its admission-owned one-shot purge removes the refs-only state. Native lifecycle regressions in `researchControlLifecycle.test.ts` verify export isolation, erasure isolation, and exact synthetic cleanup with a neighboring tenant preserved. Existing audit retention and pending WORM export refusal remain in force.
+
 - **Unseeded skills dead-letter every request** with `NO_ACTIVE_SKILL: executive-router` — run `skills:seedSkills` (skill names are hyphenated: `executive-router`, not `executive_router`)
 - Retention: nothing is ever deleted in Convex; the immutable copy is the S3 export. Object Lock retention period = `RETENTION_MS` (7 years, `@pikar/core`) — a ponytail default; lift to a per-tenant/regulatory policy if retention rules diverge.
 - Dead-letter reasons are distinct and explicit (`unknown_route` vs `route_not_implemented`) — never add a silent default reason

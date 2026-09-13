@@ -1,5 +1,10 @@
 # Optional vertical packs
 
+Last verified: 2026-09-13 — the vertical evaluator source inventory includes the research-control
+domain/adapter and every runtime propagation seam that can carry its admitted request identity.
+Those source changes invalidate prior exact-version evidence. Inventory coverage and offline tests
+do not create a semantic pass, authenticated review, activation or rollback evidence.
+
 Last verified: 2026-09-12 — both evaluator source inventories now include the native authoring
 probe, its cockpit/intake entry guards and audit control authority. The shared corpus matcher and
 runtime changes retire prior exact-source evidence; regeneration does not create a semantic pass.

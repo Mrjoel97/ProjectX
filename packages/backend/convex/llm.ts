@@ -163,7 +163,7 @@ import {
   NODE_ONLY_MODEL_PREFIX,
   resolveModel as resolveSharedModel,
 } from "./lib/models";
-import { TOOL_CONTEXT_ARGS } from "./lib/toolContextArgs";
+import { assertResearchControlContext, TOOL_CONTEXT_ARGS } from "./lib/toolContextArgs";
 import { isExplicitVideoCreationRequest } from "./mediaIntent";
 import { buildRevenueTools } from "./revenueTools";
 
@@ -492,11 +492,19 @@ export const sourcesFromToolOutput = (output: unknown): { url: string; title: st
  * research loop does — a probe that builds its own tool proves a fiction (the 15.3 `classifyOne`
  * lesson).
  */
-export const buildWebResearchTool = (evaluation?: {
-  ctx: GenericActionCtx<DataModel>;
-  tenantId: string;
-  budgetId: Id<"spendEvents">;
-}): ToolSet => {
+export const buildWebResearchTool = (
+  evaluation?: {
+    ctx: GenericActionCtx<DataModel>;
+    tenantId: string;
+    budgetId: Id<"spendEvents">;
+  },
+  requestControl?: {
+    ctx: GenericActionCtx<DataModel>;
+    tenantId: string;
+    controlId: Id<"researchControls">;
+    requestId: string;
+  },
+): ToolSet => {
   // Phase 39 (RSCH-01). THE CONTAINMENT for page reads, and it is structural: `readPage` accepts
   // ONLY a URL that `webResearch` returned in THIS record's lifetime (one build = one run). An
   // injected page cannot steer the specialist to an arbitrary host, because the model never gets to
@@ -650,6 +658,21 @@ export const buildWebResearchTool = (evaluation?: {
         const scan = scanText(focus);
         if (!scan.ok) return refused("page read skipped: focus failed redaction scan");
         reads += 1;
+        if (requestControl) {
+          let claimed = false;
+          try {
+            claimed = await requestControl.ctx.runMutation(internal.researchControl.claim, {
+              tenantId: requestControl.tenantId,
+              controlId: requestControl.controlId,
+              requestId: requestControl.requestId,
+              attemptId: crypto.randomUUID(),
+            });
+          } catch {
+            /* An ambiguous claim cannot authorize provider egress. */
+          }
+          if (claimed !== true)
+            return refused("readPage refused: request page allowance is unavailable or exhausted");
+        }
         if (evaluation) {
           const body = await fetchBudgeted(
             "extract",
@@ -1999,6 +2022,8 @@ export type ToolContext = {
   evalRevenueFixtureId?: string;
   evalContext?: EvalContext;
   evalBudgetId?: Id<"spendEvents">;
+  researchControlId?: Id<"researchControls">;
+  researchRequestId?: string;
 };
 
 /**
@@ -2030,8 +2055,17 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
     evalRevenueFixtureId,
     evalBudgetId,
   } = toolCtx;
+  assertResearchControlContext(toolCtx);
   const webResearchTool = buildWebResearchTool(
     evalBudgetId ? { ctx, tenantId, budgetId: evalBudgetId } : undefined,
+    toolCtx.researchControlId
+      ? {
+          ctx,
+          tenantId,
+          controlId: toolCtx.researchControlId,
+          requestId: toolCtx.researchRequestId ?? "",
+        }
+      : undefined,
   );
   const saveAsDocumentTool = buildSaveAsDocumentTool();
 
@@ -2163,6 +2197,8 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         if (!staged.ok) return RESEARCH_REFUSAL_REPLY[staged.reason];
 
         const team = await ctx.runMutation(internal.dispatchRun.startTeamRun, {
+          researchControlId: toolCtx.researchControlId,
+          researchRequestId: toolCtx.researchRequestId,
           evalBudgetId,
           tenantId,
           threadId,
@@ -2332,6 +2368,8 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // of re-billing the model. The extra hop is the one that existed before this change, and the
         // reliability sweep covers it the same way.
         await ctx.scheduler.runAfter(0, internal.dispatchRun.startDispatchRun, {
+          researchControlId: toolCtx.researchControlId,
+          researchRequestId: toolCtx.researchRequestId,
           evalBudgetId,
           kind: "research",
           tenantId,
@@ -2404,6 +2442,8 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // of re-billing the model. The extra hop is the one that existed before this change, and the
         // reliability sweep covers it the same way.
         await ctx.scheduler.runAfter(0, internal.dispatchRun.startDispatchRun, {
+          researchControlId: toolCtx.researchControlId,
+          researchRequestId: toolCtx.researchRequestId,
           evalBudgetId,
           kind: "media",
           tenantId,
@@ -5104,6 +5144,8 @@ async function runAgentLoop(
     visualInput?: ImageInput;
     evalContext?: EvalContext;
     evalBudgetId?: Id<"spendEvents">;
+    researchControlId?: Id<"researchControls">;
+    researchRequestId?: string;
     primary: PricedModel;
     fallback: PricedModel;
     // EVAL-01 pin — threads to buildCockpitTools so a pinned document-drafter rides the tool calls.
@@ -5212,6 +5254,8 @@ async function runAgentLoop(
     visualInput,
     evalContext,
     evalBudgetId,
+    researchControlId,
+    researchRequestId,
     maxSteps,
     timeoutMs,
     softCutoffMs,
@@ -5243,6 +5287,8 @@ async function runAgentLoop(
       evalRevenueFixtureId,
       evalContext,
       evalBudgetId,
+      researchControlId,
+      researchRequestId,
     },
     grants,
   );
@@ -5735,6 +5781,8 @@ export async function runSpecialistTurn(
     visualInput?: ImageInput;
     evalContext?: EvalContext;
     evalBudgetId?: Id<"spendEvents">;
+    researchControlId?: Id<"researchControls">;
+    researchRequestId?: string;
     expectedSkillBodyHash?: string;
     turnId?: string;
     threadId?: string;
@@ -5923,6 +5971,8 @@ export async function runSpecialistTurn(
     visualInput: args.visualInput,
     evalContext: args.evalContext,
     evalBudgetId: args.evalBudgetId,
+    researchControlId: args.researchControlId,
+    researchRequestId: args.researchRequestId,
     primary: {
       model: mock
         ? (new MockLanguageModelV4({
@@ -6380,6 +6430,8 @@ export const runCockpitAgent = internalAction({
       skillVersions,
       tenantSkillIds,
       evalBudgetId,
+      researchControlId,
+      researchRequestId,
       turnId,
       history,
       omitRecipientEdits,
@@ -6391,6 +6443,7 @@ export const runCockpitAgent = internalAction({
     // on a governed stop (nothing spent). The eval runner sums this against its hard cost cap.
     costUsd?: number;
   }> => {
+    assertResearchControlContext({ researchControlId, researchRequestId });
     // 1. Governed gate BEFORE any reasoning call — a governed stop is a paused reply, never a DLQ.
     const pre:
       | { ok: true }
@@ -6505,6 +6558,8 @@ export const runCockpitAgent = internalAction({
         // 21-03: forward the tenant pin the eval runner sent. Nothing here reads it for the
         // cockpit's own body (`cockpit-agent` is not authorable) — it reaches dispatched specialists.
         tenantSkillIds,
+        researchControlId,
+        researchRequestId,
         // Lineage ONLY under directVideo: the dispatch tools are built only with both ids present.
         ...(directVideo
           ? {
@@ -6666,6 +6721,8 @@ export const runCockpitAgent = internalAction({
           },
           skillVersions, // the loop builds its OWN tools — the drafter pin must ride there too
           evalBudgetId,
+          researchControlId,
+          researchRequestId,
           tenantSkillIds, // …and so must the tenant pin (21-03), for the specialists it dispatches
           turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
           threadId,

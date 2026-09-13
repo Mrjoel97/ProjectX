@@ -1,5 +1,10 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+Last verified: 2026-09-13 — evaluation-mode page extraction claims the same durable
+tenant/request allowance as ordinary research immediately before provider egress. Exhaustion
+refuses the second extraction without a Tavily call; the evaluation spend envelope remains a
+separate monetary control. Focused offline coverage does not establish live provider acceptance.
+
 Last verified: 2026-09-12 — internal `authoringProbe.prepare` creates one native empty Agent
 thread/plan and one existing golden envelope for an already-owner identity, an explicit cap
 of 1–1000 cents and a single-use authorization hash. It grants no ownership and invokes no model.

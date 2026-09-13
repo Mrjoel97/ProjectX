@@ -269,6 +269,8 @@ type DispatchArgs = {
    *  Absent on the production `actOnGap` path, which must keep running the effective row. */
   tenantSkillIds?: Record<string, Id<"tenantSkills">>;
   evalBudgetId?: Id<"spendEvents">;
+  researchControlId?: Id<"researchControls">;
+  researchRequestId?: string;
 };
 
 /** The Convex validators for the above now live in `lib/dispatchShared.ts` as `DISPATCH_ARGS`
@@ -711,6 +713,8 @@ export const runSpecialist = internalAction({
         },
         () =>
           runSpecialistTurn(ctx, {
+            researchControlId: args.researchControlId,
+            researchRequestId: args.researchRequestId,
             // `...a` FIRST, explicit fields last. With the spread last, a `tenantId` key present-but-
             // undefined on `a` (it is read as `a.tenantId` elsewhere in this file) silently CLOBBERS
             // the good value, and the failure surfaces far away as `guardrails:recordSpend` rejecting
@@ -1267,6 +1271,8 @@ export const runResearch = internalAction({
             },
             () =>
               runSpecialistTurn(ctx, {
+                researchControlId: args.researchControlId,
+                researchRequestId: args.researchRequestId,
                 // `...a` FIRST — see the gap-dispatch runner above. This is the RESEARCH path, where
                 // the clobber was actually observed (run 3a1e37f3, fixture 34).
                 ...a,
@@ -1424,6 +1430,8 @@ export const runMedia = internalAction({
     // research route does not have, which is the one direction that matters.
     await groundMediaBrief(ctx, args, (prompt) =>
       runSpecialistTurn(ctx, {
+        researchControlId: args.researchControlId,
+        researchRequestId: args.researchRequestId,
         tenantId: args.tenantId,
         planId: args.planId,
         skillName: SPECIALISTS.research.skillName,
@@ -1452,6 +1460,8 @@ export const runMedia = internalAction({
             },
             () =>
               runSpecialistTurn(ctx, {
+                researchControlId: args.researchControlId,
+                researchRequestId: args.researchRequestId,
                 // `...a` FIRST — the clobber lesson the research path records above.
                 ...a,
                 tenantId: args.tenantId,
@@ -1503,6 +1513,8 @@ export const __runSpecialistWithScript = internalAction({
       (a) =>
         traced({ traceName: "offline-harness" }, () =>
           runSpecialistTurn(ctx, {
+            researchControlId: args.researchControlId,
+            researchRequestId: args.researchRequestId,
             // `...a` FIRST — same reason as the two runners above. `mockScript` stays LAST because
             // this offline twin deliberately overrides it.
             ...a,

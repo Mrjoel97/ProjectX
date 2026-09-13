@@ -34,7 +34,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 61 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 62 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -50,7 +50,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   telemetry, demoItems, funnels                                            │
 // │                                                                            │
 // │ ── Agent ───────────────────────────────────────────────── ~L998           │
-// │   evaluations, agenda, agentSteps                                          │
+// │   evaluations, agenda, agentSteps, researchControls                        │
 // │                                                                            │
 // │ ── Calendar ────────────────────────────────────────────── ~L932           │
 // │   calendarViews, calendarFixtures, calendarEvents                          │
@@ -188,6 +188,17 @@ const shotElement = v.object({
 });
 
 export default defineSchema({
+  // At most six attempt refs per request; no user content.
+  researchControls: defineTable({
+    tenantId: v.string(),
+    requestId: v.string(),
+    limit: v.number(),
+    attempts: v.array(v.string()),
+    expiresAt: v.number(),
+    closed: v.boolean(),
+  })
+    .index("by_tenant", ["tenantId"])
+    .index("by_tenant_request", ["tenantId", "requestId"]),
   // Convex Auth identity tables (users, authSessions, authAccounts, ...).
   ...authTables,
 

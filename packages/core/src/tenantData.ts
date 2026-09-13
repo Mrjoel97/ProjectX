@@ -41,6 +41,7 @@ export const TENANT_TABLE_CLASSIFICATION = {
   auditExportQueue: "global", // Export delivery state: audit refs only, no content.
   requests: "tenant_owned",
   plans: "tenant_owned",
+  researchControls: "tenant_owned", // Mutable request allowance; native export/erasure and eval cleanup use by_tenant.
   briefings: "tenant_owned",
   calendarViews: "tenant_owned",
   vaultSources: "tenant_owned",

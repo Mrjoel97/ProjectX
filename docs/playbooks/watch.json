@@ -229,6 +229,8 @@
     "packages/backend/convex/requests.ts"
   ],
   "audit-dead-letter.md": [
+    "packages/backend/convex/researchControl",
+    "packages/core/src/researchControl",
     "packages/core/src/tenantData.ts",
     "packages/core/src/tenantData.test.ts",
     "packages/backend/convex/tenantExport.ts",

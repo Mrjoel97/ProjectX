@@ -1,5 +1,11 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-13 — research request-control changes moved both evaluator source
+> identities. `AGENT_EVAL_SUITE.revision`, the generated golden manifest and the generated
+> vertical evaluator revision were refreshed only after source freeze. This retires older
+> exact-source evidence; it does not create a semantic pass, candidate approval, activation or
+> rollback evidence.
+
 > Phase 23 supplementary mutation evidence: `scripts/check-phase23-mutation-proofs.mjs --plan`
 > checks 22 current target anchors without execution; `--self-check` adds lightweight harness
 > checks. Explicit `--run` creates only ignored disposable copies and executes serial

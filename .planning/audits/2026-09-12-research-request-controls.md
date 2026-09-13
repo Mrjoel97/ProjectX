@@ -1,10 +1,13 @@
 # Research request controls: observed failure and implementation plan
 
-Date: 2026-09-12. Status: design only; not implemented or accepted.
+Date: 2026-09-12. Status updated 2026-09-13: Stages 1 and 2 are implemented and offline-qualified
+in the working tree. Their exact commit, deployment and live acceptance are still pending. Stage 3
+remains open.
 
-This document records a bounded production diagnosis and proposed follow-up. It does not
-authorize a paid evaluation, record a semantic pass, or assert that the proposed controls exist.
-It contains references and timing metadata, not the user's raw request or document contents.
+This document records a bounded production diagnosis, the resulting contract and its current
+implementation status. It does not authorize a paid evaluation, record a semantic pass, or claim
+production acceptance. It contains references and timing metadata, not the user's raw request or
+document contents.
 
 ## Observed execution
 
@@ -64,9 +67,32 @@ research, identify a requested deliverable, or attest support for a claim. The r
 already produces an approvable memo and persists raw findings; a second independent drafting
 model call is not necessary to obtain the existing research draft.
 
-## Stage 1: establish a typed request boundary
+## Implementation status at 2026-09-13
 
-Proposed input: an explicit `maxPageReadAttempts` integer bounded by the system maximum,
+The working tree implements the first two stages at the intended boundaries:
+
+- The authenticated cockpit input accepts a visible integer `maxPageReadAttempts` from zero
+  through six. The server validates it before request-state writes and creates the control; the
+  client cannot supply a control ID. Omitted internal inputs retain the six-attempt compatibility
+  path without claiming a smaller prose-only limit.
+- `researchControls` stores tenant/request identity, the immutable limit, bounded attempt IDs,
+  expiry and closed state. Admission registers one non-recurring cleanup after a replay-tombstone
+  retention period. `readPage` claims an attempt atomically immediately before either
+  extraction branch. A rejected or ambiguous claim prevents provider egress, while a failed
+  extraction retains the consumed attempt.
+- The original admitted request identity and server-created control reference propagate through
+  the executive, specialist and fan-out contexts. Tenant export, erasure and synthetic evaluation
+  cleanup include the new tenant-owned state.
+
+The final source-frozen offline suite passed: 97 focused backend tests, 19 focused core and rendered
+UI tests, backend/web/contracts TypeScript, 40-case vertical identity regeneration and check, and
+the 57-fixture golden evaluator self-check. No exact commit or production deployment contains these
+controls at the time of this update. Stage 3's research-to-deliverable dependency has not been
+implemented.
+
+## Stage 1: establish a typed request boundary (offline-qualified)
+
+Implemented input: an explicit `maxPageReadAttempts` integer bounded by the system maximum,
 including zero if the product supports search-only research. The authenticated server admits
 this option and creates its immutable request-bound control before the executive model starts.
 The client must not submit an arbitrary existing budget-record ID or choose another tenant.
@@ -83,10 +109,11 @@ An absent typed option may retain the current system limit for compatibility, bu
 reported as enforcing a smaller limit mentioned only in prose. Failed attempts consuming slots
 should be explained as a conservative attempt limit, not a count of successfully understood pages.
 
-## Stage 2: enforce durable reservations at the existing extraction seam
+## Stage 2: enforce durable reservations at the existing extraction seam (offline-qualified)
 
-The smallest native mechanism is a small Convex request-control record with an atomic mutation,
-not a second scheduler or general research-history subsystem. Proposed fields are tenant,
+The implemented native mechanism is a small Convex request-control record with an atomic mutation,
+not a recurring scheduler or general research-history subsystem. Its one-shot cleanup is registered
+atomically at admission, retains an expired replay tombstone for 24 hours, and never re-arms. Fields are tenant,
 root-request reference, immutable limit, bounded claimed-attempt IDs, expiry and closed state.
 Use a tenant/root-request index and transactional lookup/insertion to prevent concurrent creation
 of separate allowances. All research children of the same admitted request share its reference.
@@ -106,20 +133,22 @@ Expiration must refuse further claims, not refill the allowance. Existing token-
 rate limits are not a substitute for a request lifetime ceiling if they can replenish. Preserve the
 existing no-automatic-retry rule on paid workflow actions.
 
-Likely implementation surfaces, to confirm while coding:
+Implemented surfaces:
 
 - `cockpit.ts` and its authenticated request UI: typed admission and visible effective policy.
 - `schema.ts` and one narrow research-control adapter: indexed request state and atomic claims.
 - `lib/toolContextArgs.ts`, `lib/dispatchShared.ts`, `dispatch.ts`, `dispatchRun.ts` and `llm.ts`:
   propagation of the trusted server-created reference through every entry and child path.
 - `buildWebResearchTool` in `llm.ts`: the shared pre-extraction enforcement point.
-- Tenant export/deletion and evaluation cleanup: account for the new control state without deleting
-  immutable audit history or stranding controls indefinitely.
+- Tenant export/deletion and evaluation cleanup account for the new control state without deleting
+  immutable audit history. A driver-owned one-shot purge removes the refs-only tombstone after its
+  replay-retention window; it does not close the control while background children may still need it.
 
-A schema/control-state addition must satisfy repository conventions and lifecycle checks. Naming
-and retention are routine implementation decisions; no table or API has been added by this plan.
+A schema/control-state addition must satisfy repository conventions and lifecycle checks. The
+working tree adds the table and internal API described above; final qualification and release
+evidence remain outstanding.
 
-## Stage 3: bind research-derived deliverables
+## Stage 3: bind research-derived deliverables (open)
 
 The smallest behavioral improvement is an exact-version executive skill candidate that uses the
 existing research memo when the requested deliverable is that draft. Candidate evaluation must
@@ -145,7 +174,7 @@ the exact-version semantic evidence required to activate a changed executive ski
 
 ## Verification and evidence requirements
 
-Before any paid acceptance rerun, offline tests should establish:
+Before any paid acceptance rerun, the final source-frozen offline qualification must establish:
 
 1. Three concurrent extraction attempts against limit two cause at most two provider calls.
 2. Ordinary and evaluation extraction both claim the same admitted request allowance.
@@ -168,7 +197,8 @@ and affected playbooks. Extend both evaluator inventories with every new product
 source freeze. Changed execution paths invalidate old exact-version evaluator evidence.
 
 Tests prove the admitted typed contract, not correct interpretation of arbitrary natural language.
-Final live acceptance must separately observe the displayed effective policy, actual extraction
+Offline qualification does not make the working-tree implementation accepted or released. Final
+live acceptance must separately observe the displayed effective policy, actual extraction
 attempts, correct deliverable dependency, requested content, source-reference labels and absence
 of external sends. Preserve failed evidence honestly. No semantic pass or phase completion is
-claimed by this design document.
+claimed by this implementation-status document.

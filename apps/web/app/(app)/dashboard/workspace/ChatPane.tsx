@@ -111,6 +111,7 @@ export function ChatPane({
   const savePrompt = useMutation(api.savedPrompts.save);
   const [pinned, setPinned] = useState<Record<string, PinState>>({});
   const [text, setText] = useState("");
+  const [maxPageReadAttempts, setMaxPageReadAttempts] = useState(6);
   const prefillConsumed = useRef(false);
   useEffect(() => {
     if (prefillConsumed.current) return;
@@ -185,7 +186,7 @@ export function ChatPane({
     // clear was ordered last originally; keep the guarantee, fix the UX).
     setText("");
     try {
-      const res = await send({ threadId, text: t });
+      const res = await send({ threadId, text: t, maxPageReadAttempts });
       if (!threadId) {
         onThread(res.threadId, t);
         // Selection never bypasses governance: files and voice stay in the browser until this
@@ -430,6 +431,23 @@ export function ChatPane({
             }}
           />
           <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+            <label style={{ fontSize: "0.78rem", color: "var(--ink-soft)" }}>
+              Research page attempts{" "}
+              <select
+                value={maxPageReadAttempts}
+                onChange={(e) => setMaxPageReadAttempts(Number(e.target.value))}
+                disabled={busy}
+                aria-describedby="research-page-attempts-help"
+                className="composer-pill"
+                style={{ minHeight: "44px" }}
+              >
+                {[0, 1, 2, 3, 4, 5, 6].map((limit) => (
+                  <option key={limit} value={limit}>
+                    {limit === 0 ? "0 — no page reads" : limit === 6 ? "6 — default" : limit}
+                  </option>
+                ))}
+              </select>
+            </label>
             <span style={{ flex: 1 }} />
             {/* This phase IS the feature this button was waiting for, so its title no longer
                 promises a future one — shipping the trace while the button still called it
@@ -488,6 +506,14 @@ export function ChatPane({
               {busy ? <span className="btn-spinner" aria-hidden="true" /> : <SendIcon size={16} />}
             </button>
           </div>
+          <p
+            id="research-page-attempts-help"
+            style={{ margin: 0, fontSize: "0.72rem", color: "var(--ink-soft)" }}
+          >
+            Maximum page-read attempts for this typed message, including failed reads. Set the limit
+            here; a number in your message does not set it. File and voice intake run as separate
+            turns.
+          </p>
           {!threadId && hasPendingIntake && text.trim() === "" && (
             <p role="status" style={{ margin: 0, fontSize: "0.78rem", color: "var(--ink-soft)" }}>
               Add typed instructions for the staged file or voice note, then send them together.

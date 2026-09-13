@@ -27,6 +27,7 @@ import {
   parseChannel,
   SEND_TIME_HORIZON_MS,
 } from "@pikar/core";
+import { researchPageLimit } from "@pikar/core/researchControl";
 // 20-07: the SHOT_TYPES boundary check for the media pre-step. Deep specifier — `storyboard` is not
 // re-exported from the package root (media.ts:23 carries the same pair of lines).
 import type { ShotType } from "@pikar/core/storyboard";
@@ -428,14 +429,33 @@ export const sendCockpitMessage = tenantAction({
     // natural-language time against the USER's now/zone — never the model's. Optional: a turn
     // without it just can't set a send time by chat (the plan-card picker remains the writer).
     clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
+    // Optional typed research allowance. Natural-language requests cannot enlarge this server
+    // admitted limit; absent keeps the existing six-page compatibility behavior.
+    maxPageReadAttempts: v.optional(v.number()),
   },
-  handler: async (ctx, { threadId, text, clientContext }): Promise<{ threadId: string }> => {
+  handler: async (
+    ctx,
+    { threadId, text, clientContext, maxPageReadAttempts },
+  ): Promise<{ threadId: string }> => {
+    // Validate and admit before thread creation or any other user-visible persistent side effect.
+    const admittedPageLimit = researchPageLimit(maxPageReadAttempts);
+    const turnId = crypto.randomUUID();
+    const researchControlId =
+      maxPageReadAttempts === undefined
+        ? undefined
+        : await ctx.runMutation(internal.researchControl.admit, {
+            tenantId: ctx.tenantId,
+            requestId: turnId,
+            limit: admittedPageLimit,
+          });
+
     // 1. Ensure a thread + its single plans row (first turn creates both; userId = tenantId).
+    // A later setup failure can leave only the refs-only control tombstone; its one-shot purge owns
+    // that cleanup and no model or provider egress has occurred.
     const { threadId: tid, planId } = await ensureThreadAndPlan(ctx, threadId, text);
 
     // 2. Fetch the prior turns BEFORE saving the current one (UAT-E) — otherwise the current turn
     //    appears twice (as the last history row AND as "The user says:"). A fresh thread yields [].
-    const turnId = crypto.randomUUID();
     const probeBudgetId = await ctx.runMutation(internal.authoringProbe.claimTurn, {
       tenantId: ctx.tenantId,
       threadId: tid,
@@ -477,6 +497,7 @@ export const sendCockpitMessage = tenantAction({
         turnId,
         history, // UAT-E: the model sees the conversation so far, not just this turn
         ...(probeBudgetId ? { evalBudgetId: probeBudgetId } : {}),
+        ...(researchControlId ? { researchControlId, researchRequestId: turnId } : {}),
       });
       reply = res.reply;
       probeFailed = !!res.blocked;

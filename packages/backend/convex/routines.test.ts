@@ -202,6 +202,7 @@ const CONVEX_MODULES = [
   "reportsGovernance.ts",
   "requests.ts",
   "research.ts",
+  "researchControl.ts",
   "revenueCrm.ts",
   "revenueFinance.ts",
   "revenueTelemetry.ts",
@@ -279,6 +280,8 @@ const SCHEDULER_CALL_SITES = [
   "mediaComplete.ts",
   "notifications.ts",
   "proactiveReview.ts",
+  // One driver-owned expiry deletion per admitted research request. It never re-arms.
+  "researchControl.ts",
   "review.ts",
   "smoke.ts",
   "vault.ts",

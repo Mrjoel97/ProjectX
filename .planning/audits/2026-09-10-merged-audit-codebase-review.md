@@ -1,10 +1,14 @@
 # Merged audit versus current code — 2026-09-10
 
 Current continuation: [September 12 production acceptance](2026-09-12-production-acceptance.md)
-records the later repairs and exact release evidence. Phase 31 is complete on production
-`4df076db`, including approved navigation and direct live desktop/mobile/file/lead acceptance.
-Native bounded authoring probes and exact vertical-corpus preflight are deployed; the authorized
-Phase 23 probe and remaining Phase 23/30 semantic/lifecycle/provider evidence are still open.
+records the later repairs and exact release evidence. The current verified production baseline is
+`d31bb936a2fa2ebe25c73f023526ff0e6fb26170`; it includes Phase 31's approved navigation and
+direct live desktop/mobile/file/lead acceptance plus the Phase 23 authentication-only readiness
+repair. Native bounded authoring probes and exact vertical-corpus preflight are deployed; the
+authorized Phase 23 probe and remaining Phase 23/30 semantic/lifecycle/provider evidence are still
+open. The [research request-control follow-up](2026-09-12-research-request-controls.md) records an
+offline-qualified working-tree Stage 1/2 implementation whose exact commit, deployment and live
+acceptance remain pending; its Stage 3 deliverable dependency is still open.
 The findings and qualification below retain their September 10 scope;
 their statements that no deployment occurred and Phase 31 was unimplemented are historical.
 

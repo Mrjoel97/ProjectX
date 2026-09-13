@@ -19,9 +19,20 @@
 import { v } from "convex/values";
 
 export const TOOL_CONTEXT_ARGS = {
+  researchControlId: v.optional(v.id("researchControls")),
+  researchRequestId: v.optional(v.string()),
   // Trusted evaluation envelope, never a model tool parameter or public client argument.
   // Every paid descendant shares this same ledger row; a child must never mint a new cap.
   evalBudgetId: v.optional(v.id("spendEvents")),
   skillVersions: v.optional(v.record(v.string(), v.number())),
   tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
 };
+
+/** A control row is useful only together with its immutable driver-minted request identity. */
+export function assertResearchControlContext(context: {
+  researchControlId?: unknown;
+  researchRequestId?: string;
+}): void {
+  if (!!context.researchControlId !== !!context.researchRequestId)
+    throw new Error("RESEARCH_CONTROL_CONTEXT_INCOMPLETE");
+}

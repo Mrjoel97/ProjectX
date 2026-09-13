@@ -1,5 +1,10 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-13 — the closed Convex module inventory now includes the internal
+> `researchControl.ts` adapter used by request-bounded page reads. Admission registers one
+> driver-owned cleanup at an absolute time after expiry and replay retention; it never re-arms and
+> adds no recurring work or DST/OAuth evidence. Recurrence remains deferred behind its existing gates.
+
 > Last verified: 2026-09-11 — The closed Convex namespace inventory includes
 > `verticalEvalEvidence.ts`, which records manual evaluation evidence and schedules no recurring
 > work. Recurrence remains deferred; the existing DST and OAuth evidence gates still apply.

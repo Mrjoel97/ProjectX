@@ -204,3 +204,61 @@ test.each([
   ).rejects.toThrow("SETTLEMENT_MISMATCH");
   await expect(t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).resolves.toBeTruthy();
 });
+
+test("evaluation page extraction consumes the same durable request allowance", async () => {
+  const t = harness();
+  vi.stubEnv("GOLDEN_OPENROUTER_BILLING", "standard");
+  vi.stubEnv("GOLDEN_TAVILY_BILLING", "free");
+  vi.stubEnv("GOLDEN_TAVILY_CREDIT_USD", "0");
+  vi.stubEnv("TAVILY_API_KEY", "test-key");
+  const budgetId = await t.mutation(internal.guardrails.openEvalBudget, {
+    tenantIds: [tenantId],
+    capCents: 200,
+    family: "golden",
+  });
+  const requestId = crypto.randomUUID();
+  const controlId = await t.mutation(internal.researchControl.admit, {
+    tenantId,
+    requestId,
+    limit: 1,
+  });
+  const ctx = { runMutation: t.mutation } as unknown as GenericActionCtx<DataModel>;
+  const page = "https://example.com/evidence";
+  const fetchMock = vi.fn(async (url: string) =>
+    url.endsWith("/search")
+      ? new Response(
+          JSON.stringify({
+            usage: { credits: 1 },
+            results: [{ url: page, title: "Evidence", content: "Search lead" }],
+          }),
+        )
+      : new Response(
+          JSON.stringify({
+            usage: { credits: 1 },
+            results: [{ url: page, raw_content: "Primary evidence" }],
+          }),
+        ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  const tools = buildWebResearchTool(
+    { ctx, tenantId, budgetId },
+    { ctx, tenantId, controlId, requestId },
+  );
+  const search = tools.webResearch?.execute as unknown as Search;
+  const read = tools.readPage?.execute as unknown as (
+    input: { url: string; focus: string },
+    options: { toolCallId: string; messages: [] },
+  ) => Promise<{ content: string; note?: string }>;
+  await search({ query: "public evidence" }, { toolCallId: "search", messages: [] });
+  await expect(
+    read({ url: page, focus: "evidence" }, { toolCallId: "read-1", messages: [] }),
+  ).resolves.toMatchObject({ content: "Primary evidence" });
+  await expect(
+    read({ url: page, focus: "evidence" }, { toolCallId: "read-2", messages: [] }),
+  ).resolves.toMatchObject({
+    content: "",
+    note: "readPage refused: request page allowance is unavailable or exhausted",
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect((await t.run((runCtx) => runCtx.db.get(controlId)))?.attempts).toHaveLength(1);
+});

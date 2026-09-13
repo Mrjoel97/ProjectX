@@ -2226,3 +2226,10 @@ The golden runner's $2 post-turn stop remains distinct from a hard aggregate cap
 Tavily, and paid child-action reservations are not yet complete. The Phase 23 continuation preflight
 reports this explicitly. See `23-EXECUTION-PREPARATION.md` in the phase directory for the current
 paid-call graph and prerequisites. No new paid evaluation is certified by these offline checks.
+> Last verified: 2026-09-12 — typed research requests may admit a bounded page-attempt allowance
+> through the authenticated cockpit driver. The server creates one tenant/request control and
+> every `readPage` extraction claims it atomically before provider egress; failed or ambiguous
+> attempts consume capacity, and expiry/closure do not reset it. A one-shot cleanup removes the
+> refs-only tombstone after replay retention. Omitted options retain the legacy six-page
+> compatibility behavior. The control is an attempt ceiling, not semantic evidence or a
+> currency budget; live acceptance remains required.

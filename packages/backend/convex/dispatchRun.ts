@@ -45,6 +45,7 @@ import {
   failedMemoFor,
   narrowFanOut,
 } from "./lib/dispatchShared";
+import { assertResearchControlContext } from "./lib/toolContextArgs";
 
 /** Which action a run of each kind steps into. A record rather than a chain of `if`s so a fourth
  *  kind is a one-line addition that cannot forget the retry option — the option lives at the single
@@ -105,6 +106,7 @@ export const dispatchRun = workflow.define({
 export const startDispatchRun = internalMutation({
   args: { kind: DISPATCH_KIND, ...DISPATCH_ARGS },
   handler: async (ctx, args): Promise<string> => {
+    assertResearchControlContext(args);
     const { kind, tenantId, threadId, planId, gapIndex, route, rootRequestId } = args;
     const workflowId = await workflow.start(ctx, internal.dispatchRun.dispatchRun, args, {
       onComplete: internal.dispatchRun.onDispatchComplete,
@@ -301,8 +303,11 @@ export const startTeamRun = internalMutation({
     skillVersions: v.optional(v.record(v.string(), v.number())),
     tenantSkillIds: v.optional(v.record(v.string(), v.id("tenantSkills"))),
     evalBudgetId: v.optional(v.id("spendEvents")),
+    researchControlId: v.optional(v.id("researchControls")),
+    researchRequestId: v.optional(v.string()),
   },
   handler: async (ctx, a): Promise<TeamRunResult> => {
+    assertResearchControlContext(a);
     const assignments = legalAssignments(a.assignments);
     if (assignments.length === 0) return { ok: false, reply: NO_ROUTES_REPLY };
 
@@ -359,6 +364,12 @@ export const startTeamRun = internalMutation({
         ...(a.skillVersions === undefined ? {} : { skillVersions: a.skillVersions }),
         ...(a.tenantSkillIds === undefined ? {} : { tenantSkillIds: a.tenantSkillIds }),
         ...(a.evalBudgetId === undefined ? {} : { evalBudgetId: a.evalBudgetId }),
+        ...(a.researchControlId === undefined
+          ? {}
+          : {
+              researchControlId: a.researchControlId,
+              researchRequestId: a.researchRequestId,
+            }),
       });
     }
 
