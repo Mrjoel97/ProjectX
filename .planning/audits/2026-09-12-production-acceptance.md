@@ -23,6 +23,13 @@ CI [34687054541](https://github.com/Mrjoel97/ProjectX/actions/runs/34687054541) 
 [34687271971](https://github.com/Mrjoel97/ProjectX/actions/runs/34687271971). The durable probe
 passed at `10:02:23Z`; production deployment `6408389517` reported success at `10:02:26Z`.
 
+The later research-control release `93d905d5ae652d6996ed3f0080b968da6f8f156a` passed full CI
+[34756673585](https://github.com/Mrjoel97/ProjectX/actions/runs/34756673585) and production deployment
+[34756978362](https://github.com/Mrjoel97/ProjectX/actions/runs/34756978362). The workflow checked out
+that exact SHA, deployed Convex, promoted Vercel deployment `dpl_9Cj3xrYCCNYGALV5VnfPr3b7uE2h`
+and successfully fetched `https://www.pikar-ai.com`. This is release evidence for the request-level
+page-read controls; their signed-in behavioral acceptance remains separate and open.
+
 The full backend qualification before the final acceptance repairs passed 4,358 tests.
 The subsequent research repair passed 392 affected tests, media terminal repair passed 324,
 and media UI repair passed 142. CI then qualified the complete committed tree. The strict

@@ -1,8 +1,8 @@
 # Research request controls: observed failure and implementation plan
 
-Date: 2026-09-12. Status updated 2026-09-13: Stages 1 and 2 are implemented and offline-qualified
-in the working tree. Their exact commit, deployment and live acceptance are still pending. Stage 3
-remains open.
+Date: 2026-09-12. Status updated 2026-09-13: Stages 1 and 2 are implemented, offline-qualified,
+committed as `93d905d5ae652d6996ed3f0080b968da6f8f156a` and deployed to production. Live
+acceptance is still pending. Stage 3 remains open.
 
 This document records a bounded production diagnosis, the resulting contract and its current
 implementation status. It does not authorize a paid evaluation, record a semantic pass, or claim
@@ -69,7 +69,8 @@ model call is not necessary to obtain the existing research draft.
 
 ## Implementation status at 2026-09-13
 
-The working tree implements the first two stages at the intended boundaries:
+Production release `93d905d5ae652d6996ed3f0080b968da6f8f156a` implements the first two stages at
+the intended boundaries:
 
 - The authenticated cockpit input accepts a visible integer `maxPageReadAttempts` from zero
   through six. The server validates it before request-state writes and creates the control; the
@@ -86,11 +87,14 @@ The working tree implements the first two stages at the intended boundaries:
 
 The final source-frozen offline suite passed: 97 focused backend tests, 19 focused core and rendered
 UI tests, backend/web/contracts TypeScript, 40-case vertical identity regeneration and check, and
-the 57-fixture golden evaluator self-check. No exact commit or production deployment contains these
-controls at the time of this update. Stage 3's research-to-deliverable dependency has not been
-implemented.
+the 57-fixture golden evaluator self-check. Full CI
+[34756673585](https://github.com/Mrjoel97/ProjectX/actions/runs/34756673585) passed, then production
+deployment [34756978362](https://github.com/Mrjoel97/ProjectX/actions/runs/34756978362) checked out
+the exact commit, deployed Convex, promoted Vercel deployment `dpl_9Cj3xrYCCNYGALV5VnfPr3b7uE2h`,
+and passed its production URL probe. Stage 3's research-to-deliverable dependency has not been
+implemented, and this release evidence does not substitute for live behavioral acceptance.
 
-## Stage 1: establish a typed request boundary (offline-qualified)
+## Stage 1: establish a typed request boundary (deployed; live acceptance pending)
 
 Implemented input: an explicit `maxPageReadAttempts` integer bounded by the system maximum,
 including zero if the product supports search-only research. The authenticated server admits
@@ -109,7 +113,7 @@ An absent typed option may retain the current system limit for compatibility, bu
 reported as enforcing a smaller limit mentioned only in prose. Failed attempts consuming slots
 should be explained as a conservative attempt limit, not a count of successfully understood pages.
 
-## Stage 2: enforce durable reservations at the existing extraction seam (offline-qualified)
+## Stage 2: enforce durable reservations at the existing extraction seam (deployed; live acceptance pending)
 
 The implemented native mechanism is a small Convex request-control record with an atomic mutation,
 not a recurring scheduler or general research-history subsystem. Its one-shot cleanup is registered
@@ -145,8 +149,9 @@ Implemented surfaces:
   replay-retention window; it does not close the control while background children may still need it.
 
 A schema/control-state addition must satisfy repository conventions and lifecycle checks. The
-working tree adds the table and internal API described above; final qualification and release
-evidence remain outstanding.
+released implementation adds the table and internal API described above. Source-frozen tests, CI
+and deployment evidence are recorded above; live extraction and displayed-policy observations remain
+outstanding.
 
 ## Stage 3: bind research-derived deliverables (open)
 
@@ -197,7 +202,7 @@ and affected playbooks. Extend both evaluator inventories with every new product
 source freeze. Changed execution paths invalidate old exact-version evaluator evidence.
 
 Tests prove the admitted typed contract, not correct interpretation of arbitrary natural language.
-Offline qualification does not make the working-tree implementation accepted or released. Final
+Offline qualification and deployment do not make the implementation behaviorally accepted. Final
 live acceptance must separately observe the displayed effective policy, actual extraction
 attempts, correct deliverable dependency, requested content, source-reference labels and absence
 of external sends. Preserve failed evidence honestly. No semantic pass or phase completion is

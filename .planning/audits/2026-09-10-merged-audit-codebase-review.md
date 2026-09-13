@@ -2,13 +2,15 @@
 
 Current continuation: [September 12 production acceptance](2026-09-12-production-acceptance.md)
 records the later repairs and exact release evidence. The current verified production baseline is
-`d31bb936a2fa2ebe25c73f023526ff0e6fb26170`; it includes Phase 31's approved navigation and
-direct live desktop/mobile/file/lead acceptance plus the Phase 23 authentication-only readiness
-repair. Native bounded authoring probes and exact vertical-corpus preflight are deployed; the
-authorized Phase 23 probe and remaining Phase 23/30 semantic/lifecycle/provider evidence are still
-open. The [research request-control follow-up](2026-09-12-research-request-controls.md) records an
-offline-qualified working-tree Stage 1/2 implementation whose exact commit, deployment and live
-acceptance remain pending; its Stage 3 deliverable dependency is still open.
+`93d905d5ae652d6996ed3f0080b968da6f8f156a`; CI
+[34756673585](https://github.com/Mrjoel97/ProjectX/actions/runs/34756673585) and production deployment
+[34756978362](https://github.com/Mrjoel97/ProjectX/actions/runs/34756978362) succeeded for that exact
+commit. It includes Phase 31's approved navigation and direct live desktop/mobile/file/lead
+acceptance, the Phase 23 authentication-only readiness repair, and the deployed Stage 1/2
+[research request controls](2026-09-12-research-request-controls.md). Native bounded authoring
+probes and exact vertical-corpus preflight are deployed; the authorized Phase 23 probe, remaining
+Phase 23/30 semantic/lifecycle/provider evidence, research-control live acceptance and Stage 3
+deliverable dependency are still open.
 The findings and qualification below retain their September 10 scope;
 their statements that no deployment occurred and Phase 31 was unimplemented are historical.
 
@@ -249,6 +251,12 @@ and report explicitly mark AST, relationship coverage and analytics stale/incomp
 modules and `beginExport` are absent; this is not a completed structural refresh. The source review
 and executable tests, rather than the partial graph, support the implementation findings.
 
+A later full refresh completed after release `93d905d5`. The current generated report records
+11,062 nodes, 18,333 edges and 661 communities with 99% extracted, 1% inferred and 0% ambiguous
+relationships. Its manifest and graph include the research-control source, tests and
+`researchControls` table. This supersedes the partial-graph condition above for the current release;
+the paragraph above remains the evidence boundary for the September 10 review itself.
+
 ### Follow-up final qualification
 
 The later workload, visual-input, evaluation-accounting, tracing and review-tool changes were
@@ -283,6 +291,7 @@ verification records, not immutable deployed-release receipts.
 **Work remains.** Phase 30 still needs the complete semantic/outcome evidence producer, independent
 method review, actual exact-candidate evaluations, authenticated workflow UAT and lifecycle drills.
 The review packet and free control harness make those tasks executable and inspectable but do not
-close them. Phase 31's eight-plan marketing tranche is unimplemented; provider/legal prerequisites,
-current media proof, the other acceptance work in the phase matrix, and the deferred Phase 47
-recurrence implementation also remain. WORM is off and no candidate was published or activated.
+close them. Phase 31 was subsequently implemented and its navigation was activated after direct
+production acceptance. Provider/legal prerequisites, current media proof, the other acceptance work
+in the phase matrix, and the deferred Phase 47 recurrence implementation remain. WORM is off and no
+candidate was published or activated.
