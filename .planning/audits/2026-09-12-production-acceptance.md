@@ -333,4 +333,6 @@ The authorized Phase 23 continuation against `07350fc` failed closed during A's 
 after the initial authoring/refusal sequence. A/B sign-in and non-owner checks, owner bootstrap, and
 the first candidate authoring turn passed; the browser then remained on the sign-in form in
 `Signing in…`. No certified handoff, full evaluation or activation exists; source integrity held.
-Repair the auth-flow race before retrying the one-shot live authorization.
+The auth-flow race was repaired in `410aec9` by waiting for signed-out UI before reauthentication,
+and `40a6553` now scrubs the password field before a failure is reported. The one-shot live
+authorization remains deferred until the prior budget and candidate state are read-only verified.

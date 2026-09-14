@@ -317,7 +317,9 @@ The authorized Phase 23 continuation was attempted against this release with the
 identities. Fresh A/B native sign-in, non-owner isolation, owner bootstrap, and the first candidate
 authoring turn passed. It then failed closed during A's second native sign-in while the browser stayed
 on `Signing in…`; no handoff artifact was certified, no full evaluation or activation was attempted,
-and source integrity held. Repair the sign-out/sign-in race before retrying the live gate.
+and source integrity held. The follow-up harness repair landed in `410aec9` (wait for the signed-out
+UI before reauth) and `40a6553` (scrub the password field on auth failure). A retry remains gated on
+read-only confirmation of the prior budget and candidate state.
 
 **Work remains.** Phase 30 still needs independent method review, actual exact-candidate evaluations,
 authenticated semantic decisions and qualified Legal/HR attestations, all-six workflow UAT and
