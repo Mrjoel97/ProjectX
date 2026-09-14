@@ -37,7 +37,13 @@ export async function authenticate(page: Page, foreign = false) {
       stage = "SIGN_OUT";
       mark(role, stage, "started");
       await signOut.click();
-      await page.goto("/signin");
+      // Convex Auth signs out asynchronously. Navigating immediately can race the
+      // session mutation and leave the next native submit on a stale auth state
+      // (observed as an endless "Signing in…" button). Wait for the protected
+      // chrome to disappear before opening a fresh form.
+      await expect(signOut).toBeHidden({ timeout: 30_000 });
+      await page.goto("/signin", { waitUntil: "domcontentloaded" });
+      await expect(emailInput).toBeVisible({ timeout: 30_000 });
       mark(role, stage, "passed");
     }
     stage = "FILL";
