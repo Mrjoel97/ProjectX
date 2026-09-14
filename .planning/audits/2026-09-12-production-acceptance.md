@@ -328,3 +328,9 @@ registry verification, staged probe, Vercel promotion and durable production URL
 September 12 wrong-content PDF, the incomplete two-case paid run, all authenticated semantic
 reviews, qualified Legal/HR review, all-six workflow UAT, two-version evidence, lifecycle drills,
 provider gates and recurrence DST/OAuth gates remain open.
+
+The authorized Phase 23 continuation against `07350fc` failed closed during A's second native sign-in
+after the initial authoring/refusal sequence. A/B sign-in and non-owner checks, owner bootstrap, and
+the first candidate authoring turn passed; the browser then remained on the sign-in form in
+`Signing in…`. No certified handoff, full evaluation or activation exists; source integrity held.
+Repair the auth-flow race before retrying the one-shot live authorization.

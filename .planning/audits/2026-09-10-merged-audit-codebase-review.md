@@ -313,6 +313,12 @@ registry verification, staged probe, Vercel promotion and durable production URL
 earlier failed research PDF and incomplete paid Phase 30 run remain historical evidence and are not
 superseded.
 
+The authorized Phase 23 continuation was attempted against this release with the two controlled
+identities. Fresh A/B native sign-in, non-owner isolation, owner bootstrap, and the first candidate
+authoring turn passed. It then failed closed during A's second native sign-in while the browser stayed
+on `Signing in…`; no handoff artifact was certified, no full evaluation or activation was attempted,
+and source integrity held. Repair the sign-out/sign-in race before retrying the live gate.
+
 **Work remains.** Phase 30 still needs independent method review, actual exact-candidate evaluations,
 authenticated semantic decisions and qualified Legal/HR attestations, all-six workflow UAT and
 lifecycle drills. The native producer, console, review packet and free control harness make those
