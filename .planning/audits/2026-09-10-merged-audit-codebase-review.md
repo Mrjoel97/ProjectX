@@ -288,10 +288,31 @@ Useful local logs: `.tmp/audit-followup-backend-qualified.log`,
 `.tmp/audit-followup-free.log`, and `.tmp/audit-review-tools-fixtures.log`. These are working-tree
 verification records, not immutable deployed-release receipts.
 
-**Work remains.** Phase 30 still needs the complete semantic/outcome evidence producer, independent
-method review, actual exact-candidate evaluations, authenticated workflow UAT and lifecycle drills.
-The review packet and free control harness make those tasks executable and inspectable but do not
-close them. Phase 31 was subsequently implemented and its navigation was activated after direct
-production acceptance. Provider/legal prerequisites, current media proof, the other acceptance work
-in the phase matrix, and the deferred Phase 47 recurrence implementation remain. WORM is off and no
-candidate was published or activated.
+### September 14 working-tree continuation
+
+Two remaining implementation seams are now offline-qualified in the working tree. Phase 30 has a
+closed owner review console keyed by exact run UUID. Native receipts bind output hash, UTF-8 byte
+length, stable per-leaf criteria and observed outcome/tool facts; deterministic review resolves only
+mechanical facts, while semantic decisions require explicit byte-bound evidence. Current-pin drift
+is visible and blocks finalization. Finalization cannot activate candidates, and Legal/HR remain
+blocked until a separately qualified external attestation mechanism exists.
+
+Stage 3 of the research-control plan now accepts an explicit memo/PDF deliverable contract. PDF
+materialization waits for the exact successful research artifact, deterministically attaches bytes
+to that same `web_research` Vault row, and uses tenant/request/plan/type/hash checks plus compare-and-
+swap replay handling. It makes no second model call or duplicate document. Missing, deleted, stale,
+incomplete or canceled dependencies land explicit terminal states.
+
+Focused validation passed: Stage 3 **6** tests, Phase 30 evidence **23**, admin console **12**,
+workspace controls **19**, backend and web typechecks, and one dispatch integration test. This is
+local evidence only; `PENDING_RELEASE_RECEIPT` intentionally marks the absent exact commit, CI,
+deployment and production probe. The earlier failed research PDF and incomplete paid Phase 30 run
+remain historical evidence and are not superseded.
+
+**Work remains.** Phase 30 still needs independent method review, actual exact-candidate evaluations,
+authenticated semantic decisions and qualified Legal/HR attestations, all-six workflow UAT and
+lifecycle drills. The native producer, console, review packet and free control harness make those
+tasks executable and inspectable but do not close them. Phase 31 was subsequently implemented and
+its navigation was activated after direct production acceptance. Provider/legal prerequisites,
+current media proof, the other acceptance work in the phase matrix, and the deferred Phase 47
+recurrence implementation remain. WORM is off and no candidate was activated.

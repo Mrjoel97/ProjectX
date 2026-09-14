@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useState } from "react";
+import { VerticalReviewConsole } from "./VerticalReviewConsole";
 
 // `@pikar/backend` exports only `./api`, so ids are reached through the function's own return
 // type rather than `dataModel` — the same route ApprovalsView takes.
@@ -228,6 +229,8 @@ export function AdminView() {
       </section>
 
       <EnvReadiness />
+
+      <VerticalReviewConsole />
 
       <section style={{ display: "grid", gap: "0.5rem" }}>
         <p className="caps-label" style={{ margin: 0 }}>

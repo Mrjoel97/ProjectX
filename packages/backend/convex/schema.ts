@@ -826,6 +826,37 @@ export default defineSchema({
         }),
       ),
     ),
+    /** Stage 3 research-derived output dependency. Present only when `dispatchResearch` received
+     *  `deliverable: "pdf"`; omitted and explicit memo calls keep the shipped memo-only shape.
+     *  The request id comes from the authenticated turn. A deterministic PDF is attached to the
+     *  SAME `web_research` vault row after the exact row id and content hash are frozen. */
+    researchDeliverable: v.optional(
+      v.object({
+        requestId: v.string(),
+        format: v.literal("pdf"),
+        status: v.union(
+          v.literal("pending"),
+          v.literal("materializing"),
+          v.literal("ready"),
+          v.literal("refused"),
+          v.literal("canceled"),
+        ),
+        sourceVaultDocId: v.optional(v.id("vaultDocuments")),
+        sourceContentHash: v.optional(v.string()),
+        workflowId: v.optional(v.string()),
+        reason: v.optional(
+          v.union(
+            v.literal("research_failed"),
+            v.literal("research_incomplete"),
+            v.literal("source_missing"),
+            v.literal("source_deleted"),
+            v.literal("source_mismatch"),
+            v.literal("plan_canceled"),
+            v.literal("render_failed"),
+          ),
+        ),
+      }),
+    ),
     // Generated outbound attachments (CKPT-02). Inline on the plan = pre-approval source of truth
     // for the PLAN card; executePlan materializes attachments-table rows at fan-out. All optional → no migration.
     attachments: v.optional(

@@ -207,6 +207,7 @@
     "packages/core/src/actionType.test.ts",
     "packages/backend/convex/research.ts",
     "packages/backend/convex/research.test.ts",
+    "packages/backend/convex/researchDeliverable.ts",
     "packages/backend/convex/calendarViews.ts",
     "packages/backend/convex/calendar.ts",
     "packages/backend/convex/calendarComplete.ts",

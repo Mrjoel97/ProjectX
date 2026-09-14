@@ -99,6 +99,26 @@ new tool grant. Local tests drive the actual SDK loop with an unpaid transport s
 authorization, complete-corpus issuance, replay/mutation/forgery failures and retained cleanup.
 These tests do not satisfy the phase's actual semantic review or UAT requirements.
 
+## 2026-09-14 closed review console — offline qualified, release pending
+
+The current working tree adds an owner-only admin review console over the native evidence plane.
+An operator loads an exact run UUID, sees whether the run still matches the current evaluator and
+candidate pins, and records each closed criterion against the exact archived UTF-8 output bytes.
+Stable per-leaf criterion identifiers prevent repeated expected fields from collapsing into one
+judgment. Outcome, required-source and forbidden-operation facts receive deterministic mechanical
+resolutions from the sealed native receipt; semantic claims still require an explicit reviewer
+decision and byte-bound evidence spans.
+
+The sealed receipt now binds the exact output hash and byte length plus observed outcome and tool
+facts. Finalization rechecks the current pins and the complete lane criteria. It cannot activate a
+candidate. Legal and HR finalization remains blocked until a separately qualified external
+attestation mechanism exists; typing a role claim into this console cannot satisfy that gate.
+
+Focused validation passed in the current tree: **23** backend native-evidence tests and **12** admin
+presentation/console tests. Backend and web typechecks also passed. These are implementation checks,
+not authenticated review, expert qualification, semantic acceptance, candidate exposure or a
+release receipt.
+
 ## Remaining gates
 
 Verification resumed 2026-09-11: 72 focused backend tests passed across native evidence,
@@ -107,7 +127,8 @@ real SDK lifecycle callbacks with transport-only stubs for zero-tool and search/
 complete-shaped imported-evidence rejection, and complete-corpus authenticated test reviews.
 The stubs and synthetic owner identities remain implementation tests, not live acceptance.
 
-1. Run the exact native collection in an authorized environment and inspect real billing/model/output
+1. Release the qualified console/evidence revision, then run the exact native collection in an
+   authorized environment and inspect real billing/model/output
    observations. All six candidates remain unpaid during this implementation task.
 2. Complete measured semantic assertions: unsupported claims, cited reasoning, review/disclaimers,
    Legal jurisdiction/playbook rules, HR prohibited decisions, Data numeric consistency and visual

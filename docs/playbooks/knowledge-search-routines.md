@@ -1,5 +1,12 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-14 — the closed Convex module inventory includes
+> `researchDeliverable.ts`, the one-shot deterministic derivative workflow for an explicitly
+> requested research PDF. It is started only from an existing research plan, never re-arms, and
+> does not add a routine or recurring schedule. Offline inventory and lifecycle checks do not close
+> live PDF acceptance, semantic review, activation/rollback, or the standing DST/OAuth recurrence
+> evidence gates. Recurrence remains deferred.
+
 > Last verified: 2026-09-13 — the closed Convex module inventory now includes the internal
 > `researchControl.ts` adapter used by request-bounded page reads. Admission registers one
 > driver-owned cleanup at an absolute time after expiry and replay retention; it never re-arms and

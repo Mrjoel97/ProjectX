@@ -841,6 +841,63 @@ export async function saveMarkdownDocument(
 }
 
 /**
+ * Render the exact persisted research markdown into a deterministic PDF and attach it to that
+ * same vault row. This action calls no model and records no spend. Every read and final write is
+ * bound to tenant + plan + request + document + content hash; a retry may render another blob,
+ * but the mutation CAS exposes one winner and this action deletes every losing blob.
+ */
+export const materializeResearchPdf = internalAction({
+  args: {
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    requestId: v.string(),
+    sourceVaultDocId: v.id("vaultDocuments"),
+    sourceContentHash: v.string(),
+  },
+  handler: async (ctx, args): Promise<null> => {
+    const source = await ctx.runQuery(internal.researchDeliverable.loadExactSource, args);
+    if (!source.ok) {
+      await ctx.runMutation(internal.researchDeliverable.refuse, {
+        tenantId: args.tenantId,
+        planId: args.planId,
+        requestId: args.requestId,
+        reason: source.reason,
+      });
+      return null;
+    }
+
+    // A retry after the row was attached but before the workflow journal advanced reuses the
+    // already-visible bytes. Calling the same CAS also repairs a still-materializing descriptor.
+    if (source.existingStorageId) {
+      await ctx.runMutation(internal.vault.attachResearchPdf, {
+        ...args,
+        storageId: source.existingStorageId,
+      });
+      return null;
+    }
+
+    let stagedStorageId: Id<"_storage"> | undefined;
+    let keepStagedBlob = false;
+    try {
+      const bytes = (await markdownToPdf(source.title, source.markdown)) as BlobPart;
+      stagedStorageId = await ctx.storage.store(
+        new Blob([bytes], { type: formatSpec("pdf").mimeType }),
+      );
+      const attached = await ctx.runMutation(internal.vault.attachResearchPdf, {
+        ...args,
+        storageId: stagedStorageId,
+      });
+      keepStagedBlob = attached.ok && !attached.reused && attached.storageId === stagedStorageId;
+      return null;
+    } finally {
+      // Includes refusal, a concurrent winner, and a mutation error. The final mutation is atomic,
+      // so a throwing call cannot leave this reference visible on a row.
+      if (stagedStorageId && !keepStagedBlob) await ctx.storage.delete(stagedStorageId);
+    }
+  },
+});
+
+/**
  * probeGemini — prove the `google/` half of `resolveModel` end to end before anything routes to it.
  *
  * Gemini was added ALONGSIDE OpenAI (owner decision 2026-08-07): `DEFAULT_MODEL`/`CHEAP_MODEL` still
@@ -2341,13 +2398,21 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       description:
         "Research a question using the outside world. The research runs in the background and " +
         "arrives as a plan card the user can approve — you do not get the findings in this turn.",
-      inputSchema: jsonSchema<{ question: string }>({
+      inputSchema: jsonSchema<{ question: string; deliverable?: "memo" | "pdf" }>({
         type: "object",
-        properties: { question: { type: "string" } },
+        properties: {
+          question: { type: "string" },
+          deliverable: {
+            type: "string",
+            enum: ["memo", "pdf"],
+            description:
+              "Optional output format. Omit for the normal plan-card memo; choose pdf only when the user explicitly asks for a PDF file.",
+          },
+        },
         required: ["question"],
         additionalProperties: false,
       }),
-      execute: async ({ question }): Promise<string> => {
+      execute: async ({ question, deliverable }): Promise<string> => {
         // Non-null asserted: the whole record key is absent unless both are present (the gate below).
         const threadId = toolCtx.threadId as string;
         const rootRequestId = toolCtx.rootRequestId as string;
@@ -2355,6 +2420,8 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           tenantId,
           threadId,
           subject: `Research: ${question}`.slice(0, 120),
+          ...(deliverable === undefined ? {} : { deliverable }),
+          ...(deliverable === "pdf" ? { rootRequestId } : {}),
         });
         // Conversational, never a throw — a governed stop is a paused conversation (the
         // PAUSED_REPLY / dispatch-refusal precedent).
@@ -2389,6 +2456,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           ancestry: [],
           envelopeCents: 0, // the ROOT signal — governedDispatch derives the real envelope
           spentCents: 0,
+          ...(deliverable === undefined ? {} : { researchDeliverable: deliverable }),
           // The eval runner's pins reach the RESEARCH specialist only through here. Without it a
           // `--skill research-specialist@2` run certifies a body in which v1 actually executed.
           skillVersions,

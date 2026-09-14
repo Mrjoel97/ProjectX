@@ -1723,6 +1723,58 @@ describe("runResearch — the scheduled entry point inherits every guard (16-06 
     expect((await readSteps(t)).map((s) => s.tool)).toContain("declareUnsupported");
   });
 
+  test("an incomplete researched memo is preserved but its requested PDF closes as refused", async () => {
+    const { t, planId } = await setup();
+    t.registerComponent("workflow", workflowSchema, workflowModules);
+    t.registerComponent("workflow/workpool", workpoolSchema, workpoolModules);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(planId, {
+        kind: "memo",
+        status: "collecting",
+        body: "",
+        researchDeliverable: {
+          requestId: ROOT,
+          format: "pdf",
+          status: "pending",
+        },
+      });
+    });
+    stubbedSearchUrls = ["https://example.com/partial-source"];
+
+    const result = ok(
+      await t.action(internal.dispatch.__runSpecialistWithScript, {
+        ...RESEARCH,
+        planId,
+        research: true,
+        researchDeliverable: "pdf",
+        primary: [
+          textToolStep(
+            "Partial researched findings.",
+            "webResearch",
+            { query: "urban dog training pricing" },
+            "partial-web-search",
+          ),
+          REPLY_STEP,
+        ],
+        softCutoffMs: 0,
+      }),
+    );
+
+    expect(result.incomplete).toBe(true);
+    expect(result.incompleteReason).toBe("clock");
+    const plan = await readPlan(t, planId);
+    expect(plan?.researchDeliverable).toMatchObject({
+      requestId: ROOT,
+      status: "refused",
+      reason: "research_incomplete",
+    });
+    const source = (await t.run((ctx) => ctx.db.query("vaultDocuments").collect())).find(
+      (doc) => doc.sourcePlanId === planId && doc.kind === "web_research",
+    );
+    expect(source?.text).toContain("Partial researched findings");
+    expect(source?.storageId).toBeUndefined();
+  });
+
   test("cost ceiling: partial output lands, then the exhausted envelope refuses exactly", async () => {
     const { t, planId } = await setup();
     await t.run((ctx) => ctx.db.patch(planId, { kind: "memo", status: "collecting", body: "" }));

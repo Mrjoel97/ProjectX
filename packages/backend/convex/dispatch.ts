@@ -260,6 +260,8 @@ type DispatchArgs = {
   /** 16-06: the executive's research question. Present ⇒ buildSpecialistPrompt takes the question
    *  branch instead of the evaluation snapshot. */
   question?: string;
+  /** Stage 3 presentation request. Absent and `memo` preserve the shipped memo-only result. */
+  researchDeliverable?: "memo" | "pdf";
   /** 16-09: the eval harness's --skill pins. Without this the specialist silently ran the ACTIVE
    *  row (v1) while the evidence row claimed v2 — a pin that certifies a body that never executed. */
   skillVersions?: Record<string, number>;
@@ -1174,7 +1176,17 @@ async function persistResearchFindings(
 ): Promise<DispatchResult> {
   // SUCCESS PATH ONLY. A governed refusal is a paused conversation, not a finding — it writes no
   // vault document at all (its reply is already on the card via `fallbackBody`).
-  if (!res.ok) return res;
+  if (!res.ok) {
+    if (args.researchDeliverable === "pdf") {
+      await ctx.runMutation(internal.researchDeliverable.refuse, {
+        tenantId: args.tenantId,
+        planId: args.planId,
+        requestId: args.rootRequestId,
+        reason: "research_failed",
+      });
+    }
+    return res;
+  }
   // STRUCTURAL FLOOR (16-09): a run that never searched is not research, so it does not earn a
   // RETRIEVABLE artifact. `evidenceVerdict` already reads `webSearchCalls === 0` as
   // `not_researched` and `researchFindingsFence` already stamps NOT_RESEARCHED_LABEL on the stored
@@ -1210,10 +1222,19 @@ async function persistResearchFindings(
       // Refs and COUNTS only (§4) — never the body, never the question.
       payload: { ...lineageRefs(args), reason: "not_researched", webSearchCalls: 0 },
     });
+    if (args.researchDeliverable === "pdf") {
+      await ctx.runMutation(internal.researchDeliverable.refuse, {
+        tenantId: args.tenantId,
+        planId: args.planId,
+        requestId: args.rootRequestId,
+        reason: "research_failed",
+      });
+    }
     return res;
   }
+  let vaultDocId: Id<"vaultDocuments">;
   try {
-    const vaultDocId = await ctx.runMutation(internal.research.persistFindings, {
+    vaultDocId = await ctx.runMutation(internal.research.persistFindings, {
       tenantId: args.tenantId,
       question: args.question ?? "",
       body: res.body,
@@ -1230,7 +1251,6 @@ async function persistResearchFindings(
       incomplete: res.incomplete,
       incompleteReason: res.incompleteReason,
     });
-    return { ...res, vaultDocId };
   } catch {
     // ONE audit row with the reason CODE — never `err.message`, which can carry prompt or grounded
     // prose (§4). The result is returned UNCHANGED, so the run itself still succeeded.
@@ -1241,8 +1261,43 @@ async function persistResearchFindings(
       actor: "system",
       payload: { ...lineageRefs(args), reason: "persist_error" },
     });
+    if (args.researchDeliverable === "pdf") {
+      await ctx.runMutation(internal.researchDeliverable.refuse, {
+        tenantId: args.tenantId,
+        planId: args.planId,
+        requestId: args.rootRequestId,
+        reason: "research_failed",
+      });
+    }
     return res;
   }
+  if (args.researchDeliverable === "pdf" && res.incomplete) {
+    await ctx.runMutation(internal.researchDeliverable.refuse, {
+      tenantId: args.tenantId,
+      planId: args.planId,
+      requestId: args.rootRequestId,
+      reason: "research_incomplete",
+    });
+  } else if (args.researchDeliverable === "pdf") {
+    try {
+      await ctx.runMutation(internal.researchDeliverable.start, {
+        tenantId: args.tenantId,
+        planId: args.planId,
+        requestId: args.rootRequestId,
+        sourceVaultDocId: vaultDocId,
+      });
+    } catch {
+      // The memo and its exact source row remain usable. Close the separate presentation
+      // dependency explicitly so no pending state can imply that a file is still on its way.
+      await ctx.runMutation(internal.researchDeliverable.refuse, {
+        tenantId: args.tenantId,
+        planId: args.planId,
+        requestId: args.rootRequestId,
+        reason: "render_failed",
+      });
+    }
+  }
+  return { ...res, vaultDocId };
 }
 
 /**

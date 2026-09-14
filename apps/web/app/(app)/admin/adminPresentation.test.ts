@@ -16,11 +16,13 @@
 // hook reference proves the mount property that matters: a non-owner does not merely receive
 // hidden markup — React never executes AdminView, so `invites.pending` never subscribes.
 // Component evidence, not a browser/DOM claim, and it says so.
+import { createHash } from "node:crypto";
 import { getFunctionName } from "convex/server";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import AdminPage from "./page";
+import { locateUtf8EvidenceSpan } from "./VerticalReviewConsole";
 
 const hooks = vi.hoisted(() => {
   const state = {
@@ -87,6 +89,7 @@ describe("the admin surface mounts only for a confirmed owner", () => {
     expect(html).toContain("hopeful@example.com");
     expect(html).toContain("Approve &amp; mint invite");
     expect(subscribed().some((n) => n.startsWith("invites:pending"))).toBe(true);
+    expect(html).toContain("Exact-version semantic evaluation review");
   });
 
   test("a NON-OWNER never executes AdminView, so invites.pending never subscribes", () => {
@@ -99,6 +102,7 @@ describe("the admin surface mounts only for a confirmed owner", () => {
     // The mount property. This is the assertion a CSS-hiding implementation would fail.
     expect(subscribed().some((n) => n.startsWith("invites:pending"))).toBe(false);
     expect(hooks.state.mutationCalls).toHaveLength(0);
+    expect(html).not.toContain("Exact-version semantic evaluation review");
   });
 
   test("the LOADING viewer is treated as a non-owner — no flash of the surface", () => {
@@ -135,6 +139,24 @@ describe("the admin surface mounts only for a confirmed owner", () => {
   test("an empty queue says so rather than rendering nothing", () => {
     const html = render({ isOwner: true }, []);
     expect(html).toContain("No one is waiting");
+  });
+});
+
+describe("the closed exact-version review foundation", () => {
+  test("turns a Unicode quote into exact UTF-8 offsets and bytes hash", async () => {
+    const output = "Préfixe 🧪 evidence";
+    const span = await locateUtf8EvidenceSpan(output, "🧪");
+    expect(span).toEqual({
+      startByte: new TextEncoder().encode("Préfixe ").length,
+      endByte: new TextEncoder().encode("Préfixe ").length + new TextEncoder().encode("🧪").length,
+      sha256: createHash("sha256").update("🧪").digest("hex"),
+    });
+  });
+
+  test("refuses text that is not an exact output span", async () => {
+    await expect(locateUtf8EvidenceSpan("recorded output", "invented quote")).rejects.toThrow(
+      "QUOTE_NOT_IN_OUTPUT",
+    );
   });
 });
 

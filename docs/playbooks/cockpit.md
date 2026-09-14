@@ -1,3 +1,13 @@
+> Last verified: 2026-09-14 — research dispatch now carries an explicit deliverable contract:
+> omitted or `memo` preserves the existing markdown result, while `pdf` records a pending
+> `researchDeliverable` on the exact plan. Only after the research result persists does a one-shot,
+> retry-bounded workflow render deterministic PDF bytes and attach them to that same `web_research`
+> Vault row. Tenant, root request, plan, source document, type and content hash must all match;
+> cancellation, missing/deleted source, hash drift and render failure end in explicit refused or
+> canceled states. The derivative makes no second model call and creates no recurrence. This is
+> offline implementation evidence: live model selection, download acceptance, semantic fidelity,
+> active prompt teaching, activation/rollback and recurrence DST/OAuth gates remain open.
+>
 > Last verified: 2026-09-12 — the typed chat composer exposes a research page-attempt selector
 > from zero through six, initially six. Its numeric `maxPageReadAttempts` travels through the
 > shared send hook alongside the trusted clock. Copy explicitly counts failed reads, scopes

@@ -11,6 +11,7 @@ import {
   VERTICAL_CORPUS_SHA256,
   VERTICAL_EVALUATOR_SHA256,
 } from "@pikar/contracts/verticalEvalCorpus";
+import type { FunctionArgs } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -41,11 +42,19 @@ vi.mock("./lib/models", async (importOriginal) => {
     resolveModel: () => new MockLanguageModelV4({ doGenerate: modelSeam.script as never }),
   };
 });
-const fixtures = JSON.parse(
-  readFileSync(new URL("../scripts/vertical-eval-cases/engineering.json", import.meta.url), "utf8"),
-);
+const fixtures = {
+  engineering: JSON.parse(
+    readFileSync(
+      new URL("../scripts/vertical-eval-cases/engineering.json", import.meta.url),
+      "utf8",
+    ),
+  ),
+  legal: JSON.parse(
+    readFileSync(new URL("../scripts/vertical-eval-cases/legal.json", import.meta.url), "utf8"),
+  ),
+};
 
-async function setup(count = 1) {
+async function setup(count = 1, verticalId: "engineering" | "legal" = "engineering") {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregates);
   t.registerComponent("rateLimiter", rateLimiterSchema, limiters);
@@ -57,28 +66,28 @@ async function setup(count = 1) {
   const candidate = await t.run((ctx) =>
     ctx.db
       .query("skills")
-      .withIndex("by_name_version", (q) => q.eq("name", "vertical-engineering").eq("version", 1))
+      .withIndex("by_name_version", (q) => q.eq("name", `vertical-${verticalId}`).eq("version", 1))
       .unique(),
   );
   if (!candidate) throw new Error("missing seeded candidate");
   const cases = [];
-  for (const item of VERTICAL_CORPUS.engineering.slice(0, count)) {
-    const fixture = fixtures.cases.find(
-      (f: { id: string }) => `engineering-${f.id}` === item.caseId,
+  for (const item of VERTICAL_CORPUS[verticalId].slice(0, count)) {
+    const fixture = fixtures[verticalId].cases.find(
+      (f: { id: string }) => `${verticalId}-${f.id}` === item.caseId,
     );
     const pin = {
       runId,
       caseId: item.caseId,
       caseHash: item.caseHash,
       requestHash: item.requestHash,
-      verticalId: "engineering" as const,
+      verticalId,
       candidateVersion: 1,
       bodyHash: sha(candidate.body),
     };
     const prepared = await t.action(internal.verticalEvalSources.provision, {
       ...pin,
       reviewReady: true,
-      sources: compileSources("engineering", fixture),
+      sources: compileSources(verticalId, fixture),
     });
     cases.push({ pin, prepared });
   }
@@ -172,19 +181,22 @@ async function observe(h: Harness, index = 0, modify?: (value: any) => void) {
   });
   return { startId, receiptId, observation };
 }
-async function reviewArgs(h: Harness, receiptId: Id<"audit">) {
+type ReviewCaseArgs = FunctionArgs<typeof api.verticalEvalEvidence.reviewCase>;
+
+async function reviewArgs(h: Harness, receiptId: Id<"audit">): Promise<ReviewCaseArgs> {
   const view = await h.owner.query(api.verticalEvalEvidence.inspectCase, { receiptId });
+  const output = view.output ?? "";
   return {
     receiptId,
-    outputHash: sha(reply),
+    outputHash: view.outputSha256 ?? undefined,
     sourceHashes: view.sources.map((s) => s.hash),
     outcome: "partial" as const,
     qualifiedRole: "owner" as const,
     decisions: view.criteria.map((criterion) => ({
-      criterion,
+      criterion: criterion.id,
       decision: "supported" as const,
       outputSpans: [
-        { startByte: 0, endByte: new TextEncoder().encode(reply).length, sha256: sha(reply) },
+        { startByte: 0, endByte: new TextEncoder().encode(output).length, sha256: sha(output) },
       ],
       sourceDocIds: view.sources.map((s) => s.docId),
     })),
@@ -247,7 +259,7 @@ describe("native vertical exact-version issuer", () => {
     const result = await h.t.action(internal.verticalPackBinding.evaluateCase, {
       ...pin,
       budgetId: h.budgetId,
-      text: fixtures.cases[0].input.request,
+      text: fixtures.engineering.cases[0].input.request,
     });
     expect(result.nativeCaseReceiptId).toBeTypeOf("string");
     expect(result.budget).toMatchObject({
@@ -301,7 +313,7 @@ describe("native vertical exact-version issuer", () => {
     const result = await h.t.action(internal.verticalPackBinding.evaluateCase, {
       ...pin,
       budgetId: h.budgetId,
-      text: fixtures.cases[0].input.request,
+      text: fixtures.engineering.cases[0].input.request,
     });
     expect(result.result).toMatchObject({
       ok: true,
@@ -529,6 +541,131 @@ describe("native vertical exact-version issuer", () => {
     await expect(
       h.owner.query(api.verticalEvalEvidence.inspectCase, { receiptId }),
     ).rejects.toThrow("SOURCE_CHANGED");
+  });
+
+  test("review criteria use stable per-assertion ids and expose mechanically resolved facts", async () => {
+    const h = await setup();
+    const { receiptId } = await observe(h);
+    await h.t.mutation(internal.guardrails.closeEvalBudget, { budgetId: h.budgetId });
+    const view = await h.owner.query(api.verticalEvalEvidence.inspectCase, { receiptId });
+    const ids = view.criteria.map((criterion) => criterion.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain("expected.must[0]");
+    expect(ids.some((id) => id.startsWith("expected:"))).toBe(false);
+    expect(
+      view.criteria.find((criterion) => criterion.id === "expected.forbiddenOperations[0]")
+        ?.mechanical,
+    ).toMatchObject({ decision: "supported" });
+    expect(view.outputByteLength).toBe(new TextEncoder().encode(reply).length);
+    expect(view.outputSha256).toBe(sha(reply));
+    const sealed = await h.t.run((ctx) => ctx.db.get(receiptId));
+    expect(sealed?.payload.attemptedAllowedToolCounts).toEqual([
+      "saveAsDocument:0",
+      "searchVault:1",
+    ]);
+    expect(sealed?.payload.completedAllowedToolCounts).toEqual([
+      "saveAsDocument:0",
+      "searchVault:1",
+    ]);
+  });
+
+  test("UTF-8 byte spans bind exact Unicode bytes and reject a split code point", async () => {
+    const h = await setup();
+    const unicode = "Préfixe 🧪 evidence";
+    const { receiptId } = await observe(h, 0, (value) => {
+      value.result.reply = unicode;
+    });
+    await h.t.mutation(internal.guardrails.closeEvalBudget, { budgetId: h.budgetId });
+    const args = await reviewArgs(h, receiptId);
+    const startByte = new TextEncoder().encode("Préfixe ").length;
+    const unicodeDecision = args.decisions[0];
+    if (!unicodeDecision) throw new Error("missing Unicode review decision");
+    unicodeDecision.outputSpans = [
+      {
+        startByte,
+        endByte: startByte + new TextEncoder().encode("🧪").length,
+        sha256: sha("🧪"),
+      },
+    ];
+    await expect(h.owner.mutation(api.verticalEvalEvidence.reviewCase, args)).resolves.toBeTypeOf(
+      "string",
+    );
+
+    const h2 = await setup();
+    const observed = await observe(h2, 0, (value) => {
+      value.result.reply = unicode;
+    });
+    await h2.t.mutation(internal.guardrails.closeEvalBudget, { budgetId: h2.budgetId });
+    const split = await reviewArgs(h2, observed.receiptId);
+    const splitDecision = split.decisions[0];
+    if (!splitDecision) throw new Error("missing split-span review decision");
+    splitDecision.outputSpans = [
+      { startByte: startByte + 1, endByte: startByte + 4, sha256: sha("wrong") },
+    ];
+    await expect(h2.owner.mutation(api.verticalEvalEvidence.reviewCase, split)).rejects.toThrow(
+      "REVIEW_SPAN",
+    );
+  });
+
+  test("needs-review verdicts remain unaccepted and cannot become issuance evidence", async () => {
+    const h = await setup();
+    const { receiptId } = await observe(h);
+    await h.t.mutation(internal.guardrails.closeEvalBudget, { budgetId: h.budgetId });
+    const args = await reviewArgs(h, receiptId);
+    const firstDecision = args.decisions[0];
+    if (!firstDecision) throw new Error("missing review decision");
+    args.decisions[0] = {
+      ...firstDecision,
+      decision: "needs_review",
+      outputSpans: [],
+    };
+    const reviewId = await h.owner.mutation(api.verticalEvalEvidence.reviewCase, args);
+    const storedReview = await h.t.run((ctx) => ctx.db.get(reviewId));
+    if (!storedReview) throw new Error("missing stored review");
+    expect(storedReview.payload.accepted).toBe(false);
+    expect((await h.t.run((ctx) => ctx.db.get(h.candidate._id)))?.status).toBe("candidate");
+  });
+
+  test("Legal review is blocked until an independently authenticated hash-bound attestation exists", async () => {
+    const h = await setup(1, "legal");
+    const { receiptId } = await observe(h);
+    await h.t.mutation(internal.guardrails.closeEvalBudget, { budgetId: h.budgetId });
+    const view = await h.owner.query(api.verticalEvalEvidence.inspectCase, { receiptId });
+    expect(view.qualification).toMatchObject({
+      state: "external-attestation-required",
+      lane: "legal",
+      binding: {
+        receiptId,
+        outputSha256: sha(reply),
+        corpusHash: VERTICAL_CORPUS_SHA256,
+        evaluatorHash: VERTICAL_EVALUATOR_SHA256,
+      },
+    });
+    const args = await reviewArgs(h, receiptId);
+    await expect(
+      h.owner.mutation(api.verticalEvalEvidence.reviewCase, {
+        ...args,
+        qualifiedRole: "qualified_counsel",
+      }),
+    ).rejects.toThrow("EXTERNAL_REVIEWER_ATTESTATION_REQUIRED");
+  });
+
+  test("run inspection marks candidate drift stale instead of repeating stored pin claims", async () => {
+    const h = await setup();
+    await observe(h);
+    const firstCase = h.cases[0];
+    if (!firstCase) throw new Error("missing first case");
+    expect(
+      (await h.owner.query(api.verticalEvalEvidence.inspectRun, { runId })).cases.find(
+        (item) => item.caseId === firstCase.pin.caseId,
+      )?.currentPins,
+    ).toBe(true);
+    await h.t.run((ctx) => ctx.db.patch(h.candidate._id, { body: `${h.candidate.body}\ndrift` }));
+    expect(
+      (await h.owner.query(api.verticalEvalEvidence.inspectRun, { runId })).cases.find(
+        (item) => item.caseId === firstCase.pin.caseId,
+      )?.currentPins,
+    ).toBe(false);
   });
 
   test("abandonment is explicit authenticated cleanup authority and can never issue", async () => {

@@ -1,3 +1,17 @@
+> Last verified: 2026-09-14 — the native vertical evidence path exposes a closed owner review
+> console for one exact run UUID. Sealed receipts bind the output's SHA-256 and UTF-8 byte length;
+> mechanically observable outcome, required-source and forbidden-operation criteria are resolved
+> from runtime facts, while remaining criteria require explicit byte-bound owner decisions.
+> Finalization does not activate a candidate, and Legal/HR cannot qualify without the separate
+> external-attestation path. No paid forty-case collection, semantic acceptance, activation or
+> rollback drill is implied by this implementation.
+>
+> Research dispatch also accepts an explicit `memo` or `pdf` deliverable. `pdf` schedules one
+> deterministic, retry-bounded derivative workflow after the research markdown has persisted;
+> it neither invokes a second model nor opens a recurrence path. Exact plan/request/source/hash
+> checks fail closed on cancellation, deletion or substitution. Offline wiring does not establish
+> live model selection, PDF acceptance, semantic fidelity or any deferred DST/OAuth evidence.
+>
 > Last verified: 2026-09-12 — the exact registered authoring probe uses the ordinary cockpit
 > model/tool loop and its real candidate mutation under a native two-turn aggregate envelope.
 > Tool descriptors are retained. Only authorSkillCandidate, webResearch, readPage, draftBody and

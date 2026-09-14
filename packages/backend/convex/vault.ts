@@ -1411,6 +1411,98 @@ export const promoteToReference = tenantMutation({
 const CREATED_FORM = v.union(v.literal("short"), v.literal("long"), v.literal("sheet"));
 
 /**
+ * Attach a deterministic PDF to the SAME persisted research row.
+ *
+ * The source markdown/hash/provenance remain untouched. This mutation is the atomic CAS for both
+ * the blob reference and the plan dependency state, so concurrent workflow attempts cannot create
+ * two visible outputs. The action deletes whichever newly staged blob loses this decision.
+ */
+export const attachResearchPdf = internalMutation({
+  args: {
+    tenantId: v.string(),
+    planId: v.id("plans"),
+    requestId: v.string(),
+    sourceVaultDocId: v.id("vaultDocuments"),
+    sourceContentHash: v.string(),
+    storageId: v.id("_storage"),
+  },
+  handler: async (
+    ctx,
+    a,
+  ): Promise<
+    | { ok: true; reused: boolean; storageId: Id<"_storage"> }
+    | {
+        ok: false;
+        reason: "source_deleted" | "source_mismatch" | "plan_canceled";
+      }
+  > => {
+    const [plan, doc] = await Promise.all([ctx.db.get(a.planId), ctx.db.get(a.sourceVaultDocId)]);
+    const dependency = plan?.researchDeliverable;
+    if (!plan || plan.tenantId !== a.tenantId || dependency?.requestId !== a.requestId) {
+      return { ok: false, reason: "source_mismatch" };
+    }
+    if (plan.status === "canceled" || dependency.status === "canceled") {
+      await ctx.db.patch(a.planId, {
+        researchDeliverable: { ...dependency, status: "canceled", reason: "plan_canceled" },
+      });
+      return { ok: false, reason: "plan_canceled" };
+    }
+    if (!doc) {
+      await ctx.db.patch(a.planId, {
+        researchDeliverable: { ...dependency, status: "refused", reason: "source_deleted" },
+      });
+      return { ok: false, reason: "source_deleted" };
+    }
+    const exact =
+      dependency.sourceVaultDocId === a.sourceVaultDocId &&
+      dependency.sourceContentHash === a.sourceContentHash &&
+      doc.tenantId === a.tenantId &&
+      doc.kind === "web_research" &&
+      doc.source === "web_research" &&
+      doc.sourcePlanId === a.planId &&
+      doc.mimeType === "text/markdown" &&
+      typeof doc.text === "string" &&
+      doc.text.length > 0 &&
+      doc.contentHash === a.sourceContentHash;
+    if (!exact) {
+      if (dependency.status !== "ready") {
+        await ctx.db.patch(a.planId, {
+          researchDeliverable: { ...dependency, status: "refused", reason: "source_mismatch" },
+        });
+      }
+      return { ok: false, reason: "source_mismatch" };
+    }
+    if (dependency.status === "ready" || doc.storageId) {
+      if (doc.storageId && doc.storedMimeType === formatSpec("pdf").mimeType) {
+        if (dependency.status !== "ready") {
+          await ctx.db.patch(a.planId, {
+            researchDeliverable: { ...dependency, status: "ready", reason: undefined },
+          });
+        }
+        return { ok: true, reused: true, storageId: doc.storageId };
+      }
+      if (dependency.status !== "ready") {
+        await ctx.db.patch(a.planId, {
+          researchDeliverable: { ...dependency, status: "refused", reason: "source_mismatch" },
+        });
+      }
+      return { ok: false, reason: "source_mismatch" };
+    }
+    if (dependency.status !== "materializing") {
+      return { ok: false, reason: "source_mismatch" };
+    }
+    await ctx.db.patch(a.sourceVaultDocId, {
+      storageId: a.storageId,
+      storedMimeType: formatSpec("pdf").mimeType,
+    });
+    await ctx.db.patch(a.planId, {
+      researchDeliverable: { ...dependency, status: "ready", reason: undefined },
+    });
+    return { ok: true, reused: false, storageId: a.storageId };
+  },
+});
+
+/**
  * What the STORED BYTES are, given the form. `mimeType` stays LOCKED to `text/markdown` (the
  * artifact of record — still searchable, still groundable); this answers the other question, and
  * PreviewModal reads it as `storedMimeType ?? mimeType` to choose a viewer. No bytes ⇒ absent,

@@ -1,8 +1,9 @@
 # Research request controls: observed failure and implementation plan
 
-Date: 2026-09-12. Status updated 2026-09-13: Stages 1 and 2 are implemented, offline-qualified,
-committed as `93d905d5ae652d6996ed3f0080b968da6f8f156a` and deployed to production. Live
-acceptance is still pending. Stage 3 remains open.
+Date: 2026-09-12. Status updated 2026-09-14: Stages 1 and 2 are implemented, offline-qualified,
+committed as `93d905d5ae652d6996ed3f0080b968da6f8f156a` and deployed to production. Stage 3 is
+implemented and focused-offline-qualified in the current working tree, but has no release receipt
+or live acceptance. Live acceptance for all three stages remains pending.
 
 This document records a bounded production diagnosis, the resulting contract and its current
 implementation status. It does not authorize a paid evaluation, record a semantic pass, or claim
@@ -91,8 +92,9 @@ the 57-fixture golden evaluator self-check. Full CI
 [34756673585](https://github.com/Mrjoel97/ProjectX/actions/runs/34756673585) passed, then production
 deployment [34756978362](https://github.com/Mrjoel97/ProjectX/actions/runs/34756978362) checked out
 the exact commit, deployed Convex, promoted Vercel deployment `dpl_9Cj3xrYCCNYGALV5VnfPr3b7uE2h`,
-and passed its production URL probe. Stage 3's research-to-deliverable dependency has not been
-implemented, and this release evidence does not substitute for live behavioral acceptance.
+and passed its production URL probe. Stage 3 was not part of that release. Its later working-tree
+implementation and offline checks do not substitute for an exact release receipt or live behavioral
+acceptance.
 
 ## Stage 1: establish a typed request boundary (deployed; live acceptance pending)
 
@@ -153,7 +155,7 @@ released implementation adds the table and internal API described above. Source-
 and deployment evidence are recorded above; live extraction and displayed-policy observations remain
 outstanding.
 
-## Stage 3: bind research-derived deliverables (open)
+## Stage 3: bind research-derived deliverables (implemented locally; release and live gates open)
 
 The smallest behavioral improvement is an exact-version executive skill candidate that uses the
 existing research memo when the requested deliverable is that draft. Candidate evaluation must
@@ -172,10 +174,23 @@ spend handling. Dependency retries should reuse the same completed source and av
 documents. Deletion, cancellation, stale source hashes and incomplete research must produce explicit
 refusal or waiting states. A new research completion cannot retroactively validate an earlier PDF.
 
-The current code has no requested-deliverable dependency that can simply be switched on. The
-recommended default is to use the existing memo for a research draft, creating a separate file
-only when the requested format requires it. Implementing the contract is distinct from obtaining
-the exact-version semantic evidence required to activate a changed executive skill.
+The current working tree now admits `memo` or `pdf` explicitly while preserving omitted-input memo
+compatibility. A PDF request stores a dependency descriptor on the exact research plan and starts
+a one-shot retryable materializer only after successful findings persistence. The materializer
+reuses the existing `web_research` Vault row, deterministically renders its exact markdown bytes,
+and attaches PDF storage to that same row through a compare-and-swap check. It performs no second
+model call and creates no second document.
+
+The dependency freezes tenant, request, plan, source document, source type and content hash.
+Incomplete research, missing/deleted/mismatched sources, plan cancellation and render failure land
+explicit refused or canceled states. Replays reuse an exact ready/materializing result; a losing
+concurrent blob is deleted. Memo and omitted requests retain the existing memo-only path. Six
+focused backend tests cover admission compatibility, cancellation, same-row replay idempotency,
+foreign/mismatched source refusal, closed-state replay and non-research dispatch refusal.
+
+This is working-tree implementation evidence only. The exact release commit, CI/deployment receipt,
+live same-row download/hash observation, requested-content review and any changed-skill semantic
+evidence remain open.
 
 ## Verification and evidence requirements
 
@@ -200,6 +215,11 @@ and affected playbooks. Extend both evaluator inventories with every new product
 `packages/backend/scripts/goldenEvaluatorIdentity.mjs` and
 `packages/backend/scripts/vertical-eval-corpus.mjs`. Regenerate their derived revisions only after
 source freeze. Changed execution paths invalidate old exact-version evaluator evidence.
+
+The 2026-09-14 working-tree delta passed six focused Stage 3 dependency tests, nineteen workspace
+control tests, one dispatch integration test, and backend/web typechecks. Those checks cover typed
+propagation, same-row attachment and refusal/replay boundaries. Source-freeze identity regeneration
+completed locally; whole-release qualification and an exact deployment receipt remain pending.
 
 Tests prove the admitted typed contract, not correct interpretation of arbitrary natural language.
 Offline qualification and deployment do not make the implementation behaviorally accepted. Final

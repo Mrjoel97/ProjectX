@@ -83,6 +83,23 @@ No new test framework is required.
 | All six responsive workflow gates | VERT-02 | Authenticated artifact navigation and real responsive behavior require a browser | Run one positive and one missing/adversarial case per pack; verify cited artifact, version/provenance, failure state and no external effect. |
 | Independent disable/rollback usability | VERT-02 | Operational recovery and retained-artifact usability need live confirmation | For each pack, inspect two passing evaluated versions and its public-exposure-off A→B activation/B→A rollback trace; then disable independently and confirm new starts stop, old artifacts remain and unrelated packs work. |
 
+## 2026-09-14 focused validation delta
+
+The current working tree closes an implementation gap in 30-08: the native evidence layer now
+binds exact UTF-8 output bytes and stable criterion IDs, resolves only mechanical receipt facts,
+detects stale pins, and exposes an owner-only review console. Legal/HR finalization remains blocked
+pending a separately qualified external attestation mechanism, and finalization cannot activate a
+candidate.
+
+The focused checks passed: **23** backend `verticalEvalEvidence` tests, **12** web admin
+presentation/console tests, and backend/web typechecks. The cross-cutting Stage 3 research
+deliverable change also passed **6** focused backend tests, **19** workspace-control tests and one
+dispatch integration test. These counts qualify the local implementation boundary only.
+
+Task 30-08-02 and every manual-only row remain pending. No paid full-corpus evaluation,
+authenticated semantic review, qualified Legal/HR attestation, all-six responsive workflow UAT,
+two-version evidence, candidate activation or rollback drill was performed.
+
 ---
 
 ## Validation Sign-Off

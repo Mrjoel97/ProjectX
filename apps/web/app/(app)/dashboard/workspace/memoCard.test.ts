@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
-import { MemoCardBody } from "./cards";
+import { MemoCardBody, ResearchDeliverableStatus } from "./cards";
 
 const MARKDOWN = [
   "# Pricing findings",
@@ -34,6 +34,10 @@ const JUL = Date.parse("2026-07-02T10:00:00.000Z");
 
 const render = (props: Parameters<typeof MemoCardBody>[0]) =>
   renderToStaticMarkup(createElement(MemoCardBody, props));
+
+type Deliverable = NonNullable<Parameters<typeof ResearchDeliverableStatus>[0]["deliverable"]>;
+const renderDeliverable = (deliverable: Deliverable) =>
+  renderToStaticMarkup(createElement(ResearchDeliverableStatus, { deliverable }));
 
 describe("MemoCardBody — the memo reads as a document", () => {
   test("the body renders as HEADING ELEMENTS, never as literal markdown markers", () => {
@@ -125,5 +129,67 @@ describe("MemoCardBody — the references block", () => {
       expect(html).not.toContain("Sources");
       expect(html).not.toContain("memo-source");
     }
+  });
+});
+
+describe("ResearchDeliverableStatus", () => {
+  test.each([
+    ["pending", "PDF requested", 'role="status"'],
+    ["materializing", "Creating the PDF", 'role="status"'],
+    ["refused", "The research did not complete", 'role="alert"'],
+    ["canceled", "The PDF request was canceled", 'role="alert"'],
+  ] as const)("renders the %s state in plain language", (status, copy, role) => {
+    const html = renderDeliverable({
+      requestId: "request-1",
+      format: "pdf",
+      status,
+      ...(status === "refused" ? { reason: "research_failed" as const } : {}),
+    });
+    expect(html).toContain(copy);
+    expect(html).toContain(role);
+    if (status === "pending" || status === "materializing") {
+      expect(html).toContain('aria-live="polite"');
+    }
+  });
+
+  test("ready opens the exact authenticated Vault document without exposing a storage URL", () => {
+    const html = renderDeliverable({
+      requestId: "request-1",
+      format: "pdf",
+      status: "ready",
+      sourceVaultDocId: "vault-doc-1" as NonNullable<Deliverable["sourceVaultDocId"]>,
+    });
+    expect(html).toContain("PDF ready");
+    expect(html).toContain('data-testid="research-pdf-vault-button"');
+    expect(html).toContain("Open it in the Vault");
+    expect(html).not.toContain("href=");
+  });
+
+  test("ready without a verified Vault document fails closed", () => {
+    const html = renderDeliverable({
+      requestId: "request-1",
+      format: "pdf",
+      status: "ready",
+    });
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Vault document could not be verified");
+    expect(html).not.toContain("research-pdf-vault-button");
+  });
+
+  test.each([
+    ["research_incomplete", "did not produce a complete memo"],
+    ["source_missing", "memo could not be found"],
+    ["source_deleted", "memo was deleted"],
+    ["source_mismatch", "memo changed"],
+    ["render_failed", "PDF could not be created"],
+  ] as const)("turns the %s reason into actionable copy", (reason, copy) => {
+    const html = renderDeliverable({
+      requestId: "request-1",
+      format: "pdf",
+      status: "refused",
+      reason,
+    });
+    expect(html).toContain(copy);
+    expect(html).not.toContain(reason);
   });
 });

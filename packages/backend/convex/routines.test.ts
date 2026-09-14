@@ -203,6 +203,7 @@ const CONVEX_MODULES = [
   "requests.ts",
   "research.ts",
   "researchControl.ts",
+  "researchDeliverable.ts",
   "revenueCrm.ts",
   "revenueFinance.ts",
   "revenueTelemetry.ts",

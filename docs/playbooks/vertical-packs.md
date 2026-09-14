@@ -1,5 +1,14 @@
 # Optional vertical packs
 
+Last verified: 2026-09-14 — `/admin` now contains a closed owner review console for an exact native
+evaluation run UUID. It displays sealed output bytes and hash, exact source links, stable criterion
+IDs and mechanically resolved runtime facts; every other criterion requires an explicit decision
+bound to the current output hash and UTF-8 byte length. Stale candidate/corpus/evaluator pins fail
+closed. Finalization remains evidence issuance only and cannot activate a candidate. Legal and HR
+remain blocked until their separate external-attestation path exists. Focused offline tests do not
+constitute the forty-case paid semantic evaluation, authenticated production acceptance, activation
+or exact-version rollback drill; all of those gates remain open.
+
 Last verified: 2026-09-13 — the vertical evaluator source inventory includes the research-control
 domain/adapter and every runtime propagation seam that can carry its admitted request identity.
 Those source changes invalidate prior exact-version evidence. Inventory coverage and offline tests

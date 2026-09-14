@@ -1,5 +1,13 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-09-14 — `/admin` now mounts an owner-only vertical review console that
+> loads one exact native evaluation run UUID and binds every decision to the sealed output's
+> SHA-256 and UTF-8 byte length. The existing owner mount gate remains the admission boundary:
+> ordinary and unauthenticated users receive no review surface or evidence content. This is an
+> offline implementation state only. Fresh owner/non-owner browser acceptance, semantic review,
+> activation and rollback evidence remain open; Legal and HR remain blocked pending external
+> attestation.
+
 > Last verified: 2026-09-08 (44-03 — ADR-045 D1 answers invariant 3's open question, and the owner
 > chose it: erasure now CLEARS `email` / `redeemedUserId` / `redeemedSubject` on a redeemed invite
 > and KEEPS `redeemedAt` + `code`, so the invite stays SPENT while the identifying half is gone.

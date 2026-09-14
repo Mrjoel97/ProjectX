@@ -1,3 +1,12 @@
+> Last verified: 2026-09-14 — an explicitly requested research PDF is now a deterministic
+> attachment on the original `web_research` Vault document. The markdown text, content hash,
+> sources, labels and source plan remain the artifact of record; `attachResearchPdf` adds the PDF
+> storage reference and MIME metadata only after exact tenant/request/plan/document/type/hash
+> validation. Replays are idempotent, and a losing or stale upload is deleted rather than orphaned.
+> Cancellation, source deletion/substitution and render failure fail closed. No duplicate document,
+> second model call or recurring job is introduced. Live PDF download/render acceptance and
+> semantic fidelity remain open, as do activation/rollback and recurrence DST/OAuth gates.
+>
 > Last verified: 2026-09-11 — Golden evaluation uses the same RAG component and provider routes,
 > with redaction verified at the actual RAG `add` boundary for both ordinary and evaluation
 > instances. `vaultRedaction.test.ts` runs the production embedding action with synthetic private

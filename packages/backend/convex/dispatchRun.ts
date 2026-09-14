@@ -66,6 +66,7 @@ const RUN_CONTEXT = v.object({
   route: v.string(),
   rootRequestId: v.string(),
   kind: DISPATCH_KIND,
+  researchDeliverable: v.optional(v.union(v.literal("memo"), v.literal("pdf"))),
 });
 
 /**
@@ -107,10 +108,24 @@ export const startDispatchRun = internalMutation({
   args: { kind: DISPATCH_KIND, ...DISPATCH_ARGS },
   handler: async (ctx, args): Promise<string> => {
     assertResearchControlContext(args);
+    if (args.researchDeliverable !== undefined && args.kind !== "research") {
+      throw new Error("RESEARCH_DELIVERABLE_REQUIRES_RESEARCH_KIND");
+    }
     const { kind, tenantId, threadId, planId, gapIndex, route, rootRequestId } = args;
     const workflowId = await workflow.start(ctx, internal.dispatchRun.dispatchRun, args, {
       onComplete: internal.dispatchRun.onDispatchComplete,
-      context: { tenantId, threadId, planId, gapIndex, route, rootRequestId, kind }, // refs only (§4)
+      context: {
+        tenantId,
+        threadId,
+        planId,
+        gapIndex,
+        route,
+        rootRequestId,
+        kind,
+        ...(args.researchDeliverable === undefined
+          ? {}
+          : { researchDeliverable: args.researchDeliverable }),
+      }, // refs only (§4)
     });
     await ctx.db.patch(planId, { workflowId });
     return workflowId;
@@ -133,6 +148,15 @@ export const onDispatchComplete = internalMutation({
   args: { workflowId: vWorkflowId, result: vResultValidator, context: RUN_CONTEXT },
   handler: async (ctx, { result, context }): Promise<void> => {
     if (result.kind === "success") return; // the action landed its own row; nothing to do
+
+    if (context.kind === "research" && context.researchDeliverable === "pdf") {
+      await ctx.runMutation(internal.researchDeliverable.refuse, {
+        tenantId: context.tenantId,
+        planId: context.planId,
+        requestId: context.rootRequestId,
+        reason: "research_failed",
+      });
+    }
 
     // Refs and a CODE only — never `result.error`, which can carry prompt or grounded prose (§4).
     // `subagent.refused` with `reason` is already the shape this path writes at `dispatch.ts`, and

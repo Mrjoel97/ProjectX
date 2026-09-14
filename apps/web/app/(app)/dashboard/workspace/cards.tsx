@@ -576,6 +576,74 @@ export function MemoCardBody({ body, sources }: { body: string; sources?: readon
   );
 }
 
+type ResearchDeliverable = NonNullable<Plan["researchDeliverable"]>;
+
+const RESEARCH_DELIVERABLE_FAILURE: Record<NonNullable<ResearchDeliverable["reason"]>, string> = {
+  research_failed: "The research did not complete, so no PDF was created.",
+  research_incomplete: "The research did not produce a complete memo, so no PDF was created.",
+  source_missing: "The research memo could not be found, so no PDF was created.",
+  source_deleted: "The research memo was deleted before the PDF could be created.",
+  source_mismatch: "The research memo changed before the PDF could be created.",
+  plan_canceled: "The PDF request was canceled.",
+  render_failed: "The research memo was saved, but its PDF could not be created.",
+};
+
+/** The PDF derivative's user-visible state. It exposes only the tenant-checked Vault document id:
+ *  the card never receives or renders a raw storage URL. */
+export function ResearchDeliverableStatus({
+  deliverable,
+}: {
+  deliverable: Plan["researchDeliverable"];
+}) {
+  if (!deliverable) return null;
+
+  if (deliverable.status === "pending") {
+    return (
+      <p role="status" aria-live="polite" style={{ ...dim, margin: "0 0 0.75rem" }}>
+        PDF requested. It will be created after the research memo is saved.
+      </p>
+    );
+  }
+
+  if (deliverable.status === "materializing") {
+    return (
+      <p role="status" aria-live="polite" style={{ ...dim, margin: "0 0 0.75rem" }}>
+        Creating the PDF from this research memo…
+      </p>
+    );
+  }
+
+  if (deliverable.status === "ready") {
+    // A ready marker without the exact source row is inconsistent. Fail closed instead of showing
+    // a control that cannot perform the tenant-checked Vault lookup.
+    if (!deliverable.sourceVaultDocId) {
+      return (
+        <p role="alert" style={{ color: "#dc2626", margin: "0 0 0.75rem" }}>
+          The PDF is unavailable because its Vault document could not be verified.
+        </p>
+      );
+    }
+    return (
+      <p role="status" style={{ ...dim, margin: "0 0 0.75rem" }}>
+        PDF ready.{" "}
+        <VaultDocButton docId={deliverable.sourceVaultDocId} testId="research-pdf-vault-button">
+          Open it in the Vault
+        </VaultDocButton>
+      </p>
+    );
+  }
+
+  const fallback =
+    deliverable.status === "canceled"
+      ? "The PDF request was canceled."
+      : "The PDF could not be created from this research memo.";
+  return (
+    <p role="alert" style={{ color: "#dc2626", margin: "0 0 0.75rem" }}>
+      {deliverable.reason ? RESEARCH_DELIVERABLE_FAILURE[deliverable.reason] : fallback}
+    </p>
+  );
+}
+
 function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
   const execute = useMutation(api.cockpit.executePlan);
   const setSendTime = useMutation(api.plans.setPlanSendTime);
@@ -680,6 +748,7 @@ function PlanCard({ plan, threadId }: { plan: Plan; threadId?: string }) {
       <div style={box} data-testid="memo-plan-card">
         <div style={label}>NEXT-STEP MEMO</div>
         <MemoCardBody body={body} sources={plan.sources} />
+        <ResearchDeliverableStatus deliverable={plan.researchDeliverable} />
         <p style={{ ...dim, margin: "0 0 0.75rem" }}>
           Approving saves this to your knowledge vault. Nothing is sent to anyone.
         </p>

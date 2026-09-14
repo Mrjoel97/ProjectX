@@ -302,3 +302,25 @@ bounded full refresh timed out after extraction, while the Convex edge fixup suc
 The final read-only Intuit developer-app check redirected to Intuit sign-in. This establishes
 an authentication prerequisite for renewed diagnosis; it does not independently reconfirm
 the older app-record defect. The tab was preserved without credentials or consent actions.
+
+## September 14 working-tree follow-up — no production claim
+
+Phase 30's native evidence layer and admin surface now implement a closed review console keyed by
+exact run UUID. Receipts bind exact output hash/UTF-8 length, stable criterion IDs and observed
+outcome/tool facts. Mechanical facts may resolve deterministically; semantic criteria require an
+explicit byte-bound reviewer decision. Stale evaluator/candidate pins block finalization,
+finalization cannot activate a candidate, and Legal/HR remain blocked until a separately qualified
+external attestation mechanism exists.
+
+The research-control Stage 3 implementation now admits an explicit memo/PDF contract. PDF requests
+wait for the exact completed research artifact and deterministically attach PDF bytes to the same
+`web_research` Vault row using tenant/request/plan/type/hash checks and compare-and-swap replay
+handling. It performs no second model transformation and creates no duplicate document. Incomplete,
+missing, deleted, mismatched or canceled dependencies refuse explicitly.
+
+Focused local validation passed: Stage 3 **6** tests, Phase 30 **23**, admin **12**, workspace
+controls **19**, backend/web typechecks, and one dispatch integration test. There is no release SHA,
+CI run, deployment receipt or production probe for this working-tree continuation yet
+(`PENDING_RELEASE_RECEIPT`). The September 12 wrong-content PDF, the incomplete two-case paid run,
+all authenticated semantic reviews, qualified Legal/HR review, all-six workflow UAT, two-version
+evidence, lifecycle drills, provider gates and recurrence DST/OAuth gates remain open.

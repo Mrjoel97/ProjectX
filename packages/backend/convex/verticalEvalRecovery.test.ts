@@ -15,7 +15,7 @@ const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
 const runId = "11111111-1111-4111-8111-111111111111";
 
 describe("authenticated lost-response recovery", () => {
-  test("recovers exact starts without claiming completion and preserves discarded history", async () => {
+  test("recovers exact starts without claiming completion or current source state", async () => {
     const t = convexTest(schema, modules);
     const ownerId = await t.run((ctx) => ctx.db.insert("users", { owner: true }));
     const owner = t.withIdentity({ subject: ownerId });
@@ -43,7 +43,7 @@ describe("authenticated lost-response recovery", () => {
       startId,
       receiptId: null,
       stage: "started-outcome-unknown",
-      currentPins: true,
+      currentPins: false,
       reviewAccepted: null,
     });
     expect(recovered.cases.filter((c) => c.stage === "not-started")).toHaveLength(39);

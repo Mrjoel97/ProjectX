@@ -30,6 +30,10 @@ export const DISPATCH_ARGS = {
   envelopeCents: v.number(),
   spentCents: v.number(),
   question: v.optional(v.string()),
+  /** Stage 3: an explicitly requested research output. Absent preserves the shipped memo-only
+   *  behavior. The request id that binds it is the code-owned `rootRequestId` above; the model
+   *  never supplies a second identity alongside this presentation choice. */
+  researchDeliverable: v.optional(v.union(v.literal("memo"), v.literal("pdf"))),
   // 16-09 / 21-03: `skillVersions` + `tenantSkillIds`, the pins every agent door accepts — ONE
   // shared validator (Phase 38), so this door and `runCockpitAgent` cannot drift from each other.
   ...TOOL_CONTEXT_ARGS,

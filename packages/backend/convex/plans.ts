@@ -232,14 +232,18 @@ export const stageResearchPlan = internalMutation({
      *  `parseChannel(undefined)` reads as `"email"` — ADR-042's failure arriving through the
      *  reuse door. */
     channel: v.optional(v.literal("vault")),
+    deliverable: v.optional(v.union(v.literal("memo"), v.literal("pdf"))),
+    /** Required by code when `deliverable === "pdf"`; it comes from the authenticated turn. */
+    rootRequestId: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { tenantId, threadId, subject, channel },
+    { tenantId, threadId, subject, channel, deliverable, rootRequestId },
   ): Promise<
     | { ok: true; planId: Id<"plans"> }
     | { ok: false; reason: "research_in_flight" | "draft_in_progress" }
   > => {
+    if (deliverable === "pdf" && !rootRequestId) throw new Error("RESEARCH_REQUEST_ID_REQUIRED");
     // ADR-037: the NEWEST ROOT, not `.unique()`. Checking only the newest root is sufficient HERE
     // because at most one root per thread is `collecting` and a new root is only ever inserted when
     // none is open — so a `collecting` root can never sit behind a newer one. The two media stagers
@@ -293,6 +297,19 @@ export const stageResearchPlan = internalMutation({
       // staged template is exactly what must not become approvable under an attribution header.
       body: "",
       status: "collecting", // ← not approvable until landSpecialistResult flips it
+    });
+    // An omitted or explicit memo uses the shipped memo card unchanged. Only a separate file needs
+    // a persisted dependency descriptor, and its request identity is copied from code-owned turn
+    // context rather than accepted inside the model's deliverable object.
+    await ctx.db.patch(planId, {
+      researchDeliverable:
+        deliverable === "pdf"
+          ? {
+              requestId: rootRequestId as string,
+              format: "pdf" as const,
+              status: "pending" as const,
+            }
+          : undefined,
     });
     return { ok: true, planId };
   },
@@ -1048,6 +1065,7 @@ export const clearCandidates = internalMutation({
 export const resetPlan = internalMutation({
   args: { planId: v.id("plans") },
   handler: async (ctx, { planId }) => {
+    const prior = await ctx.db.get(planId);
     await ctx.db.patch(planId, {
       status: "collecting",
       recipients: [],
@@ -1055,6 +1073,17 @@ export const resetPlan = internalMutation({
       subject: undefined,
       bodyIntent: undefined,
       body: undefined,
+      // A reset withdraws the dependency explicitly. Keeping the descriptor as `canceled` lets a
+      // concurrent materializer refuse at its final CAS instead of attaching bytes to a plan the
+      // user has already abandoned.
+      researchDeliverable:
+        prior?.researchDeliverable === undefined
+          ? undefined
+          : {
+              ...prior.researchDeliverable,
+              status: "canceled" as const,
+              reason: "plan_canceled" as const,
+            },
       // 25.1-05 (D11): the memo's references go with the body they attribute. Same Pitfall-6 class
       // as `recipientNames` below — a source list surviving a "start over" would sit under the NEXT
       // memo in this thread as if those pages had been read for it.

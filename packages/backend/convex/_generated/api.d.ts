@@ -114,6 +114,7 @@ import type * as reportsGovernance from "../reportsGovernance.js";
 import type * as requests from "../requests.js";
 import type * as research from "../research.js";
 import type * as researchControl from "../researchControl.js";
+import type * as researchDeliverable from "../researchDeliverable.js";
 import type * as revenueCrm from "../revenueCrm.js";
 import type * as revenueFinance from "../revenueFinance.js";
 import type * as revenueTelemetry from "../revenueTelemetry.js";
@@ -275,6 +276,7 @@ declare const fullApi: ApiFromModules<{
   requests: typeof requests;
   research: typeof research;
   researchControl: typeof researchControl;
+  researchDeliverable: typeof researchDeliverable;
   revenueCrm: typeof revenueCrm;
   revenueFinance: typeof revenueFinance;
   revenueTelemetry: typeof revenueTelemetry;
