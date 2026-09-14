@@ -62,6 +62,14 @@ export async function authenticate(page: Page, foreign = false) {
     });
     mark(role, stage, "passed");
   } catch {
+    // Playwright may capture an error-context DOM snapshot after the test fails. Clear the
+    // controlled password input before rethrowing so a stalled native auth cannot persist a
+    // credential in a diagnostic artifact.
+    try {
+      await page.getByLabel("Password", { exact: true }).fill("");
+    } catch {
+      /* The page may already have navigated away; there is nothing sensitive left to scrub. */
+    }
     mark(role, stage, "failed");
     throw new Error(`PHASE23_AUTH_${stage}_FAILED`);
   }
