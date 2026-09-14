@@ -219,7 +219,10 @@ source freeze. Changed execution paths invalidate old exact-version evaluator ev
 The 2026-09-14 working-tree delta passed six focused Stage 3 dependency tests, nineteen workspace
 control tests, one dispatch integration test, and backend/web typechecks. Those checks cover typed
 propagation, same-row attachment and refusal/replay boundaries. Source-freeze identity regeneration
-completed locally; whole-release qualification and an exact deployment receipt remain pending.
+completed locally. Exact source `07350fc122ece7d2fbb5ddc5051e699fb2e81d57` then passed the full
+release gate in CI [34826131926](https://github.com/Mrjoel97/ProjectX/actions/runs/34826131926)
+and production deployment [34826722003](https://github.com/Mrjoel97/ProjectX/actions/runs/34826722003),
+including Convex deploy, staged probe, Vercel promotion and durable production URL verification.
 
 Tests prove the admitted typed contract, not correct interpretation of arbitrary natural language.
 Offline qualification and deployment do not make the implementation behaviorally accepted. Final

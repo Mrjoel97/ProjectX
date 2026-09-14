@@ -319,8 +319,12 @@ handling. It performs no second model transformation and creates no duplicate do
 missing, deleted, mismatched or canceled dependencies refuse explicitly.
 
 Focused local validation passed: Stage 3 **6** tests, Phase 30 **23**, admin **12**, workspace
-controls **19**, backend/web typechecks, and one dispatch integration test. There is no release SHA,
-CI run, deployment receipt or production probe for this working-tree continuation yet
-(`PENDING_RELEASE_RECEIPT`). The September 12 wrong-content PDF, the incomplete two-case paid run,
-all authenticated semantic reviews, qualified Legal/HR review, all-six workflow UAT, two-version
-evidence, lifecycle drills, provider gates and recurrence DST/OAuth gates remain open.
+controls **19**, backend/web typechecks, and one dispatch integration test. The full release gate
+passed **7,841** tests (two recurrence checks intentionally skipped) plus the production build.
+Exact source `07350fc122ece7d2fbb5ddc5051e699fb2e81d57` passed CI
+[34826131926](https://github.com/Mrjoel97/ProjectX/actions/runs/34826131926) and production deployment
+[34826722003](https://github.com/Mrjoel97/ProjectX/actions/runs/34826722003), including Convex deploy,
+registry verification, staged probe, Vercel promotion and durable production URL verification. The
+September 12 wrong-content PDF, the incomplete two-case paid run, all authenticated semantic
+reviews, qualified Legal/HR review, all-six workflow UAT, two-version evidence, lifecycle drills,
+provider gates and recurrence DST/OAuth gates remain open.

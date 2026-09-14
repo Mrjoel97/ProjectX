@@ -304,10 +304,14 @@ swap replay handling. It makes no second model call or duplicate document. Missi
 incomplete or canceled dependencies land explicit terminal states.
 
 Focused validation passed: Stage 3 **6** tests, Phase 30 evidence **23**, admin console **12**,
-workspace controls **19**, backend and web typechecks, and one dispatch integration test. This is
-local evidence only; `PENDING_RELEASE_RECEIPT` intentionally marks the absent exact commit, CI,
-deployment and production probe. The earlier failed research PDF and incomplete paid Phase 30 run
-remain historical evidence and are not superseded.
+workspace controls **19**, backend and web typechecks, and one dispatch integration test. The full
+release gate then passed **7,841** tests (two recurrence checks intentionally skipped) plus the
+production build. Exact source `07350fc122ece7d2fbb5ddc5051e699fb2e81d57` passed CI
+[34826131926](https://github.com/Mrjoel97/ProjectX/actions/runs/34826131926) and production deployment
+[34826722003](https://github.com/Mrjoel97/ProjectX/actions/runs/34826722003), including Convex deploy,
+registry verification, staged probe, Vercel promotion and durable production URL verification. The
+earlier failed research PDF and incomplete paid Phase 30 run remain historical evidence and are not
+superseded.
 
 **Work remains.** Phase 30 still needs independent method review, actual exact-candidate evaluations,
 authenticated semantic decisions and qualified Legal/HR attestations, all-six workflow UAT and
