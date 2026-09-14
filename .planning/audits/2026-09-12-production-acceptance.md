@@ -329,10 +329,15 @@ September 12 wrong-content PDF, the incomplete two-case paid run, all authentica
 reviews, qualified Legal/HR review, all-six workflow UAT, two-version evidence, lifecycle drills,
 provider gates and recurrence DST/OAuth gates remain open.
 
-The authorized Phase 23 continuation against `07350fc` failed closed during A's second native sign-in
-after the initial authoring/refusal sequence. A/B sign-in and non-owner checks, owner bootstrap, and
-the first candidate authoring turn passed; the browser then remained on the sign-in form in
-`Signing in…`. No certified handoff, full evaluation or activation exists; source integrity held.
-The auth-flow race was repaired in `410aec9` by waiting for signed-out UI before reauthentication,
-and `40a6553` now scrubs the password field before a failure is reported. The one-shot live
-authorization remains deferred until the prior budget and candidate state are read-only verified.
+The authorized Phase 23 continuation against `07350fc` failed closed during A's second native
+sign-in. A/B sign-in and non-owner checks plus owner bootstrap passed; the browser then remained on
+the sign-in form in `Signing in…`. No certified handoff, full evaluation or activation exists;
+source integrity held. The auth-flow race was repaired in `410aec9` by waiting for signed-out UI
+before reauthentication, and `40a6553` now scrubs the password field before a failure is reported.
+The 2026-09-14 read-only reconciliation recovered the exact production envelope by authorization
+hash and proved it closed and expired with $0 actual spend, zero calls, zero started turns, zero
+unsettled reservations and no breach. The exact source thread contained zero agent rows and
+authenticated `/ops` showed no candidate awaiting review. The earlier browser-based inference that
+one candidate turn completed is superseded by this backend evidence; see
+`.planning/phases/23-agent-authored-skills/23-PRODUCTION-RECONCILIATION-2026-09-14.md`. A new probe
+therefore requires fresh bounded authorization rather than reuse of the expired one-shot scope.

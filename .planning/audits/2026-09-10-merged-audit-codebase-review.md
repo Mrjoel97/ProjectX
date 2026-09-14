@@ -314,12 +314,16 @@ earlier failed research PDF and incomplete paid Phase 30 run remain historical e
 superseded.
 
 The authorized Phase 23 continuation was attempted against this release with the two controlled
-identities. Fresh A/B native sign-in, non-owner isolation, owner bootstrap, and the first candidate
-authoring turn passed. It then failed closed during A's second native sign-in while the browser stayed
-on `Signing in…`; no handoff artifact was certified, no full evaluation or activation was attempted,
-and source integrity held. The follow-up harness repair landed in `410aec9` (wait for the signed-out
-UI before reauth) and `40a6553` (scrub the password field on auth failure). A retry remains gated on
-read-only confirmation of the prior budget and candidate state.
+identities. Fresh A/B native sign-in, non-owner isolation and owner bootstrap passed, but the run
+failed closed during A's second native sign-in while the browser stayed on `Signing in…`; no handoff
+artifact was certified, no full evaluation or activation was attempted, and source integrity held.
+The follow-up harness repair landed in `410aec9` (wait for the signed-out UI before reauth) and
+`40a6553` (scrub the password field on auth failure). The 2026-09-14 read-only reconciliation then
+matched the exact authorization hash to one closed, expired production budget: $0 actual spend,
+zero calls, zero started probe turns, zero unsettled reservations and no breach. Exact source-thread
+inspection and authenticated `/ops` both found no candidate. This supersedes the earlier inference
+that a server-side candidate authoring turn passed; see
+`.planning/phases/23-agent-authored-skills/23-PRODUCTION-RECONCILIATION-2026-09-14.md`.
 
 **Work remains.** Phase 30 still needs independent method review, actual exact-candidate evaluations,
 authenticated semantic decisions and qualified Legal/HR attestations, all-six workflow UAT and
