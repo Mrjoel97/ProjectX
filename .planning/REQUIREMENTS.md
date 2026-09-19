@@ -254,6 +254,24 @@ BLOCKER section of `ROADMAP.md`.*
 - [ ] **MKTG-05** *(gated on the legal entity)*: Publishing and scheduling to a channel stage into the existing plan gate and reuse the shipped deferred-send machinery; no new unattended authority is minted and approve-once-for-many remains deferred per ADR-004
 - [ ] **MKTG-06** *(gated on the legal entity)*: Per-post engagement metrics store provider-issued ids, counts and timestamps only — never post text or recipient identity — under the same refs-and-counts contract that governs audit, and the table arrives with a connected channel rather than empty and ahead of one
 
+### Public Web Presence and Tenant Commerce — admitted for intended beta 2026-09-19
+
+These are three distinct user outcomes. Generated HTML, tracked downloads, screenshots, Pikar's
+own subscription Checkout, and read-only tenant finance connectors are reusable inputs only; none
+is completion evidence for a maintained public site, measurable landing page, or tenant shop.
+
+- [ ] **SITE-01**: A nontechnical user creates and edits a structured multi-page business site with navigation, brand inputs, responsive preview, and durable versioned project state
+- [ ] **SITE-02**: The site publishes, updates, unpublishes, and rolls back through a declared hosting/source/domain ownership model, with accessibility, SEO, analytics, failure recovery, and exact-release acceptance; custom-domain external prerequisites remain Wave 7, not silently "done"
+- [ ] **SITE-03**: Business-site recipes are structured, editable, provenance-tracked, refusal-tested, eval/acceptance-gated, activatable, and genuinely rollbackable; a generic code prompt is insufficient
+- [ ] **LAND-01**: A user creates, edits, previews, approves, publishes, updates, unpublishes, and rolls back a campaign landing page on the same declared public runtime
+- [ ] **LAND-02**: Anonymous forms/lead capture apply abuse bounds and explicit consent/privacy semantics, preserve source attribution, write to the existing Phase 19 contacts/suppression substrate, and expose honest conversion measurements without raw-content telemetry
+- [ ] **LAND-03**: Campaign recipes are structured, editable, provenance-tracked, refusal-tested, eval/acceptance-gated, activatable, and rollbackable
+- [ ] **SHOP-01**: A storefront recipe renders an editable catalogue presentation over structured inputs and remains dark until the merchant lifecycle it references is available
+- [ ] **SHOP-02**: Each tenant has an isolated catalogue and inventory source of truth with explicit availability/oversell behavior and auditable changes
+- [ ] **SHOP-03**: Cart and merchant checkout use the business's provider account and PCI-hosted boundary, with credentials and money flow structurally separate from Pikar's subscription billing
+- [ ] **SHOP-04**: Order/payment state is idempotent and reconcilable through success, pending, failure, retry, cancellation, refund, notification, and fulfilment hand-off, with approval and audit rules stated for every outbound action
+- [ ] **SHOP-05**: Taxes, shipping, refunds, provider refusal, public storefront publish/update/unpublish/rollback, responsive/accessibility/SEO/analytics, and custom-domain behavior have honest technical and Wave 7 external gates
+
 ## v2 Requirements
 
 Deferred to post-beta releases. Tracked but not in the current roadmap.
@@ -415,6 +433,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MKTG-04 | Phase 32 | **BLOCKED** (legal entity) |
 | MKTG-05 | Phase 32 | **BLOCKED** (legal entity) |
 | MKTG-06 | Phase 32 | **BLOCKED** (legal entity) |
+| SITE-01 | Phase 48 | Pending — admitted by owner; Wave 0 planning only |
+| SITE-02 | Phase 48 | Pending — admitted by owner; Wave 0 planning only |
+| SITE-03 | Phase 49 | Pending — admitted by owner; Wave 0 planning only |
+| LAND-01 | Phase 48 | Pending — admitted by owner; Wave 0 planning only |
+| LAND-02 | Phase 48 | Pending — admitted by owner; Wave 0 planning only |
+| LAND-03 | Phase 49 | Pending — admitted by owner; Wave 0 planning only |
+| SHOP-01 | Phase 49 | Pending — admitted by owner; Wave 0 planning only |
+| SHOP-02 | Phase 50 | Pending — admitted by owner; Wave 0 planning only |
+| SHOP-03 | Phase 50 | Pending — admitted by owner; Wave 0 planning only |
+| SHOP-04 | Phase 50 | Pending — admitted by owner; Wave 0 planning only |
+| SHOP-05 | Phase 50 | Pending — admitted by owner; Wave 0 planning only |
 
 **Marketing coverage (minted 2026-08-07, pulled pre-beta per ADR-015):**
 - Requirements: **6 total** (MKTG-01..06)
@@ -438,6 +467,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Mapped to phases 27-30: 17
 - Unmapped: 0 ✓
 
+**Public-web and tenant-commerce coverage (admitted for intended beta 2026-09-19):**
+- Requirements: **11 total** (SITE-01..03; LAND-01..03; SHOP-01..05)
+- Mapped to phases 48-50: 11
+- Unmapped: 0 ✓
+- Status: **0 complete, 11 pending** — requirement ownership only; no product implementation or
+  public/merchant capability is claimed by this admission.
+
+**Repository-wide checkbox coverage (recalculated 2026-09-19):**
+- Requirements with checkboxes: **137 total**
+- Checked: **94**
+- Pending: **43**
+- Traceability rows: **137**; unmapped: **0**
+
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-19 — re-baselined: REVW-01 redefined to plan-level approval; CKPT-01..03 minted (Email Cockpit); count 40→43; SCHD-01 minted (deferred send, Phase 3.5); count 43→44; EVAL-01/02 minted (agent eval gate, Phase 3.6, 2026-07-14), count 44→46; CKPT-04 minted (inbox briefing, Phase 3.7, 2026-07-14), count 46→47; CKPT-05 minted (agent activity streaming, Phase 3.9, 2026-07-17), count 47→48; RPLY-01 minted (inbox reply, Phase 3.11, 2026-07-19), count 48→49*
+*Last updated: 2026-09-19 — SITE-01..03, LAND-01..03 and SHOP-01..05 admitted as pending intended-beta scope with Phases 48-50 as their single technical owners; historical requirement wording and completion state remain unchanged.*
