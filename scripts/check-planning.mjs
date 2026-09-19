@@ -39,20 +39,27 @@ const read = (p) => {
   }
 };
 // "3.1" and "03.1" name the same phase; "03.2.1" is written both ways too.
-const norm = (n) => String(n).trim().replace(/\b0+(?=\d)/g, "");
+const norm = (n) =>
+  String(n)
+    .trim()
+    .replace(/\b0+(?=\d)/g, "");
 // ponytail: these regexes intentionally parse only repository-owned record shapes. Replace them
 // with a parser only if those formats change and focused fixtures prove the local ceiling broke.
 const frontmatter = (text) => text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? null;
 const field = (text, name) =>
-  frontmatter(text)?.match(new RegExp(`^${name}:\\s*["']?([^\\r\\n"']+)`, "m"))?.[1]?.trim();
+  frontmatter(text)
+    ?.match(new RegExp(`^${name}:\\s*["']?([^\\r\\n"']+)`, "m"))?.[1]
+    ?.trim();
 const OPEN_STATUS =
   /^(?:partial(?:\b|[_ -])|in[_ -]?progress\b|blocked\b|draft\b|human[_ -]?needed\b|gaps[_ -]?found\b|awaiting(?:[_ -]|\b)|defer(?:red)?\b)/i;
 const isOpenStatus = (status) => status !== undefined && OPEN_STATUS.test(status);
 const explicitOpenEvidence = (text) => {
   const body = frontmatter(text) === null ? text : text.replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
-  const status = body.match(
-    /^\s*(?:[-*]\s*)?(?:\*\*)?(?:evidence\s+|verification\s+)?status(?:\*\*\s*:|:\s*\*\*|:)\s*([^\r\n]+)/im,
-  )?.[1]?.trim();
+  const status = body
+    .match(
+      /^\s*(?:[-*]\s*)?(?:\*\*)?(?:evidence\s+|verification\s+)?status(?:\*\*\s*:|:\s*\*\*|:)\s*([^\r\n]+)/im,
+    )?.[1]
+    ?.trim();
   return status && isOpenStatus(status) ? status : null;
 };
 const isComplete = (status) => /^\**complete(?:d)?\b/i.test(status.trim());
@@ -118,7 +125,9 @@ if (roadmap !== null) {
         const successor =
           field(summary, "superseded_by") ??
           field(summary, "successor") ??
-          summary.match(/^\s*(?:[-*]\s*)?(?:\*\*)?successor(?:\*\*)?\s*:\s*([^\r\n]+)/im)?.[1]?.trim();
+          summary
+            .match(/^\s*(?:[-*]\s*)?(?:\*\*)?successor(?:\*\*)?\s*:\s*([^\r\n]+)/im)?.[1]
+            ?.trim();
         if (!successor)
           problems.push(
             `SUMMARY ${plan} is superseded but names no successor in ${summaryName}; add \`superseded_by\` or \`successor\`.`,
@@ -139,7 +148,10 @@ if (roadmap !== null) {
       .filter((name) => /(?:^|-)VERIFICATION\.md$/.test(name))
       .map((name) => {
         const verification = read(`.planning/phases/${d}/${name}`) ?? "";
-        return { name, status: field(verification, "status") ?? explicitOpenEvidence(verification) };
+        return {
+          name,
+          status: field(verification, "status") ?? explicitOpenEvidence(verification),
+        };
       })
       .filter((verification) => verification.status && isOpenStatus(verification.status));
     const reported = row.progress.match(/^(\d+)\s*\/\s*(\d+)$/);
@@ -163,7 +175,9 @@ if (roadmap !== null) {
     if (isComplete(row.status))
       for (const item of open) {
         if (item.reason === "missing")
-          problems.push(`ROADMAP: row ${n} reads Complete but ${item.plan} has no completed SUMMARY.`);
+          problems.push(
+            `ROADMAP: row ${n} reads Complete but ${item.plan} has no completed SUMMARY.`,
+          );
         else if (item.reason === "evidence")
           problems.push(
             `ROADMAP: row ${n} reads Complete but ${item.plan} has explicit open evidence "${item.status}".`,
@@ -226,9 +240,9 @@ if (roadmap !== null) {
 
   // 6. Newly admitted public-web and commerce requirements need one concrete owner each.
   if (reqs !== null) {
-    const definitions = [
-      ...reqs.matchAll(/^- \[[ x]\] \*\*((?:SITE|LAND|SHOP)-\d+)\*\*:/gm),
-    ].map((match) => match[1]);
+    const definitions = [...reqs.matchAll(/^- \[[ x]\] \*\*((?:SITE|LAND|SHOP)-\d+)\*\*:/gm)].map(
+      (match) => match[1],
+    );
     const traceRows = [
       ...reqs.matchAll(/^\| ((?:SITE|LAND|SHOP)-\d+) \| Phase ([0-9.]+)[^|]*\|/gm),
     ].map((match) => ({ id: match[1], phase: norm(match[2]) }));
@@ -243,7 +257,9 @@ if (roadmap !== null) {
     }
     for (const row of traceRows)
       if (!definitions.includes(row.id))
-        problems.push(`REQUIREMENTS: traceability row ${row.id} has no matching requirement definition.`);
+        problems.push(
+          `REQUIREMENTS: traceability row ${row.id} has no matching requirement definition.`,
+        );
   }
 }
 

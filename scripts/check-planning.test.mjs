@@ -85,7 +85,11 @@ test("open requirement traceability still blocks an unsupported Complete phase",
 });
 
 test("only an exact canonical summary can satisfy a plan or increase completion", () => {
-  for (const auxiliary of ["30-01-FIX-SUMMARY.md", "30-TAIL-SUMMARY.md", "30-01-NOTES-SUMMARY.md"]) {
+  for (const auxiliary of [
+    "30-01-FIX-SUMMARY.md",
+    "30-TAIL-SUMMARY.md",
+    "30-01-NOTES-SUMMARY.md",
+  ]) {
     const scratch = scratchRepo();
     const dir = phaseDir(scratch);
     writePlan(dir);
@@ -137,7 +141,10 @@ test("legacy summaries count only when they carry no explicit open evidence", ()
   writeFileSync(join(dir, "30-01-SUMMARY.md"), "# Legacy completed summary\n");
   writeRoadmap(scratch, { progress: "1/1", status: "Complete" });
   expectPass(scratch);
-  writeFileSync(join(dir, "30-01-SUMMARY.md"), "# Legacy summary\n\nStatus: awaiting live evidence\n");
+  writeFileSync(
+    join(dir, "30-01-SUMMARY.md"),
+    "# Legacy summary\n\nStatus: awaiting live evidence\n",
+  );
   writeRoadmap(scratch, { progress: "0/1", status: "In progress" });
   expectPass(scratch);
   writeRoadmap(scratch, { progress: "0/1", status: "Complete" });
@@ -172,7 +179,10 @@ test("superseded is a named final disposition, never completion", () => {
   writeSummary(dir, "30-01", "status: superseded\nsuperseded_by: 31-01");
   expectPass(scratch);
   writeRoadmap(scratch, { progress: "0/1", status: "Complete" });
-  expectFail(scratch, "ROADMAP: row 30 reads Complete but 30-01 is superseded by 31-01, not completed.");
+  expectFail(
+    scratch,
+    "ROADMAP: row 30 reads Complete but 30-01 is superseded by 31-01, not completed.",
+  );
   writeRoadmap(scratch, { progress: "1/1", status: "Superseded" });
   expectFail(scratch, "ROADMAP: row 30 reports 1/1 but canonical completion is 0/1.");
 });
@@ -185,7 +195,10 @@ test("present verification evidence can veto Complete but missing historical ver
   writeRoadmap(scratch, { progress: "1/1", status: "Complete" });
   expectPass(scratch);
   writeFileSync(join(dir, "30-VERIFICATION.md"), "---\nstatus: gaps_found\n---\n");
-  expectFail(scratch, 'ROADMAP: row 30 reads Complete but 30-VERIFICATION.md status is "gaps_found".');
+  expectFail(
+    scratch,
+    'ROADMAP: row 30 reads Complete but 30-VERIFICATION.md status is "gaps_found".',
+  );
   writeRoadmap(scratch, { progress: "1/1", status: "Partial — verification open" });
   expectPass(scratch);
   writeRoadmap(scratch, { progress: "0/1", status: "Partial — verification open" });
