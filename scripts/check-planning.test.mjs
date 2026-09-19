@@ -186,6 +186,11 @@ test("present verification evidence can veto Complete but missing historical ver
   expectPass(scratch);
   writeFileSync(join(dir, "30-VERIFICATION.md"), "---\nstatus: gaps_found\n---\n");
   expectFail(scratch, 'ROADMAP: row 30 reads Complete but 30-VERIFICATION.md status is "gaps_found".');
+  writeRoadmap(scratch, { progress: "1/1", status: "Partial — verification open" });
+  expectPass(scratch);
+  writeRoadmap(scratch, { progress: "0/1", status: "Partial — verification open" });
+  expectFail(scratch, "ROADMAP: row 30 reports 0/1 but canonical completion is 1/1.");
+  writeRoadmap(scratch, { progress: "1/1", status: "Complete" });
   writeFileSync(join(dir, "30-VERIFICATION.md"), "---\nstatus: passed\n---\n");
   expectPass(scratch);
   writeFileSync(join(dir, "30-VERIFICATION.md"), "---\nstatus: verified\n---\n");

@@ -135,6 +135,13 @@ if (roadmap !== null) {
     const completed = dispositions.filter((item) => item.kind === "completed");
     const superseded = dispositions.filter((item) => item.kind === "superseded");
     const open = dispositions.filter((item) => item.kind === "open");
+    const openVerifications = files
+      .filter((name) => /(?:^|-)VERIFICATION\.md$/.test(name))
+      .map((name) => {
+        const verification = read(`.planning/phases/${d}/${name}`) ?? "";
+        return { name, status: field(verification, "status") ?? explicitOpenEvidence(verification) };
+      })
+      .filter((verification) => verification.status && isOpenStatus(verification.status));
     const reported = row.progress.match(/^(\d+)\s*\/\s*(\d+)$/);
     if (
       reported &&
@@ -144,7 +151,7 @@ if (roadmap !== null) {
         `ROADMAP: row ${n} reports ${reported[1]}/${reported[2]} but canonical completion is ${completed.length}/${plans.length}.`,
       );
 
-    if (!open.length && !superseded.length && !isComplete(row.status))
+    if (!open.length && !superseded.length && !openVerifications.length && !isComplete(row.status))
       problems.push(
         `ROADMAP: every plan in .planning/phases/${d} has a completed SUMMARY but row ${n} reads "${row.status.slice(0, 60)}" — reconcile the phase disposition (gsd \`phase complete\` does not write this file).`,
       );
@@ -171,16 +178,11 @@ if (roadmap !== null) {
         `ROADMAP: row ${n} reads Superseded but its canonical plans do not all have completed or named superseded dispositions.`,
       );
 
-    if (isComplete(row.status)) {
-      for (const verificationName of files.filter((f) => /(?:^|-)VERIFICATION\.md$/.test(f))) {
-        const verification = read(`.planning/phases/${d}/${verificationName}`) ?? "";
-        const verificationStatus = field(verification, "status") ?? explicitOpenEvidence(verification);
-        if (verificationStatus && isOpenStatus(verificationStatus))
-          problems.push(
-            `ROADMAP: row ${n} reads Complete but ${verificationName} status is "${verificationStatus}".`,
-          );
-      }
-    }
+    if (isComplete(row.status))
+      for (const verification of openVerifications)
+        problems.push(
+          `ROADMAP: row ${n} reads Complete but ${verification.name} status is "${verification.status}".`,
+        );
 
     // 5. closure rule
     if (reqs !== null && isComplete(row.status) && !isSuperseded(row.status)) {
