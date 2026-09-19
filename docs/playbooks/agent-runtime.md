@@ -2240,6 +2240,26 @@ The golden runner's $2 post-turn stop remains distinct from a hard aggregate cap
 Tavily, and paid child-action reservations are not yet complete. The Phase 23 continuation preflight
 reports this explicitly. See `23-EXECUTION-PREPARATION.md` in the phase directory for the current
 paid-call graph and prerequisites. No new paid evaluation is certified by these offline checks.
+
+## Wave 1A fail-closed current-release run (2026-09-19)
+
+> Last verified: 2026-09-19 — one shared invocation failed closed before spend or writes.
+
+One authorized shared current golden command targeted the synchronized non-production deployment
+`local:local-joel_feruzi-pikar_ai_50c69-1` with exact pins `cockpit-agent@26` and `inbox-digest@2`,
+`--no-retry`, and no `--only` filter. The free self-check passed for all 57 fixtures, then
+`guardrails:openEvalBudget` refused with `GOLDEN_PROVIDER_BILLING_UNVERIFIED` before its first insert,
+fixture seeding, or provider call. Reconciliation: one command invocation; zero paid/full-run
+attempts; zero of 57 cases started; zero retries; USD 0.00; no run id, budget/evidence rows, or fixture
+tenant; cleanup not applicable prewrite. The immutable log is
+`.planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log`.
+
+This is a RED/open live gate, not a free pass and not live briefing evidence. The one-command
+authorization is consumed even though spend stayed at zero. Never retry it automatically or reuse
+that authority. Resolve and verify the provider-billing contract without weakening the spend rail,
+then obtain fresh explicit one-run authority before another golden command. Founder/browser
+verification remains gated until certifying current-run evidence exists.
+
 > Last verified: 2026-09-12 — typed research requests may admit a bounded page-attempt allowance
 > through the authenticated cockpit driver. The server creates one tenant/request control and
 > every `readPage` extraction claims it atomically before provider egress; failed or ambiguous
