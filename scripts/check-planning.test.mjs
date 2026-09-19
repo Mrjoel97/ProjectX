@@ -144,6 +144,23 @@ test("legacy summaries count only when they carry no explicit open evidence", ()
   expectFail(scratch, "ROADMAP: row 30 reads Complete but 30-01 has explicit open evidence");
 });
 
+test("explicit body evidence overrides nominal complete frontmatter", () => {
+  const scratch = scratchRepo();
+  const dir = phaseDir(scratch);
+  writePlan(dir);
+  writeFileSync(
+    join(dir, "30-01-SUMMARY.md"),
+    "---\nstatus: complete\n---\n\n**Evidence status:** awaiting_live_evidence\n",
+  );
+  writeRoadmap(scratch, { progress: "0/1", status: "In progress" });
+  expectPass(scratch);
+  writeRoadmap(scratch, { progress: "0/1", status: "Complete" });
+  expectFail(
+    scratch,
+    'ROADMAP: row 30 reads Complete but 30-01 has explicit open evidence "awaiting_live_evidence".',
+  );
+});
+
 test("superseded is a named final disposition, never completion", () => {
   const scratch = scratchRepo();
   const dir = phaseDir(scratch);

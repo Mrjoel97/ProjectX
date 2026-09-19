@@ -1,9 +1,10 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
 > Last verified: 2026-09-19 (37.1-04 — **planning completion is semantic, not a filename
-> count**). `node --test scripts/check-planning.test.mjs` passed **10/10** focused tests. The
+> count**). `node --test scripts/check-planning.test.mjs` passed **11/11** focused tests. The
 > fixtures mutation-prove exact PLAN-to-SUMMARY identity, explicit open statuses, named
-> supersession as a non-completion disposition, present VERIFICATION vetoes, completed-only
+> supersession as a non-completion disposition, open body evidence overriding nominal `complete`
+> frontmatter, present VERIFICATION vetoes, completed-only
 > `x/y` counts, STATE/ROADMAP/GSD-ROUTING agreement, and one-owner SITE/LAND/SHOP traceability.
 > `node scripts/check-free-gates.mjs --self-test` passed all eight self-checks; `git diff --check`
 > passed for the checker and test.

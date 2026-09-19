@@ -49,7 +49,10 @@ const OPEN_STATUS =
   /^(?:partial(?:\b|[_ -])|in[_ -]?progress\b|blocked\b|draft\b|human[_ -]?needed\b|gaps[_ -]?found\b|awaiting(?:[_ -]|\b)|defer(?:red)?\b)/i;
 const isOpenStatus = (status) => status !== undefined && OPEN_STATUS.test(status);
 const explicitOpenEvidence = (text) => {
-  const status = text.match(/^\s*(?:[-*]\s*)?(?:\*\*)?status(?:\*\*)?\s*:\s*([^\r\n]+)/im)?.[1]?.trim();
+  const body = frontmatter(text) === null ? text : text.replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
+  const status = body.match(
+    /^\s*(?:[-*]\s*)?(?:\*\*)?(?:evidence\s+|verification\s+)?status(?:\*\*\s*:|:\s*\*\*|:)\s*([^\r\n]+)/im,
+  )?.[1]?.trim();
   return status && isOpenStatus(status) ? status : null;
 };
 const isComplete = (status) => /^\**complete(?:d)?\b/i.test(status.trim());
@@ -112,18 +115,21 @@ if (roadmap !== null) {
       const status = field(summary, "status");
       const openEvidence = explicitOpenEvidence(summary);
       if (status && /^superseded\b/i.test(status)) {
-        const successor = field(summary, "superseded_by") ?? field(summary, "successor");
+        const successor =
+          field(summary, "superseded_by") ??
+          field(summary, "successor") ??
+          summary.match(/^\s*(?:[-*]\s*)?(?:\*\*)?successor(?:\*\*)?\s*:\s*([^\r\n]+)/im)?.[1]?.trim();
         if (!successor)
           problems.push(
             `SUMMARY ${plan} is superseded but names no successor in ${summaryName}; add \`superseded_by\` or \`successor\`.`,
           );
         return { plan, kind: successor ? "superseded" : "open", successor, status };
       }
-      if (status && /^(?:complete|completed)\b/i.test(status) && !openEvidence)
+      if (openEvidence) return { plan, kind: "open", reason: "evidence", status: openEvidence };
+      if (status && /^(?:complete|completed)\b/i.test(status))
         return { plan, kind: "completed", status };
       if (status !== undefined)
         return { plan, kind: "open", reason: isOpenStatus(status) ? "status" : "unknown", status };
-      if (openEvidence) return { plan, kind: "open", reason: "evidence", status: openEvidence };
       return { plan, kind: "completed", status: "legacy" };
     });
     const completed = dispositions.filter((item) => item.kind === "completed");
