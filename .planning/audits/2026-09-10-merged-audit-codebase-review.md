@@ -834,7 +834,7 @@ named delta plan and is never rewritten as if later evidence existed at the time
 
 After the post-founder-verdict reconciliation the independent scan is represented by 474 ledger rows: 250 in Wave 1, 24 in Wave 2, 47 in
 Wave 3, 44 in Wave 4, 52 in Wave 5, 5 in Wave 6, 3 in Wave 7 and 49 in Wave 8. Its exact source sets
-are 356 canonical-open plan IDs, 326 semantically open summary paths, 66 phases with missing or open
+are 356 canonical-open plan IDs, 326 semantically open summary paths, 65 phases with missing or open
 verification, 43 unchecked requirements and 3 checked requirements explicitly annotated
 open/partial. These are conservative filesystem-derived counts, not completion or effort estimates.
 
@@ -850,10 +850,10 @@ recorded as 463 unknown and 11 no. No layer is inferred from another. A row adva
 layer-specific evidence is cited, and `unknown` remains an explicit closure task rather than a
 negative or a silent assumption.
 
-Wave 0 remains **in verification**. Checker hardening, delta planning, the reconciled handoff,
-Plan 07 qualification and founder acceptance are recorded. The two derivative gaps from the first
-independent review have been reconciled; a fresh independent verification must pass before Wave 1
-may begin.
+Wave 0 is **complete**. Checker hardening, delta planning, the reconciled handoff, Plan 07
+qualification and founder acceptance are recorded, and fresh independent verification passed at
+`048a6d5`. Wave 1A is the next executable handoff; no product or external evidence is inferred from
+this planning-control close.
 
 ### 9.15 Programme-level stop conditions
 

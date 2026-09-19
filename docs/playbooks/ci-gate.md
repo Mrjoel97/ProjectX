@@ -1,7 +1,7 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
-> Last verified: 2026-09-19 (37.1-04 — **planning completion is semantic, not a filename
-> count**). `node --test scripts/check-planning.test.mjs` passed **11/11** focused tests. The
+> Last verified: 2026-09-19 (37.1 closeout — **planning completion is semantic, not a filename
+> count**, and the verified route now advances to Wave 1A). `node --test scripts/check-planning.test.mjs` passed **11/11** focused tests. The
 > fixtures mutation-prove exact PLAN-to-SUMMARY identity, explicit open statuses, named
 > supersession as a non-completion disposition, open body evidence overriding nominal `complete`
 > frontmatter, present VERIFICATION vetoes, completed-only

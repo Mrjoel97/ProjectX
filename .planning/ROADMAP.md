@@ -8,10 +8,10 @@ Pikar-AI reaches a private beta in ~4 weeks (target ~2026-08-05) by building the
 
 The single governing reference for current work is the [merged audit](audits/2026-09-10-merged-audit-codebase-review.md). Its G1–G26 reconciliation and Independent cross-cutting reconciliation H1–H5 are additive release controls, not a competing roadmap. Historical Phase 1–9 material remains preserved as v1.0 history; superseded, partial, blocked, and research-only records remain honest and are not silently converted into completed work.
 
-**Current execution pointer:** Phase 37.1 — Closure Programme Integration and Wave 0 Baseline. It
-reconciles authority, evidence layers, requirement ownership, semantic planning truth and the
-executable handoff before any product lane resumes. Phase 23 remains preserved for Wave 4; its
-expired authorization is not reusable.
+**Current execution pointer:** Phase 01 — Wave 1A integration lead, with `01-10`, `03.7-10`, and
+`17.1-11` ready as the founder-accepted parallel handoff. Phase 37.1 passed independent verification
+at `048a6d5` and closed Wave 0. Phase 23 remains preserved for Wave 4; its expired authorization is
+not reusable.
 
 **Strict audit order:**
 
@@ -26,10 +26,11 @@ expired authorization is not reusable.
 
 **No-go decisions:** no major architecture rewrite, no service split, no recurrence implementation yet, no broad candidate exposure yet, no billing activation, and no WORM activation. Close live evidence and exact-release qualification first. Build determinism, audit-boundary hardening, test observability, and secret hygiene are supporting release controls. These decisions do not contradict the existing phase goals; they define when each goal may be considered releasable.
 
-**GSD command contract:** execute Phase 37.1 through the existing GSD plan/summary/verification
-workflow. Wave 1 is a pending handoff until Phase 37.1 Plan 06 reconciles it and Plan 07 records the
-blocking founder verdict. Native filesystem-count helpers remain advisory until Plan 04's semantic
-checker passes; no helper result may falsify an old summary or create placeholder evidence.
+**GSD command contract:** execute the founder-accepted Wave 1A handoff through the existing GSD
+plan/summary/verification workflow. `01-10`, `03.7-10`, and `17.1-11` may run in parallel under
+their disjoint ownership; `18-11` waits for the exact accepted `17.1-11` baseline. Native
+filesystem-count helpers remain advisory to the semantic checker; no helper result may falsify an
+old summary or create placeholder evidence.
 
 **Universal founder acceptance contract:** every relevant technical plan, including the active evidence plans, must state the expected result in plain language; provide a desktop and/or mobile browser path suitable for a nontechnical founder; specify honest loading, empty, error, partial, and refusal states; and name the browser artifact that proves the result. Code-level tests remain necessary but cannot substitute for this acceptance path. Technical users retain the deeper logs, exact versions, audit refs, and rollback evidence.
 
@@ -330,7 +331,7 @@ Plans:
 **Goal:** Make the owner-adopted closure programme executable through the existing GSD system: one authoritative route, one plan-level closure ledger, explicit requirement and phase ownership for websites/landing pages/storefronts, evidence-layer truth for every partial workflow, and verified Wave 1 handoffs. This phase changes planning controls and checks only; it does not silently complete product work or activate providers.
 **Requirements**: G26 planning/audit integrity; creates traceability for newly admitted SITE/LAND/SHOP requirements without claiming them complete
 **Depends on:** Phase 37
-**Plans:** 7/7 complete — founder accepted the qualified Wave 0 planning baseline and recorded Wave 1 handoff; independent Phase 37.1 verification remains pending before routing advances.
+**Plans:** 7/7 complete — independent verification passed at `048a6d5`; Wave 0 is closed and the founder-accepted Wave 1A handoff is next.
 
 Plans:
 - [x] 37.1-01-PLAN.md — authority, exact-identity baseline, current milestone audit and route alignment (complete 2026-09-19)
@@ -339,7 +340,7 @@ Plans:
 - [x] 37.1-04-PLAN.md — fail-closed semantic planning checker (complete 2026-09-19)
 - [x] 37.1-05-PLAN.md — ownership-safe Wave 1 delta plans (complete 2026-09-19)
 - [x] 37.1-06-PLAN.md — supersession, route reconciliation and Wave 1 handoff (complete 2026-09-19)
-- [x] 37.1-07-PLAN.md — offline qualification, Graphify reconciliation and founder verdict (complete 2026-09-19; phase verification pending)
+- [x] 37.1-07-PLAN.md — offline qualification, Graphify reconciliation and founder verdict (complete 2026-09-19; phase verification passed)
 
 ### Phase 38: Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06)
 
@@ -1785,7 +1786,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 35. Outcome language + idea-stage artifact (INSERTED) | 2/2 | **Complete 2026-09-06** — Half A: landing page and Command Center in outcome language. Half B: `offer-and-lead-plan`, the seventh pack and the first original body (ADR-034), through the pack gate with five fixtures + a Command Center first-thing card; CANDIDATE on deploy, owner gate run to go live (35-02-SUMMARY) | 2026-09-06 |
 | 36. SMOKE sentinels out of band (INSERTED) | 1/1 | **Complete 2026-09-06 (code + full local re-drive 13/13 specs, 4/4 smokes)** — fixture selection is an operator fact about WHO (`fixtureSeamFor`, `PIKAR_FIXTURE_TENANT_IDS`, ADR-035); every `SMOKE::` gate gated; readiness fails on any active fixture seam; `fixtureSeam.test.ts` proves both directions | 2026-09-06 |
 | 37. Planning-corpus repair (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — STATE.md collapsed to one frontmatter block (history archived), progress table regenerated from the phase directories (63 rows), REQUIREMENTS ticked where a closed phase certifies them and annotated `(open: …)` elsewhere, loose planning files archived, `scripts/check-planning.mjs` Stop hook refuses a stale corpus | 2026-09-06 |
-| 37.1. Closure Programme Integration and Wave 0 Baseline (INSERTED 2026-09-19) | 7/7 | **Verification pending — all plans complete; twelve-command offline qualification and Graphify reconciliation are green, and the founder accepted the Wave 0 planning baseline plus recorded Wave 1 handoff. Independent phase verification must pass before routing advances.** | - |
+| 37.1. Closure Programme Integration and Wave 0 Baseline (INSERTED 2026-09-19) | 7/7 | **Complete — independently verified at `048a6d5`; one authority, exact baseline, ownership map, exhaustive ledger, semantic checker, qualified Graphify output, founder verdict, and Wave 1 handoff are recorded without claiming product or external evidence.** | 2026-09-19 |
 | 38. Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — scope A: `buildCockpitTools(ToolContext, ToolGrants)`, `grantsFor` in `@pikar/core` (the one derivation), shared `TOOL_CONTEXT_ARGS` validator at both doors, 23-class byte-identical snapshot held; the executive loop now forwards the tenant pin to dispatched specialists; live 8/8 on the local deployment | 2026-09-06 |
 | 40. Document Canvas — documents in their true form (INSERTED 2026-09-06) | 3/3 | **Complete 2026-09-06** — `vaultSheets` (capped grid written at ingest by SheetJS, tenant-owned, cascades) + `SheetGrid` in the vault preview; `.xlsx` on both planes via `markdownToSheets` + `sheetsToXlsx` and a new ungated `spreadsheet-drafter@1`, with the stored bytes read BACK as a workbook in test; `regenerateAttachment` keeps its format; inline PDF in `OutputCard` under the restated bearer-URL rule; ADR-036 accepted; cockpit-agent body v3 pending the local gate | 2026-09-06 |
 | 42. Durable specialist runs and governed fan-out (INSERTED 2026-09-07) | 3/3 | **In progress — 42-01 complete 2026-09-07** — ADR-037 lands as code: `parentPlanId` optional + `by_parent` (no backfill); `plans.byThread` is the NEWEST ROOT by bounded descending scan (`lib/planRow.ts`, `ROOT_SCAN = 20`) and a child is never the answer; new tenant-guarded `plans.byId` and the whole Approvals plane moved onto it (a card now reads the row it mutates); LIFETIME ceilings deleted (`image_already_started`, `RECYCLABLE_STATUS`, the `completedMemo` carve-out, every "start a new chat" line) while every CONCURRENCY interlock survives, the media stagers scanning the whole root window because a rendering reel sits at `proposed`; `applyActOnGap` inserts a root per gap and gains the in-flight guard it never had (a second tap used to reset a running specialist's row); no skill-body edit was needed after all, so no gated candidate. 4034 backend + 898 web green, 3 mutations verified RED. **42-02 complete 2026-09-07** — a dispatch is a journaled workflow whose one paid step carries `{ retry: false }`, so durability never costs a second bill; ONE `workflow.define` with a `kind` switch because the dangerous edit is an OMITTED option; the starter stays SCHEDULED so the queued row keeps carrying the arg pins five tests read; `onDispatchComplete` is a second free idempotent landing; and `dispatchLive` had to move in the same commit or an armed sweep would have discarded a paid-for memo. 4048 backend green, 3 more mutations RED. **42-03 complete 2026-09-07 — G6 CLOSED** — `dispatchTeam` fans one question to <=5 specialists under ONE approval: children minted `kind: "memo"` AT BIRTH (the fatal both adversaries found — three fail-closed gates read that field), the envelope divided by a worker count the RAIL caps (ADR-038 supersedes ADR-037 D6, whose arithmetic granted a zero-share child the FULL rail), routes deduped and `media` refused at the door, a landed child taking `approved` so only the parent reaches the inbox, and the sweep resolving a dead worker instead of stranding the team. 4060 backend + 1522 core + 899 web green, 4 mutations RED. Tool is DARK until the owner activates the gated body | 2026-09-07 |

@@ -286,6 +286,14 @@ Deferred to post-beta releases. Tracked but not in the current roadmap.
 - **EXPN-06**: Team/multiplayer workspaces
 - **EXPN-07**: External agent interoperability — MCP server exposure of Pikar's governed tools first, A2A (Agent2Agent) evaluation after — implemented strictly as an adapter over the existing governed tool boundary (ADR-004), never a second door around it: external agents are a third principal class (human / internal agent / external agent) with their own auth, every inbound message is treated as untrusted input, the human Approve gate is never bypassed, and the whole capability is gated on the scoped-grant machinery (deferred capabilities #2/#3) plus post-beta behavioral evidence per the moat-strategy Validated gate. *(Minted 2026-07-14; internal agents deliberately do NOT get a messaging protocol — they coordinate through shared governed state and workflows.)*
 
+## Audit Closure Controls
+
+- [x] **G26**: Planning/audit integrity — one governing closure programme, exact evidence-layered
+  ledger membership, explicit SITE/LAND/SHOP ownership, semantic planning checks, and a verified
+  handoff through the existing GSD system. **Complete 2026-09-19:** Phase 37.1 passed independent
+  verification at `048a6d5`. This is an audit control, not a product requirement, so it is excluded
+  from the product-checkbox coverage totals below.
+
 ## Out of Scope
 
 Explicitly excluded. Documented to prevent scope creep.
@@ -482,4 +490,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-09-19 — SITE-01..03, LAND-01..03 and SHOP-01..05 admitted as pending intended-beta scope with Phases 48-50 as their single technical owners; historical requirement wording and completion state remain unchanged.*
+*Last updated: 2026-09-19 — G26 audit integrity verified through Phase 37.1; SITE-01..03, LAND-01..03 and SHOP-01..05 remain pending intended-beta scope with Phases 48-50 as their single technical owners; historical product-requirement wording and completion state remain unchanged.*

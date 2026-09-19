@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 37.1
-current_plan: 37.1-07 complete; Wave 0 baseline accepted and independent Phase 37.1 verification pending.
-status: verifying
-stopped_at: "Completed 37.1-07-PLAN.md; founder accepted the qualified Wave 0 planning baseline and recorded Wave 1 handoff. Next: independent Phase 37.1 verification before routing advances."
+current_phase: 01
+current_plan: Wave 1A handoff — parallel lanes 01-10, 03.7-10, and 17.1-11; no implementation started.
+status: ready
+stopped_at: "Phase 37.1 passed independent verification at 048a6d5 and is complete. Next: execute the founder-accepted Wave 1A handoff under its lane gates."
 last_updated: "2026-09-19"
 progress:
   total_phases: 76
-  completed_phases: 55
+  completed_phases: 56
   total_plans: 457
   completed_plans: 421
   percent: 92
@@ -19,15 +19,15 @@ progress:
 
 ## Audit-governed GSD routing (2026-09-19)
 
-**Current Phase:** 37.1
-**Current Phase Name:** Closure Programme Integration and Wave 0 Baseline
-**Current Plan:** 37.1-07 — Complete; independent phase verification pending
-**Status:** verifying
-**Progress:** 7/7 plans complete; Wave 0 planning baseline accepted; implementation routing remains gated on independent Phase 37.1 verification.
+**Current Phase:** 01 (Wave 1A integration lead; parallel lanes also resume Phases 03.7 and 17.1)
+**Current Phase Name:** Wave 1A — Foundation truth and evidence debt
+**Current Plan:** Accepted handoff for `01-10`, `03.7-10`, and `17.1-11`; no implementation started
+**Status:** ready
+**Progress:** Phase 37.1 is complete and independently verified; Wave 1A is the next executable handoff.
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
-- **Execution order:** Phase 37.1 closes Wave 0 planning truth first; Waves 1–8 then execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
-- **Immediate handoff:** Plan 07 is complete with machine-green offline qualification, reconciled Graphify outputs, and the founder's planning-baseline verdict. Independent Phase 37.1 verification is next; Wave 1 implementation has not started. Phase 23 remains preserved and resumes in Wave 4; its expired authorization is not reusable.
+- **Execution order:** Phase 37.1 closed Wave 0 planning truth; Waves 1–8 now execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
+- **Immediate handoff:** Wave 1A may dispatch `01-10`, `03.7-10`, and `17.1-11` under disjoint ownership. No Wave 1 product implementation has started at this checkpoint. Phase 23 remains preserved and resumes in Wave 4; its expired authorization is not reusable.
 - **Founder acceptance contract:** every applicable technical plan must include a plain-language outcome, a browser path for a nontechnical founder, honest loading/empty/error/partial/refusal states, and captured browser evidence in addition to code-level tests.
 - **Routing note:** native GSD helpers currently disagree because filename counts treat partial and auxiliary summaries as completion. Phase 37.1 owns that reconciliation; automatic “next phase” suggestions remain advisory until its checker changes pass.
 

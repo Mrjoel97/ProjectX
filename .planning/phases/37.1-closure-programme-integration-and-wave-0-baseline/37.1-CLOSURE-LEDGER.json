@@ -820,7 +820,6 @@
       "35-outcome-language-and-the-idea-stage-artifact",
       "36-smoke-sentinels-out-of-band",
       "37-planning-corpus-repair",
-      "37.1-closure-programme-integration-and-wave-0-baseline",
       "38-tool-registry",
       "39-research-engine",
       "40-document-canvas"
@@ -19348,9 +19347,7 @@
       "source_membership": {
         "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
-        "missing_or_open_verification_phases": [
-          "37.1-closure-programme-integration-and-wave-0-baseline"
-        ],
+        "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
