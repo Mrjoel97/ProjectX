@@ -4,7 +4,7 @@
   "active": {
     "phase": "03.7",
     "plan": "03.7-10 + 17.1-11 blocked before founder verification",
-    "reason": "Free preflight passed with no budget. One authorized unfiltered --no-retry command consumed its authority: manifest 57, pinned executable 46, seven PASS, then case 8 GOLDEN_PAID_CALL_UNRESOLVED. All 93 provider reservations later settled and the budget closed at exact USD 0.06745454 with no breach/unresolved cents and 127 cents remaining, but the runner did not observe case-8 completion and wrote no registry evidence. Retained five-source Blueprint/spine diagnostics do not unblock either founder gate. The repository settlement-observation race is under GSD debug; no new run authority exists."
+    "reason": "The earlier partial run remains non-certifying. A later free settlement-fix preflight entered its branch but ended inconclusively before provider readiness or explicit exit: 0 corpus cases, no run/budget IDs, USD 0, and backends stopped. The root cause is fixed offline by a bounded 20-second redacted PASS/REFUSED lifecycle, but the debug record awaits separately authorized live confirmation. Baseline accepted:false, both founder gates blocked, and no fresh run authority exists."
   },
   "next": {
     "phase": "Wave 1B",
@@ -27,7 +27,7 @@
     {
       "phase": "03.7 + 17.1",
       "wave": "1A",
-      "reason": "shared authority consumed after 7/46 observed passes and case-8 GOLDEN_PAID_CALL_UNRESOLVED; budget later settled but runner observation and registry evidence remain incomplete; GSD debug active and no new run authority exists"
+      "reason": "later free settlement-fix preflight was inconclusive before provider readiness/exit with 0 corpus and USD 0; bounded redacted lifecycle fixed offline but awaits live confirmation; accepted:false and no fresh run authority exists"
     },
     {
       "phase": "32",

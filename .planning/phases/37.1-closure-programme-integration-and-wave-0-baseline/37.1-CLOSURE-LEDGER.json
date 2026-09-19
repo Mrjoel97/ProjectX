@@ -6063,7 +6063,7 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "authorized_partial_run_7_of_46_then_case_8_unresolved_later_budget_settled_non_certifying",
+      "historical_state": "partial_run_non_certifying_then_settlement_fix_preflight_inconclusive_lifecycle_fixed_offline",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -6077,7 +6077,9 @@
         ],
         "offline_tested": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
-          "commit:9159c7d"
+          "commit:9159c7d",
+          ".planning/debug/golden-preflight-early-exit.md",
+          "commit:e04a656"
         ],
         "deployed": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
@@ -6088,7 +6090,9 @@
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20.log",
           "commit:a31bd70",
-          "commit:3a0c80e"
+          "commit:3a0c80e",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-SETTLEMENT-FIX.log",
+          "commit:73f723e"
         ],
         "owner_accepted": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
@@ -6105,7 +6109,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "The command printed seven PASS results, then stopped on case 8 before briefing cases 16-18. Later settlement of all 93 reservations does not provide current briefing live observation or registry evidence.",
+        "live_observed": "The earlier command stopped before briefing cases 16-18. A later free preflight entered its branch but ended inconclusively before provider readiness or explicit exit; the corpus was not invoked and the offline lifecycle fix still lacks live confirmation.",
         "owner_accepted": "Founder browser verification was not entered because the interrupted golden gate remained non-certifying.",
         "externally_enabled": "No current controlled Gmail grant was observed; eval-only provider access does not close briefing external enablement."
       },
@@ -6122,7 +6126,7 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "repository_settlement_observation_debug",
+        "live_confirmation_of_bounded_preflight_lifecycle",
         "fresh_single_run_authorization",
         "complete_certifying_single_no_retry_eval",
         "founder_browser_and_external_grant_evidence"
@@ -6132,10 +6136,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "The settlement-observation race is resolved on the current exact revision and a fresh bounded one-run authorization is recorded before any new invocation.",
+      "entry_gate": "A separately authorized live preflight confirms the bounded canonical PASS/REFUSED lifecycle on the exact revision, then fresh bounded corpus authority is recorded before any run.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "The one-run authority was consumed by the partial non-certifying command and is not reusable. Later settlement closed the budget at USD 0.06745454 without breach, but any future command requires fresh authority after the repository debug outcome.",
+      "external_gate_packet": "The latest free preflight was inconclusive with 0 corpus cases, no run/budget IDs, and USD 0. Its offline lifecycle fix awaits live confirmation; no fresh corpus authority exists and prior authority is not reusable.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13457,7 +13461,7 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "authorized_partial_run_7_of_46_then_case_8_unresolved_later_budget_settled_non_certifying",
+      "historical_state": "partial_run_non_certifying_then_settlement_fix_preflight_inconclusive_lifecycle_fixed_offline",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -13470,7 +13474,9 @@
           "commit:81b4482"
         ],
         "offline_tested": [
-          "commit:81b4482"
+          "commit:81b4482",
+          ".planning/debug/golden-preflight-early-exit.md",
+          "commit:e04a656"
         ],
         "deployed": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
@@ -13481,7 +13487,9 @@
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20.log",
           "commit:a31bd70",
-          "commit:3a0c80e"
+          "commit:3a0c80e",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-SETTLEMENT-FIX.log",
+          "commit:73f723e"
         ],
         "owner_accepted": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json"
@@ -13499,7 +13507,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "An exact five-source confirmed Blueprint and rendered evalblpr spine were observed in retained diagnostics, but the runner stopped at case 8, did not observe completion, and wrote no passing registry evidence; complete L6 remains unproven.",
+        "live_observed": "Retained diagnostics contain the exact five-source Blueprint and rendered evalblpr spine, but complete L6 remains unproven. The later free preflight ended before provider readiness or explicit exit, invoked no corpus, and the offline lifecycle fix awaits live confirmation.",
         "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification was not entered because L6 is non-certifying.",
         "externally_enabled": "Provider access was observed only inside the failed evaluation sequence; it does not close external enablement, and the controlled Gmail grant remains open."
       },
@@ -13516,7 +13524,7 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "repository_settlement_observation_debug",
+        "live_confirmation_of_bounded_preflight_lifecycle",
         "fresh_single_run_authorization",
         "complete_certifying_single_no_retry_blueprint_eval",
         "founder_browser_and_voice_acceptance",
@@ -13527,10 +13535,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "The settlement-observation race is resolved on the current exact revision and a fresh bounded one-run authorization is recorded before any new invocation.",
+      "entry_gate": "A separately authorized live preflight confirms the bounded canonical PASS/REFUSED lifecycle on the exact revision, then fresh bounded corpus authority is recorded before any run.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "The one-run authority was consumed by the partial non-certifying command and is not reusable. The budget later closed at exact USD 0.06745454 and provider access was observed eval-only, but the baseline remains accepted:false and future execution requires fresh authority after debug.",
+      "external_gate_packet": "The latest free preflight was inconclusive with 0 corpus cases, no run/budget IDs, and USD 0. The lifecycle fix is offline-only pending live confirmation; the baseline remains accepted:false and no fresh corpus authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",
