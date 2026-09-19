@@ -61,6 +61,12 @@ output/
 # Raw screenshot dump (deduped into docs/design/brand/)
 /Screenshots/
 
+# HyperFrames media-production workspaces. These are parallel authoring/render outputs,
+# not Pikar application source; they can contain virtualenvs, package installs, caches,
+# preview snapshots, and binary renders while another task is actively writing them.
+/brag-output/
+/brag-series/
+
 # 16-09: detached eval run logs + pid files (launch-detached.ps1)
 packages/backend/.eval-runs/
 

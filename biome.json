@@ -15,6 +15,8 @@
       "!.planning",
       "!.tmp",
       "!.worktrees",
+      "!brag-output",
+      "!brag-series",
       "!docs/design/mockups",
       "!graphify-out",
       "!packages/core/src/__fixtures__/assembly/empty.json",
