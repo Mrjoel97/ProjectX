@@ -55,7 +55,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { computeEvaluatorRevision } from "./goldenEvaluatorIdentity.mjs";
-import { invokePaidOnce, PaidCallUnresolved } from "./goldenPaidAttempt.mjs";
+import { invokePaidOnce, PaidCallUnresolved, waitForPaidSettlement } from "./goldenPaidAttempt.mjs";
 import { must } from "./smokeRun.mjs";
 
 const parse = (out) => JSON.parse(out);
@@ -3906,6 +3906,21 @@ function selfCheck() {
     runnerSource.slice(abortAt, abortAt + 400).includes("process.exit(2)"),
     "abortEnv must EXIT — a governed stop that returned would fall through to the evidence write",
   );
+  const settleBeforePlanAt = liveSource.indexOf("settlePaidCalls();");
+  const planObservationAt = liveSource.indexOf(
+    'plan = parse(must("plans:getById", { planId }, RETRY_READ));',
+  );
+  const finalSettlementAt = liveSource.indexOf("const budgetStatus = settlePaidCalls();");
+  const budgetCloseAt = liveSource.indexOf(
+    'must("guardrails:closeEvalBudget", { budgetId: evalBudgetId });',
+  );
+  assert.ok(
+    settleBeforePlanAt > 0 &&
+      planObservationAt > settleBeforePlanAt &&
+      finalSettlementAt > planObservationAt &&
+      budgetCloseAt > finalSettlementAt,
+    "paid calls must settle before case observation, and again before the budget closes",
+  );
 
   // 8e. The evidence BODY: refs and counts only, with the exact tenant target. A fixture prompt, a
   //     model reply or a skill body reaching this object is a §4 breach, and offline is where that
@@ -4680,7 +4695,15 @@ function waitForResearchLanding(planId, tenantId, threadId) {
 const authoringTenantFor = (runTenant, fixture, attempt) =>
   fixture.authoring === true ? `${runTenant}-${fixture.id.slice(0, 24)}-a${attempt}` : runTenant;
 
-function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1, evalBudgetId) {
+function attemptCase(
+  fixture,
+  runTenant,
+  pins,
+  tenantSkillIds = {},
+  attempt = 1,
+  evalBudgetId,
+  settlePaidCalls,
+) {
   // THE ATTEMPT NUMBER IS PART OF THE TENANT, and it has to be. The flake policy re-runs a failed
   // case once; on an authoring case the first attempt has already left an immutable pending
   // candidate, and the v1 writer correctly refuses a changed draft while one is pending — so a
@@ -4767,7 +4790,14 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
       abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${COST_CAP_USD.toFixed(2)})`);
     }
     history.push({ role: "user", content: text }, { role: "assistant", content: res.reply ?? "" });
+    // Settle each turn before a later turn can depend on its durable tool effects. The final turn's
+    // wait is also the case-level barrier before plan observation below.
+    settlePaidCalls();
   }
+  // A valid action response is not a durable completion signal for nested/scheduled calls. The
+  // final turn has now remained settled through a quiet window BEFORE plan state is observed. This
+  // is what case 08 exposed: its memo reached `proposed` only after the old runner had read it and
+  // aborted on a single unsettled snapshot. The wait is read-only and never replays a turn.
   // 15-06 (DISP-01): the "Act on this" tap, between the turns and the assertions. This drives the
   // REAL user path — evaluations.actOnGap's shared implementation stages `collecting` and schedules
   // internal.dispatch.runSpecialist — through the identity-less twin, because `npx convex run`
@@ -4802,6 +4832,7 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
     );
     if (!tap.ok) {
       // Nothing dispatched (`gap_not_found`) → no specialist money, and no read to pay for.
+      settlePaidCalls();
       return {
         pass: false,
         failures: [{ key: "actOnGap", expected: "ok", actual: tap.reason }],
@@ -4839,6 +4870,10 @@ function attemptCase(fixture, runTenant, pins, tenantSkillIds = {}, attempt = 1,
     // the thread's briefings rows — skipped otherwise, so non-briefing cases cost no extra hop.
     plan = parse(must("plans:getById", { planId }, RETRY_READ));
   }
+  // Dispatches can add their own provider reservations after the executive turn has settled. Do
+  // not evaluate their durable output or permit the outer loop to start another case until those
+  // reservations have also settled through a complete quiet window.
+  if (dispatched) settlePaidCalls();
   // The specialist bill, charged off the audit trail now that the dispatch poll has settled (one
   // read, hung off the EXISTING poll — no second loop). Same skip-unless-asked discipline as every
   // other read below: a non-dispatch case pays no extra hop and its numbers are unchanged.
@@ -5108,14 +5143,17 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
     }),
   );
   console.log(`[eval:golden] budget ${evalBudgetId}; unresolved calls retain their reservation`);
-  const assertSettledBudget = () => {
-    const status = parse(
-      must("guardrails:evalBudgetStatus", { budgetId: evalBudgetId }, RETRY_READ),
-    );
-    if (status.unsettledCount || status.breached || status.expired || status.closed)
-      throw new PaidCallUnresolved("GOLDEN_BUDGET_UNRESOLVED");
-    return status;
-  };
+  const settlePaidCalls = () =>
+    waitForPaidSettlement({
+      readStatus: () =>
+        parse(must("guardrails:evalBudgetStatus", { budgetId: evalBudgetId }, RETRY_READ)),
+      sleep: sleepSync,
+      timeoutMs: DISPATCH_TIMEOUT_MS,
+      pollMs: DISPATCH_POLL_MS,
+      // Two full poll intervals without a ledger change distinguish durable quiet from the brief
+      // zero-reservation gap before scheduled work registers its first call.
+      quietMs: DISPATCH_POLL_MS * 2,
+    });
 
   console.log(
     `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${COST_CAP_USD.toFixed(2)}` +
@@ -5180,9 +5218,20 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
     let outcome;
     let retried = false;
     try {
-      outcome = attemptCase(fixture, tenant, pins, tenantSkillIds, 1, evalBudgetId);
+      outcome = attemptCase(
+        fixture,
+        tenant,
+        pins,
+        tenantSkillIds,
+        1,
+        evalBudgetId,
+        settlePaidCalls,
+      );
     } catch (e) {
       if (e instanceof PaidCallUnresolved) throw e;
+      // If a read/assertion failed after a paid turn, still prevent a retry or the next case from
+      // starting while that turn has unsettled reservations.
+      settlePaidCalls();
       outcome = {
         pass: false,
         failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
@@ -5190,15 +5239,23 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
         specialistCost: 0,
       };
     }
-    assertSettledBudget();
     if (shouldRetryFailedFixture(outcome, automaticRetry)) {
       // Flake policy (locked): exactly ONE automatic re-run on a FRESH seeded plan.
       retried = true;
       let second;
       try {
-        second = attemptCase(fixture, tenant, pins, tenantSkillIds, 2, evalBudgetId);
+        second = attemptCase(
+          fixture,
+          tenant,
+          pins,
+          tenantSkillIds,
+          2,
+          evalBudgetId,
+          settlePaidCalls,
+        );
       } catch (e) {
         if (e instanceof PaidCallUnresolved) throw e;
+        settlePaidCalls();
         second = {
           pass: false,
           failures: [{ key: "error", expected: "run", actual: e.message.split("\n")[0] }],
@@ -5206,7 +5263,6 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
           specialistCost: 0,
         };
       }
-      assertSettledBudget();
       // Both attempts' money is real — the specialist half of it too.
       const merged = {
         caseCost: outcome.caseCost + second.caseCost,
@@ -5249,7 +5305,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
     }
   }
 
-  const budgetStatus = assertSettledBudget();
+  const budgetStatus = settlePaidCalls();
   // Closing is a required evidence gate, not best-effort cleanup. Scheduled late callers are
   // refused by this same durable envelope, and unresolved work prevents closure/evidence.
   must("guardrails:closeEvalBudget", { budgetId: evalBudgetId });

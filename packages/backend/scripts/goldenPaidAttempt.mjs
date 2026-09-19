@@ -8,6 +8,77 @@ export class PaidCallUnresolved extends Error {
   }
 }
 
+/**
+ * Wait for the durable evaluation ledger to remain fully settled for a quiet window.
+ *
+ * One zero-unsettled snapshot is insufficient: scheduled work can reserve its call after the
+ * action that scheduled it has returned. Requiring an unchanged, settled ledger for `quietMs`
+ * catches that late reservation without ever replaying the paid action. All dependencies are
+ * injectable so the timeout and race are proved with a deterministic fake clock.
+ */
+export function waitForPaidSettlement({
+  readStatus,
+  sleep,
+  now = Date.now,
+  timeoutMs,
+  pollMs,
+  quietMs,
+}) {
+  if (
+    typeof readStatus !== "function" ||
+    typeof sleep !== "function" ||
+    typeof now !== "function" ||
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs <= 0 ||
+    !Number.isFinite(pollMs) ||
+    pollMs <= 0 ||
+    !Number.isFinite(quietMs) ||
+    quietMs < 0 ||
+    quietMs > timeoutMs
+  ) {
+    throw new Error("GOLDEN_SETTLEMENT_POLL_INVALID");
+  }
+
+  const deadline = now() + timeoutMs;
+  let quietSince = null;
+  let quietSignature = null;
+  for (;;) {
+    const status = readStatus();
+    if (
+      !status ||
+      !Number.isInteger(status.callCount) ||
+      !Number.isInteger(status.settledCount) ||
+      !Number.isInteger(status.unsettledCount) ||
+      !Number.isFinite(status.unresolvedCents) ||
+      status.callCount < 0 ||
+      status.settledCount < 0 ||
+      status.unsettledCount < 0 ||
+      status.unresolvedCents < 0 ||
+      status.breached ||
+      status.expired ||
+      status.closed
+    ) {
+      throw new PaidCallUnresolved();
+    }
+
+    const observedAt = now();
+    if (status.unsettledCount === 0 && status.unresolvedCents === 0) {
+      const signature = `${status.callCount}:${status.settledCount}:${status.actualUsd}`;
+      if (signature !== quietSignature) {
+        quietSignature = signature;
+        quietSince = observedAt;
+      }
+      if (observedAt - quietSince >= quietMs) return status;
+    } else {
+      quietSince = null;
+      quietSignature = null;
+    }
+
+    if (observedAt >= deadline) throw new PaidCallUnresolved();
+    sleep(Math.min(pollMs, deadline - observedAt));
+  }
+}
+
 /** One provider-driving action, once. A local receipt never claims unknown usage was free.
  * These are recovery checkpoints, not evaluation evidence or an accounting ledger. */
 export function invokePaidOnce({ invoke, directory, fn, args, attemptId = args.turnId }) {
