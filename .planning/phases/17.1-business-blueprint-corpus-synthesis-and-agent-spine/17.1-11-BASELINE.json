@@ -15,15 +15,19 @@
     "scope": "one unfiltered current golden-corpus run with isolated evidence writes and cleanup"
   },
   "blueprint": {
-    "status": "awaiting_authorized_run"
+    "status": "not_seeded",
+    "reason": "the governed evaluation budget refused before fixture seeding"
   },
   "sources": {
     "required_ready_count": 5,
-    "status": "awaiting_authorized_run"
+    "status": "not_seeded",
+    "observed_ready_count": 0,
+    "reason": "the governed evaluation budget refused before fixture seeding"
   },
   "spine": {
     "required_needle": "evalblpr",
-    "status": "awaiting_authorized_run"
+    "status": "not_rendered",
+    "reason": "the governed evaluation budget refused before fixture seeding"
   },
   "skill": {
     "pins": [
@@ -50,9 +54,22 @@
     "evaluator_revision": "2026-09-11.budgeted-evaluator.b3c3878cd6117ee3d2164f3223aed544e8bd9faa8ebf5469548391365a7678cf",
     "runner_sha256": "c0a897a79f791c472b43707f831430c845906150a2e55e55bb30227f066b8c23",
     "mode": "unfiltered-no-retry",
+    "command_invocations": 1,
     "attempts_started": 0,
     "spend_usd": 0.0,
-    "status": "authorized_not_started"
+    "run_id": null,
+    "budget_id": null,
+    "case_total": 57,
+    "cases_started": 0,
+    "cases_passed": 0,
+    "cases_failed": 0,
+    "automatic_retries": 0,
+    "status": "blocked_pre_spend",
+    "refusal": "GOLDEN_PROVIDER_BILLING_UNVERIFIED",
+    "log": {
+      "path": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log",
+      "sha256": "1f7d723af16e5e547102004d459379f8b1ae98f19a2842ee97f9d11b671fc299"
+    }
   },
   "cockpit": {
     "status": "not_owner_verified"
@@ -64,16 +81,21 @@
     "status": "not_owner_verified"
   },
   "cleanup": {
-    "status": "not_started"
+    "status": "not_applicable_prewrite",
+    "local_backend_stopped": true,
+    "tenant_rows_created": 0,
+    "evidence_rows_created": 0,
+    "budget_rows_created": 0,
+    "note": "openEvalBudget refused before its first database insert, before a run id was emitted, and before fixture seeding"
   },
   "evidence_layers": {
     "implemented": "green",
     "offline-tested": "green",
     "deployed": "green-non-production",
-    "live-observed": "open",
+    "live-observed": "red-pre-spend-refusal",
     "owner-accepted": "open",
-    "externally-enabled": "open-paid-model-access"
+    "externally-enabled": "blocked-unverified-provider-billing-contract"
   },
   "accepted": false,
-  "blocker": "authorized golden run and founder verification are not complete"
+  "blocker": "GOLDEN_PROVIDER_BILLING_UNVERIFIED refused the governed budget before case 1; no retry is authorized and founder verification remains gated"
 }

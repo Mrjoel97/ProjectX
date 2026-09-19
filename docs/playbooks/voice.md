@@ -1340,3 +1340,9 @@ grounding failure. It was not. `pnpm start` serves a **frozen production build**
 bundle had been compiled 4h14m BEFORE the first Phase-14 commit, so no picker, no `?doc=`, no
 `docId` at the mint, and therefore no document scope. **Rebuild (`pnpm build`) before any voice
 UAT, and check the build timestamp against `git log` before believing a UI-level symptom.**
+> Last verified: 2026-09-19 (17.1-11 L6 prerequisite — **NO NEW LIVE VOICE
+> EVIDENCE**). The single authorized shared golden invocation stopped before spend at
+> `GOLDEN_PROVIDER_BILLING_UNVERIFIED`: no case, fixture tenant, confirmed eval
+> Blueprint, or rendered standing spine was created. Therefore the voice-spine
+> founder check was not opened and no voice behavior is inferred from deployment or
+> offline evidence.

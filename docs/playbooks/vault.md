@@ -4540,3 +4540,14 @@ property-position regex, not `includes`.
 is that we SEND both shared-drive parameters, never that Google honours them for a real shared
 drive. One real import against a real shared-drive folder, confirming a non-zero file count, is the
 gate — and it is the ONLY thing that can settle it.
+> Last verified: 2026-09-19 (17.1-11 bounded L6 attempt — **FAIL-CLOSED BEFORE
+> SPEND**). The exact local deployment `local:local-joel_feruzi-pikar_ai_50c69-1`
+> synchronized and reported ready, the current 57-fixture runner self-check passed,
+> provider DNS/TCP checks passed, and active identities were observed as
+> `cockpit-agent@26`, `inbox-digest@2`, and `business-blueprint@1`. The one authorized
+> unfiltered `--no-retry` invocation was refused by `guardrails:openEvalBudget` with
+> `GOLDEN_PROVIDER_BILLING_UNVERIFIED` before a budget row, run id, fixture tenant,
+> five-source corpus, Blueprint, rendered `evalblpr` spine, evidence row, or case was
+> created. Result: **0 paid/full-run attempts, 0/57 cases, 0 retries, USD 0.00**. The
+> invocation was not retried. L6 remains RED/open and no founder verification or
+> Phase-18 baseline acceptance is permitted from this record.
