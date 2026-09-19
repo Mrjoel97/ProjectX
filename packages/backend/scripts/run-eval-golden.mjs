@@ -10,6 +10,7 @@
 //
 // Invocation (locked): pnpm eval:golden [--skill <name>@<version>]
 //                                       [--tenant-skill <tenantSkillsId>] [--only <id-substring>]
+//                                       [--no-retry]
 //   --skill      pin that GLOBAL skill version on every turn; an all-green pinned
 //                run records refs/counts-only evidence via skills:recordEvalEvidence
 //                (the EVAL_GATE input for activateSkill).
@@ -21,6 +22,9 @@
 //                assertion still runs under the throwaway `eval-<runId>` tenant.
 //   --only       DIAGNOSTIC ONLY — run just the fixtures whose id contains this
 //                substring. A filtered run is NOT the gate and records NO evidence.
+//   --no-retry   run each selected fixture exactly once. This is the fail-closed mode for an
+//                authorization that forbids automatic failed-fixture retries; omission preserves
+//                the locked one-retry flake policy.
 //   --self-check offline validation (ZERO convex calls): fixture vocabulary,
 //                cap/pin/filter logic — the ponytail one-runnable-check.
 //
@@ -1230,6 +1234,13 @@ function applyOnly(fixtures, filters) {
   return fixtures.filter((f) => filters.some((s) => f.id.includes(s)));
 }
 
+/** Default stays compatible with the established flake policy. The explicit flag is used by
+ *  one-run authorizations where a failed fixture must remain failed rather than spend a second
+ *  model turn automatically. */
+const automaticRetryEnabled = (argv) => !argv.includes("--no-retry");
+const shouldRetryFailedFixture = (outcome, automaticRetry) =>
+  outcome.pass === false && automaticRetry;
+
 // ── 21-03: the read-only inspection mode + the evidence-suppression rule ─────
 
 /** Every flag this script understands. An argument NOT in here aborts — a typo must never fall
@@ -1239,6 +1250,7 @@ const KNOWN_FLAGS = new Set([
   "--skill",
   "--tenant-skill",
   "--only",
+  "--no-retry",
   "--self-check",
   "--inspect-tenant-skill",
   "--foreign-tenant",
@@ -4041,6 +4053,35 @@ function selfCheck() {
   assert.throws(() => parseRevenueCandidateMode(["--all-candidates"]), /exactly one/);
   assert.ok(assertKnownArgs(["--skill", "cockpit-agent@9", "--only", "research"]));
   assert.ok(
+    assertKnownArgs(["--no-retry"]),
+    "the explicitly authorized one-run mode must be accepted before any paid work",
+  );
+  assert.equal(
+    automaticRetryEnabled([]),
+    true,
+    "existing invocations retain the locked one-retry flake policy",
+  );
+  assert.equal(
+    automaticRetryEnabled(["--no-retry"]),
+    false,
+    "--no-retry must suppress the failed-fixture rerun",
+  );
+  assert.equal(
+    shouldRetryFailedFixture({ pass: false }, false),
+    false,
+    "a failed fixture remains final in the explicitly authorized no-retry mode",
+  );
+  assert.equal(
+    shouldRetryFailedFixture({ pass: false }, true),
+    true,
+    "a default run retains its single failed-fixture rerun",
+  );
+  assert.equal(
+    shouldRetryFailedFixture({ pass: true }, true),
+    false,
+    "a passing fixture is never rerun",
+  );
+  assert.ok(
     assertKnownArgs(["--inspect-tenant-skill", "k57rowA", "--json", "--expect-status=candidate"]),
   );
   assert.throws(
@@ -4892,7 +4933,7 @@ function suiteIdentityFor() {
   return { revision: codeOwnedSuite().revision, casesHash, caseCount };
 }
 
-async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
+async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetry = true) {
   // Revenue fixtures run only through the explicit all-candidates path. Feeding them into this
   // legacy cockpit gate would bill the wrong body and produce an `expectedState` with no oracle.
   const allFixtures = loadFixtures().filter((fixture) => fixture.candidate === undefined);
@@ -4925,7 +4966,9 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
     ...new Set([
       tenant,
       ...fixtures.flatMap((fixture) =>
-        [1, 2].map((attempt) => authoringTenantFor(tenant, fixture, attempt)),
+        (automaticRetry ? [1, 2] : [1]).map((attempt) =>
+          authoringTenantFor(tenant, fixture, attempt),
+        ),
       ),
     ]),
   ];
@@ -4954,6 +4997,9 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
         : "") +
       (filters.length
         ? `\n[eval:golden] PARTIAL RUN — --only ${filters.join(" ")} (${fixtures.length}/${allFixtures.length} fixtures). Diagnostic only: NO evidence will be recorded.`
+        : "") +
+      (!automaticRetry
+        ? "\n[eval:golden] NO-RETRY RUN — every fixture receives exactly one attempt; a failure remains final."
         : ""),
   );
 
@@ -5017,7 +5063,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = []) {
       };
     }
     assertSettledBudget();
-    if (!outcome.pass) {
+    if (shouldRetryFailedFixture(outcome, automaticRetry)) {
       // Flake policy (locked): exactly ONE automatic re-run on a FRESH seeded plan.
       retried = true;
       let second;
@@ -5402,7 +5448,12 @@ try {
   // A live run inherits every free fixture/vocabulary/cost/registry guard. Keep this immediately
   // before runLive: no fixture seed, Convex call or model/provider work may precede the preflight.
   selfCheck();
-  await runLive(parseSkillPins(argv), parseOnlyFilters(argv), parseTenantSkillIds(argv));
+  await runLive(
+    parseSkillPins(argv),
+    parseOnlyFilters(argv),
+    parseTenantSkillIds(argv),
+    automaticRetryEnabled(argv),
+  );
 } catch (e) {
   if (e instanceof PaidCallUnresolved) {
     console.error(
