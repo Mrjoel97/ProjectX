@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 37.1
-current_plan: 37.1-01 authority and exact-identity baseline; Wave 0 remains active and Wave 1 remains gated on Plans 06-07.
+current_plan: 37.1-02 requirement ownership and SITE/LAND/SHOP traceability; Wave 0 remains active and Wave 1 remains gated on Plans 06-07.
 status: in_progress
-stopped_at: "2026-09-14 — Phase 23 bounded continuation failed closed during A's second native sign-in; source integrity held and no handoff or activation was certified. Phase 30 review console and research Stage 3 deterministic same-row PDF dependency shipped at 07350fc after CI 34826131926 and production deploy 34826722003. Paid/semantic evaluation, Legal-HR attestation, all-six UAT, lifecycle, provider and recurrence gates remain open."
+stopped_at: "Completed 37.1-01-PLAN.md; authority, exact-identity baseline, current v2.0 gaps audit, and Wave 0 routing are reconciled. Next: 37.1-02 requirement ownership and SITE/LAND/SHOP traceability."
 last_updated: "2026-09-19"
 progress:
   total_phases: 76
   completed_phases: 55
   total_plans: 457
-  completed_plans: 419
+  completed_plans: 420
   percent: 92
 ---
 
@@ -21,9 +21,9 @@ progress:
 
 **Current Phase:** 37.1
 **Current Phase Name:** Closure Programme Integration and Wave 0 Baseline
-**Current Plan:** 37.1-01 — Authority, baseline, milestone audit and route alignment
+**Current Plan:** 37.1-02 — Requirement ownership and SITE/LAND/SHOP traceability
 **Status:** in_progress
-**Progress:** Wave 0 active; implementation waves remain gated on one reconciled closure ledger.
+**Progress:** 1/7 plans complete; Wave 0 active; implementation waves remain gated on one reconciled closure ledger.
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
 - **Execution order:** Phase 37.1 closes Wave 0 planning truth first; Waves 1–8 then execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
