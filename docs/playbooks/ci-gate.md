@@ -1,5 +1,40 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-09-19 (37.1-04 — **planning completion is semantic, not a filename
+> count**). `node --test scripts/check-planning.test.mjs` passed **10/10** focused tests. The
+> fixtures mutation-prove exact PLAN-to-SUMMARY identity, explicit open statuses, named
+> supersession as a non-completion disposition, present VERIFICATION vetoes, completed-only
+> `x/y` counts, STATE/ROADMAP/GSD-ROUTING agreement, and one-owner SITE/LAND/SHOP traceability.
+> `node scripts/check-free-gates.mjs --self-test` passed all eight self-checks; `git diff --check`
+> passed for the checker and test.
+>
+> The current-corpus command, `'{}' | node scripts/check-planning.mjs --exit-code`, correctly
+> returned **1** at this point in Wave 0. It named eight pre-existing contradictions: Phase 2's
+> missing canonical 02-08/02-09 summaries under a Complete row; `human_needed` verification under
+> Complete rows for Phases 5, 15.3, and 25.1; stale 10/10 versus 11/11 completion for Phase 19 plus
+> its non-final `Code complete` disposition; and stale 17/20 versus 19/20 completion for Phase 20.
+> Phase 37.1 Plan 06 owns the ROADMAP/supersession reconciliation and must make this exact command
+> green before Phase 37.1 can close. Do not add an allowlist or weaken a diagnostic to obtain green.
+>
+> Canonical completion means an exact `<plan-id>-SUMMARY.md` with explicit `complete`/`completed`,
+> or a legacy statusless summary with no structured open evidence. Auxiliary FIX/TAIL/REVIEW names
+> never count. `superseded` requires a named successor, stays outside the completed numerator, and
+> can justify only an explicit Superseded phase disposition. A present verification with `partial`,
+> `in_progress`, `blocked`, `draft`, `human_needed`, `gaps_found`, `awaiting_*`, or `defer` blocks a
+> Complete row. A missing historical VERIFICATION is not fabricated as passed or failed here; the
+> closure ledger owns that remediation.
+>
+> The checker deliberately uses Node stdlib plus regexes for repository-owned Markdown/frontmatter
+> shapes. When a status field, progress cell, current-pointer line, traceability row, or routing JSON
+> shape changes, add a red/green fixture first and then adjust the narrow matcher. That format change
+> is the Ponytail upgrade trigger; speculative YAML/Markdown parsing, auto-rewrites, and planning
+> services remain outside this gate.
+>
+> This is both a local Stop-hook guard (`.claude/settings.json`) and an actual CI step
+> (`.github/workflows/ci.yml`, “Planning evidence”). The fixture test and `--exit-code` invocation
+> are the CI evidence. They are not deployment, browser, live-provider, owner-acceptance, or
+> external-enablement evidence; those layers remain separate.
+
 > 2026-09-12: backend declares the existing TypeScript 7.0.2 compiler directly. Convex 1.42.1
 > checks `node_modules/typescript/bin/tsc` relative to the backend; a root-only declaration
 > let its default `try` mode skip the compiler even while workspace `tsc` passed. Production

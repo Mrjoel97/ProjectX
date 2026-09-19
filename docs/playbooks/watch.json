@@ -18,7 +18,9 @@
     "biome.json",
     "tsconfig.base.json",
     "scripts/check-playbooks.mjs",
-    "scripts/check-planning.mjs"
+    "scripts/check-planning.mjs",
+    "scripts/check-planning.test.mjs",
+    ".planning/GSD-ROUTING.json"
   ],
   "beta-admission.md": [
     "packages/backend/convex/invites.ts",
