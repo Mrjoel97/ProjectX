@@ -1,0 +1,79 @@
+{
+  "revision": "905a5bab610692a0c755a4fa53c5a3a186b72db5",
+  "deployment": {
+    "name": "local:local-joel_feruzi-pikar_ai_50c69-1",
+    "url": "http://127.0.0.1:3210",
+    "environment": "non-production",
+    "synchronized_at": "2026-09-19T19:47:07Z"
+  },
+  "authorization": {
+    "decision": "authorize-one-run",
+    "response_verbatim": "authorize sync and Blueprint run”",
+    "maximum_usd": 2.0,
+    "automatic_retry": false,
+    "full_run_limit": 1,
+    "scope": "one unfiltered current golden-corpus run with isolated evidence writes and cleanup"
+  },
+  "blueprint": {
+    "status": "awaiting_authorized_run"
+  },
+  "sources": {
+    "required_ready_count": 5,
+    "status": "awaiting_authorized_run"
+  },
+  "spine": {
+    "required_needle": "evalblpr",
+    "status": "awaiting_authorized_run"
+  },
+  "skill": {
+    "pins": [
+      {
+        "name": "cockpit-agent",
+        "version": 26,
+        "skill_id": "kh7aj0ek1v7cwqbb127zsar3hx8chgbn"
+      },
+      {
+        "name": "inbox-digest",
+        "version": 2,
+        "skill_id": "kh78xkkb0p8mm032q8hne07r158ap8xm",
+        "body_hash": "08fe068a58548b78a0396b02a7f221e80b042bc5a78bc09c9d4bfdefff"
+      }
+    ],
+    "business_blueprint": {
+      "version": 1,
+      "skill_id": "kh75njcg8gys4g69w8ekfkrtjs8bawt3",
+      "body_hash": "0a1ecdd5c65b22c0a3ae4bc511fc9900e9567150beeef55d8ec04547220e4aa2",
+      "pin_note": "active and deployment-observed; not a gated --skill target"
+    }
+  },
+  "evaluation": {
+    "evaluator_revision": "2026-09-11.budgeted-evaluator.b3c3878cd6117ee3d2164f3223aed544e8bd9faa8ebf5469548391365a7678cf",
+    "runner_sha256": "c0a897a79f791c472b43707f831430c845906150a2e55e55bb30227f066b8c23",
+    "mode": "unfiltered-no-retry",
+    "attempts_started": 0,
+    "spend_usd": 0.0,
+    "status": "authorized_not_started"
+  },
+  "cockpit": {
+    "status": "not_owner_verified"
+  },
+  "contradiction": {
+    "status": "not_owner_verified"
+  },
+  "voice": {
+    "status": "not_owner_verified"
+  },
+  "cleanup": {
+    "status": "not_started"
+  },
+  "evidence_layers": {
+    "implemented": "green",
+    "offline-tested": "green",
+    "deployed": "green-non-production",
+    "live-observed": "open",
+    "owner-accepted": "open",
+    "externally-enabled": "open-paid-model-access"
+  },
+  "accepted": false,
+  "blocker": "authorized golden run and founder verification are not complete"
+}
