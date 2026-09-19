@@ -3,14 +3,14 @@
   "governing_reference": ".planning/audits/2026-09-10-merged-audit-codebase-review.md",
   "active": {
     "phase": "03.7",
-    "plan": "03.7-10 Task 3 + 17.1-11 Task 2",
-    "reason": "Wave 1A is in progress. 01-10 is complete. 03.7-10 is paused before Task 3 with its authorization unconsumed at 0 attempts and USD 0 until the named local deployment is synchronized and listening. 17.1-11 is paused before Task 2 awaiting a separate authorization."
+    "plan": "03.7-10 + 17.1-11 blocked before founder verification",
+    "reason": "The named non-production deployment synchronized, then one shared authorized command invocation was consumed and refused pre-spend by GOLDEN_PROVIDER_BILLING_UNVERIFIED: 0 paid attempts, 0/57 cases, 0 retries, USD 0, no rows, cleanup not applicable, and the local backend stopped. A future command requires exact deployment billing configuration and fresh one-run authorization."
   },
   "next": {
     "phase": "Wave 1B",
     "plan": "18-11",
     "handoff": ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-1-HANDOFF.md",
-    "reason": "Wave 1B remains gated until 17.1-11 produces its exact current baseline with accepted:true; 18-11 has not started and does not run alongside unfinished Blueprint qualification."
+    "reason": "Wave 1B remains gated because the current 17.1-11 baseline is accepted:false after the pre-spend provider-billing refusal; 18-11 has not started."
   },
   "queue": [
     "Wave 1",
@@ -24,6 +24,11 @@
   ],
   "advisory": "Canonical progress is derived by the hardened semantic checker: superseded plans are final dispositions outside completion numerators, and live/owner/external evidence remains independent.",
   "blocked": [
+    {
+      "phase": "03.7 + 17.1",
+      "wave": "1A",
+      "reason": "GOLDEN_PROVIDER_BILLING_UNVERIFIED; consumed shared authorization, exact deployment billing config plus fresh one-run authorization required"
+    },
     {
       "phase": "32",
       "wave": "7",

@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 03.7
-current_plan: Wave 1A — 03.7-10 paused at Task 3; 17.1-11 paused at Task 2; 01-10 complete; 18-11 gated.
-status: in_progress
-stopped_at: "03.7-10 authorization is recorded but unconsumed (0 attempts, USD 0) and requires the named local deployment to be synchronized and listening; 17.1-11 awaits its own separate authorization."
+current_plan: Wave 1A — 03.7-10 and 17.1-11 blocked before founder verification; 01-10 complete; 18-11 gated.
+status: blocked
+stopped_at: "The synchronized non-production backend stopped after one shared authorized command invocation was consumed by GOLDEN_PROVIDER_BILLING_UNVERIFIED before spend: 0 paid attempts, 0/57 cases, 0 retries, USD 0, and no rows."
 last_updated: "2026-09-19"
 progress:
   total_phases: 76
@@ -21,13 +21,13 @@ progress:
 
 **Current Phase:** 03.7 (Wave 1A integration lead; Phase 17.1 remains a parallel gated lane)
 **Current Phase Name:** Wave 1A — Foundation truth and evidence debt
-**Current Plan:** `03.7-10` paused at Task 3; `17.1-11` paused at Task 2; `01-10` complete; `18-11` gated
-**Status:** in progress at explicit checkpoints
-**Progress:** `01-10` completed repository-controlled Google OAuth readiness. `03.7-10` completed its offline gate and recorded one authorization that remains unconsumed at 0 attempts / USD 0 because the named local deployment is not synchronized and listening. `17.1-11` completed its offline gate and awaits a separate authorization. `18-11` remains blocked on an exact `17.1-11` baseline with `accepted:true`.
+**Current Plan:** `03.7-10` and `17.1-11` blocked before founder verification; `01-10` complete; `18-11` gated
+**Status:** blocked at the fail-closed provider-billing gate
+**Progress:** `01-10` completed repository-controlled Google OAuth readiness. The named non-production deployment synchronized successfully, then one shared authorized unfiltered command invocation for `03.7-10` and `17.1-11` was consumed and refused pre-spend by `GOLDEN_PROVIDER_BILLING_UNVERIFIED`: 0 paid attempts, 0/57 cases, 0 retries, USD 0, no run/budget/evidence/tenant rows, and cleanup not applicable. The local backend was stopped. Neither lane may enter founder verification, and `18-11` remains blocked on an exact `17.1-11` baseline with `accepted:true`.
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
 - **Execution order:** Phase 37.1 closed Wave 0 planning truth; Waves 1–8 now execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
-- **Immediate handoff:** `01-10` is complete without closing SC-5 or any deployed/live/owner/external layer. `03.7-10` is paused before Task 3 with its one-run authorization unconsumed; local deployment synchronization is required before the one permitted attempt. `17.1-11` is paused before Task 2 and needs its own authorization. `18-11` cannot start before the accepted Blueprint baseline exists. Phase 23 remains preserved and resumes in Wave 4; its expired authorization is not reusable.
+- **Immediate handoff:** `01-10` is complete without closing SC-5 or any deployed/live/owner/external layer. `03.7-10` and `17.1-11` are blocked after the single shared authorization was consumed pre-spend; another command requires the exact deployment billing attestations (`GOLDEN_OPENROUTER_BILLING=standard`, `GOLDEN_TAVILY_BILLING=free`, `GOLDEN_TAVILY_CREDIT_USD=0`) to be configured and verified on the named deployment, plus fresh one-run authorization. `18-11` cannot start before the accepted Blueprint baseline exists. Phase 23 remains preserved and resumes in Wave 4; its expired authorization is not reusable.
 - **Founder acceptance contract:** every applicable technical plan must include a plain-language outcome, a browser path for a nontechnical founder, honest loading/empty/error/partial/refusal states, and captured browser evidence in addition to code-level tests.
 - **Routing note:** native GSD helpers currently disagree because filename counts treat partial and auxiliary summaries as completion. Phase 37.1 owns that reconciliation; automatic “next phase” suggestions remain advisory until its checker changes pass.
 

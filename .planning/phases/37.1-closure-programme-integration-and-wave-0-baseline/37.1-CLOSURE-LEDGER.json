@@ -6063,11 +6063,11 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "offline_gate_complete_authorized_run_unconsumed",
+      "historical_state": "nonproduction_sync_succeeded_shared_authorized_invocation_consumed_pre_spend",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
-      "deployed": "no",
+      "deployed": "yes",
       "live_observed": "no",
       "owner_accepted": "no",
       "externally_enabled": "no",
@@ -6079,10 +6079,20 @@
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
           "commit:9159c7d"
         ],
-        "deployed": [],
-        "live_observed": [],
-        "owner_accepted": [],
-        "externally_enabled": [],
+        "deployed": [
+          ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
+          "commit:b0c86c0"
+        ],
+        "live_observed": [
+          ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log"
+        ],
+        "owner_accepted": [
+          ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
+        ],
+        "externally_enabled": [
+          ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
+        ],
         "source": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-PLAN.md"
         ],
@@ -6090,10 +6100,9 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "deployed": "The exact named local deployment refused the preflight connection and requires synchronization before the authorized run.",
-        "live_observed": "The authorization remains unconsumed: 0 attempts, USD 0, and no golden run id or case evidence.",
-        "owner_accepted": "Founder browser verification has not occurred for the current revision and deployment.",
-        "externally_enabled": "No current controlled Gmail grant has been observed."
+        "live_observed": "One shared command invocation was consumed but refused before spend: 0 paid attempts, 0/57 cases, 0 retries, USD 0, and no run or evidence rows.",
+        "owner_accepted": "Founder browser verification was not entered because the golden gate was non-certifying.",
+        "externally_enabled": "No current controlled Gmail grant was observed, and the provider billing contract was unverified on the named deployment."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -6108,8 +6117,9 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "local_deployment_synchronization",
-        "single_authorized_no_retry_eval",
+        "exact_deployment_provider_billing_configuration",
+        "fresh_single_run_authorization",
+        "single_no_retry_eval_after_preflight",
         "founder_browser_and_external_grant_evidence"
       ],
       "closure_wave": 1,
@@ -6117,10 +6127,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
+      "entry_gate": "The exact named deployment carries verified GOLDEN_OPENROUTER_BILLING=standard, GOLDEN_TAVILY_BILLING=free, and GOLDEN_TAVILY_CREDIT_USD=0 attestations, and a fresh one-run authorization is recorded.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "The 03.7-10 authorization is one-run only, capped at USD 2.00, unconsumed at 0 attempts/USD 0, and cannot be reused by 17.1-11.",
+      "external_gate_packet": "The shared authorization was consumed by one command invocation despite zero spend. Future execution requires exact deployment billing configuration plus fresh one-run authority; no retry or reuse is permitted.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13442,14 +13452,14 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "offline_gate_complete_awaiting_separate_authorization",
+      "historical_state": "nonproduction_sync_succeeded_shared_authorized_invocation_consumed_pre_spend",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
-      "deployed": "no",
+      "deployed": "yes",
       "live_observed": "no",
       "owner_accepted": "no",
-      "externally_enabled": "unknown",
+      "externally_enabled": "no",
       "evidence_refs": {
         "implemented": [
           "commit:81b4482"
@@ -13457,10 +13467,20 @@
         "offline_tested": [
           "commit:81b4482"
         ],
-        "deployed": [],
-        "live_observed": [],
-        "owner_accepted": [],
-        "externally_enabled": [],
+        "deployed": [
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
+          "commit:7035e62"
+        ],
+        "live_observed": [
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log"
+        ],
+        "owner_accepted": [
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json"
+        ],
+        "externally_enabled": [
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json"
+        ],
         "source": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-PLAN.md"
         ],
@@ -13468,10 +13488,9 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "deployed": "No exact current non-production deployment has been qualified for the Blueprint-bearing run.",
-        "live_observed": "No paid Blueprint-bearing golden run is authorized or observed for 17.1-11.",
-        "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification has not occurred.",
-        "externally_enabled": "Paid model access for the bounded gate remains unproven until a separately authorized run."
+        "live_observed": "The governed budget refused before fixture seeding or case 1: 0 paid attempts, 0/57 cases, 0 retries, USD 0, no Blueprint or rendered spine.",
+        "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification was not entered because L6 is non-certifying.",
+        "externally_enabled": "The named deployment refused with GOLDEN_PROVIDER_BILLING_UNVERIFIED before provider execution."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -13486,8 +13505,9 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "separate_bounded_authorization",
-        "single_no_retry_blueprint_eval",
+        "exact_deployment_provider_billing_configuration",
+        "fresh_single_run_authorization",
+        "single_no_retry_blueprint_eval_after_preflight",
         "founder_browser_and_voice_acceptance",
         "accepted_baseline_seal"
       ],
@@ -13496,10 +13516,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
+      "entry_gate": "The exact named deployment carries verified GOLDEN_OPENROUTER_BILLING=standard, GOLDEN_TAVILY_BILLING=free, and GOLDEN_TAVILY_CREDIT_USD=0 attestations, and a fresh one-run authorization is recorded.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "17.1-11 requires its own one-run authorization; the 03.7-10 authorization is not reusable and no accepted Phase 18 baseline exists.",
+      "external_gate_packet": "The shared one-command authorization was consumed pre-spend and is not reusable. Configure and verify the exact deployment billing attestations, then obtain fresh one-run authority; the current baseline remains accepted:false.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",
@@ -14184,7 +14204,7 @@
       "requirement_ids": [
         "ACTN-04"
       ],
-      "historical_state": "wave_1b_gated_by_missing_accepted_17.1_11_baseline",
+      "historical_state": "wave_1b_gated_by_17.1_11_baseline_accepted_false",
       "current_disposition": "open",
       "implemented": "unknown",
       "offline_tested": "unknown",
