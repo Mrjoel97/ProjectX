@@ -104,7 +104,7 @@
     },
     "log": {
       "path": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20.log",
-      "sha256": "b9a490dbff1783e6428864e19c2907e172acb434ea476a11746f6295be3dd5be"
+      "sha256_lf_canonical": "b8e94ace2f984f2f829f8adc8ea53e0f257e260ed4e8225983d895956a3b86da"
     }
   },
   "cockpit": {
