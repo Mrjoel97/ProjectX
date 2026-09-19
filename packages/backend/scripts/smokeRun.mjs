@@ -32,13 +32,18 @@ const FAILURE = /Failed to run function|Uncaught Error|isn't running|not listeni
  */
 const TARGET_ARGS = process.env.PIKAR_CONVEX_TARGET === "prod" ? ["--prod"] : [];
 
-function invoke(fn, args) {
+export function convexSpawnOptions(timeoutMs) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("CONVEX_TIMEOUT_INVALID");
+  return { encoding: "utf8", timeout: timeoutMs, killSignal: "SIGTERM" };
+}
+
+function invoke(fn, args, timeoutMs) {
   const res = spawnSync(
     process.execPath,
     [convexBin, "run", ...TARGET_ARGS, fn, JSON.stringify(args)],
     {
       cwd: backendDir,
-      encoding: "utf8",
+      ...(timeoutMs === undefined ? { encoding: "utf8" } : convexSpawnOptions(timeoutMs)),
     },
   );
   const err = res.stderr || "";
@@ -63,10 +68,14 @@ function invoke(fn, args) {
  * second model turn) and `skills:recordEvalEvidence` (a retry writes a DUPLICATE evidence row).
  * Only pass it for pure, free, idempotent reads.
  */
-export function must(fn, args = {}, { retryOnEmpty = false, redactErrors = false } = {}) {
+export function must(
+  fn,
+  args = {},
+  { retryOnEmpty = false, redactErrors = false, timeoutMs } = {},
+) {
   try {
-    const out = invoke(fn, args);
-    return retryOnEmpty && out.trim() === "" ? invoke(fn, args) : out;
+    const out = invoke(fn, args, timeoutMs);
+    return retryOnEmpty && out.trim() === "" ? invoke(fn, args, timeoutMs) : out;
   } catch (e) {
     if (redactErrors) throw new Error("CONVEX_FUNCTION_FAILED");
     console.error(e.message);

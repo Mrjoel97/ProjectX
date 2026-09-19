@@ -9,6 +9,7 @@ export const EVALUATOR_FILES = [
   "pnpm-lock.yaml",
   "packages/backend/scripts/goldenEvaluatorIdentity.mjs",
   "packages/backend/scripts/goldenPaidAttempt.mjs",
+  "packages/backend/scripts/goldenProviderPreflight.mjs",
   "packages/backend/scripts/run-eval-golden.mjs",
   "packages/backend/scripts/smokeRun.mjs",
   "packages/backend/convex/smoke.ts",

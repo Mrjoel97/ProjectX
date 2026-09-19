@@ -56,6 +56,10 @@ import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { computeEvaluatorRevision } from "./goldenEvaluatorIdentity.mjs";
 import { invokePaidOnce, PaidCallUnresolved, waitForPaidSettlement } from "./goldenPaidAttempt.mjs";
+import {
+  PREFLIGHT_PASSED_LINE,
+  runStandaloneProviderPreflight,
+} from "./goldenProviderPreflight.mjs";
 import { must } from "./smokeRun.mjs";
 
 const parse = (out) => JSON.parse(out);
@@ -1296,10 +1300,24 @@ function assertProviderReadiness(readiness) {
   return true;
 }
 
-function requireProviderReadiness() {
-  const readiness = parse(must("guardrails:goldenProviderReadiness", {}, RETRY_READ));
+function checkProviderReadiness() {
+  const readiness = parse(
+    must(
+      "guardrails:goldenProviderReadiness",
+      {},
+      {
+        ...RETRY_READ,
+        redactErrors: true,
+        timeoutMs: 20_000,
+      },
+    ),
+  );
   assertProviderReadiness(readiness);
-  console.log("[eval:golden] provider preflight PASSED (secret-safe; no budget opened)");
+}
+
+function requireProviderReadiness() {
+  checkProviderReadiness();
+  console.log(PREFLIGHT_PASSED_LINE);
 }
 
 // ── 21-03: the read-only inspection mode + the evidence-suppression rule ─────
@@ -4289,6 +4307,16 @@ function selfCheck() {
     preflightDispatchAt > 0 && preflightDispatchAt < liveCallAt,
     "the standalone preflight exits before the full-run invocation",
   );
+  const preflightBranch = entry.slice(
+    preflightDispatchAt,
+    entry.indexOf('argv.includes("--write-suite-manifest")'),
+  );
+  assert.ok(
+    preflightBranch.includes("process.exit(runStandaloneProviderPreflight(") &&
+      preflightBranch.includes("check: checkProviderReadiness") &&
+      !/openEvalBudget|loadFixtures|seedInboxFixture/.test(preflightBranch),
+    "standalone preflight must emit a terminal verdict/exit code before every budget or corpus path",
+  );
   const inspectBody = runnerSource.slice(
     runnerSource.lastIndexOf(marker("21-03: the read-only inspection command")),
     runnerSource.lastIndexOf(marker("entry")),
@@ -5615,8 +5643,7 @@ try {
     // The only live/deployment read in this mode. No budget, corpus load/seed, provider call,
     // evidence write, or cleanup follows; success exits before every full-run parser.
     selfCheck();
-    requireProviderReadiness();
-    process.exit(0);
+    process.exit(runStandaloneProviderPreflight({ check: checkProviderReadiness }));
   }
   // 23-04: mechanical, and deliberately BEFORE every other mode — it writes one file and exits,
   // and it must be runnable when the self-check is red (a stale manifest is exactly when you need
