@@ -330,15 +330,15 @@ Plans:
 **Goal:** Make the owner-adopted closure programme executable through the existing GSD system: one authoritative route, one plan-level closure ledger, explicit requirement and phase ownership for websites/landing pages/storefronts, evidence-layer truth for every partial workflow, and verified Wave 1 handoffs. This phase changes planning controls and checks only; it does not silently complete product work or activate providers.
 **Requirements**: G26 planning/audit integrity; creates traceability for newly admitted SITE/LAND/SHOP requirements without claiming them complete
 **Depends on:** Phase 37
-**Plans:** 2/7 complete — Wave 0 in progress; Wave 1 remains gated on Plans 06–07.
+**Plans:** 6/7 complete — Wave 0 in progress; Wave 1 remains gated on Plan 07.
 
 Plans:
 - [x] 37.1-01-PLAN.md — authority, exact-identity baseline, current milestone audit and route alignment (complete 2026-09-19)
 - [x] 37.1-02-PLAN.md — requirement ownership and SITE/LAND/SHOP traceability (complete 2026-09-19)
-- [ ] 37.1-03-PLAN.md — exhaustive closure ledger and Wave map
-- [ ] 37.1-04-PLAN.md — fail-closed semantic planning checker
-- [ ] 37.1-05-PLAN.md — ownership-safe Wave 1 delta plans
-- [ ] 37.1-06-PLAN.md — supersession, route reconciliation and Wave 1 handoff
+- [x] 37.1-03-PLAN.md — exhaustive closure ledger and Wave map (complete 2026-09-19)
+- [x] 37.1-04-PLAN.md — fail-closed semantic planning checker (complete 2026-09-19)
+- [x] 37.1-05-PLAN.md — ownership-safe Wave 1 delta plans (complete 2026-09-19)
+- [x] 37.1-06-PLAN.md — supersession, route reconciliation and Wave 1 handoff (complete 2026-09-19)
 - [ ] 37.1-07-PLAN.md — offline qualification, Graphify reconciliation and founder verdict
 
 ### Phase 38: Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06)
