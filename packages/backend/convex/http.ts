@@ -66,19 +66,26 @@ http.route({
     const site = process.env.SITE_URL ?? "http://localhost:3111";
     const seeOther = (path: string) =>
       new Response(null, { status: 303, headers: { Location: `${site}${path}` } });
-    const fail = (msg: string) => seeOther(`/connect-gmail?gmailError=${encodeURIComponent(msg)}`);
+    // A callback redirect is browser history, proxy telemetry and a future Referer. Carry only a
+    // closed code: provider error text can contain account details, and authorization material must
+    // never cross this server-to-browser boundary.
+    type GmailCallbackError =
+      | "cancelled"
+      | "missing_callback"
+      | "invalid_state"
+      | "exchange_failed"
+      | "missing_refresh";
+    const fail = (code: GmailCallbackError) => seeOther(`/connect-gmail?gmailError=${code}`);
 
     const url = new URL(req.url);
     const oauthError = url.searchParams.get("error");
-    if (oauthError) {
-      return fail(`Gmail connection cancelled or failed: ${oauthError}`);
-    }
+    if (oauthError) return fail("cancelled");
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
-    if (!code || !state) return fail("Missing code or state — please try connecting again.");
+    if (!code || !state) return fail("missing_callback");
 
     const tenantId = await verifyState(state);
-    if (!tenantId) return fail("Invalid or tampered state — please try connecting again.");
+    if (!tenantId) return fail("invalid_state");
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -91,9 +98,7 @@ http.route({
         grant_type: "authorization_code",
       }),
     });
-    if (!tokenRes.ok) {
-      return fail("Token exchange with Google failed — please try connecting again.");
-    }
+    if (!tokenRes.ok) return fail("exchange_failed");
     const tok = (await tokenRes.json()) as {
       refresh_token?: string;
       access_token?: string;
@@ -102,11 +107,7 @@ http.route({
     };
     // Pitfall 3: no refresh_token means Google reused a prior grant (missing offline+consent).
     // Surface it as a hard error so the user re-consents rather than silently half-connecting.
-    if (!tok.refresh_token || !tok.access_token) {
-      return fail(
-        "No refresh token returned. Remove Pikar's access at myaccount.google.com/permissions, then reconnect.",
-      );
-    }
+    if (!tok.refresh_token || !tok.access_token) return fail("missing_refresh");
 
     await ctx.runMutation(internal.gmailAuth.store, {
       tenantId,

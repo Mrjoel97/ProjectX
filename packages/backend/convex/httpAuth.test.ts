@@ -7,10 +7,15 @@
 // The second thing it proves is ORDERING: state is verified BEFORE the credentialed token POST, so
 // a forged callback cannot make us spend a client secret on an attacker's code.
 
-import { MICROSOFT_CALLBACK_ERRORS, MS_CALENDARS_READWRITE_SCOPE } from "@pikar/core";
+import {
+  GOOGLE_SCOPES,
+  MICROSOFT_CALLBACK_ERRORS,
+  MS_CALENDARS_READWRITE_SCOPE,
+} from "@pikar/core";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
+import { buildAuthorizeUrl, verifyState } from "./gmailAuth";
 import { buildMicrosoftAuthorizeUrl } from "./microsoftAuth";
 import schema from "./schema";
 
@@ -36,6 +41,9 @@ beforeEach(() => {
   vi.stubEnv("MICROSOFT_OAUTH_CLIENT_ID", "ms-client-id");
   vi.stubEnv("MICROSOFT_OAUTH_CLIENT_SECRET", "ms-client-secret");
   vi.stubEnv("MICROSOFT_CALENDAR_REDIRECT_URI", `${SITE}/microsoft/callback`);
+  vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", "google-client-id");
+  vi.stubEnv("GOOGLE_OAUTH_CLIENT_SECRET", "google-client-secret");
+  vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", `${SITE}/gmail/callback`);
 });
 
 afterEach(() => {
@@ -256,30 +264,179 @@ describe("/microsoft/callback — success", () => {
   });
 });
 
-describe("the Google callback is untouched by the Microsoft one", () => {
-  test("/gmail/callback still exchanges and stores on its own route and table", async () => {
-    vi.stubEnv("GOOGLE_OAUTH_CLIENT_ID", "google-client-id");
-    vi.stubEnv("GOOGLE_OAUTH_CLIENT_SECRET", "google-client-secret");
-    vi.stubEnv("GMAIL_OAUTH_REDIRECT_URI", `${SITE}/gmail/callback`);
+describe("Google authorize URL and callback", () => {
+  test("requests the canonical shared grant with offline consent and tenant-bound signed state", async () => {
+    const url = new URL(await buildAuthorizeUrl(TENANT));
+    expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
+    expect(url.searchParams.get("client_id")).toBe("google-client-id");
+    expect(url.searchParams.get("redirect_uri")).toBe(`${SITE}/gmail/callback`);
+    expect(url.searchParams.get("response_type")).toBe("code");
+    expect(url.searchParams.get("access_type")).toBe("offline");
+    expect(url.searchParams.get("prompt")).toBe("consent");
+    expect(url.searchParams.get("include_granted_scopes")).toBe("true");
+    expect(url.searchParams.get("scope")).toBe(GOOGLE_SCOPES);
+    const state = url.searchParams.get("state") as string;
+    expect(state).not.toContain("google-client-secret");
+    expect(await verifyState(state)).toBe(TENANT);
+  });
+
+  test("provider refusal collapses to a closed code and never reaches the token endpoint", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await harness().fetch(
+      "/gmail/callback?error=access_denied&error_description=declined%20by%20owner@example.com",
+      { method: "GET" },
+    );
+    expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=cancelled`);
+    expect(location(res)).not.toContain("owner");
+    expect(location(res)).not.toContain("access_denied");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each(["?state=x", "?code=abc", ""])(
+    "an incomplete callback (%s) refuses before token exchange or storage",
+    async (query) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const t = harness();
+      const res = await t.fetch(`/gmail/callback${query}`, { method: "GET" });
+      expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=missing_callback`);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(0);
+    },
+  );
+
+  test("a tampered tenant-bound state refuses before token exchange or storage", async () => {
+    const fetchMock = tokenResponse({ access_token: ACCESS, refresh_token: REFRESH });
+    vi.stubGlobal("fetch", fetchMock);
+    const t = harness();
+    const res = await t.fetch(
+      `/gmail/callback?code=${AUTH_CODE}&state=${TENANT}.${"0".repeat(64)}`,
+      { method: "GET" },
+    );
+    expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=invalid_state`);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(0);
+  });
+
+  test("a replayed or rejected authorization code stores nothing and leaks no provider detail", async () => {
+    vi.stubGlobal(
+      "fetch",
+      tokenResponse(
+        { error: "invalid_grant", error_description: "authorization code was already redeemed" },
+        400,
+      ),
+    );
+    const state = new URL(await buildAuthorizeUrl(TENANT)).searchParams.get("state") as string;
+    const t = harness();
+    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, { method: "GET" });
+    expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=exchange_failed`);
+    expect(location(res)).not.toContain("redeemed");
+    expect(location(res)).not.toContain(AUTH_CODE);
+    expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(0);
+  });
+
+  test("a partial token response refuses without storing a half-connection", async () => {
+    vi.stubGlobal("fetch", tokenResponse({ access_token: ACCESS, expires_in: 3600 }));
+    const state = new URL(await buildAuthorizeUrl(TENANT)).searchParams.get("state") as string;
+    const t = harness();
+    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, { method: "GET" });
+    expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=missing_refresh`);
+    expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(0);
+  });
+
+  test("success stores only internally, lands in the workspace, and carries no secret", async () => {
     vi.stubGlobal(
       "fetch",
       tokenResponse({
-        access_token: "g-access",
-        refresh_token: "g-refresh",
+        access_token: ACCESS,
+        refresh_token: REFRESH,
         expires_in: 3600,
-        scope: "https://www.googleapis.com/auth/gmail.modify",
+        scope: GOOGLE_SCOPES,
       }),
     );
-
-    const { buildAuthorizeUrl } = await import("./gmailAuth");
     const state = new URL(await buildAuthorizeUrl(TENANT)).searchParams.get("state") as string;
     const t = harness();
-    const res = await t.fetch(`/gmail/callback?code=g-code&state=${state}`, { method: "GET" });
+    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, { method: "GET" });
 
     expect(res.status).toBe(303);
     expect(location(res)).toBe(`${SITE}/dashboard/workspace`);
-    // Landed in the GOOGLE table, and the Microsoft one is untouched.
-    expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(1);
+    expect(location(res)).not.toContain(REFRESH);
+    expect(location(res)).not.toContain(ACCESS);
+    expect(location(res)).not.toContain(AUTH_CODE);
+    const row = await t.run((ctx) => ctx.db.query("gmailTokens").unique());
+    expect(row?.tenantId).toBe(TENANT);
+    expect(row?.scope).toBe(GOOGLE_SCOPES);
     expect(await t.run((ctx) => ctx.db.query("microsoftCalendarTokens").collect())).toHaveLength(0);
+  });
+
+  test("reconnect replaces the old grant and retires the reconnect warning", async () => {
+    const t = harness();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("gmailTokens", {
+        tenantId: TENANT,
+        refreshToken: "old-refresh",
+        accessToken: "old-access",
+        expiresAt: 1,
+        scope: GOOGLE_SCOPES,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("notifications", {
+        tenantId: TENANT,
+        kind: "gmail_reconnect",
+        message: "Reconnect Google",
+        read: false,
+        createdAt: 1,
+      });
+    });
+    vi.stubGlobal(
+      "fetch",
+      tokenResponse({
+        access_token: ACCESS,
+        refresh_token: REFRESH,
+        expires_in: 3600,
+        scope: GOOGLE_SCOPES,
+      }),
+    );
+    const state = new URL(await buildAuthorizeUrl(TENANT)).searchParams.get("state") as string;
+    await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, { method: "GET" });
+
+    const rows = await t.run((ctx) => ctx.db.query("gmailTokens").collect());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.refreshToken).toBe(REFRESH);
+    expect(
+      (await t.run((ctx) => ctx.db.query("notifications").unique()))?.read,
+    ).toBe(true);
+  });
+
+  test("disconnect revokes with the refresh token, deletes locally, and audits refs-only state", async () => {
+    const t = harness();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("gmailTokens", {
+        tenantId: TENANT,
+        refreshToken: REFRESH,
+        accessToken: ACCESS,
+        expiresAt: Date.now() + 3600_000,
+        scope: GOOGLE_SCOPES,
+        updatedAt: Date.now(),
+      });
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { api } = await import("./_generated/api");
+
+    await expect(
+      t.withIdentity({ subject: TENANT }).action(api.gmailAuth.disconnectGoogle, {}),
+    ).resolves.toEqual({ revoked: true });
+
+    expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(0);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://oauth2.googleapis.com/revoke");
+    expect(new URLSearchParams(init.body as string).get("token")).toBe(REFRESH);
+    const audit = await t.run((ctx) => ctx.db.query("audit").unique());
+    expect(audit?.eventType).toBe("google.disconnected");
+    expect(audit?.payload).toEqual({ revoked: true, status: 200 });
+    expect(JSON.stringify(audit?.payload)).not.toContain(REFRESH);
+    expect(JSON.stringify(audit?.payload)).not.toContain(ACCESS);
   });
 });
