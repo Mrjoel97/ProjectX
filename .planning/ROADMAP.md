@@ -9,14 +9,13 @@ Pikar-AI reaches a private beta in ~4 weeks (target ~2026-08-05) by building the
 The single governing reference for current work is the [merged audit](audits/2026-09-10-merged-audit-codebase-review.md). Its G1–G26 reconciliation and Independent cross-cutting reconciliation H1–H5 are additive release controls, not a competing roadmap. Historical Phase 1–9 material remains preserved as v1.0 history; superseded, partial, blocked, and research-only records remain honest and are not silently converted into completed work.
 
 **Current execution pointer:** Phase 03.7 — Wave 1A integration lead. `01-10` is complete at the
-repository-controlled layers without closing SC-5. Local Convex upgraded with the existing snapshot
-transferred, five approved environment names were configured, and one fresh shared command for
-`03.7-10` and `17.1-11` was consumed. It refused pre-spend at
-`GOLDEN_PROVIDER_BILLING_UNVERIFIED` because the first stdin setting path appended hidden CR bytes:
-0 paid attempts, 0/57 cases, 0 retries, USD 0, no rows, and no Blueprint/spine/evidence. The values
-were corrected afterward with no-newline stdin and zero CR warnings; no rerun occurred and the backend
-stopped. Both founder gates remain blocked and `18-11` remains gated. Phase 23 remains preserved for
-Wave 4; its expired authorization is not reusable.
+repository-controlled layers without closing SC-5. A free preflight passed with no budget, then one
+authorized unfiltered `--no-retry` command for `03.7-10` and `17.1-11` consumed its authority. The
+manifest has 57 fixtures and the pinned executor selected 46; seven printed PASS before case 8 ended
+`GOLDEN_PAID_CALL_UNRESOLVED`. All 93 provider reservations later settled, the budget closed at exact
+USD `0.06745454` with no breach/unresolved cents and 127 cents remaining, but the runner never observed
+case-8 completion and wrote no registry evidence. Exact five-source Blueprint/spine diagnostics remain
+retained; the baseline is `accepted:false`, both founder gates are blocked, and `18-11` remains gated.
 
 **Strict audit order:**
 
@@ -32,12 +31,13 @@ Wave 4; its expired authorization is not reusable.
 **No-go decisions:** no major architecture rewrite, no service split, no recurrence implementation yet, no broad candidate exposure yet, no billing activation, and no WORM activation. Close live evidence and exact-release qualification first. Build determinism, audit-boundary hardening, test observability, and secret hygiene are supporting release controls. These decisions do not contradict the existing phase goals; they define when each goal may be considered releasable.
 
 **GSD command contract:** continue the founder-accepted Wave 1A handoff through the existing GSD
-plan/summary/verification workflow. `01-10` is complete. No golden command may reuse either consumed
-Wave 1A authority. The five named local values are corrected, but a future invocation still requires
-fresh explicit one-run authorization with the same cap/no-retry boundary and exact-byte preflight
-verification without printing values. `18-11` waits for the exact accepted `17.1-11` baseline.
-Native filesystem-count helpers remain advisory to the semantic checker; no helper result may
-falsify an old summary or create placeholder evidence.
+plan/summary/verification workflow. `01-10` is complete. The settlement-observation race exposed by
+case 8 is under GSD debug; settled reservations discovered afterward cannot retroactively turn the
+interrupted runner into a pass. No golden command may reuse the consumed authority, and no new run
+authority exists. Any future invocation requires a fresh bounded one-run decision after the debug
+outcome. `18-11` waits for the exact accepted `17.1-11` baseline. Native filesystem-count helpers
+remain advisory to the semantic checker; no helper result may falsify an old summary or create
+placeholder evidence.
 
 **Universal founder acceptance contract:** every relevant technical plan, including the active evidence plans, must state the expected result in plain language; provide a desktop and/or mobile browser path suitable for a nontechnical founder; specify honest loading, empty, error, partial, and refusal states; and name the browser artifact that proves the result. Code-level tests remain necessary but cannot substitute for this acceptance path. Technical users retain the deeper logs, exact versions, audit refs, and rollback evidence.
 
@@ -1739,7 +1739,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 3.4. Per-Recipient Personalization (INSERTED) | 4/4 | Complete (VERIFICATION present) | - |
 | 3.5. Deferred Send (INSERTED) | 6/6 | Complete (VERIFICATION present) | 2026-07-14 |
 | 3.6. Agent Eval Gate (INSERTED) | 5/5 | Complete (VERIFICATION present) | 2026-07-15 |
-| 3.7. Inbox Briefing (INSERTED) | 8/10 | Partial — 03.7-05 superseded by 03.7-10; after data-preserving local upgrade and five-name config, the fresh shared authority was consumed by a pre-spend `GOLDEN_PROVIDER_BILLING_UNVERIFIED` refusal caused by hidden CR bytes (0 paid attempts, 0/57, 0 retries, USD 0, no rows); values corrected afterward, no rerun, founder gate blocked pending fresh authorization | - |
+| 3.7. Inbox Briefing (INSERTED) | 8/10 | Partial — 03.7-05 superseded by 03.7-10; green no-budget preflight, then one consumed `--no-retry` command selected 46 of 57 manifest cases, printed 7 PASS, and stopped at case 8 `GOLDEN_PAID_CALL_UNRESOLVED`; later 93/93 calls settled at exact USD 0.06745454 and budget closed, but briefing cases were not reached, no registry evidence exists, founder gate blocked | - |
 | 3.8. Vault Document Extraction (INSERTED) | 6/6 | Complete (VERIFICATION present) | 2026-07-18 |
 | 3.9. Agent Activity Streaming (INSERTED) | 4/4 | Complete (VERIFICATION present) | - |
 | 3.10. Cockpit Conversation Repair (INSERTED) | 7/7 | Complete (VERIFICATION present) | 2026-07-19 |
@@ -1762,7 +1762,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 15.4. Vault redesign and scoped browse correctness (INSERTED) | 4/4 | Complete (VERIFICATION present) | 2026-08-05 |
 | 16. Research Sub-Agent & Web Research | 9/9 | Complete (gate `14feb4b7` 34/34, $0.3456; five skills activated) | 2026-08-08 |
 | 17. Calendar Actions | 9/11 | Partial — open: 17-10, 17-11 (Google create path live; Microsoft half blocked by the 2026-08-16 concurrency probe; 17-VERIFICATION `gaps_found`) | - |
-| 17.1. Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED) | 9/11 | Partial — 17.1-10 superseded by 17.1-11; the fresh shared command was refused pre-spend by `GOLDEN_PROVIDER_BILLING_UNVERIFIED` because configured values carried hidden CR bytes; zero corpus/Blueprint/spine/evidence, values corrected afterward without rerun, founder gate blocked, baseline `accepted:false` | - |
+| 17.1. Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED) | 9/11 | Partial — 17.1-10 superseded by 17.1-11; exact five-source Blueprint and `evalblpr` spine exist in retained diagnostics, but the one command stopped on case 8 after 7/46 observed passes; all 93 calls later settled and budget closed, yet no registry evidence or runner-observed case-8 completion exists, founder gate blocked, baseline `accepted:false` | - |
 | 18. Document & Content Creation | 8/11 | Partial — 18-09 and 18-10 superseded by 18-11; Wave 1B remains gated and 18-11 cannot start before an exact 17.1-11 baseline with `accepted:true`; the current baseline is explicitly `accepted:false` | - |
 | 19. Contacts, CRM & Follow-ups | 11/11 | Complete (plan-disposition layer only) — every canonical plan has a completed SUMMARY. The separately recorded owner BRAND/tone judgement and any requirement/evidence-layer note remain open until directly accepted; completion here does not manufacture that verdict. | 2026-08-10 |
 | 19.1. Bulk Contact Import (CSV) (INSERTED) | 7/7 | Complete (VERIFICATION present) | - |

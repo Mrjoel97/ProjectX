@@ -6063,7 +6063,7 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "fresh_authority_consumed_pre_spend_by_hidden_cr_configuration_then_corrected_without_rerun",
+      "historical_state": "authorized_partial_run_7_of_46_then_case_8_unresolved_later_budget_settled_non_certifying",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -6081,18 +6081,22 @@
         ],
         "deployed": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
-          "commit:45fdcb4"
+          "commit:a31bd70",
+          "commit:3a0c80e"
         ],
         "live_observed": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
-          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-19-FRESH.log"
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20.log",
+          "commit:a31bd70",
+          "commit:3a0c80e"
         ],
         "owner_accepted": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
         ],
         "externally_enabled": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
-          "commit:45fdcb4"
+          "commit:a31bd70",
+          "commit:3a0c80e"
         ],
         "source": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-PLAN.md"
@@ -6101,9 +6105,9 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "The fresh shared command was consumed but refused before spend because the initial stdin path appended hidden CR bytes: 0 paid attempts, 0/57 cases, 0 retries, USD 0, and no run or evidence rows. Values were corrected afterward without rerun.",
-        "owner_accepted": "Founder browser verification was not entered because the golden gate was non-certifying.",
-        "externally_enabled": "No current controlled Gmail grant was observed. The five local values are corrected, but no authorized post-correction provider gate ran."
+        "live_observed": "The command printed seven PASS results, then stopped on case 8 before briefing cases 16-18. Later settlement of all 93 reservations does not provide current briefing live observation or registry evidence.",
+        "owner_accepted": "Founder browser verification was not entered because the interrupted golden gate remained non-certifying.",
+        "externally_enabled": "No current controlled Gmail grant was observed; eval-only provider access does not close briefing external enablement."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -6118,9 +6122,9 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "exact_byte_configuration_preflight_reverification",
+        "repository_settlement_observation_debug",
         "fresh_single_run_authorization",
-        "single_no_retry_eval_after_preflight",
+        "complete_certifying_single_no_retry_eval",
         "founder_browser_and_external_grant_evidence"
       ],
       "closure_wave": 1,
@@ -6128,10 +6132,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "A fresh one-run authorization is recorded and the corrected five-name deployment configuration is exact-byte reverified without printing values before invocation.",
+      "entry_gate": "The settlement-observation race is resolved on the current exact revision and a fresh bounded one-run authorization is recorded before any new invocation.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "The fresh shared authorization was consumed by the CR-byte pre-spend refusal despite zero spend. Values are corrected, but future execution still requires fresh one-run authority and exact-byte preflight; no retry or reuse is permitted.",
+      "external_gate_packet": "The one-run authority was consumed by the partial non-certifying command and is not reusable. Later settlement closed the budget at USD 0.06745454 without breach, but any future command requires fresh authority after the repository debug outcome.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13453,14 +13457,14 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "fresh_authority_consumed_pre_spend_by_hidden_cr_configuration_then_corrected_without_rerun",
+      "historical_state": "authorized_partial_run_7_of_46_then_case_8_unresolved_later_budget_settled_non_certifying",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
       "deployed": "yes",
-      "live_observed": "no",
+      "live_observed": "partial",
       "owner_accepted": "no",
-      "externally_enabled": "no",
+      "externally_enabled": "partial",
       "evidence_refs": {
         "implemented": [
           "commit:81b4482"
@@ -13470,18 +13474,23 @@
         ],
         "deployed": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
-          "commit:45fdcb4"
+          "commit:a31bd70",
+          "commit:3a0c80e"
         ],
         "live_observed": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
-          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-19-FRESH.log"
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20.log",
+          "commit:a31bd70",
+          "commit:3a0c80e"
         ],
         "owner_accepted": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json"
         ],
         "externally_enabled": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
-          "commit:45fdcb4"
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20.log",
+          "commit:a31bd70",
+          "commit:3a0c80e"
         ],
         "source": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-PLAN.md"
@@ -13490,9 +13499,9 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "The fresh governed budget refused before fixture seeding or case 1 because configured values carried hidden CR bytes: 0 paid attempts, 0/57 cases, 0 retries, USD 0, no Blueprint or rendered spine. Values were corrected afterward without rerun.",
+        "live_observed": "An exact five-source confirmed Blueprint and rendered evalblpr spine were observed in retained diagnostics, but the runner stopped at case 8, did not observe completion, and wrote no passing registry evidence; complete L6 remains unproven.",
         "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification was not entered because L6 is non-certifying.",
-        "externally_enabled": "The five local values are corrected, but no authorized post-correction provider gate ran; external/model availability remains unobserved."
+        "externally_enabled": "Provider access was observed only inside the failed evaluation sequence; it does not close external enablement, and the controlled Gmail grant remains open."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -13507,9 +13516,9 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "exact_byte_configuration_preflight_reverification",
+        "repository_settlement_observation_debug",
         "fresh_single_run_authorization",
-        "single_no_retry_blueprint_eval_after_preflight",
+        "complete_certifying_single_no_retry_blueprint_eval",
         "founder_browser_and_voice_acceptance",
         "accepted_baseline_seal"
       ],
@@ -13518,10 +13527,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "A fresh one-run authorization is recorded and the corrected five-name deployment configuration is exact-byte reverified without printing values before invocation.",
+      "entry_gate": "The settlement-observation race is resolved on the current exact revision and a fresh bounded one-run authorization is recorded before any new invocation.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "The fresh one-command authorization was consumed by the CR-byte pre-spend refusal and is not reusable. Values are corrected, but a future command still requires fresh authority and exact-byte preflight; the baseline remains accepted:false.",
+      "external_gate_packet": "The one-run authority was consumed by the partial non-certifying command and is not reusable. The budget later closed at exact USD 0.06745454 and provider access was observed eval-only, but the baseline remains accepted:false and future execution requires fresh authority after debug.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",
