@@ -76,7 +76,7 @@
       "01-foundation-governance-substrate/01-02",
       "01-foundation-governance-substrate/01-06",
       "01-foundation-governance-substrate/01-08",
-      "01-foundation-governance-substrate/01-09",
+      "01-foundation-governance-substrate/01-10",
       "02-thin-end-to-end-slice/02-01",
       "02-thin-end-to-end-slice/02-02",
       "02-thin-end-to-end-slice/02-03",
@@ -140,9 +140,9 @@
       "03.7-inbox-briefing/03.7-02",
       "03.7-inbox-briefing/03.7-03",
       "03.7-inbox-briefing/03.7-04",
-      "03.7-inbox-briefing/03.7-05",
       "03.7-inbox-briefing/03.7-07",
       "03.7-inbox-briefing/03.7-09",
+      "03.7-inbox-briefing/03.7-10",
       "03.8-vault-document-extraction/03.8-02",
       "03.8-vault-document-extraction/03.8-05",
       "03.8-vault-document-extraction/03.8-06",
@@ -247,7 +247,7 @@
       "17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-07",
       "17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-08",
       "17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-09",
-      "17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10",
+      "17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11",
       "18-document-content-creation/18-01",
       "18-document-content-creation/18-02",
       "18-document-content-creation/18-03",
@@ -256,8 +256,7 @@
       "18-document-content-creation/18-06",
       "18-document-content-creation/18-07",
       "18-document-content-creation/18-08",
-      "18-document-content-creation/18-09",
-      "18-document-content-creation/18-10",
+      "18-document-content-creation/18-11",
       "19-contacts-crm-follow-ups/19-01",
       "19-contacts-crm-follow-ups/19-02",
       "19-contacts-crm-follow-ups/19-03",
@@ -754,6 +753,7 @@
       ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-01-SUMMARY.md",
       ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-02-SUMMARY.md",
       ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-04-SUMMARY.md",
+      ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-05-SUMMARY.md",
       ".planning/phases/38-tool-registry/38-01-SUMMARY.md",
       ".planning/phases/40-document-canvas/40-02-SUMMARY.md"
     ],
@@ -1173,7 +1173,7 @@
     },
     {
       "id": "PLAN:01-foundation-governance-substrate/01-09",
-      "workflow": "Complete the Week-1 Google OAuth verification submission: configure the GCP consent screen (gmail.send only, Testing mode), build the minimal working consent flow needed for the mandatory demo video (Connect Gmail -> Google consent -> callback stores tokens in Convex), record the video, and submit in the OAuth Verification Center.",
+      "workflow": "SUPERSEDED 2026-09-19 by 01-10; not completion. Historical intent: Complete the Week-1 Google OAuth verification submission: configure the GCP consent screen (gmail.send only, Testing mode), build the minimal working consent flow needed for the mandatory demo video (Connect Gmail -> Google consent -> callback stores tokens in Convex), record the video, and submit in the OAuth Verification Center.",
       "source_phase": "Phase 01",
       "source_plans": [
         ".planning/phases/01-foundation-governance-substrate/01-09-PLAN.md"
@@ -1181,8 +1181,8 @@
       "requirement_ids": [
         "SC-5"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
+      "historical_state": "superseded_summary",
+      "current_disposition": "superseded_and_archived",
       "implemented": "unknown",
       "offline_tested": "unknown",
       "deployed": "unknown",
@@ -1197,7 +1197,8 @@
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/01-foundation-governance-substrate/01-09-PLAN.md"
+          ".planning/phases/01-foundation-governance-substrate/01-09-PLAN.md",
+          ".planning/phases/01-foundation-governance-substrate/01-09-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -1211,9 +1212,7 @@
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "01-foundation-governance-substrate/01-09"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
@@ -1236,9 +1235,80 @@
       "objective_exit_test": "User typed \"done\"; consent screen configured in Testing mode with gmail.send only; both env vars set in Convex.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
-      "successor": null,
+      "successor": "PLAN:01-foundation-governance-substrate/01-10",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
+      ]
+    },
+    {
+      "id": "PLAN:01-foundation-governance-substrate/01-10",
+      "workflow": "Close the repository-controlled Google consent/OAuth technical-readiness delta and produce the exact disabled re-entry packet Wave 7 needs for provider/formal verification.",
+      "source_phase": "Phase 01",
+      "source_plans": [
+        ".planning/phases/01-foundation-governance-substrate/01-10-PLAN.md"
+      ],
+      "requirement_ids": [
+        "SC-5"
+      ],
+      "historical_state": "plan_without_canonical_summary",
+      "current_disposition": "open",
+      "implemented": "unknown",
+      "offline_tested": "unknown",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/01-foundation-governance-substrate/01-10-PLAN.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "No current layer-specific implementation evidence is certified by this open delta.",
+        "offline_tested": "No exact current offline command evidence is certified by this open delta.",
+        "deployed": "No exact candidate deployment evidence is certified by this open delta.",
+        "live_observed": "No current live observation is certified by this open delta.",
+        "owner_accepted": "No current founder verdict is certified by this open delta.",
+        "externally_enabled": "No current external enablement is certified by this open delta."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "01-foundation-governance-substrate/01-10"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "Repository-controlled Google OAuth readiness is proven against current code, with external approval and live enablement isolated in a Wave 7 packet."
+      ],
+      "remaining_work_classes": [
+        "evidence_reconciliation",
+        "current_code_delta_or_named_supersession"
+      ],
+      "closure_wave": 1,
+      "owner_phase": "Phase 01",
+      "dependencies": [
+        "37.1-07"
+      ],
+      "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
+      "objective_exit_test": "Repository-controlled Google OAuth readiness is proven against current code, with external approval and live enablement isolated in a Wave 7 packet.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop if Graphify/current source cannot establish the exact authorize-callback-token path.",
+        "Stop if an owned path changed after the Wave 1 handoff; ask the integration owner to re-baseline that path.",
+        "Stop before any provider submission, consent-screen edit, test-user edit, live authorization, deployment, production write, or secret mutation."
       ]
     },
     {
@@ -5908,7 +5978,7 @@
     },
     {
       "id": "PLAN:03.7-inbox-briefing/03.7-05",
-      "workflow": "Close the phase: golden-set briefing fixtures (incl. the mandated injection probe), the runner extensions that make them assertable, the live cockpit-agent gate cycle that actually teaches the production agent the new tools, and the human-verify of a real briefing.",
+      "workflow": "SUPERSEDED 2026-09-19 by 03.7-10; not completion. Historical intent: Close the phase: golden-set briefing fixtures (incl. the mandated injection probe), the runner extensions that make them assertable, the live cockpit-agent gate cycle that actually teaches the production agent the new tools, and the human-verify of a real briefing.",
       "source_phase": "Phase 03.7",
       "source_plans": [
         ".planning/phases/03.7-inbox-briefing/03.7-05-PLAN.md"
@@ -5916,8 +5986,8 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
+      "historical_state": "superseded_summary",
+      "current_disposition": "superseded_and_archived",
       "implemented": "unknown",
       "offline_tested": "unknown",
       "deployed": "unknown",
@@ -5932,7 +6002,8 @@
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/03.7-inbox-briefing/03.7-05-PLAN.md"
+          ".planning/phases/03.7-inbox-briefing/03.7-05-PLAN.md",
+          ".planning/phases/03.7-inbox-briefing/03.7-05-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -5946,9 +6017,7 @@
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "03.7-inbox-briefing/03.7-05"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
@@ -5971,9 +6040,81 @@
       "objective_exit_test": "Self-check exit 0 offline with 18 validated fixtures; briefingPresent wired end-to-end in the runner; playbook bumped.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
-      "successor": null,
+      "successor": "PLAN:03.7-inbox-briefing/03.7-10",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
+      ]
+    },
+    {
+      "id": "PLAN:03.7-inbox-briefing/03.7-10",
+      "workflow": "Re-certify the already-shipped inbox briefing on the current exact code, skill versions, deployment, and browser surface without rebuilding it or borrowing historical acceptance.",
+      "source_phase": "Phase 03.7",
+      "source_plans": [
+        ".planning/phases/03.7-inbox-briefing/03.7-10-PLAN.md"
+      ],
+      "requirement_ids": [
+        "CKPT-04"
+      ],
+      "historical_state": "plan_without_canonical_summary",
+      "current_disposition": "open",
+      "implemented": "unknown",
+      "offline_tested": "unknown",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/03.7-inbox-briefing/03.7-10-PLAN.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "No current layer-specific implementation evidence is certified by this open delta.",
+        "offline_tested": "No exact current offline command evidence is certified by this open delta.",
+        "deployed": "No exact candidate deployment evidence is certified by this open delta.",
+        "live_observed": "No current live observation is certified by this open delta.",
+        "owner_accepted": "No current founder verdict is certified by this open delta.",
+        "externally_enabled": "No current external enablement is certified by this open delta."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "03.7-inbox-briefing/03.7-10"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
+      ],
+      "remaining_work_classes": [
+        "evidence_reconciliation",
+        "current_code_delta_or_named_supersession"
+      ],
+      "closure_wave": 1,
+      "owner_phase": "Phase 03.7",
+      "dependencies": [
+        "37.1-07"
+      ],
+      "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
+      "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop if the exact skill/deployment/revision identity is ambiguous.",
+        "Stop before any paid call without fresh authorization or after one non-certifying full-run attempt.",
+        "Stop rather than treating an unavailable Gmail grant, fixture-only browser run, timeout, or partial corpus as acceptance.",
+        "Stop on any mailbox write/send or evidence of raw body content in audit/telemetry."
       ]
     },
     {
@@ -13209,7 +13350,7 @@
     },
     {
       "id": "PLAN:17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10",
-      "workflow": "Run the live gate and record it. **Offline green does NOT close this phase** — CONTEXT marks this",
+      "workflow": "SUPERSEDED 2026-09-19 by 17.1-11; not completion. Historical intent: Run the live gate and record it. **Offline green does NOT close this phase** — CONTEXT marks this",
       "source_phase": "Phase 17.1",
       "source_plans": [
         ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10-PLAN.md"
@@ -13218,8 +13359,8 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
+      "historical_state": "superseded_summary",
+      "current_disposition": "superseded_and_archived",
       "implemented": "unknown",
       "offline_tested": "unknown",
       "deployed": "unknown",
@@ -13234,7 +13375,8 @@
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10-PLAN.md"
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10-PLAN.md",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -13248,9 +13390,7 @@
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
@@ -13274,9 +13414,82 @@
       "objective_exit_test": "Every offline suite is at its documented baseline; `business-blueprint` is ACTIVE on the deployment and the version that carries the body is recorded by number, not assumed.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
-      "successor": null,
+      "successor": "PLAN:17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
+      ]
+    },
+    {
+      "id": "PLAN:17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11",
+      "workflow": "Close the cited Blueprint and active-spine acceptance delta on current code, then publish the exact accepted baseline that Phase 18 is allowed to consume.",
+      "source_phase": "Phase 17.1",
+      "source_plans": [
+        ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-PLAN.md"
+      ],
+      "requirement_ids": [
+        "BLPR-01",
+        "BLPR-02"
+      ],
+      "historical_state": "plan_without_canonical_summary",
+      "current_disposition": "open",
+      "implemented": "unknown",
+      "offline_tested": "unknown",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-PLAN.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "No current layer-specific implementation evidence is certified by this open delta.",
+        "offline_tested": "No exact current offline command evidence is certified by this open delta.",
+        "deployed": "No exact candidate deployment evidence is certified by this open delta.",
+        "live_observed": "No current live observation is certified by this open delta.",
+        "owner_accepted": "No current founder verdict is certified by this open delta.",
+        "externally_enabled": "No current external enablement is certified by this open delta."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
+      ],
+      "remaining_work_classes": [
+        "evidence_reconciliation",
+        "current_code_delta_or_named_supersession"
+      ],
+      "closure_wave": 1,
+      "owner_phase": "Phase 17.1",
+      "dependencies": [
+        "37.1-07"
+      ],
+      "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
+      "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",
+        "Stop before a paid run without fresh bounded authorization and after the first non-certifying full-run attempt.",
+        "Stop on tenant leakage, uncited Blueprint claims, raw content in audit evidence, or a regression that inserts the spine into ordinary retrieval arrays/budgets.",
+        "Stop before founder verification unless L6 is conclusive."
       ]
     },
     {
@@ -13871,7 +14084,7 @@
     },
     {
       "id": "PLAN:18-document-content-creation/18-09",
-      "workflow": "Discharge Phase 18's §9 documentation obligation, correct the two places ROADMAP contradicts the",
+      "workflow": "SUPERSEDED 2026-09-19 by 18-11; not completion. Historical intent: Discharge Phase 18's §9 documentation obligation, correct the two places ROADMAP contradicts the",
       "source_phase": "Phase 18",
       "source_plans": [
         ".planning/phases/18-document-content-creation/18-09-PLAN.md"
@@ -13879,8 +14092,8 @@
       "requirement_ids": [
         "ACTN-04"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
+      "historical_state": "superseded_summary",
+      "current_disposition": "superseded_and_archived",
       "implemented": "unknown",
       "offline_tested": "unknown",
       "deployed": "unknown",
@@ -13895,7 +14108,8 @@
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/18-document-content-creation/18-09-PLAN.md"
+          ".planning/phases/18-document-content-creation/18-09-PLAN.md",
+          ".planning/phases/18-document-content-creation/18-09-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -13909,9 +14123,7 @@
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "18-document-content-creation/18-09"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
@@ -13941,17 +14153,17 @@
       "objective_exit_test": "Four `### Phase 18` subsections exist; every withheld `Last verified` bump is named with its reason in the SUMMARY (at minimum `onboarding.md`, which is withheld unconditionally); `check-playbooks.mjs` reports no Phase-18 path outstanding (foreign-lane demands may remain and must be left alone, named explicitly in the SUMMARY); `watch.json` has zero diff.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
-      "successor": null,
+      "successor": "PLAN:18-document-content-creation/18-11",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
       ]
     },
     {
-      "id": "PLAN:18-document-content-creation/18-10",
-      "workflow": "Land Pattern 9: one conjunct on the blueprint drift predicate so agent-authored documents stop",
+      "id": "PLAN:18-document-content-creation/18-11",
+      "workflow": "Close the current document workflow from the accepted Blueprint baseline through create, view, download, regenerate, replacement, format truth, and founder BRAND acceptance.",
       "source_phase": "Phase 18",
       "source_plans": [
-        ".planning/phases/18-document-content-creation/18-10-PLAN.md"
+        ".planning/phases/18-document-content-creation/18-11-PLAN.md"
       ],
       "requirement_ids": [
         "ACTN-04"
@@ -13972,7 +14184,80 @@
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/18-document-content-creation/18-10-PLAN.md"
+          ".planning/phases/18-document-content-creation/18-11-PLAN.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "No current layer-specific implementation evidence is certified by this open delta.",
+        "offline_tested": "No exact current offline command evidence is certified by this open delta.",
+        "deployed": "No exact candidate deployment evidence is certified by this open delta.",
+        "live_observed": "No current live observation is certified by this open delta.",
+        "owner_accepted": "No current founder verdict is certified by this open delta.",
+        "externally_enabled": "No current external enablement is certified by this open delta."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "18-document-content-creation/18-11"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "The current product creates, presents, downloads, regenerates, replaces, and truthfully formats Blueprint-grounded documents with founder-approved BRAND presentation and independent evidence-layer accounting."
+      ],
+      "remaining_work_classes": [
+        "evidence_reconciliation",
+        "current_code_delta_or_named_supersession"
+      ],
+      "closure_wave": 1,
+      "owner_phase": "Phase 18",
+      "dependencies": [
+        "17.1-11"
+      ],
+      "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
+      "objective_exit_test": "The current product creates, presents, downloads, regenerates, replaces, and truthfully formats Blueprint-grounded documents with founder-approved BRAND presentation and independent evidence-layer accounting.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop immediately if 17.1-11 is missing, accepted:false, incomplete, or stale against the candidate revision.",
+        "Stop if the defect belongs to Blueprint construction, schema, deployment infrastructure, or any path outside files_modified; return it to the named integration owner.",
+        "Stop before paid/live model work without bounded authorization and after the first non-certifying sequence.",
+        "Stop on tenant leakage, raw content in audit, mismatched MIME/extension, missing cleanup evidence, or an owner rejection."
+      ]
+    },
+    {
+      "id": "PLAN:18-document-content-creation/18-10",
+      "workflow": "SUPERSEDED 2026-09-19 by 18-11; not completion. Historical intent: Land Pattern 9: one conjunct on the blueprint drift predicate so agent-authored documents stop",
+      "source_phase": "Phase 18",
+      "source_plans": [
+        ".planning/phases/18-document-content-creation/18-10-PLAN.md"
+      ],
+      "requirement_ids": [
+        "ACTN-04"
+      ],
+      "historical_state": "superseded_summary",
+      "current_disposition": "superseded_and_archived",
+      "implemented": "unknown",
+      "offline_tested": "unknown",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/18-document-content-creation/18-10-PLAN.md",
+          ".planning/phases/18-document-content-creation/18-10-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -13986,9 +14271,7 @@
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "18-document-content-creation/18-10"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
@@ -14011,7 +14294,7 @@
       "objective_exit_test": "17.1-10's closure is recorded (or the phase reports blocked here). The observation is written verbatim into 18-10-SUMMARY.md either way.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
-      "successor": null,
+      "successor": "PLAN:18-document-content-creation/18-11",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
       ]
@@ -15814,29 +16097,31 @@
       "requirement_ids": [
         "G26"
       ],
-      "historical_state": "plan_without_canonical_summary",
+      "historical_state": "semantic_open_summary",
       "current_disposition": "open",
-      "implemented": "unknown",
+      "implemented": "partial",
       "offline_tested": "unknown",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
-        "implemented": [],
+        "implemented": [
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-05-SUMMARY.md"
+        ],
         "offline_tested": [],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-05-PLAN.md"
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-05-PLAN.md",
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-05-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -15847,7 +16132,9 @@
         "canonical_open_plan_ids": [
           "37.1-closure-programme-integration-and-wave-0-baseline/37.1-05"
         ],
-        "semantic_partial_summary_paths": [],
+        "semantic_partial_summary_paths": [
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-05-SUMMARY.md"
+        ],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []

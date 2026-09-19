@@ -832,21 +832,27 @@ must be regenerated and reconciled at every wave boundary. Historical PLAN, SUMM
 VERIFICATION records remain immutable evidence; a stale or replaced record is superseded only by a
 named delta plan and is never rewritten as if later evidence existed at the time.
 
-At this baseline the independent scan produced 470 ledger rows: 246 in Wave 1, 24 in Wave 2, 47 in
+After the post-delta reconciliation the independent scan is represented by 474 ledger rows: 250 in Wave 1, 24 in Wave 2, 47 in
 Wave 3, 44 in Wave 4, 52 in Wave 5, 5 in Wave 6, 3 in Wave 7 and 49 in Wave 8. Its exact source sets
-are 358 canonical-open plan IDs, 324 semantically open summary paths, 66 phases with missing or open
+are 357 canonical-open plan IDs, 325 semantically open summary paths, 66 phases with missing or open
 verification, 43 unchecked requirements and 3 checked requirements explicitly annotated
 open/partial. These are conservative filesystem-derived counts, not completion or effort estimates.
 
-Evidence remains separated. Of the 470 rows, implementation is recorded as 332 partial, 127 unknown
+The five replaced plans (`01-09`, `03.7-05`, `17.1-10`, `18-09`, `18-10`) remain dated,
+successor-linked historical rows with disposition `superseded_and_archived`; they are not completion
+and are excluded from canonical-open membership. Their current-code successors are `01-10`,
+`03.7-10`, `17.1-11`, and the dependent `18-11`. The exact dispatch and ownership contract is the
+[Wave 1 handoff](../phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-1-HANDOFF.md).
+
+Evidence remains separated. Of the 474 rows, implementation is recorded as 333 partial, 130 unknown
 and 11 no; each of offline-tested, deployed, live-observed, owner-accepted and externally-enabled is
-recorded as 459 unknown and 11 no. No layer is inferred from another. A row advances only when new
+recorded as 463 unknown and 11 no. No layer is inferred from another. A row advances only when new
 layer-specific evidence is cited, and `unknown` remains an explicit closure task rather than a
 negative or a silent assumption.
 
-Wave 0 remains **in progress**. Plan 04 checker hardening, Plan 05 delta planning, Plan 06
-reconciliation/handoff and Plan 07 qualification and founder acceptance still remain before Wave 1
-may begin.
+Wave 0 remains **in progress**. Checker hardening, delta planning, and the post-delta
+reconciliation/handoff are recorded; Plan 07 qualification and founder acceptance still remain
+before Wave 1 may begin.
 
 ### 9.15 Programme-level stop conditions
 
