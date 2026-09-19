@@ -1,5 +1,5 @@
 {
-  "revision": "43a1487b79fe72069049a24f4839a12a9a3b2053",
+  "revision": "d78cbb10a8c466b2c36d92ae7a23ef7db446f0cc",
   "deployment": {
     "name": "local:local-joel_feruzi-pikar_ai_50c69-1",
     "url": "http://127.0.0.1:3210",
@@ -9,7 +9,7 @@
   },
   "authorization": {
     "decision": "authorize-one-run",
-    "response_verbatim": "authorize configuration and one fresh run",
+    "response_verbatim": "authorize preflight sync and conditional run.",
     "maximum_usd": 2.0,
     "automatic_retry": false,
     "full_run_limit": 1,
@@ -21,19 +21,30 @@
     }
   },
   "blueprint": {
-    "status": "not_seeded",
-    "reason": "the fresh governed evaluation budget refused before fixture seeding"
+    "status": "confirmed_retained",
+    "doc_id": "mx77ezthtjqv9scd45s3wkafe18eqz88",
+    "content_hash": "a0537bcf228dab7b9bdfd25a4d2425271f698d37ca6c3f20ddda78fdaededdb4",
+    "size_bytes": 219
   },
   "sources": {
     "required_ready_count": 5,
-    "status": "not_seeded",
-    "observed_ready_count": 0,
-    "reason": "the fresh governed evaluation budget refused before fixture seeding"
+    "status": "ready_retained",
+    "observed_ready_count": 5,
+    "documents": [
+      {"id":"mx776c8vhswrm6317034cy8pa98epqk2","content_hash":"983b6342d82d862794b8d8d0c03b82bfb945c34b23e750afbb51539ce0917056"},
+      {"id":"mx7ew33wngdcj59z0976m3mvtx8eqgtr","content_hash":"9406313d47a5632f3b0cfa99710ff62cd26f34be6df205efab9fda650100f2b1"},
+      {"id":"mx78mvxyq8874v8zmd7ryvd4ed8eqd0j","content_hash":"2ba7e5de52205080ab1194603b30078dd6fb619d375a4578dccbba6c11fcd5ef"},
+      {"id":"mx707m982dtfx8xnm46xp8r1h98epg7r","content_hash":"049384312db7dbaa04acd0203ebdc490b5ff85d144ef845a30dbddf758ada776"},
+      {"id":"mx73jhkjw8jevevvb015ge82018epdtt","content_hash":"f42b90cd1c39922d5cb300161dc2f957adca67a5144b677d68979760733a66d2"}
+    ]
   },
   "spine": {
     "required_needle": "evalblpr",
-    "status": "not_rendered",
-    "reason": "the fresh governed evaluation budget refused before fixture seeding"
+    "status": "rendered_retained",
+    "run_start_length": 401,
+    "reconciliation_length": 516,
+    "reconciliation_sha256": "b80ece37e4fa9757291a92954cf2ccb76a35ca28ec085061af0839dd38a91848",
+    "needle_observed": true
   },
   "skill": {
     "pins": [
@@ -61,18 +72,24 @@
     "runner_sha256": "c0a897a79f791c472b43707f831430c845906150a2e55e55bb30227f066b8c23",
     "mode": "unfiltered-no-retry",
     "command_invocations": 1,
-    "attempts_started": 0,
-    "spend_usd": 0.0,
-    "run_id": null,
-    "budget_id": null,
-    "case_total": 57,
-    "cases_started": 0,
-    "cases_passed": 0,
+    "attempts_started": 93,
+    "spend_usd": 0.06745454,
+    "run_id": "bc1d1a74",
+    "budget_id": "ps7f497nf881se330r2jncnzr18epwfx",
+    "manifest_case_total": 57,
+    "executable_case_total": 46,
+    "cases_started": 8,
+    "cases_passed": 7,
     "cases_failed": 0,
     "automatic_retries": 0,
-    "status": "blocked_pre_spend",
-    "refusal": "GOLDEN_PROVIDER_BILLING_UNVERIFIED",
-    "refusal_root_cause": "the initial non-echoing PowerShell stdin configuration appended carriage-return bytes; names-only validation could not detect the exact-value mismatch",
+    "status": "partial_non_certifying_paid_call_unresolved",
+    "refusal": "GOLDEN_PAID_CALL_UNRESOLVED at case 08-bounce-then-correct",
+    "governed_status": {"closed":true,"cap_cents":200,"calls":93,"settled":93,"unsettled":0,"unresolved_cents":0,"remaining_cents":127,"breached":false},
+    "provider_totals": {
+      "openrouter": {"calls":73,"cost_usd":0.06745454,"is_byok_observation":"false for every settled call; validated in memory, not persisted per row"},
+      "tavily_search": {"calls":10,"credits":10,"cost_usd":0},
+      "tavily_extract": {"calls":10,"credits":1,"cost_usd":0}
+    },
     "configuration_after_consumed_attempt": {
       "corrected_without_secret_output": true,
       "carriage_return_warnings": 0,
@@ -83,11 +100,11 @@
         "OPENROUTER_API_KEY",
         "TAVILY_API_KEY"
       ],
-      "rerun_performed": false
+      "rerun_performed": true
     },
     "log": {
-      "path": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-19-FRESH.log",
-      "sha256_lf_normalized": "64f238e21e95757846a7a666abe5c1b1f2516e820057a27a42693d06761c6211"
+      "path": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20.log",
+      "sha256": "b9a490dbff1783e6428864e19c2907e172acb434ea476a11746f6295be3dd5be"
     }
   },
   "cockpit": {
@@ -100,27 +117,31 @@
     "status": "not_owner_verified"
   },
   "cleanup": {
-    "status": "not_applicable_prewrite",
-    "local_backend_stopped": true,
-    "tenant_rows_created": 0,
+    "status": "retained_by_failed_partial_run_policy",
+    "local_backend_stopped": false,
+    "tenant_rows_created": 299,
     "evidence_rows_created": 0,
-    "budget_rows_created": 0,
+    "budget_rows_created": 254,
     "reconciled_rows_since_command_start": {
-      "audit": 0,
-      "plans": 0,
-      "spendEvents": 0,
-      "vaultDocuments": 0
+      "audit": 26,
+      "plans": 10,
+      "spendEvents": 254,
+      "vaultDocuments": 8,
+      "tenantProfiles": 1,
+      "evaluations": 0,
+      "briefings": 0,
+      "requests": 0
     },
-    "note": "openEvalBudget refused before its first database insert, before a run id was emitted, and before fixture seeding; the local backend was stopped"
+    "note": "No cleanup was run. The runner retains failed/partial tenant rows as diagnostic evidence, and spend/budget rows must remain."
   },
   "evidence_layers": {
     "implemented": "green",
     "offline-tested": "green",
     "deployed": "green-non-production",
-    "live-observed": "red-pre-spend-refusal",
+    "live-observed": "red-partial-7-of-46-observed-before-case-8-unresolved",
     "owner-accepted": "open",
-    "externally-enabled": "configuration-corrected-after-consumed-attempt-awaiting-fresh-gate"
+    "externally-enabled": "provider-access-observed-for-eval-only; Gmail grant remains open"
   },
   "accepted": false,
-  "blocker": "the only fresh command was consumed by GOLDEN_PROVIDER_BILLING_UNVERIFIED before case 1; configuration was corrected afterward, but no retry is authorized and founder verification remains gated"
+  "blocker": "the one conditional command was consumed after 7/46 executable cases passed; case 8 terminated GOLDEN_PAID_CALL_UNRESOLVED. The 57-case manifest is not 57 executed cases, no registry evidence was written, and founder/browser verification remains gated."
 }

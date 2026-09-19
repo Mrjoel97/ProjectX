@@ -2280,3 +2280,12 @@ printing them; names-only validation is necessary but not sufficient.
 > refs-only tombstone after replay retention. Omitted options retain the legacy six-page
 > compatibility behavior. The control is an attempt ceiling, not semantic evidence or a
 > currency budget; live acceptance remains required.
+## Wave 1A conditional-run reconciliation (2026-09-20)
+
+After a green free preflight, one unfiltered `--no-retry` command opened run `bc1d1a74` and budget
+`ps7f497nf881se330r2jncnzr18epwfx`. The manifest had 57 entries but the executor excluded 11
+revenue-candidate fixtures and announced 46 executable cases. Seven passed; case 8 ended
+`GOLDEN_PAID_CALL_UNRESOLVED`. Later read-only reconciliation found all 93 provider reservations
+settled and the budget closed at USD `0.06745454`, without breach. This does not turn the interrupted
+runner into a completed corpus: no retry, no registry evidence, no cleanup, and no founder
+checkpoint. Always record manifest size and executable scope separately.

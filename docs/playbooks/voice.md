@@ -1351,3 +1351,9 @@ UAT, and check the build timestamp against `git log` before believing a UI-level
 > carriage-return bytes from the non-echoing PowerShell pipeline, so the exact server
 > attestation refused before spend. They were corrected after the one-command authority
 > was consumed, with no retry. No Blueprint/spine or voice evidence was produced.
+## Wave 1A conditional-run voice disposition (2026-09-20)
+
+The five-source Blueprint and `evalblpr` standing spine were proven before the paid fixture loop,
+but the corpus stopped on case 8 after seven observed passes. It never produced a complete L6 gate
+and did not enter a live voice session. Voice-spine owner acceptance therefore remains OPEN; a
+retained Blueprint prerequisite is not live voice evidence.

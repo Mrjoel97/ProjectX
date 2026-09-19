@@ -1,0 +1,6 @@
+
+> @pikar/backend@0.0.0 eval:golden C:\Users\expert\Desktop\Pikar-Ai\packages\backend
+> node ./scripts/run-eval-golden.mjs "--preflight"
+
+[eval:golden] self-check PASSED (57 fixtures valid, 12 gated skills derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline; 21-03: tenant-pin parsing/scope-merge/candidate-eligibility/evidence-suppression/inspection/expectations/foreign-collision/deployment-fingerprint/unknown-arg proven offline)
+[eval:golden] provider preflight PASSED (secret-safe; no budget opened)

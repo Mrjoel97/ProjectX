@@ -4558,3 +4558,10 @@ gate — and it is the ONLY thing that can settle it.
 > before the five ready sources, Blueprint, or `evalblpr` spine existed. The values were
 > corrected without output after the authority was consumed; no second command ran.
 > Read-only reconciliation found zero new audit, plan, spend, or vault rows and USD 0.00.
+## Wave 1A retained Blueprint fixture (2026-09-20)
+
+The conditional run proved five ready source documents, one confirmed Blueprint, and a rendered
+spine containing `evalblpr` before case 1. The shared corpus then stopped at case 8 after seven
+observed passes. The retained fixture tenant holds 8 ready vault documents: 5 source brain dumps,
+the Blueprint, and 2 web-research documents. Failed/partial-run policy keeps these diagnostic rows;
+do not purge them or the associated spend evidence as successful-run cleanup.
