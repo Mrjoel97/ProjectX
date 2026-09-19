@@ -107,6 +107,21 @@
       "sha256_lf_canonical": "b8e94ace2f984f2f829f8adc8ea53e0f257e260ed4e8225983d895956a3b86da"
     }
   },
+  "latest_authorized_attempt": {
+    "authorization_response_verbatim": "proceed",
+    "authorization_scope": "settlement-fix sync, one free preflight, and one corpus command only if the preflight is green",
+    "source_revision": "77f8df8e0eca47a94019e1933b217a52b5dcad85",
+    "target": "local:local-joel_feruzi-pikar_ai_50c69-1",
+    "deployment_revision_observed": false,
+    "preflight_invocations": 1,
+    "preflight_status": "not_green_no_provider_readiness_pass_observed",
+    "preflight_exit_code": null,
+    "corpus_invocations": 0,
+    "spend_usd": 0,
+    "run_id": null,
+    "budget_id": null,
+    "log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-SETTLEMENT-FIX.log"
+  },
   "cockpit": {
     "status": "not_owner_verified"
   },

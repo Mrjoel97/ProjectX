@@ -1,0 +1,63 @@
+# Authorized settlement-fix preflight — fail-closed record
+
+Date: 2026-09-20
+Authorization response: `proceed`
+Authorization scope: synchronize the settlement-fix revision to the named existing non-production
+deployment, run one free secret-safe preflight, and invoke one unfiltered `--no-retry` corpus only
+if that preflight is green.
+
+## Target confirmation
+
+- deployment: `local:local-joel_feruzi-pikar_ai_50c69-1`
+- endpoint: `http://127.0.0.1:3210`
+- backend workspace: `packages/backend/.env.local`
+- source revision: `77f8df8e0eca47a94019e1933b217a52b5dcad85`
+- current runner SHA-256: `dfd9469a1eaccd4ba083e58427b2a924074e762130a7ed90da96a52952fd2a6d`
+- current suite revision: `2026-09-11.budgeted-evaluator.4b9a1ff9ac6b187b18924abafd84022407b93d9f2bf8f0f93c7b0fd2cb1f34c5`
+
+An accidental root-workspace CLI invocation created an unrelated temporary `:3212` local listener,
+then failed before pushing because the root package has no Convex dependency. It was never used for
+evaluation and had no listener by the time the approved target was checked. No deployment was reset,
+deleted, or used as a substitute.
+
+## Approved-target startup and preflight observation
+
+The existing `:3210` backend was stopped only after confirming its process identity and was launched
+again from `packages/backend` using the exact target configuration and existing-data continuity. The
+new listener came up on `:3210`, but the CLI session did not produce a conclusive `Convex functions
+ready` synchronization line.
+
+The one permitted standalone command was invoked exactly once:
+
+```text
+pnpm --filter @pikar/backend eval:golden -- --preflight
+```
+
+Its only captured result was:
+
+```text
+[eval:golden] self-check PASSED (57 fixtures valid, 12 gated skills derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline; 21-03: tenant-pin parsing/scope-merge/candidate-eligibility/evidence-suppression/inspection/expectations/foreign-collision/deployment-fingerprint/unknown-arg proven offline)
+```
+
+It did **not** emit the required `[eval:golden] provider preflight PASSED` deployment-readiness
+line. The preflight is therefore not green or conclusive. The temporary backend process was stopped
+after this observation; no timeout was extended and no second preflight was invoked.
+
+## Fail-closed reconciliation
+
+| Fact | Observed value |
+| --- | --- |
+| free preflight command invocations | 1 |
+| green deployment-readiness result | no |
+| corpus command invocations | 0 |
+| `--only` filters | 0 |
+| `--no-retry` corpus attempts | 0 |
+| run id / budget id | none / none |
+| corpus cases started / passed / failed | 0 / 0 / 0 |
+| provider spend under this authorization | USD 0.00 |
+| evidence, fixture, or cleanup writes | none observed |
+| retry or alternate target | none |
+
+No conclusion is borrowed from prior run `bc1d1a74`. The settlement fix remains offline-verified
+only; current L6/live-observed, registry-evidence, browser, founder, and Phase 18 acceptance gates
+remain open.
