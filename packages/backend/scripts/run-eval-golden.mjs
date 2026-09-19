@@ -11,6 +11,7 @@
 // Invocation (locked): pnpm eval:golden [--skill <name>@<version>]
 //                                       [--tenant-skill <tenantSkillsId>] [--only <id-substring>]
 //                                       [--no-retry]
+//                                       [--preflight]
 //   --skill      pin that GLOBAL skill version on every turn; an all-green pinned
 //                run records refs/counts-only evidence via skills:recordEvalEvidence
 //                (the EVAL_GATE input for activateSkill).
@@ -25,6 +26,9 @@
 //   --no-retry   run each selected fixture exactly once. This is the fail-closed mode for an
 //                authorization that forbids automatic failed-fixture retries; omission preserves
 //                the locked one-retry flake policy.
+//   --preflight  one FREE, read-only Convex readiness query. It validates deployment credentials
+//                and billing attestations without opening a budget, loading/seeding the corpus,
+//                calling a provider, writing evidence, or consuming the authorized full run.
 //   --self-check offline validation (ZERO convex calls): fixture vocabulary,
 //                cap/pin/filter logic — the ponytail one-runnable-check.
 //
@@ -1241,6 +1245,63 @@ const automaticRetryEnabled = (argv) => !argv.includes("--no-retry");
 const shouldRetryFailedFixture = (outcome, automaticRetry) =>
   outcome.pass === false && automaticRetry;
 
+const PROVIDER_READINESS_KEYS = [
+  "openrouterBilling",
+  "openrouterKey",
+  "ready",
+  "tavilyBilling",
+  "tavilyCreditUsd",
+  "tavilyKey",
+].sort();
+
+/** Convert a secret-free readiness response into closed, operator-safe reason codes. Unknown
+ * fields or values fail as `schema_invalid`; they are NEVER echoed because a future endpoint bug
+ * must not turn this runner into a secret printer. */
+function providerReadinessFailures(readiness) {
+  if (
+    readiness === null ||
+    typeof readiness !== "object" ||
+    Array.isArray(readiness) ||
+    !isDeepStrictEqual(Object.keys(readiness).sort(), PROVIDER_READINESS_KEYS)
+  )
+    return ["schema_invalid"];
+  const failures = [];
+  if (readiness.openrouterKey !== "ready")
+    failures.push(
+      readiness.openrouterKey === "missing"
+        ? "openrouter_key_missing"
+        : readiness.openrouterKey === "invalid_format"
+          ? "openrouter_key_invalid_format"
+          : "schema_invalid",
+    );
+  if (readiness.tavilyKey !== "ready")
+    failures.push(
+      readiness.tavilyKey === "missing"
+        ? "tavily_key_missing"
+        : readiness.tavilyKey === "invalid_format"
+          ? "tavily_key_invalid_format"
+          : "schema_invalid",
+    );
+  if (readiness.openrouterBilling !== "standard") failures.push("openrouter_billing_not_standard");
+  if (readiness.tavilyBilling !== "free") failures.push("tavily_billing_not_free");
+  if (readiness.tavilyCreditUsd !== "canonical_zero")
+    failures.push("tavily_credit_usd_not_canonical_zero");
+  if (readiness.ready !== (failures.length === 0)) failures.push("aggregate_verdict_mismatch");
+  return [...new Set(failures)];
+}
+
+function assertProviderReadiness(readiness) {
+  const failures = providerReadinessFailures(readiness);
+  if (failures.length) throw new Error(`GOLDEN_PROVIDER_PREFLIGHT_NOT_READY:${failures.join(",")}`);
+  return true;
+}
+
+function requireProviderReadiness() {
+  const readiness = parse(must("guardrails:goldenProviderReadiness", {}, RETRY_READ));
+  assertProviderReadiness(readiness);
+  console.log("[eval:golden] provider preflight PASSED (secret-safe; no budget opened)");
+}
+
 // ── 21-03: the read-only inspection mode + the evidence-suppression rule ─────
 
 /** Every flag this script understands. An argument NOT in here aborts — a typo must never fall
@@ -1251,6 +1312,7 @@ const KNOWN_FLAGS = new Set([
   "--tenant-skill",
   "--only",
   "--no-retry",
+  "--preflight",
   "--self-check",
   "--inspect-tenant-skill",
   "--foreign-tenant",
@@ -1299,6 +1361,16 @@ function assertKnownArgs(argv) {
       throw new Error(`unknown argument "${a}" (known: ${[...KNOWN_FLAGS].sort().join(" ")})`);
     }
     if (VALUED_FLAGS.has(flag) && !a.includes("=")) i++; // skip the value
+  }
+  return true;
+}
+
+function assertStandalonePreflightArgs(argv) {
+  if (!argv.includes("--preflight")) return true;
+  if (argv.length !== 1) {
+    throw new Error(
+      "--preflight is a standalone read-only mode and cannot be combined with run flags",
+    );
   }
   return true;
 }
@@ -4056,6 +4128,42 @@ function selfCheck() {
     assertKnownArgs(["--no-retry"]),
     "the explicitly authorized one-run mode must be accepted before any paid work",
   );
+  assert.ok(assertKnownArgs(["--preflight"]), "the free deployment preflight flag is known");
+  assert.equal(assertStandalonePreflightArgs(["--preflight"]), true);
+  assert.throws(
+    () => assertStandalonePreflightArgs(["--preflight", "--no-retry"]),
+    /standalone read-only mode/,
+    "the preflight cannot accidentally consume or alter full-run semantics",
+  );
+  const canonicalReadiness = {
+    openrouterKey: "ready",
+    tavilyKey: "ready",
+    openrouterBilling: "standard",
+    tavilyBilling: "free",
+    tavilyCreditUsd: "canonical_zero",
+    ready: true,
+  };
+  assert.equal(assertProviderReadiness(canonicalReadiness), true, "canonical readiness passes");
+  for (const [field, state, reason] of [
+    ["openrouterKey", "missing", "openrouter_key_missing"],
+    ["openrouterKey", "invalid_format", "openrouter_key_invalid_format"],
+    ["tavilyKey", "missing", "tavily_key_missing"],
+    ["tavilyKey", "invalid_format", "tavily_key_invalid_format"],
+    ["openrouterBilling", "invalid", "openrouter_billing_not_standard"],
+    ["tavilyBilling", "invalid", "tavily_billing_not_free"],
+    ["tavilyCreditUsd", "invalid", "tavily_credit_usd_not_canonical_zero"],
+  ]) {
+    assert.throws(
+      () => assertProviderReadiness({ ...canonicalReadiness, [field]: state, ready: false }),
+      new RegExp(reason),
+      `${field} fails with a safe closed reason`,
+    );
+  }
+  assert.throws(
+    () => assertProviderReadiness({ ...canonicalReadiness, unexpected: "do-not-echo" }),
+    /schema_invalid/,
+    "unexpected response fields fail without being echoed",
+  );
   assert.equal(
     automaticRetryEnabled([]),
     true,
@@ -4149,6 +4257,22 @@ function selfCheck() {
   assert.ok(
     inspectCallAt < liveCallAt,
     "--inspect-tenant-skill must be dispatched BEFORE runLive — a read-only mode that seeds fixtures is not read-only",
+  );
+  const liveBody = runnerSource.slice(
+    runnerSource.lastIndexOf("async function runLive("),
+    runnerSource.lastIndexOf(marker("21-03: the read-only inspection command")),
+  );
+  const providerPreflightAt = liveBody.indexOf("requireProviderReadiness();");
+  const corpusLoadAt = liveBody.indexOf("loadFixtures()");
+  const budgetOpenAt = liveBody.indexOf("guardrails:openEvalBudget");
+  assert.ok(
+    providerPreflightAt > 0 && corpusLoadAt > providerPreflightAt && budgetOpenAt > corpusLoadAt,
+    "the secret-safe deployment preflight must precede corpus loading and budget opening",
+  );
+  const preflightDispatchAt = entry.indexOf('argv.includes("--preflight")');
+  assert.ok(
+    preflightDispatchAt > 0 && preflightDispatchAt < liveCallAt,
+    "the standalone preflight exits before the full-run invocation",
   );
   const inspectBody = runnerSource.slice(
     runnerSource.lastIndexOf(marker("21-03: the read-only inspection command")),
@@ -4934,6 +5058,10 @@ function suiteIdentityFor() {
 }
 
 async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetry = true) {
+  // FIRST deployment interaction and before even loading the corpus: malformed secrets or billing
+  // attestations must not open a budget, mint a tenant, seed a fixture, or consume an authorized
+  // full-run attempt. The same query is available separately through `--preflight`.
+  requireProviderReadiness();
   // Revenue fixtures run only through the explicit all-candidates path. Feeding them into this
   // legacy cockpit gate would bill the wrong body and produce an `expectedState` with no oracle.
   const allFixtures = loadFixtures().filter((fixture) => fixture.candidate === undefined);
@@ -5422,8 +5550,16 @@ const argv = stripSeparator(process.argv.slice(2));
 try {
   // 21-03: a typo aborts HERE, before anything is parsed, seeded, read or billed.
   assertKnownArgs(argv);
+  assertStandalonePreflightArgs(argv);
   if (argv.includes("--self-check")) {
     selfCheck();
+    process.exit(0);
+  }
+  if (argv.includes("--preflight")) {
+    // The only live/deployment read in this mode. No budget, corpus load/seed, provider call,
+    // evidence write, or cleanup follows; success exits before every full-run parser.
+    selfCheck();
+    requireProviderReadiness();
     process.exit(0);
   }
   // 23-04: mechanical, and deliberately BEFORE every other mode — it writes one file and exits,

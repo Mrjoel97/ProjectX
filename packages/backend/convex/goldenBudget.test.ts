@@ -30,6 +30,79 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+test.each([
+  {
+    name: "canonical values",
+    env: {
+      OPENROUTER_API_KEY: "provider-token",
+      TAVILY_API_KEY: "search-token",
+      GOLDEN_OPENROUTER_BILLING: "standard",
+      GOLDEN_TAVILY_BILLING: "free",
+      GOLDEN_TAVILY_CREDIT_USD: "0",
+    },
+    expected: {
+      openrouterKey: "ready",
+      tavilyKey: "ready",
+      openrouterBilling: "standard",
+      tavilyBilling: "free",
+      tavilyCreditUsd: "canonical_zero",
+      ready: true,
+    },
+  },
+  {
+    name: "blank secrets",
+    env: { OPENROUTER_API_KEY: "", TAVILY_API_KEY: "   " },
+    expected: { openrouterKey: "missing", tavilyKey: "missing", ready: false },
+  },
+  {
+    name: "secret trailing space",
+    env: { OPENROUTER_API_KEY: "provider-token ", TAVILY_API_KEY: "search-token" },
+    expected: { openrouterKey: "invalid_format", tavilyKey: "ready", ready: false },
+  },
+  {
+    name: "secret CR LF",
+    env: { OPENROUTER_API_KEY: "provider-token\r", TAVILY_API_KEY: "search-token\n" },
+    expected: {
+      openrouterKey: "invalid_format",
+      tavilyKey: "invalid_format",
+      ready: false,
+    },
+  },
+  {
+    name: "wrong attestations",
+    env: {
+      OPENROUTER_API_KEY: "provider-token",
+      TAVILY_API_KEY: "search-token",
+      GOLDEN_OPENROUTER_BILLING: "byok",
+      GOLDEN_TAVILY_BILLING: "standard",
+      GOLDEN_TAVILY_CREDIT_USD: "0.008",
+    },
+    expected: {
+      openrouterBilling: "invalid",
+      tavilyBilling: "invalid",
+      tavilyCreditUsd: "invalid",
+      ready: false,
+    },
+  },
+])("golden provider readiness is secret-safe and fail-closed: $name", async ({ env, expected }) => {
+  const t = harness();
+  for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+  const readiness = await t.query(internal.guardrails.goldenProviderReadiness, {});
+  expect(readiness).toMatchObject(expected);
+  expect(JSON.stringify(readiness)).not.toContain("provider-token");
+  expect(JSON.stringify(readiness)).not.toContain("search-token");
+  expect(Object.keys(readiness).sort()).toEqual(
+    [
+      "openrouterBilling",
+      "openrouterKey",
+      "ready",
+      "tavilyBilling",
+      "tavilyCreditUsd",
+      "tavilyKey",
+    ].sort(),
+  );
+});
+
 test("chat billing uses raw SDK response and unverified billing retains its hold", async () => {
   for (const isByok of [false, true, undefined]) {
     const t = harness();
