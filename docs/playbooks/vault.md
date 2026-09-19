@@ -4551,3 +4551,10 @@ gate — and it is the ONLY thing that can settle it.
 > created. Result: **0 paid/full-run attempts, 0/57 cases, 0 retries, USD 0.00**. The
 > invocation was not retried. L6 remains RED/open and no founder verification or
 > Phase-18 baseline acceptance is permitted from this record.
+
+> Fresh-authority follow-up, 2026-09-19: the five approved local environment values
+> were present by name, but the initial PowerShell stdin path appended carriage-return
+> bytes. The server therefore refused the one fresh command at `openEvalBudget`, again
+> before the five ready sources, Blueprint, or `evalblpr` spine existed. The values were
+> corrected without output after the authority was consumed; no second command ran.
+> Read-only reconciliation found zero new audit, plan, spend, or vault rows and USD 0.00.

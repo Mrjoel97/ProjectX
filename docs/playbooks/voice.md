@@ -1346,3 +1346,8 @@ UAT, and check the build timestamp against `git log` before believing a UI-level
 > Blueprint, or rendered standing spine was created. Therefore the voice-spine
 > founder check was not opened and no voice behavior is inferred from deployment or
 > offline evidence.
+
+> Fresh-authority follow-up, 2026-09-19: the newly configured values contained hidden
+> carriage-return bytes from the non-echoing PowerShell pipeline, so the exact server
+> attestation refused before spend. They were corrected after the one-command authority
+> was consumed, with no retry. No Blueprint/spine or voice evidence was produced.

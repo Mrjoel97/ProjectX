@@ -2260,6 +2260,19 @@ that authority. Resolve and verify the provider-billing contract without weakeni
 then obtain fresh explicit one-run authority before another golden command. Founder/browser
 verification remains gated until certifying current-run evidence exists.
 
+### Fresh configuration attempt (2026-09-19)
+
+A separately authorized local-only attempt configured the two provider keys and three billing
+attestations without printing values, upgraded the required local backend by transferring its
+existing snapshot, and re-proved the exact pins, evaluator revision, 57-fixture self-check, and
+provider DNS/TCP readiness. The one unfiltered `--no-retry` command still failed at
+`openEvalBudget` before spend or writes. Diagnosis after the consumed command found the initial
+PowerShell stdin method had appended carriage returns to every value: names-only checks passed,
+but the server's exact comparison correctly refused. The values were corrected with no-newline
+stdin and the command was not repeated. Result: 0 attempts, 0/57 cases, 0 retries, USD 0.00, and
+zero new audit/plan/spend/vault rows. Future configuration gates must verify exact bytes without
+printing them; names-only validation is necessary but not sufficient.
+
 > Last verified: 2026-09-12 — typed research requests may admit a bounded page-attempt allowance
 > through the authenticated cockpit driver. The server creates one tenant/request control and
 > every `readPage` extraction claims it atomically before provider egress; failed or ambiguous

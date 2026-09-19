@@ -1,33 +1,39 @@
 {
-  "revision": "905a5bab610692a0c755a4fa53c5a3a186b72db5",
+  "revision": "43a1487b79fe72069049a24f4839a12a9a3b2053",
   "deployment": {
     "name": "local:local-joel_feruzi-pikar_ai_50c69-1",
     "url": "http://127.0.0.1:3210",
     "environment": "non-production",
-    "synchronized_at": "2026-09-19T19:47:07Z"
+    "synchronized_at": "2026-09-19T20:21:38Z",
+    "startup_note": "Convex required a local-backend upgrade; the existing 327205078-byte snapshot was transferred and imported, not discarded"
   },
   "authorization": {
     "decision": "authorize-one-run",
-    "response_verbatim": "authorize sync and Blueprint run”",
+    "response_verbatim": "authorize configuration and one fresh run",
     "maximum_usd": 2.0,
     "automatic_retry": false,
     "full_run_limit": 1,
-    "scope": "one unfiltered current golden-corpus run with isolated evidence writes and cleanup"
+    "scope": "configure the five named local deployment variables, then one unfiltered current golden-corpus run with isolated evidence writes and cleanup",
+    "prior_authority": {
+      "response_verbatim": "authorize sync and Blueprint run”",
+      "consumed_log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log",
+      "spend_usd": 0.0
+    }
   },
   "blueprint": {
     "status": "not_seeded",
-    "reason": "the governed evaluation budget refused before fixture seeding"
+    "reason": "the fresh governed evaluation budget refused before fixture seeding"
   },
   "sources": {
     "required_ready_count": 5,
     "status": "not_seeded",
     "observed_ready_count": 0,
-    "reason": "the governed evaluation budget refused before fixture seeding"
+    "reason": "the fresh governed evaluation budget refused before fixture seeding"
   },
   "spine": {
     "required_needle": "evalblpr",
     "status": "not_rendered",
-    "reason": "the governed evaluation budget refused before fixture seeding"
+    "reason": "the fresh governed evaluation budget refused before fixture seeding"
   },
   "skill": {
     "pins": [
@@ -66,9 +72,22 @@
     "automatic_retries": 0,
     "status": "blocked_pre_spend",
     "refusal": "GOLDEN_PROVIDER_BILLING_UNVERIFIED",
+    "refusal_root_cause": "the initial non-echoing PowerShell stdin configuration appended carriage-return bytes; names-only validation could not detect the exact-value mismatch",
+    "configuration_after_consumed_attempt": {
+      "corrected_without_secret_output": true,
+      "carriage_return_warnings": 0,
+      "verified_names_only": [
+        "GOLDEN_OPENROUTER_BILLING",
+        "GOLDEN_TAVILY_BILLING",
+        "GOLDEN_TAVILY_CREDIT_USD",
+        "OPENROUTER_API_KEY",
+        "TAVILY_API_KEY"
+      ],
+      "rerun_performed": false
+    },
     "log": {
-      "path": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log",
-      "sha256": "1f7d723af16e5e547102004d459379f8b1ae98f19a2842ee97f9d11b671fc299"
+      "path": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-19-FRESH.log",
+      "sha256_lf_normalized": "64f238e21e95757846a7a666abe5c1b1f2516e820057a27a42693d06761c6211"
     }
   },
   "cockpit": {
@@ -86,7 +105,13 @@
     "tenant_rows_created": 0,
     "evidence_rows_created": 0,
     "budget_rows_created": 0,
-    "note": "openEvalBudget refused before its first database insert, before a run id was emitted, and before fixture seeding"
+    "reconciled_rows_since_command_start": {
+      "audit": 0,
+      "plans": 0,
+      "spendEvents": 0,
+      "vaultDocuments": 0
+    },
+    "note": "openEvalBudget refused before its first database insert, before a run id was emitted, and before fixture seeding; the local backend was stopped"
   },
   "evidence_layers": {
     "implemented": "green",
@@ -94,8 +119,8 @@
     "deployed": "green-non-production",
     "live-observed": "red-pre-spend-refusal",
     "owner-accepted": "open",
-    "externally-enabled": "blocked-unverified-provider-billing-contract"
+    "externally-enabled": "configuration-corrected-after-consumed-attempt-awaiting-fresh-gate"
   },
   "accepted": false,
-  "blocker": "GOLDEN_PROVIDER_BILLING_UNVERIFIED refused the governed budget before case 1; no retry is authorized and founder verification remains gated"
+  "blocker": "the only fresh command was consumed by GOLDEN_PROVIDER_BILLING_UNVERIFIED before case 1; configuration was corrected afterward, but no retry is authorized and founder verification remains gated"
 }
