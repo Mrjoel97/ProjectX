@@ -1,5 +1,16 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-19 (01-10 — Google OAuth repository readiness). The connect page now
+> renders closed callback codes through bounded user copy, exposes deterministic loading,
+> unavailable, connected/reconnect, and disconnect-result selectors, and never echoes provider
+> text. `google-oauth-readiness.spec.ts` inspects the signed shared-grant authorize URL but never
+> clicks it or leaves Pikar; `reconnectBanner.test.ts` pins hostile callback fallback and the
+> distinction between partial provider revocation and an unchanged connection. Offline commands:
+> `pnpm --filter @pikar/web exec vitest run "app/(app)/_components/reconnectBanner.test.ts"` and
+> `pnpm --filter @pikar/web exec playwright test e2e/google-oauth-readiness.spec.ts --list`.
+> Provider consent, test-user edits, live authorization, revocation round-trip, and formal Google
+> verification remain OPEN for Wave 7; this entry claims none of them.
+
 > 2026-09-10: Business shape now hosts evidence-qualified vertical suggestions in a separate
 > error boundary. The server selects at most two; unqualified candidates remain absent. Turning
 > a suggestion off preserves artifacts and exposes a restore preference, which cannot bypass
