@@ -424,7 +424,6 @@
       "37-planning-corpus-repair/37-01",
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-01",
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-02",
-      "37.1-closure-programme-integration-and-wave-0-baseline/37.1-03",
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-04",
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-05",
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-06",
@@ -754,6 +753,7 @@
       ".planning/phases/37-planning-corpus-repair/37-01-SUMMARY.md",
       ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-01-SUMMARY.md",
       ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-02-SUMMARY.md",
+      ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-04-SUMMARY.md",
       ".planning/phases/38-tool-registry/38-01-SUMMARY.md",
       ".planning/phases/40-document-canvas/40-02-SUMMARY.md"
     ],
@@ -15732,86 +15732,6 @@
       ]
     },
     {
-      "id": "PLAN:37.1-closure-programme-integration-and-wave-0-baseline/37.1-03",
-      "workflow": "Produce the one truthful, plan-level closure ledger and dependency map that turns Waves 1-8 into executable work.",
-      "source_phase": "Phase 37.1",
-      "source_plans": [
-        ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-03-PLAN.md"
-      ],
-      "requirement_ids": [
-        "G26",
-        "SITE-01",
-        "SITE-02",
-        "SITE-03",
-        "LAND-01",
-        "LAND-02",
-        "LAND-03",
-        "SHOP-01",
-        "SHOP-02",
-        "SHOP-03",
-        "SHOP-04",
-        "SHOP-05"
-      ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
-      "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
-        "deployed": [],
-        "live_observed": [],
-        "owner_accepted": [],
-        "externally_enabled": [],
-        "source": [
-          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-03-PLAN.md"
-        ],
-        "objective_exit_test": [],
-        "owner_decision": []
-      },
-      "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
-      },
-      "source_membership": {
-        "canonical_open_plan_ids": [
-          "37.1-closure-programme-integration-and-wave-0-baseline/37.1-03"
-        ],
-        "semantic_partial_summary_paths": [],
-        "missing_or_open_verification_phases": [],
-        "open_requirement_ids": [],
-        "semantic_partial_requirement_ids": []
-      },
-      "unmet_acceptance": [
-        "The JSON ledger covers the full admitted backlog with stable IDs, exact evidence layers, owners, waves, and closure tests."
-      ],
-      "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
-      ],
-      "closure_wave": 1,
-      "owner_phase": "Phase 37.1",
-      "dependencies": [
-        "37.1-02"
-      ],
-      "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
-      "objective_exit_test": "The JSON ledger covers the full admitted backlog with stable IDs, exact evidence layers, owners, waves, and closure tests.",
-      "user_claims": [],
-      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
-      "successor": null,
-      "stop_conditions": [
-        "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
-      ]
-    },
-    {
       "id": "PLAN:37.1-closure-programme-integration-and-wave-0-baseline/37.1-04",
       "workflow": "Harden the existing planning checker just enough to prevent the specific false-closure and split-authority failures found in Wave 0.",
       "source_phase": "Phase 37.1",
@@ -15821,29 +15741,31 @@
       "requirement_ids": [
         "G26"
       ],
-      "historical_state": "plan_without_canonical_summary",
+      "historical_state": "semantic_open_summary",
       "current_disposition": "open",
-      "implemented": "unknown",
+      "implemented": "partial",
       "offline_tested": "unknown",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
-        "implemented": [],
+        "implemented": [
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-04-SUMMARY.md"
+        ],
         "offline_tested": [],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-04-PLAN.md"
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-04-PLAN.md",
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-04-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -15854,7 +15776,9 @@
         "canonical_open_plan_ids": [
           "37.1-closure-programme-integration-and-wave-0-baseline/37.1-04"
         ],
-        "semantic_partial_summary_paths": [],
+        "semantic_partial_summary_paths": [
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-04-SUMMARY.md"
+        ],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []

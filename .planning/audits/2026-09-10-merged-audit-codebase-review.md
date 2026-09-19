@@ -832,15 +832,15 @@ must be regenerated and reconciled at every wave boundary. Historical PLAN, SUMM
 VERIFICATION records remain immutable evidence; a stale or replaced record is superseded only by a
 named delta plan and is never rewritten as if later evidence existed at the time.
 
-At this baseline the independent scan produced 471 ledger rows: 247 in Wave 1, 24 in Wave 2, 47 in
+At this baseline the independent scan produced 470 ledger rows: 246 in Wave 1, 24 in Wave 2, 47 in
 Wave 3, 44 in Wave 4, 52 in Wave 5, 5 in Wave 6, 3 in Wave 7 and 49 in Wave 8. Its exact source sets
-are 359 canonical-open plan IDs, 323 semantically open summary paths, 66 phases with missing or open
+are 358 canonical-open plan IDs, 324 semantically open summary paths, 66 phases with missing or open
 verification, 43 unchecked requirements and 3 checked requirements explicitly annotated
 open/partial. These are conservative filesystem-derived counts, not completion or effort estimates.
 
-Evidence remains separated. Of the 471 rows, implementation is recorded as 331 partial, 129 unknown
+Evidence remains separated. Of the 470 rows, implementation is recorded as 332 partial, 127 unknown
 and 11 no; each of offline-tested, deployed, live-observed, owner-accepted and externally-enabled is
-recorded as 460 unknown and 11 no. No layer is inferred from another. A row advances only when new
+recorded as 459 unknown and 11 no. No layer is inferred from another. A row advances only when new
 layer-specific evidence is cited, and `unknown` remains an explicit closure task rather than a
 negative or a silent assumption.
 
