@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Pikar-AI is a governed, agentic operating layer that turns scattered, unstructured input — voice, text, attachments — into planned, multi-step action that follows through across the user's tools, with built-in guardrails for cost, compliance, and quality, and that gets better over time. It targets every business size, but v1 serves the solopreneur: a 24/7 AI chief-of-staff they couldn't otherwise afford, delivered as a web app reaching private beta in 4 weeks.
+Pikar-AI is a governed, agentic operating layer that turns scattered, unstructured input — voice, text, attachments — into planned, multi-step action that follows through across the user's tools, with built-in guardrails for cost, compliance, and quality, and that gets better over time. It targets every business size, but v1 serves the solopreneur: a 24/7 AI chief-of-staff they couldn't otherwise afford, delivered as an invite-only web beta only after the intended workflows pass the owner-adopted Closure Programme.
 
 ## Core Value
 
@@ -11,8 +11,16 @@ A user speaks or types a goal and the system reliably plans it, shows the plan f
 ## Current Milestone: v2.0 — Platform → Private Beta
 
 **Goal:** Grow Pikar from a governed *email* cockpit into a genuinely intelligent, broadly-capable
-AI chief-of-staff — one that knows the user's business, evaluates it, and acts across multiple tools
-— and only *then* open the invite-only private beta on that fuller product.
+AI chief-of-staff — one that knows the user's business, evaluates it, acts across multiple tools,
+and creates the intended public web and commerce outcomes — and only *then* open the invite-only
+private beta on the complete, evidence-qualified product.
+
+**Adopted operating programme (2026-09-19):** the owner-adopted Closure Programme in
+`.planning/audits/2026-09-10-merged-audit-codebase-review.md` §9 is the standing authority through
+Wave 8. GSD ROADMAP/REQUIREMENTS/plans/summaries/verifications remain its operational records.
+Existing partial work is closed by current-code delta plans; it is not abandoned, silently removed,
+or declared complete from source presence. Phase 37.1 owns the Wave 0 truth baseline before product
+lanes resume.
 
 **Why now (2026-07-24):** A pre-beta launch-readiness review verified in code that the app was an
 excellent governance spine wrapped around a single organ (email): the Knowledge Vault's hybrid
@@ -35,7 +43,11 @@ beta (former Phase 9) moves to the END of this milestone.
    provider API**, do not rebuild; the Pikar-Ai MCP is claude.ai client-side only and unreachable
    from the backend — corrected 2026-08-03, see ADR-011/ADR-012) · dynamic skill creation
    (user-authored first, then agent-authored — self-modification, governance-heavy, placed late).
-4. **Governance & Open the Beta** — ISO 9001:2015 QMS foundation (formalize the existing audit /
+4. **Public Web Presence & Tenant Commerce** — structured multi-page business websites · campaign
+   landing pages with forms, consent, attribution and analytics · qualified reusable recipes ·
+   tenant catalogues, inventory, merchant checkout and order lifecycle, kept structurally separate
+   from Pikar's own subscription billing.
+5. **Governance & Open the Beta** — ISO 9001:2015 QMS foundation (formalize the existing audit /
    skill-versioning / GSD-playbook change-control bones) · `requireOwner` + cross-user isolation
    test · Private Beta Productionization (invite/waitlist, Microsoft Graph/Outlook, Vercel deploy) —
    the final phase.
@@ -91,7 +103,9 @@ evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
 - Multi-reviewer / senior-reviewer human roles — solo user reviews own output in v1; escalation paths map to notifications + timeout defaults
 - Slack intake and multi-channel orchestration — startup/SME tier features, later milestone
 - Desktop/legacy RPA execution — no UiPath; browser/API tools only in v1
-- Public launch (billing, abuse protection, legal pages) — next milestone after private beta
+- Unrestricted public launch remains after the invite-only beta. Technical abuse controls and the
+  legal/provider/domain/merchant prerequisites required by admitted beta workflows remain visible
+  Closure Programme work; they are not removed merely because external enablement is Wave 7.
 - Custom skills registry for third-party teams — enterprise-tier feature
 - Recurring/standing-instruction sends ("every day at 8 AM") — gated on verified OAuth (Testing mode's 7-day tokens break weekly schedules) and an unmade approve-template-vs-per-run-redraft governance decision; design constraints recorded in `.planning/design/scheduled-send.md`
 
@@ -106,7 +120,9 @@ evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
 
 ## Constraints
 
-- **Timeline**: Private beta in production in 4 weeks (target ~2026-08-05) — MVP must be one thin end-to-end slice with everything else staged
+- **Timeline**: the historical 4-week target (~2026-08-05) has expired. The private beta opens after
+  the adopted Waves 0–8 close the intended scope on one exact release; no acceptance criterion is
+  weakened to recover the old date.
 - **Tech stack**: Code-first TypeScript monorepo — Next.js web app on a Convex backend (database, functions, realtime, vector search, scheduling), LLM gateway with caching/fallback — no UiPath licensing dependency. Python sidecars (Presidio PII, graphify extraction) are **not yet built and no longer assumed**: the v1 PII engine is **pure-TS in `packages/pii`** (decided 2026-07-12, spike proven — see `.planning/design/pii-engine.md`); the Presidio sidecar is the named upgrade path, adopted only if redaction quality (names/i18n) demands the platform cost
 - **Restricted-scope compliance** *(added 2026-07-10)*: `gmail.modify` is a Google **restricted** scope — an annual CASA third-party security assessment (~$500–4,500/yr to the assessor) is a permanent recurring product cost, and the LLM provider MUST be contracted on zero-retention / no-training terms (Google policy forbids using restricted-scope data to train generalized models). Verification also runs longer than the sensitive-scope path
 - **Budget**: Cost guardrails are a product feature and a build constraint — LLM cache and model downgrade must exist in v1
@@ -137,4 +153,4 @@ evidence hierarchy (behavioral > verbal-specific; verbal-general is noise).*
 | **Scheduling split into two tiers: deferred send in v1 (Phase 3.5), recurring post-verification** (2026-07-12) | "Send at 4 AM" is the time dimension of the chief-of-staff promise and composes onto per-plan approval (the approved plan includes the when); recurring is a standing instruction blocked structurally by 7-day Testing-mode tokens and an unmade re-draft governance decision | ✅ Registered — SCHD-01 minted, Phase 3.5 inserted; design record: `.planning/design/scheduled-send.md` |
 
 ---
-*Last updated: 2026-07-24 — v2.0 Platform milestone opened (build the full chief-of-staff platform before the private beta; beta moves to the milestone's end — see Current Milestone). Prior 2026-07-12 re-baseline: per-plan approval, gmail.modify restricted-scope constraints (CASA + zero-retention LLM), cockpit phases 3.1–3.4, sidecar assumption removed, decision outcomes recorded; moat strategy + post-beta Validated gate registered (`.planning/design/moat-strategy.md`); deferred send added (SCHD-01 / Phase 3.5), recurring sends scoped out (`.planning/design/scheduled-send.md`)*
+*Last updated: 2026-09-19 — owner-adopted Closure Programme made the complete intended invite-only beta, including public-web and tenant-commerce scope, the milestone target. Earlier dated decisions remain historical evidence.*

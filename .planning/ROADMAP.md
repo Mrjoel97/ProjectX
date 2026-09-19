@@ -4,6 +4,73 @@
 
 Pikar-AI reaches a private beta in ~4 weeks (target ~2026-08-05) by building the governed request pipeline outward from an immutable foundation. We first lay the Convex data/orchestration substrate that bakes in tenant isolation, insert-only audit, durable workflows, and the dead-letter/timeout patterns every later feature reuses â then prove the core value with one thin end-to-end slice (type a goal â plan â review â email â audit). Guardrails (PII, cost, cache, kill-switch) slot into the existing pipeline steps, followed by richer intake (attachments + voice dictation), the knowledge vault with GraphRAG memory, and the identity-defining live voice sessions. We then harden every failure path, add the self-improvement loop, and finish with private-beta productionization: invite-only signup, verified per-user isolation, fast onboarding, and the second email provider. Voice is deliberately staged (dictation before live) and email providers are strictly sequenced (Gmail before Microsoft Graph) to keep the highest-risk, least-controllable work off the critical path.
 
+## Audit-governed execution (v2.0)
+
+The single governing reference for current work is the [merged audit](audits/2026-09-10-merged-audit-codebase-review.md). Its G1–G26 reconciliation and Independent cross-cutting reconciliation H1–H5 are additive release controls, not a competing roadmap. Historical Phase 1–9 material remains preserved as v1.0 history; superseded, partial, blocked, and research-only records remain honest and are not silently converted into completed work.
+
+**Current execution pointer:** Phase 37.1 — Closure Programme Integration and Wave 0 Baseline. It
+reconciles authority, evidence layers, requirement ownership, semantic planning truth and the
+executable handoff before any product lane resumes. Phase 23 remains preserved for Wave 4; its
+expired authorization is not reusable.
+
+**Strict audit order:**
+
+1. Wave 0 / Phase 37.1: one truthful authority, baseline, requirement map and closure ledger.
+2. Wave 1: historical foundation and acceptance debt.
+3. Wave 2: complete end-to-end product spine and repository-controlled Phase 25 remainder.
+4. Wave 3: operational workflows plus website/landing-page runtime.
+5. Wave 4: user/agent skills and qualified public-web/storefront packs, including Phases 23 and 30.
+6. Wave 5: connectors, tenant commerce and Pikar billing technical completion as separate rails.
+7. Wave 6: governance, archive readiness and controlled recurrence.
+8. Wave 7 external enablement, then Wave 8 exact-release beta qualification.
+
+**No-go decisions:** no major architecture rewrite, no service split, no recurrence implementation yet, no broad candidate exposure yet, no billing activation, and no WORM activation. Close live evidence and exact-release qualification first. Build determinism, audit-boundary hardening, test observability, and secret hygiene are supporting release controls. These decisions do not contradict the existing phase goals; they define when each goal may be considered releasable.
+
+**GSD command contract:** execute Phase 37.1 through the existing GSD plan/summary/verification
+workflow. Wave 1 is a pending handoff until Phase 37.1 Plan 06 reconciles it and Plan 07 records the
+blocking founder verdict. Native filesystem-count helpers remain advisory until Plan 04's semantic
+checker passes; no helper result may falsify an old summary or create placeholder evidence.
+
+**Universal founder acceptance contract:** every relevant technical plan, including the active evidence plans, must state the expected result in plain language; provide a desktop and/or mobile browser path suitable for a nontechnical founder; specify honest loading, empty, error, partial, and refusal states; and name the browser artifact that proves the result. Code-level tests remain necessary but cannot substitute for this acceptance path. Technical users retain the deeper logs, exact versions, audit refs, and rollback evidence.
+
+### Audit traceability: G1–G26 and H1–H5
+
+These are explicit GSD pointers, not claims that the linked work is closed. Live, owner, provider, and release evidence remains open wherever the phase record says so.
+
+| Audit item | Governing GSD pointer(s) |
+|---|---|
+| G1 terminals/watchdogs | [25.1-01](phases/25.1-consistency-and-reliability-hardening/25.1-01-PLAN.md), [25.1-02](phases/25.1-consistency-and-reliability-hardening/25.1-02-PLAN.md), [25.3-01](phases/25.3-scale-constants-and-armed-sweep/25.3-01-PLAN.md) |
+| G2 running-work visibility | [25.1-02](phases/25.1-consistency-and-reliability-hardening/25.1-02-PLAN.md) |
+| G3 terminal refusal correctness | [25.1-05](phases/25.1-consistency-and-reliability-hardening/25.1-05-PLAN.md) |
+| G4 bounded research reads | [39-01](phases/39-research-engine/39-01-PLAN.md) |
+| G5 document outputs/downloads | [40-01](phases/40-document-canvas/40-01-PLAN.md), [40-02](phases/40-document-canvas/40-02-PLAN.md), [40-03](phases/40-document-canvas/40-03-PLAN.md) |
+| G6 durable specialist runs/fan-out | [41-01](phases/41-plan-row-adr/41-01-SUMMARY.md), [42-01](phases/42-durable-runs-and-governed-fan-out/42-01-SUMMARY.md), [42-02](phases/42-durable-runs-and-governed-fan-out/42-02-SUMMARY.md), [42-03](phases/42-durable-runs-and-governed-fan-out/42-03-SUMMARY.md) |
+| G7 vertical breadth/evidence | [Phase 27](phases/27-curated-knowledge-work-pack-pilot/), [29-05](phases/29-unified-knowledge-and-routines/29-05-PLAN.md), [29-07](phases/29-unified-knowledge-and-routines/29-07-PLAN.md), [29-10](phases/29-unified-knowledge-and-routines/29-10-PLAN.md), [29-13](phases/29-unified-knowledge-and-routines/29-13-PLAN.md), [Phase 30](phases/30-optional-vertical-workflow-packs/) |
+| G8 current-provider media proof | [25.1-07](phases/25.1-consistency-and-reliability-hardening/25.1-07-PLAN.md), [33.1-06](phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-06-PLAN.md), [33.2-03](phases/33.2-storyboard-authoring-moves-to-a-measured-model-pin/33.2-03-PLAN.md) |
+| G9 audit payload boundary/attestation | [25.1-06](phases/25.1-consistency-and-reliability-hardening/25.1-06-PLAN.md), [25.3-01](phases/25.3-scale-constants-and-armed-sweep/25.3-01-PLAN.md), [payload checker](../scripts/check-audit-payloads.mjs) |
+| G10 content batches | [42-03](phases/42-durable-runs-and-governed-fan-out/42-03-SUMMARY.md), [43 summary](phases/43-batch-content-and-the-content-queue/43-SUMMARY.md) |
+| G11 media persistence/readback | [25.1-03](phases/25.1-consistency-and-reliability-hardening/25.1-03-PLAN.md), [25.1-07](phases/25.1-consistency-and-reliability-hardening/25.1-07-PLAN.md) |
+| G12 approval feedback/version receipt | [25.1-04](phases/25.1-consistency-and-reliability-hardening/25.1-04-PLAN.md), [25.1-07](phases/25.1-consistency-and-reliability-hardening/25.1-07-PLAN.md) |
+| G13 proactive agenda | [34-01](phases/34-goal-engine-v0-the-agenda-speaks/34-01-PLAN.md) |
+| G14 concept load/simplification | [25.2-01](phases/25.2-delete-first-ux-pass/25.2-01-PLAN.md) |
+| G15 mobile cockpit | [25.2-02](phases/25.2-delete-first-ux-pass/25.2-02-PLAN.md) |
+| G16 invite-to-first-result | [25.2-03](phases/25.2-delete-first-ux-pass/25.2-03-PLAN.md), [25-01](phases/25-private-beta-productionization/25-01-PLAN.md), [25-04](phases/25-private-beta-productionization/25-04-PLAN.md), [25-11](phases/25-private-beta-productionization/25-11-PLAN.md) |
+| G17 scaling/archive/notification safety | [25.3-01](phases/25.3-scale-constants-and-armed-sweep/25.3-01-PLAN.md), [ADR-048](../docs/decisions/048-audit-export-uses-a-transactional-outbox.md) |
+| G18 exact-release qualification | [25-11](phases/25-private-beta-productionization/25-11-PLAN.md), [25-12](phases/25-private-beta-productionization/25-12-PLAN.md), [25-13](phases/25-private-beta-productionization/25-13-PLAN.md), [33.1-06](phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-06-PLAN.md), [Phase 45](phases/45-free-gates-and-a-connector-nobody-could-connect/45-SUMMARY.md), [release record](../docs/releases/2026-09-10-audit-reliability-promotion.md) |
+| G19 dark activation/candidate gates | [Phase 44](phases/44-erasure-actually-erases/44-SUMMARY.md), [Phase 45](phases/45-free-gates-and-a-connector-nobody-could-connect/45-SUMMARY.md) |
+| G20 legal/provider prerequisites | [external blocker](#external-blocker-non-code-unscheduled-the-legal-entity); no implementation phase by design |
+| G21 billing | [Phase 28.1](phases/28.1-stripe-billing-invoicing-and-tax-for-pikar-s-own-merchant-account/), [billing requirements](REQUIREMENTS.md) |
+| G22 provider/revenue connector | [28-27](phases/28-connector-backed-revenue-pack/28-27-PLAN.md), [28.2-01](phases/28.2-unpark-one-connector-and-invoice-reminders/28.2-01-PLAN.md), [Phase 45](phases/45-free-gates-and-a-connector-nobody-could-connect/45-SUMMARY.md) |
+| G23 first useful outcome measurement | [35-01](phases/35-outcome-language-and-the-idea-stage-artifact/35-01-PLAN.md), [35-02](phases/35-outcome-language-and-the-idea-stage-artifact/35-02-PLAN.md) |
+| G24 production fixtures/positive controls | [36-01](phases/36-smoke-sentinels-out-of-band/36-01-PLAN.md), [24-02](phases/24-iso-9001-conformance-map/24-02-PLAN.md) |
+| G25 recurrence evidence gate | [29-11](phases/29-unified-knowledge-and-routines/29-11-PLAN.md), [29-12](phases/29-unified-knowledge-and-routines/29-12-PLAN.md), [29-13](phases/29-unified-knowledge-and-routines/29-13-PLAN.md), [recurrence decision](phases/29-unified-knowledge-and-routines/29-RECURRENCE-DECISION.md), [46 ADR](phases/46-autonomy-and-standing-approval-adr/46-SUMMARY.md), [47 research](phases/47-the-schedule-row-that-re-arms/47-RESEARCH.md) |
+| G26 planning/audit corpus integrity | [37-01](phases/37-planning-corpus-repair/37-01-PLAN.md), [planning checker](../scripts/check-planning.mjs), [24-02](phases/24-iso-9001-conformance-map/24-02-PLAN.md) |
+| Audit H1 deterministic production build | [25-12](phases/25-private-beta-productionization/25-12-PLAN.md), [33.1-06](phases/33.1-media-provider-migration-to-openrouter-grok-imagine-video-replaces-sora-2-before-the-videos-api-withdrawal-gpt-image-2-onto-openrouter-with-native-batching-and-the-persistdeck-music-field-fix/33.1-06-PLAN.md) |
+| Audit H2 audit-boundary hardening | [25.1-06](phases/25.1-consistency-and-reliability-hardening/25.1-06-PLAN.md), [37-01](phases/37-planning-corpus-repair/37-01-PLAN.md) |
+| Audit H3 test observability/positive controls | [36-01](phases/36-smoke-sentinels-out-of-band/36-01-PLAN.md), [25-12](phases/25-private-beta-productionization/25-12-PLAN.md), [Phase 45](phases/45-free-gates-and-a-connector-nobody-could-connect/45-SUMMARY.md) |
+| Audit H4 secret hygiene | [25-12](phases/25-private-beta-productionization/25-12-PLAN.md), [Phase 45](phases/45-free-gates-and-a-connector-nobody-could-connect/45-SUMMARY.md), [CI gate playbook](../docs/playbooks/ci-gate.md) |
+| Audit H5 internal decomposition | [merged audit H5](audits/2026-09-10-merged-audit-codebase-review.md#h5-internal-module-decomposition-post-beta); no current phase by design, and it may start only after private-beta gates close |
+
 ## Phases
 
 **Phase Numbering:**
@@ -257,6 +324,22 @@ Plans:
 **Requirements**: none minted (a corpus repair); owner decisions 2026-09-06: archive STATE history, tick bucket A only and annotate bucket B `(open: …)`, archive the loose planning files, keep the ignored local PDFs.
 **Depends on:** nothing — docs and one hook script.
 **Plans:** 1/1 — plan 01 complete 2026-09-06 (see 37-01-SUMMARY.md).
+
+### Phase 37.1: Closure Programme Integration and Wave 0 Baseline (INSERTED)
+
+**Goal:** Make the owner-adopted closure programme executable through the existing GSD system: one authoritative route, one plan-level closure ledger, explicit requirement and phase ownership for websites/landing pages/storefronts, evidence-layer truth for every partial workflow, and verified Wave 1 handoffs. This phase changes planning controls and checks only; it does not silently complete product work or activate providers.
+**Requirements**: G26 planning/audit integrity; creates traceability for newly admitted SITE/LAND/SHOP requirements without claiming them complete
+**Depends on:** Phase 37
+**Plans:** 0/7 complete — Wave 0 in progress; Wave 1 remains gated on Plans 06–07.
+
+Plans:
+- [ ] 37.1-01-PLAN.md — authority, exact-identity baseline, current milestone audit and route alignment
+- [ ] 37.1-02-PLAN.md — requirement ownership and SITE/LAND/SHOP traceability
+- [ ] 37.1-03-PLAN.md — exhaustive closure ledger and Wave map
+- [ ] 37.1-04-PLAN.md — fail-closed semantic planning checker
+- [ ] 37.1-05-PLAN.md — ownership-safe Wave 1 delta plans
+- [ ] 37.1-06-PLAN.md — supersession, route reconciliation and Wave 1 handoff
+- [ ] 37.1-07-PLAN.md — offline qualification, Graphify reconciliation and founder verdict
 
 ### Phase 38: Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06)
 
@@ -1659,6 +1742,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 35. Outcome language + idea-stage artifact (INSERTED) | 2/2 | **Complete 2026-09-06** — Half A: landing page and Command Center in outcome language. Half B: `offer-and-lead-plan`, the seventh pack and the first original body (ADR-034), through the pack gate with five fixtures + a Command Center first-thing card; CANDIDATE on deploy, owner gate run to go live (35-02-SUMMARY) | 2026-09-06 |
 | 36. SMOKE sentinels out of band (INSERTED) | 1/1 | **Complete 2026-09-06 (code + full local re-drive 13/13 specs, 4/4 smokes)** — fixture selection is an operator fact about WHO (`fixtureSeamFor`, `PIKAR_FIXTURE_TENANT_IDS`, ADR-035); every `SMOKE::` gate gated; readiness fails on any active fixture seam; `fixtureSeam.test.ts` proves both directions | 2026-09-06 |
 | 37. Planning-corpus repair (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — STATE.md collapsed to one frontmatter block (history archived), progress table regenerated from the phase directories (63 rows), REQUIREMENTS ticked where a closed phase certifies them and annotated `(open: …)` elsewhere, loose planning files archived, `scripts/check-planning.mjs` Stop hook refuses a stale corpus | 2026-09-06 |
+| 37.1. Closure Programme Integration and Wave 0 Baseline (INSERTED 2026-09-19) | 0/7 | **In progress — Wave 0 planning truth, requirement ownership, evidence-layer reconciliation, and executable Wave 1 handoff; Wave 1 remains gated on Plans 06–07** | - |
 | 38. Tool registry — one tool context, one grant derivation (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — scope A: `buildCockpitTools(ToolContext, ToolGrants)`, `grantsFor` in `@pikar/core` (the one derivation), shared `TOOL_CONTEXT_ARGS` validator at both doors, 23-class byte-identical snapshot held; the executive loop now forwards the tenant pin to dispatched specialists; live 8/8 on the local deployment | 2026-09-06 |
 | 40. Document Canvas — documents in their true form (INSERTED 2026-09-06) | 3/3 | **Complete 2026-09-06** — `vaultSheets` (capped grid written at ingest by SheetJS, tenant-owned, cascades) + `SheetGrid` in the vault preview; `.xlsx` on both planes via `markdownToSheets` + `sheetsToXlsx` and a new ungated `spreadsheet-drafter@1`, with the stored bytes read BACK as a workbook in test; `regenerateAttachment` keeps its format; inline PDF in `OutputCard` under the restated bearer-URL rule; ADR-036 accepted; cockpit-agent body v3 pending the local gate | 2026-09-06 |
 | 42. Durable specialist runs and governed fan-out (INSERTED 2026-09-07) | 3/3 | **In progress — 42-01 complete 2026-09-07** — ADR-037 lands as code: `parentPlanId` optional + `by_parent` (no backfill); `plans.byThread` is the NEWEST ROOT by bounded descending scan (`lib/planRow.ts`, `ROOT_SCAN = 20`) and a child is never the answer; new tenant-guarded `plans.byId` and the whole Approvals plane moved onto it (a card now reads the row it mutates); LIFETIME ceilings deleted (`image_already_started`, `RECYCLABLE_STATUS`, the `completedMemo` carve-out, every "start a new chat" line) while every CONCURRENCY interlock survives, the media stagers scanning the whole root window because a rendering reel sits at `proposed`; `applyActOnGap` inserts a root per gap and gains the in-flight guard it never had (a second tap used to reset a running specialist's row); no skill-body edit was needed after all, so no gated candidate. 4034 backend + 898 web green, 3 mutations verified RED. **42-02 complete 2026-09-07** — a dispatch is a journaled workflow whose one paid step carries `{ retry: false }`, so durability never costs a second bill; ONE `workflow.define` with a `kind` switch because the dangerous edit is an OMITTED option; the starter stays SCHEDULED so the queued row keeps carrying the arg pins five tests read; `onDispatchComplete` is a second free idempotent landing; and `dispatchLive` had to move in the same commit or an armed sweep would have discarded a paid-for memo. 4048 backend green, 3 more mutations RED. **42-03 complete 2026-09-07 — G6 CLOSED** — `dispatchTeam` fans one question to <=5 specialists under ONE approval: children minted `kind: "memo"` AT BIRTH (the fatal both adversaries found — three fail-closed gates read that field), the envelope divided by a worker count the RAIL caps (ADR-038 supersedes ADR-037 D6, whose arithmetic granted a zero-share child the FULL rail), routes deduped and `media` refused at the door, a landed child taking `approved` so only the parent reaches the inbox, and the sweep resolving a dead worker instead of stranding the team. 4060 backend + 1522 core + 899 web green, 4 mutations RED. Tool is DARK until the owner activates the gated body | 2026-09-07 |

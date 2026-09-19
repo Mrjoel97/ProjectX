@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "governing_reference": ".planning/audits/2026-09-10-merged-audit-codebase-review.md",
+  "active": {
+    "phase": "37.1",
+    "plan": "wave-0",
+    "reason": "Reconcile authority, exact identities, semantic evidence, requirement ownership, the closure ledger, delta plans, offline qualification, and the founder verdict before product implementation resumes."
+  },
+  "next": {
+    "phase": "Wave 1",
+    "plan": "handoff-pending",
+    "reason": "Plan 06 must write and reconcile the handoff and Plan 07 must record the blocking founder verdict before Wave 1 can begin."
+  },
+  "queue": [
+    "Wave 1",
+    "Wave 2",
+    "Wave 3",
+    "Wave 4",
+    "Wave 5",
+    "Wave 6",
+    "Wave 7",
+    "Wave 8"
+  ],
+  "advisory": "Native filesystem-count helpers remain advisory until Phase 37.1 Plan 04's semantic checker passes.",
+  "blocked": [
+    {
+      "phase": "32",
+      "wave": "7",
+      "reason": "external_legal_and_channel_enablement_gated"
+    },
+    {
+      "phase": "47",
+      "wave": "6",
+      "reason": "real_dst_and_oauth_evidence_required_before_recurrence"
+    },
+    {
+      "phase": "SITE-LAND-SHOP external remainder",
+      "wave": "7",
+      "reason": "domain_merchant_provider_and_policy_enablement_gated"
+    },
+    {
+      "phase": "H5",
+      "wave": "post-beta-evidence",
+      "reason": "private_beta_evidence_gates_must_close_first"
+    }
+  ]
+}
