@@ -6063,7 +6063,7 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "nonproduction_sync_succeeded_shared_authorized_invocation_consumed_pre_spend",
+      "historical_state": "fresh_authority_consumed_pre_spend_by_hidden_cr_configuration_then_corrected_without_rerun",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -6081,17 +6081,18 @@
         ],
         "deployed": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
-          "commit:b0c86c0"
+          "commit:45fdcb4"
         ],
         "live_observed": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
-          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log"
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-19-FRESH.log"
         ],
         "owner_accepted": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
         ],
         "externally_enabled": [
-          ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
+          ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
+          "commit:45fdcb4"
         ],
         "source": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-PLAN.md"
@@ -6100,9 +6101,9 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "One shared command invocation was consumed but refused before spend: 0 paid attempts, 0/57 cases, 0 retries, USD 0, and no run or evidence rows.",
+        "live_observed": "The fresh shared command was consumed but refused before spend because the initial stdin path appended hidden CR bytes: 0 paid attempts, 0/57 cases, 0 retries, USD 0, and no run or evidence rows. Values were corrected afterward without rerun.",
         "owner_accepted": "Founder browser verification was not entered because the golden gate was non-certifying.",
-        "externally_enabled": "No current controlled Gmail grant was observed, and the provider billing contract was unverified on the named deployment."
+        "externally_enabled": "No current controlled Gmail grant was observed. The five local values are corrected, but no authorized post-correction provider gate ran."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -6117,7 +6118,7 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "exact_deployment_provider_billing_configuration",
+        "exact_byte_configuration_preflight_reverification",
         "fresh_single_run_authorization",
         "single_no_retry_eval_after_preflight",
         "founder_browser_and_external_grant_evidence"
@@ -6127,10 +6128,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "The exact named deployment carries verified GOLDEN_OPENROUTER_BILLING=standard, GOLDEN_TAVILY_BILLING=free, and GOLDEN_TAVILY_CREDIT_USD=0 attestations, and a fresh one-run authorization is recorded.",
+      "entry_gate": "A fresh one-run authorization is recorded and the corrected five-name deployment configuration is exact-byte reverified without printing values before invocation.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "The shared authorization was consumed by one command invocation despite zero spend. Future execution requires exact deployment billing configuration plus fresh one-run authority; no retry or reuse is permitted.",
+      "external_gate_packet": "The fresh shared authorization was consumed by the CR-byte pre-spend refusal despite zero spend. Values are corrected, but future execution still requires fresh one-run authority and exact-byte preflight; no retry or reuse is permitted.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13452,7 +13453,7 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "nonproduction_sync_succeeded_shared_authorized_invocation_consumed_pre_spend",
+      "historical_state": "fresh_authority_consumed_pre_spend_by_hidden_cr_configuration_then_corrected_without_rerun",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -13469,17 +13470,18 @@
         ],
         "deployed": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
-          "commit:7035e62"
+          "commit:45fdcb4"
         ],
         "live_observed": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
-          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN.log"
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-19-FRESH.log"
         ],
         "owner_accepted": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json"
         ],
         "externally_enabled": [
-          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json"
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
+          "commit:45fdcb4"
         ],
         "source": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-PLAN.md"
@@ -13488,9 +13490,9 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "The governed budget refused before fixture seeding or case 1: 0 paid attempts, 0/57 cases, 0 retries, USD 0, no Blueprint or rendered spine.",
+        "live_observed": "The fresh governed budget refused before fixture seeding or case 1 because configured values carried hidden CR bytes: 0 paid attempts, 0/57 cases, 0 retries, USD 0, no Blueprint or rendered spine. Values were corrected afterward without rerun.",
         "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification was not entered because L6 is non-certifying.",
-        "externally_enabled": "The named deployment refused with GOLDEN_PROVIDER_BILLING_UNVERIFIED before provider execution."
+        "externally_enabled": "The five local values are corrected, but no authorized post-correction provider gate ran; external/model availability remains unobserved."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -13505,7 +13507,7 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "exact_deployment_provider_billing_configuration",
+        "exact_byte_configuration_preflight_reverification",
         "fresh_single_run_authorization",
         "single_no_retry_blueprint_eval_after_preflight",
         "founder_browser_and_voice_acceptance",
@@ -13516,10 +13518,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "The exact named deployment carries verified GOLDEN_OPENROUTER_BILLING=standard, GOLDEN_TAVILY_BILLING=free, and GOLDEN_TAVILY_CREDIT_USD=0 attestations, and a fresh one-run authorization is recorded.",
+      "entry_gate": "A fresh one-run authorization is recorded and the corrected five-name deployment configuration is exact-byte reverified without printing values before invocation.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "The shared one-command authorization was consumed pre-spend and is not reusable. Configure and verify the exact deployment billing attestations, then obtain fresh one-run authority; the current baseline remains accepted:false.",
+      "external_gate_packet": "The fresh one-command authorization was consumed by the CR-byte pre-spend refusal and is not reusable. Values are corrected, but a future command still requires fresh authority and exact-byte preflight; the baseline remains accepted:false.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",

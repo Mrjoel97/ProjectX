@@ -4,7 +4,7 @@
   "active": {
     "phase": "03.7",
     "plan": "03.7-10 + 17.1-11 blocked before founder verification",
-    "reason": "The named non-production deployment synchronized, then one shared authorized command invocation was consumed and refused pre-spend by GOLDEN_PROVIDER_BILLING_UNVERIFIED: 0 paid attempts, 0/57 cases, 0 retries, USD 0, no rows, cleanup not applicable, and the local backend stopped. A future command requires exact deployment billing configuration and fresh one-run authorization."
+    "reason": "After a data-preserving local Convex upgrade and five-name configuration, one fresh shared command was consumed and refused pre-spend by GOLDEN_PROVIDER_BILLING_UNVERIFIED because the first stdin path appended hidden CR bytes: 0 paid attempts, 0/57 cases, 0 retries, USD 0, no run/budget/audit/plan/spend/vault/evidence rows, and no Blueprint/spine. Values were corrected afterward with no-newline stdin and zero CR warnings; no rerun occurred and the backend stopped. Future invocation requires fresh one-run authorization."
   },
   "next": {
     "phase": "Wave 1B",
@@ -27,7 +27,7 @@
     {
       "phase": "03.7 + 17.1",
       "wave": "1A",
-      "reason": "GOLDEN_PROVIDER_BILLING_UNVERIFIED; consumed shared authorization, exact deployment billing config plus fresh one-run authorization required"
+      "reason": "fresh shared authorization consumed by pre-spend CR-byte configuration refusal; five values corrected afterward, no rerun, fresh one-run authorization still required"
     },
     {
       "phase": "32",
