@@ -425,7 +425,6 @@
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-02",
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-04",
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-05",
-      "37.1-closure-programme-integration-and-wave-0-baseline/37.1-06",
       "37.1-closure-programme-integration-and-wave-0-baseline/37.1-07",
       "38-tool-registry/38-01",
       "40-document-canvas/40-02"
@@ -754,6 +753,7 @@
       ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-02-SUMMARY.md",
       ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-04-SUMMARY.md",
       ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-05-SUMMARY.md",
+      ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-07-SUMMARY.md",
       ".planning/phases/38-tool-registry/38-01-SUMMARY.md",
       ".planning/phases/40-document-canvas/40-02-SUMMARY.md"
     ],
@@ -16201,9 +16201,7 @@
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "37.1-closure-programme-integration-and-wave-0-baseline/37.1-06"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
@@ -16273,7 +16271,9 @@
         "canonical_open_plan_ids": [
           "37.1-closure-programme-integration-and-wave-0-baseline/37.1-07"
         ],
-        "semantic_partial_summary_paths": [],
+        "semantic_partial_summary_paths": [
+          ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-07-SUMMARY.md"
+        ],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []

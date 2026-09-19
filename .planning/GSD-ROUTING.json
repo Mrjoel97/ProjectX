@@ -3,14 +3,14 @@
   "governing_reference": ".planning/audits/2026-09-10-merged-audit-codebase-review.md",
   "active": {
     "phase": "37.1",
-    "plan": "37.1-07",
-    "reason": "The post-delta Wave 1 handoff is reconciled, but Phase 37.1 stays active until Plan 07 completes offline qualification and records the blocking founder verdict."
+    "plan": "independent phase re-verification",
+    "reason": "Plan 07 offline qualification and the founder verdict are complete. Phase 37.1 stays active while the corrected ledger and routing derivatives await independent re-verification."
   },
   "next": {
     "phase": "Wave 1A",
     "plan": "01-10 + 03.7-10 + 17.1-11",
     "handoff": ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-1-HANDOFF.md",
-    "reason": "Verified parallel handoff; dispatch remains blocked until 37.1-07 records founder acceptance. Wave 1B plan 18-11 starts only after the 17.1-11 accepted baseline."
+    "reason": "Founder-accepted parallel handoff; dispatch remains blocked until independent Phase 37.1 re-verification passes. Wave 1B plan 18-11 starts only after the 17.1-11 accepted baseline."
   },
   "queue": [
     "Wave 1",

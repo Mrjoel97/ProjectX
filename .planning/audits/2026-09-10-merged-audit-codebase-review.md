@@ -832,9 +832,9 @@ must be regenerated and reconciled at every wave boundary. Historical PLAN, SUMM
 VERIFICATION records remain immutable evidence; a stale or replaced record is superseded only by a
 named delta plan and is never rewritten as if later evidence existed at the time.
 
-After the post-delta reconciliation the independent scan is represented by 474 ledger rows: 250 in Wave 1, 24 in Wave 2, 47 in
+After the post-founder-verdict reconciliation the independent scan is represented by 474 ledger rows: 250 in Wave 1, 24 in Wave 2, 47 in
 Wave 3, 44 in Wave 4, 52 in Wave 5, 5 in Wave 6, 3 in Wave 7 and 49 in Wave 8. Its exact source sets
-are 357 canonical-open plan IDs, 325 semantically open summary paths, 66 phases with missing or open
+are 356 canonical-open plan IDs, 326 semantically open summary paths, 66 phases with missing or open
 verification, 43 unchecked requirements and 3 checked requirements explicitly annotated
 open/partial. These are conservative filesystem-derived counts, not completion or effort estimates.
 
@@ -850,9 +850,10 @@ recorded as 463 unknown and 11 no. No layer is inferred from another. A row adva
 layer-specific evidence is cited, and `unknown` remains an explicit closure task rather than a
 negative or a silent assumption.
 
-Wave 0 remains **in progress**. Checker hardening, delta planning, and the post-delta
-reconciliation/handoff are recorded; Plan 07 qualification and founder acceptance still remain
-before Wave 1 may begin.
+Wave 0 remains **in verification**. Checker hardening, delta planning, the reconciled handoff,
+Plan 07 qualification and founder acceptance are recorded. The two derivative gaps from the first
+independent review have been reconciled; a fresh independent verification must pass before Wave 1
+may begin.
 
 ### 9.15 Programme-level stop conditions
 
