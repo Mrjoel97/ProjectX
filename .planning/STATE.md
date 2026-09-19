@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 01
-current_plan: Wave 1A handoff — parallel lanes 01-10, 03.7-10, and 17.1-11; no implementation started.
-status: ready
-stopped_at: "Phase 37.1 passed independent verification at 048a6d5 and is complete. Next: execute the founder-accepted Wave 1A handoff under its lane gates."
+current_phase: 03.7
+current_plan: Wave 1A — 03.7-10 paused at Task 3; 17.1-11 paused at Task 2; 01-10 complete; 18-11 gated.
+status: in_progress
+stopped_at: "03.7-10 authorization is recorded but unconsumed (0 attempts, USD 0) and requires the named local deployment to be synchronized and listening; 17.1-11 awaits its own separate authorization."
 last_updated: "2026-09-19"
 progress:
   total_phases: 76
   completed_phases: 56
   total_plans: 457
-  completed_plans: 421
+  completed_plans: 422
   percent: 92
 ---
 
@@ -19,15 +19,15 @@ progress:
 
 ## Audit-governed GSD routing (2026-09-19)
 
-**Current Phase:** 01 (Wave 1A integration lead; parallel lanes also resume Phases 03.7 and 17.1)
+**Current Phase:** 03.7 (Wave 1A integration lead; Phase 17.1 remains a parallel gated lane)
 **Current Phase Name:** Wave 1A — Foundation truth and evidence debt
-**Current Plan:** Accepted handoff for `01-10`, `03.7-10`, and `17.1-11`; no implementation started
-**Status:** ready
-**Progress:** Phase 37.1 is complete and independently verified; Wave 1A is the next executable handoff.
+**Current Plan:** `03.7-10` paused at Task 3; `17.1-11` paused at Task 2; `01-10` complete; `18-11` gated
+**Status:** in progress at explicit checkpoints
+**Progress:** `01-10` completed repository-controlled Google OAuth readiness. `03.7-10` completed its offline gate and recorded one authorization that remains unconsumed at 0 attempts / USD 0 because the named local deployment is not synchronized and listening. `17.1-11` completed its offline gate and awaits a separate authorization. `18-11` remains blocked on an exact `17.1-11` baseline with `accepted:true`.
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
 - **Execution order:** Phase 37.1 closed Wave 0 planning truth; Waves 1–8 now execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
-- **Immediate handoff:** Wave 1A may dispatch `01-10`, `03.7-10`, and `17.1-11` under disjoint ownership. No Wave 1 product implementation has started at this checkpoint. Phase 23 remains preserved and resumes in Wave 4; its expired authorization is not reusable.
+- **Immediate handoff:** `01-10` is complete without closing SC-5 or any deployed/live/owner/external layer. `03.7-10` is paused before Task 3 with its one-run authorization unconsumed; local deployment synchronization is required before the one permitted attempt. `17.1-11` is paused before Task 2 and needs its own authorization. `18-11` cannot start before the accepted Blueprint baseline exists. Phase 23 remains preserved and resumes in Wave 4; its expired authorization is not reusable.
 - **Founder acceptance contract:** every applicable technical plan must include a plain-language outcome, a browser path for a nontechnical founder, honest loading/empty/error/partial/refusal states, and captured browser evidence in addition to code-level tests.
 - **Routing note:** native GSD helpers currently disagree because filename counts treat partial and auxiliary summaries as completion. Phase 37.1 owns that reconciliation; automatic “next phase” suggestions remain advisory until its checker changes pass.
 

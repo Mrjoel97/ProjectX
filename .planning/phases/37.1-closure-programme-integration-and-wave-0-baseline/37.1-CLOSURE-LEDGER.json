@@ -434,6 +434,7 @@
       ".planning/phases/01-foundation-governance-substrate/01-02-SUMMARY.md",
       ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md",
       ".planning/phases/01-foundation-governance-substrate/01-08-SUMMARY.md",
+      ".planning/phases/01-foundation-governance-substrate/01-10-SUMMARY.md",
       ".planning/phases/02-thin-end-to-end-slice/02-01-SUMMARY.md",
       ".planning/phases/02-thin-end-to-end-slice/02-02-SUMMARY.md",
       ".planning/phases/02-thin-end-to-end-slice/02-03-SUMMARY.md",
@@ -1249,17 +1250,23 @@
       "requirement_ids": [
         "SC-5"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "historical_state": "repository_controlled_delta_complete_with_external_layers_open",
+      "current_disposition": "technically_ready_for_external_gate",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "no",
+      "live_observed": "no",
+      "owner_accepted": "no",
+      "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/01-foundation-governance-substrate/01-10-SUMMARY.md",
+          ".planning/phases/01-foundation-governance-substrate/01-10-EVIDENCE.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/01-foundation-governance-substrate/01-10-SUMMARY.md",
+          ".planning/phases/01-foundation-governance-substrate/01-10-EVIDENCE.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -1267,32 +1274,34 @@
         "source": [
           ".planning/phases/01-foundation-governance-substrate/01-10-PLAN.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/01-foundation-governance-substrate/01-10-SUMMARY.md"
+        ],
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No current layer-specific implementation evidence is certified by this open delta.",
-        "offline_tested": "No exact current offline command evidence is certified by this open delta.",
-        "deployed": "No exact candidate deployment evidence is certified by this open delta.",
-        "live_observed": "No current live observation is certified by this open delta.",
-        "owner_accepted": "No current founder verdict is certified by this open delta.",
-        "externally_enabled": "No current external enablement is certified by this open delta."
+        "deployed": "No deployment was authorized for 01-10.",
+        "live_observed": "No current provider round-trip was authorized or observed.",
+        "owner_accepted": "No founder browser verdict was recorded for the current release.",
+        "externally_enabled": "Google configuration, submission, approval, and live enablement remain Wave 7 work."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
           "01-foundation-governance-substrate/01-10"
         ],
-        "semantic_partial_summary_paths": [],
+        "semantic_partial_summary_paths": [
+          ".planning/phases/01-foundation-governance-substrate/01-10-SUMMARY.md"
+        ],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Repository-controlled Google OAuth readiness is proven against current code, with external approval and live enablement isolated in a Wave 7 packet."
+        "SC-5, deployment, live provider observation, founder browser acceptance, and external Google enablement remain open."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "external_enablement",
+        "exact_release_live_and_owner_evidence"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 01",
@@ -1302,7 +1311,7 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "Repository-controlled Google OAuth readiness is proven against current code, with external approval and live enablement isolated in a Wave 7 packet.",
       "user_claims": [],
-      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "external_gate_packet": "01-10-EVIDENCE.md records the disabled Wave 7 re-entry packet; no provider action or standing authorization is implied.",
       "successor": null,
       "stop_conditions": [
         "Stop if Graphify/current source cannot establish the exact authorize-callback-token path.",
@@ -6054,17 +6063,22 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "plan_without_canonical_summary",
+      "historical_state": "offline_gate_complete_authorized_run_unconsumed",
       "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "no",
+      "live_observed": "no",
+      "owner_accepted": "no",
+      "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
+          "commit:9159c7d"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -6076,12 +6090,10 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No current layer-specific implementation evidence is certified by this open delta.",
-        "offline_tested": "No exact current offline command evidence is certified by this open delta.",
-        "deployed": "No exact candidate deployment evidence is certified by this open delta.",
-        "live_observed": "No current live observation is certified by this open delta.",
-        "owner_accepted": "No current founder verdict is certified by this open delta.",
-        "externally_enabled": "No current external enablement is certified by this open delta."
+        "deployed": "The exact named local deployment refused the preflight connection and requires synchronization before the authorized run.",
+        "live_observed": "The authorization remains unconsumed: 0 attempts, USD 0, and no golden run id or case evidence.",
+        "owner_accepted": "Founder browser verification has not occurred for the current revision and deployment.",
+        "externally_enabled": "No current controlled Gmail grant has been observed."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -6096,8 +6108,9 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "local_deployment_synchronization",
+        "single_authorized_no_retry_eval",
+        "founder_browser_and_external_grant_evidence"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 03.7",
@@ -6107,7 +6120,7 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "external_gate_packet": "The 03.7-10 authorization is one-run only, capped at USD 2.00, unconsumed at 0 attempts/USD 0, and cannot be reused by 17.1-11.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13429,17 +13442,21 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "plan_without_canonical_summary",
+      "historical_state": "offline_gate_complete_awaiting_separate_authorization",
       "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "no",
+      "live_observed": "no",
+      "owner_accepted": "no",
       "externally_enabled": "unknown",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          "commit:81b4482"
+        ],
+        "offline_tested": [
+          "commit:81b4482"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -13451,12 +13468,10 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No current layer-specific implementation evidence is certified by this open delta.",
-        "offline_tested": "No exact current offline command evidence is certified by this open delta.",
-        "deployed": "No exact candidate deployment evidence is certified by this open delta.",
-        "live_observed": "No current live observation is certified by this open delta.",
-        "owner_accepted": "No current founder verdict is certified by this open delta.",
-        "externally_enabled": "No current external enablement is certified by this open delta."
+        "deployed": "No exact current non-production deployment has been qualified for the Blueprint-bearing run.",
+        "live_observed": "No paid Blueprint-bearing golden run is authorized or observed for 17.1-11.",
+        "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification has not occurred.",
+        "externally_enabled": "Paid model access for the bounded gate remains unproven until a separately authorized run."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -13471,8 +13486,10 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "separate_bounded_authorization",
+        "single_no_retry_blueprint_eval",
+        "founder_browser_and_voice_acceptance",
+        "accepted_baseline_seal"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 17.1",
@@ -13482,7 +13499,7 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "external_gate_packet": "17.1-11 requires its own one-run authorization; the 03.7-10 authorization is not reusable and no accepted Phase 18 baseline exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",
@@ -14167,7 +14184,7 @@
       "requirement_ids": [
         "ACTN-04"
       ],
-      "historical_state": "plan_without_canonical_summary",
+      "historical_state": "wave_1b_gated_by_missing_accepted_17.1_11_baseline",
       "current_disposition": "open",
       "implemented": "unknown",
       "offline_tested": "unknown",
@@ -14217,7 +14234,7 @@
       "dependencies": [
         "17.1-11"
       ],
-      "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
+      "entry_gate": "17.1-11-BASELINE.json exists, is current, complete, and carries accepted:true.",
       "objective_exit_test": "The current product creates, presents, downloads, regenerates, replaces, and truthfully formats Blueprint-grounded documents with founder-approved BRAND presentation and independent evidence-layer accounting.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",

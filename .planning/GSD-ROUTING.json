@@ -2,15 +2,15 @@
   "version": 1,
   "governing_reference": ".planning/audits/2026-09-10-merged-audit-codebase-review.md",
   "active": {
-    "phase": "01",
-    "plan": "01-10 + 03.7-10 + 17.1-11",
-    "reason": "Phase 37.1 passed independent verification. The founder-accepted Wave 1A handoff is ready for three ownership-disjoint lanes under their recorded authorization gates."
+    "phase": "03.7",
+    "plan": "03.7-10 Task 3 + 17.1-11 Task 2",
+    "reason": "Wave 1A is in progress. 01-10 is complete. 03.7-10 is paused before Task 3 with its authorization unconsumed at 0 attempts and USD 0 until the named local deployment is synchronized and listening. 17.1-11 is paused before Task 2 awaiting a separate authorization."
   },
   "next": {
     "phase": "Wave 1B",
     "plan": "18-11",
     "handoff": ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-1-HANDOFF.md",
-    "reason": "Wave 1B remains blocked until 17.1-11 produces its exact current accepted baseline; it does not run alongside unfinished Blueprint qualification."
+    "reason": "Wave 1B remains gated until 17.1-11 produces its exact current baseline with accepted:true; 18-11 has not started and does not run alongside unfinished Blueprint qualification."
   },
   "queue": [
     "Wave 1",

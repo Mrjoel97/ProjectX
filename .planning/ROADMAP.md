@@ -8,10 +8,12 @@ Pikar-AI reaches a private beta in ~4 weeks (target ~2026-08-05) by building the
 
 The single governing reference for current work is the [merged audit](audits/2026-09-10-merged-audit-codebase-review.md). Its G1–G26 reconciliation and Independent cross-cutting reconciliation H1–H5 are additive release controls, not a competing roadmap. Historical Phase 1–9 material remains preserved as v1.0 history; superseded, partial, blocked, and research-only records remain honest and are not silently converted into completed work.
 
-**Current execution pointer:** Phase 01 — Wave 1A integration lead, with `01-10`, `03.7-10`, and
-`17.1-11` ready as the founder-accepted parallel handoff. Phase 37.1 passed independent verification
-at `048a6d5` and closed Wave 0. Phase 23 remains preserved for Wave 4; its expired authorization is
-not reusable.
+**Current execution pointer:** Phase 03.7 — Wave 1A integration lead. `01-10` is complete at the
+repository-controlled layers without closing SC-5. `03.7-10` is paused at Task 3 with its bounded
+authorization unconsumed (0 attempts / USD 0) until the named local deployment is synchronized and
+listening. `17.1-11` is paused at Task 2 awaiting its own separate authorization, and `18-11` remains
+gated on an exact accepted Blueprint baseline. Phase 23 remains preserved for Wave 4; its expired
+authorization is not reusable.
 
 **Strict audit order:**
 
@@ -26,9 +28,10 @@ not reusable.
 
 **No-go decisions:** no major architecture rewrite, no service split, no recurrence implementation yet, no broad candidate exposure yet, no billing activation, and no WORM activation. Close live evidence and exact-release qualification first. Build determinism, audit-boundary hardening, test observability, and secret hygiene are supporting release controls. These decisions do not contradict the existing phase goals; they define when each goal may be considered releasable.
 
-**GSD command contract:** execute the founder-accepted Wave 1A handoff through the existing GSD
-plan/summary/verification workflow. `01-10`, `03.7-10`, and `17.1-11` may run in parallel under
-their disjoint ownership; `18-11` waits for the exact accepted `17.1-11` baseline. Native
+**GSD command contract:** continue the founder-accepted Wave 1A handoff through the existing GSD
+plan/summary/verification workflow. `01-10` is complete; `03.7-10` may resume only after local
+deployment synchronization without consuming a second attempt; `17.1-11` requires a separate
+authorization before its paid gate; `18-11` waits for the exact accepted `17.1-11` baseline. Native
 filesystem-count helpers remain advisory to the semantic checker; no helper result may falsify an
 old summary or create placeholder evidence.
 
@@ -1722,7 +1725,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Governance Substrate | 8/10 | Partial — 01-09 superseded by 01-10; open: 01-10 | - |
+| 1. Foundation & Governance Substrate | 9/10 | Superseded — 01-09 is superseded by completed 01-10; SC-5 and deployed/live/owner/external evidence remain open and are not implied by technical readiness | - |
 | 2. Thin End-to-End Slice | 7/9 | Partial — 02-08 and 02-09 have no canonical completed or named-superseded SUMMARY; historical cockpit replacement context is preserved but not counted | - |
 | 3. Guardrails | 5/5 | Complete (VERIFICATION present) | 2026-07-12 |
 | 3.1. Cockpit Core (INSERTED) | 9/9 | Complete (VERIFICATION present) | 2026-07-12 |
@@ -1732,7 +1735,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 3.4. Per-Recipient Personalization (INSERTED) | 4/4 | Complete (VERIFICATION present) | - |
 | 3.5. Deferred Send (INSERTED) | 6/6 | Complete (VERIFICATION present) | 2026-07-14 |
 | 3.6. Agent Eval Gate (INSERTED) | 5/5 | Complete (VERIFICATION present) | 2026-07-15 |
-| 3.7. Inbox Briefing (INSERTED) | 8/10 | Partial — 03.7-05 superseded by 03.7-10; open: 03.7-10 (current-release verification) | - |
+| 3.7. Inbox Briefing (INSERTED) | 8/10 | Partial — 03.7-05 superseded by 03.7-10; 03.7-10 is paused at Task 3 with authorization unconsumed (0 attempts / USD 0) until the named local deployment is synchronized and listening | - |
 | 3.8. Vault Document Extraction (INSERTED) | 6/6 | Complete (VERIFICATION present) | 2026-07-18 |
 | 3.9. Agent Activity Streaming (INSERTED) | 4/4 | Complete (VERIFICATION present) | - |
 | 3.10. Cockpit Conversation Repair (INSERTED) | 7/7 | Complete (VERIFICATION present) | 2026-07-19 |
@@ -1755,8 +1758,8 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 15.4. Vault redesign and scoped browse correctness (INSERTED) | 4/4 | Complete (VERIFICATION present) | 2026-08-05 |
 | 16. Research Sub-Agent & Web Research | 9/9 | Complete (gate `14feb4b7` 34/34, $0.3456; five skills activated) | 2026-08-08 |
 | 17. Calendar Actions | 9/11 | Partial — open: 17-10, 17-11 (Google create path live; Microsoft half blocked by the 2026-08-16 concurrency probe; 17-VERIFICATION `gaps_found`) | - |
-| 17.1. Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED) | 9/11 | Partial — 17.1-10 superseded by 17.1-11; open: 17.1-11 accepted current baseline | - |
-| 18. Document & Content Creation | 8/11 | Partial — 18-09 and 18-10 superseded by 18-11; open: 18-11 after accepted 17.1-11 baseline | - |
+| 17.1. Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED) | 9/11 | Partial — 17.1-10 superseded by 17.1-11; 17.1-11 passed its offline gate and is paused at Task 2 awaiting separate authorization; no accepted baseline exists | - |
+| 18. Document & Content Creation | 8/11 | Partial — 18-09 and 18-10 superseded by 18-11; Wave 1B remains gated and 18-11 cannot start before an exact 17.1-11 baseline with `accepted:true` | - |
 | 19. Contacts, CRM & Follow-ups | 11/11 | Complete (plan-disposition layer only) — every canonical plan has a completed SUMMARY. The separately recorded owner BRAND/tone judgement and any requirement/evidence-layer note remain open until directly accepted; completion here does not manufacture that verdict. | 2026-08-10 |
 | 19.1. Bulk Contact Import (CSV) (INSERTED) | 7/7 | Complete (VERIFICATION present) | - |
 | 20. Media Canvas | 19/20 | In Progress — open: 20-11. Implementation through captions/retention/drift detection is landed; Tasks 1-3 are evidenced by `1db8a03`, while the supported Run A/evidence remainder stays open. | - |
