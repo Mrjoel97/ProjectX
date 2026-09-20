@@ -84,8 +84,6 @@
       "02-thin-end-to-end-slice/02-05",
       "02-thin-end-to-end-slice/02-06",
       "02-thin-end-to-end-slice/02-07",
-      "02-thin-end-to-end-slice/02-08",
-      "02-thin-end-to-end-slice/02-09",
       "03-guardrails/03-01",
       "03-guardrails/03-02",
       "03-guardrails/03-03",
@@ -760,7 +758,6 @@
     ],
     "missing_or_open_verification_phases": [
       "01-foundation-governance-substrate",
-      "02-thin-end-to-end-slice",
       "03-guardrails",
       "03.1-cockpit-core",
       "03.10-cockpit-conversation-repair",
@@ -1847,7 +1844,7 @@
     },
     {
       "id": "PLAN:02-thin-end-to-end-slice/02-08",
-      "workflow": "Build the intake and live-status surface: the recipient-first submit form (To → Goal →",
+      "workflow": "SUPERSEDED 2026-07-12 by 03.1-09; not completion. Historical intent: Build the intake and live-status surface: the recipient-first submit form (To → Goal →",
       "source_phase": "Phase 02",
       "source_plans": [
         ".planning/phases/02-thin-end-to-end-slice/02-08-PLAN.md"
@@ -1856,8 +1853,8 @@
         "INTK-01",
         "BETA-04"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
+      "historical_state": "superseded_summary",
+      "current_disposition": "superseded_and_archived",
       "implemented": "unknown",
       "offline_tested": "unknown",
       "deployed": "unknown",
@@ -1872,7 +1869,8 @@
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/02-thin-end-to-end-slice/02-08-PLAN.md"
+          ".planning/phases/02-thin-end-to-end-slice/02-08-PLAN.md",
+          ".planning/phases/02-thin-end-to-end-slice/02-08-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -1886,9 +1884,7 @@
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "02-thin-end-to-end-slice/02-08"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
@@ -1910,14 +1906,14 @@
       "objective_exit_test": "Files upload as picked; chips show the caveat; over-cap/bad-mime/oversized blocked inline; build green.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
-      "successor": null,
+      "successor": "PLAN:03.1-cockpit-core/03.1-09",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
       ]
     },
     {
       "id": "PLAN:02-thin-end-to-end-slice/02-09",
-      "workflow": "Build the human-review and operator surface: the live review queue and the collapsed",
+      "workflow": "SUPERSEDED 2026-07-12 by 03.1-09 and 01-10; not completion. Historical intent: Build the human-review and operator surface: the live review queue and the collapsed",
       "source_phase": "Phase 02",
       "source_plans": [
         ".planning/phases/02-thin-end-to-end-slice/02-09-PLAN.md"
@@ -1928,8 +1924,8 @@
         "OPSG-07",
         "DLVR-03"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
+      "historical_state": "superseded_summary",
+      "current_disposition": "superseded_and_archived",
       "implemented": "unknown",
       "offline_tested": "unknown",
       "deployed": "unknown",
@@ -1944,7 +1940,8 @@
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/02-thin-end-to-end-slice/02-09-PLAN.md"
+          ".planning/phases/02-thin-end-to-end-slice/02-09-PLAN.md",
+          ".planning/phases/02-thin-end-to-end-slice/02-09-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -1958,9 +1955,7 @@
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "02-thin-end-to-end-slice/02-09"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
@@ -1982,7 +1977,7 @@
       "objective_exit_test": "Queue is a live list; the gate shows route+plan(read-only)+recipient+draft and wires all four typed decisions with the attempt counter; build green.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
-      "successor": null,
+      "successor": "PLAN:03.1-cockpit-core/03.1-09 + PLAN:01-foundation-governance-substrate/01-10",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
       ]
@@ -16544,8 +16539,8 @@
         ".planning/phases/02-thin-end-to-end-slice/02-09-PLAN.md"
       ],
       "requirement_ids": [],
-      "historical_state": "verification_missing",
-      "current_disposition": "open",
+      "historical_state": "verification_superseded",
+      "current_disposition": "superseded_and_archived",
       "implemented": "unknown",
       "offline_tested": "unknown",
       "deployed": "unknown",
@@ -16568,7 +16563,8 @@
           ".planning/phases/02-thin-end-to-end-slice/02-06-PLAN.md",
           ".planning/phases/02-thin-end-to-end-slice/02-07-PLAN.md",
           ".planning/phases/02-thin-end-to-end-slice/02-08-PLAN.md",
-          ".planning/phases/02-thin-end-to-end-slice/02-09-PLAN.md"
+          ".planning/phases/02-thin-end-to-end-slice/02-09-PLAN.md",
+          ".planning/phases/02-thin-end-to-end-slice/02-VERIFICATION.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -16584,18 +16580,15 @@
       "source_membership": {
         "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
-        "missing_or_open_verification_phases": [
-          "02-thin-end-to-end-slice"
-        ],
+        "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "No canonical phase verification file exists."
+        "Retired Phase 02 page acceptance is not completion; current cockpit and Google-readiness evidence belongs to the named successors."
       ],
       "remaining_work_classes": [
-        "verification",
-        "evidence_layer_separation"
+        "named_supersession"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 02",
@@ -16605,8 +16598,8 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "A canonical non-open verification record cites the exact revision and every evidence layer required by the phase contract.",
       "user_claims": [],
-      "external_gate_packet": "No external remainder may substitute for the missing technical verification.",
-      "successor": null,
+      "external_gate_packet": "Google provider work is owned by PLAN:01-foundation-governance-substrate/01-10 and its Wave 7 re-entry packet.",
+      "successor": "VERIFY:03.1-cockpit-core + PLAN:01-foundation-governance-substrate/01-10",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
       ]

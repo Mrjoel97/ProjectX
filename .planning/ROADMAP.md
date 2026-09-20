@@ -1736,7 +1736,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Governance Substrate | 9/10 | Superseded — 01-09 is superseded by completed 01-10; SC-5 and deployed/live/owner/external evidence remain open and are not implied by technical readiness | - |
-| 2. Thin End-to-End Slice | 7/9 | Partial — 02-08 and 02-09 have no canonical completed or named-superseded SUMMARY; historical cockpit replacement context is preserved but not counted | - |
+| 2. Thin End-to-End Slice | 7/9 | Superseded — 02-01 through 02-07 are completed; 02-08 is superseded by 03.1-09, and 02-09 is superseded by 03.1-09 plus 01-10; retired Phase 2 pages are not counted as completed | - |
 | 3. Guardrails | 5/5 | Complete (VERIFICATION present) | 2026-07-12 |
 | 3.1. Cockpit Core (INSERTED) | 9/9 | Complete (VERIFICATION present) | 2026-07-12 |
 | 3.2. Inbox Reading (INSERTED) | 6/6 | Complete (VERIFICATION present) | 2026-07-12 |
