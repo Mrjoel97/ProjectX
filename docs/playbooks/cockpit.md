@@ -1,3 +1,10 @@
+> Last verified: 2026-09-20 — `blueprint-active-spine.spec.ts` now owns the deterministic,
+> authenticated half of the Phase 17.1 founder check. It reads the production no-tool prompt
+> assembler through `llm:__cockpitTurnPrompt`, proves the confirmed Blueprint spine is present,
+> and compares the persisted spine byte-for-byte before and after that read-only turn assembly.
+> The spec makes no provider call and does not infer the founder's qualitative grounding verdict;
+> that exact-candidate judgment remains post-L6 and manual.
+>
 > Last verified: 2026-09-20 — `replyToMessage` now closes the selector-loss failure at both
 > boundaries. Its model schema has a root `anyOf` requiring `sender` or `subject`, and both strings
 > are non-empty. The runtime still fails closed if a malformed direct call crosses that boundary,

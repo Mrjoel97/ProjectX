@@ -8,10 +8,13 @@
 // All payloads are synthetic (`{ note: "synthetic" }`) — never raw content.
 import type { WorkflowId } from "@convex-dev/workflow";
 import {
+  type BlueprintDiffRow,
   type BusinessBlueprint,
+  type BusinessProfile,
   type EvidenceVerdict,
   isPackEvalSandboxTenant,
   serializeBlueprint,
+  serializeProfile,
 } from "@pikar/core";
 import { categoryFor } from "@pikar/vault";
 import {
@@ -482,6 +485,211 @@ export const seedGoldenEvalBlueprint = internalMutation({
       blueprintConfirmedAt: now,
     });
     return { docId, sourceDocCount: sourceDocIds.length, needle: GOLDEN_BLUEPRINT_NEEDLE };
+  },
+});
+
+// --- 17.1-11: authenticated Blueprint active-spine browser fixture ----------
+
+const ACTIVE_SPINE_FIXTURE_NAME = "Northwind Pedal Works";
+const ACTIVE_SPINE_TYPED_CUSTOMER = "Independent city bicycle couriers";
+const ACTIVE_SPINE_DERIVED_CUSTOMER = "Regional fleet operators";
+const ACTIVE_SPINE_SOURCE_TITLE = "Active-spine market evidence";
+const ACTIVE_SPINE_PROFILE_TITLE = `${ACTIVE_SPINE_FIXTURE_NAME} — E2E profile`;
+
+/**
+ * Seed the one deterministic profile/live-Blueprint/draft shape used by
+ * `blueprint-active-spine.spec.ts`. This is deliberately an internal smoke writer, not a product
+ * mutation: the browser resolves its authenticated tenant id, then the CLI invokes this function
+ * on the already-running local stack. Re-runs reuse the fixture rows by exact marker rather than
+ * stacking documents.
+ *
+ * `withDraft: false` resets the accepted baseline; `withDraft: true` overlays one contradiction
+ * without changing that live row. No model, embedding, provider, or workflow is entered.
+ */
+export const seedBlueprintActiveSpineFixture = internalMutation({
+  args: { tenantId: v.string(), withDraft: v.boolean() },
+  handler: async (
+    ctx,
+    { tenantId, withDraft },
+  ): Promise<{
+    profileDocId: Id<"vaultDocuments">;
+    sourceDocId: Id<"vaultDocuments">;
+    blueprintDocId: Id<"vaultDocuments">;
+    typedTargetCustomer: string;
+    derivedTargetCustomer: string;
+  }> => {
+    const now = Date.now();
+    const profile: BusinessProfile = {
+      name: ACTIVE_SPINE_FIXTURE_NAME,
+      oneLineDescription: "Repairs and dispatches bicycles for time-sensitive city deliveries.",
+      persona: "startup",
+      stage: "growing",
+      offering: "Same-day bicycle repair and fleet maintenance",
+      targetCustomer: ACTIVE_SPINE_TYPED_CUSTOMER,
+      primaryGoals: ["Cut courier fleet downtime"],
+      knownConstraints: ["One workshop location"],
+    };
+    const profileText = serializeProfile(profile);
+    const profileDocs = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant_kind", (q) => q.eq("tenantId", tenantId).eq("kind", "business_profile"))
+      .collect();
+    const existingProfile = profileDocs.find((doc) => doc.title === ACTIVE_SPINE_PROFILE_TITLE);
+    let profileDocId: Id<"vaultDocuments">;
+    if (existingProfile) {
+      await ctx.db.patch(existingProfile._id, {
+        text: profileText,
+        contentHash: await contentHash(profileText),
+        size: new TextEncoder().encode(profileText).length,
+        status: "ready",
+        createdAt: now,
+      });
+      profileDocId = existingProfile._id;
+    } else {
+      profileDocId = await ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title: ACTIVE_SPINE_PROFILE_TITLE,
+        kind: "business_profile",
+        category: categoryFor({ source: "agent" }),
+        source: "agent",
+        mimeType: "text/markdown",
+        size: new TextEncoder().encode(profileText).length,
+        contentHash: await contentHash(profileText),
+        text: profileText,
+        status: "ready",
+        createdAt: now,
+      });
+    }
+
+    const sourceText =
+      "Interview notes propose regional fleet operators as a new audience. This contradicts the founder-authored courier focus and must never be accepted implicitly.";
+    const sourceDocs = await ctx.db
+      .query("vaultDocuments")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    const existingSource = sourceDocs.find((doc) => doc.title === ACTIVE_SPINE_SOURCE_TITLE);
+    let sourceDocId: Id<"vaultDocuments">;
+    if (existingSource) {
+      await ctx.db.patch(existingSource._id, {
+        text: sourceText,
+        contentHash: await contentHash(sourceText),
+        size: new TextEncoder().encode(sourceText).length,
+        status: "ready",
+      });
+      sourceDocId = existingSource._id;
+    } else {
+      sourceDocId = await ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title: ACTIVE_SPINE_SOURCE_TITLE,
+        kind: "document",
+        category: categoryFor({ source: "upload" }),
+        source: "upload",
+        mimeType: "text/plain",
+        size: new TextEncoder().encode(sourceText).length,
+        contentHash: await contentHash(sourceText),
+        text: sourceText,
+        status: "ready",
+        createdAt: now,
+      });
+    }
+
+    const typedTarget = { values: [ACTIVE_SPINE_TYPED_CUSTOMER], origin: "stated" as const };
+    const derivedTarget = {
+      values: [ACTIVE_SPINE_DERIVED_CUSTOMER],
+      origin: "derived" as const,
+      source: ACTIVE_SPINE_SOURCE_TITLE,
+    };
+    const live: BusinessBlueprint = {
+      name: { values: [ACTIVE_SPINE_FIXTURE_NAME], origin: "stated" },
+      oneLineDescription: { values: [profile.oneLineDescription], origin: "stated" },
+      stage: { values: [profile.stage], origin: "stated" },
+      tier: { values: [profile.persona], origin: "stated" },
+      offering: { values: [profile.offering], origin: "stated" },
+      targetCustomer: typedTarget,
+      revenueModel: {
+        values: ["Monthly fleet-care retainers"],
+        origin: "derived",
+        source: ACTIVE_SPINE_SOURCE_TITLE,
+      },
+      bindingConstraint: {
+        values: ["Workshop capacity"],
+        origin: "derived",
+        source: ACTIVE_SPINE_SOURCE_TITLE,
+      },
+      primaryGoals: { values: profile.primaryGoals, origin: "stated" },
+      knownConstraints: { values: profile.knownConstraints, origin: "stated" },
+      entities: null,
+    };
+    const liveText = serializeBlueprint(live);
+    const existingBlueprint = sourceDocs.find(
+      (doc) =>
+        doc.kind === "business_blueprint" &&
+        typeof doc.text === "string" &&
+        doc.text.includes(ACTIVE_SPINE_FIXTURE_NAME),
+    );
+    let blueprintDocId: Id<"vaultDocuments">;
+    if (existingBlueprint) {
+      await ctx.db.patch(existingBlueprint._id, {
+        title: "Business blueprint",
+        text: liveText,
+        contentHash: await contentHash(liveText),
+        size: new TextEncoder().encode(liveText).length,
+        status: "ready",
+      });
+      blueprintDocId = existingBlueprint._id;
+    } else {
+      blueprintDocId = await ctx.db.insert("vaultDocuments", {
+        tenantId,
+        title: "Business blueprint",
+        kind: "business_blueprint",
+        category: categoryFor({ source: "agent" }),
+        source: "agent",
+        mimeType: "text/markdown",
+        size: new TextEncoder().encode(liveText).length,
+        contentHash: await contentHash(liveText),
+        text: liveText,
+        status: "ready",
+        createdAt: now,
+      });
+    }
+
+    const diff: BlueprintDiffRow[] = [
+      {
+        kind: "contradiction",
+        field: "targetCustomer",
+        stated: typedTarget,
+        derived: derivedTarget,
+      },
+    ];
+    const draftJson = JSON.stringify({
+      blueprint: live,
+      diff,
+      sourceDocIds: [profileDocId, sourceDocId],
+    });
+    const tenantProfile = await ctx.db
+      .query("tenantProfiles")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .unique();
+    const blueprintFields = {
+      tier: "startup" as const,
+      tierSource: "confirmed" as const,
+      derivedAt: now,
+      blueprintSourceDocIds: [profileDocId, sourceDocId],
+      blueprintDocId,
+      blueprintConfirmedAt: now,
+      blueprintDraft: withDraft ? draftJson : undefined,
+      blueprintDraftAt: withDraft ? now : undefined,
+    };
+    if (tenantProfile) await ctx.db.patch(tenantProfile._id, blueprintFields);
+    else await ctx.db.insert("tenantProfiles", { tenantId, ...blueprintFields });
+
+    return {
+      profileDocId,
+      sourceDocId,
+      blueprintDocId,
+      typedTargetCustomer: ACTIVE_SPINE_TYPED_CUSTOMER,
+      derivedTargetCustomer: ACTIVE_SPINE_DERIVED_CUSTOMER,
+    };
   },
 });
 

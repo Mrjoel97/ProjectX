@@ -24,7 +24,8 @@ import {
 } from "@pikar/voice";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction, internalQuery } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { type ActionCtx, internalAction, internalQuery } from "./_generated/server";
 import { tenantAction } from "./lib/functions";
 
 // ponytail: warm GA voice for gpt-realtime; the voice is a product/BRAND choice — swap the
@@ -70,6 +71,53 @@ export const docForMint = internalQuery({
 });
 
 /**
+ * Assemble the exact instructions sent to Realtime, without performing the external mint.
+ * Production and the deterministic active-spine browser probe both use this one function, so the
+ * probe cannot pass against a reimplementation while the real voice path drifts.
+ */
+async function voiceInstructions(
+  ctx: Pick<ActionCtx, "runQuery">,
+  tenantId: string,
+  docId?: Id<"vaultDocuments">,
+): Promise<string> {
+  const skill = await ctx.runQuery(internal.skills.getActiveSkill, {
+    name: docId ? DOCUMENT_ANALYST_SKILL : VOICE_SESSION_SKILL,
+  });
+  let instructions = skill.body;
+  // The owner explicitly authorizes this tenant-scoped blueprint to cross the OpenAI Realtime
+  // boundary as private session context. `spineForTenant` returns only the CONFIRMED blueprint,
+  // already bounded and fenced as reference data; drafts can never leak into a voice session.
+  const blueprintSpine = await ctx.runQuery(internal.blueprint.spineForTenant, { tenantId });
+  if (blueprintSpine) instructions = `${instructions}\n\n${blueprintSpine}`;
+  if (!docId) return instructions;
+
+  const doc = await ctx.runQuery(internal.voiceToken.docForMint, {
+    vaultDocId: docId,
+    tenantId,
+  });
+  if (!doc) throw new Error("voicedoc: document not found");
+  if (doc.status !== "ready") throw new Error("voicedoc: document not ready");
+  // The digest is already capped, fenced and truncation-disclosing in @pikar/voice — do NOT
+  // re-slice or re-fence it here, and do NOT add a behavioural instruction inline: every rule
+  // the analyst follows lives in the registry skill body (§5).
+  return `${instructions}\n\n${buildDocDigest({
+    title: doc.title,
+    text: doc.text,
+    truncated: doc.extractionTruncated,
+  })}`;
+}
+
+/**
+ * Internal, read-only proof seam for the authenticated active-spine E2E. It returns instruction
+ * assembly before the provider boundary; it never reads OPENAI_API_KEY and never calls `fetch`.
+ */
+export const __voiceInstructionsForTest = internalAction({
+  args: { tenantId: v.string(), docId: v.optional(v.id("vaultDocuments")) },
+  handler: async (ctx, { tenantId, docId }): Promise<string> =>
+    await voiceInstructions(ctx, tenantId, docId),
+});
+
+/**
  * Mint a short-lived Realtime client secret for the browser (VOIC-01 pre-flight), optionally
  * scoped to ONE vault report (DOCV-01).
  *
@@ -89,40 +137,12 @@ export const mintClientSecret = tenantAction({
     ctx,
     { docId },
   ): Promise<{ clientSecret: string; expiresAt: number; toolsAtMint: boolean }> => {
-    // Persona from the registry — fail-closed (getActiveSkill throws NO_ACTIVE_SKILL) when
-    // unseeded. Never a hardcoded fallback prompt (§5). The Phase-6 `voice-session` body is
-    // untouched by this branch, so a Phase-14 prompt change cannot regress Phase 6.
-    const skill = await ctx.runQuery(internal.skills.getActiveSkill, {
-      name: docId ? DOCUMENT_ANALYST_SKILL : VOICE_SESSION_SKILL,
-    });
-
     // The mint is a SECOND trust boundary alongside `voice.startSession` — and the FIRST one in
     // wall-clock order, since the browser mints before it has a session row. A document must
     // exist, be this tenant's, and be `ready`; the thrown message is a STATUS, never content.
-    let instructions = skill.body;
-    // The owner explicitly authorizes this tenant-scoped blueprint to cross the OpenAI Realtime
-    // boundary as private session context. `spineForTenant` returns only the CONFIRMED blueprint,
-    // already bounded and fenced as reference data; drafts can never leak into a voice session.
-    const blueprintSpine = await ctx.runQuery(internal.blueprint.spineForTenant, {
-      tenantId: ctx.tenantId,
-    });
-    if (blueprintSpine) instructions = `${instructions}\n\n${blueprintSpine}`;
-    if (docId) {
-      const doc = await ctx.runQuery(internal.voiceToken.docForMint, {
-        vaultDocId: docId,
-        tenantId: ctx.tenantId,
-      });
-      if (!doc) throw new Error("voicedoc: document not found");
-      if (doc.status !== "ready") throw new Error("voicedoc: document not ready");
-      // The digest is already capped, fenced and truncation-disclosing in @pikar/voice — do NOT
-      // re-slice or re-fence it here, and do NOT add a behavioural instruction inline: every rule
-      // the analyst follows lives in the registry skill body (§5).
-      instructions = `${instructions}\n\n${buildDocDigest({
-        title: doc.title,
-        text: doc.text,
-        truncated: doc.extractionTruncated,
-      })}`;
-    }
+    // Persona load, confirmed Blueprint spine, and optional document digest are shared with the
+    // read-only E2E proof seam above. Missing skills/documents still fail closed before any fetch.
+    const instructions = await voiceInstructions(ctx, ctx.tenantId, docId);
 
     // ponytail: PROMPT-INJECTION CEILING. A digest of user-supplied document text sits inside the
     // SYSTEM `instructions` field — a materially stronger exposure than ADR-006's tool-RETURN case,

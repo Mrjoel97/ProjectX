@@ -1,3 +1,9 @@
+> Last verified: 2026-09-20 — `smoke:seedBlueprintActiveSpineFixture` is the idempotent local-only
+> data seam for the authenticated Phase 17.1 browser contract. It writes one exact typed profile,
+> confirmed Blueprint, cited source, and optional contradiction draft for the signed-in tenant;
+> it enters no model, embedding, provider, or workflow path. The spec uses it only on an
+> already-running local stack and never treats its deterministic assertions as founder acceptance.
+>
 > Last verified: 2026-09-14 — the native vertical evidence path exposes a closed owner review
 > console for one exact run UUID. Sealed receipts bind the output's SHA-256 and UTF-8 byte length;
 > mechanically observable outcome, required-source and forbidden-operation criteria are resolved
