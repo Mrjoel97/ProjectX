@@ -313,6 +313,10 @@
       "25-private-beta-productionization/25-11",
       "25-private-beta-productionization/25-12",
       "25-private-beta-productionization/25-13",
+      "25-private-beta-productionization/25-14",
+      "25-private-beta-productionization/25-15",
+      "25-private-beta-productionization/25-16",
+      "25-private-beta-productionization/25-17",
       "25.1-consistency-and-reliability-hardening/25.1-02",
       "25.1-consistency-and-reliability-hardening/25.1-03",
       "25.1-consistency-and-reliability-hardening/25.1-04",
@@ -20213,6 +20217,291 @@
       ]
     },
     {
+      "id": "PLAN:25-private-beta-productionization/25-14",
+      "workflow": "Close the remaining repository-controlled first-governed-self-send delta from historical 25-04. Trace the existing onboarding projection through cockpit offer, authenticated self-recipient, approval/recovery, and terminal observation without rebuilding onboarding or delivery.",
+      "source_phase": "Phase 25",
+      "source_plans": [
+        ".planning/phases/25-private-beta-productionization/25-14-PLAN.md"
+      ],
+      "requirement_ids": [
+        "BETA-03"
+      ],
+      "historical_state": "plan_without_canonical_summary",
+      "current_disposition": "open",
+      "implemented": "unknown",
+      "offline_tested": "unknown",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/25-private-beta-productionization/25-14-PLAN.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "25-private-beta-productionization/25-14"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "Plan unexecuted: all named implementation and verification tasks and the Wave 1 entry gate remain outstanding."
+      ],
+      "remaining_work_classes": [
+        "evidence_reconciliation",
+        "current_code_delta_or_named_supersession"
+      ],
+      "closure_wave": 2,
+      "owner_phase": "Phase 25",
+      "dependencies": [
+        "25-01",
+        "25-02",
+        "25-04",
+        "25-05",
+        "25-06"
+      ],
+      "entry_gate": "Wave 1 foundation/evidence exit gate has passed.",
+      "objective_exit_test": "All plan tasks and tests prove onboarding offer, server-bound self-recipient, provider-aware prerequisite recovery, single approval and terminal/report state. The separate controlled live journey and Wave 8 gates remain open.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop on a weakened tenant, owner-only, approval, audit, cost, recovery, or admission boundary."
+      ]
+    },
+    {
+      "id": "PLAN:25-private-beta-productionization/25-15",
+      "workflow": "Add the missing Wave 2 measurement and result-history spine using the repository's existing telemetry, spend, approval, delivery, audit, export and erasure contracts. This is a focused cross-cutting delta, not a replacement for those subsystems or for Wave 8 qualification.",
+      "source_phase": "Phase 25",
+      "source_plans": [
+        ".planning/phases/25-private-beta-productionization/25-15-PLAN.md"
+      ],
+      "requirement_ids": [
+        "BETA-03"
+      ],
+      "historical_state": "plan_without_canonical_summary",
+      "current_disposition": "open",
+      "implemented": "unknown",
+      "offline_tested": "unknown",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/25-private-beta-productionization/25-15-PLAN.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "25-private-beta-productionization/25-15"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "Plan unexecuted: all named implementation and verification tasks and the Wave 1 entry gate remain outstanding."
+      ],
+      "remaining_work_classes": [
+        "evidence_reconciliation",
+        "current_code_delta_or_named_supersession"
+      ],
+      "closure_wave": 2,
+      "owner_phase": "Phase 25",
+      "dependencies": [
+        "25-14"
+      ],
+      "entry_gate": "Wave 1 foundation/evidence exit gate has passed.",
+      "objective_exit_test": "Actual admission, onboarding, approval, all terminal and session producers emit idempotent events; bounded history and pure metrics pass meaningful privacy, export/erasure and honest-unknown checks.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop on a weakened tenant, owner-only, approval, audit, cost, recovery, or admission boundary."
+      ]
+    },
+    {
+      "id": "PLAN:25-private-beta-productionization/25-16",
+      "workflow": "Close the repository-controlled admission and isolation proof debt in Wave 2. The implementation already has invite/auth and owner wrappers; this plan adds executable two-identity evidence at the real browser/backend/HTTP boundaries without weakening any authorization rule.",
+      "source_phase": "Phase 25",
+      "source_plans": [
+        ".planning/phases/25-private-beta-productionization/25-16-PLAN.md"
+      ],
+      "requirement_ids": [
+        "BETA-01",
+        "BETA-02",
+        "BETA-05"
+      ],
+      "historical_state": "plan_without_canonical_summary",
+      "current_disposition": "open",
+      "implemented": "unknown",
+      "offline_tested": "unknown",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/25-private-beta-productionization/25-16-PLAN.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "25-private-beta-productionization/25-16"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "Plan unexecuted: all named implementation and verification tasks and the Wave 1 entry gate remain outstanding."
+      ],
+      "remaining_work_classes": [
+        "evidence_reconciliation",
+        "current_code_delta_or_named_supersession"
+      ],
+      "closure_wave": 2,
+      "owner_phase": "Phase 25",
+      "dependencies": [
+        "25-14"
+      ],
+      "entry_gate": "Wave 1 foundation/evidence exit gate has passed.",
+      "objective_exit_test": "Real owner/non-owner browser paths, runtime-schema-derived private API isolation and public capability HTTP tests prove the actual contracts with positive and negative controls.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop on a weakened tenant, owner-only, approval, audit, cost, recovery, or admission boundary."
+      ]
+    },
+    {
+      "id": "PLAN:25-private-beta-productionization/25-17",
+      "workflow": "Make audit §9.7's claim-versus-code control enforceable across the actual product, marketing, onboarding and legal copy surfaces. The checker must express capability truth and honest blocked states; it must not turn historical evidence or provider prerequisites into claims of availability.",
+      "source_phase": "Phase 25",
+      "source_plans": [
+        ".planning/phases/25-private-beta-productionization/25-17-PLAN.md"
+      ],
+      "requirement_ids": [
+        "BETA-01",
+        "BETA-03"
+      ],
+      "historical_state": "plan_without_canonical_summary",
+      "current_disposition": "open",
+      "implemented": "unknown",
+      "offline_tested": "unknown",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/25-private-beta-productionization/25-17-PLAN.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "25-private-beta-productionization/25-17"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "Plan unexecuted: all named implementation and verification tasks and the Wave 1 entry gate remain outstanding."
+      ],
+      "remaining_work_classes": [
+        "evidence_reconciliation",
+        "current_code_delta_or_named_supersession"
+      ],
+      "closure_wave": 2,
+      "owner_phase": "Phase 25",
+      "dependencies": [
+        "25-14",
+        "25-15",
+        "25-16"
+      ],
+      "entry_gate": "Wave 1 foundation/evidence exit gate has passed.",
+      "objective_exit_test": "All named claim surfaces have typed capability coverage and CI-wired enforcement with meaningful negative mutations; unobserved outcomes are never advertised as accepted.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop on a weakened tenant, owner-only, approval, audit, cost, recovery, or admission boundary."
+      ]
+    },
+    {
       "id": "REQ:BETA-01",
       "workflow": "BETA-01 — : New users can sign up only with a valid invite code (Convex Auth) *(open: 25-01/25-02 shipped invite-gated signup and decline to certify; the proof is one invited non-owner signup)*",
       "source_phase": "Phase 25",
@@ -20668,7 +20957,11 @@
         ".planning/phases/25-private-beta-productionization/25-10-PLAN.md",
         ".planning/phases/25-private-beta-productionization/25-11-PLAN.md",
         ".planning/phases/25-private-beta-productionization/25-12-PLAN.md",
-        ".planning/phases/25-private-beta-productionization/25-13-PLAN.md"
+        ".planning/phases/25-private-beta-productionization/25-13-PLAN.md",
+        ".planning/phases/25-private-beta-productionization/25-14-PLAN.md",
+        ".planning/phases/25-private-beta-productionization/25-15-PLAN.md",
+        ".planning/phases/25-private-beta-productionization/25-16-PLAN.md",
+        ".planning/phases/25-private-beta-productionization/25-17-PLAN.md"
       ],
       "requirement_ids": [],
       "historical_state": "verification_missing",
