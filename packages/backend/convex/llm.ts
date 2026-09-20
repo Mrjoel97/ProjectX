@@ -4614,6 +4614,33 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
       }),
       execute: async ({ topic, form, replace }): Promise<string> => {
         const plan = await readPlan(); // threadId + the cross-tenant guard — NEVER from the model
+        // PRE-FLIGHT EVERY REAL REPLACEMENT before scanning, drafting, rendering or storing. The
+        // mutation below remains the final authority (and re-checks the same tenant/origin rules),
+        // but discovering a bad index, a foreign id or a user upload only after draftDocument has
+        // run would spend a model call and perform irreversible rendering work for an operation we
+        // already know must refuse. `latestCreated` supplies the server-owned index and
+        // `ownedDocsMeta` is the existing refs-only tenant read; neither trusts a model-supplied id.
+        const preflightCard = await ctx.runQuery(internal.vaultSources.latestCreated, {
+          tenantId,
+          threadId: plan.threadId,
+        });
+        const preflightDocIds = preflightCard?.docIds ?? [];
+        // Keep the fixture-35 rule: when nothing has been created, the model's habitual `replace`
+        // field is noise and this is a create. Once a card exists, it denotes a real replacement
+        // request and must pass the complete preflight before any work or spend.
+        const effectiveReplace = preflightDocIds.length === 0 ? undefined : replace;
+        const replacementRefusal = (index: number) =>
+          `There's no document #${index} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+        if (effectiveReplace !== undefined) {
+          const targetDocId = preflightDocIds[effectiveReplace - 1];
+          if (!targetDocId) return replacementRefusal(effectiveReplace);
+          const [target] = await ctx.runQuery(internal.vault.ownedDocsMeta, {
+            tenantId,
+            docIds: [targetDocId],
+          });
+          if (!target || target._id !== targetDocId || target.origin !== "agent")
+            return replacementRefusal(effectiveReplace);
+        }
         const scan = scanText(topic);
         // Fail-closed, but as a SENTENCE: a governed stop is a paused conversation, never a throw
         // out of the loop (the mailboxUnavailable / dispatch-refusal precedent).
@@ -4713,7 +4740,6 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // denote anything, so it is not a refusal case — it is noise, and creating is the only
         // coherent reading. An out-of-range index WITH documents present keeps its honest refusal,
         // because there the user may genuinely mean a document that is simply numbered differently.
-        const effectiveReplace = docIds.length === 0 ? undefined : replace;
         if (effectiveReplace === undefined) {
           // 26-11 (CONT-01): provenance goes on the INSERT ONLY, never into `docArgs` -- that
           // object is also spread into `patchCreatedDoc` below, whose validator has no such fields
@@ -4732,13 +4758,12 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             threadId: plan.threadId,
             index: effectiveReplace,
           });
-          // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
-          // never throws, and neither does this. Rendering happened before the server-owned index
-          // check, so a refused replacement must also discard its newly rendered bytes; otherwise
-          // every bad/foreign index leaves an unreferenced PDF or workbook in storage.
+          // The mutation repeats the tenant/origin check at commit time, closing the race between
+          // preflight and patch. A late refusal is still a SENTENCE, never a throw, and must discard
+          // the just-rendered bytes so a concurrent card/row change cannot orphan storage.
           if (!res.ok) {
             if (storageId) await ctx.storage.delete(storageId);
-            return `There's no document #${effectiveReplace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+            return replacementRefusal(effectiveReplace);
           }
           // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
           // superseded (the regenerateAttachment ordering — never orphan a live ref).

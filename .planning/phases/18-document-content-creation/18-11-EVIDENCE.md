@@ -68,7 +68,7 @@ accepted=false
 | Filename/MIME truth | `formatSpec` is the single extension/MIME mapping for PDF, HTML and XLSX; collision suffixes are format-local and `formatForMime` round-trips only supported formats. |
 | View | The Output card follows the newest artifact unless the user explicitly selects another, then opens the exact tenant-scoped Vault document. |
 | Regenerate | Attachment regeneration preserves stored HTML/XLSX format, replaces the slot, and deletes superseded bytes. |
-| Replace | `createDocument(replace:N)` patches the same Vault row without count inflation, refreshes the append-only card, deletes superseded bytes, and now deletes newly rendered bytes when the server-owned index refuses. |
+| Replace | `createDocument(replace:N)` preflights the server-owned index, tenant ownership, and `origin:"agent"` before scan/draft/render/storage; it patches the same Vault row without count inflation, refreshes the append-only card, deletes superseded bytes, and deletes newly rendered bytes if the final mutation refuses after a concurrent change. |
 | Loading/empty/partial | The Output card has explicit loading, missing-artifact, missing-download, summary-only partial, and empty-preview copy. Missing PDF storage falls back to saved text while naming the unavailable download. |
 | Renderer/draft refusal | Forced attachment render failure stores no ref, records `attachmentError`, and blocks proposal; missing drafter, budget/kill-switch, no-table spreadsheet and bad-format paths return bounded refusal sentences without half-written artifacts. |
 | Audit | `document.created` is exactly one refs-only row with `topicHash`, closed `form`, `vaultDocId`, and `hasPdf`; neither topic nor generated prose is present. |
@@ -87,7 +87,7 @@ accepted=false
   before returning the honest “nothing was changed” sentence. This applies equally to missing,
   foreign-tenant, and user-upload replacement refusals.
 - **Regression:** the storage system-table ids must remain byte-for-byte identical across a refused
-  replacement; the focused test and the complete 169-test cockpit suite pass.
+  replacement; the focused test and the complete 171-test cockpit suite pass.
 
 **[Rule 2 — Missing critical honesty] Output-card degradation was silent.**
 
@@ -96,19 +96,36 @@ accepted=false
 - The card now names missing artifact, missing download bytes, summary-only partial, empty preview,
   and loading independently, while preserving the saved-not-sent boundary.
 
+**[Rule 1 — Bug] Known-invalid replacement targets were rejected only after draft/render work.**
+
+- The orphan cleanup made the final state honest, but bad indexes, cross-tenant ids, and user uploads
+  still reached `draftDocument` and could render/store bytes before the authoritative mutation
+  refused them. That violated the workflow prerequisite rule even though cleanup later succeeded.
+- `createDocument` now resolves the current thread's server-owned card before scanning or drafting,
+  validates its target through the existing refs-only `vault.ownedDocsMeta` query, and requires an
+  exact tenant-owned row with `origin:"agent"`. Missing, foreign, and upload targets return the
+  indexed refusal before model work or storage. The mutation repeats its checks at commit time to
+  guard the preflight-to-patch race; its cleanup remains the late-refusal backstop.
+- The deterministic regressions archive `document-drafter` after seeding a target. All three refusal
+  classes still return the indexed refusal rather than the drafting/rendering failure, proving the
+  drafter was not invoked; `_storage` ids, card count, audit count, and document hash/ref remain
+  unchanged.
+
 ## Exact deterministic verification (2026-09-20)
 
 | Command | Result |
 |---|---|
+| `pnpm --filter @pikar/backend test -- cockpitTools.test.ts -t "bad index\|preflights a foreign\|preflights a user upload"` | PASS — 1 file, 3 tests (168 skipped); archived-drafter tripwire proves all refusals precede drafting, and storage ids remain identical |
 | `pnpm --filter @pikar/core test -- documentGen` | PASS — 1 file, 27 tests |
-| `pnpm --filter @pikar/backend exec vitest run convex/createdDocs.test.ts convex/documentDraft.test.ts convex/cockpitTools.test.ts convex/runCockpitAgent.test.ts` | PASS — 4 files, 228 tests |
+| `pnpm --filter @pikar/backend exec vitest run convex/createdDocs.test.ts convex/documentDraft.test.ts convex/cockpitTools.test.ts convex/runCockpitAgent.test.ts` | PASS — 4 files, 230 tests |
+| `pnpm --filter @pikar/backend typecheck` | PASS — exit 0 |
 | `pnpm --filter @pikar/web exec vitest run "app/(app)/dashboard/workspace/outputCard.test.ts"` | PASS — 1 file, 13 tests |
 | `pnpm --filter @pikar/web exec playwright test e2e/cockpit-created-document.spec.ts --list` | PASS — 3 discovered tests in 2 files (setup plus 2 Chromium cases); **not executed** |
 | `pnpm --filter @pikar/web exec tsc --noEmit` | PASS — exit 0 |
 | `node scripts/check-playbooks.mjs` | PASS after updating `docs/playbooks/cockpit.md` with the repository-only repair |
 
 The backend suite emits its known convex-test diagnostic when the optional Workflow component is
-not registered in two scheduled-test paths; all four files and all 228 assertions pass. This output
+not registered in two scheduled-test paths; all four files and all 230 assertions pass. This output
 is not treated as a document failure.
 
 ## Cleanup and remaining gate

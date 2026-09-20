@@ -1,6 +1,8 @@
-> Last verified: 2026-09-20 — Phase 18's offline document lifecycle now deletes newly rendered
-> PDF/XLSX bytes when a server-owned replacement index is refused, so “nothing was changed” also
-> means no orphaned storage object. The Output card distinguishes loading, missing artifact,
+> Last verified: 2026-09-20 — Phase 18's offline document lifecycle now preflights a replacement's
+> server-owned index, tenant ownership, and agent-authored origin before scan, drafting, rendering,
+> or storage. The final mutation repeats those checks for race safety and deletes newly rendered
+> PDF/XLSX bytes on a late refusal, so “nothing was changed” also means no spend or orphaned object.
+> The Output card distinguishes loading, missing artifact,
 > missing download bytes, summary-only partial, and empty-preview states, while retaining the
 > explicit “Saved to your vault. Nothing was sent.” boundary. Focused backend and web regressions
 > are deterministic only; no live model, deployment, founder BRAND verdict, send, or publish is

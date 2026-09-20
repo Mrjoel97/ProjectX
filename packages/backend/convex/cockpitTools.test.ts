@@ -9,7 +9,11 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AGENT_AUTHORABLE_SKILLS, CONTENT_DRAFTER_SKILL } from "@pikar/contracts/skill";
+import {
+  AGENT_AUTHORABLE_SKILLS,
+  CONTENT_DRAFTER_SKILL,
+  DOCUMENT_DRAFTER_SKILL,
+} from "@pikar/contracts/skill";
 import {
   ACTION_TYPES,
   type ActionType,
@@ -2446,6 +2450,11 @@ test("createDocument(replace: <bad index>) returns a sentence and changes NOTHIN
   const before = (await vaultDocs(t))[0]!;
   const storedBefore = await storageObjects(t);
   expect(storedBefore).toHaveLength(1); // the accepted document's derived PDF
+  // Make drafting a deterministic tripwire. If replacement validation slips back below the
+  // drafter, the call returns the draft-failure sentence instead of the indexed refusal.
+  expect(await t.mutation(internal.skills.archiveSkill, { name: DOCUMENT_DRAFTER_SKILL })).toEqual({
+    archived: true,
+  });
 
   const reply = await call(t, planId, "createDocument", {
     topic: `${SMOKE} rewrite the fifth one`,
@@ -2455,12 +2464,70 @@ test("createDocument(replace: <bad index>) returns a sentence and changes NOTHIN
 
   // A refusal is a returned sentence, never a throw — and nothing is half-written.
   expect(reply).toMatch(/no document #5|nothing was changed/i);
+  expect(reply).not.toMatch(/drafting|rendering/i);
   const after = await vaultDocs(t);
   expect(after).toHaveLength(1);
   expect(after[0]!.contentHash).toBe(before.contentHash);
   expect(after[0]!.storageId).toBe(before.storageId);
   expect((await cardRows(t)).filter((r) => r.role === "created")).toHaveLength(1); // no new card
   expect(await createdAudit(t)).toHaveLength(1); // no audit for work not done
+  expect((await storageObjects(t)).map((o) => o._id)).toEqual(storedBefore.map((o) => o._id));
+});
+
+test("createDocument preflights a foreign replacement before drafting or changing storage", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
+  const before = (await vaultDocs(t))[0]!;
+  await t.run((ctx) => ctx.db.patch(before._id, { tenantId: "t2" }));
+  const storedBefore = await storageObjects(t);
+  expect(await t.mutation(internal.skills.archiveSkill, { name: DOCUMENT_DRAFTER_SKILL })).toEqual({
+    archived: true,
+  });
+
+  const reply = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} rewrite the foreign one`,
+    form: "long",
+    replace: 1,
+  });
+
+  expect(reply).toMatch(/no document #1|nothing was changed/i);
+  expect(reply).not.toMatch(/drafting|rendering/i); // archived skill was never reached
+  const after = (await vaultDocs(t))[0]!;
+  expect(after.contentHash).toBe(before.contentHash);
+  expect(after.storageId).toBe(before.storageId);
+  expect((await cardRows(t)).filter((r) => r.role === "created")).toHaveLength(1);
+  expect(await createdAudit(t)).toHaveLength(1);
+  expect((await storageObjects(t)).map((o) => o._id)).toEqual(storedBefore.map((o) => o._id));
+});
+
+test("createDocument preflights a user upload replacement before drafting or changing storage", async () => {
+  const { t, planId } = await setup();
+  await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
+  const before = (await vaultDocs(t))[0]!;
+  // ABSENT origin is the schema's authoritative user-supplied discriminator. Keep the same card
+  // and bytes so this test isolates replacement eligibility rather than index resolution.
+  await t.run((ctx) =>
+    ctx.db.patch(before._id, { origin: undefined, kind: "upload", source: "upload" }),
+  );
+  const storedBefore = await storageObjects(t);
+  expect(await t.mutation(internal.skills.archiveSkill, { name: DOCUMENT_DRAFTER_SKILL })).toEqual({
+    archived: true,
+  });
+
+  const reply = await call(t, planId, "createDocument", {
+    topic: `${SMOKE} rewrite the upload`,
+    form: "long",
+    replace: 1,
+  });
+
+  expect(reply).toMatch(/no document #1|nothing was changed/i);
+  expect(reply).not.toMatch(/drafting|rendering/i); // archived skill was never reached
+  const after = (await vaultDocs(t))[0]!;
+  expect(after.contentHash).toBe(before.contentHash);
+  expect(after.storageId).toBe(before.storageId);
+  expect(after.origin).toBeUndefined();
+  expect((await cardRows(t)).filter((r) => r.role === "created")).toHaveLength(1);
+  expect(await createdAudit(t)).toHaveLength(1);
   expect((await storageObjects(t)).map((o) => o._id)).toEqual(storedBefore.map((o) => o._id));
 });
 
