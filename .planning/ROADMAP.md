@@ -8,6 +8,11 @@ Pikar-AI reaches a private beta in ~4 weeks (target ~2026-08-05) by building the
 
 The single governing reference for current work is the [merged audit](audits/2026-09-10-merged-audit-codebase-review.md). Its G1–G26 reconciliation and Independent cross-cutting reconciliation H1–H5 are additive release controls, not a competing roadmap. Historical Phase 1–9 material remains preserved as v1.0 history; superseded, partial, blocked, and research-only records remain honest and are not silently converted into completed work.
 
+**Current authorization (2026-09-20):** the user confirmed the nine stages are Waves 0–8 and
+granted [standing execution authorization](audits/2026-09-20-standing-execution-authorization.md).
+It supersedes the consumed-permission stops in the historical attempt notes below. Existing cost,
+identity, dependency, and evidence requirements still apply; permission does not certify a result.
+
 **Current execution pointer:** Phase 03.7 — Wave 1A integration lead. `01-10` is complete at the
 repository-controlled layers without closing SC-5. A free preflight passed with no budget, then one
 authorized unfiltered `--no-retry` command for `03.7-10` and `17.1-11` consumed its authority. The
@@ -881,7 +886,7 @@ Plans:
 - [ ] 03.2-05-PLAN.md â Resolution card + "Searchingâ¦" chip + cockpit-resolve E2E (Wave 3)
 - [ ] 03.2-06-PLAN.md â Playbook + watch.json update (Â§9) + CKPT-01 human-verify (Wave 4)
 
-### Phase 03.2.1: Agent-Driven Cockpit (INSERTED)
+### Phase 3.2.1: Agent-Driven Cockpit (INSERTED)
 
 **Goal:** Replace the deterministic `emailIntent` FSM cockpit with an Executive Agent governed tool-loop (`generateText` + tools in `llm.ts`) so the conversation is flexible ("remove Bob", "make it more formal, add Jane") while every governance invariant survives â human Approve gate stays a mutation (never a tool), redaction-before-draft, refs-only logs, and structural facts are never model-invented (validated/resolved at the tool boundary). Clean cutover (FSM deleted).
 **Requirements**: AGNT-01, AGNT-02 (reshaped â the Executive Agent finally becomes a real reasoning tool-loop instead of an inert message store; no new v1 ID)
@@ -1617,6 +1622,20 @@ certify instructions nobody tested. This phase therefore runs AFTER both.
 - [ ] 20.1-01-PLAN.md - Wave 1: offline-only findInDrive + two read-only cockpit tools + trace/SMOKE parity + structural no-import/no-spend guard + substrate playbooks (VALT-15)
 - [ ] 20.1-02-PLAN.md - Wave 2: depends on active 20-12; Drive body/mirror + fixture 39 and all watched playbooks before pause, then separately authorized paid gate, exact-version activation, real Drive zero-ingest UAT and evidence-only close (VALT-15)
 
+### Phase 20.2: Scene Timeline Reels (INSERTED 2026-08-14)
+
+**Goal:** Replace the uniform fixed-block reel with a variable-duration scene timeline that hits an
+exact 15/30/60-second target, supports the four declared visual sources, and places narration on one
+master audio track. This is a media contract correction, not a reason to broaden candidate exposure or
+activate a provider without evidence.
+**Depends on:** Phase 20 Media Canvas.
+**Audit relation:** Supports G8 and the current-media-proof step in the merged audit order. Its
+offline implementation is recorded, but the phase remains open until its live seed, current-version
+readback, and user/browser evidence are qualified.
+**Plans:** 0/1 closure — [20.2-PLAN.md](phases/20.2-scene-timeline-reels/20.2-PLAN.md) is
+`status: proposed`; [20.2-SUMMARY.md](phases/20.2-scene-timeline-reels/20.2-SUMMARY.md) is
+`status: awaiting_live_seed`. Preserve both statuses; do not infer completion from landed commits.
+
 ### Phase 21: User-Authored Skills & Routines
 **Goal**: The user can author skills adapted to their business through the existing eval-gated skills registry - draft -> publish-as-candidate -> eval -> activate - tenant-scoped, reusing the shipped `insertCandidate`/`activateCandidate` seam verbatim. A ROUTINE is that same thing plus a trigger row: it reuses `insertCandidate` (`skills.ts:386`), `activateSkillVersion` (`skills.ts:110`) and `GATED_SKILLS` (`skill.ts:170-194`) and introduces no authoring language. **Pre-beta deliverable: a re-runnable pinned prompt** — a saved chat message re-fired at `api.cockpit.sendCockpitMessage`. NOT a `routines` table, NOT a cron, NOT an authoring canvas, NOT a graph DSL; those are post-beta and evidence-gated on someone actually re-firing a pinned prompt twice.
 **Depends on**: Phases 16-19 (real specialist capability worth authoring skills for), Phase 3.6 (eval gate). User-authored first, agent-authored (Phase 23) last.
@@ -1672,7 +1691,7 @@ Plans:
   1. An agent-reachable authoring tool can only ever produce a `status:"candidate"` skill - it is physically incapable of calling `activateCandidate` (capability minimization, not instruction-policing).
   2. An agent-authored candidate reaches `active` only through a passing held-out eval (including adversarial cases the authoring agent never sees) PLUS `requireOwner` approval.
   3. Every agent-authored skill row records author = agent and is immutable-versioned with one-write rollback; an `active` skill whose author is `agent` without recorded owner + eval evidence is impossible by construction.
-**Plans**: TBD
+**Plans**: 9 plans, 5/9 closed. Plans 23-01 through 23-05 are recorded complete; [23-06](phases/23-agent-authored-skills/23-06-PLAN.md) remains `in-progress` and requires fresh bounded authorization after the previous authorization expired unused; [23-07](phases/23-agent-authored-skills/23-07-PLAN.md), [23-08](phases/23-agent-authored-skills/23-08-PLAN.md), and [23-09](phases/23-agent-authored-skills/23-09-PLAN.md) remain unexecuted. No live handoff, evaluation result, activation, or rollback result may be inferred from validator tests.
 
 ### Phase 24: ISO 9001 Conformance Map
 **Goal**: An ISO 9001:2015 conformance foundation that maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills only genuine gaps - a conformance map that makes the compliance/trust moat real, not process theater.
@@ -1694,7 +1713,7 @@ Plans:
   4. A new user reaches a first real delivered result (a governed email to their own address) within minutes via the scripted first-run cockpit onboarding.
   5. An approved plan can deliver via Microsoft Graph (Outlook) (connect-both, choose-per-send). **Phase 25 BUILDS the provider-agnostic adapter — it does not exist today**: `gmailTokens` (`schema.ts:625-632`) has no `provider` column and is indexed `by_tenant` only, `gmail.ts:45-46` hardcodes `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`, and `gmail.ts:19` hardcodes the Google token endpoint. **CORRECTED 2026-08-15 (phase 14→25 gap audit): the widening described here is NOT being built.** This line said the seam is a `provider` column plus a `by_tenant_provider` index on `gmailTokens`. Plan 17-05 instead landed a SECOND table, `microsoftCalendarTokens`, and `schema.ts` records why a discriminator column is the wrong shape — it would make every existing `by_tenant` `.unique()` read ambiguous, and the two grants have different refresh endpoints, scope strings and expiry behaviour. `gmailTokens` is UNCHANGED; there is no provider column, no `by_tenant_provider` index and no migration. The seam that DOES ship in the same commit as the Graph adapter is `mailProvider` on plan/request state plus `delivery.ts`'s two arms (re-cut `25-05-PLAN.md`). ADR-018 further made the Microsoft grant a UNION consented once by 17-06, so no separate Outlook OAuth flow remains. The line-number citations above are stale (`gmailTokens` now sits near `schema.ts:1146`). An abstraction with one implementation is still what CLAUDE.md §8 forbids — that half stands. Deployed to a live Vercel domain on Gmail Testing mode + unverified Azure app (verification off the critical path).
   6. The custom-domain decision is MADE here, because every user-shareable URL depends on it. Serving from `*.convex.site` shares a host with the OAuth callback (`http.ts:15`), so a reputation flag on that host breaks SIGN-IN, not just the page; and a Convex deployment URL is deployment-scoped, so a link a user sent a client does not survive a prod migration. Branch A (durable domain + DNS + TLS) is required to complete the mandatory BETA-03 and DLVR-02 live sends. Branch B records that no user-shareable URL ships and explicitly BLOCKS Phase 25 until Branch A becomes available.
-**Plans**: 14 plans across 13 waves (execution is blocked on Plan 25-00's prerequisite gate; Plan 25-10 Branch B also blocks completion)
+**Plans**: 18 plans: historical 25-00–25-13 across 13 plan waves, plus proposed closure-programme Wave 2 deltas 25-14–25-17. Prerequisite and live acceptance gates remain open.
 
 Plans:
 - [ ] 25-00-PLAN.md — Blocking completion/stable-baseline gate for every pre-beta prerequisite lane; Phase 32 explicitly excluded (Wave 1)
@@ -1711,6 +1730,10 @@ Plans:
 - [ ] 25-11-PLAN.md — Durable-domain Vercel/Convex deployment, seed/readiness, and hosted OAuth admission (Wave 11)
 - [ ] 25-12-PLAN.md — Exact-SHA automated/authenticated-E2E/boot/hosted-env production qualification (Wave 12)
 - [ ] 25-13-PLAN.md — Fresh live Outlook/two-user/timed-first-result acceptance and evidence-only bookkeeping closure (Wave 13)
+- [ ] 25-14-PLAN.md — Proposed Wave 2 first governed self-send and inline prerequisite recovery; not executed
+- [ ] 25-15-PLAN.md — Proposed Wave 2 real-flow activation metrics and linked result history; not executed
+- [ ] 25-16-PLAN.md — Proposed Wave 2 admission, tenant isolation, and public capability-boundary proof; not executed
+- [ ] 25-17-PLAN.md — Proposed Wave 2 enforceable product/marketing/onboarding/legal claim control; not executed
 
 ## Progress
 
@@ -1774,12 +1797,13 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 19.1. Bulk Contact Import (CSV) (INSERTED) | 7/7 | Complete (VERIFICATION present) | - |
 | 20. Media Canvas | 19/20 | In Progress — open: 20-11. Implementation through captions/retention/drift detection is landed; Tasks 1-3 are evidenced by `1db8a03`, while the supported Run A/evidence remainder stays open. | - |
 | 20.1. Drive in the Cockpit (INSERTED) | 1/2 | Partial — open: 20.1-02 | - |
+| 20.2. Scene Timeline Reels (INSERTED) | 0/1 | Partial — open: live seed, current-version readback, and browser evidence; plan remains `proposed` and summary remains `awaiting_live_seed` | - |
 | 21. User-Authored Skills & Routines | 7/8 | Partial plan execution; SKILL-01 criteria verified, runtime protocol open | 2026-09-10 |
 | 22. Owner Authorization Primitive | 3/3 | Complete (VERIFICATION present) — owner UAT: server boundary proven live 2026-08; the DOM half was folded into 22.1 | 2026-08-16 |
 | 22.1. Beta Admission Readiness - legal deployment CI typechecking and identity-boundary hardening (INSERTED) | 5/5 | Complete (VERIFICATION present) | 2026-08-16 |
 | 23. Agent-Authored Skills | 5/9 | Partial — open: 23-06, 23-07, 23-08, 23-09 | - |
 | 24. ISO 9001 Conformance Map | 1/2 | Partial — open: 24-02 | - |
-| 25. Private Beta Productionization | 7/14 | Partial — open: 25-00, 25-07, 25-08, 25-09, 25-11, 25-12, 25-13 | - |
+| 25. Private Beta Productionization | 7/18 | Partial — open: 25-00, 25-07, 25-08, 25-09, 25-11, 25-12, 25-13, 25-14, 25-15, 25-16, 25-17 | - |
 | 25.1. Consistency and Reliability Hardening (INSERTED) | 6/7 | Partial — 25.1-07 carries a partial result; reel proof does not complete the five un-attested checkpoint items | - |
 | 25.2. Delete-first UX pass (INSERTED 2026-09-05) | 3/3 | Complete | 2026-09-05 |
 | 25.3. Scale constants and the armed reliability sweep (INSERTED 2026-09-05) | 1/1 | Complete | 2026-09-05 |
@@ -1791,7 +1815,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 29. Unified Knowledge and Routines | 13/13 | Complete (VERIFICATION present) | 2026-08-29 |
 | 30. Optional Vertical Workflow Packs | 1/10 | Partial — 30-01 verified; six dormant draft candidates, guarded native binding, Data validation, tenant controls and the closed exact-byte owner review console are implemented. Focused offline checks pass; paid exact-version evaluation, authenticated semantic/qualified Legal-HR review, all-six UAT, two-version evidence and lifecycle drills remain | - |
 | 31. Marketing surface and funnel v0 (TRANCHE A — buildable now) | 8/8 | Complete — approved contract and navigation, direct live acceptance and deployed desktop/mobile checks; see 31-VERIFICATION.md for method and cleanup limits | 2026-09-12 |
-| 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — legal entity not started.** Do not plan | - |
+| 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — registered legal details pending.** Owner confirmed provisional name `pikar-ai` on 2026-09-20; it is not a verified legal entity. The phase directory records the external gate; no PLAN until that gate clears. | - |
 | 33. Media creation UX overhaul: guided intake, storyboard variations, auto-assembled reel, reel-first canvas, clear failure retry, grounded citations | 10/10 | Complete | 2026-08-16 |
 | 33.1. Media provider migration to OpenRouter: grok-imagine-video replaces sora-2 before the Videos API withdrawal, gpt-image-2 onto OpenRouter with native batching, and the persistDeck music-field fix (INSERTED) | 5/6 | Partial — open: 33.1-06 | - |
 | 33.2. Storyboard authoring moves to a measured model pin (INSERTED) | 3/3 | Complete | - |
