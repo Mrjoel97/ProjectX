@@ -10,7 +10,7 @@
 //
 // Invocation (locked): pnpm eval:golden [--skill <name>@<version>]
 //                                       [--tenant-skill <tenantSkillsId>] [--only <id-substring>]
-//                                       [--no-retry]
+//                                       [--no-retry] [--max-usd <0.01-2.00>]
 //                                       [--preflight]
 //   --skill      pin that GLOBAL skill version on every turn; an all-green pinned
 //                run records refs/counts-only evidence via skills:recordEvalEvidence
@@ -26,6 +26,8 @@
 //   --no-retry   run each selected fixture exactly once. This is the fail-closed mode for an
 //                authorization that forbids automatic failed-fixture retries; omission preserves
 //                the locked one-retry flake policy.
+//   --max-usd    lower the hard per-run cap for one explicitly bounded run. It can never raise
+//                the $2.00 default and is rejected unless it is an exact positive cent amount.
 //   --preflight  one FREE, read-only Convex readiness query. It validates deployment credentials
 //                and billing attestations without opening a budget, loading/seeding the corpus,
 //                calling a provider, writing evidence, or consuming the authorized full run.
@@ -190,6 +192,7 @@ function revenueArtifactPaths() {
 // retry — so the old 1.0 would abort the very run ACTN-03 needs the evidence row from, after paying
 // for most of it. 2.0 is a real ceiling for the honest total, not a licence to spend more.
 const COST_CAP_USD = 2.0;
+let activeCostCapUsd = COST_CAP_USD;
 
 /**
  * The model every evidence row records — **DERIVED FROM `DEFAULT_MODEL`, NEVER HAND-COPIED.**
@@ -1250,6 +1253,19 @@ const automaticRetryEnabled = (argv) => !argv.includes("--no-retry");
 const shouldRetryFailedFixture = (outcome, automaticRetry) =>
   outcome.pass === false && automaticRetry;
 
+/** Explicit lower cap for a one-off authorization. This parser accepts cents only and can never
+ * raise the code-owned $2.00 ceiling; malformed or repeated flags stop before any live work. */
+function parseMaxUsd(argv) {
+  const values = argv.flatMap((value, index) => (value === "--max-usd" ? [argv[index + 1]] : []));
+  if (values.length === 0) return COST_CAP_USD;
+  if (values.length !== 1 || !/^\d+(?:\.\d{1,2})?$/.test(values[0] ?? ""))
+    throw new Error("--max-usd requires one positive cent value, e.g. 0.10");
+  const cents = Math.round(Number(values[0]) * 100);
+  if (!Number.isSafeInteger(cents) || cents < 1 || cents > Math.round(COST_CAP_USD * 100))
+    throw new Error(`--max-usd must be between 0.01 and ${COST_CAP_USD.toFixed(2)}`);
+  return cents / 100;
+}
+
 const PROVIDER_READINESS_KEYS = [
   "openrouterBilling",
   "openrouterKey",
@@ -1336,6 +1352,7 @@ const KNOWN_FLAGS = new Set([
   "--tenant-skill",
   "--only",
   "--no-retry",
+  "--max-usd",
   "--preflight",
   "--self-check",
   "--inspect-tenant-skill",
@@ -1358,6 +1375,7 @@ const VALUED_FLAGS = new Set([
   "--skill",
   "--tenant-skill",
   "--only",
+  "--max-usd",
   "--inspect-tenant-skill",
   "--foreign-tenant",
   "--inspect-agent-source",
@@ -2395,7 +2413,7 @@ async function runRevenueCandidateMode(mode) {
 
 // ── cost cap ─────────────────────────────────────────────────────────────────
 
-function overCap(totalCost, cap = COST_CAP_USD) {
+function overCap(totalCost, cap = activeCostCapUsd) {
   return totalCost > cap;
 }
 
@@ -3398,6 +3416,14 @@ function selfCheck() {
   const under = [0.05, 0.1].reduce((sum, c) => sum + c * COST_CAP_USD, 0); // 15% of cap
   assert.ok(!overCap(under), "15% of the cap must not trip it");
   assert.ok(!overCap(COST_CAP_USD), "exactly the cap does not trip (strictly greater-than)");
+  assert.equal(parseMaxUsd([]), COST_CAP_USD, "default cap remains $2.00");
+  assert.equal(parseMaxUsd(["--max-usd", "0.10"]), 0.1, "cent cap is parsed exactly");
+  assert.throws(() => parseMaxUsd(["--max-usd", "2.01"]), /between/, "cap cannot rise");
+  assert.throws(
+    () => parseMaxUsd(["--max-usd", "0.10", "--max-usd", "0.10"]),
+    /requires one/,
+    "repeated cap is rejected",
+  );
 
   // 4. --skill pin parsing.
   assert.deepEqual(parseSkillPin("cockpit-agent@3"), { name: "cockpit-agent", version: 3 });
@@ -4680,7 +4706,7 @@ let totalCost = 0;
  *  Throws EnvironmentAbort (via abortEnv) on governed stops / cost cap — never a case failure. */
 function abortEnv(message) {
   console.error(`\n[eval:golden] ${message}`);
-  console.error(`[eval:golden] total cost so far: $${totalCost.toFixed(4)}`);
+  console.error(`[eval:golden] total cost so far: $${totalCost.toFixed(4)} / $${activeCostCapUsd.toFixed(2)}`);
   process.exit(2);
 }
 
@@ -4831,7 +4857,7 @@ function attemptCase(
     caseCost += res.costUsd ?? 0;
     totalCost += res.costUsd ?? 0;
     if (overCap(totalCost)) {
-      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${COST_CAP_USD.toFixed(2)})`);
+      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${activeCostCapUsd.toFixed(2)})`);
     }
     history.push({ role: "user", content: text }, { role: "assistant", content: res.reply ?? "" });
     // Settle each turn before a later turn can depend on its durable tool effects. The final turn's
@@ -4929,7 +4955,7 @@ function attemptCase(
     totalCost += specialistCost;
     // The cap is a governed stop and outranks a case failure — check BEFORE returning one.
     if (overCap(totalCost)) {
-      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${COST_CAP_USD.toFixed(2)})`);
+      abortEnv(`COST CAP EXCEEDED ($${totalCost.toFixed(4)} > $${activeCostCapUsd.toFixed(2)})`);
     }
   }
   if (dispatchFailures) {
@@ -5136,7 +5162,9 @@ function suiteIdentityFor() {
   return { revision: codeOwnedSuite().revision, casesHash, caseCount };
 }
 
-async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetry = true) {
+async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetry = true, maxUsd) {
+  activeCostCapUsd = maxUsd;
+  totalCost = 0;
   // FIRST deployment interaction and before even loading the corpus: malformed secrets or billing
   // attestations must not open a budget, mint a tenant, seed a fixture, or consume an authorized
   // full-run attempt. The same query is available separately through `--preflight`.
@@ -5182,7 +5210,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
   const evalBudgetId = parse(
     must("guardrails:openEvalBudget", {
       tenantIds,
-      capCents: Math.round(COST_CAP_USD * 100),
+      capCents: Math.round(activeCostCapUsd * 100),
       family: "golden",
     }),
   );
@@ -5200,7 +5228,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
     });
 
   console.log(
-    `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${COST_CAP_USD.toFixed(2)}` +
+    `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${activeCostCapUsd.toFixed(2)}` +
       (pins.length ? `, pins ${pins.map((p) => `${p.name}@${p.version}`).join(" ")}` : "") +
       (tenantTargets.length
         ? `, tenant pins ${tenantTargets.map((t) => `${t.name}@${t.version}#${t.candidateId}`).join(" ")}`
@@ -5688,6 +5716,7 @@ try {
     parseOnlyFilters(argv),
     parseTenantSkillIds(argv),
     automaticRetryEnabled(argv),
+    parseMaxUsd(argv),
   );
 } catch (e) {
   if (e instanceof PaidCallUnresolved) {
