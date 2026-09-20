@@ -220,6 +220,13 @@ evaluation, semantic acceptance, owner activation or rollback is implied by thes
 
 # Playbook: Agent Runtime (the Executive Agent platform)
 
+> Last verified: 2026-09-20 — after evaluator-owned Blueprint/document lifecycle sources
+> changed, the current golden evaluator revision was refreshed to
+> `2026-09-11.budgeted-evaluator.6d27a8201a51e1ed81b18c32c510b18bcc0926d0100a16fdb7bf95ec305f22b6`.
+> The fixture corpus remains 46 executable cases with its existing manifest hash; older
+> evidence is deliberately retired. This identity refresh is free and does not itself run a
+> provider call, issue evidence, or establish a live verdict.
+
 > Last verified: 2026-09-04 (33.2-02 — **`smoke:storyboardFactsForPlan`**: the storyboard bake-off's
 > ONE read. The parser's verdict off the plan row as counts and codes — `two` / `salvaged` / `one` /
 > `refused:<reason>` / `none`, scene and alt-scene counts, generated seconds, kind histogram,
