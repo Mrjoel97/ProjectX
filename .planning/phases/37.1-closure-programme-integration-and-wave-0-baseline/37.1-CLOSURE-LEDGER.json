@@ -16456,17 +16456,21 @@
         ".planning/phases/01-foundation-governance-substrate/01-09-PLAN.md"
       ],
       "requirement_ids": [],
-      "historical_state": "verification_missing",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "historical_state": "verification_reconciled_by_01-10",
+      "current_disposition": "technically_ready_for_external_gate",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "no",
+      "live_observed": "no",
+      "owner_accepted": "no",
+      "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/01-foundation-governance-substrate/01-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/01-foundation-governance-substrate/01-10-EVIDENCE.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -16480,7 +16484,9 @@
           ".planning/phases/01-foundation-governance-substrate/01-06-PLAN.md",
           ".planning/phases/01-foundation-governance-substrate/01-07-PLAN.md",
           ".planning/phases/01-foundation-governance-substrate/01-08-PLAN.md",
-          ".planning/phases/01-foundation-governance-substrate/01-09-PLAN.md"
+          ".planning/phases/01-foundation-governance-substrate/01-09-PLAN.md",
+          ".planning/phases/01-foundation-governance-substrate/01-VERIFICATION.md",
+          ".planning/phases/01-foundation-governance-substrate/01-10-EVIDENCE.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
@@ -16503,11 +16509,10 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "No canonical phase verification file exists."
+        "Wave 7 owns consent configuration, test users, policy/domain confirmation, formal provider submission and approval, exact grant/reconnect/revoke observation, founder verdict, and cleanup."
       ],
       "remaining_work_classes": [
-        "verification",
-        "evidence_layer_separation"
+        "external_provider_reentry"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 01",
@@ -16517,7 +16522,7 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "A canonical non-open verification record cites the exact revision and every evidence layer required by the phase contract.",
       "user_claims": [],
-      "external_gate_packet": "No external remainder may substitute for the missing technical verification.",
+      "external_gate_packet": "Wave 7 packet in 01-10-EVIDENCE.md: execute only after fresh exact authorization; pin candidate revision and deployment, complete provider console prerequisites, exercise one controlled grant/reconnect/revoke path, capture founder verdict and cleanup, and do not infer submission approval.",
       "successor": null,
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
@@ -18440,8 +18445,8 @@
         ".planning/phases/15.3-vault-folders-folder-ingest-synthesis-and-drill-in/15.3-09-PLAN.md"
       ],
       "requirement_ids": [],
-      "historical_state": "verification_semantically_open",
-      "current_disposition": "open",
+      "historical_state": "verification_superseded_by_requirement_owner",
+      "current_disposition": "superseded_and_archived",
       "implemented": "unknown",
       "offline_tested": "unknown",
       "deployed": "unknown",
@@ -18479,11 +18484,10 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Existing verification contains explicit open/partial language."
+        "VALT-13 current technical and provider acceptance is owned by REQ:VALT-13 in Wave 3, with provider grant re-entry in Wave 7."
       ],
       "remaining_work_classes": [
-        "verification",
-        "evidence_layer_separation"
+        "named_supersession"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 15.3",
@@ -18493,8 +18497,8 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "A canonical non-open verification record cites the exact revision and every evidence layer required by the phase contract.",
       "user_claims": [],
-      "external_gate_packet": "No external remainder may substitute for the missing technical verification.",
-      "successor": null,
+      "external_gate_packet": "See REQ:VALT-13; this duplicate phase-level source row carries no independent provider authorization.",
+      "successor": "REQ:VALT-13",
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
       ]
