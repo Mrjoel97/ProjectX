@@ -16,10 +16,10 @@ manifest has 57 fixtures and the pinned executor selected 46; seven printed PASS
 USD `0.06745454` with no breach/unresolved cents and 127 cents remaining, but the runner never observed
 case-8 completion and wrote no registry evidence. Exact five-source Blueprint/spine diagnostics remain
 retained; the baseline is `accepted:false`, both founder gates are blocked, and `18-11` remains gated.
-A later free settlement-fix preflight entered its branch but ended inconclusively before provider
-readiness or explicit exit: 0 corpus cases, no run/budget IDs, USD 0, and backends stopped. The root
-cause is fixed offline at `e04a656` with a bounded 20-second redacted PASS/REFUSED lifecycle, but the
-debug record awaits separately authorized live confirmation and no fresh run authority exists.
+The latest free preflight returned canonical secret-safe `REFUSED` with exit `2` within the bound:
+0 corpus cases, no budget, and USD 0. This live-verifies the `e04a656` lifecycle, not provider
+readiness. Commit `275c360` adds safe refusal reason enums offline-only; a fresh authorized sync and
+preflight are required for diagnosis, and no fresh run authority exists.
 
 **Strict audit order:**
 
@@ -35,11 +35,11 @@ debug record awaits separately authorized live confirmation and no fresh run aut
 **No-go decisions:** no major architecture rewrite, no service split, no recurrence implementation yet, no broad candidate exposure yet, no billing activation, and no WORM activation. Close live evidence and exact-release qualification first. Build determinism, audit-boundary hardening, test observability, and secret hygiene are supporting release controls. These decisions do not contradict the existing phase goals; they define when each goal may be considered releasable.
 
 **GSD command contract:** continue the founder-accepted Wave 1A handoff through the existing GSD
-plan/summary/verification workflow. `01-10` is complete. The settlement-observation correction and
-bounded preflight lifecycle are offline-proven only; the latest free preflight was inconclusive and
-closed no gate. No golden command may reuse consumed authority, and no new run authority exists. A
-separately authorized live preflight must first confirm one canonical PASS/REFUSED line and exit 0/2
-within the bounded window. `18-11` waits for the exact accepted `17.1-11` baseline. Native filesystem-count helpers
+plan/summary/verification workflow. `01-10` is complete. The bounded lifecycle is live-confirmed by
+the latest `REFUSED/2`, but provider readiness remains undiagnosed and no gate closed. No golden
+command may reuse consumed authority, and no new run authority exists. The offline safe-reason fix
+requires a fresh authorized sync+preflight before any future corpus decision. `18-11` waits for the
+exact accepted `17.1-11` baseline. Native filesystem-count helpers
 remain advisory to the semantic checker; no helper result may falsify an old summary or create
 placeholder evidence.
 
@@ -1743,7 +1743,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 3.4. Per-Recipient Personalization (INSERTED) | 4/4 | Complete (VERIFICATION present) | - |
 | 3.5. Deferred Send (INSERTED) | 6/6 | Complete (VERIFICATION present) | 2026-07-14 |
 | 3.6. Agent Eval Gate (INSERTED) | 5/5 | Complete (VERIFICATION present) | 2026-07-15 |
-| 3.7. Inbox Briefing (INSERTED) | 8/10 | Partial — 03.7-05 superseded by 03.7-10; earlier run stopped after 7/46 observed PASS results and never reached briefing cases; later settlement-fix preflight was inconclusive before provider readiness/exit with 0 corpus, no IDs, USD 0; lifecycle fixed offline but awaiting live confirmation, no registry evidence, founder gate blocked | - |
+| 3.7. Inbox Briefing (INSERTED) | 8/10 | Partial — 03.7-05 superseded by 03.7-10; earlier run never reached briefing cases; latest free preflight returned bounded `REFUSED/2` with 0 corpus/no budget/USD 0, confirming lifecycle but not provider readiness; safe-reason fix is offline-only pending fresh sync+preflight, no registry evidence, founder gate blocked | - |
 | 3.8. Vault Document Extraction (INSERTED) | 6/6 | Complete (VERIFICATION present) | 2026-07-18 |
 | 3.9. Agent Activity Streaming (INSERTED) | 4/4 | Complete (VERIFICATION present) | - |
 | 3.10. Cockpit Conversation Repair (INSERTED) | 7/7 | Complete (VERIFICATION present) | 2026-07-19 |
@@ -1766,7 +1766,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 15.4. Vault redesign and scoped browse correctness (INSERTED) | 4/4 | Complete (VERIFICATION present) | 2026-08-05 |
 | 16. Research Sub-Agent & Web Research | 9/9 | Complete (gate `14feb4b7` 34/34, $0.3456; five skills activated) | 2026-08-08 |
 | 17. Calendar Actions | 9/11 | Partial — open: 17-10, 17-11 (Google create path live; Microsoft half blocked by the 2026-08-16 concurrency probe; 17-VERIFICATION `gaps_found`) | - |
-| 17.1. Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED) | 9/11 | Partial — 17.1-10 superseded by 17.1-11; retained exact five-source Blueprint/`evalblpr` spine remains non-certifying; later settlement-fix preflight ended inconclusively before provider readiness/exit with 0 corpus and USD 0; bounded lifecycle fixed offline but awaits live confirmation, founder gate blocked, baseline `accepted:false` | - |
+| 17.1. Business Blueprint - Corpus Synthesis and Agent Spine (INSERTED) | 9/11 | Partial — 17.1-10 superseded by 17.1-11; retained exact five-source Blueprint/`evalblpr` spine remains non-certifying; latest free preflight returned bounded `REFUSED/2` with 0 corpus/no budget/USD 0; safe-reason fix is offline-only pending fresh sync+preflight, founder gate blocked, baseline `accepted:false` | - |
 | 18. Document & Content Creation | 8/11 | Partial — 18-09 and 18-10 superseded by 18-11; Wave 1B remains gated and 18-11 cannot start before an exact 17.1-11 baseline with `accepted:true`; the current baseline is explicitly `accepted:false` | - |
 | 19. Contacts, CRM & Follow-ups | 11/11 | Complete (plan-disposition layer only) — every canonical plan has a completed SUMMARY. The separately recorded owner BRAND/tone judgement and any requirement/evidence-layer note remain open until directly accepted; completion here does not manufacture that verdict. | 2026-08-10 |
 | 19.1. Bulk Contact Import (CSV) (INSERTED) | 7/7 | Complete (VERIFICATION present) | - |

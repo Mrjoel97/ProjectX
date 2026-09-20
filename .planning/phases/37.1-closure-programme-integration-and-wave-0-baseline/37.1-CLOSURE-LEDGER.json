@@ -6063,7 +6063,7 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "partial_run_non_certifying_then_settlement_fix_preflight_inconclusive_lifecycle_fixed_offline",
+      "historical_state": "partial_run_non_certifying_then_bounded_preflight_refused_lifecycle_live_verified_safe_reason_fix_offline",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -6079,7 +6079,9 @@
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
           "commit:9159c7d",
           ".planning/debug/golden-preflight-early-exit.md",
-          "commit:e04a656"
+          "commit:e04a656",
+          ".planning/debug/golden-preflight-refusal-reasons.md",
+          "commit:275c360"
         ],
         "deployed": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
@@ -6092,7 +6094,9 @@
           "commit:a31bd70",
           "commit:3a0c80e",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-SETTLEMENT-FIX.log",
-          "commit:73f723e"
+          "commit:73f723e",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-FINAL.log",
+          "commit:d8ac77a"
         ],
         "owner_accepted": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
@@ -6109,7 +6113,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "The earlier command stopped before briefing cases 16-18. A later free preflight entered its branch but ended inconclusively before provider readiness or explicit exit; the corpus was not invoked and the offline lifecycle fix still lacks live confirmation.",
+        "live_observed": "The earlier command stopped before briefing cases 16-18. The latest free preflight returned bounded REFUSED/2 with no budget or corpus, confirming lifecycle behavior but not provider readiness or current briefing observation.",
         "owner_accepted": "Founder browser verification was not entered because the interrupted golden gate remained non-certifying.",
         "externally_enabled": "No current controlled Gmail grant was observed; eval-only provider access does not close briefing external enablement."
       },
@@ -6126,7 +6130,7 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "live_confirmation_of_bounded_preflight_lifecycle",
+        "fresh_sync_and_safe_reason_preflight_diagnosis",
         "fresh_single_run_authorization",
         "complete_certifying_single_no_retry_eval",
         "founder_browser_and_external_grant_evidence"
@@ -6136,10 +6140,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "A separately authorized live preflight confirms the bounded canonical PASS/REFUSED lifecycle on the exact revision, then fresh bounded corpus authority is recorded before any run.",
+      "entry_gate": "A fresh authorized sync+preflight exposes one bounded safe refusal reason or PASS on the exact revision, then separate fresh bounded corpus authority is recorded before any run.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "The latest free preflight was inconclusive with 0 corpus cases, no run/budget IDs, and USD 0. Its offline lifecycle fix awaits live confirmation; no fresh corpus authority exists and prior authority is not reusable.",
+      "external_gate_packet": "The latest free preflight returned REFUSED/2 with 0 corpus cases, no budget, and USD 0. Lifecycle is live-confirmed; safe-reason diagnosis remains offline-only pending fresh sync+preflight, and no fresh corpus authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13461,7 +13465,7 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "partial_run_non_certifying_then_settlement_fix_preflight_inconclusive_lifecycle_fixed_offline",
+      "historical_state": "partial_run_non_certifying_then_bounded_preflight_refused_lifecycle_live_verified_safe_reason_fix_offline",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -13476,7 +13480,9 @@
         "offline_tested": [
           "commit:81b4482",
           ".planning/debug/golden-preflight-early-exit.md",
-          "commit:e04a656"
+          "commit:e04a656",
+          ".planning/debug/golden-preflight-refusal-reasons.md",
+          "commit:275c360"
         ],
         "deployed": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
@@ -13489,7 +13495,9 @@
           "commit:a31bd70",
           "commit:3a0c80e",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-SETTLEMENT-FIX.log",
-          "commit:73f723e"
+          "commit:73f723e",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-FINAL.log",
+          "commit:d8ac77a"
         ],
         "owner_accepted": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json"
@@ -13507,7 +13515,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "Retained diagnostics contain the exact five-source Blueprint and rendered evalblpr spine, but complete L6 remains unproven. The later free preflight ended before provider readiness or explicit exit, invoked no corpus, and the offline lifecycle fix awaits live confirmation.",
+        "live_observed": "Retained diagnostics contain the exact five-source Blueprint and rendered evalblpr spine, but complete L6 remains unproven. The latest free preflight returned bounded REFUSED/2 without budget or corpus, confirming lifecycle behavior but not provider readiness.",
         "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification was not entered because L6 is non-certifying.",
         "externally_enabled": "Provider access was observed only inside the failed evaluation sequence; it does not close external enablement, and the controlled Gmail grant remains open."
       },
@@ -13524,7 +13532,7 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "live_confirmation_of_bounded_preflight_lifecycle",
+        "fresh_sync_and_safe_reason_preflight_diagnosis",
         "fresh_single_run_authorization",
         "complete_certifying_single_no_retry_blueprint_eval",
         "founder_browser_and_voice_acceptance",
@@ -13535,10 +13543,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "A separately authorized live preflight confirms the bounded canonical PASS/REFUSED lifecycle on the exact revision, then fresh bounded corpus authority is recorded before any run.",
+      "entry_gate": "A fresh authorized sync+preflight exposes one bounded safe refusal reason or PASS on the exact revision, then separate fresh bounded corpus authority is recorded before any run.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "The latest free preflight was inconclusive with 0 corpus cases, no run/budget IDs, and USD 0. The lifecycle fix is offline-only pending live confirmation; the baseline remains accepted:false and no fresh corpus authority exists.",
+      "external_gate_packet": "The latest free preflight returned REFUSED/2 with 0 corpus cases, no budget, and USD 0. Lifecycle is live-confirmed; safe-reason diagnosis remains offline-only, baseline accepted:false, and no fresh corpus authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",
