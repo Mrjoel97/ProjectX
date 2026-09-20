@@ -51,7 +51,8 @@ describe("tenant table classification registry", () => {
     // schema.test.ts against the same source) are two readers of one file that now agree.
     // + funnels (31-01): tenant-owned fixed-source aggregate links = 61.
     // + researchControls (2026-09-12 request controls): tenant-owned bounded attempt state = 62.
-    expect(schemaTables).toHaveLength(62);
+    // + goldenEvalAttempts (2026-09-20): refs/hash-only paid-workflow recovery journal = 63.
+    expect(schemaTables).toHaveLength(63);
     expect(new Set(schemaTables).size).toBe(schemaTables.length);
     expect(classifiedTables.sort()).toEqual([...schemaTables].sort());
   });
@@ -164,6 +165,7 @@ describe("tenant table classification registry", () => {
       "billingCoverage",
       "billingEvents",
       "deadLetters",
+      "goldenEvalAttempts",
       "workflowPackEvents",
     ]);
 

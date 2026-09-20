@@ -72,19 +72,17 @@ const parse = (out) => JSON.parse(out);
 // retry bills a second model turn) or skills:recordEvalEvidence (a duplicate evidence row).
 const RETRY_READ = { retryOnEmpty: true };
 
-// Phase 23: an empty/failed paid response is an unresolved charge, never a free failed case.
-// Checkpoint before the action; retain refs/hash receipts and abort without retry or evidence.
-const paidAttemptDirectory = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../../.tmp/golden-paid-attempts",
-);
+// A paid operation is one durable server-side Workflow step. Only its free, idempotent start and
+// status calls may retry after lost CLI stdout; the provider-driving action itself has retry:false.
 const mustPaid = (fn, args) =>
   invokePaidOnce({
     invoke: must,
-    directory: paidAttemptDirectory,
     fn,
     args,
     attemptId: args.turnId ?? randomUUID(),
+    sleep: sleepSync,
+    timeoutMs: DISPATCH_TIMEOUT_MS,
+    pollMs: DISPATCH_POLL_MS,
   });
 const casesDir = resolve(dirname(fileURLToPath(import.meta.url)), "eval-cases");
 const costSrcPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../cost/src/cost.ts");
@@ -5721,7 +5719,7 @@ try {
 } catch (e) {
   if (e instanceof PaidCallUnresolved) {
     console.error(
-      "[eval:golden] GOLDEN_PAID_CALL_UNRESOLVED; retained recovery checkpoints; no retry, evidence, or cleanup.",
+      `[eval:golden] ${e.message}; durable attempt retained; no paid replay, evidence, or cleanup.`,
     );
     process.exit(2);
   }

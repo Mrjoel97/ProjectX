@@ -52,6 +52,7 @@ import type * as funnels from "../funnels.js";
 import type * as gmail from "../gmail.js";
 import type * as gmailAuth from "../gmailAuth.js";
 import type * as goals from "../goals.js";
+import type * as goldenEvalAttempts from "../goldenEvalAttempts.js";
 import type * as graph from "../graph.js";
 import type * as guardrails from "../guardrails.js";
 import type * as home from "../home.js";
@@ -214,6 +215,7 @@ declare const fullApi: ApiFromModules<{
   gmail: typeof gmail;
   gmailAuth: typeof gmailAuth;
   goals: typeof goals;
+  goldenEvalAttempts: typeof goldenEvalAttempts;
   graph: typeof graph;
   guardrails: typeof guardrails;
   home: typeof home;

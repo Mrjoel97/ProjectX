@@ -74,6 +74,9 @@ export const TENANT_TABLE_CLASSIFICATION = {
   tenantProfiles: "tenant_owned",
   goals: "tenant_owned",
   spendEvents: "tenant_owned",
+  // Golden-run recovery journal: insert-only workflow/budget refs plus a request hash. It may
+  // outlive an eval tenant, so the closed refs-only immutable class is the honest privacy shape.
+  goldenEvalAttempts: "audit_immutable",
   spendCoverage: "tenant_owned",
   mediaJobs: "tenant_owned",
   contacts: "tenant_owned",

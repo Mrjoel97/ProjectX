@@ -34,7 +34,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
   v.union(...(values.map((value) => v.literal(value)) as unknown as [VLiteral<T>, VLiteral<T>]));
 
 // ┌──────────────────────────────────────────────────────────────────────────────┐
-// │ SCHEMA TABLE INDEX — 62 tables, grouped by domain.                         │
+// │ SCHEMA TABLE INDEX — 63 tables, grouped by domain.                         │
 // │ Line numbers are approximate; use Find to jump.                            │
 // │                                                                            │
 // │ ── Identity & Auth (Convex Auth + beta admission) ──────── ~L85            │
@@ -72,7 +72,7 @@ const literals = <T extends string>(values: readonly [T, ...T[]]) =>
 // │   inboxFixtures                                                            │
 // │                                                                            │
 // │ ── Finance ─────────────────────────────────────────────── ~L1981          │
-// │   spendEvents, spendCoverage, financeInputs                                │
+// │   spendEvents, goldenEvalAttempts, spendCoverage, financeInputs            │
 // │                                                                            │
 // │ ── Media ───────────────────────────────────────────────── ~L2030          │
 // │   mediaJobs                                                                │
@@ -2725,6 +2725,23 @@ export default defineSchema({
     .index("by_correlation", ["correlationId"])
     .index("by_eval_budget", ["evalBudgetId"])
     .index("by_probe_thread", ["tenantId", "evalAuthoringProbe.threadId"]),
+
+  // Durable idempotency key for the golden evaluator's provider-driving operations. This table is
+  // intentionally refs/hash-only: request arguments and returned model content live only in the
+  // Workflow component journal, never in the application data plane or audit plane.
+  goldenEvalAttempts: defineTable({
+    attemptId: v.string(),
+    requestSha256: v.string(),
+    operation: v.union(
+      v.literal("llm:runCockpitAgent"),
+      v.literal("llm:runRevenueCandidateEval"),
+      v.literal("vaultSmoke:seedCorpus"),
+      v.literal("evaluations:actOnGapInternal"),
+    ),
+    workflowId: v.string(),
+    evalBudgetId: v.optional(v.id("spendEvents")),
+    createdAt: v.number(),
+  }).index("by_attempt_id", ["attemptId"]),
 
   // One durable start per tenant, created before the first paid movement. A missing row means
   // coverage has not begun; it never means historical spend was zero.

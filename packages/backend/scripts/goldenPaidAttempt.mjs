@@ -1,10 +1,125 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 
 export class PaidCallUnresolved extends Error {
+  constructor(code = "GOLDEN_PAID_CALL_UNRESOLVED") {
+    super(code);
+  }
+}
+
+export class PaidCallFailed extends PaidCallUnresolved {
   constructor() {
-    super("GOLDEN_PAID_CALL_UNRESOLVED");
+    super("GOLDEN_PAID_CALL_FAILED");
+  }
+}
+
+export class PaidCallCanceled extends PaidCallUnresolved {
+  constructor() {
+    super("GOLDEN_PAID_CALL_CANCELED");
+  }
+}
+
+export class PaidCallTimedOut extends PaidCallUnresolved {
+  constructor() {
+    super("GOLDEN_PAID_CALL_TIMEOUT");
+  }
+}
+
+const ALLOWED = new Set([
+  "llm:runCockpitAgent",
+  "llm:runRevenueCandidateEval",
+  "vaultSmoke:seedCorpus",
+  "evaluations:actOnGapInternal",
+]);
+
+const parseFree = (invoke, fn, args) => {
+  // Only this refs/hash-only start/status layer may retry after the Windows CLI loses stdout.
+  // The server keys both calls by attemptId+requestSha256, so the retry cannot start paid work.
+  const call = () => invoke(fn, args, { retryOnEmpty: false, redactErrors: true });
+  let output = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      output = call();
+    } catch (error) {
+      if (attempt === 0 && ["backend_unavailable", "transport_error"].includes(error?.safeReason)) {
+        continue;
+      }
+      // Preserve a terminal error verbatim: collapsing the second transport failure to
+      // "unresolved" would erase the distinction operators need.
+      throw error;
+    }
+    if (typeof output === "string" && output.trim() !== "") break;
+  }
+  if (typeof output !== "string" || output.trim() === "") throw new PaidCallUnresolved();
+  try {
+    return JSON.parse(output);
+  } catch {
+    throw new PaidCallUnresolved();
+  }
+};
+
+/**
+ * Start one durable server-side attempt and recover its exact JSON result.
+ *
+ * A lost start/status response retries only the free idempotent functions. The paid operation is a
+ * single `{retry:false}` Workflow step and is never called by this process directly.
+ */
+export function invokePaidOnce({
+  invoke,
+  fn,
+  args,
+  attemptId = args.turnId,
+  sleep,
+  now = Date.now,
+  timeoutMs,
+  pollMs,
+}) {
+  if (
+    typeof invoke !== "function" ||
+    typeof sleep !== "function" ||
+    !ALLOWED.has(fn) ||
+    !/^[0-9a-f-]{36}$/.test(attemptId ?? "") ||
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs <= 0 ||
+    !Number.isFinite(pollMs) ||
+    pollMs <= 0
+  ) {
+    throw new Error("GOLDEN_PAID_CALL_INVALID");
+  }
+  const requestSha256 = createHash("sha256")
+    .update(JSON.stringify({ operation: fn, args }))
+    .digest("hex");
+  const identity = { attemptId, requestSha256, operation: fn };
+  const started = parseFree(invoke, "goldenEvalAttempts:start", {
+    attemptId,
+    requestSha256,
+    request: { operation: fn, args },
+  });
+  if (
+    !started ||
+    !["started", "existing"].includes(started.state) ||
+    typeof started.workflowId !== "string"
+  ) {
+    throw new PaidCallUnresolved();
+  }
+
+  const deadline = now() + timeoutMs;
+  for (;;) {
+    const observed = parseFree(invoke, "goldenEvalAttempts:status", identity);
+    switch (observed?.state) {
+      case "completed":
+        return JSON.stringify(observed.result);
+      case "failed":
+        throw new PaidCallFailed();
+      case "canceled":
+        throw new PaidCallCanceled();
+      case "in_progress":
+        break;
+      default:
+        throw new PaidCallUnresolved();
+    }
+    const observedAt = now();
+    if (observedAt >= deadline) throw new PaidCallTimedOut();
+    sleep(Math.min(pollMs, deadline - observedAt));
   }
 }
 
@@ -77,78 +192,4 @@ export function waitForPaidSettlement({
     if (observedAt >= deadline) throw new PaidCallUnresolved();
     sleep(Math.min(pollMs, deadline - observedAt));
   }
-}
-
-/** One provider-driving action, once. A local receipt never claims unknown usage was free.
- * These are recovery checkpoints, not evaluation evidence or an accounting ledger. */
-export function invokePaidOnce({ invoke, directory, fn, args, attemptId = args.turnId }) {
-  if (
-    ![
-      "llm:runCockpitAgent",
-      "llm:runRevenueCandidateEval",
-      "vaultSmoke:seedCorpus",
-      "evaluations:actOnGapInternal",
-    ].includes(fn) ||
-    !/^[0-9a-f-]{36}$/.test(attemptId ?? "")
-  )
-    throw new Error("GOLDEN_PAID_CALL_INVALID");
-  const hash = (value) => createHash("sha256").update(value).digest("hex");
-  const receipt = {
-    schema: "golden-paid-attempt.v1",
-    attemptId,
-    ...(args.evalBudgetId ? { budgetId: args.evalBudgetId } : {}),
-    function: fn,
-    requestSha256: hash(JSON.stringify(args)),
-    startedAt: Date.now(),
-  };
-  mkdirSync(directory, { recursive: true });
-  const write = (suffix, value) =>
-    writeFileSync(join(directory, `${attemptId}.${suffix}.json`), `${JSON.stringify(value)}\n`, {
-      flag: "wx",
-      mode: 0o600,
-      flush: true,
-    });
-  // Exclusive durable write prevents accidental replay of this exact attempt after a crash.
-  write("started", receipt);
-  let output;
-  let response;
-  try {
-    output = invoke(fn, args, { retryOnEmpty: false, redactErrors: true });
-    response = JSON.parse(output);
-    if (
-      !response ||
-      (fn === "evaluations:actOnGapInternal"
-        ? typeof response.ok !== "boolean"
-        : fn === "vaultSmoke:seedCorpus"
-          ? !Array.isArray(response.docIds) ||
-            response.docIds.length === 0 ||
-            response.docIds.some((id) => typeof id !== "string")
-          : typeof response.reply !== "string" ||
-            (response.blocked === undefined &&
-              (typeof response.costUsd !== "number" ||
-                !Number.isFinite(response.costUsd) ||
-                response.costUsd < 0)))
-    )
-      throw new Error();
-  } catch {
-    try {
-      write("unresolved", { ...receipt, state: "unresolved", observedAt: Date.now() });
-    } catch {
-      /* started receipt remains */
-    }
-    throw new PaidCallUnresolved();
-  }
-  try {
-    write("returned", {
-      ...receipt,
-      state: "returned",
-      observedAt: Date.now(),
-      responseSha256: hash(output),
-      costUsd: response.costUsd ?? null,
-      blocked: response.blocked !== undefined,
-    });
-  } catch {
-    throw new PaidCallUnresolved();
-  }
-  return output;
 }

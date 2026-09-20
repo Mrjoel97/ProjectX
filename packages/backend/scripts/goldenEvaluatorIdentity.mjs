@@ -12,6 +12,7 @@ export const EVALUATOR_FILES = [
   "packages/backend/scripts/goldenProviderPreflight.mjs",
   "packages/backend/scripts/run-eval-golden.mjs",
   "packages/backend/scripts/smokeRun.mjs",
+  "packages/backend/convex/goldenEvalAttempts.ts",
   "packages/backend/convex/smoke.ts",
   "packages/backend/convex/smokeAssert.ts",
   "packages/backend/convex/llm.ts",

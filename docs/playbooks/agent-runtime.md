@@ -2226,15 +2226,26 @@ alongside the ordinary text prompt, and reuses the same bytes for an explicit fa
 bytes are never inserted into the system prompt or audit metadata. The reader and shared loop
 both enforce a 1 MiB ceiling. Offline provider-wire tests verify the resulting image data URI
 and MIME type; live visual quality and release evidence still require their separate gates.
-## Phase 23 golden-run recovery (2026-09-10)
+## Golden-run durable paid attempts (2026-09-20)
 
-Golden evaluator model-driving CLI calls use `goldenPaidAttempt.mjs` to persist a refs/hash-only
-started receipt before invoking the action once. A missing, malformed or failed response leaves an
-unresolved receipt and stops with exit 2; it cannot trigger the ordinary failed-case retry, passing
-evidence, or successful-run cleanup. A response receipt records only a response hash and known
-returned cost. These local files under `.tmp/golden-paid-attempts` are recovery aids, not a new
-spend ledger or outcome evidence. Read the attempted turn's native state before deciding whether a
-new paid attempt is appropriate; never treat an unresolved receipt as a zero-cost failure.
+Every golden evaluator provider-driving call now enters through `goldenEvalAttempts:start`, keyed
+by the caller-minted `attemptId` and SHA-256 of the exact operation+arguments. The refs/hash-only
+`goldenEvalAttempts` row names one Workflow execution. A repeated start with the same identity
+returns that execution; a changed hash or operation is a conflict. Prompt, fixture, reply and error
+content never enter the table.
+
+The Workflow has exactly one wrapper action step and explicitly sets `{ retry: false }`. That step
+selects one of the closed allowlist (`runCockpitAgent`, revenue candidate evaluation, live vault
+seed, or the identity-less act-on-gap path) and calls it once. The CLI may retry only the free,
+idempotent start/status functions after empty stdout or a classified transport/backend loss. Status
+returns the exact completed Convex JSON value or a code-owned `failed`/`canceled` state; a bounded
+client wait reports `timeout` separately.
+Never restart a failed/canceled/timed-out Workflow and never infer a result from the spend ledger.
+
+Ledger settlement remains a second, accounting-only barrier after Workflow completion. It cannot
+manufacture a missing action result, and `closeEvalBudget` remains the authoritative terminal fence
+against every late provider reservation. A non-completed attempt still stops the run before failed-
+fixture retry, evidence, or cleanup.
 
 The golden runner's $2 post-turn stop remains distinct from a hard aggregate cap: embedding,
 Tavily, and paid child-action reservations are not yet complete. The Phase 23 continuation preflight

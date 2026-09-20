@@ -1,5 +1,11 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+Last verified: 2026-09-20 — `goldenEvalAttempts` is a refs/hash-only, insert-only recovery
+journal classified `audit_immutable`. It may retain an optional spend-event reference after the
+synthetic eval tenant is erased, but stores no prompt, fixture, reply, provider error, or result.
+The tenant export/deletion walkers therefore exclude it by construction; the immutable writer,
+classification, export, and deletion gates are green. No live erasure was performed.
+
 Last verified: 2026-09-12 — authoring probe control receipts use the reserved
 `control:authoring-probe:v1` namespace, `authoring_probe.` events and `authoring-probe:`
 correlation prefix. Generic `audit.log` refuses each reserved identifier; only the code-level
