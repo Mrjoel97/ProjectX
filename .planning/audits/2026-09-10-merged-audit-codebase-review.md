@@ -479,6 +479,10 @@ closure record must say why rather than silently omit it.
   production registry state have one integration owner per wave.
 - Existing plans are not replayed blindly. Each open phase receives a small current-code delta plan
   that names the remaining acceptance gap and reuses the implementation already present.
+- An external, paid, provider or founder acceptance gate blocks only the claims and dependent live
+  actions that consume its result. It does not serialize independent repository-controlled tests,
+  repairs or browser-fixture preparation inside the same closure wave. Those proceed in parallel
+  and remain explicitly unaccepted until the gate is satisfied.
 - No later wave begins while an earlier wave has an unmet repository-controlled criterion. A truly
   external condition may move to **Technically ready for external gate** with its acceptance packet;
   vague dependence on the owner or a provider is not enough.
