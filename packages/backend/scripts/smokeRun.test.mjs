@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { convexSpawnOptions } from "./smokeRun.mjs";
+import { convexSpawnOptions, safeConvexFailureReason } from "./smokeRun.mjs";
 
 test("Convex child options carry a finite timeout and deterministic termination signal", () => {
   assert.deepEqual(convexSpawnOptions(20_000), {
@@ -24,3 +24,17 @@ test("the bounded child options terminate a non-responsive local process", () =>
   assert.equal(result.error?.code, "ETIMEDOUT");
   assert.equal(result.status, null);
 });
+
+for (const [input, expected] of [
+  [{ spawnErrorCode: "ETIMEDOUT", stderr: "PRIVATE timeout detail" }, "backend_unavailable"],
+  [{ stderr: "Local deployment isn't running at PRIVATE_URL" }, "backend_unavailable"],
+  [{ stderr: "backend not listening; token=PRIVATE" }, "backend_unavailable"],
+  [{ spawnErrorCode: "ENOENT", stderr: "PRIVATE path" }, "transport_error"],
+  [{ stderr: "Uncaught Error: PRIVATE function detail" }, "transport_error"],
+]) {
+  test(`Convex failure collapses to the closed reason ${expected}`, () => {
+    const reason = safeConvexFailureReason(input);
+    assert.equal(reason, expected);
+    assert.ok(!reason.includes("PRIVATE"));
+  });
+}

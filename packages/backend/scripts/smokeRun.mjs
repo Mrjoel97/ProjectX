@@ -17,6 +17,22 @@ const convexBin = resolve(backendDir, "node_modules/convex/bin/main.js");
 
 // Distinctive markers the convex CLI prints on a genuine function failure.
 const FAILURE = /Failed to run function|Uncaught Error|isn't running|not listening/;
+const BACKEND_UNAVAILABLE = /isn't running|not listening/i;
+
+/** Reduce process/CLI failures to the only two facts preflight may safely reveal. Never return or
+ * interpolate stderr, error messages, paths, URLs, lengths, or credential-derived material. */
+export function safeConvexFailureReason({ spawnErrorCode, stderr = "" } = {}) {
+  return spawnErrorCode === "ETIMEDOUT" || BACKEND_UNAVAILABLE.test(stderr)
+    ? "backend_unavailable"
+    : "transport_error";
+}
+
+class ConvexInvocationFailure extends Error {
+  constructor(message, safeReason) {
+    super(message);
+    this.safeReason = safeReason;
+  }
+}
 
 /**
  * WHICH DEPLOYMENT. `convex run` with no flag targets whatever the local config points at — the DEV
@@ -48,8 +64,13 @@ function invoke(fn, args, timeoutMs) {
   );
   const err = res.stderr || "";
   const out = res.stdout || "";
-  if (res.error) throw new Error(`spawn failed for ${fn}: ${res.error.message}`);
-  if (FAILURE.test(err)) throw new Error(err.trim());
+  if (res.error)
+    throw new ConvexInvocationFailure(
+      `spawn failed for ${fn}: ${res.error.message}`,
+      safeConvexFailureReason({ spawnErrorCode: res.error.code, stderr: err }),
+    );
+  if (FAILURE.test(err))
+    throw new ConvexInvocationFailure(err.trim(), safeConvexFailureReason({ stderr: err }));
   return out;
 }
 
@@ -77,7 +98,12 @@ export function must(
     const out = invoke(fn, args, timeoutMs);
     return retryOnEmpty && out.trim() === "" ? invoke(fn, args, timeoutMs) : out;
   } catch (e) {
-    if (redactErrors) throw new Error("CONVEX_FUNCTION_FAILED");
+    if (redactErrors) {
+      const redacted = new Error("CONVEX_FUNCTION_FAILED");
+      redacted.safeReason =
+        e?.safeReason === "backend_unavailable" ? "backend_unavailable" : "transport_error";
+      throw redacted;
+    }
     console.error(e.message);
     throw e;
   }

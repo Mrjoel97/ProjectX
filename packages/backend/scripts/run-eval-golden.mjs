@@ -58,6 +58,7 @@ import { computeEvaluatorRevision } from "./goldenEvaluatorIdentity.mjs";
 import { invokePaidOnce, PaidCallUnresolved, waitForPaidSettlement } from "./goldenPaidAttempt.mjs";
 import {
   PREFLIGHT_PASSED_LINE,
+  ProviderPreflightRefusal,
   runStandaloneProviderPreflight,
 } from "./goldenProviderPreflight.mjs";
 import { must } from "./smokeRun.mjs";
@@ -1261,48 +1262,43 @@ const PROVIDER_READINESS_KEYS = [
 /** Convert a secret-free readiness response into closed, operator-safe reason codes. Unknown
  * fields or values fail as `schema_invalid`; they are NEVER echoed because a future endpoint bug
  * must not turn this runner into a secret printer. */
-function providerReadinessFailures(readiness) {
+function providerReadinessReason(readiness) {
   if (
     readiness === null ||
     typeof readiness !== "object" ||
     Array.isArray(readiness) ||
     !isDeepStrictEqual(Object.keys(readiness).sort(), PROVIDER_READINESS_KEYS)
   )
-    return ["schema_invalid"];
-  const failures = [];
-  if (readiness.openrouterKey !== "ready")
-    failures.push(
-      readiness.openrouterKey === "missing"
-        ? "openrouter_key_missing"
-        : readiness.openrouterKey === "invalid_format"
-          ? "openrouter_key_invalid_format"
-          : "schema_invalid",
-    );
-  if (readiness.tavilyKey !== "ready")
-    failures.push(
-      readiness.tavilyKey === "missing"
-        ? "tavily_key_missing"
-        : readiness.tavilyKey === "invalid_format"
-          ? "tavily_key_invalid_format"
-          : "schema_invalid",
-    );
-  if (readiness.openrouterBilling !== "standard") failures.push("openrouter_billing_not_standard");
-  if (readiness.tavilyBilling !== "free") failures.push("tavily_billing_not_free");
-  if (readiness.tavilyCreditUsd !== "canonical_zero")
-    failures.push("tavily_credit_usd_not_canonical_zero");
-  if (readiness.ready !== (failures.length === 0)) failures.push("aggregate_verdict_mismatch");
-  return [...new Set(failures)];
+    return "readiness_response_invalid";
+  if (!["ready", "missing", "invalid_format"].includes(readiness.openrouterKey))
+    return "readiness_response_invalid";
+  if (!["ready", "missing", "invalid_format"].includes(readiness.tavilyKey))
+    return "readiness_response_invalid";
+  if (!["standard", "invalid"].includes(readiness.openrouterBilling))
+    return "readiness_response_invalid";
+  if (!["free", "invalid"].includes(readiness.tavilyBilling)) return "readiness_response_invalid";
+  if (!["canonical_zero", "invalid"].includes(readiness.tavilyCreditUsd))
+    return "readiness_response_invalid";
+  if (typeof readiness.ready !== "boolean") return "readiness_response_invalid";
+  if (readiness.openrouterKey !== "ready") return "openrouter_key_missing_or_invalid";
+  if (readiness.tavilyKey !== "ready") return "tavily_key_missing_or_invalid";
+  if (readiness.openrouterBilling !== "standard") return "openrouter_billing_attestation_invalid";
+  if (readiness.tavilyBilling !== "free") return "tavily_billing_attestation_invalid";
+  if (readiness.tavilyCreditUsd !== "canonical_zero") return "tavily_credit_attestation_invalid";
+  if (!readiness.ready) return "readiness_response_invalid";
+  return null;
 }
 
 function assertProviderReadiness(readiness) {
-  const failures = providerReadinessFailures(readiness);
-  if (failures.length) throw new Error(`GOLDEN_PROVIDER_PREFLIGHT_NOT_READY:${failures.join(",")}`);
+  const reason = providerReadinessReason(readiness);
+  if (reason) throw new ProviderPreflightRefusal(reason);
   return true;
 }
 
 function checkProviderReadiness() {
-  const readiness = parse(
-    must(
+  let output;
+  try {
+    output = must(
       "guardrails:goldenProviderReadiness",
       {},
       {
@@ -1310,8 +1306,18 @@ function checkProviderReadiness() {
         redactErrors: true,
         timeoutMs: 20_000,
       },
-    ),
-  );
+    );
+  } catch (error) {
+    throw new ProviderPreflightRefusal(
+      error?.safeReason === "backend_unavailable" ? "backend_unavailable" : "transport_error",
+    );
+  }
+  let readiness;
+  try {
+    readiness = parse(output);
+  } catch {
+    throw new ProviderPreflightRefusal("readiness_response_invalid");
+  }
   assertProviderReadiness(readiness);
 }
 
@@ -4178,23 +4184,33 @@ function selfCheck() {
   };
   assert.equal(assertProviderReadiness(canonicalReadiness), true, "canonical readiness passes");
   for (const [field, state, reason] of [
-    ["openrouterKey", "missing", "openrouter_key_missing"],
-    ["openrouterKey", "invalid_format", "openrouter_key_invalid_format"],
-    ["tavilyKey", "missing", "tavily_key_missing"],
-    ["tavilyKey", "invalid_format", "tavily_key_invalid_format"],
-    ["openrouterBilling", "invalid", "openrouter_billing_not_standard"],
-    ["tavilyBilling", "invalid", "tavily_billing_not_free"],
-    ["tavilyCreditUsd", "invalid", "tavily_credit_usd_not_canonical_zero"],
+    ["openrouterKey", "missing", "openrouter_key_missing_or_invalid"],
+    ["openrouterKey", "invalid_format", "openrouter_key_missing_or_invalid"],
+    ["tavilyKey", "missing", "tavily_key_missing_or_invalid"],
+    ["tavilyKey", "invalid_format", "tavily_key_missing_or_invalid"],
+    ["openrouterBilling", "invalid", "openrouter_billing_attestation_invalid"],
+    ["tavilyBilling", "invalid", "tavily_billing_attestation_invalid"],
+    ["tavilyCreditUsd", "invalid", "tavily_credit_attestation_invalid"],
   ]) {
-    assert.throws(
-      () => assertProviderReadiness({ ...canonicalReadiness, [field]: state, ready: false }),
-      new RegExp(reason),
-      `${field} fails with a safe closed reason`,
-    );
+    let refusal;
+    try {
+      assertProviderReadiness({ ...canonicalReadiness, [field]: state, ready: false });
+    } catch (error) {
+      refusal = error;
+    }
+    assert.ok(refusal instanceof ProviderPreflightRefusal);
+    assert.equal(refusal.reason, reason, `${field} fails with a safe closed reason`);
   }
-  assert.throws(
-    () => assertProviderReadiness({ ...canonicalReadiness, unexpected: "do-not-echo" }),
-    /schema_invalid/,
+  let malformedReadiness;
+  try {
+    assertProviderReadiness({ ...canonicalReadiness, unexpected: "do-not-echo" });
+  } catch (error) {
+    malformedReadiness = error;
+  }
+  assert.ok(malformedReadiness instanceof ProviderPreflightRefusal);
+  assert.equal(
+    malformedReadiness.reason,
+    "readiness_response_invalid",
     "unexpected response fields fail without being echoed",
   );
   assert.equal(

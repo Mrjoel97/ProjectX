@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PREFLIGHT_PASSED_LINE,
-  PREFLIGHT_REFUSED_LINE,
+  PREFLIGHT_REFUSAL_REASONS,
+  ProviderPreflightRefusal,
+  preflightRefusedLine,
   runStandaloneProviderPreflight,
 } from "./goldenProviderPreflight.mjs";
 
@@ -23,19 +25,48 @@ test("standalone preflight emits one canonical ready line and returns exit code 
   assert.deepEqual(stderr, []);
 });
 
-test("standalone preflight redacts backend failures, emits refusal, and returns exit code two", () => {
+for (const reason of PREFLIGHT_REFUSAL_REASONS) {
+  test(`standalone preflight renders the closed secret-safe refusal reason: ${reason}`, () => {
+    const stdout = [];
+    const stderr = [];
+    const code = runStandaloneProviderPreflight({
+      check: () => {
+        throw new ProviderPreflightRefusal(reason);
+      },
+      stdout: (line) => stdout.push(line),
+      stderr: (line) => stderr.push(line),
+    });
+    assert.equal(code, 2);
+    assert.deepEqual(stdout, []);
+    assert.deepEqual(stderr, [preflightRefusedLine(reason)]);
+  });
+}
+
+test("standalone preflight redacts unknown failures as transport_error", () => {
   const stdout = [];
   const stderr = [];
-  const privateNeedle = "PRIVATE_DEPLOYMENT_DETAIL";
+  const privateNeedles = [
+    "PRIVATE_DEPLOYMENT_DETAIL",
+    "https://secret.example/deployment?token=private",
+    "key-length=51",
+    "whitespace-at=19",
+  ];
   const code = runStandaloneProviderPreflight({
     check: () => {
-      throw new Error(privateNeedle);
+      throw new Error(privateNeedles.join(" "));
     },
     stdout: (line) => stdout.push(line),
     stderr: (line) => stderr.push(line),
   });
   assert.equal(code, 2);
   assert.deepEqual(stdout, []);
-  assert.deepEqual(stderr, [PREFLIGHT_REFUSED_LINE]);
-  assert.ok(!stderr.join("\n").includes(privateNeedle));
+  assert.deepEqual(stderr, [preflightRefusedLine("transport_error")]);
+  for (const needle of privateNeedles) assert.ok(!stderr.join("\n").includes(needle));
+});
+
+test("an unrecognized refusal reason cannot reach terminal output", () => {
+  assert.throws(
+    () => new ProviderPreflightRefusal("PRIVATE_DEPLOYMENT_DETAIL"),
+    /PREFLIGHT_REFUSAL_REASON_INVALID/,
+  );
 });
