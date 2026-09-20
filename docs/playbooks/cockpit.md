@@ -1,3 +1,11 @@
+> Last verified: 2026-09-20 — Phase 18's offline document lifecycle now deletes newly rendered
+> PDF/XLSX bytes when a server-owned replacement index is refused, so “nothing was changed” also
+> means no orphaned storage object. The Output card distinguishes loading, missing artifact,
+> missing download bytes, summary-only partial, and empty-preview states, while retaining the
+> explicit “Saved to your vault. Nothing was sent.” boundary. Focused backend and web regressions
+> are deterministic only; no live model, deployment, founder BRAND verdict, send, or publish is
+> inferred.
+>
 > Last verified: 2026-09-20 — `blueprint-active-spine.spec.ts` now owns the deterministic,
 > authenticated half of the Phase 17.1 founder check. It reads the production no-tool prompt
 > assembler through `llm:__cockpitTurnPrompt`, proves the confirmed Blueprint spine is present,

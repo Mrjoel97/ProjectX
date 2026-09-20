@@ -2041,6 +2041,7 @@ const SMOKE_TITLE = "Smoke Document"; // draftDocument's deterministic offline t
 const vaultDocs = (t: T) => t.run((ctx) => ctx.db.query("vaultDocuments").collect());
 const cardRows = (t: T) => t.run((ctx) => ctx.db.query("vaultSources").collect());
 const auditRows = (t: T) => t.run((ctx) => ctx.db.query("audit").collect());
+const storageObjects = (t: T) => t.run((ctx) => ctx.db.system.query("_storage").collect());
 const createdAudit = async (t: T) =>
   (await auditRows(t)).filter((r) => r.eventType === "document.created");
 
@@ -2443,6 +2444,8 @@ test("createDocument(replace: <bad index>) returns a sentence and changes NOTHIN
   const { t, planId } = await setup();
   await call(t, planId, "createDocument", { topic: CREATE_TOPIC, form: "long" });
   const before = (await vaultDocs(t))[0]!;
+  const storedBefore = await storageObjects(t);
+  expect(storedBefore).toHaveLength(1); // the accepted document's derived PDF
 
   const reply = await call(t, planId, "createDocument", {
     topic: `${SMOKE} rewrite the fifth one`,
@@ -2458,6 +2461,7 @@ test("createDocument(replace: <bad index>) returns a sentence and changes NOTHIN
   expect(after[0]!.storageId).toBe(before.storageId);
   expect((await cardRows(t)).filter((r) => r.role === "created")).toHaveLength(1); // no new card
   expect(await createdAudit(t)).toHaveLength(1); // no audit for work not done
+  expect((await storageObjects(t)).map((o) => o._id)).toEqual(storedBefore.map((o) => o._id));
 });
 
 // ── SC2 + the renderer-bypass guard (static) ──────────────────────────────────

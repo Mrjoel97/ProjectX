@@ -2746,6 +2746,20 @@ function OutputCard({ threadId }: { threadId?: string }) {
   // `count` would be a heuristic where a stored closed enum already exists.
   const kind = FORM_LABEL[created.form ?? "long"];
   const many = created.count > 1;
+  const textPreview = artifact?.text ? (
+    <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
+      <MarkdownDocument markdown={artifact.text} />
+    </div>
+  ) : created.snippet ? (
+    <div>
+      <p style={{ ...traceText, margin: "0 0 0.5rem", color: "var(--ink-soft)" }}>
+        Full text unavailable. Showing the saved summary.
+      </p>
+      <MarkdownDocument markdown={created.snippet} compact />
+    </div>
+  ) : (
+    "This artifact has no text preview."
+  );
   return (
     <div style={{ ...briefingSheet, padding: "1rem 1.15rem" }} data-testid="output-card">
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
@@ -2797,7 +2811,9 @@ function OutputCard({ threadId }: { threadId?: string }) {
         {/* `pdfBytes && pdfUrl === undefined` is still LOADING: the URL query cannot even be
             registered until `artifact` resolves, so without this the card renders the extracted
             markdown for one round trip and then swaps it for the frame. */}
-        {artifact === undefined || (pdfBytes && pdfUrl === undefined) ? (
+        {!selectedId || artifact === null ? (
+          "This saved artifact is unavailable."
+        ) : artifact === undefined || (pdfBytes && pdfUrl === undefined) ? (
           "Loading document…"
         ) : pdfUrl ? (
           // The document AS IT WILL BE READ. The browser's own PDF viewer, the same bare iframe the
@@ -2815,14 +2831,15 @@ function OutputCard({ threadId }: { threadId?: string }) {
               background: "var(--card)",
             }}
           />
-        ) : artifact?.text ? (
-          <div style={{ maxHeight: "32rem", overflowY: "auto" }}>
-            <MarkdownDocument markdown={artifact.text} />
+        ) : pdfBytes ? (
+          <div data-testid="output-storage-partial">
+            <p style={{ ...traceText, margin: "0 0 0.5rem", color: "var(--ink-soft)" }}>
+              Download unavailable. Showing the saved text instead.
+            </p>
+            {textPreview}
           </div>
-        ) : created.snippet ? (
-          <MarkdownDocument markdown={created.snippet} compact />
         ) : (
-          "This artifact has no text preview."
+          textPreview
         )}
       </section>
       {/* The full document, HERE. The inline preview above is the text; this opens the shipped

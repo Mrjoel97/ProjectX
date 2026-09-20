@@ -4733,9 +4733,13 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
             index: effectiveReplace,
           });
           // A refusal (no such #index, foreign tenant, a user upload) is a SENTENCE — the mutation
-          // never throws, and neither does this.
-          if (!res.ok)
+          // never throws, and neither does this. Rendering happened before the server-owned index
+          // check, so a refused replacement must also discard its newly rendered bytes; otherwise
+          // every bad/foreign index leaves an unreferenced PDF or workbook in storage.
+          if (!res.ok) {
+            if (storageId) await ctx.storage.delete(storageId);
             return `There's no document #${effectiveReplace} I can rewrite in this conversation — nothing was changed. Tell the user which documents are here and ask which one they mean.`;
+          }
           // Drop the SUPERSEDED bytes only AFTER the patch persists, and only when they really were
           // superseded (the regenerateAttachment ordering — never orphan a live ref).
           if (res.oldStorageId && res.oldStorageId !== storageId)
