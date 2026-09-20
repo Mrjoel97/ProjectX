@@ -1,3 +1,13 @@
+> Last verified: 2026-09-20 — `replyToMessage` now closes the selector-loss failure at both
+> boundaries. Its model schema has a root `anyOf` requiring `sender` or `subject`, and both strings
+> are non-empty. The runtime still fails closed if a malformed direct call crosses that boundary,
+> except when exactly one mailbox message has its full subject, display name, or address visibly
+> present in the trusted raw current user turn. That recovery reads headers only: snippet, message
+> body and conversation history cannot select a target. Zero, multiple, partial, or body-only
+> matches write nothing; an explicit selector always remains authoritative. Focused core and
+> cockpit tests lock the `Account activity` injection case to `no-reply@example.net`, `Re: Account
+> activity`, an inert draft, and zero request/provider writes before Approve.
+>
 > Last verified: 2026-09-14 — research dispatch now carries an explicit deliverable contract:
 > omitted or `memo` preserves the existing markdown result, while `pdf` records a pending
 > `researchDeliverable` on the exact plan. Only after the research result persists does a one-shot,

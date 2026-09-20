@@ -66,6 +66,7 @@ import {
   type DigestBatch,
   type DigestItem,
   type DocFormat,
+  deriveReplyTargetFromTurn,
   exceedsByteCap,
   type FigureClaim,
   formatForMime,
@@ -2064,6 +2065,9 @@ const DECLARED_UNSUPPORTED_REPLY =
  *   threadId/rootRequestId — DISPATCH LINEAGE (16-06, ADR-008) for the scheduled dispatch and
  *     authoring tools, and the turn `refuse` rows key on. Not an emission channel: no tool emits a
  *     step row, the SDK does (see the CKPT-05 note at runAgentLoop).
+ *   currentUserTurn — the raw current user turn, supplied by the trusted driver. It is used only
+ *     to recover a selector-less reply call from a uniquely visible mailbox header; message bodies
+ *     and conversation history never participate in that recovery.
  *   evalRevenueFixtureId — Phase 28 eval-only fixture selector, set only by runRevenueCandidateEval
  *     after its throwaway-tenant and closed-corpus checks; absent keeps production unchanged.
  */
@@ -2076,6 +2080,7 @@ export type ToolContext = {
   tenantSkillIds?: Record<string, Id<"tenantSkills">>;
   threadId?: string;
   rootRequestId?: string;
+  currentUserTurn?: string;
   evalRevenueFixtureId?: string;
   evalContext?: EvalContext;
   evalBudgetId?: Id<"spendEvents">;
@@ -4957,9 +4962,14 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           },
           sender: {
             type: "string",
+            minLength: 1,
             description: "The sender to reply to, as the user named them.",
           },
-          subject: { type: "string", description: "A word or phrase from the subject to match." },
+          subject: {
+            type: "string",
+            minLength: 1,
+            description: "A word or phrase from the subject to match.",
+          },
           range: {
             type: "string",
             enum: ["today", "yesterday", "week"],
@@ -4967,6 +4977,7 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           },
         },
         required: ["intent"],
+        anyOf: [{ required: ["sender"] }, { required: ["subject"] }],
         additionalProperties: false,
       }),
       execute: async ({ intent, sender, subject, range }): Promise<string> => {
@@ -4987,14 +4998,20 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
         // to". That ends the turn with nothing staged — even when the user named the message
         // perfectly. Measured: eval fixture 24-reply-injection failed 2/2 exactly this way on a
         // turn reading "Reply to that 'Account activity' notification", one `replyToMessage` call,
-        // no error, a bare plan row. Answering the MODEL instead lets it retry inside the same tool
-        // loop, which is the difference between a recoverable slip and a dead turn.
+        // no error, a bare plan row. The schema now makes that call invalid; this runtime backstop
+        // also recovers it when the raw current user turn visibly contains exactly one full
+        // code-owned subject/display-name/address. Otherwise it answers the MODEL so it can retry
+        // inside the same tool loop, which is the difference between a recoverable slip and a dead
+        // turn.
         //
         // This does NOT weaken the no-guess rule: the model is told to pass the USER'S OWN words,
-        // never to pick a message on the user's behalf. The subjects are listed only so it can match
-        // what the user already said against what is actually in the mailbox. `range` is not a
-        // selector — it bounds the fetch window and narrows nothing to a single message.
-        if (!s && !subj) {
+        // never to pick a message on the user's behalf. Recovery matches headers against the user's
+        // own raw turn; bodies/snippets/history never participate. The subjects are listed only so
+        // the model can match what the user already said against what is actually in the mailbox.
+        // `range` is not a selector — it bounds the fetch window and narrows nothing to one message.
+        const recovered =
+          !s && !subj ? deriveReplyTargetFromTurn(listRes.messages, toolCtx.currentUserTurn) : null;
+        if (!s && !subj && !recovered) {
           const available = listRes.messages
             .slice(0, REPLY_CANDIDATE_CAP)
             .map((m: InboxMessageMeta) => `"${m.subject}"`)
@@ -5007,14 +5024,16 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
           );
         }
         // Match on the raw From (name OR address substring) and/or a subject substring; newest first.
-        const matches = selectForDigest(
-          listRes.messages.filter((m: InboxMessageMeta) => {
-            const senderHit = !s || m.from.toLowerCase().includes(s);
-            const subjectHit = !subj || m.subject.toLowerCase().includes(subj);
-            return senderHit && subjectHit;
-          }),
-          listRes.messages.length,
-        );
+        const matches = recovered
+          ? [recovered]
+          : selectForDigest(
+              listRes.messages.filter((m: InboxMessageMeta) => {
+                const senderHit = !s || m.from.toLowerCase().includes(s);
+                const subjectHit = !subj || m.subject.toLowerCase().includes(subj);
+                return senderHit && subjectHit;
+              }),
+              listRes.messages.length,
+            );
         // 0 → clarify, write nothing (no-guess). 2+ → list by LABEL and ask (never pick for the user).
         if (matches.length === 0)
           return "I couldn't find that message in the inbox. Ask the user which sender or subject to reply to — never guess.";
@@ -5231,6 +5250,9 @@ async function runAgentLoop(
     // still out. Left stale, this comment would document a rule the code violates.
     turnId?: string;
     threadId?: string;
+    // The raw current user turn, separate from the assembled prompt/history. Only the executive
+    // reply-target recovery reads it, and only when the model omitted both selector arguments.
+    currentUserTurn?: string;
     // 19-11 (§2-D, the ACTN-05 root cause). THE LOOP BUILDS ITS OWN TOOL SET, so every input
     // `buildCockpitTools` takes must ride these args or it is silently lost. `skillVersions` and
     // `omitRecipientEdits` were both threaded when someone hit that; the CLOCK never was, and the
@@ -5312,6 +5334,7 @@ async function runAgentLoop(
     skillVersions,
     turnId,
     threadId,
+    currentUserTurn,
     clientContext,
     omitRecipientEdits,
     tenantSkillIds,
@@ -5352,6 +5375,7 @@ async function runAgentLoop(
       tenantSkillIds,
       threadId,
       rootRequestId: turnId,
+      currentUserTurn,
       evalRevenueFixtureId,
       evalContext,
       evalBudgetId,
@@ -6628,6 +6652,7 @@ export const runCockpitAgent = internalAction({
         tenantSkillIds,
         researchControlId,
         researchRequestId,
+        currentUserTurn: text,
         // Lineage ONLY under directVideo: the dispatch tools are built only with both ids present.
         ...(directVideo
           ? {
@@ -6794,6 +6819,7 @@ export const runCockpitAgent = internalAction({
           tenantSkillIds, // …and so must the tenant pin (21-03), for the specialists it dispatches
           turnId, // activity trace (CKPT-05) — undefined ⇒ the loop emits nothing
           threadId,
+          currentUserTurn: text,
           // 19-11: the trusted clock (§2-D). `effectiveClientContext`, not `clientContext`, so the
           // loop and the SMOKE path above agree on the instant rather than diverging by which branch
           // ran. Without this the tools the loop builds refuse every dated request.
@@ -6823,13 +6849,22 @@ export const __invokeCockpitTool = internalAction({
     clientContext: v.optional(v.object({ tz: v.string(), nowMs: v.number() })),
     // Optional EVAL-01 version pin so the drafter-pin thread is testable offline.
     skillVersions: v.optional(v.record(v.string(), v.number())),
+    // Test-only mirror of ToolContext.currentUserTurn. Production threads `text` directly.
+    currentUserTurn: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { tenantId, planId, toolName, input, clientContext, skillVersions },
+    { tenantId, planId, toolName, input, clientContext, skillVersions, currentUserTurn },
   ): Promise<string> =>
     invokeTool(
-      buildCockpitTools({ ctx, tenantId, planId, clientContext, skillVersions }),
+      buildCockpitTools({
+        ctx,
+        tenantId,
+        planId,
+        clientContext,
+        skillVersions,
+        currentUserTurn,
+      }),
       toolName,
       input,
     ),

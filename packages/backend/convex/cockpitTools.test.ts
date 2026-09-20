@@ -3375,6 +3375,92 @@ test("replyToMessage with NO sender and NO subject answers the MODEL, and stages
   expect(plan?.subject).toBeUndefined();
 });
 
+test("replyToMessage schema structurally requires one non-empty selector", () => {
+  const tools = buildCockpitTools({
+    ctx: {} as ToolContext["ctx"],
+    tenantId: "t1",
+    planId: "plan-stub" as Id<"plans">,
+  });
+  const schema = (
+    tools.replyToMessage.inputSchema as unknown as {
+      jsonSchema: {
+        properties: Record<string, { minLength?: number }>;
+        required: string[];
+        anyOf: Array<{ required: string[] }>;
+        additionalProperties: boolean;
+      };
+    }
+  ).jsonSchema;
+
+  expect(Object.keys(schema.properties).sort()).toEqual(["intent", "range", "sender", "subject"]);
+  expect(schema.required).toEqual(["intent"]);
+  expect(schema.anyOf).toEqual([{ required: ["sender"] }, { required: ["subject"] }]);
+  expect(schema.properties.sender?.minLength).toBe(1);
+  expect(schema.properties.subject?.minLength).toBe(1);
+  expect(schema.additionalProperties).toBe(false);
+});
+
+test("replyToMessage recovers one full subject from the raw user turn, never from attacker body", async () => {
+  const { t, planId } = await setupMailbox();
+  const reply = await t.action(internal.llm.__invokeCockpitTool, {
+    tenantId: "t1",
+    planId,
+    toolName: "replyToMessage",
+    input: { intent: `${SMOKE} say I reviewed it` },
+    currentUserTurn: "Reply to that 'Account activity' notification and say I reviewed it.",
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.replyToMessageId).toBe("fix-injection");
+  expect(plan?.recipients).toEqual(["no-reply@example.net"]);
+  expect(plan?.subject).toBe("Re: Account activity");
+  expect(plan?.body).toBeTruthy();
+  expect(JSON.stringify(plan)).not.toContain(NEEDLE);
+  expect(reply).not.toContain(NEEDLE);
+  // Reply setup stages the ordinary email draft only. The injected body cannot pick another
+  // action or bypass Approve into a request/provider write.
+  expect(plan?.kind).toBeUndefined();
+  expect(await t.run((ctx) => ctx.db.query("requests").collect())).toHaveLength(0);
+});
+
+test("replyToMessage raw-turn recovery refuses ambiguous and body-only matches without writes", async () => {
+  for (const currentUserTurn of [
+    "Reply about Account activity and Re: Q3 numbers.",
+    `Reply to ${NEEDLE}.`,
+  ]) {
+    const { t, planId } = await setupMailbox();
+    const reply = await t.action(internal.llm.__invokeCockpitTool, {
+      tenantId: "t1",
+      planId,
+      toolName: "replyToMessage",
+      input: { intent: `${SMOKE} say I reviewed it` },
+      currentUserTurn,
+    });
+    expect(reply).toMatch(/without naming a message/i);
+    const plan = await readPlan(t, planId);
+    expect(plan?.recipients ?? []).toEqual([]);
+    expect(plan?.subject).toBeUndefined();
+    expect(plan?.replyToMessageId).toBeUndefined();
+    expect(await t.run((ctx) => ctx.db.query("requests").collect())).toHaveLength(0);
+  }
+});
+
+test("replyToMessage keeps an explicit selector authoritative over the raw-turn fallback", async () => {
+  const { t, planId } = await setupMailbox();
+  await t.action(internal.llm.__invokeCockpitTool, {
+    tenantId: "t1",
+    planId,
+    toolName: "replyToMessage",
+    input: { intent: `${SMOKE} sounds good`, subject: "Q3" },
+    currentUserTurn: "Reply to the Account activity message.",
+  });
+
+  const plan = await readPlan(t, planId);
+  expect(plan?.replyToMessageId).toBe("fix-reply");
+  expect(plan?.recipients).toEqual(["sarah.chen@example.com"]);
+  expect(plan?.subject).toBe("Re: Q3 numbers");
+});
+
 test("replyToMessage RESOLVES and stages the original sender BEFORE it drafts a body", async () => {
   const { t, planId } = await setupMailbox();
   // The draft is a model call this offline harness has no key for. That is the point of the

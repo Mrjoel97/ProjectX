@@ -1,3 +1,5 @@
+import { parseAddress } from "./emailIntent";
+
 // Pure briefing domain logic for the cockpit inbox briefing (CLAUDE.md §1: no Convex imports).
 //
 // The locked decision this module exists to enforce (ADR-004 / design §2, SC-1): TIME GROUPING IS
@@ -113,6 +115,62 @@ export function selectForDigest(
   cap: number = BRIEFING_BODY_CAP,
 ): InboxMessageMeta[] {
   return [...messages].sort((a, b) => b.internalDate - a.internalDate).slice(0, cap);
+}
+
+/**
+ * Recover a selector-less reply call only when the user's own turn visibly identifies one header.
+ *
+ * This is deliberately narrower than fuzzy reply matching: the FULL subject, display name, or
+ * address must appear as a bounded phrase in the raw current user turn, and exactly one message
+ * may match. Snippets and bodies are never inputs, so third-party content cannot select its own
+ * recipient. Ambiguous or absent evidence returns null and leaves the caller on its no-write path.
+ */
+export function deriveReplyTargetFromTurn(
+  messages: readonly InboxMessageMeta[],
+  userTurn: string | undefined,
+): InboxMessageMeta | null {
+  const turn = userTurn?.trim().toLowerCase();
+  if (!turn) return null;
+
+  const isAlphaNumeric = (char: string | undefined): boolean =>
+    char !== undefined && /[\p{L}\p{N}]/u.test(char);
+  const visiblyContains = (value: string | undefined): boolean => {
+    const needle = value?.trim().toLowerCase();
+    if (!needle) return false;
+    const email = needle.includes("@");
+    let at = turn.indexOf(needle);
+    while (at >= 0) {
+      const before = turn[at - 1];
+      const after = turn[at + needle.length];
+      const beforeContinues = email
+        ? isAlphaNumeric(before) ||
+          /[@_+-]/u.test(before ?? "") ||
+          (before === "." && isAlphaNumeric(turn[at - 2]))
+        : isAlphaNumeric(before);
+      const afterContinues = email
+        ? isAlphaNumeric(after) ||
+          /[@_+-]/u.test(after ?? "") ||
+          (after === "." && isAlphaNumeric(turn[at + needle.length + 1]))
+        : isAlphaNumeric(after);
+      if (
+        (!isAlphaNumeric(needle[0]) || !beforeContinues) &&
+        (!isAlphaNumeric(needle.at(-1)) || !afterContinues)
+      )
+        return true;
+      at = turn.indexOf(needle, at + 1);
+    }
+    return false;
+  };
+
+  const matches = messages.filter((message) => {
+    const sender = parseAddress(message.from);
+    return (
+      visiblyContains(message.subject) ||
+      visiblyContains(sender?.displayName) ||
+      visiblyContains(sender?.address)
+    );
+  });
+  return matches.length === 1 ? (matches[0] ?? null) : null;
 }
 
 /**
