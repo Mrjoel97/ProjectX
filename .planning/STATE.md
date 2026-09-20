@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 03.7
-current_plan: Wave 1A — provider-failure accounting repaired; no repeat paid run; continue repository-controlled closure while exact live/founder gates remain explicit.
+current_plan: Wave 1 — repository-controlled briefing, Blueprint, and document closure complete; live/provider/founder acceptance remains explicit and unspent.
 status: in_progress
-stopped_at: "The single durable run passed preflight and failed before case 1 produced a verdict. Its failed provider request is now accounted at the full USD 0.03 conservative ceiling; all six reservations are settled, the budget is closed without breach, and no paid replay occurred."
+stopped_at: "Wave 1 zero-cost closure completed: briefing and Blueprint reproof are green; document lifecycle repaired and green. No new paid call occurred. Exact live/provider/founder acceptance remains open."
 last_updated: "2026-09-20"
 progress:
   total_phases: 76
@@ -21,13 +21,13 @@ progress:
 
 **Current Phase:** 03.7 (Wave 1A integration lead; Phase 17.1 remains a parallel gated lane)
 **Current Phase Name:** Wave 1A — Foundation truth and evidence debt
-**Current Plan:** no repeat paid corpus; finish repository-controlled Wave 1 closure and keep exact live/founder gates explicit
-**Status:** in progress after permanent failed-provider accounting repair
-**Progress:** `01-10` completed repository-controlled Google OAuth readiness. Case-24 selection and durable paid-attempt handling are repaired offline. The latest single authorized run passed preflight but its first cockpit provider request failed before a case verdict. The failed request was not replayed: it is now booked at the full USD `0.03` conservative ceiling, separate from USD `0.00000392` observed usage; all six reservations are settled and the budget is closed without breach. Focused tests, backend/contracts typechecks and the 57-fixture self-check are green. The run remains non-certifying and `accepted:false`, but no unresolved hold or settlement-observation defect remains.
+**Current Plan:** preserve the completed repository-controlled Wave 1 result; do not repeat the paid corpus without a fresh bounded decision
+**Status:** repository-controlled Wave 1 work complete; exact live/provider/founder acceptance remains open
+**Progress:** `01-10` is technically ready for its later external gate. `03.7-10` current offline gates are green (46 core, 9 backend, evaluator self-check and Playwright discovery). `17.1-11` current offline gates are green (77 core and 100 backend tests, including non-empty source and standing-spine controls). `18-11` Tasks 1-2 are complete: 27 core, 230 backend and 13 web tests pass; invalid replacements now refuse before scan/draft/render/storage or spend, the late refusal remains cleanup-safe for races, and the Output card exposes honest loading/missing/partial/empty and saved-not-sent states. The failed paid request remains conservatively accounted at USD `0.03`, all six reservations are settled, the budget is closed, and no new paid request occurred. The Blueprint baseline remains `accepted:false`, so live and founder layers are not claimed.
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
 - **Execution order:** Phase 37.1 closed Wave 0 planning truth; Waves 1–8 now execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
-- **Immediate handoff:** do not spend more money repeating the full corpus. The runner now closes a terminal failed-provider budget conservatively and never replays it. `03.7-10` and `17.1-11` remain open only for a certifying live verdict and founder/external acceptance; their earlier recurring settlement defect is closed. Continue repository-controlled Wave 1 work that does not require those external verdicts, while the final `18-11` acceptance seal still consumes an exact accepted Blueprint baseline. Phase 23 remains preserved for Wave 4.
+- **Immediate handoff:** do not spend more money repeating the full corpus. Repository-controlled work for `03.7-10`, `17.1-11`, and `18-11` Tasks 1-2 is complete. `03.7-10` and `17.1-11` remain open only for a certifying live verdict and founder/external acceptance. `18-11` Tasks 3-6 remain gated on the exact accepted Blueprint baseline, bounded document UAT, and founder BRAND judgment. Phase 23 remains preserved for Wave 4.
 - **Founder acceptance contract:** every applicable technical plan must include a plain-language outcome, a browser path for a nontechnical founder, honest loading/empty/error/partial/refusal states, and captured browser evidence in addition to code-level tests.
 - **Routing note:** native GSD helpers currently disagree because filename counts treat partial and auxiliary summaries as completion. Phase 37.1 owns that reconciliation; automatic “next phase” suggestions remain advisory until its checker changes pass.
 

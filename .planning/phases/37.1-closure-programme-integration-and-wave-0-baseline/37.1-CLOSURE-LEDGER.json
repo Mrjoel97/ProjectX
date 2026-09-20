@@ -5868,7 +5868,7 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "latest_single_durable_run_failed_before_case_1_verdict_with_one_unresolved_reservation_after_prior_partial_runs",
+      "historical_state": "current_offline_reproof_green_live_and_owner_gates_open",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -5887,7 +5887,8 @@
           "commit:e04a656",
           ".planning/debug/golden-preflight-refusal-reasons.md",
           "commit:275c360",
-          "commit:c10fb34"
+          "commit:c10fb34",
+          "commit:392c72b"
         ],
         "deployed": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
@@ -5943,7 +5944,6 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "ambiguous_provider_response_reconciliation",
         "fresh_single_run_authorization_if_requested",
         "complete_certifying_single_no_retry_eval",
         "founder_browser_and_external_grant_evidence"
@@ -5953,7 +5953,7 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "Diagnose the first-turn provider-response failure and preserve safe accounting without paid replay; any future exact-revision run requires separate fresh bounded authorization.",
+      "entry_gate": "Repository-controlled offline reproof and failed-provider accounting are complete; any future exact-revision run requires separate fresh bounded authorization.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
       "external_gate_packet": "The latest single durable run passed preflight, then failed before case 1 produced a verdict. Provider-observed usage is USD 0.00000392 and the ambiguous request is accounted at its full USD 0.03 conservative ceiling; all six reservations are settled, the budget is closed without breach, the failed tenant is retained, and no further retry/run authority exists.",
@@ -13007,7 +13007,7 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "latest_single_durable_run_failed_before_case_1_verdict_with_one_unresolved_reservation_after_prior_partial_runs",
+      "historical_state": "current_offline_reproof_green_live_and_owner_gates_open",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -13025,7 +13025,8 @@
           "commit:e04a656",
           ".planning/debug/golden-preflight-refusal-reasons.md",
           "commit:275c360",
-          "commit:c10fb34"
+          "commit:c10fb34",
+          "commit:c66d0f7"
         ],
         "deployed": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
@@ -13082,7 +13083,6 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "ambiguous_provider_response_reconciliation",
         "fresh_single_run_authorization_if_requested",
         "complete_certifying_single_no_retry_blueprint_eval",
         "founder_browser_and_voice_acceptance",
@@ -13093,7 +13093,7 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "Diagnose the first-turn provider-response failure and preserve safe accounting without paid replay; any future exact-revision run requires separate fresh bounded authorization.",
+      "entry_gate": "Repository-controlled Blueprint/spine/voice reproof and failed-provider accounting are complete; any future exact-revision run requires separate fresh bounded authorization.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
       "external_gate_packet": "The latest single durable run passed preflight, then failed before case 1 produced a verdict. Provider-observed usage is USD 0.00000392 and the ambiguous request is accounted at its full USD 0.03 conservative ceiling; all six reservations are settled, the budget is closed without breach, baseline accepted:false, and no further authority exists.",
@@ -13763,7 +13763,7 @@
     },
     {
       "id": "PLAN:18-document-content-creation/18-11",
-      "workflow": "Close the current document workflow from the accepted Blueprint baseline through create, view, download, regenerate, replacement, format truth, and founder BRAND acceptance.",
+      "workflow": "Close the current document workflow through create, view, download, regenerate, replacement, format truth, accepted Blueprint consumption, and founder BRAND acceptance.",
       "source_phase": "Phase 18",
       "source_plans": [
         ".planning/phases/18-document-content-creation/18-11-PLAN.md"
@@ -13771,17 +13771,26 @@
       "requirement_ids": [
         "ACTN-04"
       ],
-      "historical_state": "wave_1b_gated_by_17.1_11_baseline_accepted_false",
+      "historical_state": "repository_controlled_tasks_1_2_complete_baseline_accepted_false",
       "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/18-document-content-creation/18-11-EVIDENCE.md",
+          "commit:14ba5dc",
+          "commit:6ddd60a"
+        ],
+        "offline_tested": [
+          ".planning/phases/18-document-content-creation/18-11-EVIDENCE.md",
+          "commit:f6c711e",
+          "commit:14ba5dc",
+          "commit:6ddd60a"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -13793,8 +13802,6 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No current layer-specific implementation evidence is certified by this open delta.",
-        "offline_tested": "No exact current offline command evidence is certified by this open delta.",
         "deployed": "No exact candidate deployment evidence is certified by this open delta.",
         "live_observed": "No current live observation is certified by this open delta.",
         "owner_accepted": "No current founder verdict is certified by this open delta.",
@@ -13813,21 +13820,22 @@
         "The current product creates, presents, downloads, regenerates, replaces, and truthfully formats Blueprint-grounded documents with founder-approved BRAND presentation and independent evidence-layer accounting."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "accepted_blueprint_baseline",
+        "bounded_document_live_uat",
+        "founder_brand_acceptance"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 18",
       "dependencies": [
         "17.1-11"
       ],
-      "entry_gate": "17.1-11-BASELINE.json exists, is current, complete, and carries accepted:true.",
+      "entry_gate": "Repository-controlled Tasks 1-2 are complete. Tasks 3-6 require a current, complete 17.1-11 baseline carrying accepted:true.",
       "objective_exit_test": "The current product creates, presents, downloads, regenerates, replaces, and truthfully formats Blueprint-grounded documents with founder-approved BRAND presentation and independent evidence-layer accounting.",
       "user_claims": [],
       "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
       "successor": null,
       "stop_conditions": [
-        "Stop immediately if 17.1-11 is missing, accepted:false, incomplete, or stale against the candidate revision.",
+        "Stop before Tasks 3-6 if 17.1-11 is missing, accepted:false, incomplete, or stale against the candidate revision; deterministic Task 2 remains independently complete.",
         "Stop if the defect belongs to Blueprint construction, schema, deployment infrastructure, or any path outside files_modified; return it to the named integration owner.",
         "Stop before paid/live model work without bounded authorization and after the first non-certifying sequence.",
         "Stop on tenant leakage, raw content in audit, mismatched MIME/extension, missing cleanup evidence, or an owner rejection."
