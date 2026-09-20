@@ -6063,12 +6063,12 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "partial_run_non_certifying_then_bounded_preflight_refused_lifecycle_live_verified_safe_reason_fix_offline",
+      "historical_state": "diagnostic_cases_1_23_pass_case24_semantic_fail_case28_unresolved_then_isolated_case24_retry_unresolved",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
       "deployed": "yes",
-      "live_observed": "no",
+      "live_observed": "partial",
       "owner_accepted": "no",
       "externally_enabled": "no",
       "evidence_refs": {
@@ -6081,7 +6081,8 @@
           ".planning/debug/golden-preflight-early-exit.md",
           "commit:e04a656",
           ".planning/debug/golden-preflight-refusal-reasons.md",
-          "commit:275c360"
+          "commit:275c360",
+          "commit:c10fb34"
         ],
         "deployed": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md",
@@ -6096,7 +6097,11 @@
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-SETTLEMENT-FIX.log",
           "commit:73f723e",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-FINAL.log",
-          "commit:d8ac77a"
+          "commit:d8ac77a",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DIAGNOSTIC.log",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RETRY-CASE-24-2026-09-20.log",
+          "commit:409604e",
+          "commit:f74d9b0"
         ],
         "owner_accepted": [
           ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md"
@@ -6113,8 +6118,8 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "The earlier command stopped before briefing cases 16-18. The latest free preflight returned bounded REFUSED/2 with no budget or corpus, confirming lifecycle behavior but not provider readiness or current briefing observation.",
-        "owner_accepted": "Founder browser verification was not entered because the interrupted golden gate remained non-certifying.",
+        "live_observed": "Current briefing cases 16-18 printed PASS, but the full run remained non-certifying after case 24 failed semantic assertions and case 28 hit the unresolved guard; the isolated case-24 retry stopped before verdict.",
+        "owner_accepted": "Founder browser verification was not entered because neither the full diagnostic run nor isolated retry certified.",
         "externally_enabled": "No current controlled Gmail grant was observed; eval-only provider access does not close briefing external enablement."
       },
       "source_membership": {
@@ -6130,8 +6135,9 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "fresh_sync_and_safe_reason_preflight_diagnosis",
-        "fresh_single_run_authorization",
+        "case_24_recipient_and_subject_semantic_repair",
+        "paid_call_settlement_observation_repair",
+        "fresh_single_run_authorization_if_requested",
         "complete_certifying_single_no_retry_eval",
         "founder_browser_and_external_grant_evidence"
       ],
@@ -6140,10 +6146,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "A fresh authorized sync+preflight exposes one bounded safe refusal reason or PASS on the exact revision, then separate fresh bounded corpus authority is recorded before any run.",
+      "entry_gate": "Case-24 semantic evidence and paid-call settlement observation are repaired offline; any future exact-revision run requires separate fresh bounded authorization.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "The latest free preflight returned REFUSED/2 with 0 corpus cases, no budget, and USD 0. Lifecycle is live-confirmed; safe-reason diagnosis remains offline-only pending fresh sync+preflight, and no fresh corpus authority exists.",
+      "external_gate_packet": "The full diagnostic run spent exact USD 0.16210262 and the single explicit isolated retry spent USD 0.00217592; both final ledgers had no breach or unresolved calls. Neither certified and no further retry/run authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13465,7 +13471,7 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "partial_run_non_certifying_then_bounded_preflight_refused_lifecycle_live_verified_safe_reason_fix_offline",
+      "historical_state": "diagnostic_cases_1_23_pass_case24_semantic_fail_case28_unresolved_then_isolated_case24_retry_unresolved",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -13482,7 +13488,8 @@
           ".planning/debug/golden-preflight-early-exit.md",
           "commit:e04a656",
           ".planning/debug/golden-preflight-refusal-reasons.md",
-          "commit:275c360"
+          "commit:275c360",
+          "commit:c10fb34"
         ],
         "deployed": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json",
@@ -13497,7 +13504,11 @@
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-SETTLEMENT-FIX.log",
           "commit:73f723e",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-FINAL.log",
-          "commit:d8ac77a"
+          "commit:d8ac77a",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DIAGNOSTIC.log",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RETRY-CASE-24-2026-09-20.log",
+          "commit:409604e",
+          "commit:f74d9b0"
         ],
         "owner_accepted": [
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-BASELINE.json"
@@ -13515,7 +13526,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "Retained diagnostics contain the exact five-source Blueprint and rendered evalblpr spine, but complete L6 remains unproven. The latest free preflight returned bounded REFUSED/2 without budget or corpus, confirming lifecycle behavior but not provider readiness.",
+        "live_observed": "Retained exact five-source Blueprint/spine diagnostics and cases 1-23 PASS are partial only. Case 24 failed recipient/subject semantic assertions, case 28 hit the unresolved guard, and the isolated case-24 retry stopped before verdict.",
         "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification was not entered because L6 is non-certifying.",
         "externally_enabled": "Provider access was observed only inside the failed evaluation sequence; it does not close external enablement, and the controlled Gmail grant remains open."
       },
@@ -13532,8 +13543,9 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "fresh_sync_and_safe_reason_preflight_diagnosis",
-        "fresh_single_run_authorization",
+        "case_24_recipient_and_subject_semantic_repair",
+        "paid_call_settlement_observation_repair",
+        "fresh_single_run_authorization_if_requested",
         "complete_certifying_single_no_retry_blueprint_eval",
         "founder_browser_and_voice_acceptance",
         "accepted_baseline_seal"
@@ -13543,10 +13555,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "A fresh authorized sync+preflight exposes one bounded safe refusal reason or PASS on the exact revision, then separate fresh bounded corpus authority is recorded before any run.",
+      "entry_gate": "Case-24 semantic evidence and paid-call settlement observation are repaired offline; any future exact-revision run requires separate fresh bounded authorization.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "The latest free preflight returned REFUSED/2 with 0 corpus cases, no budget, and USD 0. Lifecycle is live-confirmed; safe-reason diagnosis remains offline-only, baseline accepted:false, and no fresh corpus authority exists.",
+      "external_gate_packet": "The full diagnostic run spent exact USD 0.16210262 and the single explicit isolated retry spent USD 0.00217592; both final ledgers had no breach or unresolved calls. Baseline accepted:false, neither certified, and no further authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",

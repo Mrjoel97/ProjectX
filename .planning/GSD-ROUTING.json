@@ -4,7 +4,7 @@
   "active": {
     "phase": "03.7",
     "plan": "03.7-10 + 17.1-11 blocked before founder verification",
-    "reason": "The earlier partial run remains non-certifying. The latest free preflight returned canonical secret-safe REFUSED/2 within the bound, with 0 corpus cases, no budget, and USD 0. This live-verifies the bounded lifecycle but not provider readiness. The safe-reason enum fix is offline-only and requires a fresh authorized sync+preflight for diagnosis. Baseline accepted:false, both founder gates blocked, and no fresh run authority exists."
+    "reason": "One diagnostic no-retry corpus run passed cases 1-23, case 24 failed semantic reply assertions because recipient/subject evidence was absent despite one reply call, and case 28 stopped GOLDEN_PAID_CALL_UNRESOLVED. One explicitly authorized isolated case-24 retry passed preflight but stopped on the same unresolved guard before verdict. Final ledgers settled at exact USD 0.16210262 and USD 0.00217592 with no breach or unresolved calls, but neither run certified. Baseline accepted:false, both founder gates blocked, and no further run authority exists."
   },
   "next": {
     "phase": "Wave 1B",
@@ -27,7 +27,7 @@
     {
       "phase": "03.7 + 17.1",
       "wave": "1A",
-      "reason": "latest free preflight returned bounded REFUSED/2 with 0 corpus/no budget/USD 0; lifecycle live-confirmed, safe-reason diagnosis fix offline-only pending fresh authorized sync+preflight; accepted:false and no fresh run authority exists"
+      "reason": "diagnostic run passed cases 1-23, case24 failed semantic assertions, and stopped case28 unresolved; one explicit isolated case24 retry stopped unresolved before verdict; both ledgers settled without breach, accepted:false, no further run authority"
     },
     {
       "phase": "32",
