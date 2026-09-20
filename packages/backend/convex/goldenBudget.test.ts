@@ -1,13 +1,15 @@
 // @vitest-environment node
 
+import { APICallError, InvalidResponseDataError, JSONParseError, TypeValidationError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { GenericActionCtx } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import rateLimiterSchema from "../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import { internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
-import { evalBudgetModel } from "./lib/evalBudgetModel";
+import { closedGoldenFailureToken, evalBudgetModel } from "./lib/evalBudgetModel";
 import { buildWebResearchTool } from "./llm";
 import schema from "./schema";
 
@@ -148,6 +150,72 @@ test("chat billing uses raw SDK response and unverified billing retains its hold
   }
 });
 
+test("real OpenRouter model fetches settle success and classify closed failures", async () => {
+  const cases = [
+    {
+      name: "success",
+      response: new Response(
+        JSON.stringify({
+          id: "mock-completion",
+          model: "openai/gpt-4o-mini",
+          choices: [{ index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3, cost: 0.001, is_byok: false },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+      error: undefined,
+    },
+    {
+      name: "http failure",
+      response: new Response("secret provider body", { status: 429 }),
+      error: "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_429",
+    },
+    {
+      name: "malformed response",
+      response: new Response("secret malformed provider body", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+      error: "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_200",
+    },
+  ] as const;
+  for (const current of cases) {
+    const t = harness();
+    vi.stubEnv("GOLDEN_OPENROUTER_BILLING", "standard");
+    vi.stubEnv("GOLDEN_TAVILY_CREDIT_USD", "0.008");
+    const budgetId = await t.mutation(internal.guardrails.openEvalBudget, {
+      tenantIds: [tenantId],
+      capCents: 200,
+      family: "golden",
+    });
+    const fetch = vi.fn(async () => current.response);
+    const provider = createOpenRouter({ apiKey: "test-key", fetch });
+    const wrapped = evalBudgetModel({
+      ctx: { runMutation: t.mutation } as unknown as GenericActionCtx<DataModel>,
+      tenantId,
+      budgetId,
+      model: provider.chat("openai/gpt-4o-mini"),
+      modelId: "or/openai/gpt-4o-mini",
+      mode: "golden",
+      onCost: () => {},
+    });
+    const call = wrapped.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "public fixture" }] }],
+    });
+    if (current.error === undefined) await expect(call).resolves.toMatchObject({ content: [{ type: "text", text: "ok" }] });
+    else await expect(call).rejects.toThrow(current.error);
+    const status = await t.query(internal.guardrails.evalBudgetStatus, { budgetId });
+    expect(status).toMatchObject({
+      settledCount: 1,
+      conservativeCount: current.error === undefined ? 0 : 1,
+      observedUsd: current.error === undefined ? 0.001 : 0,
+      conservativeUsd: current.error === undefined ? 0 : 0.03,
+      unsettledCount: 0,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  }
+});
+
 test("a thrown golden chat settles at the reservation ceiling and remains explicitly conservative", async () => {
   const t = harness();
   vi.stubEnv("GOLDEN_OPENROUTER_BILLING", "standard");
@@ -188,6 +256,38 @@ test("a thrown golden chat settles at the reservation ceiling and remains explic
     unresolvedCents: 0,
   });
   await expect(t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).resolves.toBeTruthy();
+});
+
+test("golden failure classification is closed and cannot leak provider error contents", () => {
+  const secret = "https://secret.example/route?token=never-log";
+  const errors = [
+    new APICallError({
+      message: secret,
+      url: secret,
+      requestBodyValues: { authorization: secret },
+      responseHeaders: { authorization: secret },
+      responseBody: secret,
+      statusCode: 429,
+    }),
+    new APICallError({ message: secret, url: secret, requestBodyValues: {}, statusCode: 700 }),
+    new JSONParseError({ text: secret, cause: new Error(secret) }),
+    new TypeValidationError({ value: secret, cause: new Error(secret) }),
+    new InvalidResponseDataError({ data: secret, message: secret }),
+    new DOMException(secret, "TimeoutError"),
+    new DOMException(secret, "AbortError"),
+    { name: secret, message: secret },
+  ];
+  expect(errors.map(closedGoldenFailureToken)).toEqual([
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_429",
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_UNKNOWN",
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_PARSE",
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_SCHEMA",
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_SCHEMA",
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_TIMEOUT",
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_ABORT",
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_UNKNOWN",
+  ]);
+  expect(JSON.stringify(errors.map(closedGoldenFailureToken))).not.toContain(secret);
 });
 
 test("golden envelope requires verified billing and one bounded tenant family", async () => {

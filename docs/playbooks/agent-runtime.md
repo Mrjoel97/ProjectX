@@ -3,6 +3,9 @@
 > `conservative_ceiling` basis, the durable Workflow remains `failed`, and the runner closes the
 > settled budget before stopping while retaining the failed tenant for diagnosis. This is
 > conservative accounting, not a passing case or observed provider usage.
+> Its existing terminal error adds only a closed code-owned suffix: bounded SDK HTTP status,
+> `PARSE`, `SCHEMA`, `TIMEOUT`, `ABORT`, or `UNKNOWN`. It never carries provider messages, bodies,
+> headers, URLs, or arbitrary error names; no schema or diagnostic table was added.
 >
 > Last verified: 2026-09-20 — `smoke:seedBlueprintActiveSpineFixture` is the idempotent local-only
 > data seam for the authenticated Phase 17.1 browser contract. It writes one exact typed profile,

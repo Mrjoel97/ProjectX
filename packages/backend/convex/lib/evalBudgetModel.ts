@@ -4,7 +4,14 @@ import {
   goldenOpenRouterObservedUsage,
   goldenProviderCeilingCents,
 } from "@pikar/cost/goldenProviderBudget";
-import { type LanguageModel, wrapLanguageModel } from "ai";
+import {
+  APICallError,
+  InvalidResponseDataError,
+  JSONParseError,
+  TypeValidationError,
+  type LanguageModel,
+  wrapLanguageModel,
+} from "ai";
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
 import type { DataModel, Id } from "../_generated/dataModel";
@@ -25,6 +32,29 @@ export type EvalContext = {
   failure?: "EVAL_SOURCE_READ_FAILED";
 };
 export type ImageInput = { bytes: ArrayBuffer; mimeType: "image/png" | "image/jpeg" };
+
+const FAILED_CONSERVATIVE_PREFIX = "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE";
+
+/**
+ * A terminal golden failure must be diagnosable without exposing an SDK error's message, body,
+ * headers, URL, or arbitrary name. This token stays within existing Workflow error logging.
+ */
+export function closedGoldenFailureToken(error: unknown): string {
+  if (APICallError.isInstance(error)) {
+    const status = error.statusCode;
+    return typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
+      ? `${FAILED_CONSERVATIVE_PREFIX}_HTTP_${status}`
+      : `${FAILED_CONSERVATIVE_PREFIX}_HTTP_UNKNOWN`;
+  }
+  if (JSONParseError.isInstance(error)) return `${FAILED_CONSERVATIVE_PREFIX}_PARSE`;
+  if (TypeValidationError.isInstance(error) || InvalidResponseDataError.isInstance(error))
+    return `${FAILED_CONSERVATIVE_PREFIX}_SCHEMA`;
+  if (error instanceof DOMException && error.name === "TimeoutError")
+    return `${FAILED_CONSERVATIVE_PREFIX}_TIMEOUT`;
+  if (error instanceof DOMException && error.name === "AbortError")
+    return `${FAILED_CONSERVATIVE_PREFIX}_ABORT`;
+  return `${FAILED_CONSERVATIVE_PREFIX}_UNKNOWN`;
+}
 
 function refuseCacheControl(value: unknown): void {
   if (value === null || typeof value !== "object") return;
@@ -138,7 +168,7 @@ export function evalBudgetModel(args: {
               costUsd: goldenProviderCeilingCents(goldenCall) / 100,
               settlementBasis: "conservative_ceiling",
             });
-            throw new Error("EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE");
+            throw new Error(closedGoldenFailureToken(error));
           }
           throw error;
         }
