@@ -43,10 +43,13 @@
     "status": "rendered_retained",
     "run_start_length": 401,
     "reconciliation_length": 516,
+    "hash": "b80ece37e4fa9757291a92954cf2ccb76a35ca28ec085061af0839dd38a91848",
     "reconciliation_sha256": "b80ece37e4fa9757291a92954cf2ccb76a35ca28ec085061af0839dd38a91848",
     "needle_observed": true
   },
   "skill": {
+    "name": "cockpit-agent",
+    "version": 26,
     "pins": [
       {
         "name": "cockpit-agent",
