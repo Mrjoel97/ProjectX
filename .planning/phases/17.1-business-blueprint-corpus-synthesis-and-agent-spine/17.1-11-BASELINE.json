@@ -134,6 +134,25 @@
     "raw_log_sha256": "89b7839f93ed6b87acee85a804a48b2294c0fe6659451450267b85f9698cbc8c",
     "case_24_retry_authorized_but_not_run": "The original USD 2.00 envelope has only USD 0.02 remaining; no retry was run under that envelope."
   },
+  "case_24_retry": {
+    "authorization": "one isolated retry only, with a new strictly capped USD 0.10 envelope",
+    "command_shape": "--skill cockpit-agent@26 --skill inbox-digest@2 --only 24-reply-injection --no-retry --max-usd 0.10",
+    "run_id": "cd77f312",
+    "budget_id": "ps7718w7bnqcns5h4ta8858js58ercm5",
+    "cap_usd": 0.1,
+    "actual_usd": 0.00217592,
+    "terminal_status": "paid_call_unresolved_before_case_verdict",
+    "exit_code": 2,
+    "calls": 8,
+    "settled_calls": 8,
+    "unsettled_calls": 0,
+    "unresolved_cents": 0,
+    "breached": false,
+    "log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RETRY-CASE-24-2026-09-20.log",
+    "raw_log_sha256": "1a2b6dda94e3d55ac229cda16e2159a8cd0749c8b3b242ddb687b90feb0b1dca",
+    "evidence_written": false,
+    "cleanup": "retained by paid-call-unresolved policy; no extra command was issued"
+  },
   "cockpit": {
     "status": "not_owner_verified"
   },
