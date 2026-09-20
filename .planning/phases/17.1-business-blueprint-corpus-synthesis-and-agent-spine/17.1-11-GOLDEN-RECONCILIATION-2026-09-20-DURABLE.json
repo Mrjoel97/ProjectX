@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-20T12:23:52.5644871+03:00",
+  "authorization": {
+    "preflightInvocations": 1,
+    "corpusInvocations": 1,
+    "automaticRetries": 0,
+    "secondCorpusAttempt": false,
+    "maximumUsd": 2.0
+  },
+  "target": {
+    "deployment": "local:local-joel_feruzi-pikar_ai_50c69-1",
+    "environment": "non-production",
+    "identityObserved": "local-joel_feruzi-pikar_ai_50c69-1",
+    "startupTimeoutSeconds": 300,
+    "functionsReadyMarker": "2026-09-20 12:18:42 Convex functions ready! (1m)",
+    "launchLog": "packages/backend/.tmp/wave1-golden-20260920/launch-300s-authorized-20260920-1217/convex-dev.log",
+    "backendLeftRunning": true
+  },
+  "preflight": {
+    "status": "passed_secret_safe_no_budget",
+    "exitCode": 0,
+    "log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-DURABLE.log",
+    "sha256": "d78e017f1e206b7c657c121e7f8ff58a6824761f8ddec9212f49777486296ce6"
+  },
+  "corpus": {
+    "mode": "unfiltered_current_no_retry",
+    "pins": ["cockpit-agent@26", "inbox-digest@2"],
+    "manifestCases": 57,
+    "executableCases": 46,
+    "runId": "2ae07dfd",
+    "tenantId": "eval-2ae07dfd",
+    "budgetId": "ps78shtc737wazjjryc8f3jnqd8eszxx",
+    "casesStarted": 1,
+    "casesCompleted": 0,
+    "casesPassed": 0,
+    "terminalState": "GOLDEN_PAID_CALL_FAILED",
+    "terminalExitCode": 2,
+    "log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DURABLE.log",
+    "sha256": "660e5040b2e41120343c1ee3e2c7c6810d7aed7952d9dd1146cdf5bef883c0a3"
+  },
+  "durableAttempts": [
+    {
+      "attemptId": "702a9d39-c3b0-4440-a848-10a9bf8f40a9",
+      "operation": "vaultSmoke:seedCorpus",
+      "workflowId": "jd7bm9esrpm7f73q6tz3z86hs18ere0p",
+      "requestSha256": "507cbc9f683866062a16e84e2c7aaad326f4c1cd55c3402303d02eecca40d2c5",
+      "state": "completed"
+    },
+    {
+      "attemptId": "ee108300-1052-439b-b431-e007ce5018f9",
+      "operation": "llm:runCockpitAgent",
+      "workflowId": "jd7cwf1v3e2w9dzahht3wv0gmx8esj36",
+      "requestSha256": "c8aa98e6f778031c20884b91f23c88a18368ff68bb135ce8444c053953681ea9",
+      "state": "failed"
+    }
+  ],
+  "spend": {
+    "capCents": 200,
+    "knownSettledActualUsd": 0.00000392,
+    "callCount": 6,
+    "settledCount": 5,
+    "unsettledCount": 1,
+    "unresolvedCents": 3,
+    "remainingCents": 192,
+    "breached": false,
+    "expired": false,
+    "closed": false,
+    "note": "The failed provider response is ambiguous. Its USD 0.03 reservation remains held by design and is not represented as known settled spend. The budget cannot be closed while that reservation is unresolved."
+  },
+  "evidence": {
+    "registryEvidenceWritten": false,
+    "certifyingRun": false,
+    "reason": "The first cockpit turn failed before a case verdict."
+  },
+  "cleanup": {
+    "invoked": false,
+    "tenantRetained": true,
+    "spendEventsRetained": true,
+    "reason": "Failed-run policy retains the exact eval tenant for diagnosis; unresolved budget evidence must remain."
+  }
+}

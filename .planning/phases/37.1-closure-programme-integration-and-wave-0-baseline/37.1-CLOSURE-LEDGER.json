@@ -5868,7 +5868,7 @@
       "requirement_ids": [
         "CKPT-04"
       ],
-      "historical_state": "diagnostic_cases_1_23_pass_case24_semantic_fail_case28_unresolved_then_isolated_case24_retry_unresolved",
+      "historical_state": "latest_single_durable_run_failed_before_case_1_verdict_with_one_unresolved_reservation_after_prior_partial_runs",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -5905,6 +5905,9 @@
           "commit:d8ac77a",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DIAGNOSTIC.log",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RETRY-CASE-24-2026-09-20.log",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-DURABLE.log",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DURABLE.log",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RECONCILIATION-2026-09-20-DURABLE.json",
           "commit:409604e",
           "commit:f74d9b0"
         ],
@@ -5923,7 +5926,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "Current briefing cases 16-18 printed PASS, but the full run remained non-certifying after case 24 failed semantic assertions and case 28 hit the unresolved guard; the isolated case-24 retry stopped before verdict.",
+        "live_observed": "Current briefing cases 16-18 printed PASS in the earlier diagnostic run, but it remained non-certifying. The latest single durable run passed preflight and then failed its first cockpit turn before any case verdict, leaving one USD 0.03 reservation unresolved by design.",
         "owner_accepted": "Founder browser verification was not entered because neither the full diagnostic run nor isolated retry certified.",
         "externally_enabled": "No current controlled Gmail grant was observed; eval-only provider access does not close briefing external enablement."
       },
@@ -5940,8 +5943,7 @@
         "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild."
       ],
       "remaining_work_classes": [
-        "case_24_recipient_and_subject_semantic_repair",
-        "paid_call_settlement_observation_repair",
+        "ambiguous_provider_response_reconciliation",
         "fresh_single_run_authorization_if_requested",
         "complete_certifying_single_no_retry_eval",
         "founder_browser_and_external_grant_evidence"
@@ -5951,10 +5953,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "Case-24 semantic evidence and paid-call settlement observation are repaired offline; any future exact-revision run requires separate fresh bounded authorization.",
+      "entry_gate": "Diagnose the first-turn provider-response failure and preserve safe accounting without paid replay; any future exact-revision run requires separate fresh bounded authorization.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "The full diagnostic run spent exact USD 0.16210262 and the single explicit isolated retry spent USD 0.00217592; both final ledgers had no breach or unresolved calls. Neither certified and no further retry/run authority exists.",
+      "external_gate_packet": "The latest single durable run passed preflight, then failed before case 1 produced a verdict. Known settled actual is USD 0.00000392; one USD 0.03 reservation remains unresolved, the budget is open without breach, the failed tenant is retained, and no further retry/run authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13005,7 +13007,7 @@
         "BLPR-01",
         "BLPR-02"
       ],
-      "historical_state": "diagnostic_cases_1_23_pass_case24_semantic_fail_case28_unresolved_then_isolated_case24_retry_unresolved",
+      "historical_state": "latest_single_durable_run_failed_before_case_1_verdict_with_one_unresolved_reservation_after_prior_partial_runs",
       "current_disposition": "open",
       "implemented": "yes",
       "offline_tested": "yes",
@@ -13041,6 +13043,9 @@
           "commit:d8ac77a",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DIAGNOSTIC.log",
           ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RETRY-CASE-24-2026-09-20.log",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-DURABLE.log",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DURABLE.log",
+          ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RECONCILIATION-2026-09-20-DURABLE.json",
           "commit:409604e",
           "commit:f74d9b0"
         ],
@@ -13060,7 +13065,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "Retained exact five-source Blueprint/spine diagnostics and cases 1-23 PASS are partial only. Case 24 failed recipient/subject semantic assertions, case 28 hit the unresolved guard, and the isolated case-24 retry stopped before verdict.",
+        "live_observed": "Retained exact five-source Blueprint/spine diagnostics and the earlier cases 1-23 PASS are partial only. The latest single durable run passed preflight but failed its first cockpit turn before any case verdict, leaving one USD 0.03 reservation unresolved by design.",
         "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification was not entered because L6 is non-certifying.",
         "externally_enabled": "Provider access was observed only inside the failed evaluation sequence; it does not close external enablement, and the controlled Gmail grant remains open."
       },
@@ -13077,8 +13082,7 @@
         "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11."
       ],
       "remaining_work_classes": [
-        "case_24_recipient_and_subject_semantic_repair",
-        "paid_call_settlement_observation_repair",
+        "ambiguous_provider_response_reconciliation",
         "fresh_single_run_authorization_if_requested",
         "complete_certifying_single_no_retry_blueprint_eval",
         "founder_browser_and_voice_acceptance",
@@ -13089,10 +13093,10 @@
       "dependencies": [
         "37.1-07"
       ],
-      "entry_gate": "Case-24 semantic evidence and paid-call settlement observation are repaired offline; any future exact-revision run requires separate fresh bounded authorization.",
+      "entry_gate": "Diagnose the first-turn provider-response failure and preserve safe accounting without paid replay; any future exact-revision run requires separate fresh bounded authorization.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "The full diagnostic run spent exact USD 0.16210262 and the single explicit isolated retry spent USD 0.00217592; both final ledgers had no breach or unresolved calls. Baseline accepted:false, neither certified, and no further authority exists.",
+      "external_gate_packet": "The latest single durable run passed preflight, then failed before case 1 produced a verdict. Known settled actual is USD 0.00000392; one USD 0.03 reservation remains unresolved, the budget is open without breach, baseline accepted:false, and no further authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",

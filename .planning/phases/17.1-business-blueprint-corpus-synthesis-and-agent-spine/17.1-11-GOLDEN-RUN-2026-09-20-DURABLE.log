@@ -1,0 +1,15 @@
+
+> @pikar/backend@0.0.0 eval:golden C:\Users\expert\Desktop\Pikar-Ai\packages\backend
+> node ./scripts/run-eval-golden.mjs "--skill" "cockpit-agent@26" "--skill" "inbox-digest@2" "--no-retry" "--max-usd" "2.00"
+
+[eval:golden] self-check PASSED (57 fixtures valid, 12 gated skills derived from GATED_SKILLS, vocabulary/cap/multi-pin/only-filter/dispatch/cost-merge logic proven offline; 21-03: tenant-pin parsing/scope-merge/candidate-eligibility/evidence-suppression/inspection/expectations/foreign-collision/deployment-fingerprint/unknown-arg proven offline)
+[eval:golden] provider preflight PASSED (secret-safe; no budget opened)
+[eval:golden] budget ps78shtc737wazjjryc8f3jnqd8eszxx; unresolved calls retain their reservation
+[eval:golden] run 2ae07dfd — 46 cases, tenant eval-2ae07dfd, cap $2.00, pins cockpit-agent@26 inbox-digest@2
+[eval:golden] NO-RETRY RUN — every fixture receives exactly one attempt; a failure remains final.
+[eval:golden] seeded inbox fixture: 5 message(s), live digest
+[eval:golden] seeded vault corpus: 5 doc(s), live embed
+[eval:golden] seeded confirmed Blueprint: doc mx74z6h7ym8d110axzr64gp6rd8esc1j, 5 source(s), spine 401 chars, needle evalblpr
+  · 01-happy-single thread=smoke-attach-99fe7f9d-2bc0-48a7-9370-b79d0523da85 plan=mh75eqs1z5m94qteh9cmtqy4s98esgh6
+[eval:golden] GOLDEN_PAID_CALL_FAILED; durable attempt retained; no paid replay, evidence, or cleanup.
+ ELIFECYCLE  Command failed with exit code 2.
