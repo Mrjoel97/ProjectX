@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-20T14:30:00+03:00",
+  "target": {
+    "deployment": "local:local-joel_feruzi-pikar_ai_50c69-1",
+    "environment": "non-production",
+    "identityObserved": "local-joel_feruzi-pikar_ai_50c69-1",
+    "functionsReadyObserved": true
+  },
+  "source": {
+    "revision": "37bf1a38e8d911dcdb7d09f43e3c9f1f009cf139",
+    "evaluatorRevision": "2026-09-11.budgeted-evaluator.6d27a8201a51e1ed81b18c32c510b18bcc0926d0100a16fdb7bf95ec305f22b6"
+  },
+  "preflight": {
+    "status": "passed_secret_safe_no_budget",
+    "log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-NETWORK-ENABLED.log"
+  },
+  "corpus": {
+    "mode": "unfiltered_current_no_retry",
+    "pins": ["cockpit-agent@26", "inbox-digest@2"],
+    "manifestCases": 57,
+    "executableCases": 46,
+    "runId": "72a43b32",
+    "tenantId": "eval-72a43b32",
+    "budgetId": "ps7d509t3e281pb14ry373r7s18er6cr",
+    "casesStarted": 1,
+    "casesCompleted": 0,
+    "casesPassed": 0,
+    "automaticRetries": 0,
+    "terminalState": "GOLDEN_PAID_CALL_FAILED",
+    "terminalExitCode": 2,
+    "log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-CURRENT.log",
+    "sha256": "908710c94894506284b0a0552348b370331c5f6d7d2f26163758d301cdc62516"
+  },
+  "spend": {
+    "capCents": 200,
+    "accountedUsd": 0.03000392,
+    "observedUsd": 0.00000392,
+    "conservativeUsd": 0.03,
+    "conservativeCount": 1,
+    "callCount": 6,
+    "settledCount": 6,
+    "unsettledCount": 0,
+    "unresolvedCents": 0,
+    "remainingCents": 192,
+    "breached": false,
+    "expired": false,
+    "closed": true
+  },
+  "evidence": {
+    "registryEvidenceWritten": false,
+    "certifyingRun": false,
+    "reason": "The terminal paid failure occurred before the first case verdict."
+  },
+  "cleanup": {
+    "invoked": false,
+    "tenantRetained": true,
+    "spendEventsRetained": true,
+    "reason": "Failed-run policy retains diagnostic tenant and append-only settled budget evidence."
+  }
+}
