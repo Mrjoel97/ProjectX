@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-20T16:46:32+03:00",
+  "classification": "redaction_safe_refs_counts_and_closed_tokens_only",
+  "target": {
+    "deployment": "local:local-joel_feruzi-pikar_ai_50c69-1",
+    "environment": "non-production",
+    "head": "afecf0ad253f7e0687b79feaeaac3361a8984c48",
+    "evaluatorRevision": "2026-09-11.budgeted-evaluator.764154e208ed2842e3a8d7645f148a6a3f3c89293daab90db879e8fe122f1a9c"
+  },
+  "authorization": {
+    "scope": "one filtered synthetic diagnostic; OpenRouter OpenAI-only gpt-4o-mini chat route; no retry; USD 0.25 cap",
+    "disclosureCorrection": "The runner also performs five synthetic vault-document embedding calls before the selected cockpit case."
+  },
+  "preflight": {
+    "status": "passed_secret_safe_no_budget"
+  },
+  "run": {
+    "runStartedAt": "2026-09-20T16:21:25+03:00",
+    "mode": "filtered_diagnostic_no_retry",
+    "filter": "01-happy-single",
+    "pins": ["cockpit-agent@26", "inbox-digest@2"],
+    "runId": "294a80bc",
+    "tenantId": "eval-294a80bc",
+    "budgetId": "ps76pamnqe9fjayrf955ty18kh8er47j",
+    "terminalState": "GOLDEN_PAID_CALL_FAILED",
+    "terminalExitCode": 2,
+    "registryEvidenceWritten": false,
+    "certifyingRun": false
+  },
+  "durableAttempts": {
+    "seedCorpus": "completed",
+    "runCockpitAgent": "failed",
+    "failureClass": "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400",
+    "failureTokenSource": {
+      "method": "installed Convex CLI inline read-only query: budget-filtered application attempt lookup followed by Workflow component status reduction",
+      "reduction": "strict allow-list token regex only; raw component error was neither printed nor persisted",
+      "stdoutValidation": "the reducer's structured result arrived before the known Windows Node UV_HANDLE_CLOSING teardown assertion; the result, not the teardown exit behavior, is the evidence"
+    }
+  },
+  "providerScope": {
+    "embeddingCalls": 5,
+    "embeddingDestination": "OpenRouter",
+    "embeddingModel": "openai/text-embedding-3-small",
+    "chatCalls": 1,
+    "chatDestination": "OpenRouter OpenAI-only route",
+    "chatModel": "openai/gpt-4o-mini",
+    "perCallAttribution": "embedding destination/model is configuration/execution-path attribution; aggregate ledger exposes counts and totals only"
+  },
+  "spend": {
+    "capCents": 25,
+    "closed": true,
+    "breached": false,
+    "actualUsd": 0.03000392,
+    "observedUsd": 0.00000392,
+    "conservativeUsd": 0.03,
+    "conservativeCount": 1,
+    "callCount": 6,
+    "settledCount": 6,
+    "unsettledCount": 0,
+    "unresolvedCents": 0,
+    "remainingCents": 17
+  },
+  "cleanup": {
+    "invoked": false,
+    "tenantRetained": true,
+    "spendEventsRetained": true
+  },
+  "offlineHttp400Review": {
+    "mode": "offline mocked-fetch only; no provider request",
+    "command": "packages/backend: & .\\node_modules\\.bin\\vitest.cmd run --config .eval-runs\\vitest-wire.config.ts --reporter=verbose",
+    "serializationPath": ["evalBudgetModel", "createOpenRouter", "generateText", "actual 30-tool cockpit set"],
+    "syntheticRequest": {
+      "endpoint": "POST /api/v1/chat/completions",
+      "model": "openai/gpt-4o-mini",
+      "messageCount": 2,
+      "maxTokens": 8192,
+      "n": 1,
+      "pluginsCount": 0,
+      "transformsCount": 0,
+      "toolCount": 30,
+      "toolChoice": "auto",
+      "toolSchemaSummary": {
+        "allTypeFunction": true,
+        "parameterObjectCount": 30,
+        "requiredArrayCount": 24,
+        "additionalPropertiesFalseCount": 30,
+        "strictTrueCount": 0
+      },
+      "providerControls": ["only", "order", "allow_fallbacks", "require_parameters", "max_price"]
+    },
+    "officialDocumentation": [
+      "https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion",
+      "https://openrouter.ai/docs/guides/features/tool-calling",
+      "https://openrouter.ai/docs/guides/routing/provider-selection"
+    ],
+    "finding": "No invalid field, schema contradiction, or request-size limit breach was demonstrated. The mocked HTTP 400 is intentional harness control flow, not upstream evidence.",
+    "limitation": "The retained live failure exposes only the closed HTTP_400 token. Raw upstream content is intentionally unavailable, and a mock cannot validate upstream semantic acceptance.",
+    "nextAction": "No provider-gate change or paid replay. Treat cause as unresolved pending a privacy-safe, independently authorized diagnostic signal."
+  },
+  "log": {
+    "path": "packages/backend/.eval-runs/golden-wave1-diagnostic-approved-20260920-162125.log",
+    "sha256": "a89f579b262caf1072f5d1d9f9485347ecfd20bdff67ef438c519b2884a099bf"
+  }
+}

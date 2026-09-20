@@ -107,3 +107,10 @@ Embedding destination/model attribution is an execution-path inference: `seedCor
 `openai/text-embedding-3-small`, and `ragForEvaluation` reserves that embedding model. The aggregate
 budget query does not disclose per-call model/provider rows. Do not label this as independently
 verified per-row provider attribution or confuse the embedding model with the chat model.
+
+An existing CLI inline-query/component read subsequently recovered the strict closed token
+`EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400` from the retained chat workflow. The in-memory
+reducer emitted only the failed state and allow-listed token; no raw workflow payload was
+persisted and no diagnostic schema/index/API was added. The existing budget links two attempts
+(`vaultSmoke:seedCorpus` and `llm:runCockpitAgent`). HTTP 400 establishes the response class, not
+the invalid request field; further diagnosis is offline-only, without another paid request.
