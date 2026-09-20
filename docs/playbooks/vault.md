@@ -1,3 +1,12 @@
+> Browser-evidence procedure (prepared 2026-09-20) — `blueprint-active-spine.spec.ts` has an
+> opt-in `PIKAR_E2E_BROWSER_EVIDENCE_DIR` capture path. It saves the confirmed Blueprint state at
+> 1280×1000 and 390×844 only after the existing derived-target and no-horizontal-overflow checks;
+> it restores desktop size before the remaining profile-tab assertion. Run it only against a fresh
+> disposable local tenant because its existing fixture creates and accepts a contradictory Blueprint
+> draft. The no-tool prompt and voice-instruction seams stop before model/provider access. These
+> screenshots are implementation observations, never evidence of a founder's qualitative
+> grounding or voice judgment.
+>
 > Last verified: 2026-09-14 — an explicitly requested research PDF is now a deterministic
 > attachment on the original `web_research` Vault document. The markdown text, content hash,
 > sources, labels and source plan remain the artifact of record; `attachResearchPdf` adds the PDF

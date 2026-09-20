@@ -1,3 +1,20 @@
+> Browser-evidence procedure (prepared 2026-09-20) — `cockpit-briefing.spec.ts` has an opt-in
+> `PIKAR_E2E_BROWSER_EVIDENCE_DIR` capture path for its already deterministic, local offline
+> fixture. Only when set, it saves the rendered briefing at 1280×1000 and 390×844 after checking
+> the card, Needs-you section, and no horizontal page overflow. The test still seeds/deletes only
+> its authenticated disposable tenant's fixture inbox and sends `SMOKE::agent::brief=today`; it
+> makes no model or Gmail call. Captures are browser observations, not a founder verdict, deployed
+> proof, mailbox write, or provider evidence.
+>
+> Provisioning diagnostic policy (prepared 2026-09-20) — the local-only E2E owner provisioner
+> bounds each CLI child at 60 seconds and accepts a Windows teardown non-zero exit only after a
+> structured response and the expected durable-id, invite-code, owner-grant, and onboarding-result
+> shapes are verified. Empty output is reduced to a closed transport reason; malformed JSON or
+> shapes refuse. It never prints child
+> stderr, addresses, passwords, or invite codes into Playwright artifacts. A terminal browser
+> setup failure is not evidence that an invite mutation did or did not land; reconcile state
+> read-only before retrying.
+>
 > Last verified: 2026-09-20 — Phase 18's offline document lifecycle now preflights a replacement's
 > server-owned index, tenant ownership, and agent-authored origin before scan, drafting, rendering,
 > or storage. The final mutation repeats those checks for race safety and deletes newly rendered

@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
@@ -23,6 +24,36 @@ const CLI_FAILURE = /Failed to run function|Uncaught Error|isn't running|not lis
 
 const TYPED_TARGET = "Independent city bicycle couriers";
 const DERIVED_TARGET = "Regional fleet operators";
+const BROWSER_EVIDENCE_DIR = process.env.PIKAR_E2E_BROWSER_EVIDENCE_DIR;
+
+async function captureResponsiveEvidence(page: Page) {
+  if (!BROWSER_EVIDENCE_DIR) return;
+  mkdirSync(BROWSER_EVIDENCE_DIR, { recursive: true });
+  for (const viewport of [
+    { name: "desktop", width: 1280, height: 1000 },
+    { name: "mobile", width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => done())),
+        ),
+    );
+    await expect(page.getByText(DERIVED_TARGET, { exact: true }).first()).toBeVisible();
+    expect(
+      await page.locator("html").evaluate((element) => element.scrollWidth - element.clientWidth),
+      `Blueprint page overflows at ${viewport.width}px`,
+    ).toBeLessThanOrEqual(1);
+    await page.screenshot({
+      path: resolve(BROWSER_EVIDENCE_DIR, `blueprint-${viewport.name}.png`),
+      fullPage: true,
+    });
+  }
+  // The assertions below continue through profile tabs; restore a desktop viewport after the
+  // mobile witness so that evidence capture cannot itself change the interaction being tested.
+  await page.setViewportSize({ width: 1280, height: 1000 });
+}
 
 function convexRun(fn: string, args: Record<string, unknown>): string {
   const res = spawnSync(process.execPath, [convexBin, "run", fn, JSON.stringify(args)], {
@@ -112,6 +143,8 @@ test("confirmed Blueprint stays stable until an explicit contradiction choice, t
   await expect(page.getByText(DERIVED_TARGET, { exact: true }).first()).toBeVisible({
     timeout: 15_000,
   });
+
+  await captureResponsiveEvidence(page);
 
   // Confirmation replaces the Blueprint value only. The typed profile remains byte-faithful.
   await page.getByRole("tab", { name: "What the business is" }).click();
