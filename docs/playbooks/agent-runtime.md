@@ -1,3 +1,9 @@
+> Last verified: 2026-09-20 — a terminal golden provider failure is never replayed and no longer
+> strands its budget. The low-level reservation settles at its full ceiling with the explicit
+> `conservative_ceiling` basis, the durable Workflow remains `failed`, and the runner closes the
+> settled budget before stopping while retaining the failed tenant for diagnosis. This is
+> conservative accounting, not a passing case or observed provider usage.
+>
 > Last verified: 2026-09-20 — `smoke:seedBlueprintActiveSpineFixture` is the idempotent local-only
 > data seam for the authenticated Phase 17.1 browser contract. It writes one exact typed profile,
 > confirmed Blueprint, cited source, and optional contradiction draft for the signed-in tenant;

@@ -5926,7 +5926,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "Current briefing cases 16-18 printed PASS in the earlier diagnostic run, but it remained non-certifying. The latest single durable run passed preflight and then failed its first cockpit turn before any case verdict, leaving one USD 0.03 reservation unresolved by design.",
+        "live_observed": "Current briefing cases 16-18 printed PASS in the earlier diagnostic run, but it remained non-certifying. The latest single durable run passed preflight and then failed its first cockpit turn before any case verdict; the ambiguous request is now conservatively accounted and its budget closed without breach.",
         "owner_accepted": "Founder browser verification was not entered because neither the full diagnostic run nor isolated retry certified.",
         "externally_enabled": "No current controlled Gmail grant was observed; eval-only provider access does not close briefing external enablement."
       },
@@ -5956,7 +5956,7 @@
       "entry_gate": "Diagnose the first-turn provider-response failure and preserve safe accounting without paid replay; any future exact-revision run requires separate fresh bounded authorization.",
       "objective_exit_test": "The shipped inbox briefing is either current-release certified at every observed layer or left explicitly open at the exact unavailable layer, without a rebuild.",
       "user_claims": [],
-      "external_gate_packet": "The latest single durable run passed preflight, then failed before case 1 produced a verdict. Known settled actual is USD 0.00000392; one USD 0.03 reservation remains unresolved, the budget is open without breach, the failed tenant is retained, and no further retry/run authority exists.",
+      "external_gate_packet": "The latest single durable run passed preflight, then failed before case 1 produced a verdict. Provider-observed usage is USD 0.00000392 and the ambiguous request is accounted at its full USD 0.03 conservative ceiling; all six reservations are settled, the budget is closed without breach, the failed tenant is retained, and no further retry/run authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if the exact skill/deployment/revision identity is ambiguous.",
@@ -13065,7 +13065,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "live_observed": "Retained exact five-source Blueprint/spine diagnostics and the earlier cases 1-23 PASS are partial only. The latest single durable run passed preflight but failed its first cockpit turn before any case verdict, leaving one USD 0.03 reservation unresolved by design.",
+        "live_observed": "Retained exact five-source Blueprint/spine diagnostics and the earlier cases 1-23 PASS are partial only. The latest single durable run passed preflight but failed its first cockpit turn before any case verdict; the ambiguous request is now conservatively accounted and its budget closed without breach.",
         "owner_accepted": "Founder no-tool, contradiction, and voice-spine verification was not entered because L6 is non-certifying.",
         "externally_enabled": "Provider access was observed only inside the failed evaluation sequence; it does not close external enablement, and the controlled Gmail grant remains open."
       },
@@ -13096,7 +13096,7 @@
       "entry_gate": "Diagnose the first-turn provider-response failure and preserve safe accounting without paid replay; any future exact-revision run requires separate fresh bounded authorization.",
       "objective_exit_test": "The current cited Blueprint reaches cockpit, evaluation, RAG, and voice with conclusive exact-version evidence, and an accepted baseline explicitly unblocks 18-11.",
       "user_claims": [],
-      "external_gate_packet": "The latest single durable run passed preflight, then failed before case 1 produced a verdict. Known settled actual is USD 0.00000392; one USD 0.03 reservation remains unresolved, the budget is open without breach, baseline accepted:false, and no further authority exists.",
+      "external_gate_packet": "The latest single durable run passed preflight, then failed before case 1 produced a verdict. Provider-observed usage is USD 0.00000392 and the ambiguous request is accounted at its full USD 0.03 conservative ceiling; all six reservations are settled, the budget is closed without breach, baseline accepted:false, and no further authority exists.",
       "successor": null,
       "stop_conditions": [
         "Stop if source identity, deployment identity, skill pin, Blueprint source set, or revision is ambiguous.",

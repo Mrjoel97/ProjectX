@@ -626,8 +626,10 @@ export const settleEvalCall = internalMutation({
     reservationId: v.id("spendEvents"),
     costUsd: v.number(),
     tavilyCredits: v.optional(v.number()),
+    settlementBasis: v.optional(v.union(v.literal("observed"), v.literal("conservative_ceiling"))),
   },
-  handler: async (ctx, { tenantId, reservationId, costUsd, tavilyCredits }) => {
+  handler: async (ctx, { tenantId, reservationId, costUsd, tavilyCredits, settlementBasis }) => {
+    const basis = settlementBasis ?? "observed";
     const actualCents = evalActualCents(costUsd);
     const reservation = await ctx.db.get(reservationId);
     if (
@@ -645,11 +647,25 @@ export const settleEvalCall = internalMutation({
       .take(4);
     const settled = siblings.find((row) => row.evalActualUsd !== undefined);
     if (settled) {
-      if (settled.evalActualUsd !== costUsd || settled.evalTavilyCredits !== tavilyCredits)
+      if (
+        settled.evalActualUsd !== costUsd ||
+        settled.evalTavilyCredits !== tavilyCredits ||
+        (settled.evalSettlementBasis ?? "observed") !== basis
+      )
         throw new Error("EVAL_SETTLEMENT_MISMATCH");
-      return { actualUsd: costUsd, settled: true, breached: settled.evalBreach === true };
+      return {
+        actualUsd: costUsd,
+        basis,
+        settled: true,
+        breached: settled.evalBreach === true,
+      };
     }
     const isTavily = ["tavily-search", "tavily-extract"].includes(reservation.model ?? "");
+    if (
+      basis === "conservative_ceiling" &&
+      (isTavily || tavilyCredits !== undefined || actualCents !== reservation.amountCents)
+    )
+      throw new Error("EVAL_CONSERVATIVE_SETTLEMENT_INVALID");
     if (
       isTavily
         ? tavilyCredits === undefined ||
@@ -716,6 +732,7 @@ export const settleEvalCall = internalMutation({
         ...(actualCents === 0
           ? {
               evalActualUsd: costUsd,
+              evalSettlementBasis: basis,
               ...(tavilyCredits === undefined ? {} : { evalTavilyCredits: tavilyCredits }),
             }
           : {}),
@@ -733,10 +750,11 @@ export const settleEvalCall = internalMutation({
         createdAt: Date.now(),
         evalBudgetId: reservation.evalBudgetId,
         evalActualUsd: costUsd,
+        evalSettlementBasis: basis,
         ...(tavilyCredits === undefined ? {} : { evalTavilyCredits: tavilyCredits }),
         ...(breached ? { evalBreach: true } : {}),
       });
-    return { actualUsd: costUsd, settled: true, breached };
+    return { actualUsd: costUsd, basis, settled: true, breached };
   },
 });
 
@@ -751,6 +769,9 @@ export const evalBudgetStatus = internalQuery({
     if (rows.length > 1501) throw new Error("EVAL_LEDGER_LIMIT");
     const reserved = rows.filter((row) => row.phase === "reserved");
     const settled = rows.filter((row) => row.evalActualUsd !== undefined);
+    const conservative = settled.filter(
+      (row) => row.evalSettlementBasis === "conservative_ceiling",
+    );
     const settledIds = new Set(settled.map((row) => row.correlationId));
     const outstanding = reserved.filter((row) => !settledIds.has(row.correlationId));
     const expired = Date.now() >= (envelope.evalEnvelope?.expiresAt ?? 0);
@@ -766,6 +787,11 @@ export const evalBudgetStatus = internalQuery({
       breached: rows.some((row) => row.evalBreach === true),
       remainingCents: expired ? 0 : Math.max(0, Math.floor(window.value)),
       actualUsd: settled.reduce((sum, row) => sum + (row.evalActualUsd ?? 0), 0),
+      observedUsd: settled
+        .filter((row) => row.evalSettlementBasis !== "conservative_ceiling")
+        .reduce((sum, row) => sum + (row.evalActualUsd ?? 0), 0),
+      conservativeUsd: conservative.reduce((sum, row) => sum + (row.evalActualUsd ?? 0), 0),
+      conservativeCount: conservative.length,
       callCount: reserved.length,
       settledCount: settled.length,
       unsettledCount: outstanding.length,

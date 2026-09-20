@@ -57,26 +57,40 @@
   ],
   "spend": {
     "capCents": 200,
-    "knownSettledActualUsd": 0.00000392,
+    "accountedUsd": 0.03000392,
+    "observedUsd": 0.00000392,
+    "conservativeUsd": 0.03,
+    "conservativeCount": 1,
     "callCount": 6,
-    "settledCount": 5,
-    "unsettledCount": 1,
-    "unresolvedCents": 3,
+    "settledCount": 6,
+    "unsettledCount": 0,
+    "unresolvedCents": 0,
     "remainingCents": 192,
     "breached": false,
     "expired": false,
-    "closed": false,
-    "note": "The failed provider response is ambiguous. Its USD 0.03 reservation remains held by design and is not represented as known settled spend. The budget cannot be closed while that reservation is unresolved."
+    "closed": true,
+    "note": "The failed provider response remained ambiguous, so its full USD 0.03 reservation was settled with basis conservative_ceiling. This deliberately overstates possible exposure rather than claiming exact provider usage. The budget then closed without breach."
   },
   "evidence": {
     "registryEvidenceWritten": false,
     "certifyingRun": false,
     "reason": "The first cockpit turn failed before a case verdict."
   },
+  "postFailureRepair": {
+    "paidCalls": 0,
+    "evaluatorRevision": "2026-09-11.budgeted-evaluator.1fb74bdbd6047a6e2649cbcc545f5a6a60e94517d7448c0bd9212859646ea941",
+    "behavior": "A thrown golden chat settles at its full reservation with basis conservative_ceiling, is never replayed, and the runner closes the settled budget before stopping.",
+    "verification": {
+      "focusedTests": "34/34 passed",
+      "backendTypecheck": "passed",
+      "contractsTypecheck": "passed",
+      "goldenSelfCheck": "57 fixtures passed"
+    }
+  },
   "cleanup": {
     "invoked": false,
     "tenantRetained": true,
     "spendEventsRetained": true,
-    "reason": "Failed-run policy retains the exact eval tenant for diagnosis; unresolved budget evidence must remain."
+    "reason": "Failed-run policy retains the exact eval tenant for diagnosis; the now-settled and closed spend evidence remains append-only."
   }
 }

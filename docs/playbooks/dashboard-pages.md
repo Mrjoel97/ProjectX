@@ -1,5 +1,10 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-20 — evaluation settlement rows now distinguish exact provider-observed
+> usage from a failed request booked at its full conservative ceiling. Existing dashboard dollar
+> totals remain safe because both consume the same numeric spend field; no current dashboard claims
+> that a conservative ceiling is an exact invoice amount.
+
 > Last verified: 2026-09-12 — the compact-navigation regression now pins the exact five approved
 > hrefs: Command Center, Approvals, Workspace, Vault and Marketing. The previous four-route pin
 > correctly caught the intentional mobile activation in CI; this correction retains all original

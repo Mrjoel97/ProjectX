@@ -1,5 +1,11 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+Last verified: 2026-09-20 — a thrown golden chat request is terminal and is never replayed. Its
+reservation is settled at the full reserved ceiling with `evalSettlementBasis:
+"conservative_ceiling"`, so exposure cannot be understated and the budget can close. Status
+separates `observedUsd` from `conservativeUsd`; neither a conservative settlement nor closure turns
+the failed durable attempt into a passing evaluation.
+
 Last verified: 2026-09-13 — evaluation-mode page extraction claims the same durable
 tenant/request allowance as ordinary research immediately before provider egress. Exhaustion
 refuses the second extraction without a Tavily call; the evaluation spend envelope remains a
@@ -725,7 +731,10 @@ an unlisted model fails before reservation or a provider call.
 
 Successful calls settle the exact `providerMetadata.openrouter.usage.cost` dollar value. Integer
 cents remain conservative enforcement units; the exact value is retained on the actual movement.
-An explicit zero is settled, whereas missing usage or a failed request retains the entire hold.
+An explicit zero is settled and a successful response with missing usage retains its hold. A thrown
+golden chat request is not replayed: it settles at the full reservation with basis
+`conservative_ceiling`, deliberately overstating rather than understating possible exposure so the
+budget can close. Status reports observed and conservative dollars separately.
 Late settlement never refunds a newly opened daily window. A known over-ceiling provider charge
 is recorded truthfully with `evalBreach`, then the model action fails and future reservations are
 refused. A provider contract breach is not reported as a successfully enforced spending cap.
@@ -743,8 +752,9 @@ replaces RAG for this method evaluation, so no hidden embedding or paid search c
 envelope. Extra tools, streaming, unsupported output/media paths, and failed source verification
 fail closed. This does not measure live retrieval quality. Preserve the evaluation spend history
 when removing throwaway fixture content; an envelope or outstanding hold must not disappear with
-its tenant. Status exposes `breached`, `unsettledCount` and `unresolvedCents` separately from known
-actual dollars; a zero known total does not mean an unresolved request was free.
+its tenant. Status exposes `breached`, `unsettledCount`, `unresolvedCents`, `observedUsd`, and
+`conservativeUsd` separately; a zero observed total does not make a conservative settlement exact
+provider usage or an unresolved request free.
 
 ## Known gaps & deferred work
 

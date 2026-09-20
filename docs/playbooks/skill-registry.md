@@ -1,5 +1,10 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-20 — terminal golden provider failures now settle conservatively and close
+> their budget without replay. That evaluator-source change refreshed `AGENT_EVAL_SUITE.revision`
+> and the golden manifest together. It retires older exact-evaluator evidence and does not create a
+> passing case, owner acceptance, activation or rollback evidence.
+
 > Last verified: 2026-09-14 — the deterministic research-PDF dependency and native vertical
 > review-console sources moved both evaluator identities. `AGENT_EVAL_SUITE.revision`, the golden
 > manifest and the generated vertical evaluator revision were refreshed only after source freeze.

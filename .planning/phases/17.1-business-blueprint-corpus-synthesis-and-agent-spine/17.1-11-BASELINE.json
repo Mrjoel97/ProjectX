@@ -170,13 +170,16 @@
     "tenant_id": "eval-2ae07dfd",
     "budget_id": "ps78shtc737wazjjryc8f3jnqd8eszxx",
     "cap_usd": 2.0,
-    "known_settled_actual_usd": 0.00000392,
+    "accounted_usd": 0.03000392,
+    "observed_usd": 0.00000392,
+    "conservative_usd": 0.03,
+    "conservative_count": 1,
     "calls": 6,
-    "settled_calls": 5,
-    "unsettled_calls": 1,
-    "unresolved_cents": 3,
+    "settled_calls": 6,
+    "unsettled_calls": 0,
+    "unresolved_cents": 0,
     "breached": false,
-    "budget_closed": false,
+    "budget_closed": true,
     "cases_started": 1,
     "cases_completed": 0,
     "terminal_status": "GOLDEN_PAID_CALL_FAILED_before_first_case_verdict",
@@ -227,5 +230,5 @@
     "externally-enabled": "provider-access-observed-for-eval-only; Gmail grant remains open"
   },
   "accepted": false,
-  "blocker": "the latest authorized preflight passed, but the sole permitted corpus command failed durably on the first cockpit turn before any case verdict. One USD 0.03 reservation remains unresolved by design, the budget cannot be closed, no registry evidence exists, and founder/browser verification remains gated."
+  "blocker": "the latest authorized preflight passed, but the sole permitted corpus command failed durably on the first cockpit turn before any case verdict. Its ambiguous request is now accounted at the full USD 0.03 conservative ceiling and the budget is closed without breach; no registry evidence exists and founder/browser verification remains gated."
 }

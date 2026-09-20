@@ -57,7 +57,12 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { computeEvaluatorRevision } from "./goldenEvaluatorIdentity.mjs";
-import { invokePaidOnce, PaidCallUnresolved, waitForPaidSettlement } from "./goldenPaidAttempt.mjs";
+import {
+  invokePaidOnce,
+  PaidCallFailed,
+  PaidCallUnresolved,
+  waitForPaidSettlement,
+} from "./goldenPaidAttempt.mjs";
 import {
   PREFLIGHT_PASSED_LINE,
   ProviderPreflightRefusal,
@@ -3959,7 +3964,7 @@ function selfCheck() {
     'plan = parse(must("plans:getById", { planId }, RETRY_READ));',
   );
   const finalSettlementAt = liveSource.indexOf("const budgetStatus = settlePaidCalls();");
-  const budgetCloseAt = liveSource.indexOf(
+  const budgetCloseAt = liveSource.lastIndexOf(
     'must("guardrails:closeEvalBudget", { budgetId: evalBudgetId });',
   );
   assert.ok(
@@ -4704,7 +4709,9 @@ let totalCost = 0;
  *  Throws EnvironmentAbort (via abortEnv) on governed stops / cost cap — never a case failure. */
 function abortEnv(message) {
   console.error(`\n[eval:golden] ${message}`);
-  console.error(`[eval:golden] total cost so far: $${totalCost.toFixed(4)} / $${activeCostCapUsd.toFixed(2)}`);
+  console.error(
+    `[eval:golden] total cost so far: $${totalCost.toFixed(4)} / $${activeCostCapUsd.toFixed(2)}`,
+  );
   process.exit(2);
 }
 
@@ -5224,6 +5231,19 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
       // zero-reservation gap before scheduled work registers its first call.
       quietMs: DISPATCH_POLL_MS * 2,
     });
+  const closeAfterTerminalPaidFailure = (error) => {
+    const status = settlePaidCalls();
+    must("guardrails:closeEvalBudget", { budgetId: evalBudgetId });
+    console.error(
+      `[eval:golden] closed budget ${evalBudgetId} after terminal paid failure; ` +
+        `accounted $${status.actualUsd.toFixed(6)}` +
+        (status.conservativeUsd > 0
+          ? ` ($${status.conservativeUsd.toFixed(6)} conservative ceiling, not observed usage)`
+          : ""),
+    );
+    teardownEvalTenant(tenant, false);
+    throw error;
+  };
 
   console.log(
     `[eval:golden] run ${runId} — ${fixtures.length} cases, tenant ${tenant}, cap $${activeCostCapUsd.toFixed(2)}` +
@@ -5256,9 +5276,16 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
   // an internalAction callable via `convex run` (identity-less, explicit tenantId) that embeds two
   // "Northwind-evalgrd" logistics briefs. The eval tenant is throwaway (`eval-${runId}`) — no purge
   // (the inbox seed isn't purged either). Needs the deployment OPENAI_API_KEY the eval already requires.
-  const { docIds: vaultDocIds } = parse(
-    mustPaid("vaultSmoke:seedCorpus", { tenantId: tenant, needle: VAULT_NEEDLE, evalBudgetId }),
-  );
+  let vaultSeed;
+  try {
+    vaultSeed = parse(
+      mustPaid("vaultSmoke:seedCorpus", { tenantId: tenant, needle: VAULT_NEEDLE, evalBudgetId }),
+    );
+  } catch (error) {
+    if (error instanceof PaidCallFailed) closeAfterTerminalPaidFailure(error);
+    throw error;
+  }
+  const { docIds: vaultDocIds } = vaultSeed;
   console.log(`[eval:golden] seeded vault corpus: ${vaultDocIds.length} doc(s), live embed`);
 
   // 17.1-10: the original L6 premise was false — the runner minted an eval tenant but never gave
@@ -5298,6 +5325,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
         settlePaidCalls,
       );
     } catch (e) {
+      if (e instanceof PaidCallFailed) closeAfterTerminalPaidFailure(e);
       if (e instanceof PaidCallUnresolved) throw e;
       // If a read/assertion failed after a paid turn, still prevent a retry or the next case from
       // starting while that turn has unsettled reservations.
@@ -5324,6 +5352,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
           settlePaidCalls,
         );
       } catch (e) {
+        if (e instanceof PaidCallFailed) closeAfterTerminalPaidFailure(e);
         if (e instanceof PaidCallUnresolved) throw e;
         settlePaidCalls();
         second = {

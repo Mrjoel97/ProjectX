@@ -148,6 +148,48 @@ test("chat billing uses raw SDK response and unverified billing retains its hold
   }
 });
 
+test("a thrown golden chat settles at the reservation ceiling and remains explicitly conservative", async () => {
+  const t = harness();
+  vi.stubEnv("GOLDEN_OPENROUTER_BILLING", "standard");
+  vi.stubEnv("GOLDEN_TAVILY_CREDIT_USD", "0.008");
+  const budgetId = await t.mutation(internal.guardrails.openEvalBudget, {
+    tenantIds: [tenantId],
+    capCents: 200,
+    family: "golden",
+  });
+  const ctx = { runMutation: t.mutation } as unknown as GenericActionCtx<DataModel>;
+  const wrapped = evalBudgetModel({
+    ctx,
+    tenantId,
+    budgetId,
+    model: new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw new Error("provider response lost");
+      },
+    }),
+    modelId: "or/openai/gpt-4o-mini",
+    mode: "golden",
+    onCost: () => {},
+  });
+
+  await expect(
+    wrapped.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "public fixture" }] }],
+    }),
+  ).rejects.toThrow("FAILED_CONSERVATIVE");
+
+  const status = await t.query(internal.guardrails.evalBudgetStatus, { budgetId });
+  expect(status).toMatchObject({
+    breached: false,
+    conservativeCount: 1,
+    conservativeUsd: 0.03,
+    observedUsd: 0,
+    unsettledCount: 0,
+    unresolvedCents: 0,
+  });
+  await expect(t.mutation(internal.guardrails.closeEvalBudget, { budgetId })).resolves.toBeTruthy();
+});
+
 test("golden envelope requires verified billing and one bounded tenant family", async () => {
   const t = harness();
   vi.stubEnv("GOLDEN_OPENROUTER_BILLING", "");

@@ -2717,6 +2717,12 @@ export default defineSchema({
     evalActualUsd: v.optional(v.number()),
     evalTavilyCredits: v.optional(v.number()),
     evalBreach: v.optional(v.boolean()),
+    // `observed` is provider-reported usage. `conservative_ceiling` is an ambiguous failed
+    // request charged at its full reservation so a golden budget can close without pretending
+    // the provider returned exact usage or leaving an orphaned hold forever.
+    evalSettlementBasis: v.optional(
+      v.union(v.literal("observed"), v.literal("conservative_ceiling")),
+    ),
     createdAt: v.number(),
   })
     .index("by_tenant_createdAt", ["tenantId", "createdAt"])

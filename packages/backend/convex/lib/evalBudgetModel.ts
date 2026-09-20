@@ -2,6 +2,7 @@ import { EVAL_MAX_OUTPUT_TOKENS, EVAL_MODEL_BOUNDS } from "@pikar/cost/evalBudge
 import {
   goldenChatWireOptions,
   goldenOpenRouterObservedUsage,
+  goldenProviderCeilingCents,
 } from "@pikar/cost/goldenProviderBudget";
 import { type LanguageModel, wrapLanguageModel } from "ai";
 import type { GenericActionCtx } from "convex/server";
@@ -126,9 +127,19 @@ export function evalBudgetModel(args: {
         try {
           result = await doGenerate();
         } catch (error) {
-          // Ambiguous golden requests retain their hold; neither SDK nor model fallback may
-          // silently submit the same paid operation again after an uncertain provider response.
-          if (goldenOptions) throw new Error("EVAL_MODEL_RESPONSE_UNRESOLVED");
+          // A golden provider failure is terminal and is never replayed. Charge the full reserved
+          // ceiling instead of leaving an uncloseable hold: this may overstate spend, but can never
+          // understate exposure, and the explicit basis prevents it being mistaken for observed
+          // provider usage. The original error remains content-private.
+          if (goldenOptions) {
+            await args.ctx.runMutation(internal.guardrails.settleEvalCall, {
+              tenantId: args.tenantId,
+              reservationId,
+              costUsd: goldenProviderCeilingCents(goldenCall) / 100,
+              settlementBasis: "conservative_ceiling",
+            });
+            throw new Error("EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE");
+          }
           throw error;
         }
         const usage = result.providerMetadata?.openrouter?.usage as

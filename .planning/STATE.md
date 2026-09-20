@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
 current_phase: 03.7
-current_plan: Wave 1A — 03.7-10 and 17.1-11 blocked before founder verification; 01-10 complete; 18-11 gated.
-status: blocked
-stopped_at: "The diagnostic corpus reached case 28: cases 1-23 PASS, case 24 failed semantic reply assertions, then case 28 stopped GOLDEN_PAID_CALL_UNRESOLVED. One separately authorized case-24 retry passed preflight but stopped on the same unresolved guard before verdict. Final ledgers settled at USD 0.16210262 + USD 0.00217592 without breach or unresolved calls; no further retry is authorized."
+current_plan: Wave 1A — provider-failure accounting repaired; no repeat paid run; continue repository-controlled closure while exact live/founder gates remain explicit.
+status: in_progress
+stopped_at: "The single durable run passed preflight and failed before case 1 produced a verdict. Its failed provider request is now accounted at the full USD 0.03 conservative ceiling; all six reservations are settled, the budget is closed without breach, and no paid replay occurred."
 last_updated: "2026-09-20"
 progress:
   total_phases: 76
@@ -21,13 +21,13 @@ progress:
 
 **Current Phase:** 03.7 (Wave 1A integration lead; Phase 17.1 remains a parallel gated lane)
 **Current Phase Name:** Wave 1A — Foundation truth and evidence debt
-**Current Plan:** `03.7-10` and `17.1-11` blocked before founder verification; `01-10` complete; `18-11` gated
-**Status:** blocked on case-24 semantics and recurring paid-call settlement observation
-**Progress:** `01-10` completed repository-controlled Google OAuth readiness. A later diagnostic preflight passed, then exactly one unfiltered `--no-retry` corpus command ran under the USD 2.00 cap. Cases 1–23 printed PASS; case 24 made one reply call but failed because recipient and subject evidence were absent. The command continued and stopped at case 28 with `GOLDEN_PAID_CALL_UNRESOLVED`. Final reconciliation closed its 209-call ledger at exact USD `0.16210262`, with zero unsettled/unresolved calls and no breach. The founder separately authorized exactly one isolated case-24 retry under `c10fb34` cap support and a USD 0.10 envelope; its preflight passed, but it stopped on the same unresolved guard before a verdict. Its eight calls settled at exact USD `0.00217592`, again without breach or unresolved calls. No automatic or additional retry occurred. The result remains non-certifying and `accepted:false`; both founder gates stay blocked and `18-11` remains gated.
+**Current Plan:** no repeat paid corpus; finish repository-controlled Wave 1 closure and keep exact live/founder gates explicit
+**Status:** in progress after permanent failed-provider accounting repair
+**Progress:** `01-10` completed repository-controlled Google OAuth readiness. Case-24 selection and durable paid-attempt handling are repaired offline. The latest single authorized run passed preflight but its first cockpit provider request failed before a case verdict. The failed request was not replayed: it is now booked at the full USD `0.03` conservative ceiling, separate from USD `0.00000392` observed usage; all six reservations are settled and the budget is closed without breach. Focused tests, backend/contracts typechecks and the 57-fixture self-check are green. The run remains non-certifying and `accepted:false`, but no unresolved hold or settlement-observation defect remains.
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
 - **Execution order:** Phase 37.1 closed Wave 0 planning truth; Waves 1–8 now execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
-- **Immediate handoff:** `01-10` is complete without closing SC-5 or any deployed/live/owner/external layer. `03.7-10` and `17.1-11` remain open after the diagnostic run and one explicit isolated retry. Current briefing cases 16–18 did pass, but case-24 semantic evidence and the recurring settlement-observation guard keep the corpus non-certifying; neither final settled ledger retroactively supplies a runner verdict. No further retry/run authority exists. `18-11` cannot start before an accepted Blueprint baseline. Phase 23 remains preserved and resumes in Wave 4; its expired authorization is not reusable.
+- **Immediate handoff:** do not spend more money repeating the full corpus. The runner now closes a terminal failed-provider budget conservatively and never replays it. `03.7-10` and `17.1-11` remain open only for a certifying live verdict and founder/external acceptance; their earlier recurring settlement defect is closed. Continue repository-controlled Wave 1 work that does not require those external verdicts, while the final `18-11` acceptance seal still consumes an exact accepted Blueprint baseline. Phase 23 remains preserved for Wave 4.
 - **Founder acceptance contract:** every applicable technical plan must include a plain-language outcome, a browser path for a nontechnical founder, honest loading/empty/error/partial/refusal states, and captured browser evidence in addition to code-level tests.
 - **Routing note:** native GSD helpers currently disagree because filename counts treat partial and auxiliary summaries as completion. Phase 37.1 owns that reconciliation; automatic “next phase” suggestions remain advisory until its checker changes pass.
 
