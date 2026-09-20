@@ -14990,21 +14990,30 @@
         "D11"
       ],
       "historical_state": "semantic_open_summary",
-      "current_disposition": "open",
-      "implemented": "partial",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "current_disposition": "technically_ready_for_external_gate",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "partial",
+      "live_observed": "partial",
+      "owner_accepted": "partial",
+      "externally_enabled": "no",
       "evidence_refs": {
         "implemented": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-VERIFICATION.md",
           ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-07-SUMMARY.md"
         ],
-        "offline_tested": [],
-        "deployed": [],
-        "live_observed": [],
-        "owner_accepted": [],
+        "offline_tested": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-VERIFICATION.md"
+        ],
+        "deployed": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-07-SUMMARY.md"
+        ],
+        "live_observed": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-07-SUMMARY.md"
+        ],
+        "owner_accepted": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-07-SUMMARY.md"
+        ],
         "externally_enabled": [],
         "source": [
           ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-07-PLAN.md",
@@ -15014,11 +15023,11 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
+        "offline_tested": "None; the exact-current focused backend and web suites are recorded in 25.1-VERIFICATION.md.",
+        "deployed": "The reel path has historical production proof, but the exact current revision and four remaining browser surfaces are not deployment-certified.",
+        "live_observed": "The reel path is observed; Approve persistence, image Vault persistence, memo rendering, owner DLQ, and the armed sweep remain unobserved.",
+        "owner_accepted": "The owner accepted the reel result only; the other current browser surfaces and reliability decision remain.",
+        "externally_enabled": "RELIABILITY_SWEEP_ARMED has no current owner authorization or first-pass receipt."
       },
       "source_membership": {
         "canonical_open_plan_ids": [
@@ -15032,11 +15041,10 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "The exact current-code acceptance remainder has not been certified closed."
+        "The Phase 25.1 current browser surfaces and reliability-sweep owner-decision packet is not recorded."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "external_gate"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 25.1",
@@ -15051,7 +15059,7 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "The source plan’s still-open acceptance criteria pass against current code and exact evidence, or a named successor explicitly supersedes them.",
       "user_claims": [],
-      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "external_gate_packet": "Phase 25.1 current browser surfaces and reliability-sweep owner-decision packet: exact deployed revision; persistent Approve result and plan isolation; first and second same-plan image Vault persistence; memo markdown and Sources; owner dead-letter view; then a separate owner decision on RELIABILITY_SWEEP_ARMED using a fresh pre-arm inventory, one healthy unswept render, first bounded pass effects, notification readback, spend, and rollback/unset instruction.",
       "successor": null,
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
@@ -18532,19 +18540,29 @@
       ],
       "requirement_ids": [],
       "historical_state": "verification_semantically_open",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "current_disposition": "technically_ready_for_external_gate",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "partial",
+      "live_observed": "partial",
+      "owner_accepted": "partial",
+      "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
-        "deployed": [],
-        "live_observed": [],
-        "owner_accepted": [],
+        "implemented": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-VERIFICATION.md"
+        ],
+        "deployed": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-07-SUMMARY.md"
+        ],
+        "live_observed": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-07-SUMMARY.md"
+        ],
+        "owner_accepted": [
+          ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-07-SUMMARY.md"
+        ],
         "externally_enabled": [],
         "source": [
           ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-VERIFICATION.md"
@@ -18553,12 +18571,12 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
+        "implemented": "None; current repository implementation is certified.",
+        "offline_tested": "None; 615 backend and 61 web focused tests plus typechecks are current-revision green.",
+        "deployed": "Historical reel deployment is recorded; the exact current revision and four remaining browser surfaces are not deployment-certified.",
+        "live_observed": "Only the reel path is observed; the remaining browser surfaces and armed sweep are not.",
+        "owner_accepted": "Only the reel result has an owner verdict.",
+        "externally_enabled": "The production reliability sweep remains an explicit unmade owner decision."
       },
       "source_membership": {
         "canonical_open_plan_ids": [],
@@ -18570,11 +18588,10 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Existing verification contains explicit open/partial language."
+        "The Phase 25.1 current browser surfaces and reliability-sweep owner-decision packet is not recorded."
       ],
       "remaining_work_classes": [
-        "verification",
-        "evidence_layer_separation"
+        "external_gate"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 25.1",
@@ -18584,7 +18601,7 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "A canonical non-open verification record cites the exact revision and every evidence layer required by the phase contract.",
       "user_claims": [],
-      "external_gate_packet": "No external remainder may substitute for the missing technical verification.",
+      "external_gate_packet": "Phase 25.1 current browser surfaces and reliability-sweep owner-decision packet: exact deployed revision; persistent Approve result and plan isolation; first and second same-plan image Vault persistence; memo markdown and Sources; owner dead-letter view; then a separate owner decision on RELIABILITY_SWEEP_ARMED using a fresh pre-arm inventory, one healthy unswept render, first bounded pass effects, notification readback, spend, and rollback/unset instruction.",
       "successor": null,
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."
