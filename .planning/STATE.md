@@ -5,7 +5,7 @@ milestone_name: - Platform -> Private Beta
 current_phase: 03.7
 current_plan: Wave 1 — resume bounded live qualification under standing execution authorization; repository-controlled work is complete.
 status: in_progress
-stopped_at: "Resumed under 2026-09-20 standing authorization. Prepare one capped current live corpus attempt and browser acceptance evidence; retain honest evidence layers."
+stopped_at: "Current corpus 72a43b32 failed at first chat; budget reconciled closed. Diagnose provider failure before retry; deterministic browser evidence continues."
 last_updated: "2026-09-20"
 progress:
   total_phases: 76
@@ -27,7 +27,8 @@ progress:
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
 - **Execution order:** Phase 37.1 closed Wave 0 planning truth; Waves 1–8 now execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
-- **Immediate handoff:** the user's standing authorization supersedes prior permission stops. Run one bounded current corpus attempt after successful free preflight, capture browser evidence, and diagnose failures before any further paid attempt. Repository-controlled work for `03.7-10`, `17.1-11`, and `18-11` Tasks 1-2 is complete. Live/owner evidence remains open until observed; Phase 18 live acceptance still depends on the exact accepted Blueprint baseline. Phase 23 remains preserved for Wave 4.
+- **Immediate handoff:** the user's standing authorization supersedes prior permission stops. Current corpus `72a43b32` on evaluator `6d27a820…` passed preflight but failed at its first chat before a case verdict. Budget `ps7d509t3e281pb14ry373r7s18er6cr` is closed: six calls settled, zero unresolved, USD `0.00000392` observed plus `0.03` conservative, no breach. Diagnose before any paid retry; deterministic browser evidence continues separately. Blueprint remains `accepted:false`; Phase 18 live acceptance remains gated. Phase 23 stays in Wave 4.
+- **External facts (2026-09-20):** owner confirmed provisional name `pikar-ai`; registered legal information remains pending. Phase 32's entity/provider gate is not cleared by that provisional name.
 - **Founder acceptance contract:** every applicable technical plan must include a plain-language outcome, a browser path for a nontechnical founder, honest loading/empty/error/partial/refusal states, and captured browser evidence in addition to code-level tests.
 - **Routing note:** native GSD helpers currently disagree because filename counts treat partial and auxiliary summaries as completion. Phase 37.1 owns that reconciliation; automatic “next phase” suggestions remain advisory until its checker changes pass.
 
