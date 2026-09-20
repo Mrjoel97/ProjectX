@@ -17632,21 +17632,34 @@
         ".planning/phases/05-knowledge-vault-graphrag/05-07-PLAN.md"
       ],
       "requirement_ids": [],
-      "historical_state": "verification_semantically_open",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "historical_state": "verification_reconciled_with_later_evidence",
+      "current_disposition": "technically_ready_for_external_gate",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "partial",
+      "live_observed": "partial",
+      "owner_accepted": "yes",
+      "externally_enabled": "partial",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
-        "deployed": [],
-        "live_observed": [],
-        "owner_accepted": [],
-        "externally_enabled": [],
+        "implemented": [
+          ".planning/phases/05-knowledge-vault-graphrag/05-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/05-knowledge-vault-graphrag/05-VERIFICATION.md"
+        ],
+        "deployed": [
+          "docs/playbooks/vault.md#live-verified-not-just-unit-green"
+        ],
+        "live_observed": [
+          "docs/playbooks/vault.md#live-verified-not-just-unit-green",
+          ".planning/phases/15.4-vault-redesign-and-scoped-browse-correctness/15.4-VERIFICATION.md"
+        ],
+        "owner_accepted": [
+          ".planning/phases/15.4-vault-redesign-and-scoped-browse-correctness/15.4-VERIFICATION.md"
+        ],
+        "externally_enabled": [
+          "docs/playbooks/vault.md#live-verified-not-just-unit-green"
+        ],
         "source": [
           ".planning/phases/05-knowledge-vault-graphrag/05-VERIFICATION.md"
         ],
@@ -17671,11 +17684,10 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Existing verification contains explicit open/partial language."
+        "Run one exact current-release smoke:vault provider gate in Wave 7; the 2026-08-27 pass predates later Vault changes."
       ],
       "remaining_work_classes": [
-        "verification",
-        "evidence_layer_separation"
+        "external_provider_reentry"
       ],
       "closure_wave": 1,
       "owner_phase": "Phase 05",
@@ -17685,7 +17697,7 @@
       "entry_gate": "Wave 0 ledger, authority, checker and handoff are reconciled.",
       "objective_exit_test": "A canonical non-open verification record cites the exact revision and every evidence layer required by the phase contract.",
       "user_claims": [],
-      "external_gate_packet": "No external remainder may substitute for the missing technical verification.",
+      "external_gate_packet": "Wave 7: after fresh explicit bounded authorization, run pnpm --filter @pikar/backend smoke:vault exactly once, with no automatic retry, against the named non-production deployment and exact candidate revision; record provider identity, result, cost if any, and cleanup. Stop on the first non-pass.",
       "successor": null,
       "stop_conditions": [
         "Stop on ambiguous historical evidence, changed intent, or a required live action without authorization."

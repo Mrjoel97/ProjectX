@@ -1751,7 +1751,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 3.10. Cockpit Conversation Repair (INSERTED) | 7/7 | Complete (VERIFICATION present) | 2026-07-19 |
 | 3.11. Inbox Reply (INSERTED) | 6/6 | Complete (VERIFICATION present) | 2026-07-19 |
 | 4. Attachment & Voice-Dictation Intake | 6/6 | Complete (SC3 live human-verify APPROVED) | 2026-07-15 |
-| 5. Knowledge Vault & GraphRAG | 7/7 | Partial — all plan summaries are complete, but 05-VERIFICATION remains `human_needed`; historical browser/P0 evidence does not close that veto | - |
+| 5. Knowledge Vault & GraphRAG | 7/7 | Complete (repository-controlled) — current offline Vault suites pass; the superseding Phase 15.4 UI is owner/browser-approved; one exact current-release `smoke:vault` provider re-entry is packeted for Wave 7 | - |
 | 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
 | 7. Resilience & Operations Hardening | 6/6 | Complete (owner-approved; email + in-app matrix live-verified; real-S3 durability owner-deferred) | 2026-07-21 |
 | 8. Self-Improvement | 8/8 | Complete    | 2026-07-23 |
