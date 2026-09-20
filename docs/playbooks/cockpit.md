@@ -17,6 +17,15 @@
 > setup failure is not evidence that an invite mutation did or did not land; reconcile state
 > read-only before retrying.
 >
+> Playwright discovery safety (prepared 2026-09-20) — `playwright.config.ts` excludes
+> `**/.auth/**`: storage state and Chrome profiles are runtime artifacts, never source tests. The
+> focused offline discovery regression creates a temporary failing `.auth` spec and proves the
+> direct Node `--list` command ignores it, then removes it. Use direct Node for detached Windows
+> control (`node node_modules/@playwright/test/cli.js test …` from `apps/web`); do not pass a
+> literal `--` through a detached pnpm wrapper, which can turn a narrow spec run into profile
+> discovery. This guard contains malformed invocation discovery only; it does not certify signup
+> preflight, authentication, provider access, or browser acceptance.
+>
 > Last verified: 2026-09-20 — Phase 18's offline document lifecycle now preflights a replacement's
 > server-owned index, tenant ownership, and agent-authored origin before scan, drafting, rendering,
 > or storage. The final mutation repeats those checks for race safety and deletes newly rendered

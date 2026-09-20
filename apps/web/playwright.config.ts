@@ -22,6 +22,9 @@ if (
  */
 export default defineConfig({
   testDir: "./e2e",
+  // Auth storage/profile files are runtime artifacts, never test modules. Without this exclusion a
+  // malformed invocation can recursively import Chrome extension JavaScript from `.auth`.
+  testIgnore: ["**/.auth/**"],
   fullyParallel: !phase23Identities,
   ...(phase23Identities ? { workers: 1, retries: 0 } : {}),
   forbidOnly: !!process.env.CI,
