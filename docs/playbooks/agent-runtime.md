@@ -2289,3 +2289,15 @@ revenue-candidate fixtures and announced 46 executable cases. Seven passed; case
 settled and the budget closed at USD `0.06745454`, without breach. This does not turn the interrupted
 runner into a completed corpus: no retry, no registry evidence, no cleanup, and no founder
 checkpoint. Always record manifest size and executable scope separately.
+
+## Wave 1A final preflight refusal (2026-09-20)
+
+> Last verified: 2026-09-20 — exact local target identity and offline runner self-check passed;
+> standalone provider-readiness did not.
+
+An already-functions-ready local target may still refuse `eval:golden -- --preflight`. Treat its
+canonical secret-safe `REFUSED`/exit-2 result as terminal for that authorization: it has opened no
+budget, loaded no corpus, called no provider, or created cleanup work. A conditional `--no-retry`
+corpus authority does not become eligible until the same preflight emits `PASSED`; do not diagnose by
+printing deployed configuration, and do not run a second preflight or corpus command under the
+consumed authorization.
