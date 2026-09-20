@@ -194,6 +194,38 @@
     "run_log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DURABLE.log",
     "reconciliation": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RECONCILIATION-2026-09-20-DURABLE.json"
   },
+  "offline_reproof": {
+    "observed_at": "2026-09-20T10:04:15Z",
+    "revision": "f6c711e1481c09098877414e4bcad46b62ffb49c",
+    "scope": "repository-only; no backend start, deployment, provider call, external mutation, or paid action",
+    "task_owned_paths_clean_before_evidence_update": true,
+    "product_bytes_changed": false,
+    "core": {
+      "command": "pnpm --filter @pikar/core test -- blueprint",
+      "test_files_passed": 3,
+      "tests_passed": 77,
+      "tests_failed": 0,
+      "worst_case_spine_chars": 2495,
+      "spine_char_cap": 2500
+    },
+    "backend": {
+      "command": "pnpm --filter @pikar/backend exec vitest run convex/blueprint.test.ts convex/vaultGround.test.ts convex/cockpitBlueprint.test.ts convex/searchVaultSpine.test.ts convex/voiceDoc.test.ts",
+      "test_files_passed": 5,
+      "tests_passed": 100,
+      "tests_failed": 0
+    },
+    "non_vacuity": {
+      "source_doc_count_positive_control": 1,
+      "rendered_spine_needle": "evalblpr",
+      "separate_spine_preserved": true,
+      "retrieval_arrays_unchanged": true,
+      "no_tool_cockpit_prompt_proven": true,
+      "no_match_and_retrieval_count_proven": true,
+      "tenant_isolation_proven": true,
+      "voice_propagation_outside_retrieval_budget_proven": true
+    },
+    "status": "green"
+  },
   "cockpit": {
     "status": "not_owner_verified"
   },
