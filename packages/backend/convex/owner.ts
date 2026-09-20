@@ -7,8 +7,25 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, internalQuery } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
+
+type OwnerLookup = { userId: Id<"users">; owner: boolean } | null;
+
+/** One exact-match resolver shared by the nullable operator query and its non-null E2E envelope. */
+async function resolveUserIdByEmail(ctx: QueryCtx, email: string): Promise<OwnerLookup> {
+  const rows = await ctx.db
+    .query("users")
+    .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
+    .collect();
+  if (rows.length > 1) {
+    // Count only, never the addresses or ids of the other rows (CLAUDE.md §4).
+    throw new Error(`AMBIGUOUS_EMAIL: ${rows.length} user rows share this address`);
+  }
+  const user = rows[0];
+  return user === undefined ? null : { userId: user._id, owner: user.owner === true };
+}
 
 /**
  * Does the CALLER own this deployment? Returns one boolean and nothing else.
@@ -88,17 +105,17 @@ export const findUserIdByEmail = internalQuery({
     // matches it names the count and stops, rather than handing back "the newest" or "the first".
     // Picking one here would put the choice of who becomes owner back into data the owner does not
     // control — exactly what `bootstrapOwner` exists to prevent. The operator disambiguates by id.
-    const rows = await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", email.trim().toLowerCase()))
-      .collect();
-    if (rows.length > 1) {
-      // Count only, never the addresses or ids of the other rows (CLAUDE.md §4).
-      throw new Error(`AMBIGUOUS_EMAIL: ${rows.length} user rows share this address`);
-    }
-    const user = rows[0];
-    return user === undefined ? null : { userId: user._id, owner: user.owner === true };
+    return await resolveUserIdByEmail(ctx, email);
   },
+});
+
+/**
+ * Same read and duplicate refusal as `findUserIdByEmail`, but an envelope prevents the local
+ * Convex CLI from suppressing an absent `null` result. Provisioning is its sole caller.
+ */
+export const findUserIdByEmailForProvisioning = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => ({ result: await resolveUserIdByEmail(ctx, email) }),
 });
 
 /**

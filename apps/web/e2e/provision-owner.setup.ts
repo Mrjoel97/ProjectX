@@ -3,12 +3,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import {
-  durableUserId,
   inviteCode,
   jsonValue,
   noOutputReason,
   onboardedTenant,
   ownerGrant,
+  provisioningOwnerLookup,
 } from "./provision-owner.diagnostics";
 
 // 27-11: PROVISION THE OWNER THE BROWSER EVIDENCE PLANE NEEDS. Local dev only, and it is a SETUP
@@ -84,10 +84,12 @@ test("provision an owner account for the candidate preview", async ({ page }) =>
   //    failure is confusing: the invite is REDEEMED by the first successful signup, so the second
   //    run's preflight rejects the code and leaves Create Account disabled forever. Measured — this
   //    step exists because the second run failed exactly that way.
-  const existing = convexJson("owner:findUserIdByEmail", { email });
-  const already = durableUserId(existing) ?? undefined;
+  const existing = provisioningOwnerLookup(
+    convexJson("owner:findUserIdByEmailForProvisioning", { email }),
+  );
+  if (!existing) throw new Error("owner lookup returned an invalid provisioning envelope");
 
-  if (already === undefined) {
+  if (existing.kind === "absent") {
     // 2. The invite, then sign up through the REAL form, so the account is created by the
     //    product's own auth transaction rather than by a fixture that could diverge from it.
     const seeded = convexJson("invites:__seedInvite", { email });
@@ -115,11 +117,13 @@ test("provision an owner account for the candidate preview", async ({ page }) =>
 
   // 3. The owner grant, by id, from the CLI. `bootstrapOwner` is `internalMutation`; nothing the
   //    browser can reach grants authority.
-  const found = convexJson("owner:findUserIdByEmail", { email });
-  const userId = durableUserId(found);
-  if (!userId) {
-    throw new Error("owner lookup did not return a durable user-id shape after signup");
+  const found = provisioningOwnerLookup(
+    convexJson("owner:findUserIdByEmailForProvisioning", { email }),
+  );
+  if (found?.kind !== "found") {
+    throw new Error("owner lookup did not return a durable user-id envelope after signup");
   }
+  const userId = found.userId;
   if (!ownerGrant(convexJson("owner:bootstrapOwner", { userId }), userId)) {
     throw new Error("owner:bootstrapOwner returned an invalid grant result");
   }

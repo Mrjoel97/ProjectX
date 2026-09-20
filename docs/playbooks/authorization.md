@@ -1,5 +1,15 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-09-20 — the local browser provisioner now calls
+> `owner.findUserIdByEmailForProvisioning`, a private read-only envelope around the same exact
+> resolver as nullable `findUserIdByEmail`. This preserves the established operator contract
+> (`{ userId, owner } | null`) and its duplicate refusal, while ensuring a missing user is emitted
+> as `{ result: null }`: the installed Convex CLI intentionally suppresses a bare `null` return.
+> Neither query selects a duplicate row, grants owner, or exposes an address; `bootstrapOwner`
+> remains a separate exact-id internal mutation. Do not make a CLI client interpret arbitrary empty
+> stdout as absence—use this structured envelope only where an observable provisioning absence is
+> required.
+
 > Last verified: 2026-09-10 — `isolation.test.ts` now discovers `ownerAction` exports alongside
 > owner queries/mutations and invokes the action lane with a real typed Vault-id fixture.
 > The Data operator preview is covered by the derived non-owner rejection test; its own tests

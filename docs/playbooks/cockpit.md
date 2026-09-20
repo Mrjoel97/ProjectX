@@ -9,8 +9,10 @@
 > Provisioning diagnostic policy (prepared 2026-09-20) — the local-only E2E owner provisioner
 > bounds each CLI child at 60 seconds and accepts a Windows teardown non-zero exit only after a
 > structured response and the expected durable-id, invite-code, owner-grant, and onboarding-result
-> shapes are verified. Empty output is reduced to a closed transport reason; malformed JSON or
-> shapes refuse. It never prints child
+> shapes are verified. Its first and post-signup owner reads use the backend's non-null
+> `findUserIdByEmailForProvisioning` envelope, because the local Convex CLI deliberately suppresses
+> a bare null result; arbitrary empty output is still reduced to a closed transport reason, and
+> malformed JSON or shapes refuse. It never prints child
 > stderr, addresses, passwords, or invite codes into Playwright artifacts. A terminal browser
 > setup failure is not evidence that an invite mutation did or did not land; reconcile state
 > read-only before retrying.

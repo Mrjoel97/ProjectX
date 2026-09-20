@@ -1,5 +1,5 @@
 type SpawnResult = {
-  error?: { code?: string };
+  error?: Error | { code?: string };
   signal?: string | null;
   status?: number | null;
 };
@@ -7,8 +7,9 @@ type SpawnResult = {
 /** Closed diagnostics only: never include raw CLI stderr or payloads in test artifacts. */
 export function noOutputReason(result: SpawnResult): string {
   if (result.error) {
-    return ["ETIMEDOUT", "ENOENT", "EACCES", "EPERM"].includes(result.error.code ?? "")
-      ? `spawn_${result.error.code}`
+    const code = "code" in result.error ? result.error.code : undefined;
+    return ["ETIMEDOUT", "ENOENT", "EACCES", "EPERM"].includes(code ?? "")
+      ? `spawn_${code}`
       : "spawn_unknown";
   }
   if (result.signal) {
@@ -37,6 +38,19 @@ export function durableUserId(value: unknown): string | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const userId = (value as Record<string, unknown>).userId;
   return typeof userId === "string" && /^[a-z0-9]+$/.test(userId) ? userId : null;
+}
+
+export type ProvisioningOwnerLookup = { kind: "absent" } | { kind: "found"; userId: string };
+
+/** The E2E-only envelope keeps a real null absence observable through the Convex CLI. */
+export function provisioningOwnerLookup(value: unknown): ProvisioningOwnerLookup | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const result = (value as Record<string, unknown>).result;
+  if (result === null) return { kind: "absent" };
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  const row = result as Record<string, unknown>;
+  const userId = durableUserId(row);
+  return userId && typeof row.owner === "boolean" ? { kind: "found", userId } : null;
 }
 
 export function ownerGrant(value: unknown, userId: string): boolean {
