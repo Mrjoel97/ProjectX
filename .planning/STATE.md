@@ -2,37 +2,41 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: - Platform -> Private Beta
-current_phase: 03.7
-current_plan: Wave 1 — diagnose invite preflight and provider HTTP 400; preserve all acceptance gates.
-status: in_progress
-stopped_at: "Direct OAuth run reached signup but invite preflight did not enable submission; five checks did not run. Reconcile exact invite read-only. HTTP_400 remains unresolved; no further paid work."
-last_updated: "2026-09-20"
+current_phase: 17.1
+current_phase_name: Business Blueprint - Corpus Synthesis and Agent Spine
+current_plan: continue 17.1-11 shared golden gate with 03.7-10
+status: executing
+last_updated: "2026-09-24"
 progress:
-  total_phases: 76
-  completed_phases: 56
-  total_plans: 457
-  completed_plans: 422
-  percent: 92
+  total_phases: 79
+  completed_phases: 53
+  total_plans: 485
+  completed_plans: 443
+  percent: 91
 ---
 
 # Project State
 
 ## Audit-governed GSD routing (2026-09-20)
 
-**Current Phase:** 03.7 (Wave 1A integration lead; Phase 17.1 remains a parallel gated lane)
-**Current Phase Name:** Wave 1A — Foundation truth and evidence debt
-**Current Plan:** preserve completed repository work and execute bounded live qualification under the [standing authorization](audits/2026-09-20-standing-execution-authorization.md)
-**Status:** Wave 1 acceptance in progress; provisioning repair verified, signup preflight diagnosis open, exact live/provider/founder acceptance unproven
-**Progress:** `01-10` is technically ready for its later external gate. `03.7-10` current offline gates are green (46 core, 9 backend, evaluator self-check and Playwright discovery). `17.1-11` current offline gates are green (77 core and 100 backend tests, including non-empty source and standing-spine controls). `18-11` Tasks 1-2 are complete: 27 core, 230 backend and 13 web tests pass; invalid replacements now refuse before scan/draft/render/storage or spend, the late refusal remains cleanup-safe for races, and the Output card exposes honest loading/missing/partial/empty and saved-not-sent states. Latest corpus `72a43b32` is non-certifying; all six calls are settled and its closed budget accounts USD `0.03000392`, including `0.03` conservative exposure. The Blueprint baseline remains `accepted:false`, so live and founder layers are not claimed.
+**Current Phase:** 17.1 (Wave 1 Blueprint/inbox live and founder acceptance; Waves 7/8 remain open)
+**Current Phase Name:** Business Blueprint - Corpus Synthesis and Agent Spine
+**Current Plan:** continue 17.1-11 shared golden gate with 03.7-10
+**Status:** Phase 49 repository/local layer is qualified on its current digest; overall closure remains in progress and no external/provider/founder layer is inferred
+**Progress:** 443/485 canonical plans recorded complete; 35 open and 7 superseded. This is a plan-disposition count, not proof of wave or release closure.
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
 - **Execution order:** Phase 37.1 closed Wave 0 planning truth; Waves 1–8 now execute through ordinary GSD phases and plans with the dependencies and exit gates in the merged audit.
-- **Immediate handoff:** the user's standing authorization supersedes prior permission stops. Current corpus `72a43b32` on evaluator `6d27a820…` passed preflight but failed at its first chat before a case verdict. Budget `ps7d509t3e281pb14ry373r7s18er6cr` is closed: six calls settled, zero unresolved, USD `0.00000392` observed plus `0.03` conservative, no breach. Diagnose before any paid retry; deterministic browser evidence continues separately. Blueprint remains `accepted:false`; Phase 18 live acceptance remains gated. Phase 23 stays in Wave 4.
-- **Current repairs:** `20dbfe7` adds closed provider-failure tokens while preserving conservative accounting: 22 focused tests, backend typecheck, three identity tests and runner self-check pass. Evaluator is `764154e2…`. `afecf0a` adds desktop/mobile capture and secret-safe browser provisioning diagnostics; its earlier claimed web typecheck pass was contradicted by a verified exit 2 for Node's `Error` type. Commit `1b06fb3` repairs that helper and the CLI's suppressed-null lookup using a shared resolver and non-null internal provisioning envelope. Verified: 19 owner tests, two web diagnostic tests, backend/web typechecks exit 0, formatting and playbook checks. Runtime read/browser verification remains pending; no passing registry evidence is claimed.
-- **Wave 2 tracking:** plans `25-14`–`25-17` are prepared and unexecuted. Ledger reconciliation has 478 rows, including 28 in Wave 2; its exhaustive verifier passes and historical rows remain unchanged.
-- **Browser attempts (2026-09-20):** PID 20452 failed at the old nullable lookup. After `1b06fb3`, a read-only call returned exact `{result:null}`, exit 0. PID 2444 failed in discovery because the package script forwarded a literal `--`; earlier controller validation was insufficient. Root's direct Node `--list` from `apps/web` selected exactly six tests, exit 0. Web recovery used direct Next PID 12708. Corrected OAuth PID 18448 (`oauth-readiness-direct-20260920-170704`) reached signup but Create Account stayed disabled: invite preflight did not confirm validity. One setup failed, five checks did not run. No retry or acceptance; reconcile that exact invite/user and backend targeting read-only. Historical failed identities remain unreconciled.
-- **Single diagnostic after explicit approval:** `294a80bc` terminated exit 2; budget `ps76pamnqe9fjayrf955ty18kh8er47j` is closed with six settled calls, zero unresolved and no breach: USD 0.00000392 observed plus USD 0.03 conservative. Approval disclosure omitted the runner's five synthetic embedding setup calls; the owner was informed and further paid work stopped. Existing CLI inline-query/component reads recovered only `EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400`, with no raw workflow persistence or source/schema change. HTTP 400 does not identify the rejected field; offline request-shape diagnosis is next. No registry evidence, replay or acceptance is claimed.
+- **Wave 1 offline checkpoint (2026-09-24):** `17.1-11` Task 1 was reproved on current code with 77/77 core and 100/100 exact-five-file backend tests, including non-empty cited Blueprint and rendered `evalblpr` standing-spine controls. No product file changed. The plan's backend verifier was corrected from a Windows-unresolved `pnpm exec vitest` invocation to the package `test` script, then rerun independently at 100/100. Task 2's fresh bounded paid-run decision remains open; this proof does not certify L6 or owner acceptance. See `17.1-11-TASK1-OFFLINE-2026-09-24.md`.
+- **Closure Wave 5 planning (2026-09-24):** Phase 50 has research, a draft validation strategy and 15 independently checked serial plans for SHOP-02..05. No commerce code is implemented. Plans 01–05 are provider-independent; Plan 06 requires the owner's merchant provider, account topology and policy decisions before any selected test-mode adapter; Plans 07–15 remain unstarted. Public selling, live merchant enablement and Waves 7–8 remain closed.
+- **Immediate handoff:** Phase 49 Plans 01–07 are repository/local qualified on the current 61-file artifact-set SHA-256 `0f4f424dcd67f41bcfbca620f88e44af369e1eaaa74377804556e68fffb04420`. The 2026-09-24 serialized aggregate exited 0 after a safe golden HTTP 400 category diagnostic, closed-allowlist hardening and dependent source-pin refresh: both fresh browser stacks, two in-stack audits, three typechecks, production build, strict playbook/planning/claim checks and all 28 registered free gates passed; no owned temporary roots or 3409/3410/3411 listeners remained. Earlier failed and superseded aggregates are separately recorded in `49-VERIFICATION.md`. The governing next step remains Wave 1: `17.1-11`/`03.7-10` golden live evidence and founder acceptance. The local backend at `127.0.0.1:3210` responded during the 2026-09-24 diagnostic. One bounded unfiltered synthetic run then failed at its first cockpit case with a retained HTTP 400 code, zero verdicts, no replay, and a settled/closed budget; the precise upstream rejection is unproven (see `17.1-11-GOLDEN-RECONCILIATION-2026-09-24.json` and `.planning/debug/wave1-golden-http400-current.md`). The new classifier can report only closed categories on a future run; it does not retroactively reveal this error or authorize a replay. The Blueprint baseline remains `accepted:false`. No certification, founder verdict, or production claim is inferred. Wave 7 and Wave 8 remain open; Graphify refresh remains unverified.
+- **Current repairs:** `20dbfe7` adds closed provider-failure tokens while preserving conservative accounting: 22 focused tests, backend typecheck, three identity tests and runner self-check pass. Evaluator is `764154e2…`. `afecf0a` adds desktop/mobile capture and secret-safe browser provisioning diagnostics; its earlier claimed web typecheck pass was contradicted by a verified exit 2 for Node's `Error` type. Commit `1b06fb3` repairs that helper and the CLI's suppressed-null lookup using a shared resolver and non-null internal provisioning envelope. Verified: 19 owner tests, two web diagnostic tests, backend/web typechecks exit 0, formatting and playbook checks. Current browser comparison is now recorded: production hydration passes while next-dev hydration fails; no passing registry evidence is claimed.
+- **Wave 2 tracking:** plans `25-14` through `25-17` are repository-complete. Controlled local acceptance passed for the two-identity Admin boundary (2/2) and first-send journey (2/2), alongside 132 admission/isolation/HTTP/export/erasure tests, 89 journey/cockpit tests, 45 core tests, 15 focused web regressions, the production web build, and all 23 free gates. The browser run found and repaired one real issued-invite retention defect plus two test-harness lifecycle issues. No hosted provider, paid, legal, founder, or Wave 8 layer is inferred from this local proof.
+- **Browser attempts (2026-09-20):** PID 20452 failed at the old nullable lookup. After `1b06fb3`, a read-only call returned exact `{result:null}`, exit 0. PID 2444 failed in discovery because the package script forwarded a literal `--`; direct Node discovery selected exactly six tests, exit 0. Corrected synthetic comparison proves the running `next dev` :3111 server's missing React hydration; a rebuilt production build on :3112 hydrated and reached invalid-invite. The CLI still selected the remote control plane, so the disposable local fixture used the direct local Convex HTTP seam only. Fresh local signup/auth then passed, and direct production `google-oauth-readiness.spec.ts` passed 4/4 while stopping before Google. No provider navigation, token exchange, outbound message, or paid retry occurred; provider/founder/external gates remain open.
+- **Single diagnostic after explicit approval:** `294a80bc` terminated exit 2; budget `ps76pamnqe9fjayrf955ty18kh8er47j` is closed with six settled calls, zero unresolved and no breach: USD 0.00000392 observed plus USD 0.03 conservative. Approval disclosure omitted the runner's five synthetic embedding setup calls; the owner was informed and further paid work stopped. Existing CLI inline-query/component reads recovered only `EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400`, with no raw workflow persistence or source/schema change. HTTP 400 does not identify the rejected field. The offline request-shape diagnosis and exact-endpoint repair are now complete; no registry evidence, replay or acceptance is claimed.
+- **Zero-cost provider stabilization (2026-09-21):** current OpenRouter metadata shows the moving GPT-4o Mini alias spans two providers but tools on only one, while `openai/gpt-4o-mini-2024-07-18` is OpenAI-only and explicitly tool-capable at the same price. The shared resolver now preserves `or/openai/gpt-4o-mini` as the pricing/audit key while using that dated wire id. The redacted HTTP 400 body prevents claiming a verbatim provider cause; this is a narrowed readiness repair, not live proof. 131 focused backend assertions, backend TypeScript, the golden self-check, and all 23 free gates pass at evaluator `5b92b4a9…`. No provider call, paid retry, or acceptance claim occurred.
 - **External facts (2026-09-20):** owner confirmed provisional name `pikar-ai`; registered legal information remains pending. Phase 32's entity/provider gate is not cleared by that provisional name.
+- **Closure Wave 3 (2026-09-21):** Phase 48 is repository/local qualified across six plans. The isolated browser matrix passed both site and landing lifecycles, exact bytes, refusal/recovery, anonymous forms, metrics, retention cleanup and rollback; 34 targeted tests, all three typechecks, the production build and all 24 free gates are green. Artifact-set SHA-256 is `b8b99b398038b0d8c1b21a481e09a6dbf24e46430d2176d67f34d9af8289bc11`. Wave 7 custom-domain/provider/legal facts and Wave 8 exact-production founder acceptance remain explicitly open.
 - **Founder acceptance contract:** every applicable technical plan must include a plain-language outcome, a browser path for a nontechnical founder, honest loading/empty/error/partial/refusal states, and captured browser evidence in addition to code-level tests.
 - **Routing note:** native GSD helpers currently disagree because filename counts treat partial and auxiliary summaries as completion. Phase 37.1 owns that reconciliation; automatic “next phase” suggestions remain advisory until its checker changes pass.
 
@@ -49,6 +53,14 @@ progress:
 - **History:** everything this file used to carry (36 stacked snapshots, lane tables from August, the Phase 14 historical position, the accumulated-context log) is in `.planning/archive/STATE-history-2026-09-06.md`, unchanged.
 
 ## Current Position
+
+Phase 49 continuation (2026-09-24): Plans 01–07 are repository/local qualified on
+artifact-set SHA-256 `0f4f424dcd67f41bcfbca620f88e44af369e1eaaa74377804556e68fffb04420`.
+The one-tree aggregate exited 0 after exact regressions, both fresh browser/audit stacks,
+three typechecks, production build, strict playbook/planning/claim checks and all 28 free
+gates; no owned temporary roots or guarded-port listeners remained. See `49-VERIFICATION.md`
+for current and superseded digests. Graphify refresh remains unverified. This local result
+does not replace Wave 1 live/owner acceptance or Wave 7/8 external/production evidence.
 
 Last three closes, newest first:
 
@@ -73,7 +85,9 @@ Current owner priority: the Phase 23 native sign-out/sign-in race is repaired in
 
 ## Session Continuity
 
-Progress totals were regenerated from current roadmap dispositions and matching completed plan summaries; they replace stale counters rather than reopening completed work. Pending/in-progress summaries do not count as completed plans.
+2026-09-20 continuation: discovery safeguard committed `10123eb`; isolated probe and six-test discovery remained green. Corrected synthetic probe proves :3111 `next dev` serves a non-hydrated static shell (20/20 scripts 200+finished, two controls, click completed, React state poll timeout, HMR only with `NET::ERR_INVALID_HTTP_RESPONSE`) while a rebuilt production build on :3112 hydrates and resolves the invalid invite. The direct local Convex HTTP seam prepared a disposable owner/onboarding fixture; fresh production auth passed and OAuth readiness passed 4/4 without provider navigation. No paid retry, token exchange, outbound message, or founder acceptance occurred. Graph refresh session `16097` exhausted Windows process resources; only that task was interrupted and the existing-graph edge fixup passed, but full refresh remains incomplete.
+
+Progress totals were reconciled on 2026-09-23 against canonical PLAN/SUMMARY pairs using the semantic checker's disposition rules. Pending/in-progress and superseded summaries do not count as completed plans. Phase counts reflect scoped roadmap dispositions; they do not imply external or exact-production acceptance.
 
 2026-09-12 continuation: implementation shipped in `1127573`, `000bbace` and `0c258885`, with successful exact CI/production probes. Historical media navigation/caption copy passed authenticated desktop/mobile checks. Forty dormant vertical preflights passed; one capped live run stopped at the third corpus pin after two Data observations, with its budget closed at $0.00406801. A shared-cell mutation was reproduced and repaired without changing source bytes; a new vertical evaluator revision requires fresh evidence. Owner confirmed ordinary OpenRouter access and Tavily Free, and supplied two unused controlled addresses for Phase 23 setup. See the dated acceptance report for source, semantic and lifecycle gaps. No phase was marked complete from code or preflight alone.
 

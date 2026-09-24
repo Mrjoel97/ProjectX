@@ -13,7 +13,12 @@ granted [standing execution authorization](audits/2026-09-20-standing-execution-
 It supersedes the consumed-permission stops in the historical attempt notes below. Existing cost,
 identity, dependency, and evidence requirements still apply; permission does not certify a result.
 
-**Current execution pointer:** Phase 03.7 — Wave 1A integration lead. `01-10` is complete at the
+**Current execution pointer:** Phase 17.1 — Plan 11 shared Blueprint/inbox golden and founder
+acceptance gate (Closure Wave 1), with `03.7-10` as its linked briefing row. Phase 49 Plan 07's
+repository/local layer passed one serialized aggregate on the refreshed 2026-09-24 source digest;
+it does not certify the Wave 1 live/owner gates, Phase 50 commerce or Waves 7–8.
+
+**Historical Wave 1A attempts (not the current dispatch):** `01-10` is complete at the
 repository-controlled layers without closing SC-5. A free preflight passed with no budget, then one
 authorized unfiltered `--no-retry` command for `03.7-10` and `17.1-11` consumed its authority. The
 manifest has 57 fixtures and the pinned executor selected 46; seven printed PASS before case 8 ended
@@ -41,11 +46,12 @@ is authorized; the baseline remains `accepted:false` and both founder gates stay
 
 **No-go decisions:** no major architecture rewrite, no service split, no recurrence implementation yet, no broad candidate exposure yet, no billing activation, and no WORM activation. Close live evidence and exact-release qualification first. Build determinism, audit-boundary hardening, test observability, and secret hygiene are supporting release controls. These decisions do not contradict the existing phase goals; they define when each goal may be considered releasable.
 
-**GSD command contract:** continue the founder-accepted Wave 1A handoff through the existing GSD
-plan/summary/verification workflow. `01-10` is complete. The diagnostic run and its one explicit
+**GSD command contract:** continue `17.1-11` and linked `03.7-10` through their existing
+plan/summary/verification workflow; do not replay Phase 49 or infer Wave 7/8 completion.
+The historical Wave 1A handoff remains open: `01-10` is complete. The diagnostic run and its one explicit
 isolated retry are partial evidence only: settled ledgers do not replace the missing runner verdict,
 case-24 semantic assertions, registry evidence, or founder acceptance. No automatic retry occurred,
-consumed authority is not reusable, and no new run authority exists. `18-11` waits for the exact
+consumed run identities and evidence are not reusable. `18-11` waits for the exact
 accepted `17.1-11` baseline. Native filesystem-count helpers
 remain advisory to the semantic checker; no helper result may falsify an old summary or create
 placeholder evidence.
@@ -394,8 +400,8 @@ Plans:
 **Technical exit gate:** Versioned project state, creator/editor, responsive preview and the declared public runtime prove create/edit/approve/publish/update/unpublish/rollback for both website and landing-page shapes. Forms apply abuse bounds and explicit consent/privacy semantics, preserve attribution, reuse Phase 19 contacts/suppression, and expose conversion measurements without raw-content telemetry. Accessibility, SEO, analytics, hosting/source ownership, failure recovery and rollback are exact-release tested.
 **Wave 7 external remainder:** Custom-domain DNS/TLS and any host/provider approval receive an exact re-entry packet; no absent external prerequisite is presented as complete.
 **Wave 8 exact-release acceptance:** One clean production revision proves a nontechnical founder can create and maintain a responsive multi-page site and publish a measurable lead-capture landing page across authenticated desktop/mobile authoring and anonymous public use, including refusal, failure, retry, unpublish and rollback evidence.
-**Status:** Not planned — Phase 37.1 owns baseline only.
-**Plans:** 0/TBD — product plans are intentionally not created in Wave 0.
+**Status:** Repository/local technical layer complete 2026-09-21; Wave 7 external enablement and Wave 8 exact-production founder acceptance remain open and unclaimed.
+**Plans:** 6/6 complete — see `48-01-SUMMARY.md` through `48-06-SUMMARY.md` and `48-VERIFICATION.md`.
 
 ### Phase 49: Qualified Public-Web and Storefront Recipes (Closure Wave 4)
 
@@ -407,8 +413,8 @@ Plans:
 **Technical exit gate:** Each recipe family has an immutable identity, structured schema, provenance, positive/partial/refusal fixtures, adversarial and isolation coverage, passing evaluation, controlled activation, accepted founder workflow and genuine rollback to an exact baseline. Storefront recipes remain dark until Phase 50's declared commerce contract is technically available.
 **Wave 7 external remainder:** Recipe exposure remains bounded by the hosting/domain/provider and merchant prerequisites in its re-entry packet; no recipe may imply an externally enabled channel or merchant account.
 **Wave 8 exact-release acceptance:** One clean production revision proves each activated recipe can be selected, edited, published through the qualified runtime, attributed to its exact version and rolled back without changing source, domain, merchant or payment ownership claims.
-**Status:** Not planned.
-**Plans:** 0/TBD — product plans are intentionally not created in Wave 0.
+**Status:** Plans 01–07 repository/local qualified on exact 61-file artifact-set SHA-256 `0f4f424dcd67f41bcfbca620f88e44af369e1eaaa74377804556e68fffb04420` after the final serialized aggregate passed 2026-09-24. Wave 7 external enablement, Wave 8 exact-production founder acceptance and Phase 50 commerce remain open and unclaimed.
+**Plans:** 7/7 complete at repository/local layer — see `49-VERIFICATION.md`; this is not production acceptance.
 
 ### Phase 50: Tenant Merchant Commerce (Closure Wave 5)
 
@@ -420,8 +426,8 @@ Plans:
 **Technical exit gate:** A tenant-isolated catalogue/inventory source of truth has explicit availability and oversell behavior plus auditable changes. Cart and merchant checkout cross a business-owned PCI-hosted provider boundary. Order/payment state reconciles success, pending, failure, retry, cancellation, refund, notification and fulfilment hand-off idempotently, with taxes/shipping/refunds and provider refusal represented honestly. Storefront publish/update/unpublish/rollback integrates with Phase 48 without conflating Pikar billing.
 **Wave 7 external remainder:** Merchant account approval, production credentials, tax/shipping configuration, domain/DNS/TLS and provider-policy conditions receive exact re-entry packets and remain disabled until durable external evidence exists.
 **Wave 8 exact-release acceptance:** One clean production revision proves two-tenant isolation and the enabled catalogue-to-order-hand-off lifecycle, including provider refusal, duplicate callback/retry reconciliation, cancellation/refund, notification, fulfilment hand-off, responsive/accessibility/SEO/analytics behavior and public storefront rollback without a live capability being inferred from test-mode or adjacent billing evidence.
-**Status:** Not planned.
-**Plans:** 0/TBD — product plans are intentionally not created in Wave 0.
+**Status:** Planned 2026-09-24; no Phase 50 implementation or merchant/provider acceptance is claimed. Plans 01–05 are provider-independent; Plan 06 records the owner merchant/provider/policy decision; Plans 07–15 remain dependent on that accepted decision and exact test-mode evidence. Production remains gated by Waves 7–8.
+**Plans:** 0/15 implemented — research, validation draft and all 15 serial plans passed independent plan review.
 
 ### Phase 46: The autonomy / standing-approval ADR (INSERTED 2026-09-09)
 
@@ -1803,7 +1809,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 22.1. Beta Admission Readiness - legal deployment CI typechecking and identity-boundary hardening (INSERTED) | 5/5 | Complete (VERIFICATION present) | 2026-08-16 |
 | 23. Agent-Authored Skills | 5/9 | Partial — open: 23-06, 23-07, 23-08, 23-09 | - |
 | 24. ISO 9001 Conformance Map | 1/2 | Partial — open: 24-02 | - |
-| 25. Private Beta Productionization | 7/18 | Partial — open: 25-00, 25-07, 25-08, 25-09, 25-11, 25-12, 25-13, 25-14, 25-15, 25-16, 25-17 | - |
+| 25. Private Beta Productionization | 11/18 | Partial — open: 25-00, 25-07, 25-08, 25-09, 25-11, 25-12, 25-13 | - |
 | 25.1. Consistency and Reliability Hardening (INSERTED) | 6/7 | Partial — 25.1-07 carries a partial result; reel proof does not complete the five un-attested checkpoint items | - |
 | 25.2. Delete-first UX pass (INSERTED 2026-09-05) | 3/3 | Complete | 2026-09-05 |
 | 25.3. Scale constants and the armed reliability sweep (INSERTED 2026-09-05) | 1/1 | Complete | 2026-09-05 |
@@ -1835,9 +1841,9 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 41. The plan-row ADR — a root is an artifact, a child is a worker (INSERTED 2026-09-07) | 1/1 | **Complete 2026-09-07** — ADR-037 accepted: `parentPlanId` optional + `by_parent`, no parent = a ROOT (its own artifact, its own approval), a parent = a FAN-OUT CHILD (no approval of its own); `plans.byThread` becomes the NEWEST ROOT by bounded descending scan (`smoke.ts:893-898`'s shipped idiom, not a new one); A1-wide removes LIFETIME ceilings but keeps CONCURRENCY interlocks, so at most one root per thread is `collecting` — which is what makes newest-root unambiguous; children land at `approved` (invisible to every approvals query) and only the parent flips to `proposed`; envelope divided at the fan-out site with `governedDispatch` untouched; the Approvals plane moves to `planId` in the consuming phase and cannot be deferred. Supersedes ADR-033 D3 and ADR-014's one-image bullet; retires ADR-014's unfounded back-reference to ADR-012. NO CODE. | 2026-09-07 |
 | 39. Research engine — reads the pages it cites (INSERTED 2026-09-06) | 1/1 | **Complete 2026-09-06** — `readPage` (Tavily /extract, only URLs the run's own search returned, 6 reads × 6k chars), page-read/snippet-only labels, `RESEARCH_STALE_AFTER_MS` shared by reuse + card stamp, footer rewritten, skill v4 = research-specialist@10 through the gate 46/46 ($0.80) and ACTIVE on the local deployment (readPage ×20 across 7 runs); prod activation = owner G19 step | 2026-09-06 |
 
-| 48. Business Website and Landing Runtime (Closure Wave 3) | 0/TBD | Not planned — Phase 37.1 owns baseline only | - |
-| 49. Qualified Public-Web and Storefront Recipes (Closure Wave 4) | 0/TBD | Not planned | - |
-| 50. Tenant Merchant Commerce (Closure Wave 5) | 0/TBD | Not planned | - |
+| 48. Business Website and Landing Runtime (Closure Wave 3) | 6/6 | Complete (repository/local technical layer only); Wave 7/8 evidence remains open | 2026-09-21 |
+| 49. Qualified Public-Web and Storefront Recipes (Closure Wave 4) | 7/7 | Complete (repository/local technical layer only); Wave 7 external facts, Wave 8 exact-production founder acceptance, and Phase 50 storefront commerce remain open | 2026-09-23 |
+| 50. Tenant Merchant Commerce (Closure Wave 5) | 0/15 | Planned; provider-independent implementation not yet started, owner decision at Plan 06, production Wave 7/8 gates open | 2026-09-24 |
 
 ### Phase 25.1: Consistency and Reliability Hardening (INSERTED)
 
