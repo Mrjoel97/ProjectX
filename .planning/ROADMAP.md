@@ -426,8 +426,8 @@ Plans:
 **Technical exit gate:** A tenant-isolated catalogue/inventory source of truth has explicit availability and oversell behavior plus auditable changes. Cart and merchant checkout cross a business-owned PCI-hosted provider boundary. Order/payment state reconciles success, pending, failure, retry, cancellation, refund, notification and fulfilment hand-off idempotently, with taxes/shipping/refunds and provider refusal represented honestly. Storefront publish/update/unpublish/rollback integrates with Phase 48 without conflating Pikar billing.
 **Wave 7 external remainder:** Merchant account approval, production credentials, tax/shipping configuration, domain/DNS/TLS and provider-policy conditions receive exact re-entry packets and remain disabled until durable external evidence exists.
 **Wave 8 exact-release acceptance:** One clean production revision proves two-tenant isolation and the enabled catalogue-to-order-hand-off lifecycle, including provider refusal, duplicate callback/retry reconciliation, cancellation/refund, notification, fulfilment hand-off, responsive/accessibility/SEO/analytics behavior and public storefront rollback without a live capability being inferred from test-mode or adjacent billing evidence.
-**Status:** Planned 2026-09-24; no Phase 50 implementation or merchant/provider acceptance is claimed. Plans 01–05 are provider-independent; Plan 06 records the owner merchant/provider/policy decision; Plans 07–15 remain dependent on that accepted decision and exact test-mode evidence. Production remains gated by Waves 7–8.
-**Plans:** 0/15 implemented — research, validation draft and all 15 serial plans passed independent plan review.
+**Status:** Plan 01 provider-independent contract and separation guard repository/local verified 2026-09-24; no merchant/provider acceptance, public checkout or live selling is claimed. Plans 02–05 are provider-independent and unstarted; Plan 06 records the owner merchant/provider/policy decision; Plans 07–15 remain dependent on that accepted decision and exact test-mode evidence. Production remains gated by Waves 7–8.
+**Plans:** 1/15 repository/local complete — see `50-01-SUMMARY.md`; research, validation draft and all 15 serial plans passed independent plan review.
 
 ### Phase 46: The autonomy / standing-approval ADR (INSERTED 2026-09-09)
 
@@ -1843,7 +1843,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 
 | 48. Business Website and Landing Runtime (Closure Wave 3) | 6/6 | Complete (repository/local technical layer only); Wave 7/8 evidence remains open | 2026-09-21 |
 | 49. Qualified Public-Web and Storefront Recipes (Closure Wave 4) | 7/7 | Complete (repository/local technical layer only); Wave 7 external facts, Wave 8 exact-production founder acceptance, and Phase 50 storefront commerce remain open | 2026-09-23 |
-| 50. Tenant Merchant Commerce (Closure Wave 5) | 0/15 | Planned; provider-independent implementation not yet started, owner decision at Plan 06, production Wave 7/8 gates open | 2026-09-24 |
+| 50. Tenant Merchant Commerce (Closure Wave 5) | 1/15 | Plan 01 repository/local contract verified; Plans 02–15 open, owner decision at Plan 06, production Wave 7/8 gates open | 2026-09-24 |
 
 ### Phase 25.1: Consistency and Reliability Hardening (INSERTED)
 

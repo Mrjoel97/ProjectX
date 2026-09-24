@@ -37,6 +37,7 @@ export * from "./reviewThreshold";
 export * from "./specialists";
 export * from "./spend";
 export * from "./toolGrants";
+export * from "./tenantCommerce";
 export * from "./validateSubmit";
 export * from "./verticalPacks";
 export * from "./workflowCustomization";
