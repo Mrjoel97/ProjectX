@@ -3,7 +3,7 @@
 Last verified: 2026-09-28 - a zero-network golden-mode wire test exercises the installed
 `@openrouter/ai-sdk-provider` through a mocked fetch, first with a representative function
 schema and then with the actual `buildCockpitTools` record. The serialized request keeps the
-exact `openai/gpt-4o-mini` model, OpenAI-only/no-fallback route and numeric price ceiling;
+exact dated `openai/gpt-4o-mini-2024-07-18` wire model, OpenAI-only/no-fallback route and numeric price ceiling;
 every built cockpit tool appears as a function schema, while `n`, `transforms`, `plugins` and
 `require_parameters` remain absent. Seven focused middleware tests and backend TypeScript pass.
 This proves local serialization, not OpenRouter acceptance, historical HTTP-400 cause, a paid

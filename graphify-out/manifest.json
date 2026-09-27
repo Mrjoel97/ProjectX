@@ -6345,8 +6345,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/guardrails.md": {
-    "mtime": 1790544700.4842918,
-    "ast_hash": "82477f8a662ed38c71ff94e7c9b6f043",
+    "mtime": 1790545528.0571764,
+    "ast_hash": "958b634564580ca8aa5bc778632bd735",
     "semantic_hash": ""
   },
   ".planning/phases/20-media-canvas/20-18-SUMMARY.md": {
@@ -13010,8 +13010,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/evalBudgetModel.test.ts": {
-    "mtime": 1790544577.8734064,
-    "ast_hash": "64e524eeda0aa79e54f399e197970392",
+    "mtime": 1790545536.1058319,
+    "ast_hash": "9d435faa72f6c278e77e4ee9925331e2",
     "semantic_hash": ""
   },
   "packages/backend/convex/foglamp.test.ts": {
@@ -14305,8 +14305,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-HTTP400-DIAGNOSIS-2026-09-21.md": {
-    "mtime": 1790544701.6791213,
-    "ast_hash": "339cfab20b2c485b49428486af31470c",
+    "mtime": 1790545529.2673209,
+    "ast_hash": "9d4d2fb1f0a477673412024d0dca9582",
     "semantic_hash": ""
   },
   ".planning/phases/25-private-beta-productionization/25-14-SUMMARY.md": {

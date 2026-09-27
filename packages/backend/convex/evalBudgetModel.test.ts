@@ -166,7 +166,7 @@ describe("low-level model budget middleware", () => {
         return new Response(
           JSON.stringify({
             id: "golden-wire-test",
-            model: "openai/gpt-4o-mini",
+            model: "openai/gpt-4o-mini-2024-07-18",
             provider: "OpenAI",
             object: "chat.completion",
             created: 1,
@@ -190,7 +190,9 @@ describe("low-level model budget middleware", () => {
       tenantId,
       budgetId,
       modelId: "or/openai/gpt-4o-mini",
-      model: provider.chat("openai/gpt-4o-mini"),
+      // The route table pins this dated, tool-capable wire model; models.test.ts
+      // separately guards the alias -> wire-model mapping.
+      model: provider.chat("openai/gpt-4o-mini-2024-07-18"),
       mode: "golden",
       onCost: () => {},
     });
@@ -213,7 +215,7 @@ describe("low-level model budget middleware", () => {
     expect(events).toEqual(["reserve", "provider", "settle"]);
     expect(wire).toHaveLength(1);
     expect(wire[0]).toMatchObject({
-      model: "openai/gpt-4o-mini",
+      model: "openai/gpt-4o-mini-2024-07-18",
       max_tokens: 8192,
       provider: {
         only: ["openai"],
@@ -265,6 +267,7 @@ describe("low-level model budget middleware", () => {
       expect(entry.type).toBe("function");
       expect(entry.function.parameters).toMatchObject({ type: "object" });
     }
+    expect(wire[1]?.model).toBe(wire[0]?.model);
     expect(wire[1]?.provider).toEqual(wire[0]?.provider);
     expect(wire[1]).not.toHaveProperty("plugins");
     expect(wire[1]).not.toHaveProperty("n");
