@@ -1,6 +1,19 @@
 # Optional vertical packs
 
-Last verified: 2026-09-23 — the offline generator reconciled the six-lane/forty-case native
+Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
+record, NOT a verification of the sections below.** No vertical case, lane or pack content changed.
+The offline generator reconciled the generated native evaluator field to the current source-derived
+revision `0c440be9611fef8d504338297b0e379727ee89258b10a450eadd40b1b3725ddc`, moved from
+`6387a7959eb146d1ecad7e79dab1f93b27e0a40e5ee8691fbcb137186320d997`. Both `llm.ts` and
+`lib/evalBudgetModel.ts` are in the generator's `EVALUATOR_FILES` inventory, so the authoring
+probe's failure-policy change moved the evaluator's source identity; the refresh happened only
+after source freeze, per the convention recorded in `skill-registry.md`. The corpus hash
+`dc21fea0660d041e0c3ee5ed9b2ea0448f53c4834f9566b6c0180a11578bcc69` and all six lanes and forty
+cases are UNCHANGED, as is every `caseHash` and `requestHash`; `--check` and the focused pin tests
+pass. This issues no native semantic observations, authenticated review, activation, or production
+acceptance, and retires evidence keyed to the prior evaluator revision.)
+
+Last verified: 2026-09-23 - the offline generator reconciled the six-lane/forty-case native
 corpus's stale generated evaluator field to the current source-derived revision
 `721b8f452746ee434cd012925fde549c1cd573fc8cceab28495d2dff3b85a54e`.
 The corpus hash and cases did not change; `--check` and all four focused pin tests pass.

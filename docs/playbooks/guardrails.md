@@ -1,6 +1,56 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
-Last verified: 2026-09-25 — golden text-chat routing now limits `provider.max_price` to
+Last verified: 2026-09-27 - **the authoring probe no longer settles an AMBIGUOUS attempt at the
+golden ceiling; it RETAINS its whole hold.** A probe turn reached the model with an `evalBudgetId`
+and no `evalContext`, so it fell through the same spread that gives the golden suite
+`mode: "golden"` - and therefore through the same catch, which settles the full reserved ceiling and
+throws a `...FAILED_CONSERVATIVE_...` token. That contradicted the recorded intent verbatim
+(`23-EXECUTION-PREPARATION.md`: "Ambiguous provider attempts retain holds and do not trigger an
+automatic paid retry"; "an unresolved attempt retains its whole hold"). The accounting therefore
+reported a KNOWN cost for a call whose whole premise is that the cost is unknown, and the hold that
+was supposed to stop a second attempt was already gone.
+
+The fix is a probe-scoped discriminator, `evalBudgetModel`'s new optional `retainUnresolvedHold`,
+checked BEFORE the golden settle. Absent everywhere else, so every other `mode: "golden"` caller
+keeps the byte-identical conservative settlement - `goldenBudget.test.ts` passes 18/18 unchanged,
+including the pins that a thrown golden chat settles at the reservation ceiling and that
+`closeEvalBudget` then resolves. The probe's own failure token is the distinct
+`EVAL_PROVIDER_ATTEMPT_UNRESOLVED_*` family, because a token named `...FAILED_CONSERVATIVE...` would
+tell a reader a settlement happened when none did; both tokens now derive their content-free
+classification from one shared helper so the two classifiers cannot drift.
+
+**The throw must stay a fresh bare `Error`, and that is load-bearing rather than incidental.** The
+agent loop's cross-model rollover consults `isFallbackEligible`, which matches on `name`. The
+transport failures this branch exists for carry a `name` of `TimeoutError`/`AbortError`, so
+re-throwing the original would have made the SAME envelope eligible and spent a SECOND authorised
+call on it - a budget violation, and one the previous code only avoided by accident. A bare `Error`
+is ineligible regardless of the underlying type, and stays ineligible even if the SDK wraps it.
+
+This TIGHTENS the boundary rather than loosening it. The reservation is still taken before the call
+and still charged in full against the eval, daily and deployment ceilings; nothing is released, so
+exposure is over- rather than under-reserved. No evidence may be written from an unresolved hold,
+and `closeEvalBudget` now correctly refuses with `NOT_SETTLED` for a probe that ended ambiguously -
+which is the gate `23-EXECUTION-PREPARATION.md` already specified.
+
+Also here: `vaultEmbeddingBudget.test.ts` asserted `max_price` as STRINGS while the wire sends
+NUMBERS. The numeric form is the deliberate documented contract (the entry below, and
+`goldenProviderBudget.test.ts` plus the sibling chat test both pin numbers and a numeric `typeof`),
+so the stale assertion was corrected rather than the wire. Worth recording WHY it was so hard to
+see: the test's own `expect` runs inside a mocked `fetch`, and `vaultRag.ts` rewrites any error that
+does not already begin with `EVAL_` into the closed `EVAL_EMBEDDING_RESPONSE_UNRESOLVED` token. A
+local assertion failure was therefore reported as a provider fault. The masking is correct - a
+provider body, URL or credential must never reach a log - but it also hides local assertion errors
+raised inside that mock.
+
+Because the evaluator's source inventory includes `llm.ts` and `lib/evalBudgetModel.ts`, this
+change also retires the previous native vertical evaluator revision
+(`6387a7959eb146d1...` -> `0c440be9611fef8d...`) and the golden `AGENT_EVAL_SUITE` revision
+(`32f2d3443debc...` -> `a8f2127b60b4e3c...`), both refreshed only after source freeze. The held-out
+vertical corpus SHA (`dc21fea0...`) is unchanged and every `caseHash`/`requestHash` is untouched; only
+the evaluators' source identities moved. The 46-case golden manifest and its 57-fixture offline
+self-check agree with the new golden revision.
+
+Last verified: 2026-09-25 - golden text-chat routing now limits `provider.max_price` to
 OpenRouter's documented prompt, completion, request and image fields. The unused `audio: 0`
 field was removed from that request; the whole-context reservation, per-run cap, pinned
 OpenAI route and no-retry behavior are unchanged. Offline exact-wire tests verify the shape.

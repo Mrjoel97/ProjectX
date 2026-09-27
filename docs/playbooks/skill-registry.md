@@ -1,6 +1,19 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-09-25 — the current evaluator source moved the golden revision to
+> Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
+> record, NOT a verification of the sections below.** No skill or prompt body changed. The current
+> evaluator source moved the golden revision to
+> `2026-09-11.budgeted-evaluator.a8f2127b60b4e3c5249776779717b018f499fad3f460888c37eb0bd718afb168`,
+> because `llm.ts` and `lib/evalBudgetModel.ts` are members of `EVALUATOR_FILES` and the authoring
+> probe's failure policy changed - see `guardrails.md` for what that change does and why it tightens
+> rather than loosens the money boundary. The code-owned `AGENT_EVAL_SUITE` and the regenerated
+> 46-case manifest agree, and the 57-fixture offline self-check passes. The deterministic web-recipe
+> evaluator pin moved with it to `d407d5fce26f8cda...` because `skill.ts` is inside that digest's own
+> normalized inventory, so the golden bump necessarily moves it. Older exact-evaluator evidence
+> keyed to either prior revision is retired. The free provider preflight still refuses against the
+> unavailable local deployment, so no paid or live pass follows from this identity refresh.)
+
+> Last verified: 2026-09-25 - the current evaluator source moved the golden revision to
 > `2026-09-11.budgeted-evaluator.d324ea865ac2dfc43fe6f0a04131f35d240a193d9c11502265e8f2aa010bc74e`.
 > The code-owned `AGENT_EVAL_SUITE` and regenerated 46-case manifest agree; the 57-fixture
 > offline self-check passes. Older exact-evaluator evidence is retired. The free provider

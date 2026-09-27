@@ -5423,11 +5423,17 @@ async function runAgentLoop(
     toolNames === undefined
       ? built
       : Object.fromEntries(Object.entries(built).filter(([n]) => toolNames.includes(n)));
-  if (
-    activeBudgetId &&
-    !evalContext &&
-    (await ctx.runQuery(internal.authoringProbe.context, { tenantId, budgetId: activeBudgetId }))
-  ) {
+  // The probe discriminator, hoisted: tool containment below only needs WHETHER an authoring-probe
+  // envelope owns this budget, and `retainUnresolvedHold` further below needs the same bit, so the
+  // lookup happens once and drives both. `null` for an ordinary turn AND for the held-out suite's
+  // own `evalContext` (which is never a probe), which is what keeps the golden settle untouched.
+  const probe =
+    activeBudgetId && !evalContext
+      ? await ctx.runQuery(internal.authoringProbe.context, { tenantId, budgetId: activeBudgetId })
+      : null;
+  // `activeBudgetId` restated here is NOT redundant: the contained `execute` closures are built in
+  // this block and invoked later, so the narrowed, non-optional id must be in scope where they are.
+  if (probe && activeBudgetId) {
     // Preserve ordinary descriptors. The probe only executes audited immediate paths: authoring
     // is one inert mutation; web calls and text drafters share the native budget. Other tools may
     // schedule media/connectors or provider work outside it, so refuse before their closures run.
@@ -5548,6 +5554,8 @@ async function runAgentLoop(
             onCost: (cost) => {
               costUsd += cost;
             },
+            // A probe turn's ambiguous attempt must RETAIN its hold, not settle the golden ceiling.
+            retainUnresolvedHold: probe !== null,
             ...(evalContext ? {} : { mode: "golden" as const }),
           })
         : m.model,

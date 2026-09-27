@@ -34,6 +34,10 @@ export type EvalContext = {
 export type ImageInput = { bytes: ArrayBuffer; mimeType: "image/png" | "image/jpeg" };
 
 const FAILED_CONSERVATIVE_PREFIX = "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE";
+// The authoring probe's counterpart. An AMBIGUOUS attempt (transport failed, outcome unknown)
+// settles NOTHING, so its token must not borrow the `…FAILED_CONSERVATIVE` name — a reader would
+// then read a settlement that never happened.
+const UNRESOLVED_HOLD_PREFIX = "EVAL_PROVIDER_ATTEMPT_UNRESOLVED";
 const MAX_DIAGNOSTIC_BODY_BYTES = 8_192;
 const FAILURE_DIAGNOSTIC_CATEGORIES = ["TOOL_SCHEMA", "ROUTING", "MODEL", "CONTEXT"] as const;
 type FailureDiagnosticCategory = (typeof FAILURE_DIAGNOSTIC_CATEGORIES)[number] | "UNKNOWN";
@@ -132,30 +136,47 @@ function structuredHttp400Category(responseBody: unknown, depth = 0): FailureDia
 }
 
 /**
+ * The closed, content-free CLASS of a failed provider attempt. Shared by the golden suite's
+ * conservative settlement and the probe's retained hold so the two classifiers cannot drift.
+ * Same rule as `closedGoldenFailureToken`: no message, body, header, URL or arbitrary name.
+ */
+function closedProviderFailureClass(error: unknown): string {
+  if (APICallError.isInstance(error)) {
+    const status = error.statusCode;
+    const httpClass =
+      typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
+        ? `HTTP_${status}`
+        : "HTTP_UNKNOWN";
+    return status === 400
+      ? `${httpClass}_CATEGORY_${structuredHttp400Category(error.responseBody)}`
+      : httpClass;
+  }
+  if (JSONParseError.isInstance(error)) return "PARSE";
+  if (TypeValidationError.isInstance(error) || InvalidResponseDataError.isInstance(error))
+    return "SCHEMA";
+  if (error instanceof DOMException && error.name === "TimeoutError") return "TIMEOUT";
+  if (error instanceof DOMException && error.name === "AbortError") return "ABORT";
+  return "UNKNOWN";
+}
+
+/**
  * A terminal golden failure must be diagnosable without exposing an SDK error's message, body,
  * headers, URL, or arbitrary name. This token stays within existing Workflow error logging.
  */
 export function closedGoldenFailureToken(error: unknown): string {
-  if (APICallError.isInstance(error)) {
-    const status = error.statusCode;
-    const httpToken =
-      typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
-        ? `${FAILED_CONSERVATIVE_PREFIX}_HTTP_${status}`
-        : `${FAILED_CONSERVATIVE_PREFIX}_HTTP_UNKNOWN`;
-    if (status === 400) {
-      const category = structuredHttp400Category(error.responseBody);
-      return `${httpToken}_CATEGORY_${category}`;
-    }
-    return httpToken;
-  }
-  if (JSONParseError.isInstance(error)) return `${FAILED_CONSERVATIVE_PREFIX}_PARSE`;
-  if (TypeValidationError.isInstance(error) || InvalidResponseDataError.isInstance(error))
-    return `${FAILED_CONSERVATIVE_PREFIX}_SCHEMA`;
-  if (error instanceof DOMException && error.name === "TimeoutError")
-    return `${FAILED_CONSERVATIVE_PREFIX}_TIMEOUT`;
-  if (error instanceof DOMException && error.name === "AbortError")
-    return `${FAILED_CONSERVATIVE_PREFIX}_ABORT`;
-  return `${FAILED_CONSERVATIVE_PREFIX}_UNKNOWN`;
+  return `${FAILED_CONSERVATIVE_PREFIX}_${closedProviderFailureClass(error)}`;
+}
+
+/**
+ * The authoring-probe counterpart of `closedGoldenFailureToken`, for a RETAINED hold rather than a
+ * conservative settlement (23-EXECUTION-PREPARATION: "an unresolved attempt retains its whole
+ * hold"). The value is only ever consumed as `new Error(token)`, and THAT is load-bearing: a bare
+ * `Error` has `name === "Error"`, which `isFallbackEligible` cannot match. Re-throwing the original
+ * transport failure instead would preserve its `TimeoutError`/`AbortError` name, and the agent
+ * loop's cross-model rollover would then spend a SECOND authorised call on the same envelope.
+ */
+function closedUnresolvedHoldToken(error: unknown): string {
+  return `${UNRESOLVED_HOLD_PREFIX}_${closedProviderFailureClass(error)}`;
 }
 
 function refuseCacheControl(value: unknown): void {
@@ -180,6 +201,11 @@ export function evalBudgetModel(args: {
   beforeCall?: () => void;
   /** General golden suite uses real local tools/RAG; native vertical grants stay closed. */
   mode?: "golden";
+  /** Authoring-probe discriminator: an ambiguous attempt RETAINS its whole reservation instead of
+   *  settling the golden ceiling, and must never authorise a second paid call (23-PREPARATION:
+   *  "Ambiguous provider attempts retain holds and do not trigger an automatic paid retry"). Absent
+   *  everywhere else, so every other `mode: "golden"` caller keeps the byte-identical settle. */
+  retainUnresolvedHold?: boolean;
 }): ReturnType<typeof wrapLanguageModel> {
   const goldenCall = {
     kind: "chat",
@@ -260,6 +286,12 @@ export function evalBudgetModel(args: {
         try {
           result = await doGenerate();
         } catch (error) {
+          // The probe's own failure policy, checked BEFORE the golden settle: an ambiguous attempt
+          // keeps its WHOLE hold — never settled, never released — so the envelope can neither
+          // close nor authorise another call, and no second paid retry is ever attempted. The
+          // throw is a fresh bare `Error`, never the original error, so `isFallbackEligible` cannot
+          // read an inherited TimeoutError/AbortError and roll over to a second authorised call.
+          if (args.retainUnresolvedHold) throw new Error(closedUnresolvedHoldToken(error));
           // A golden provider failure is terminal and is never replayed. Charge the full reserved
           // ceiling instead of leaving an uncloseable hold: this may overstate spend, but can never
           // understate exposure, and the explicit basis prevents it being mistaken for observed

@@ -100,7 +100,12 @@
           "gitBlobSha": "b72132fcd466da605623ffe96e370b3991fc5285",
           "role": "brief-dials-preservation-review",
           "disposition": "included",
-          "excludedSections": ["instructions", "code", "package-operations", "prompting"]
+          "excludedSections": [
+            "instructions",
+            "code",
+            "package-operations",
+            "prompting"
+          ]
         }
       ]
     },
@@ -133,7 +138,12 @@
           "gitBlobSha": "725d21bc1988216800dcc012420970b04ddedab9",
           "role": "landing-conversion-review",
           "disposition": "included",
-          "excludedSections": ["install", "network", "platform-authority", "commerce-operations"]
+          "excludedSections": [
+            "install",
+            "network",
+            "platform-authority",
+            "commerce-operations"
+          ]
         },
         {
           "path": "product-description-generator/SKILL.md",
@@ -143,7 +153,12 @@
           "gitBlobSha": "1370d32d6d84dd21ef325d56d73e6399306d937f",
           "role": "bounded-product-copy-review",
           "disposition": "included",
-          "excludedSections": ["install", "network", "competitor-fetch", "platform-commerce"]
+          "excludedSections": [
+            "install",
+            "network",
+            "competitor-fetch",
+            "platform-commerce"
+          ]
         },
         {
           "path": "conversion-rate-optimization/SKILL.md",
@@ -153,7 +168,12 @@
           "gitBlobSha": "ca193f57f8104c95f6caec152d1d51f4bc372bc3",
           "role": "conversion-heuristics-review",
           "disposition": "included",
-          "excludedSections": ["install", "checkout", "payment", "commerce-operations"]
+          "excludedSections": [
+            "install",
+            "checkout",
+            "payment",
+            "commerce-operations"
+          ]
         }
       ]
     }
@@ -256,7 +276,13 @@
       ],
       "data": {
         "label": "Hero Features CTA",
-        "sections": ["hero", "value", "features", "action", "footer"],
+        "sections": [
+          "hero",
+          "value",
+          "features",
+          "action",
+          "footer"
+        ],
         "cta": "hero-and-lower-page",
         "accessibility": "focus-visible-reduced-motion"
       }
@@ -341,7 +367,13 @@
       ],
       "data": {
         "label": "Landing Proof",
-        "fields": ["headline", "summary", "benefit", "publisher-proof", "clear-action"],
+        "fields": [
+          "headline",
+          "summary",
+          "benefit",
+          "publisher-proof",
+          "clear-action"
+        ],
         "proofRequired": true
       }
     },
@@ -365,7 +397,13 @@
       ],
       "data": {
         "label": "Product Copy",
-        "fields": ["name", "description", "features", "audience", "tone"],
+        "fields": [
+          "name",
+          "description",
+          "features",
+          "audience",
+          "tone"
+        ],
         "proofRequired": true
       }
     }
