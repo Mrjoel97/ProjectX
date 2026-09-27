@@ -334,7 +334,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
       if (!claim.runId) throw new Error("run absent");
       const budget = rails();
       const outcome = await syntheticAttempt(tx, tenant, claim.runId, budget, async () => {
-        throw new SyntheticFailure(failure);
+        throw new SyntheticFailure(failure, true);
       });
       expect(outcome).toBe(
         ["provider_5xx", "provider_timeout", "internal"].includes(failure)
@@ -475,7 +475,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     const sharedBudget = rails();
     for (let attempt = 1; attempt <= 3; attempt++) {
       const result = await syntheticAttempt(tx, tenant, claim.runId, sharedBudget, async () => {
-        throw new Error(hostile);
+        throw new SyntheticFailure("internal", true, hostile);
       });
       expect(result).toBe(attempt < 3 ? "retry_pending" : "failed_internal");
       expect(sharedBudget.held).toBe(attempt < 3 ? 50 : 0);
@@ -728,6 +728,32 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     );
   });
 
+  it("quarantines ambiguous paid-start throws instead of opening a second call", async () => {
+    for (const error of [new SyntheticFailure("provider_timeout"), new Error("transport lost")]) {
+      const { tx } = harness();
+      const { id, runId } = await claimed(tx);
+      const budget = rails();
+      const physical = vi.fn(async () => {
+        throw error;
+      });
+      expect(await syntheticAttempt(tx, tenant, runId, budget, physical)).toBe(
+        "reconciliation_required",
+      );
+      expect((await tx((db) => db.get(runId)))?.paidStep?.state).toBe("start_claimed");
+      expect((await tx((db) => db.get(id)))?.activeRunId).toBe(runId);
+      expect(budget.held).toBe(50);
+      expect(budget.released).toBe(0);
+      expect(await syntheticAttempt(tx, tenant, runId, budget, physical)).toBe(
+        "reconciliation_required",
+      );
+      expect(physical).toHaveBeenCalledOnce();
+      expect((await syntheticReconciliationSweep(tx, tenant, budget)).outcomes).toEqual([
+        "blocked_unknown_paid_step",
+      ]);
+      expect(budget.held).toBe(50);
+    }
+  });
+
   it("requires distinct per-run human approval and a current fence for external-action admission", async () => {
     const { tx } = harness();
     const { id, runId } = await claimed(tx);
@@ -848,7 +874,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     const budget = rails();
     expect(
       await syntheticAttempt(tx, tenant, runId, budget, async () => {
-        throw new SyntheticFailure("provider_5xx");
+        throw new SyntheticFailure("provider_5xx", true);
       }),
     ).toBe("retry_pending");
     expect(budget.held).toBe(50);
@@ -902,7 +928,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     const budget = rails();
     expect(
       await syntheticAttempt(tx, tenant, runId, budget, async () => {
-        throw new SyntheticFailure("provider_timeout");
+        throw new SyntheticFailure("provider_timeout", true);
       }),
     ).toBe("retry_pending");
     expect(budget.held).toBe(50);
@@ -926,7 +952,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     const budget = rails();
     expect(
       await syntheticAttempt(tx, tenant, runId, budget, async () => {
-        throw new SyntheticFailure("provider_5xx");
+        throw new SyntheticFailure("provider_5xx", true);
       }),
     ).toBe("retry_pending");
     await tx(async (db) => {
@@ -1397,7 +1423,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     const budget = rails();
     expect(
       await syntheticAttempt(tx, tenant, item.runId, budget, async () => {
-        throw new SyntheticFailure("provider_timeout");
+        throw new SyntheticFailure("provider_timeout", true);
       }),
     ).toBe("retry_pending");
     await tx((db) => pauseCandidate(db, tenant, item.id));

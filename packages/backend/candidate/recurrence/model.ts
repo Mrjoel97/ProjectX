@@ -909,9 +909,17 @@ async function dispatchAdmittedStep(
   try {
     result = { kind: "prepared", ...(await prepare()) };
   } catch (error) {
+    // Once start_claimed, a thrown timeout/5xx/internal error cannot prove the
+    // provider did nothing. Do not invent a second physical call or refund its
+    // envelope. Only the synthetic stub's explicit confirmed-no-effect case may
+    // enter the bounded retry reducer; production must prove that fact itself.
+    if (!(error instanceof SyntheticFailure && error.noEffectConfirmed)) {
+      await transaction((db) => markUnknownPaidStep(db, tenantId, runId, stepId, token));
+      return "reconciliation_required";
+    }
     result = {
       kind: "failure",
-      failureClass: error instanceof SyntheticFailure ? error.failureClass : "internal",
+      failureClass: error.failureClass,
     };
   }
   const status = await transaction((db) =>
@@ -1029,7 +1037,11 @@ export async function syntheticAttempt(
 }
 
 export class SyntheticFailure extends Error {
-  constructor(readonly failureClass: FailureClass) {
-    super("candidate synthetic failure");
+  constructor(
+    readonly failureClass: FailureClass,
+    readonly noEffectConfirmed = false,
+    detail = "candidate synthetic failure",
+  ) {
+    super(detail);
   }
 }

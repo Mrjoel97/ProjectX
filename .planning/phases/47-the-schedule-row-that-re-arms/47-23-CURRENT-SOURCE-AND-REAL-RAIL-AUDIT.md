@@ -14,9 +14,9 @@ tree. Its recorded SHA-256 values for `schema.ts`, `model.ts` and `model.test.ts
 | Candidate path under `packages/backend/candidate/recurrence/` | Current SHA-256 |
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
-| `model.ts` | `99bc5ad58ba2a2e6d6289dc9cf0d28f4f7f6702c5211523e9fb41b9dc8e4e2ff` |
-| `model.test.ts` | `f0b385c42b5985f1ab970ed23b58dd60c242d5ae5be6331f1dd7b910711111c8` |
-| `README.md` | `e7e497c95aa67b9887145eee9cae84cdb757733c2e0d6edde5d34a958858a04e` |
+| `model.ts` | `61a908a419a21703d53a18e93e9efbb862d516e6e3115e3b886a483d9c103ba9` |
+| `model.test.ts` | `56b605ba4c61dabc86e677cecb43ef9cb6757bdb50a0a307d4f15ba77a33df40` |
+| `README.md` | `be7c8983ac665b9daf6068a61500383697885ca98b85c6900ac1025165905452` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
@@ -41,6 +41,17 @@ later landing with the exact step ID/token can settle through the normal termina
 candidate suite passes **35/35** and candidate TypeScript exits 0 after the fix. This is a
 synthetic fail-closed repair, not authenticated provider settlement, actual money accounting or a
 fresh independent review; the three current hashes above supersede this memo's earlier values.
+
+**2026-09-28 ambiguous-throw amendment:** A new test proved that an unconfirmed
+`provider_timeout` after the committed paid-start claim previously returned `retry_pending`,
+allowing another physical call with a new step ID. The same risk applies to an ordinary transport
+throw. The disabled model now quarantines both cases with the exact outstanding step and held
+rails; a second attempt and the recovery sweep cannot redispatch or release. Bounded retry remains
+testable only through `SyntheticFailure(..., true)`, an explicitly confirmed-no-effect *stub*
+result, not a real provider attestation. The full candidate suite passes **36/36** and candidate
+TypeScript exits 0. Production must authenticate/settle the first effect before any retry or
+budget release. Current hashes above replace the prior repair's source identities; independent
+current-source review remains pending.
 
 Current controls still have value but are narrower: explicit candidate Vitest passed **35/35**;
 candidate TypeScript passed; `routineDecision`, `routines` and `dstProbe` passed **108/108**;

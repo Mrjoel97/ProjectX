@@ -1,5 +1,14 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — a red-before-green 36th synthetic candidate test
+> showed that an unconfirmed paid-step timeout could enter `retry_pending` and
+> permit another physical call. The disabled model now quarantines ambiguous
+> timeout and generic throws with the same start claim and held rails; only a
+> synthetic explicitly confirmed-no-effect failure may use bounded retry.
+> Candidate tests pass 36/36 and candidate TypeScript passes. This is not
+> authenticated provider no-effect evidence, real spend-rail integration,
+> independent current-source review, or recurrence activation.
+
 > Last verified: 2026-09-28 — the disabled six-file candidate now quarantines an
 > unknown `start_claimed` paid step without releasing its synthetic budget holds or
 > clearing the active run. Two adverse expectations failed on the prior behavior;
