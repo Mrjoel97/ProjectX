@@ -15245,8 +15245,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/tenant-commerce.md": {
-    "mtime": 1790514120.0830262,
-    "ast_hash": "fa4e61533ced861a34f2ec16fe48422a",
+    "mtime": 1790515827.3628404,
+    "ast_hash": "f56a9b445a24508f9a5417afc9ac7640",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantCatalogue.test.ts": {
@@ -15295,23 +15295,23 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantOrders.test.ts": {
-    "mtime": 1790514212.017421,
-    "ast_hash": "c70cd6d7a7471586430378cc3ab2080f",
+    "mtime": 1790515360.4939246,
+    "ast_hash": "a451c6b7b9c190267b68a0182c06aa92",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantOrders.ts": {
-    "mtime": 1790514006.9271052,
-    "ast_hash": "77efc7e2807b717727aeb86ce86a8f2b",
+    "mtime": 1790515297.5001261,
+    "ast_hash": "77859afd90a373acc8e284eb29ec2aee",
     "semantic_hash": ""
   },
   "packages/core/src/tenantOrder.test.ts": {
-    "mtime": 1790471234.661858,
-    "ast_hash": "3b42187b741d719f30dc56a1c6138822",
+    "mtime": 1790515243.4023128,
+    "ast_hash": "d7b7a60cfffbd9e34f4950b3166eb4dd",
     "semantic_hash": ""
   },
   "packages/core/src/tenantOrder.ts": {
-    "mtime": 1790471234.5988288,
-    "ast_hash": "a17af18f358246a6a87bbab10cb341d8",
+    "mtime": 1790515285.0008743,
+    "ast_hash": "45e469c97a84dff0f370f5355e5e61dc",
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-03-PREEDIT-BASELINE-2026-09-24.md": {
@@ -17060,8 +17060,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-20-SUMMARY.md": {
-    "mtime": 1790514249.0576885,
-    "ast_hash": "156988331b0b1380504af1bd5bba137c",
+    "mtime": 1790515854.3124664,
+    "ast_hash": "3be76652996889ffa47c31748d55397c",
     "semantic_hash": ""
   },
   "docs/evidence/recurrence/auckland-2026-09-26/dst-boundary.md": {
