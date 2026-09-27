@@ -45,11 +45,52 @@ export function assertGoldenNonProductionTarget(
 ) {
   if (env.PIKAR_CONVEX_TARGET === "prod")
     throw new ProviderPreflightRefusal("production_target_forbidden");
-  const fileDeclarations = [...envFile.matchAll(/^CONVEX_DEPLOYMENT\s*=\s*([^\r\n#]*)/gm)];
-  const deployment =
-    env.CONVEX_DEPLOYMENT ?? (fileDeclarations.length === 1 ? fileDeclarations[0][1].trim() : null);
-  if (!/^(?:dev|local):[A-Za-z0-9][A-Za-z0-9_-]*$/.test(deployment ?? ""))
+  const declarations = (key) =>
+    [...envFile.matchAll(new RegExp(`^${key}\\s*=\\s*([^\\r\\n#]*)`, "gm"))].map((row) =>
+      row[1]
+        .trim()
+        .replace(/^(?:"([^"]*)"|'([^']*)')$/, (_match, double, single) => double ?? single),
+    );
+  const fileDeployment = declarations("CONVEX_DEPLOYMENT");
+  const ambientDeployment = env.CONVEX_DEPLOYMENT?.trim();
+  if (
+    fileDeployment.length > 1 ||
+    (ambientDeployment && fileDeployment.length === 1 && ambientDeployment !== fileDeployment[0])
+  )
     throw new ProviderPreflightRefusal("named_nonproduction_target_required");
+  const deployment = ambientDeployment || fileDeployment[0] || null;
+  const match = /^(dev|local):([A-Za-z0-9][A-Za-z0-9_-]*)$/.exec(deployment ?? "");
+  if (!match) throw new ProviderPreflightRefusal("named_nonproduction_target_required");
+  const explicitUrls = [];
+  for (const key of ["CONVEX_URL", "CONVEX_SELF_HOSTED_URL"]) {
+    const fileUrls = declarations(key);
+    const ambientUrl = env[key]?.trim();
+    if (fileUrls.length > 1 || (ambientUrl && fileUrls.length === 1 && ambientUrl !== fileUrls[0]))
+      throw new ProviderPreflightRefusal("named_nonproduction_target_required");
+    const value = ambientUrl || fileUrls[0];
+    if (value) explicitUrls.push({ key, value });
+  }
+  for (const { key, value } of explicitUrls) {
+    let url;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new ProviderPreflightRefusal("named_nonproduction_target_required");
+    }
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      (match[1] === "local"
+        ? !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
+          !["http:", "https:"].includes(url.protocol)
+        : key === "CONVEX_SELF_HOSTED_URL" ||
+          url.protocol !== "https:" ||
+          url.hostname !== `${match[2]}.convex.cloud`)
+    )
+      throw new ProviderPreflightRefusal("named_nonproduction_target_required");
+  }
   return true;
 }
 

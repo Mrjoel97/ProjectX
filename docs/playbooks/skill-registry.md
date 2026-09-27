@@ -1,5 +1,16 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-27 — the free golden preflight now rejects conflicting ambient/file
+> deployment declarations and explicit Convex URLs that contradict a named `local:` or `dev:`
+> target. Local URLs must be loopback; an explicit cloud-dev URL must name the same Convex
+> deployment. This is a necessary routing check, not `/instance_name` proof. The source-derived
+> golden evaluator and unchanged 46-case manifest now pin
+> `2026-09-11.budgeted-evaluator.9d4e970858fa89a3cd2145c49bb8c90a70e57af803981877a358e5634a8c258b`;
+> the dependent deterministic web-recipe evaluator pins
+> `148305ce474e70522d8f586a7738d9d7044540f5f48ba959ba3492db2b92b07c`.
+> Offline preflight tests and both evaluator self-checks pass. The real preflight still refuses
+> `named_nonproduction_target_required` before a budget opens; no live or paid gate passed.
+
 > Last verified: 2026-09-27 (Wave 1 golden target-guard acknowledgment only). The free golden
 > preflight now requires an explicit named `dev:` or `local:` `CONVEX_DEPLOYMENT` before querying
 > readiness; missing, anonymous and production declarations fail closed. A declared name alone is

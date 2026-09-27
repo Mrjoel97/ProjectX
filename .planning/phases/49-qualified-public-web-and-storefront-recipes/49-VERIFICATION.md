@@ -7,9 +7,11 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-27 serialized aggregate passed on the current 71-file source digest below, including the vertical telemetry provenance playbook update. The earlier passing digest is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-27 serialized aggregate passed on the current 71-file source digest below, including the Wave 1 golden target-guard repin and watched registry playbook. Prior passing digests are historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `dfb9c1d0e6fbd9d5e7c7ae36f5d88f13116cd46e3139d547aee4773996d41257`
+Artifact-set SHA-256: `559de608fee74224617997e8492860fef777325bb1a0d73cbf42a79d27751412`
+
+**2026-09-27 target-conflict requalification:** The golden preflight now rejects a named local/dev deployment declaration when an explicit backend URL or another declaration conflicts with it. Source-derived golden and deterministic recipe evaluator pins were refreshed without changing either fixture corpus. The full serialized Phase 49 runner passed all 21 planes on this initial/final-equal digest, including both fresh disposable browser/audit stacks, three typechecks, production web build, strict documents, claim controls and all 30 free gates. The actual free golden preflight still refuses before a budget because no named non-production target is configured. No paid, live, hosted, founder or merchant acceptance follows.
 
 **2026-09-27 review-origin requalification:** The watched playbook changed for the bounded same-candidate artifact-origin guard on review telemetry. The full serialized runner passed all 21 required planes on the new initial/final-equal digest, including both fresh disposable browser/audit stacks, three typechecks, production build, strict documents, claim controls and all 30 free gates. Separate focused telemetry tests passed 3/3. This adds no human-review observation, native pack activation, provider fact or Wave 7/8 acceptance.
 

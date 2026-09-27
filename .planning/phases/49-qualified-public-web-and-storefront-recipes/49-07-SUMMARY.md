@@ -17,9 +17,11 @@ reviewed: 2026-09-27
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-27 serialized aggregate passed all 21 planes on the current 71-file digest, including the vertical telemetry provenance playbook update. The prior passing digest is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-27 serialized aggregate passed all 21 planes on the current 71-file digest, including the Wave 1 golden target-guard repin and watched registry playbook. Prior passing digests are historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `dfb9c1d0e6fbd9d5e7c7ae36f5d88f13116cd46e3139d547aee4773996d41257`
+Artifact-set SHA-256: `559de608fee74224617997e8492860fef777325bb1a0d73cbf42a79d27751412`
+
+The target-conflict guard changed the shared skill/evaluator pins in this declared source set. The exact digest passed both fresh browser/audit stacks, three typechecks, production build, strict documents, claim controls and all 30 free gates with source identity stable throughout. This renews repository/local evidence only; the golden live preflight remains red for want of a named non-production deployment.
 
 The review-origin guard changed the watched playbook in this source set. Its exact digest passed both fresh browser/audit stacks, three typechecks, production web build, strict documents, claim controls and all 30 free gates, with source identity stable throughout. This renews repository/local evidence only; native vertical reviews remain unobserved.
 

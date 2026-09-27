@@ -103,3 +103,61 @@ test("golden readiness needs an explicitly named non-production deployment", () 
     true,
   );
 });
+
+test("a named local target cannot disguise a remote or conflicting Convex endpoint", () => {
+  const named = "CONVEX_DEPLOYMENT=local:local-golden-test";
+  assert.equal(
+    assertGoldenNonProductionTarget({}, `${named}\nCONVEX_URL=http://127.0.0.1:3210`),
+    true,
+  );
+  for (const file of [
+    `${named}\nCONVEX_URL=https://production.convex.cloud`,
+    `${named}\nCONVEX_SELF_HOSTED_URL=https://remote.example.com`,
+    `${named}\nCONVEX_URL=http://127.0.0.1:3210\nCONVEX_URL=http://127.0.0.1:3211`,
+  ])
+    assert.throws(
+      () => assertGoldenNonProductionTarget({}, file),
+      (error) =>
+        error instanceof ProviderPreflightRefusal &&
+        error.reason === "named_nonproduction_target_required",
+    );
+  assert.throws(
+    () =>
+      assertGoldenNonProductionTarget(
+        { CONVEX_URL: "http://127.0.0.1:3211" },
+        `${named}\nCONVEX_URL=http://127.0.0.1:3210`,
+      ),
+    (error) =>
+      error instanceof ProviderPreflightRefusal &&
+      error.reason === "named_nonproduction_target_required",
+  );
+});
+
+test("a named cloud dev target refuses a mismatched explicit URL or declaration", () => {
+  const named = "CONVEX_DEPLOYMENT=dev:named-golden-test";
+  assert.equal(
+    assertGoldenNonProductionTarget(
+      {},
+      `${named}\nCONVEX_URL=https://named-golden-test.convex.cloud`,
+    ),
+    true,
+  );
+  for (const file of [
+    `${named}\nCONVEX_URL=https://production.convex.cloud`,
+    `${named}\nCONVEX_SELF_HOSTED_URL=http://127.0.0.1:3210`,
+    `${named}\nCONVEX_URL=https://named-golden-test.convex.cloud?token=secret`,
+    `${named}\nCONVEX_DEPLOYMENT=dev:other`,
+  ])
+    assert.throws(
+      () => assertGoldenNonProductionTarget({}, file),
+      (error) =>
+        error instanceof ProviderPreflightRefusal &&
+        error.reason === "named_nonproduction_target_required",
+    );
+  assert.throws(
+    () => assertGoldenNonProductionTarget({ CONVEX_DEPLOYMENT: "dev:other" }, named),
+    (error) =>
+      error instanceof ProviderPreflightRefusal &&
+      error.reason === "named_nonproduction_target_required",
+  );
+});

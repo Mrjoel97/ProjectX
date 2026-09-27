@@ -1,3 +1,9 @@
+> Last verified: 2026-09-27 — the golden evaluator's free named-target preflight now checks
+> that explicit local/cloud URLs and ambient/file declarations agree with the selected
+> `CONVEX_DEPLOYMENT`. The 17 offline preflight controls pass. Its current real invocation
+> still refuses before a budget or model call because no named non-production target is
+> configured. A declaration check does not replace `/instance_name` and source review.
+
 > Last verified: 2026-09-23 — Phase 49's local-only `smoke:seedPhase49MalformedStorefrontPointer`
 > fixture is available only with `PIKAR_OFFLINE_FIXTURES=1`, for an exact disposable private
 > storefront project belonging to the supplied tenant. It deliberately seeds a malformed
