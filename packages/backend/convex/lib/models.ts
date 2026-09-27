@@ -80,6 +80,22 @@ export const openRouter = () => {
 };
 
 /**
+ * Stable wire identities for routed aliases whose provider capabilities differ behind the moving
+ * slug. Keep the caller-facing id unchanged: it remains the pricing/audit key. The exact dated
+ * GPT-4o Mini endpoint is OpenAI-only and advertises tool calling, which the golden cockpit loop
+ * requires; the undated alias currently spans OpenAI and Azure with tools on only one endpoint.
+ */
+const OPENROUTER_WIRE_MODEL = {
+  "openai/gpt-4o-mini": "openai/gpt-4o-mini-2024-07-18",
+} as const satisfies Record<string, string>;
+
+function openRouterWireModel(id: string): string {
+  return Object.hasOwn(OPENROUTER_WIRE_MODEL, id)
+    ? OPENROUTER_WIRE_MODEL[id as keyof typeof OPENROUTER_WIRE_MODEL]
+    : id;
+}
+
+/**
  * Model-level settings for ox-alpha. **EMPTY ON PURPOSE, AND THE MEASUREMENTS ARE WHY.**
  *
  * Reasoning is MANDATORY on this model: `reasoning: {enabled: false}` returns HTTP 400 "Reasoning is
@@ -201,7 +217,7 @@ export const resolveModel = (id: string): LanguageModel => {
   // stays the PRICING/audit key, so `or/openai/gpt-4o-mini` and `openai/gpt-4o-mini` price and audit
   // as the different billing paths they are. No per-model settings: unlike ox-alpha these are not
   // reasoning-mandatory, and the 45 s lane is the one place reasoning has actually cost us runs.
-  if (id.startsWith("or/")) return openRouter().chat(id.slice(3));
+  if (id.startsWith("or/")) return openRouter().chat(openRouterWireModel(id.slice(3)));
   // FAIL CLOSED. Routing a `google/` id to `openai()` is precisely the silent misroute this module
   // was created to stop; a caller that can reach Vertex handles the prefix before calling here.
   if (id.startsWith(NODE_ONLY_MODEL_PREFIX))

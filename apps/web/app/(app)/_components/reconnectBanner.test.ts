@@ -14,9 +14,9 @@
 // would assert on an empty string and prove nothing.
 import { RECONNECT } from "@pikar/core";
 import { describe, expect, test } from "vitest";
-import { reconnectLines } from "./ReconnectBanner";
-import { googleDisconnectMessage } from "./DisconnectGoogle";
 import { gmailCallbackMessage } from "../connect-gmail/page";
+import { googleDisconnectMessage } from "./DisconnectGoogle";
+import { reconnectLines } from "./ReconnectBanner";
 
 const hold = (mailProvider?: "google" | "microsoft") => ({ mailProvider });
 const warn = (provider: "google" | "microsoft") => ({ kind: RECONNECT[provider].kind });

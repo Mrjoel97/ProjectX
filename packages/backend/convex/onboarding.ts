@@ -718,6 +718,12 @@ export const commitProfile = tenantMutation({
         tierSource: row.tierSource,
       },
     });
+    await ctx.runMutation(internal.betaJourney.record, {
+      tenantId: ctx.tenantId,
+      eventType: "onboarding_completed",
+      idempotencyKey: `onboarding:${String(vaultDocId)}`,
+      occurredAt: Date.now(),
+    });
     return { vaultDocId };
   },
 });

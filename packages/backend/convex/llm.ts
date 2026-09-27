@@ -4373,7 +4373,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
               return "Google is connected without Drive access. Ask the user to reconnect Google.";
             if (result.reason === "bad_folder_id")
               return "That Drive folder reference is invalid. Ask the user to choose it again.";
-            return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+            if (result.reason === "refresh_failed")
+              return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+            return "Google Drive could not be read right now. Tell the user to try again later.";
           }
           const folders = result.folders.map((f) => `${f.name} [id: ${f.id}]`).join("; ");
           const files = result.files
@@ -4409,7 +4411,9 @@ export function buildCockpitTools(toolCtx: ToolContext, grants: ToolGrants = NO_
               return "Google is not connected. Ask the user to connect Google before searching Drive.";
             if (result.reason === "reauth")
               return "Google is connected without Drive access. Ask the user to reconnect Google.";
-            return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+            if (result.reason === "refresh_failed")
+              return "The Google connection could not be refreshed. Ask the user to reconnect Google.";
+            return "Google Drive search failed right now. Tell the user to try again later.";
           }
           if (result.hits.length === 0) return "No matching Drive files or folders were found.";
           const hits = result.hits

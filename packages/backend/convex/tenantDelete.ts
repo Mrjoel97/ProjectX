@@ -1,7 +1,11 @@
 import type { EntryId } from "@convex-dev/rag";
 import {
+  COMMERCE_EXPORT_FIELDS,
+  commerceDeletionBlocker,
+  commerceExportView,
   type DeletableTenantTable,
   deletableTables,
+  isCommerceTable,
   STORAGE_ID_FIELDS,
   storageIdsIn,
   type TenantDeletionCursor,
@@ -19,6 +23,49 @@ import { rag } from "./vaultRag";
 import { CURSOR_NAME } from "./wormCursor";
 
 export const TENANT_DELETE_BATCH_SIZE = 2;
+const COMMERCE_RESERVATION_PREFLIGHT_LIMIT = 256;
+
+/** Indexed, bounded retention probe. Run on every direct page too, so an internal replay or
+ * cursor jump cannot erase unrelated tables before a known order/attempt refusal. */
+async function assertCommerceRetentionClear(ctx: MutationCtx, tenantId: string): Promise<void> {
+  const order = await ctx.db
+    .query("tenantOrders")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .first();
+  if (order)
+    throw new Error(commerceDeletionBlocker("tenantOrders", order as Record<string, unknown>)!);
+  const attempt = await ctx.db
+    .query("tenantOrderAttempts")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .first();
+  if (attempt)
+    throw new Error(
+      commerceDeletionBlocker("tenantOrderAttempts", attempt as Record<string, unknown>)!,
+    );
+  // Plan 18 indexed orderId, so the descending first row detects any linked order in O(1).
+  // attemptId lacks an index: refuse beyond a bounded probe rather than erasing before seeing
+  // an attempt-only link. The cap is an explicit operational refusal, not a retention period.
+  const orderReservation = await ctx.db
+    .query("tenantReservations")
+    .withIndex("by_tenant_order", (q) => q.eq("tenantId", tenantId))
+    .order("desc")
+    .first();
+  if (orderReservation?.orderId !== undefined) {
+    throw new Error("COMMERCE_RETENTION_POLICY_REQUIRED:LINKED_RESERVATION");
+  }
+  const reservations = await ctx.db
+    .query("tenantReservations")
+    .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+    .take(COMMERCE_RESERVATION_PREFLIGHT_LIMIT + 1);
+  if (reservations.length > COMMERCE_RESERVATION_PREFLIGHT_LIMIT) {
+    throw new Error("COMMERCE_RETENTION_POLICY_REQUIRED:RESERVATION_SCAN_CAP");
+  }
+  for (const reservation of reservations) {
+    if (reservation.attemptId !== undefined) {
+      throw new Error("COMMERCE_RETENTION_POLICY_REQUIRED:LINKED_RESERVATION");
+    }
+  }
+}
 
 type ProviderDeletionResult = {
   /** 28.1-08 widened this to three and the connector arm to seven. BOTH this type AND
@@ -193,6 +240,10 @@ export const authorizeTenantDeletion = internalMutation({
     if (!user || String(args.userId) !== args.tenantId) {
       throw new Error("TENANT_SELF_REQUIRED");
     }
+    // Plan 50-04 has no approved merchant accounting-retention or outstanding-payment policy.
+    // Refuse before any connector revocation or deletion page can run: local order rows may later
+    // need reconciliation, and deleting their attempt/stock linkage would make that impossible.
+    await assertCommerceRetentionClear(ctx, args.tenantId);
     const google = await ctx.db
       .query("gmailTokens")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
@@ -268,6 +319,10 @@ export const deleteTenantDataPage = internalMutation({
     const tables = deletableTables();
     const table = tables[tableIndex];
     if (!table) throw new Error("INVALID_DELETE_CURSOR");
+    await assertCommerceRetentionClear(ctx, args.tenantId);
+    if (isCommerceTable(table) && !(table in COMMERCE_EXPORT_FIELDS)) {
+      throw new Error(`COMMERCE_TABLE_UNCLASSIFIED:${table}`);
+    }
 
     if (tenantTableScope(table) === "identity") {
       const user = await ctx.db.get(args.userId);
@@ -396,6 +451,12 @@ export const deleteTenantDataPage = internalMutation({
     // purely to throw it away is exactly what it forbids, and it was right to fire. The system
     // table answers the same question — null when the blob is gone — and mints nothing.
     for (const row of rows) {
+      if (isCommerceTable(table)) {
+        const data = row as unknown as Record<string, unknown>;
+        commerceExportView(table, data);
+        const blocker = commerceDeletionBlocker(table, data);
+        if (blocker) throw new Error(blocker);
+      }
       for (const storageId of storageIdsIn(table, row as unknown as Record<string, unknown>)) {
         const id = storageId as Id<"_storage">;
         if ((await ctx.db.system.get("_storage", id)) !== null) await ctx.storage.delete(id);

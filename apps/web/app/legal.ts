@@ -15,6 +15,8 @@ export const LEAD_AUTHORITY = "[LEAD EU SUPERVISORY AUTHORITY — TBD]";
 const PLACEHOLDERS = [ENTITY, ENTITY_ADDRESS, GOVERNING_LAW, VENUE, LEAD_AUTHORITY];
 
 export const HAS_PLACEHOLDERS = PLACEHOLDERS.some((p) => p.startsWith("["));
+// Capability consumers receive this named result instead of reparsing legal copy or placeholders.
+export const LEGAL_READINESS = !HAS_PLACEHOLDERS;
 
 // Owner-approved production deferral, 2026-08-12. Keep this explicit and visible so the
 // unresolved legal work cannot be mistaken for completion. The public pages continue to render

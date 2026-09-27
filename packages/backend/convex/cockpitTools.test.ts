@@ -679,6 +679,33 @@ test("buildCockpitTools registers tenant-derived Drive reads without a tenantId 
   }
 });
 
+test("Drive read refusals distinguish connection, refresh, bad id, and provider failures", async () => {
+  const runAction = vi.fn();
+  const tools = buildCockpitTools({
+    ctx: { runAction } as unknown as ToolContext["ctx"],
+    tenantId: "t1",
+    planId: "plan-stub" as Id<"plans">,
+  }) as unknown as Record<string, { execute: (input: unknown, opts: unknown) => Promise<string> }>;
+  const cases = [
+    ["listDriveFolders", { parentId: "folder-1" }, "not_connected", /not connected/i],
+    ["listDriveFolders", { parentId: "folder-1" }, "reauth", /without Drive access/i],
+    ["listDriveFolders", { parentId: "folder-1" }, "bad_folder_id", /invalid/i],
+    ["listDriveFolders", { parentId: "folder-1" }, "refresh_failed", /refreshed/i],
+    ["listDriveFolders", { parentId: "folder-1" }, "drive_error", /could not be read/i],
+    ["findInDrive", { query: "plan" }, "not_connected", /not connected/i],
+    ["findInDrive", { query: "plan" }, "reauth", /without Drive access/i],
+    ["findInDrive", { query: "plan" }, "refresh_failed", /refreshed/i],
+    ["findInDrive", { query: "plan" }, "drive_error", /search failed/i],
+  ] as const;
+  for (const [name, input, reason, expected] of cases) {
+    runAction.mockResolvedValueOnce({ ok: false, reason });
+    const reply = await tools[name]!.execute(input, extractOpts);
+    expect(reply, `${name}: ${reason}`).toMatch(expected);
+    expect(runAction.mock.lastCall?.[1]).toEqual(input);
+  }
+  expect(runAction).toHaveBeenCalledTimes(cases.length);
+});
+
 // ── 22.1b: every tool the research grant NAMES is actually BUILT ──────────────────────────────
 //
 // The runtime-record assertion nobody wrote for `dispatchResearch`. That tool was built only under

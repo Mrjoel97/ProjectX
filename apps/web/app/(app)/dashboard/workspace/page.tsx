@@ -65,6 +65,7 @@ type Tab = { id: string; label: string };
 // openThread already skips ids it is already showing.
 const REVIEW_TAB: Tab = { id: REVIEW_THREAD_ID, label: "Weekly review" };
 const WORKSPACE_SESSION_KEY = "pikar.workspace.session.v1";
+const BETA_JOURNEY_SESSION_KEY = "pikar.betaJourney.session.v1";
 
 type StoredWorkspace = { tabs: Tab[]; threadId?: string };
 
@@ -299,6 +300,7 @@ function PinnedPromptsFallback() {
 }
 
 export default function WorkspacePage() {
+  const recordJourneySession = useMutation(api.betaJourney.recordBrowserSession);
   const [tabs, setTabs] = useState<Tab[]>([REVIEW_TAB]);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>();
@@ -352,6 +354,17 @@ export default function WorkspacePage() {
     }
     setWorkspaceRestored(true);
   }, []);
+  // A browser-scoped random key is the whole session identity. URLs, user-agent and content stay
+  // out of the measurement plane; an existing key marks a return rather than a second start.
+  useEffect(() => {
+    let key = window.sessionStorage.getItem(BETA_JOURNEY_SESSION_KEY);
+    const returned = Boolean(key);
+    if (!key) {
+      key = crypto.randomUUID().replaceAll("-", "");
+      window.sessionStorage.setItem(BETA_JOURNEY_SESSION_KEY, key);
+    }
+    void recordJourneySession({ sessionKey: key, returned });
+  }, [recordJourneySession]);
   useEffect(() => {
     if (!workspaceRestored) return;
     window.sessionStorage.setItem(
@@ -898,7 +911,11 @@ export default function WorkspacePage() {
             {view === "canvas" ? (
               <CanvasPane threadId={threadId} planId={selectedPlanId} />
             ) : (
-              <CardList threadId={threadId} sending={sending} />
+              <CardList
+                threadId={threadId}
+                sending={sending}
+                onFirstSendThread={(id) => registerThread(id, "First send")}
+              />
             )}
           </section>
         }

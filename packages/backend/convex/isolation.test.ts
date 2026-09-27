@@ -11,9 +11,12 @@
 // schema.ts, so it is structurally blind to the six tables Convex Auth injects via the
 // `...authTables` spread. `Object.keys(schema.tables)` at RUNTIME sees all 51. The union assertion
 // here is the only place those six are pinned.
+import { readFileSync } from "node:fs";
 import { TENANT_TABLE_CLASSIFICATION } from "@pikar/core/tenantData";
-import { convexTest } from "convex-test";
+import { type GenericDataModel, makeFunctionReference } from "convex/server";
+import { convexTest, type TestConvexForDataModel } from "convex-test";
 import { describe, expect, test } from "vitest";
+import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api } from "./_generated/api";
 import { RAW_BUILDER_ALLOWLIST } from "./lib/allowlist";
 import schema from "./schema";
@@ -25,6 +28,7 @@ const sources = import.meta.glob("./**/*.ts", {
 }) as Record<string, string>;
 
 const RUNTIME_TABLES = Object.keys(schema.tables).sort();
+const WEB_PROJECTS_SOURCE = readFileSync(new URL("./webProjects.ts", import.meta.url), "utf8");
 
 /**
  * The six tables Convex Auth injects. Hand-authored HERE and nowhere else, because they are the
@@ -214,6 +218,14 @@ const NON_TENANT_LEADING: Record<string, string> = {
   // The tenant-facing surface (`billing.invoices`) uses `by_tenant`, which does lead with tenantId.
   "billingPeriods.by_status_dueAt":
     "deployment-wide claim scan from the cron; no tenant-facing caller",
+  // Phase 48 public host/path resolution starts without tenant identity. The resolver performs
+  // the bounded host/slug lookup, then rejects ambiguity before reading any version row.
+  "webProjects.by_host_slug":
+    "Phase 48 anonymous host/path binding; resolver rejects ambiguity before content read",
+  "webProjects.by_slug":
+    "Phase 48 ambiguous host/path refusal; resolver binds tenant only after host validation",
+  "webSubmissions.by_expires_at":
+    "Phase 48 deployment-wide retention cron selects only expired rows in bounded batches; this index has no tenant-facing reader",
 };
 
 describe("every tenant-owned index leads with tenantId, or names why it does not", () => {
@@ -257,6 +269,34 @@ describe("every tenant-owned index leads with tenantId, or names why it does not
         leadsWithTenant: false,
       });
     }
+  });
+});
+
+describe("Phase 48 lifecycle isolation and audit redaction", () => {
+  test("private lifecycle surface is tenant-wrapped and has no caller tenant selector", () => {
+    for (const name of [
+      "createDraft",
+      "saveDraft",
+      "approveVersion",
+      "publishVersion",
+      "updateVersion",
+      "unpublish",
+      "rollback",
+    ]) {
+      expect(WEB_PROJECTS_SOURCE).toMatch(new RegExp(`export const ${name} = tenantMutation\\(`));
+    }
+    expect(WEB_PROJECTS_SOURCE).not.toMatch(/args:\s*\{[^}]*tenantId/);
+    expect(WEB_PROJECTS_SOURCE).toContain("project.tenantId !== ctx.tenantId");
+  });
+
+  test("publication receipts are closed refs/hashes/counts and never form content", () => {
+    expect(WEB_PROJECTS_SOURCE).toContain("PublicationAuditPayload");
+    expect(WEB_PROJECTS_SOURCE).toContain("appendAudit");
+    for (const forbidden of ["email", "userAgent", "ipAddress", "formBody", "documentText"]) {
+      expect(WEB_PROJECTS_SOURCE).not.toContain(forbidden);
+    }
+    expect(WEB_PROJECTS_SOURCE).toContain("approvedContentHash");
+    expect(WEB_PROJECTS_SOURCE).toContain("publishedContentHash");
   });
 });
 
@@ -368,6 +408,27 @@ const OWNER_ARGS: Record<string, Record<string, unknown>> = {
   "skills.activateAgentCandidate": { candidateId: "id:tenantSkills" },
   "skills.activateTenantCandidate": { candidateId: "id:tenantSkills" },
   "skills.rollbackTenantSkill": { targetId: "id:tenantSkills" },
+  "skills.activateWebRecipeCandidate": { candidateId: "id:skills" },
+  "skills.rollbackWebRecipe": { targetId: "id:skills" },
+  "skills.beginWebRecipeBrowserQualification": { candidateId: "id:skills" },
+  "skills.advanceWebRecipeBrowserQualification": {
+    candidateId: "id:skills",
+    runId: "owner-boundary-fixture",
+    revision: 0,
+    viewport: "desktop",
+  },
+  "skills.finalizeWebRecipeBrowserQualification": {
+    candidateId: "id:skills",
+    runId: "owner-boundary-fixture",
+    revision: 0,
+  },
+  "webRecipes.previewWebRecipeCandidate": {
+    candidateId: "id:skills",
+    runId: "owner-boundary-fixture",
+    revision: 0,
+    viewport: "desktop",
+    values: {},
+  },
   "verticalPacks.rollback": { verticalId: "legal", targetId: "id:tenantSkills" },
   "verticalEvalEvidence.inspectCase": { receiptId: "id:audit" },
   "verticalEvalEvidence.inspectRun": { runId: "00000000-0000-4000-8000-000000000001" },
@@ -408,6 +469,17 @@ const OWNER_ARGS: Record<string, Record<string, unknown>> = {
     amountMinor: 1,
     currency: "USD",
   },
+  "webRecipes.qualifyStorefront": {
+    recipeId: "storefront-catalogue",
+    values: {
+      brandName: "Private Catalogue",
+      items: [{ id: "item-1", name: "Item One", description: "A presentation item" }],
+    },
+    slug: "private-catalogue",
+    title: "Private Catalogue",
+    expectedAvailability: "private_qualification",
+  },
+  "webRecipes.getStorefrontQualification": { projectId: "id:webProjects" },
 };
 
 /** The endpoints whose validator has at least one required field. Kept beside `OWNER_ARGS` so a
@@ -442,6 +514,7 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
       "verticalData",
       "verticalEvalEvidence",
       "verticalPacks",
+      "webRecipes",
       "workflowPackDiscovery",
     ]);
     // The kill switches specifically: the highest-consequence owner endpoints in the repo.
@@ -507,22 +580,50 @@ describe("owner endpoints reject a non-owner, and the list grows by itself", () 
                       ts: 0,
                     }),
                   )
-                : await t.run((ctx) =>
-                    ctx.db.insert("tenantSkills", {
-                      tenantId: "someone-else",
-                      name: "seed",
-                      version: 1,
-                      body: "seed",
-                      authoredBody: "seed",
-                      status: "candidate",
-                      author: "user",
-                      basedOnScope: "global",
-                      basedOnName: "seed",
-                      basedOnVersion: 1,
-                      rollbackEligible: false,
-                      createdAt: 0,
-                    }),
-                  );
+                : value === "id:webProjects"
+                  ? await t.run((ctx) =>
+                      ctx.db.insert("webProjects", {
+                        tenantId: "someone-else",
+                        kind: "storefront",
+                        slug: "owner-fixture",
+                        title: "owner fixture",
+                        publicHost: "fixture",
+                        domainMode: "platform_path",
+                        hostingDeclaration: {
+                          hosting: "pikar_platform_path",
+                          source: "tenant_structured_content",
+                        },
+                        revision: 1,
+                        createdAt: 0,
+                        updatedAt: 0,
+                      }),
+                    )
+                  : value === "id:skills"
+                    ? await t.run((ctx) =>
+                        ctx.db.insert("skills", {
+                          name: "owner-boundary-fixture",
+                          version: 1,
+                          body: "fixture",
+                          status: "candidate",
+                          createdAt: 0,
+                        }),
+                      )
+                    : await t.run((ctx) =>
+                        ctx.db.insert("tenantSkills", {
+                          tenantId: "someone-else",
+                          name: "seed",
+                          version: 1,
+                          body: "seed",
+                          authoredBody: "seed",
+                          status: "candidate",
+                          author: "user",
+                          basedOnScope: "global",
+                          basedOnName: "seed",
+                          basedOnVersion: 1,
+                          rollbackEligible: false,
+                          createdAt: 0,
+                        }),
+                      );
       }
 
       // Branch the CALL, not the function reference: `query` and `mutation` are separately
@@ -582,5 +683,314 @@ describe("grounded-prose export stays on the internal + token plane", () => {
         /names? in (free )?prose/i.test(content),
     );
     expect(claims).toEqual([]);
+  });
+});
+
+/**
+ * BEHAVIORAL TWO-IDENTITY MATRIX.
+ *
+ * The structural checks above prove that a new table or wrapper cannot silently escape the
+ * registry. This section drives the actual tenant-facing APIs with two admitted identities and
+ * then reads the export through its production query, not through a test-only table accessor.
+ * `TENANT_TABLE_CLASSIFICATION` supplies the table universe; the small set of writes below are
+ * deliberately real product mutations whose rows are then carried through every export page.
+ */
+type ExportCursor = {
+  tableIndex: number;
+  cursor: string | null;
+  rowsExported: number;
+  tableRows: number;
+  truncated: boolean;
+  generatedAt: string;
+};
+
+async function exportRows<T extends GenericDataModel>(client: TestConvexForDataModel<T>) {
+  const rows: Record<string, unknown>[] = [];
+  let cursor: ExportCursor | undefined;
+  for (;;) {
+    const page = await client.query(api.tenantExport.exportTenantData, cursor ? { cursor } : {});
+    rows.push(...(page.table.rows as Record<string, unknown>[]));
+    if (!page.nextCursor) return rows;
+    cursor = page.nextCursor;
+  }
+}
+
+describe("two admitted tenants stay isolated through production APIs", () => {
+  test("A/B rows cross no read or write boundary, including the export read model", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.*s"));
+    const userA = await t.run((ctx) => ctx.db.insert("users", {}));
+    const userB = await t.run((ctx) => ctx.db.insert("users", {}));
+    const a = t.withIdentity({ subject: `${userA}|session_a` });
+    const b = t.withIdentity({ subject: `${userB}|session_b` });
+
+    const aDemo = await a.mutation(api.demo.addItem, { label: "tenant-a" });
+    const bDemo = await b.mutation(api.demo.addItem, { label: "tenant-b" });
+    const aContact = await a.mutation(api.contacts.upsertContact, {
+      email: "a@example.com",
+      origin: "user-entered",
+    });
+    const bContact = await b.mutation(api.contacts.upsertContact, {
+      email: "b@example.com",
+      origin: "user-entered",
+    });
+    const aPrompt = await a.mutation(api.savedPrompts.save, { text: "tenant A prompt" });
+    const bPrompt = await b.mutation(api.savedPrompts.save, { text: "tenant B prompt" });
+
+    expect((await a.query(api.demo.listItems, {})).map((row) => row._id)).toEqual([aDemo]);
+    expect((await b.query(api.demo.listItems, {})).map((row) => row._id)).toEqual([bDemo]);
+    expect(
+      (await a.query(api.contacts.listContacts, { limit: 50 })).contacts.map(
+        (row) => row.contactId,
+      ),
+    ).toEqual([aContact]);
+    expect(
+      (await b.query(api.contacts.listContacts, { limit: 50 })).contacts.map(
+        (row) => row.contactId,
+      ),
+    ).toEqual([bContact]);
+    expect((await a.query(api.savedPrompts.list, {})).map((row) => row.id)).toEqual([aPrompt.id]);
+    expect((await b.query(api.savedPrompts.list, {})).map((row) => row.id)).toEqual([bPrompt.id]);
+
+    // Valid ids are intentional: these refusals reach the ownership check rather than failing at
+    // Convex argument validation, and they leave the other tenant's rows byte-unchanged.
+    await expect(b.mutation(api.savedPrompts.remove, { id: aPrompt.id })).resolves.toEqual({
+      removed: false,
+    });
+    await expect(
+      b.mutation(api.contacts.assertConsent, {
+        contactId: aContact,
+        wording: "foreign attempt",
+      }),
+    ).rejects.toThrow(/CONTACT_NOT_FOUND/);
+    expect((await a.query(api.savedPrompts.list, {})).map((row) => row.id)).toEqual([aPrompt.id]);
+
+    const aExport = await exportRows(a);
+    const bExport = await exportRows(b);
+    expect(
+      aExport.some((row) => row._id === aDemo || row._id === aContact || row._id === aPrompt.id),
+    ).toBe(true);
+    expect(
+      aExport.some((row) => row._id === bDemo || row._id === bContact || row._id === bPrompt.id),
+    ).toBe(false);
+    expect(
+      bExport.some((row) => row._id === bDemo || row._id === bContact || row._id === bPrompt.id),
+    ).toBe(true);
+    expect(
+      bExport.some((row) => row._id === aDemo || row._id === aContact || row._id === aPrompt.id),
+    ).toBe(false);
+
+    const classified = Object.entries(TENANT_TABLE_CLASSIFICATION);
+    expect(new Set(classified.map(([, category]) => category))).toEqual(
+      new Set([
+        "tenant_owned",
+        "tenant_credential",
+        "global",
+        "audit_immutable",
+        "admission_plane",
+      ]),
+    );
+  });
+});
+
+describe("tenant catalogue production adapter isolation", () => {
+  const create = makeFunctionReference<
+    "mutation",
+    {
+      sku: string;
+      variant: string;
+      currency: string;
+      priceMinor: number;
+      status: "active";
+      goodsKind: "physical";
+      stock: { kind: "finite"; onHand: number; reservationTtlMs: number };
+    },
+    { productId: string; revision: number; stockRevision: number }
+  >("tenantCatalogue:createProduct");
+  const list = makeFunctionReference<
+    "query",
+    { limit?: number },
+    {
+      products: { _id: string; sku: string; available: number | "untracked" }[];
+      nextCursor: string | null;
+    }
+  >("tenantCatalogue:listProducts");
+  const edit = makeFunctionReference<
+    "mutation",
+    {
+      productId: string;
+      expectedRevision: number;
+      priceMinor?: number;
+      status?: "retired";
+    },
+    { revision: number }
+  >("tenantCatalogue:editProduct");
+  const adjust = makeFunctionReference<
+    "mutation",
+    {
+      productId: string;
+      expectedRevision: number;
+      delta: number;
+    },
+    { stockRevision: number }
+  >("tenantCatalogue:adjustStock");
+  const reserve = makeFunctionReference<
+    "mutation",
+    {
+      productId: string;
+      expectedStockRevision: number;
+      quantity: number;
+    },
+    { reservationId: string; stockRevision: number }
+  >("tenantCatalogue:reserveProduct");
+  const release = makeFunctionReference<
+    "mutation",
+    {
+      productId: string;
+      reservationId: string;
+      expectedStockRevision: number;
+    },
+    { stockRevision: number }
+  >("tenantCatalogue:releaseReservation");
+
+  test("authenticated A/B, owner and anonymous callers cannot cross product, stock or reservation boundaries", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.*s"));
+    t.registerComponent(
+      "auditCounts",
+      aggregateSchema,
+      import.meta.glob("../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts"),
+    );
+    const [aId, bId, ownerId] = await t.run(async (ctx) =>
+      Promise.all([
+        ctx.db.insert("users", {}),
+        ctx.db.insert("users", {}),
+        ctx.db.insert("users", { owner: true }),
+      ]),
+    );
+    const a = t.withIdentity({ subject: `${aId}|a` });
+    const b = t.withIdentity({ subject: `${bId}|b` });
+    const owner = t.withIdentity({ subject: `${ownerId}|owner` });
+    const args = {
+      sku: "lamp",
+      variant: "standard",
+      currency: "USD",
+      priceMinor: 1200,
+      goodsKind: "physical" as const,
+      status: "active" as const,
+      stock: { kind: "finite" as const, onHand: 2, reservationTtlMs: 900_000 },
+    };
+    const aProduct = await a.mutation(create, args);
+    const bProduct = await b.mutation(create, args);
+    const aReservation = await a.mutation(reserve, {
+      productId: aProduct.productId,
+      expectedStockRevision: 1,
+      quantity: 1,
+    });
+
+    expect((await a.query(list, {})).products.map((row) => row._id)).toEqual([aProduct.productId]);
+    expect((await b.query(list, {})).products.map((row) => row._id)).toEqual([bProduct.productId]);
+    expect((await owner.query(list, {})).products).toEqual([]);
+    await expect(t.query(list, {})).rejects.toThrow("UNAUTHENTICATED");
+    await expect(t.mutation(create, args)).rejects.toThrow("UNAUTHENTICATED");
+
+    for (const actor of [b, owner]) {
+      await expect(
+        actor.mutation(edit, { productId: aProduct.productId, expectedRevision: 1, priceMinor: 1 }),
+      ).rejects.toThrow("PRODUCT_UNAVAILABLE");
+      await expect(
+        actor.mutation(adjust, { productId: aProduct.productId, expectedRevision: 2, delta: -1 }),
+      ).rejects.toThrow("PRODUCT_UNAVAILABLE");
+      await expect(
+        actor.mutation(reserve, {
+          productId: aProduct.productId,
+          expectedStockRevision: 2,
+          quantity: 1,
+        }),
+      ).rejects.toThrow("PRODUCT_UNAVAILABLE");
+      await expect(
+        actor.mutation(release, {
+          productId: aProduct.productId,
+          reservationId: aReservation.reservationId,
+          expectedStockRevision: 2,
+        }),
+      ).rejects.toThrow("PRODUCT_UNAVAILABLE");
+    }
+    await expect(
+      b.mutation(release, {
+        productId: bProduct.productId,
+        reservationId: aReservation.reservationId,
+        expectedStockRevision: 1,
+      }),
+    ).rejects.toThrow("RESERVATION_UNAVAILABLE");
+    expect((await a.query(list, {})).products).toMatchObject([
+      { _id: aProduct.productId, available: 1 },
+    ]);
+    expect((await b.query(list, {})).products).toMatchObject([
+      { _id: bProduct.productId, available: 2 },
+    ]);
+    const receipts = await t.run((ctx) => ctx.db.query("audit").collect());
+    expect(receipts).toHaveLength(3);
+    expect(
+      receipts.every((receipt) =>
+        Object.keys(receipt.payload).every((key) =>
+          /^(productId|stockRevision|status|reservationId|quantity)$/.test(key),
+        ),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("closed commerce intent and foreign cart isolation", () => {
+  test("anonymous HTTP cannot smuggle tenant/product ids and authenticated A cannot place B's cart", async () => {
+    const t = convexTest(schema, import.meta.glob("./**/*.*s"));
+    const [aId, bId] = await t.run(async (ctx) =>
+      Promise.all([ctx.db.insert("users", {}), ctx.db.insert("users", {})]),
+    );
+    const cartId = await t.run(async (ctx) => {
+      const projectId = await ctx.db.insert("webProjects", {
+        tenantId: String(bId),
+        kind: "storefront",
+        slug: "foreign-store",
+        title: "Foreign",
+        publicHost: "some.convex.site",
+        domainMode: "platform_path",
+        hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+        revision: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      return ctx.db.insert("tenantCarts", {
+        tenantId: String(bId),
+        projectId,
+        lines: [],
+        addressCountry: "TZ",
+        revision: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+      });
+    });
+    const foreignProduct = await t.fetch("/p/foreign-store/home/commerce/cart", {
+      method: "POST",
+      headers: {
+        Origin: "https://some.convex.site",
+        "Content-Type": "application/json",
+        "Idempotency-Key": "foreign-1",
+      },
+      body: JSON.stringify({
+        items: [{ presentationItemId: "lamp", productId: "foreign-product", quantity: 1 }],
+        addressCountry: "TZ",
+      }),
+    });
+    expect(foreignProduct.status).toBe(400);
+    const a = t.withIdentity({ subject: `${aId}|session` });
+    const place = makeFunctionReference<
+      "mutation",
+      { cartId: typeof cartId; expectedCartRevision: number; retryKey: string }
+    >("tenantOrders:placeOrder");
+    await expect(
+      a.mutation(place, { cartId, expectedCartRevision: 1, retryKey: "foreign-1" }),
+    ).rejects.toThrow("CART_UNAVAILABLE");
+    expect(await t.run((ctx) => ctx.db.query("tenantOrders").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("tenantReservations").collect())).toEqual([]);
   });
 });

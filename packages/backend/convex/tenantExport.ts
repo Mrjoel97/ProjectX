@@ -1,7 +1,10 @@
 import {
   AUDIT_ARCHIVE_STATEMENT,
+  COMMERCE_EXPORT_FIELDS,
+  commerceExportView,
   type DeletableTenantTable,
   exportableTables,
+  isCommerceTable,
   storageIdsIn,
   summarizeTenantCredential,
   TENANT_EXPORT_SCHEMA_VERSION,
@@ -25,6 +28,9 @@ export const TENANT_EXPORT_PAGE_SIZE = 256;
  */
 export const TENANT_EXPORT_ROWS_PER_TABLE = 500;
 export const TENANT_EXPORT_TOTAL_ROW_CAP = 20_000;
+// Plan 50-04 local policies, mappings, carts, orders and attempts use the same classified
+// tenant-owned walk below. Order snapshots are content-plane data; no finance-retention exception
+// is inferred from including them in export. Erasure has a separate preflight refusal.
 
 const omittedReason = (
   category: "global" | "audit_immutable" | "admission_plane",
@@ -82,6 +88,9 @@ export const exportTenantData = tenantQuery({
     const exportTables = exportableTables();
     const table = exportTables[tableIndex];
     if (!table) throw new Error("INVALID_EXPORT_CURSOR");
+    if (isCommerceTable(table) && !(table in COMMERCE_EXPORT_FIELDS)) {
+      throw new Error(`COMMERCE_TABLE_UNCLASSIFIED:${table}`);
+    }
 
     const omitted: Record<string, string> = {};
     for (const [omittedTable, category] of Object.entries(TENANT_TABLE_CLASSIFICATION)) {
@@ -120,7 +129,11 @@ export const exportTenantData = tenantQuery({
 
     const category = TENANT_TABLE_CLASSIFICATION[table];
     const shapedRows =
-      category === "tenant_credential" ? rows.map(summarizeTenantCredential) : rows;
+      category === "tenant_credential"
+        ? rows.map(summarizeTenantCredential)
+        : isCommerceTable(table)
+          ? rows.map((row) => commerceExportView(table, row))
+          : rows;
     const totalRows = rowsExported + shapedRows.length;
     const tableRowsAfter = tableRows + shapedRows.length;
     // Only a table with rows STILL UNREAD is truncated. One that ends exactly on its budget is

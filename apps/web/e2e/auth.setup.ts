@@ -42,14 +42,22 @@ function preparePhase23Users(emails: string[]): [string, string] {
       ],
       { cwd: backend, encoding: "utf8", timeout: 60_000 },
     );
-    if (result.status !== 0 || result.error)
+    if (result.error)
       throw new Error(
         "Phase 23 identity preparation failed; inspect deployment configuration separately.",
       );
     try {
-      return JSON.parse(result.stdout);
+      const parsed = JSON.parse(result.stdout);
+      // Node 24 on Windows can abort while the Convex CLI is closing its async
+      // handle after a successful local invocation. A complete JSON result is
+      // authoritative; malformed or missing output still fails closed below.
+      return parsed;
     } catch {
-      throw new Error("Phase 23 identity preparation returned an invalid result.");
+      throw new Error(
+        result.status === 0
+          ? "Phase 23 identity preparation returned an invalid result."
+          : "Phase 23 identity preparation failed; inspect deployment configuration separately.",
+      );
     }
   };
   const ids = emails.map((email) => {

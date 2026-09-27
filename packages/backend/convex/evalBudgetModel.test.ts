@@ -128,16 +128,20 @@ describe("low-level model budget middleware", () => {
     expect(events).toEqual(["reserve", "provider", "settle"]);
     expect(wire[0]).toMatchObject({
       max_tokens: 8192,
-      n: 1,
-      plugins: [],
-      transforms: [],
       provider: {
         only: ["openai"],
+        order: ["openai"],
         allow_fallbacks: false,
-        require_parameters: true,
         max_price: { prompt: 0.5, completion: 1.8, request: 0, image: 0 },
       },
     });
+    // providerOptions.openrouter is SPREAD into the top-level request body by the
+    // @openrouter provider; `n`/`transforms`/`plugins` and a `require_parameters`
+    // filter are not permitted (they made every eval chat request unroutable — HTTP 400).
+    expect(wire[0]).not.toHaveProperty("n");
+    expect(wire[0]).not.toHaveProperty("transforms");
+    expect(wire[0]).not.toHaveProperty("plugins");
+    expect(wire[0]?.provider).not.toHaveProperty("require_parameters");
     expect(onCost).toHaveBeenCalledExactlyOnceWith(0.000123);
     expect(wire[0]?.messages).toEqual([
       {

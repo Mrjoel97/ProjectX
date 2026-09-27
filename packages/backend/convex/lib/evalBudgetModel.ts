@@ -8,8 +8,8 @@ import {
   APICallError,
   InvalidResponseDataError,
   JSONParseError,
-  TypeValidationError,
   type LanguageModel,
+  TypeValidationError,
   wrapLanguageModel,
 } from "ai";
 import type { GenericActionCtx } from "convex/server";
@@ -34,6 +34,102 @@ export type EvalContext = {
 export type ImageInput = { bytes: ArrayBuffer; mimeType: "image/png" | "image/jpeg" };
 
 const FAILED_CONSERVATIVE_PREFIX = "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE";
+const MAX_DIAGNOSTIC_BODY_BYTES = 8_192;
+const FAILURE_DIAGNOSTIC_CATEGORIES = ["TOOL_SCHEMA", "ROUTING", "MODEL", "CONTEXT"] as const;
+type FailureDiagnosticCategory = (typeof FAILURE_DIAGNOSTIC_CATEGORIES)[number] | "UNKNOWN";
+
+const PROVIDER_ERROR_CODES: Readonly<Record<string, FailureDiagnosticCategory>> = {
+  invalid_tool_schema: "TOOL_SCHEMA",
+  tool_schema_invalid: "TOOL_SCHEMA",
+  no_available_provider: "ROUTING",
+  provider_not_available: "ROUTING",
+  routing_error: "ROUTING",
+  model_not_found: "MODEL",
+  invalid_model: "MODEL",
+  context_length_exceeded: "CONTEXT",
+  max_context_length_exceeded: "CONTEXT",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Categorize only exact, code-owned provider codes/parameter paths from a small envelope. */
+function structuredHttp400Category(responseBody: unknown, depth = 0): FailureDiagnosticCategory {
+  if (depth > 1) return "UNKNOWN";
+  if (
+    typeof responseBody !== "string" ||
+    responseBody.length === 0 ||
+    new TextEncoder().encode(responseBody).byteLength > MAX_DIAGNOSTIC_BODY_BYTES
+  )
+    return "UNKNOWN";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(responseBody);
+  } catch {
+    return "UNKNOWN";
+  }
+  if (
+    !isRecord(parsed) ||
+    Object.keys(parsed).some((key) => !["error", "user_id"].includes(key)) ||
+    (parsed.user_id !== undefined &&
+      (typeof parsed.user_id !== "string" || parsed.user_id.length > 256)) ||
+    !isRecord(parsed.error) ||
+    Object.keys(parsed.error).some(
+      (key) => !["code", "message", "type", "param", "metadata"].includes(key),
+    )
+  )
+    return "UNKNOWN";
+
+  const error = parsed.error;
+  const candidates: FailureDiagnosticCategory[] = [];
+  if (typeof error.code === "string") {
+    if (!Object.hasOwn(PROVIDER_ERROR_CODES, error.code)) return "UNKNOWN";
+    const category = PROVIDER_ERROR_CODES[error.code];
+    if (category === undefined) return "UNKNOWN";
+    candidates.push(category);
+  } else if (error.code !== undefined && error.code !== null && error.code !== 400) {
+    return "UNKNOWN";
+  }
+  if (
+    (error.message !== undefined &&
+      (typeof error.message !== "string" || error.message.length > MAX_DIAGNOSTIC_BODY_BYTES)) ||
+    (error.type !== undefined &&
+      error.type !== null &&
+      (typeof error.type !== "string" || error.type !== "invalid_request_error")) ||
+    (error.param !== undefined && error.param !== null && typeof error.param !== "string")
+  )
+    return "UNKNOWN";
+  if (
+    typeof error.param === "string" &&
+    /^tools\[(?:0|[1-9][0-9]{0,2})\]\.function\.parameters$/.test(error.param)
+  )
+    candidates.push("TOOL_SCHEMA");
+  // OpenRouter sometimes wraps a provider's serialized error under metadata.raw.
+  if (error.metadata !== undefined) {
+    if (
+      !isRecord(error.metadata) ||
+      Object.keys(error.metadata).some(
+        (key) => !["raw", "provider_name", "is_byok"].includes(key),
+      ) ||
+      (error.metadata.provider_name !== undefined &&
+        (typeof error.metadata.provider_name !== "string" ||
+          error.metadata.provider_name.length > 128)) ||
+      (error.metadata.is_byok !== undefined && typeof error.metadata.is_byok !== "boolean")
+    )
+      return "UNKNOWN";
+    if (error.metadata.raw !== undefined) {
+      if (typeof error.metadata.raw !== "string") return "UNKNOWN";
+      const inner = structuredHttp400Category(error.metadata.raw, depth + 1);
+      if (inner === "UNKNOWN") return "UNKNOWN";
+      candidates.push(inner);
+    }
+  }
+  const first = candidates[0];
+  return first !== undefined && candidates.every((category) => category === first)
+    ? first
+    : "UNKNOWN";
+}
 
 /**
  * A terminal golden failure must be diagnosable without exposing an SDK error's message, body,
@@ -42,9 +138,15 @@ const FAILED_CONSERVATIVE_PREFIX = "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE";
 export function closedGoldenFailureToken(error: unknown): string {
   if (APICallError.isInstance(error)) {
     const status = error.statusCode;
-    return typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
-      ? `${FAILED_CONSERVATIVE_PREFIX}_HTTP_${status}`
-      : `${FAILED_CONSERVATIVE_PREFIX}_HTTP_UNKNOWN`;
+    const httpToken =
+      typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
+        ? `${FAILED_CONSERVATIVE_PREFIX}_HTTP_${status}`
+        : `${FAILED_CONSERVATIVE_PREFIX}_HTTP_UNKNOWN`;
+    if (status === 400) {
+      const category = structuredHttp400Category(error.responseBody);
+      return `${httpToken}_CATEGORY_${category}`;
+    }
+    return httpToken;
   }
   if (JSONParseError.isInstance(error)) return `${FAILED_CONSERVATIVE_PREFIX}_PARSE`;
   if (TypeValidationError.isInstance(error) || InvalidResponseDataError.isInstance(error))
@@ -123,15 +225,16 @@ export function evalBudgetModel(args: {
           ...params,
           maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
           providerOptions: {
+            // The @openrouter provider SPREADS these keys into the top-level request body —
+            // only keys OpenRouter's documented chat-completions schema accepts may appear
+            // here, and no `require_parameters` filter (the `n`/`plugins` incidents: see
+            // @pikar/cost goldenChatWireOptions / openRouterProvider).
             openrouter: goldenOptions ?? {
               max_tokens: EVAL_MAX_OUTPUT_TOKENS,
-              n: 1,
-              plugins: [],
-              transforms: [],
               provider: {
                 only: ["openai"],
+                order: ["openai"],
                 allow_fallbacks: false,
-                require_parameters: true,
                 max_price: {
                   prompt: bound?.promptPerMillion ?? 0,
                   completion: bound?.completionPerMillion ?? 0,

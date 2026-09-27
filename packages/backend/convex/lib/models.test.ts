@@ -58,10 +58,10 @@ describe("resolveModel routes an id to the provider that id names", () => {
     const model = resolved("or/openai/gpt-4o-mini");
     expect(model.provider).toContain("openrouter");
     expect(model.provider).not.toContain("openai.");
-    expect(model.modelId).toBe("openai/gpt-4o-mini");
+    expect(model.modelId).toBe("openai/gpt-4o-mini-2024-07-18");
   });
 
-  test("the DEFAULT model — the one the knowledge plane actually sends — routes to OpenRouter", async () => {
+  test("the DEFAULT pricing id routes to OpenRouter's exact tool-capable wire model", async () => {
     // Read from `@pikar/cost` rather than spelled here, because the whole failure was a constant
     // changing under copies that did not move with it.
     const { DEFAULT_MODEL } = await import("@pikar/cost");
@@ -70,7 +70,7 @@ describe("resolveModel routes an id to the provider that id names", () => {
       true,
     );
     expect(model.provider).toContain("openrouter");
-    expect(model.modelId).toBe(DEFAULT_MODEL.slice(3));
+    expect(model.modelId).toBe("openai/gpt-4o-mini-2024-07-18");
   });
 
   test("a `stealth/` id keeps its FULL id — OpenRouter wants it and PRICING is keyed on it", () => {

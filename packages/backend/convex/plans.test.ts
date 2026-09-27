@@ -314,6 +314,32 @@ describe("recordDeliveryTerminal (Phase 26 — exact bounded plan progress)", ()
     );
     expect((await t.run((ctx) => ctx.db.get(first)))?.status).toBe("sent");
     expect((await t.run((ctx) => ctx.db.get(second)))?.status).toBe("failed");
+    const journeyEvents = await t.run((ctx) => ctx.db.query("betaJourneyEvents").collect());
+    expect(journeyEvents).toHaveLength(2);
+    expect(journeyEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tenantId: TENANT,
+          eventType: "delivery_sent",
+          idempotencyKey: `delivery:${String(first)}`,
+          planId,
+          requestId: first,
+          terminalOutcome: "sent",
+        }),
+        expect.objectContaining({
+          tenantId: TENANT,
+          eventType: "delivery_failed",
+          idempotencyKey: `delivery:${String(second)}`,
+          planId,
+          requestId: second,
+          terminalOutcome: "failed",
+        }),
+      ]),
+    );
+    for (const event of journeyEvents) {
+      expect(Object.keys(event)).not.toContain("recipient");
+      expect(Object.keys(event)).not.toContain("body");
+    }
   });
 
   test("legacy plans transition request status but remain explicitly counter-partial", async () => {
@@ -445,6 +471,16 @@ describe("recordDeliveryTerminal (Phase 26 — exact bounded plan progress)", ()
       sentCount: 0,
       failedCount: 0,
     });
+    expect(await t.run((ctx) => ctx.db.query("betaJourneyEvents").collect())).toEqual([
+      expect.objectContaining({
+        tenantId: TENANT,
+        eventType: "delivery_suppressed",
+        idempotencyKey: `delivery:${String(requestId)}`,
+        planId,
+        requestId,
+        terminalOutcome: "suppressed",
+      }),
+    ]);
   });
 });
 

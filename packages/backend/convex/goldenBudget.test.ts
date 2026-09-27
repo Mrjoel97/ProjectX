@@ -1,8 +1,8 @@
 // @vitest-environment node
 
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { APICallError, InvalidResponseDataError, JSONParseError, TypeValidationError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { GenericActionCtx } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
@@ -18,6 +18,14 @@ const limiterModules = import.meta.glob(
   "../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
 );
 const tenantId = "eval-abcdef12";
+const http400Error = (responseBody: string, message = "private") =>
+  new APICallError({
+    message,
+    url: "https://example.invalid/route",
+    requestBodyValues: {},
+    responseBody,
+    statusCode: 400,
+  });
 type Search = (
   input: { query: string },
   options: { toolCallId: string; messages: [] },
@@ -158,8 +166,16 @@ test("real OpenRouter model fetches settle success and classify closed failures"
         JSON.stringify({
           id: "mock-completion",
           model: "openai/gpt-4o-mini",
-          choices: [{ index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" }],
-          usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3, cost: 0.001, is_byok: false },
+          choices: [
+            { index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" },
+          ],
+          usage: {
+            prompt_tokens: 2,
+            completion_tokens: 1,
+            total_tokens: 3,
+            cost: 0.001,
+            is_byok: false,
+          },
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
@@ -202,7 +218,8 @@ test("real OpenRouter model fetches settle success and classify closed failures"
     const call = wrapped.doGenerate({
       prompt: [{ role: "user", content: [{ type: "text", text: "public fixture" }] }],
     });
-    if (current.error === undefined) await expect(call).resolves.toMatchObject({ content: [{ type: "text", text: "ok" }] });
+    if (current.error === undefined)
+      await expect(call).resolves.toMatchObject({ content: [{ type: "text", text: "ok" }] });
     else await expect(call).rejects.toThrow(current.error);
     const status = await t.query(internal.guardrails.evalBudgetStatus, { budgetId });
     expect(status).toMatchObject({
@@ -288,6 +305,82 @@ test("golden failure classification is closed and cannot leak provider error con
     "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_UNKNOWN",
   ]);
   expect(JSON.stringify(errors.map(closedGoldenFailureToken))).not.toContain(secret);
+});
+
+test("structured HTTP 400 failures add only allowlisted diagnostic categories", () => {
+  const cases = [
+    ['{"error":{"code":"invalid_tool_schema","message":"private"}}', "TOOL_SCHEMA"],
+    ['{"error":{"code":"no_available_provider"}}', "ROUTING"],
+    ['{"error":{"code":"model_not_found"}}', "MODEL"],
+    ['{"error":{"code":"context_length_exceeded"}}', "CONTEXT"],
+    [
+      '{"error":{"code":"invalid_model","metadata":{"raw":"{\\"error\\":{\\"code\\":\\"invalid_model\\"}}"}}}',
+      "MODEL",
+    ],
+  ] as const;
+  for (const [responseBody, category] of cases) {
+    const error = http400Error(responseBody, "private message");
+    expect(closedGoldenFailureToken(error)).toBe(
+      `EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400_CATEGORY_${category}`,
+    );
+  }
+
+  const openRouterWrapper = JSON.stringify({
+    user_id: "opaque-provider-id",
+    error: {
+      code: 400,
+      type: null,
+      param: null,
+      message: "private wrapper text",
+      metadata: {
+        provider_name: "OpenAI",
+        is_byok: false,
+        raw: JSON.stringify({
+          error: {
+            message: "private inner text",
+            type: "invalid_request_error",
+            code: "invalid_tool_schema",
+          },
+        }),
+      },
+    },
+  });
+  expect(closedGoldenFailureToken(http400Error(openRouterWrapper))).toBe(
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400_CATEGORY_TOOL_SCHEMA",
+  );
+
+  const toolParam = JSON.stringify({
+    error: {
+      type: "invalid_request_error",
+      code: null,
+      param: "tools[17].function.parameters",
+      message: "private path details",
+    },
+  });
+  expect(closedGoldenFailureToken(http400Error(toolParam))).toBe(
+    "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400_CATEGORY_TOOL_SCHEMA",
+  );
+});
+
+test("HTTP 400 diagnostic parsing is bounded, closed, and secret-safe on ambiguity", () => {
+  const secret = "sk-provider-secret do not expose";
+  const bodies = [
+    `{"error":{"code":"${secret}","message":"${secret}"}}`,
+    '{"error":{"code":"toString"}}',
+    '{"error":{"code":"constructor"}}',
+    '{"error":{"code":"__proto__"}}',
+    `{"error":{"code":"invalid_model","metadata":{"raw":"${secret}"}}}`,
+    `{"error":{"code":"invalid_model","unexpected":"${secret}"}}`,
+    `{"error":{"code":"invalid_model","metadata":{"raw":"${"x".repeat(8193)}"}}}`,
+    `{"error":{"code":"invalid_model","metadata":{"raw":"{\\"error\\":{\\"code\\":\\"invalid_model\\",\\"metadata\\":{\\"raw\\":\\"{\\\\\\"error\\\\\\":{\\\\\\"code\\\\\\":\\\\\\"invalid_model\\\\\\"}}\\"}}}"}}}`,
+  ];
+  const tokens = bodies.map((responseBody) =>
+    closedGoldenFailureToken(http400Error(responseBody, secret)),
+  );
+  expect(tokens).toEqual(
+    bodies.map(() => "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400_CATEGORY_UNKNOWN"),
+  );
+  expect(JSON.stringify(tokens)).not.toContain(secret);
 });
 
 test("golden envelope requires verified billing and one bounded tenant family", async () => {

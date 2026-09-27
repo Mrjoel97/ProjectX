@@ -117,7 +117,9 @@ describe("one Google consent flow", () => {
 
   test("buildAuthorizeUrl is the only Google authorize-URL construction in convex", () => {
     const constructions = Object.entries(convexSources).flatMap(([path, source]) =>
-      [...source.matchAll(/accounts\.google\.com\/o\/oauth2/g)].map(() => path),
+      path.endsWith(".test.ts")
+        ? []
+        : [...source.matchAll(/accounts\.google\.com\/o\/oauth2/g)].map(() => path),
     );
     expect(constructions.length, "the scan found no authorize URL and is vacuous").toBeGreaterThan(
       0,

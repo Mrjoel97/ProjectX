@@ -1,4 +1,9 @@
-import { deletableTables, type TenantDeletionCursor } from "@pikar/core/tenantData";
+import {
+  deletableTables,
+  STORAGE_ID_FIELDS,
+  TENANT_TABLE_CLASSIFICATION,
+  type TenantDeletionCursor,
+} from "@pikar/core/tenantData";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -27,6 +32,11 @@ const deleteTenantDataPage = makeFunctionReference<
     nextCursor: TenantDeletionCursor | null;
   }
 >("tenantDelete:deleteTenantDataPage");
+const authorizeTenantDeletion = makeFunctionReference<
+  "mutation",
+  { tenantId: string; userId: Id<"users"> },
+  unknown
+>("tenantDelete:authorizeTenantDeletion");
 type ProviderResult = {
   provider: "google" | "microsoft" | "billing" | "hubspot" | "quickbooks" | "stripe" | "paypal";
   localRowDeleted: boolean;
@@ -39,6 +49,296 @@ const deleteTenantData = makeFunctionReference<
   { confirmation: string },
   { deletedByTable: Record<string, number>; providers: ProviderResult[] }
 >("tenantDelete:deleteTenantData");
+
+test("Phase 48 rows are erased by the generic tenant walk and artifacts are deleted first", () => {
+  expect(TENANT_TABLE_CLASSIFICATION.webProjects).toBe("tenant_owned");
+  expect(TENANT_TABLE_CLASSIFICATION.webProjectVersions).toBe("tenant_owned");
+  expect(TENANT_TABLE_CLASSIFICATION.webMetrics).toBe("tenant_owned");
+  expect(TENANT_TABLE_CLASSIFICATION.webSubmissions).toBe("tenant_owned");
+  expect(deletableTables()).toEqual(
+    expect.arrayContaining(["webProjects", "webProjectVersions", "webMetrics", "webSubmissions"]),
+  );
+  expect(STORAGE_ID_FIELDS.webProjectVersions).toEqual(["artifactStorageId"]);
+});
+
+test("Phase 50 catalogue, stock and reservations erase only the selected tenant", async () => {
+  const { t, tenantA, tenantB } = await seedTwoTenants();
+  await t.run(async (ctx) => {
+    for (const [tenantId, sku] of [
+      [tenantA, "delete-lamp"],
+      [tenantB, "keep-lamp"],
+    ] as const) {
+      const productId = await ctx.db.insert("tenantProducts", {
+        tenantId,
+        sku,
+        variant: "one",
+        currency: "USD",
+        priceMinor: 100,
+        status: "active",
+        revision: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("tenantStock", {
+        tenantId,
+        productId,
+        kind: "finite",
+        onHand: 2,
+        reserved: 1,
+        reservationTtlMs: 900_000,
+        revision: 2,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("tenantReservations", {
+        tenantId,
+        productId,
+        quantity: 1,
+        status: "held",
+        expiresAt: 900_001,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    }
+  });
+  const counts = await deleteAll(t, String(tenantA), tenantA);
+  expect(counts).toMatchObject({ tenantProducts: 1, tenantStock: 1, tenantReservations: 1 });
+  await t.run(async (ctx) => {
+    for (const table of ["tenantProducts", "tenantStock", "tenantReservations"] as const) {
+      expect(
+        await ctx.db
+          .query(table)
+          .withIndex("by_tenant", (q) => q.eq("tenantId", String(tenantA)))
+          .collect(),
+      ).toHaveLength(0);
+      expect(
+        await ctx.db
+          .query(table)
+          .withIndex("by_tenant", (q) => q.eq("tenantId", String(tenantB)))
+          .collect(),
+      ).toHaveLength(1);
+    }
+  });
+});
+
+test("unused policy revisions erase, while an order refuses before a direct or jumped deletion page", async () => {
+  const { t, tenantA, tenantB } = await seedTwoTenants();
+  await t.run(async (ctx) => {
+    for (const tenantId of [tenantA, tenantB]) {
+      const projectId = await ctx.db.insert("webProjects", {
+        tenantId: String(tenantId),
+        kind: "storefront",
+        slug: `delete-${tenantId}`,
+        title: "Private",
+        publicHost: "private.test",
+        domainMode: "platform_path",
+        hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+        revision: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("tenantCommercePolicies", {
+        tenantId,
+        projectId,
+        revision: 1,
+        sellerOfRecordRef: "seller",
+        currency: "USD",
+        countries: ["US"],
+        createdAt: 1,
+      });
+    }
+  });
+  await authorizeTenantDeletionCall(t, tenantA);
+  const counts = await deleteAll(t, String(tenantA), tenantA);
+  expect(counts.tenantCommercePolicies).toBe(1);
+  await t.run(async (ctx) => {
+    expect(
+      await ctx.db
+        .query("tenantCommercePolicies")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", String(tenantB)))
+        .collect(),
+    ).toHaveLength(1);
+  });
+
+  const projectId = await t.run((ctx) =>
+    ctx.db
+      .query("webProjects")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", String(tenantB)))
+      .first()
+      .then((row) => row!._id),
+  );
+  const cartId = await t.run((ctx) =>
+    ctx.db.insert("tenantCarts", {
+      tenantId: String(tenantB),
+      projectId,
+      lines: [],
+      addressCountry: "US",
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      expiresAt: 1000,
+    }),
+  );
+  const orderId = await t.run((ctx) =>
+    ctx.db.insert("tenantOrders", {
+      tenantId: String(tenantB),
+      projectId,
+      cartId,
+      cartRevision: 1,
+      snapshot: {
+        tenantId: String(tenantB),
+        projectId: String(projectId),
+        currency: "USD",
+        country: "US",
+        policyId: "missing-policy",
+        policyRevision: 1,
+        sellerOfRecordRef: "seller",
+        lines: [],
+        subtotalMinor: 0,
+        taxMinor: 0,
+        shippingMinor: 0,
+        totalMinor: 0,
+        hash: "hash",
+      },
+      snapshotHash: "hash",
+      status: "pending",
+      expiresAt: 1000,
+      createdAt: 1,
+      updatedAt: 1,
+    }),
+  );
+  await expect(authorizeTenantDeletionCall(t, tenantB)).rejects.toThrow(
+    "COMMERCE_RETENTION_POLICY_REQUIRED:ORDER_FINANCIAL_FULFILMENT_REFUND_BUYER",
+  );
+  await expect(
+    t.mutation(deleteTenantDataPage, { tenantId: String(tenantB), userId: tenantB }),
+  ).rejects.toThrow("COMMERCE_RETENTION_POLICY_REQUIRED:ORDER_FINANCIAL_FULFILMENT_REFUND_BUYER");
+  await expect(
+    t.mutation(deleteTenantDataPage, {
+      tenantId: String(tenantB),
+      userId: tenantB,
+      cursor: { tableIndex: deletableTables().indexOf("tenantOrders") },
+    }),
+  ).rejects.toThrow("COMMERCE_RETENTION_POLICY_REQUIRED:ORDER_FINANCIAL_FULFILMENT_REFUND_BUYER");
+  await t.run(async (ctx) => {
+    expect(
+      await ctx.db
+        .query("demoItems")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", String(tenantB)))
+        .collect(),
+    ).toHaveLength(1);
+    expect(
+      await ctx.db
+        .query("tenantCommercePolicies")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", String(tenantB)))
+        .collect(),
+    ).toHaveLength(1);
+  });
+  await t.run((ctx) => ctx.db.delete(orderId));
+  const attemptId = await t.run((ctx) =>
+    ctx.db.insert("tenantOrderAttempts", {
+      tenantId: String(tenantB),
+      orderId,
+      cartId,
+      cartRevision: 1,
+      retryKeyHash: "hash",
+      snapshotHash: "hash",
+      status: "local_pending",
+      createdAt: 1,
+      updatedAt: 1,
+    }),
+  );
+  await expect(
+    t.mutation(deleteTenantDataPage, { tenantId: String(tenantB), userId: tenantB }),
+  ).rejects.toThrow("COMMERCE_RETENTION_POLICY_REQUIRED:ATTEMPT_HISTORY");
+  await t.run((ctx) => ctx.db.delete(attemptId));
+  const productId = await t.run((ctx) =>
+    ctx.db.insert("tenantProducts", {
+      tenantId: String(tenantB),
+      sku: "linked",
+      variant: "one",
+      currency: "USD",
+      priceMinor: 1,
+      status: "active",
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }),
+  );
+  const reservationId = await t.run((ctx) =>
+    ctx.db.insert("tenantReservations", {
+      tenantId: String(tenantB),
+      productId,
+      quantity: 1,
+      status: "held",
+      expiresAt: 1000,
+      createdAt: 1,
+      updatedAt: 1,
+      orderId,
+    }),
+  );
+  await expect(authorizeTenantDeletionCall(t, tenantB)).rejects.toThrow(
+    "COMMERCE_RETENTION_POLICY_REQUIRED:LINKED_RESERVATION",
+  );
+  await expect(
+    t.mutation(deleteTenantDataPage, {
+      tenantId: String(tenantB),
+      userId: tenantB,
+      cursor: { tableIndex: deletableTables().indexOf("tenantProducts") },
+    }),
+  ).rejects.toThrow("COMMERCE_RETENTION_POLICY_REQUIRED:LINKED_RESERVATION");
+  await t.run(async (ctx) => {
+    await ctx.db.patch(reservationId, { orderId: undefined, attemptId });
+  });
+  await expect(
+    t.mutation(deleteTenantDataPage, { tenantId: String(tenantB), userId: tenantB }),
+  ).rejects.toThrow("COMMERCE_RETENTION_POLICY_REQUIRED:LINKED_RESERVATION");
+});
+
+async function authorizeTenantDeletionCall(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
+  return t.mutation(authorizeTenantDeletion, { tenantId: String(userId), userId });
+}
+
+test("attempt-link preflight refuses above its bounded scan cap before any deletion", async () => {
+  const { t, tenantA } = await seedTwoTenants();
+  await t.run(async (ctx) => {
+    const productId = await ctx.db.insert("tenantProducts", {
+      tenantId: String(tenantA),
+      sku: "cap",
+      variant: "one",
+      currency: "USD",
+      priceMinor: 1,
+      status: "active",
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    for (let i = 0; i < 257; i++) {
+      await ctx.db.insert("tenantReservations", {
+        tenantId: String(tenantA),
+        productId,
+        quantity: 1,
+        status: "held",
+        expiresAt: i + 1,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    }
+  });
+  await expect(authorizeTenantDeletionCall(t, tenantA)).rejects.toThrow(
+    "COMMERCE_RETENTION_POLICY_REQUIRED:RESERVATION_SCAN_CAP",
+  );
+  await expect(
+    t.mutation(deleteTenantDataPage, { tenantId: String(tenantA), userId: tenantA }),
+  ).rejects.toThrow("COMMERCE_RETENTION_POLICY_REQUIRED:RESERVATION_SCAN_CAP");
+  await t.run(async (ctx) => {
+    expect(
+      await ctx.db
+        .query("demoItems")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", String(tenantA)))
+        .collect(),
+    ).toHaveLength(5);
+  });
+});
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -857,6 +1157,8 @@ describe("erasure deletes stored files (2026-09-08)", () => {
       const planPdf = await ctx.storage.store(new Blob(["plan-attachment"]));
       const asset = await ctx.storage.store(new Blob(["media-asset"]));
       const survivor = await ctx.storage.store(new Blob(["tenant-b-must-survive"]));
+      const webArtifact = await ctx.storage.store(new Blob(["web-a"]));
+      const webSurvivor = await ctx.storage.store(new Blob(["web-b"]));
 
       await ctx.db.insert("plans", {
         tenantId: tenantA,
@@ -870,6 +1172,76 @@ describe("erasure deletes stored files (2026-09-08)", () => {
           { storageId: planPdf, filename: "brief.pdf", mimeType: "application/pdf", size: 4 },
         ],
         createdAt: Date.now(),
+      });
+      const webProjectA = await ctx.db.insert("webProjects", {
+        tenantId: tenantA,
+        kind: "landing",
+        slug: "blob-a",
+        title: "Blob A",
+        publicHost: "pikar-platform",
+        domainMode: "platform_path",
+        hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+        draftVersion: 1,
+        revision: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      const webProjectB = await ctx.db.insert("webProjects", {
+        tenantId: tenantB,
+        kind: "landing",
+        slug: "blob-b",
+        title: "Blob B",
+        publicHost: "pikar-platform",
+        domainMode: "platform_path",
+        hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+        draftVersion: 1,
+        revision: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      await ctx.db.insert("webProjectVersions", {
+        tenantId: tenantA,
+        projectId: webProjectA,
+        version: 1,
+        document: { kind: "landing", title: "Blob A" },
+        contentHash: "sha256:web-a",
+        rendererVersion: "web-runtime-v1",
+        artifactStorageId: webArtifact,
+        artifactByteLength: 5,
+        createdBy: String(tenantA),
+        createdAt: Date.now(),
+        sourceRefs: [],
+        recipeRef: {
+          name: "web-recipe-business-site",
+          version: 1,
+          skillId: "skill-delete-fixture",
+          bodyHash: "sha256:body",
+          definitionHash: "sha256:definition",
+          inputHash: "sha256:input",
+          designProfile: {
+            bundleHash: "bundle",
+            compilerHash: "compiler",
+            patternId: "pattern",
+            styleId: "style",
+            paletteId: "palette",
+            typographyId: "typography",
+            formProfileId: "form",
+            dials: { variance: 1, motion: 1, density: 1 },
+          },
+        },
+      });
+      await ctx.db.insert("webProjectVersions", {
+        tenantId: tenantB,
+        projectId: webProjectB,
+        version: 1,
+        document: { kind: "landing", title: "Blob B" },
+        contentHash: "sha256:web-b",
+        rendererVersion: "web-runtime-v1",
+        artifactStorageId: webSurvivor,
+        artifactByteLength: 5,
+        createdBy: String(tenantB),
+        createdAt: Date.now(),
+        sourceRefs: [],
       });
       // A SECOND TABLE, so a fix that special-cased `plans` cannot pass.
       await ctx.db.insert("attachments", {
@@ -887,25 +1259,34 @@ describe("erasure deletes stored files (2026-09-08)", () => {
         renderStorageId: survivor,
         createdAt: Date.now(),
       });
-      return { tenantA, mine: [reel, sidecar, planPdf, asset], survivor };
+      return { tenantA, mine: [reel, sidecar, planPdf, asset, webArtifact], survivor, webSurvivor };
     });
 
     const urls = (ids: Id<"_storage">[]) =>
       t.run(async (ctx) => Promise.all(ids.map((id) => ctx.storage.getUrl(id))));
 
-    // NON-VACUITY FLOOR: all four blobs really exist before the walk. Without this the test passes
+    // NON-VACUITY FLOOR: all five blobs really exist before the walk. Without this the test passes
     // just as happily against a `ctx.storage.store` that silently did nothing.
-    expect((await urls(seeded.mine)).filter((u) => u !== null)).toHaveLength(4);
+    expect((await urls(seeded.mine)).filter((u) => u !== null)).toHaveLength(5);
 
     await deleteAll(t, seeded.tenantA, seeded.tenantA);
 
-    // MUTATION: drop the `ctx.storage.delete` loop from `deleteTenantDataPage` → all four survive.
+    // MUTATION: drop the `ctx.storage.delete` loop from `deleteTenantDataPage` → all five survive.
     expect(
       (await urls(seeded.mine)).filter((u) => u !== null),
       "these blobs survived erasure — the user's files are still on disk",
     ).toEqual([]);
     // …and the neighbour's file is untouched.
     expect((await urls([seeded.survivor])).filter((u) => u !== null)).toHaveLength(1);
+    expect((await urls([seeded.webSurvivor])).filter((u) => u !== null)).toHaveLength(1);
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("webProjectVersions")
+          .withIndex("by_tenant_project_version", (q) => q.eq("tenantId", seeded.tenantA))
+          .collect(),
+      ),
+    ).toEqual([]);
   });
 });
 

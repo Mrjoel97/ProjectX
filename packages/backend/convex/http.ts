@@ -1,6 +1,7 @@
 import { eventFacts } from "@pikar/billing/events";
 import { reconcileEvent } from "@pikar/billing/reconcile";
 import { invoiceTaxabilityReason } from "@pikar/billing/tax";
+import type { WebCtaNode, WebDocument, WebNode } from "@pikar/contracts/webRuntime";
 import { GOOGLE_SCOPES, type MicrosoftCallbackError, notificationMessage } from "@pikar/core";
 import { FUNNEL_SOURCE_MAX_LENGTH, normalizeFunnelSource } from "@pikar/core/marketing";
 import type { ConnectorEnvironment, Provider } from "@pikar/revenue";
@@ -15,6 +16,241 @@ import { verifyState } from "./gmailAuth";
 import { MICROSOFT_TOKEN_ENDPOINT, verifyMicrosoftState } from "./microsoftAuth";
 
 const http = httpRouter();
+
+// ── Phase 48 public structured runtime ──────────────────────────────────────
+// Public reads are resolved from the request host and path. No tenant, project, version, or
+// document is accepted from the caller; those values come from the published coordination head.
+const publicHeaders = {
+  "Cache-Control": "no-store",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+};
+const runtimeHeaders = (declaration: { hosting: string; source: string }) => ({
+  ...publicHeaders,
+  "X-Pikar-Hosting": declaration.hosting,
+  "X-Pikar-Source": declaration.source,
+});
+const publicNotFound = () => new Response("not found", { status: 404, headers: publicHeaders });
+const publicUnavailable = () =>
+  new Response("unavailable", { status: 503, headers: publicHeaders });
+
+function publicSegments(req: Request): string[] {
+  const segments = new URL(req.url).pathname.split("/").filter(Boolean);
+  if (segments[0] !== "p" || segments.some((segment) => !/^[A-Za-z0-9_-]+$/.test(segment)))
+    return [];
+  return segments.slice(1);
+}
+
+function publicHost(req: Request): string {
+  return new URL(req.url).hostname.toLowerCase();
+}
+
+// ponytail: this is a bounded, read-only seam while the code-owned storefront gate is false.
+// The joint Stripe/PayPal readiness plan may add a write only after that same gate authorizes
+// the exact host/page/version; this preflight never calls tenantOrders or persists buyer input.
+async function readClosedCartIntent(req: Request): Promise<"valid" | "invalid" | "too_large"> {
+  const limit = 8192;
+  const declared = req.headers.get("Content-Length");
+  if (declared && (!/^\d+$/.test(declared) || Number(declared) > limit)) return "too_large";
+  const reader = req.body?.getReader();
+  if (!reader) return "invalid";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel();
+      return "too_large";
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    const input: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    if (!input || typeof input !== "object" || Array.isArray(input)) return "invalid";
+    const fields = input as Record<string, unknown>;
+    if (
+      Object.keys(fields).sort().join(",") !== "addressCountry,items" ||
+      typeof fields.addressCountry !== "string" ||
+      !/^[A-Z]{2}$/.test(fields.addressCountry) ||
+      !Array.isArray(fields.items) ||
+      fields.items.length < 1 ||
+      fields.items.length > 50
+    )
+      return "invalid";
+    const seen = new Set<string>();
+    for (const item of fields.items) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return "invalid";
+      const row = item as Record<string, unknown>;
+      if (
+        Object.keys(row).sort().join(",") !== "presentationItemId,quantity" ||
+        typeof row.presentationItemId !== "string" ||
+        !/^[A-Za-z0-9_-]{1,128}$/.test(row.presentationItemId) ||
+        seen.has(row.presentationItemId) ||
+        !Number.isSafeInteger(row.quantity) ||
+        (row.quantity as number) < 1 ||
+        (row.quantity as number) > 100
+      )
+        return "invalid";
+      seen.add(row.presentationItemId);
+    }
+    return "valid";
+  } catch {
+    return "invalid";
+  }
+}
+
+function findPublicCta(nodes: readonly WebNode[], id: string): WebCtaNode | null {
+  for (const node of nodes) {
+    if (node.kind === "cta" && node.id === id) return node;
+    if (node.kind === "section") {
+      const nested = findPublicCta(node.children, id);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+http.route({
+  pathPrefix: "/p/",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const parts = publicSegments(req);
+    if (parts.length !== 2) return publicNotFound();
+    const slug = parts[0]!;
+    const page = parts[1]!;
+    const resolved = await ctx.runQuery(internal.webRuntime.resolvePage, {
+      host: publicHost(req),
+      slug,
+      page,
+    });
+    if (resolved.state !== "published") return publicNotFound();
+    try {
+      await ctx.runMutation(internal.webForms.recordMetric, {
+        host: publicHost(req),
+        slug,
+        page,
+        kind: "page_view",
+      });
+      const headers = runtimeHeaders(resolved.hostingDeclaration);
+      return new Response(req.method === "HEAD" ? null : resolved.html, {
+        status: 200,
+        headers: { ...headers, "Content-Type": "text/html; charset=utf-8" },
+      });
+    } catch {
+      return publicUnavailable();
+    }
+  }),
+});
+
+http.route({
+  pathPrefix: "/p/",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const parts = publicSegments(req);
+    // tenant-commerce:start — closed Plan 05 preflight, never a merchant callback.
+    if (parts.length === 4 && parts[2] === "commerce" && parts[3] === "cart") {
+      const requestOrigin = new URL(req.url).origin;
+      if (req.headers.get("Origin") !== requestOrigin)
+        return new Response(null, { status: 403, headers: publicHeaders });
+      if (!/^application\/json(?:;\s*charset=utf-8)?$/i.test(req.headers.get("Content-Type") ?? ""))
+        return new Response(null, { status: 415, headers: publicHeaders });
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(req.headers.get("Idempotency-Key") ?? ""))
+        return new Response(null, { status: 400, headers: publicHeaders });
+      const intent = await readClosedCartIntent(req);
+      if (intent !== "valid")
+        return new Response(null, {
+          status: intent === "too_large" ? 413 : 400,
+          headers: publicHeaders,
+        });
+      const resolved = await ctx.runQuery(internal.webRuntime.resolvePage, {
+        host: publicHost(req),
+        slug: parts[0]!,
+        page: parts[1]!,
+      });
+      if (resolved.state !== "published") return publicNotFound();
+      // The current resolver can publish sites/landings only; those are never merchant shops.
+      // Even a future resolver change must not turn this preflight into a cart/order write.
+      return publicNotFound();
+    }
+    // tenant-commerce:end
+    if (parts.length === 4 && parts[2] === "cta") {
+      const slug = parts[0]!;
+      const pageSlug = parts[1]!;
+      const ctaId = parts[3]!;
+      const resolved = await ctx.runQuery(internal.webProjects.resolvePublished, {
+        host: publicHost(req),
+        slug,
+      });
+      if (resolved.state !== "published" || resolved.project.kind === "storefront")
+        return publicNotFound();
+      const page = (resolved.version.document as WebDocument).pages.find(
+        (candidate) => candidate.slug === pageSlug,
+      );
+      const cta = page ? findPublicCta(page.nodes, ctaId) : null;
+      if (!page || !cta || cta.analytics !== true) return publicNotFound();
+      try {
+        await ctx.runMutation(internal.webForms.recordMetric, {
+          host: publicHost(req),
+          slug,
+          page: pageSlug,
+          kind: "cta_click",
+        });
+      } catch {
+        return publicUnavailable();
+      }
+      return new Response(null, {
+        status: 303,
+        headers: {
+          ...runtimeHeaders(resolved.project.hostingDeclaration),
+          Location: cta.target.kind === "local" ? cta.target.path : cta.target.url,
+        },
+      });
+    }
+    if (parts.length !== 4 || parts[2] !== "forms") return publicNotFound();
+    const slug = parts[0]!;
+    const page = parts[1]!;
+    const formId = parts[3]!;
+    const resolved = await ctx.runQuery(internal.webProjects.resolvePublished, {
+      host: publicHost(req),
+      slug,
+    });
+    if (resolved.state !== "published" || resolved.project.kind === "storefront")
+      return publicNotFound();
+    const form = await req.formData();
+    const raw: Record<string, unknown> = {};
+    for (const [key, value] of form.entries()) if (typeof value === "string") raw[key] = value;
+    const bodyKey = [raw.email, raw.name, raw.company, raw.consent]
+      .map((value) => String(value ?? ""))
+      .join("\u001f");
+    const idempotencyKey =
+      req.headers.get("Idempotency-Key")?.trim() || String(raw.idempotencyKey ?? bodyKey);
+    const forwarded =
+      req.headers.get("CF-Connecting-IP") ??
+      req.headers.get("X-Forwarded-For")?.split(",")[0]?.trim();
+    const result = await ctx.runMutation(internal.webForms.submit, {
+      host: publicHost(req),
+      slug,
+      page,
+      formId,
+      raw,
+      idempotencyKey,
+      abuseKey: forwarded || "anonymous",
+    });
+    const status = result.ok ? 200 : result.outcome === "rate_limited" ? 429 : 400;
+    return Response.json(result, {
+      status,
+      headers: runtimeHeaders(resolved.project.hostingDeclaration),
+    });
+  }),
+});
 
 // Wire Convex Auth sign-in/callback httpAction routes.
 auth.addHttpRoutes(http);
@@ -596,6 +832,9 @@ http.route({
   // message, so a GET-suppresses design silently unsubscribes people who never clicked. The
   // confirm button below is what stops the feature firing itself; POST is the only mutating verb.
   handler: httpAction(async (ctx, req) => {
+    // Convex routes HEAD through the GET handler. Keep the route's capability contract explicit:
+    // a scanner's HEAD must not receive the confirmation page, and no other verb may enter it.
+    if (req.method !== "GET") return unsubNotFound();
     const pathname = new URL(req.url).pathname;
     const parts = unsubSegment(pathname);
     if (!parts) return unsubNotFound();
@@ -623,6 +862,9 @@ http.route({
   pathPrefix: "/unsubscribe/",
   method: "POST",
   handler: httpAction(async (ctx, req) => {
+    // Route dispatch can share a handler for HEAD in the Convex test/runtime adapter. Refuse it
+    // explicitly so only a deliberate POST can reach the suppression mutation.
+    if (req.method !== "POST") return unsubNotFound();
     const parts = unsubSegment(new URL(req.url).pathname);
     if (!parts) return unsubNotFound();
     // Resolved for the confirmation's address list; the mutation re-verifies from scratch and

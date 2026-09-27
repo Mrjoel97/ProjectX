@@ -293,18 +293,19 @@ describe("Google authorize URL and callback", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test.each(["?state=x", "?code=abc", ""])(
-    "an incomplete callback (%s) refuses before token exchange or storage",
-    async (query) => {
-      const fetchMock = vi.fn();
-      vi.stubGlobal("fetch", fetchMock);
-      const t = harness();
-      const res = await t.fetch(`/gmail/callback${query}`, { method: "GET" });
-      expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=missing_callback`);
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(0);
-    },
-  );
+  test.each([
+    "?state=x",
+    "?code=abc",
+    "",
+  ])("an incomplete callback (%s) refuses before token exchange or storage", async (query) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const t = harness();
+    const res = await t.fetch(`/gmail/callback${query}`, { method: "GET" });
+    expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=missing_callback`);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(0);
+  });
 
   test("a tampered tenant-bound state refuses before token exchange or storage", async () => {
     const fetchMock = tokenResponse({ access_token: ACCESS, refresh_token: REFRESH });
@@ -329,7 +330,9 @@ describe("Google authorize URL and callback", () => {
     );
     const state = new URL(await buildAuthorizeUrl(TENANT)).searchParams.get("state") as string;
     const t = harness();
-    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, { method: "GET" });
+    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, {
+      method: "GET",
+    });
     expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=exchange_failed`);
     expect(location(res)).not.toContain("redeemed");
     expect(location(res)).not.toContain(AUTH_CODE);
@@ -340,7 +343,9 @@ describe("Google authorize URL and callback", () => {
     vi.stubGlobal("fetch", tokenResponse({ access_token: ACCESS, expires_in: 3600 }));
     const state = new URL(await buildAuthorizeUrl(TENANT)).searchParams.get("state") as string;
     const t = harness();
-    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, { method: "GET" });
+    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, {
+      method: "GET",
+    });
     expect(location(res)).toBe(`${SITE}/connect-gmail?gmailError=missing_refresh`);
     expect(await t.run((ctx) => ctx.db.query("gmailTokens").collect())).toHaveLength(0);
   });
@@ -357,7 +362,9 @@ describe("Google authorize URL and callback", () => {
     );
     const state = new URL(await buildAuthorizeUrl(TENANT)).searchParams.get("state") as string;
     const t = harness();
-    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, { method: "GET" });
+    const res = await t.fetch(`/gmail/callback?code=${AUTH_CODE}&state=${state}`, {
+      method: "GET",
+    });
 
     expect(res.status).toBe(303);
     expect(location(res)).toBe(`${SITE}/dashboard/workspace`);
@@ -404,9 +411,7 @@ describe("Google authorize URL and callback", () => {
     const rows = await t.run((ctx) => ctx.db.query("gmailTokens").collect());
     expect(rows).toHaveLength(1);
     expect(rows[0]?.refreshToken).toBe(REFRESH);
-    expect(
-      (await t.run((ctx) => ctx.db.query("notifications").unique()))?.read,
-    ).toBe(true);
+    expect((await t.run((ctx) => ctx.db.query("notifications").unique()))?.read).toBe(true);
   });
 
   test("disconnect revokes with the refresh token, deletes locally, and audits refs-only state", async () => {

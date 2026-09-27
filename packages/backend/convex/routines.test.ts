@@ -103,6 +103,7 @@ const CONVEX_MODULES = [
   "auth.config.ts",
   "auth.ts",
   "authoringProbe.ts",
+  "betaJourney.ts",
   "billing.ts",
   "billingApi.ts",
   "billingLedger.ts",
@@ -141,6 +142,7 @@ const CONVEX_MODULES = [
   "gmail.ts",
   "gmailAuth.ts",
   "goals.ts",
+  "goldenEvalAttempts.ts",
   "graph.ts",
   "guardrails.ts",
   "home.ts",
@@ -219,8 +221,10 @@ const CONVEX_MODULES = [
   "stripeAuth.ts",
   "stripeConnector.ts",
   "telemetry.ts",
+  "tenantCatalogue.ts",
   "tenantDelete.ts",
   "tenantExport.ts",
+  "tenantOrders.ts",
   "tenantProfile.ts",
   "vault.ts",
   "vaultDigest.ts",
@@ -246,6 +250,11 @@ const CONVEX_MODULES = [
   "voice.ts",
   "voiceDoc.ts",
   "voiceToken.ts",
+  "webForms.ts",
+  "webProjects.ts",
+  "webRecipeEvals.ts",
+  "webRecipes.ts",
+  "webRuntime.ts",
   "workflowPackBinding.ts",
   "workflowPackDiscovery.ts",
   "workflowPackEventLog.ts",
@@ -285,6 +294,9 @@ const SCHEDULER_CALL_SITES = [
   "researchControl.ts",
   "review.ts",
   "smoke.ts",
+  // Phase 50 local checkout: one expiry callback per newly placed order. `expireDue` only
+  // closes that order's held stock and never schedules another callback or cadence.
+  "tenantOrders.ts",
   "vault.ts",
   "vaultDrive.ts",
   "vaultFolders.ts",
@@ -378,6 +390,8 @@ describe("the scheduling primitives have a CLOSED, PINNED call-site set", () => 
       "vault-pending-extraction-sweep",
       "reliability-sweep",
       "billing-invoice-rollup",
+      // Phase 48's fixed global retention sweep, not a tenant-created cadence.
+      "web-form-retention",
     ]);
   });
 });

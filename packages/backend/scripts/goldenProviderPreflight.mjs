@@ -9,6 +9,7 @@ export const PREFLIGHT_REFUSAL_REASONS = Object.freeze([
   "tavily_billing_attestation_invalid",
   "tavily_credit_attestation_invalid",
   "backend_unavailable",
+  "production_target_forbidden",
   "transport_error",
   "readiness_response_invalid",
 ]);
@@ -28,6 +29,14 @@ export class ProviderPreflightRefusal extends Error {
     this.name = "ProviderPreflightRefusal";
     this.reason = reason;
   }
+}
+
+/** The shared Convex runner permits an explicit production override for other smoke gates.
+ * The golden corpus is a non-production qualification and must never inherit that override. */
+export function assertGoldenNonProductionTarget(env = process.env) {
+  if (env.PIKAR_CONVEX_TARGET === "prod")
+    throw new ProviderPreflightRefusal("production_target_forbidden");
+  return true;
 }
 
 /**

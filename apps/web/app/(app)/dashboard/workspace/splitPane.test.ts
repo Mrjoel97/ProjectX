@@ -1,4 +1,4 @@
-// Phase 25.2 items 8-9 (G15): one pane at a time on a phone, and a labelled four-item bar.
+// Phase 25.2 items 8-9 (G15): one pane at a time on a phone, with approved primary tabs.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,8 +52,8 @@ describe("SplitPane wires the helper to a live media query and a visible toggle"
   });
 });
 
-describe("the compact bar has exactly five approved tabs, all drawn from NAV", () => {
-  test("TABBAR_HREFS preserves the original four routes and approved Marketing entry", () => {
+describe("the compact bar has six approved tabs, all drawn from NAV", () => {
+  test("TABBAR_HREFS preserves the original four routes plus Marketing and Sites", () => {
     const m = layout.match(/const TABBAR_HREFS = \[([^\]]+)\];/);
     expect(m).not.toBeNull();
     const hrefs = [...(m?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((x) => x[1]);
@@ -63,6 +63,7 @@ describe("the compact bar has exactly five approved tabs, all drawn from NAV", (
       "/dashboard/workspace",
       "/dashboard/vault",
       "/dashboard/marketing",
+      "/dashboard/sites",
     ]);
     for (const h of hrefs) expect(layout, h).toContain(`href: "${h}"`);
     expect(layout).toContain('<nav className="tabbar" aria-label="Primary (compact)">');

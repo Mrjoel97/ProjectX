@@ -3,7 +3,9 @@ import { expect, test } from "@playwright/test";
 // Repository-only Google OAuth readiness. These checks stop at the consent URL: they never click
 // the link, leave Pikar, authorize a grant, mutate a provider, or claim the consent screen ran.
 test.describe("Google OAuth readiness before the provider boundary", () => {
-  test("loading resolves to an honest configured or unavailable terminal state", async ({ page }) => {
+  test("loading resolves to an honest configured or unavailable terminal state", async ({
+    page,
+  }) => {
     await page.goto("/connect-gmail");
     await expect(page.getByRole("heading", { name: "Connect Google" })).toBeVisible();
     await expect(

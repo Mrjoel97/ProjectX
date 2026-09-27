@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertGoldenNonProductionTarget,
   PREFLIGHT_PASSED_LINE,
   PREFLIGHT_REFUSAL_REASONS,
   ProviderPreflightRefusal,
@@ -68,5 +69,15 @@ test("an unrecognized refusal reason cannot reach terminal output", () => {
   assert.throws(
     () => new ProviderPreflightRefusal("PRIVATE_DEPLOYMENT_DETAIL"),
     /PREFLIGHT_REFUSAL_REASON_INVALID/,
+  );
+});
+
+test("golden readiness refuses an ambient production target before a deployment call", () => {
+  assert.equal(assertGoldenNonProductionTarget({}), true);
+  assert.equal(assertGoldenNonProductionTarget({ PIKAR_CONVEX_TARGET: "dev" }), true);
+  assert.throws(
+    () => assertGoldenNonProductionTarget({ PIKAR_CONVEX_TARGET: "prod" }),
+    (error) =>
+      error instanceof ProviderPreflightRefusal && error.reason === "production_target_forbidden",
   );
 });

@@ -23,7 +23,9 @@ export type CommerceRefusal =
   | "mixed_currency"
   | "client_total_override";
 
-export type CommerceResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: CommerceRefusal };
+export type CommerceResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly reason: CommerceRefusal };
 
 /** All prices and adjustments are trusted server-side integer-minor values. */
 export type CommerceQuoteLine = {

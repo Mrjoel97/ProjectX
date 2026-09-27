@@ -40,6 +40,9 @@ import { workflow } from "./index";
 import { contentHash } from "./lib/hash";
 import { reviewEventValidator } from "./review";
 
+// NOTE: Phase 48's browser fixture helpers live at the end of this file. They are internal-only,
+// local acceptance seams and never render, publish, or send content on behalf of a tenant.
+
 // --- Pattern 1: dead-letter via onComplete ---------------------------------
 
 /** A step that always throws — the deliberate failure that lands in the DLQ. */
@@ -2551,5 +2554,247 @@ export const modelsForPlan = internalQuery({
       }
     }
     return { models: [...models].sort(), rowCount, runs: runIds.length };
+  },
+});
+
+// --- Phase 48: disposable local web-runtime acceptance ----------------------
+
+/** Seed only the competing host/slug binding needed to prove fail-closed tenant isolation. */
+export const seedPhase48Collision = internalMutation({
+  args: { tenantId: v.string(), slug: v.string() },
+  handler: async (ctx, { tenantId, slug }) => {
+    const foreignTenantId = `phase48-foreign-${tenantId}`;
+    let publicHost = "pikar-platform";
+    try {
+      publicHost = new URL(process.env.CONVEX_SITE_URL ?? "").hostname.toLowerCase() || publicHost;
+    } catch {}
+    const existing = await ctx.db
+      .query("webProjects")
+      .withIndex("by_tenant_slug", (q) => q.eq("tenantId", foreignTenantId).eq("slug", slug))
+      .first();
+    if (existing) return { projectId: existing._id, foreignTenantId, publicHost };
+    const now = Date.now();
+    const projectId = await ctx.db.insert("webProjects", {
+      tenantId: foreignTenantId,
+      kind: "landing",
+      slug,
+      title: "PHASE48::collision",
+      publicHost,
+      domainMode: "platform_path",
+      hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { projectId, foreignTenantId, publicHost };
+  },
+});
+
+export const cleanupPhase48Collision = internalMutation({
+  args: { tenantId: v.string(), slug: v.string() },
+  handler: async (ctx, { tenantId, slug }) => {
+    const foreignTenantId = `phase48-foreign-${tenantId}`;
+    const project = await ctx.db
+      .query("webProjects")
+      .withIndex("by_tenant_slug", (q) => q.eq("tenantId", foreignTenantId).eq("slug", slug))
+      .first();
+    if (project?.title === "PHASE48::collision") await ctx.db.delete(project._id);
+    return { ok: true };
+  },
+});
+
+export const seedPhase48Suppression = internalMutation({
+  args: { tenantId: v.string(), email: v.string() },
+  handler: async (ctx, { tenantId, email }) => {
+    const address = email.trim().toLowerCase();
+    const existing = await ctx.db
+      .query("suppressions")
+      .withIndex("by_tenant_address", (q) => q.eq("tenantId", tenantId).eq("address", address))
+      .unique();
+    if (existing) return { ok: true };
+    await ctx.db.insert("suppressions", {
+      tenantId,
+      address,
+      suppressedAt: Date.now(),
+      source: "user-marked",
+    });
+    return { ok: true };
+  },
+});
+
+export const expirePhase48SubmissionWindows = internalMutation({
+  args: { tenantId: v.string(), projectId: v.id("webProjects") },
+  handler: async (ctx, { tenantId, projectId }) => {
+    const rows = await ctx.db
+      .query("webSubmissions")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+      .collect();
+    let count = 0;
+    for (const row of rows)
+      if (row.projectId === projectId) {
+        await ctx.db.patch(row._id, { expiresAt: 0, abuseWindowExpiresAt: 0 });
+        count += 1;
+      }
+    return { count };
+  },
+});
+
+/** Bounded evidence readback for the exact disposable projects used by the browser matrix. */
+export const inspectPhase48Acceptance = internalQuery({
+  args: { tenantId: v.string(), projectIds: v.array(v.id("webProjects")) },
+  handler: async (ctx, { tenantId, projectIds }) => {
+    const wanted = new Set(projectIds.map(String));
+    const projects = (await Promise.all(projectIds.map((id) => ctx.db.get(id))))
+      .filter((row): row is NonNullable<typeof row> =>
+        Boolean(row && (row.tenantId === tenantId || row.title === "PHASE48::collision")),
+      )
+      .map((row) => ({
+        id: String(row._id),
+        tenantId: row.tenantId,
+        kind: row.kind,
+        slug: row.slug,
+        publicHost: row.publicHost,
+        revision: row.revision,
+        publishedVersion: row.publishedVersion,
+        publishedContentHash: row.publishedContentHash,
+      }));
+    const versions = (
+      await ctx.db
+        .query("webProjectVersions")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect()
+    )
+      .filter((row) => wanted.has(String(row.projectId)))
+      .map((row) => ({
+        projectId: String(row.projectId),
+        version: row.version,
+        contentHash: row.contentHash,
+        artifacts:
+          row.artifacts?.map((artifact) => ({
+            pageSlug: artifact.pageSlug,
+            byteLength: artifact.byteLength,
+            html: artifact.html,
+          })) ?? [],
+      }));
+    const metrics = (
+      await ctx.db
+        .query("webMetrics")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect()
+    )
+      .filter((row) => wanted.has(String(row.projectId)))
+      .map((row) => ({
+        projectId: String(row.projectId),
+        version: row.version,
+        kind: row.kind,
+        count: row.count,
+      }));
+    const submissions = (
+      await ctx.db
+        .query("webSubmissions")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+        .collect()
+    )
+      .filter((row) => wanted.has(String(row.projectId)))
+      .map((row) => ({
+        projectId: String(row.projectId),
+        version: row.version,
+        formId: row.formId,
+        outcome: row.outcome,
+        attribution: row.attribution,
+      }));
+    return { projects, versions, metrics, submissions };
+  },
+});
+
+/** Deliberately corrupt only a disposable private Phase 49 storefront pointer. The public
+ * resolver must refuse it even when the stored row looks published. */
+export const seedPhase49MalformedStorefrontPointer = internalMutation({
+  args: { tenantId: v.string(), projectId: v.id("webProjects") },
+  handler: async (ctx, { tenantId, projectId }) => {
+    if (process.env.PIKAR_OFFLINE_FIXTURES !== "1") throw new Error("PHASE49_FIXTURE_DISABLED");
+    const project = await ctx.db.get(projectId);
+    if (
+      !project ||
+      project.tenantId !== tenantId ||
+      project.kind !== "storefront" ||
+      project.title !== "Private catalogue" ||
+      !project.slug.startsWith("phase49-private-") ||
+      project.publishedVersion !== undefined
+    )
+      throw new Error("PHASE49_STOREFRONT_FIXTURE_INVALID");
+    await ctx.db.patch(projectId, {
+      publishedVersion: 999_999,
+      publishedContentHash: "sha256:malformed-phase49-fixture",
+      revision: project.revision + 1,
+    });
+    return { projectId, revision: project.revision + 1 };
+  },
+});
+
+/** Deterministic cleanup for Phase 48's disposable rows. Append-only audit receipts stay intact. */
+export const cleanupPhase48Acceptance = internalMutation({
+  args: {
+    tenantId: v.string(),
+    projectIds: v.array(v.id("webProjects")),
+    contactEmails: v.array(v.string()),
+  },
+  handler: async (ctx, { tenantId, projectIds, contactEmails }) => {
+    let deleted = 0;
+    for (const projectId of projectIds) {
+      const project = await ctx.db.get(projectId);
+      if (!project || (project.tenantId !== tenantId && project.title !== "PHASE48::collision"))
+        continue;
+      const versions = await ctx.db
+        .query("webProjectVersions")
+        .withIndex("by_tenant_project_version", (q) =>
+          q.eq("tenantId", project.tenantId).eq("projectId", projectId),
+        )
+        .collect();
+      for (const row of versions) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+      const metrics = await ctx.db
+        .query("webMetrics")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", project.tenantId))
+        .collect();
+      for (const row of metrics)
+        if (row.projectId === projectId) {
+          await ctx.db.delete(row._id);
+          deleted += 1;
+        }
+      const submissions = await ctx.db
+        .query("webSubmissions")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", project.tenantId))
+        .collect();
+      for (const row of submissions)
+        if (row.projectId === projectId) {
+          await ctx.db.delete(row._id);
+          deleted += 1;
+        }
+      await ctx.db.delete(projectId);
+      deleted += 1;
+    }
+    for (const email of contactEmails) {
+      const address = email.trim().toLowerCase();
+      const contact = await ctx.db
+        .query("contacts")
+        .withIndex("by_tenant_email", (q) => q.eq("tenantId", tenantId).eq("email", address))
+        .unique();
+      if (contact?.origin === "inbound") {
+        await ctx.db.delete(contact._id);
+        deleted += 1;
+      }
+      const suppression = await ctx.db
+        .query("suppressions")
+        .withIndex("by_tenant_address", (q) => q.eq("tenantId", tenantId).eq("address", address))
+        .unique();
+      if (suppression?.source === "user-marked") {
+        await ctx.db.delete(suppression._id);
+        deleted += 1;
+      }
+    }
+    return { ok: true, deleted };
   },
 });

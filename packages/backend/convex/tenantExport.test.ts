@@ -1,6 +1,9 @@
 import {
   AUDIT_ARCHIVE_STATEMENT,
+  deletableTables,
+  STORAGE_ID_FIELDS,
   TENANT_EXPORT_SCHEMA_VERSION,
+  TENANT_TABLE_CLASSIFICATION,
   type TenantDataExport,
   type TenantDataExportPage,
   type TenantExportCursor,
@@ -90,6 +93,222 @@ async function seedTwoTenants() {
 }
 
 describe("tenant data export", () => {
+  test("commerce export projects policy branches and omits retry material for one tenant", async () => {
+    const { t, tenantA, tenantB } = await seedTwoTenants();
+    await t.run(async (ctx) => {
+      for (const tenantId of [tenantA, tenantB]) {
+        const projectId = await ctx.db.insert("webProjects", {
+          tenantId: String(tenantId),
+          kind: "storefront",
+          slug: `store-${tenantId}`,
+          title: "Private",
+          publicHost: "private.test",
+          domainMode: "platform_path",
+          hostingDeclaration: {
+            hosting: "pikar_platform_path",
+            source: "tenant_structured_content",
+          },
+          revision: 1,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        const productId = await ctx.db.insert("tenantProducts", {
+          tenantId,
+          goodsKind: "digital",
+          sku: tenantId === tenantA ? "mine" : "foreign",
+          variant: "one",
+          currency: "USD",
+          priceMinor: 125,
+          status: "active",
+          revision: 2,
+          createdAt: 1,
+          updatedAt: 2,
+        });
+        const cartId = await ctx.db.insert("tenantCarts", {
+          tenantId,
+          projectId,
+          lines: [
+            {
+              presentationItemId: "item",
+              productId,
+              quantity: 1,
+              expectedProductRevision: 2,
+              expectedUnitMinor: 125,
+            },
+          ],
+          addressCountry: "US",
+          revision: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          expiresAt: 1000,
+        });
+        const policyId = await ctx.db.insert("tenantCommercePolicies", {
+          tenantId,
+          projectId,
+          revision: 3,
+          sellerOfRecordRef: "seller-ref",
+          currency: "USD",
+          countries: ["US"],
+          physical: {
+            shippingSourceRef: "shipping-ref",
+            shippingMinor: 20,
+            returnsPolicyRef: "returns-ref",
+            taxSourceRef: "tax-ref",
+            taxBasisPoints: 500,
+            refundPolicyRef: "refund-ref",
+            buyerRetentionRef: "retention-ref",
+          },
+          digital: {
+            deliveryRef: "delivery-ref",
+            revocationRef: "revocation-ref",
+            noShipping: true,
+            taxSourceRef: "tax-ref",
+            taxBasisPoints: 500,
+            refundPolicyRef: "refund-ref",
+            buyerRetentionRef: "retention-ref",
+          },
+          createdAt: 1,
+        });
+        const orderId = await ctx.db.insert("tenantOrders", {
+          tenantId,
+          projectId,
+          cartId,
+          cartRevision: 1,
+          snapshot: {
+            tenantId,
+            projectId: String(projectId),
+            currency: "USD",
+            country: "US",
+            policyId: String(policyId),
+            policyRevision: 3,
+            sellerOfRecordRef: "seller-ref",
+            digitalPolicy: {
+              deliveryRef: "delivery-ref",
+              revocationRef: "revocation-ref",
+              noShipping: true,
+              taxSourceRef: "tax-ref",
+              taxBasisPoints: 500,
+              refundPolicyRef: "refund-ref",
+              buyerRetentionRef: "retention-ref",
+            },
+            lines: [
+              {
+                presentationItemId: "item",
+                productId: String(productId),
+                sku: "mine",
+                goodsKind: "digital",
+                productRevision: 2,
+                stockRevision: 1,
+                unitMinor: 125,
+                quantity: 1,
+                lineMinor: 125,
+              },
+            ],
+            subtotalMinor: 125,
+            taxMinor: 6,
+            shippingMinor: 0,
+            totalMinor: 131,
+            hash: "snapshot-hash",
+          },
+          snapshotHash: "snapshot-hash",
+          status: "pending",
+          expiresAt: 1000,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        await ctx.db.insert("tenantOrderAttempts", {
+          tenantId,
+          orderId,
+          cartId,
+          cartRevision: 1,
+          retryKeyHash: "SECRET_RETRY_HASH",
+          snapshotHash: "snapshot-hash",
+          status: "local_pending",
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      }
+    });
+    const result = await downloadExport(t, tenantA);
+    expect(result.tables.tenantCommercePolicies).toEqual([
+      expect.objectContaining({
+        revision: 3,
+        physical: expect.objectContaining({ buyerRetentionRef: "retention-ref" }),
+        digital: expect.objectContaining({ noShipping: true }),
+      }),
+    ]);
+    expect(result.tables.tenantOrders).toEqual([
+      expect.objectContaining({
+        snapshot: expect.objectContaining({
+          lines: [expect.objectContaining({ goodsKind: "digital", lineMinor: 125 })],
+        }),
+      }),
+    ]);
+    expect(result.tables.tenantOrderAttempts).toEqual([
+      expect.not.objectContaining({ retryKeyHash: expect.anything() }),
+    ]);
+    const bytes = JSON.stringify(result);
+    expect(bytes).not.toContain("SECRET_RETRY_HASH");
+    expect(bytes).not.toContain("foreign");
+  });
+  test("Phase 48 rows and rendered artifact links are in the generic export walk", () => {
+    expect(TENANT_TABLE_CLASSIFICATION.webProjects).toBe("tenant_owned");
+    expect(TENANT_TABLE_CLASSIFICATION.webProjectVersions).toBe("tenant_owned");
+    expect(TENANT_TABLE_CLASSIFICATION.webMetrics).toBe("tenant_owned");
+    expect(TENANT_TABLE_CLASSIFICATION.webSubmissions).toBe("tenant_owned");
+    expect(deletableTables()).toEqual(
+      expect.arrayContaining(["webProjects", "webProjectVersions", "webMetrics", "webSubmissions"]),
+    );
+    expect(STORAGE_ID_FIELDS.webProjectVersions).toContain("artifactStorageId");
+  });
+
+  test("Phase 50 catalogue, stock and reservations export only the authenticated tenant", async () => {
+    const { t, tenantA, tenantB } = await seedTwoTenants();
+    await t.run(async (ctx) => {
+      for (const [tenantId, sku] of [
+        [tenantA, "a-lamp"],
+        [tenantB, "b-secret-lamp"],
+      ] as const) {
+        const productId = await ctx.db.insert("tenantProducts", {
+          tenantId,
+          sku,
+          variant: "one",
+          currency: "USD",
+          priceMinor: 100,
+          status: "active",
+          revision: 1,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        await ctx.db.insert("tenantStock", {
+          tenantId,
+          productId,
+          kind: "finite",
+          onHand: 2,
+          reserved: 1,
+          reservationTtlMs: 900_000,
+          revision: 2,
+          updatedAt: 1,
+        });
+        await ctx.db.insert("tenantReservations", {
+          tenantId,
+          productId,
+          quantity: 1,
+          status: "held",
+          expiresAt: 900_001,
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      }
+    });
+    const result = await downloadExport(t, tenantA);
+    expect(result.tables.tenantProducts).toHaveLength(1);
+    expect(result.tables.tenantStock).toHaveLength(1);
+    expect(result.tables.tenantReservations).toHaveLength(1);
+    expect(JSON.stringify(result.tables.tenantProducts)).toContain("a-lamp");
+    expect(JSON.stringify(result)).not.toContain("b-secret-lamp");
+  });
+
   test("exports only the authenticated tenant and states the immutable-audit omission", async () => {
     const { t, tenantA } = await seedTwoTenants();
 
@@ -191,6 +410,8 @@ test("a page carries download links for the files its rows point at", async () =
     const tenantB = await ctx.db.insert("users", { email: "files-b@example.test" });
     const mine = await ctx.storage.store(new Blob(["my reel"]));
     const theirs = await ctx.storage.store(new Blob(["not mine"]));
+    const webMine = await ctx.storage.store(new Blob(["<html>mine</html>"]));
+    const webTheirs = await ctx.storage.store(new Blob(["<html>theirs</html>"]));
     await ctx.db.insert("plans", {
       tenantId: tenantA,
       threadId: "thread_files",
@@ -205,15 +426,87 @@ test("a page carries download links for the files its rows point at", async () =
       renderStorageId: theirs,
       createdAt: Date.now(),
     });
-    return { tenantA, mine, theirs };
+    const webProjectA = await ctx.db.insert("webProjects", {
+      tenantId: tenantA,
+      kind: "landing",
+      slug: "files-a",
+      title: "Files A",
+      publicHost: "pikar-platform",
+      domainMode: "platform_path",
+      hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+      draftVersion: 1,
+      revision: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    const webProjectB = await ctx.db.insert("webProjects", {
+      tenantId: tenantB,
+      kind: "landing",
+      slug: "files-b",
+      title: "Files B",
+      publicHost: "pikar-platform",
+      domainMode: "platform_path",
+      hostingDeclaration: { hosting: "pikar_platform_path", source: "tenant_structured_content" },
+      draftVersion: 1,
+      revision: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    await ctx.db.insert("webProjectVersions", {
+      tenantId: tenantA,
+      projectId: webProjectA,
+      version: 1,
+      document: { kind: "landing", title: "Files A" },
+      contentHash: "sha256:web-a",
+      rendererVersion: "web-runtime-v1",
+      artifactStorageId: webMine,
+      artifactByteLength: 18,
+      createdBy: String(tenantA),
+      createdAt: Date.now(),
+      sourceRefs: [],
+      recipeRef: {
+        name: "web-recipe-business-site",
+        version: 1,
+        skillId: "skill-export-fixture",
+        bodyHash: "sha256:body",
+        definitionHash: "sha256:definition",
+        inputHash: "sha256:input",
+        designProfile: {
+          bundleHash: "bundle",
+          compilerHash: "compiler",
+          patternId: "pattern",
+          styleId: "style",
+          paletteId: "palette",
+          typographyId: "typography",
+          formProfileId: "form",
+          dials: { variance: 1, motion: 1, density: 1 },
+        },
+      },
+    });
+    await ctx.db.insert("webProjectVersions", {
+      tenantId: tenantB,
+      projectId: webProjectB,
+      version: 1,
+      document: { kind: "landing", title: "Files B" },
+      contentHash: "sha256:web-b",
+      rendererVersion: "web-runtime-v1",
+      artifactStorageId: webTheirs,
+      artifactByteLength: 20,
+      createdBy: String(tenantB),
+      createdAt: Date.now(),
+      sourceRefs: [],
+    });
+    return { tenantA, mine, theirs, webMine, webTheirs };
   });
 
   const files: { storageId: string; url: string | null }[] = [];
+  const pages: TenantDataExportPage[] = [];
   let cursor: TenantExportCursor | undefined;
   do {
     const page = await t
       .withIdentity({ subject: `${seeded.tenantA}|export-session` })
       .query(exportTenantData, cursor ? { cursor } : {});
+    pages.push(page);
     files.push(...page.files);
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
@@ -224,4 +517,12 @@ test("a page carries download links for the files its rows point at", async () =
   expect(mine[0]?.url, "the file is listed but has no download link").toBeTruthy();
   // TENANT ISOLATION, on the same assertion: another tenant's blob must never appear.
   expect(files.map((f) => f.storageId)).not.toContain(String(seeded.theirs));
+  expect(files.map((f) => f.storageId)).toContain(String(seeded.webMine));
+  expect(files.map((f) => f.storageId)).not.toContain(String(seeded.webTheirs));
+  const exportedVersion = pages.find((page) => page.table.name === "webProjectVersions")?.table
+    .rows[0] as Record<string, unknown> | undefined;
+  expect(exportedVersion?.recipeRef).toMatchObject({
+    name: "web-recipe-business-site",
+    skillId: "skill-export-fixture",
+  });
 });
