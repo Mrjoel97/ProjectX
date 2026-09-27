@@ -531,7 +531,7 @@ Plans:
 **Plans:** 10 plans across 6 waves
 
 Plans:
-- [ ] 30-01-PLAN.md — Shared vertical safety/relevance contracts and structural Bio exclusion (Wave 1)
+- [x] 30-01-PLAN.md — Shared vertical safety/relevance contracts and structural Bio exclusion (Wave 1); summary `status: complete` dated 2026-09-10, current pure contract 5/5 and core TypeScript pass 2026-09-28. This is only the repository policy deliverable; VERT-01–04 and Phase 30 exposure remain open.
 - [ ] 30-02-PLAN.md — Tenant discovery, evidence, telemetry and independent controls (Wave 2)
 - [ ] 30-03-PLAN.md — Deterministic file-first Data pack (Wave 3)
 - [ ] 30-04-PLAN.md — Product and Design artifact-only candidates (Wave 3)
