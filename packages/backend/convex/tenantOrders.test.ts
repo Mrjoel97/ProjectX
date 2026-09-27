@@ -1082,6 +1082,67 @@ describe("local tenant order adapter", () => {
     });
   });
 
+  test("expiry drain refuses a held row linked to a terminal order instead of claiming progress", async () => {
+    const t = harness();
+    const a = await setup(t, "terminal-hold@example.test");
+    const placed = await a.actor.mutation(placeOrder, {
+      cartId: a.cart.cartId,
+      expectedCartRevision: 1,
+      retryKey: "terminal-hold",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(placed.orderId as never, { status: "expired", expiresAt: 1 });
+      const held = await ctx.db
+        .query("tenantReservations")
+        .withIndex("by_tenant_order", (q) =>
+          q.eq("tenantId", String(a.userId)).eq("orderId", placed.orderId as never),
+        )
+        .unique();
+      if (!held) throw new Error("MISSING_HOLD");
+      await ctx.db.patch(held._id, { expiresAt: 1 });
+    });
+    const before = await t.run(async (ctx) => ({
+      order: await ctx.db.get(placed.orderId as never),
+      holds: await ctx.db.query("tenantReservations").collect(),
+      stocks: await ctx.db.query("tenantStock").collect(),
+    }));
+    await expect(
+      a.actor.mutation(reconcileExpiredProduct, { productId: a.productId }),
+    ).rejects.toThrow("RESERVATION_LINK_INCOMPLETE");
+    expect(
+      await t.run(async (ctx) => ({
+        order: await ctx.db.get(placed.orderId as never),
+        holds: await ctx.db.query("tenantReservations").collect(),
+        stocks: await ctx.db.query("tenantStock").collect(),
+      })),
+    ).toEqual(before);
+  });
+
+  test("expiry drain refuses a due hold whose linked order is not due", async () => {
+    const t = harness();
+    const a = await setup(t, "early-hold@example.test");
+    const placed = await a.actor.mutation(placeOrder, {
+      cartId: a.cart.cartId,
+      expectedCartRevision: 1,
+      retryKey: "early-hold",
+    });
+    await t.run(async (ctx) => {
+      const held = await ctx.db
+        .query("tenantReservations")
+        .withIndex("by_tenant_order", (q) =>
+          q.eq("tenantId", String(a.userId)).eq("orderId", placed.orderId as never),
+        )
+        .unique();
+      if (!held) throw new Error("MISSING_HOLD");
+      await ctx.db.patch(held._id, { expiresAt: 1 });
+    });
+    await expect(
+      a.actor.mutation(reconcileExpiredProduct, { productId: a.productId }),
+    ).rejects.toThrow("RESERVATION_LINK_INCOMPLETE");
+    expect((await a.actor.query(getOrder, { orderId: placed.orderId }))?.status).toBe("pending");
+    expect((await t.run((ctx) => ctx.db.query("tenantStock").collect()))[0]?.reserved).toBe(1);
+  });
+
   test("order creation durably arms exact expiry; timer landing is tenant-bound and idempotent", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {

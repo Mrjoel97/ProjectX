@@ -635,6 +635,10 @@ async function expireHeldRows(
       visited.add(reservation.orderId);
       const order = await ctx.db.get(reservation.orderId);
       if (!order || order.tenantId !== tenantId) throw new Error("ORDER_LINK_INVALID");
+      // A due held row cannot belong to a terminal or not-yet-due order. Otherwise this
+      // drain reports it as processed while leaving stock reserved on every retry.
+      if (order.status !== "pending" || now < order.expiresAt)
+        throw new Error("RESERVATION_LINK_INCOMPLETE");
       await expireOrderInTx(ctx, order, now);
       continue;
     }

@@ -1,6 +1,6 @@
 # Playbook: Tenant commerce (Phase 50)
 
-> Last verified: 2026-09-27 against local policy-reference validation, canonical new-quote hashing with legacy pending-order closure, order/attempt/hold integrity, the owner's 1–60-minute finite-stock hold and merchant-admin late-paid resolution choices, and valid nonfuture merchant-decision evidence dates; the pending merchant decision, Plan 50-19 data classification and Plan 50-05 closed HTTP preflight remain unchanged
+> Last verified: 2026-09-27 against local policy-reference validation, canonical new-quote hashing with legacy pending-order closure, order/attempt/hold integrity including terminal/not-due order links in the expired-hold drain, the owner's 1–60-minute finite-stock hold and merchant-admin late-paid resolution choices, and valid nonfuture merchant-decision evidence dates; the pending merchant decision, Plan 50-19 data classification and Plan 50-05 closed HTTP preflight remain unchanged
 > Build history: `.planning/phases/50-tenant-merchant-commerce/` · Related ADRs: ADR-049 pending owner decision
 
 ## Purpose
@@ -55,6 +55,8 @@ Checkout demand releases expired holds on its products in the same transaction b
 up to five expired reservations. A larger backlog refuses checkout and the tenant-scoped
 `reconcileExpiredProduct` mutation drains it in bounded pages. An order expiry releases every
 linked hold once and marks the local attempt expired; cancellation marks it refused.
+The drain refuses a due held reservation linked to a terminal or not-yet-due order; it must not
+count an unchanged hold as processed and leave finite stock stranded on every retry.
 Before either close path releases stock, it requires one still-local-pending payment attempt whose
 snapshot hash, cart identity and cart revision match the order, and every held reservation's product,
 quantity, attempt link and expiry
