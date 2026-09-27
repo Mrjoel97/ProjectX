@@ -1,5 +1,14 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+Last verified: 2026-09-28 - a zero-network golden-mode wire test exercises the installed
+`@openrouter/ai-sdk-provider` through a mocked fetch, first with a representative function
+schema and then with the actual `buildCockpitTools` record. The serialized request keeps the
+exact `openai/gpt-4o-mini` model, OpenAI-only/no-fallback route and numeric price ceiling;
+every built cockpit tool appears as a function schema, while `n`, `transforms`, `plugins` and
+`require_parameters` remain absent. Seven focused middleware tests and backend TypeScript pass.
+This proves local serialization, not OpenRouter acceptance, historical HTTP-400 cause, a paid
+verdict, or permission to run the golden corpus.
+
 Last verified: 2026-09-27 - **the authoring probe no longer settles an AMBIGUOUS attempt at the
 golden ceiling; it RETAINS its whole hold.** A probe turn reached the model with an `evalBudgetId`
 and no `evalContext`, so it fell through the same spread that gives the golden suite
