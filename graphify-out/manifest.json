@@ -13165,13 +13165,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.test.ts": {
-    "mtime": 1789054428.178245,
-    "ast_hash": "b45c748e2de2d9dc56fb509e911fe9a6",
+    "mtime": 1790524822.5242424,
+    "ast_hash": "6dfe84946f73b2228673ebdeae4a8c96",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.ts": {
-    "mtime": 1789055078.615755,
-    "ast_hash": "2f41548daada7de9eaa3bb44ff197db0",
+    "mtime": 1790524858.928535,
+    "ast_hash": "407af0983a2acac1edd71342897258b1",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalProductDesign.test.ts": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790501604.4048884,
-    "ast_hash": "373b6e93b7628753cd0273fed94286ac",
+    "mtime": 1790524935.69532,
+    "ast_hash": "4494fa70f92cf5843183e1c3880cdb04",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -13940,8 +13940,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-MAP.md": {
-    "mtime": 1790504763.1345387,
-    "ast_hash": "8cb548210da6d7562147b8058f847dd9",
+    "mtime": 1790524234.7816465,
+    "ast_hash": "3dc05bfed475b570e879fe83c85aa42d",
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-03-SUMMARY.md": {
@@ -17077,6 +17077,11 @@
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-STEP0-EVIDENCE-INTEGRITY-2026-09-27.md": {
     "mtime": 1790505424.3455055,
     "ast_hash": "d5842d778d28642695e3fcb028bf8d51",
+    "semantic_hash": ""
+  },
+  ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-TASK1-OFFLINE-2026-09-27.md": {
+    "mtime": 1790523542.1471777,
+    "ast_hash": "bb13310123a12ae772672611411b24b2",
     "semantic_hash": ""
   }
 }
