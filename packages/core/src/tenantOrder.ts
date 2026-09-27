@@ -133,6 +133,24 @@ const digitalReady = (
   ref(value.refundPolicyRef) &&
   ref(value.buyerRetentionRef);
 
+function canonicalOrderJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalOrderJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const fields = value as Record<string, unknown>;
+    return `{${Object.keys(fields)
+      .filter((key) => fields[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalOrderJson(fields[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/** Stable across policy/Convex object-key ordering; line-array order remains significant. */
+export function hashOrderQuote(body: Record<string, unknown>): string {
+  return `sha256:${sha256Bytes(new TextEncoder().encode(canonicalOrderJson(body)))}`;
+}
+
 /** Server-owned live product and policy facts are the only financial authority. */
 export function quoteOrder(input: OrderQuoteInput): OrderQuoteResult {
   if (
@@ -288,7 +306,7 @@ export function quoteOrder(input: OrderQuoteInput): OrderQuoteResult {
     ok: true,
     snapshot: {
       ...body,
-      hash: `sha256:${sha256Bytes(new TextEncoder().encode(JSON.stringify(body)))}`,
+      hash: hashOrderQuote(body),
     },
   };
 }

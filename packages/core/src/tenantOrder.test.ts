@@ -237,6 +237,31 @@ describe("server order quote", () => {
     if (result.ok) expect(result.snapshot.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
+  test("the quote digest is independent of nested policy property insertion order", () => {
+    const original = quoteOrder(input);
+    const reordered = quoteOrder({
+      ...input,
+      policy: {
+        ...input.policy,
+        physical: {
+          buyerRetentionRef: input.policy.physical.buyerRetentionRef,
+          refundPolicyRef: input.policy.physical.refundPolicyRef,
+          returnsPolicyRef: input.policy.physical.returnsPolicyRef,
+          shippingMinor: input.policy.physical.shippingMinor,
+          shippingSourceRef: input.policy.physical.shippingSourceRef,
+          taxBasisPoints: input.policy.physical.taxBasisPoints,
+          taxSourceRef: input.policy.physical.taxSourceRef,
+        },
+      },
+    });
+    expect(original.ok).toBe(true);
+    expect(reordered.ok).toBe(true);
+    if (original.ok && reordered.ok) {
+      expect(reordered.snapshot.totalMinor).toBe(original.snapshot.totalMinor);
+      expect(reordered.snapshot.hash).toBe(original.snapshot.hash);
+    }
+  });
+
   test("refuses stale/foreign mapping, price and stock drift", () => {
     expect(
       quoteOrder({ ...input, lines: [{ ...input.lines[0]!, expectedUnitMinor: 1200 }] }),

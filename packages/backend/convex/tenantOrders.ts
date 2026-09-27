@@ -6,6 +6,7 @@ import {
   reserveInventory,
 } from "@pikar/core/tenantInventory";
 import {
+  hashOrderQuote,
   type OrderLineRequest,
   type OrderPolicy,
   quoteOrder,
@@ -496,8 +497,9 @@ async function closeHeld(
   now: number,
   mode: "expire" | "cancel",
 ) {
-  // Convex may reorder object keys on read. Rebuild the exact quoteOrder body order before
-  // checking its existing digest; spreading the fetched snapshot produces a false mismatch.
+  // New quotes hash canonical JSON. The original local quotes hashed insertion-order JSON;
+  // retain that verifier so their still-held reservations can close without migration.
+  // Rebuild their quote-time field order because Convex may reorder keys on read.
   const snapshot = order.snapshot;
   const quotedBody = {
     tenantId: snapshot.tenantId,
@@ -531,7 +533,8 @@ async function closeHeld(
   };
   if (
     snapshot.hash !== order.snapshotHash ||
-    snapshot.hash !== hash(JSON.stringify(quotedBody)) ||
+    (snapshot.hash !== hashOrderQuote(quotedBody) &&
+      snapshot.hash !== hash(JSON.stringify(quotedBody))) ||
     snapshot.tenantId !== order.tenantId ||
     snapshot.projectId !== order.projectId
   )

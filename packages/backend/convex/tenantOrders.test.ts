@@ -1,4 +1,5 @@
 import { exportableTables } from "@pikar/core/tenantData";
+import { sha256Bytes } from "@pikar/core/webRuntime";
 import { type DefaultFunctionArgs, makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
@@ -366,6 +367,64 @@ describe("local tenant order adapter", () => {
     ]);
     expect(rows.stock[0]).toMatchObject({ reserved: 1 });
     expect(JSON.stringify(rows.audit)).not.toMatch(/@example\.test|tax-tz|ship-tz/);
+  });
+
+  test("an insertion-order legacy quote can still cancel its pending hold", async () => {
+    const t = harness();
+    const a = await setup(t, "legacy-quote@example.test");
+    const placed = await a.actor.mutation(placeOrder, {
+      cartId: a.cart.cartId,
+      expectedCartRevision: 1,
+      retryKey: "legacy-quote",
+    });
+    await t.run(async (ctx) => {
+      const order = await ctx.db.get(placed.orderId as never);
+      if (!order || !("snapshot" in order)) throw new Error("MISSING_ORDER");
+      const s = order.snapshot;
+      const oldBody = {
+        tenantId: s.tenantId,
+        projectId: s.projectId,
+        currency: s.currency,
+        country: s.country,
+        policyId: s.policyId,
+        policyRevision: s.policyRevision,
+        sellerOfRecordRef: s.sellerOfRecordRef,
+        taxRounding: s.taxRounding,
+        ...(s.physicalPolicy ? { physicalPolicy: s.physicalPolicy } : {}),
+        ...(s.digitalPolicy ? { digitalPolicy: s.digitalPolicy } : {}),
+        lines: s.lines.map((line) => ({
+          presentationItemId: line.presentationItemId,
+          productId: line.productId,
+          sku: line.sku,
+          goodsKind: line.goodsKind,
+          taxSourceRef: line.taxSourceRef,
+          refundPolicyRef: line.refundPolicyRef,
+          buyerRetentionRef: line.buyerRetentionRef,
+          productRevision: line.productRevision,
+          stockRevision: line.stockRevision,
+          unitMinor: line.unitMinor,
+          quantity: line.quantity,
+          lineMinor: line.lineMinor,
+        })),
+        subtotalMinor: s.subtotalMinor,
+        taxMinor: s.taxMinor,
+        shippingMinor: s.shippingMinor,
+        totalMinor: s.totalMinor,
+      };
+      const legacyHash = `sha256:${sha256Bytes(new TextEncoder().encode(JSON.stringify(oldBody)))}`;
+      expect(legacyHash).not.toBe(s.hash);
+      await ctx.db.patch(placed.orderId as never, {
+        snapshot: { ...s, hash: legacyHash },
+        snapshotHash: legacyHash,
+      });
+      await ctx.db.patch(placed.attemptId as never, { snapshotHash: legacyHash });
+    });
+    expect(await a.actor.mutation(cancelOrder, { orderId: placed.orderId })).toEqual({
+      status: "cancelled",
+    });
+    expect(await t.run((ctx) => ctx.db.query("tenantReservations").unique())).toMatchObject({
+      status: "released",
+    });
   });
 
   test("a merchant's 60-minute hold starts at order placement, even when the cart is nearly expired", async () => {
