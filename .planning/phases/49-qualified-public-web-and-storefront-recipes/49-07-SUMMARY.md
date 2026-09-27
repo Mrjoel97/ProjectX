@@ -12,14 +12,16 @@ provides:
   - code-owned claim guard and one-tree fail-closed qualification runner
   - watched runtime/registry playbooks and explicit Wave 7/8 re-entry packet
 affects: [SITE-03, LAND-03, SHOP-01, phase-50]
-reviewed: 2026-09-26
+reviewed: 2026-09-27
 ---
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-26 serialized aggregate exited 0 on the expanded 71-file digest below. It adds runtime/form source and test files that the earlier 61-file aggregate exercised but had not pinned; that narrower `e4c3ba52ae5074eb22c45d0f79dfc2da97cee5b83be9b03f140834c245e09ebb` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-27 serialized 71-file aggregate exited 0 after the authenticated browser hand-off assertion changed one pinned test file. The 2026-09-26 digest and earlier 61-file result are historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `a1b776516f06b5ce0576ed7fb1648739eb831b1925c207106416cd14a91310c5`
+Artifact-set SHA-256: `5bb951c5ead33c303a43a02d051ded690ae872ef5dfcf0878b9fda771cf31cbd`
+
+The new browser assertion confirms persisted signup JWT and the same authenticated identity's backend owner flag before requiring the owner-only recipe heading. The targeted fresh-stack matrix and full aggregate both passed; the earlier intermittent heading failure remains root-cause-unproven, not declared fixed. See `49-VERIFICATION.md` for exact planes and the unchanged Wave 7/8 boundary.
 
 The declared set is the 71 lexical file rows produced by `node scripts/check-phase49-qualification.mjs --manifest` from `ARTIFACT_INPUTS` in that script. Each row hashes exact file bytes; the set digest hashes `path\0sha256\n` rows in lexical order. This summary, `49-VERIFICATION.md` and mutable planning-status files are deliberately excluded to avoid self-reference. The aggregate checks this recorded digest before and after every required plane.
 

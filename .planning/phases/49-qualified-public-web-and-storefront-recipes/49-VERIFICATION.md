@@ -1,17 +1,19 @@
 ---
 phase: 49-qualified-public-web-and-storefront-recipes
 status: repository-local-qualified
-reviewed: 2026-09-26
+reviewed: 2026-09-27
 requirements: [SITE-03, LAND-03, SHOP-01]
 ---
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-26 serialized aggregate exited 0 on the expanded 71-file source digest below. A manifest-coverage review found that the earlier 61-file aggregate executed web-form and web-runtime tests without pinning several corresponding source/test files; the expanded aggregate has now passed. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-27 serialized aggregate exited 0 on the expanded 71-file source digest below after the authenticated browser hand-off assertion changed one pinned test file. The 2026-09-26 digest is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `a1b776516f06b5ce0576ed7fb1648739eb831b1925c207106416cd14a91310c5`
+Artifact-set SHA-256: `5bb951c5ead33c303a43a02d051ded690ae872ef5dfcf0878b9fda771cf31cbd`
 
-This is the 2026-09-26 qualified expanded 71-file repository/local digest. The prior passing narrower digest was `e4c3ba52ae5074eb22c45d0f79dfc2da97cee5b83be9b03f140834c245e09ebb`.
+**2026-09-27 hand-off requalification:** The integrated browser spec now waits for a persisted signup JWT and reads `owner.viewer` with that same browser identity after owner bootstrap, before expecting the owner-only heading. The targeted fresh-stack spec passed with nine projects, isolated audit exit 0 and exact owned-root cleanup. The subsequent serialized 71-file aggregate exited 0 with initial/final digest equal: provenance, compiler, core/backend/web regressions, native and recipe evaluator pins, both disposable browser stacks and audit witnesses, three typechecks, production build, strict planning/playbook, claim guards and 30 free gates all passed. This narrows where a future intermittent heading failure can arise; it does not prove the earlier intermittent failure's root cause or that no future flake exists. No provider, paid, merchant or production action occurred.
+
+The prior 2026-09-26 passing 71-file digest was `a1b776516f06b5ce0576ed7fb1648739eb831b1925c207106416cd14a91310c5`; the earlier passing narrower digest was `e4c3ba52ae5074eb22c45d0f79dfc2da97cee5b83be9b03f140834c245e09ebb`.
 
 **2026-09-26 manifest-coverage correction:** The 61-file source set omitted ten core/backend runtime, form and test files that were already exercised by the aggregate. `ARTIFACT_INPUTS` now includes those ten paths, and the aggregate self-test enforces their presence. This changes what a source edit can retire; the earlier passing result remains factual for its narrower declared set but does not prove the expanded one.
 

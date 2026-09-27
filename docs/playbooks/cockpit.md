@@ -1,3 +1,9 @@
+> Last verified: 2026-09-27 — the Phase 49 isolated owner-browser qualification now confirms
+> signup JWT persistence and the authenticated backend owner flag before checking the owner-only
+> recipe heading. The targeted integrated browser matrix and isolated audit passed on a fresh
+> disposable stack; the earlier intermittent heading failure is not claimed root-caused. This
+> test-hand-off change does not alter cockpit agent behavior or active skill bodies.
+>
 > Last verified: 2026-09-25 — Plan 20.1-01's two read-only Drive tools retain closed
 > `agentSteps.tool`/workspace VERB parity and `drive=list:`/`drive=find:` SMOKE routes.
 > Refusal copy now distinguishes disconnected, Drive-scope reauth, invalid folder id,

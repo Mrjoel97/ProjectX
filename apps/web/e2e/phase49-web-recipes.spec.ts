@@ -145,7 +145,7 @@ function fixture() {
   return { admin, backend, app, site };
 }
 
-async function account(page: Page, admin: ConvexHttpClient, owner: boolean) {
+async function account(page: Page, admin: ConvexHttpClient, backend: URL, owner: boolean) {
   const email = `phase49-integrated-${randomUUID()}@example.test`;
   const password = `Pikar-${randomUUID()}-test`;
   const invite = await call<{ code: string }>(admin, privateRefs.invites.__seedInvite, { email });
@@ -156,6 +156,19 @@ async function account(page: Page, admin: ConvexHttpClient, owner: boolean) {
   await page.getByPlaceholder("Confirm password").fill(password);
   await page.getByRole("button", { name: /Create Account/i }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/signup"), { timeout: 30_000 });
+  await expect
+    .poll(
+      async () => {
+        const state = await page.context().storageState();
+        return state.origins.some((origin) =>
+          origin.localStorage.some(
+            (entry) => entry.name.startsWith("__convexAuthJWT") && Boolean(entry.value),
+          ),
+        );
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
   const found = await call<{ result: { userId: string } | null }>(
     admin,
     privateRefs.owner.findUserIdByEmailForProvisioning,
@@ -167,6 +180,16 @@ async function account(page: Page, admin: ConvexHttpClient, owner: boolean) {
   await call(admin, privateRefs.onboarding.__seedOnboardedTenant, {
     tenantId: found.result.userId,
   });
+  const authenticated = await userClient(page, backend);
+  await expect
+    .poll(
+      async () =>
+        (await call<{ isOwner: boolean }>(authenticated, api.owner.viewer, {}, true)).isOwner,
+      {
+        timeout: 30_000,
+      },
+    )
+    .toBe(owner);
   await page.goto(owner ? "/ops" : "/dashboard/sites");
   await expect(
     page.getByRole("heading", { name: owner ? "Web recipe candidates" : "Publish a focused page" }),
@@ -368,7 +391,7 @@ test("integrated site, landing and private storefront lifecycles on one disposab
   browser,
 }) => {
   const { admin, backend, site } = fixture();
-  const tenantId = await account(page, admin, true);
+  const tenantId = await account(page, admin, backend, true);
   const owner = await userClient(page, backend);
   const ownedIds: string[] = [];
   const emails: string[] = [];
@@ -438,7 +461,7 @@ test("integrated site, landing and private storefront lifecycles on one disposab
     // A separate signed-in tenant sees the site/landing choices, never the private catalogue.
     tenantContext = await browser.newContext({ baseURL: process.env.PIKAR_E2E_BASE_URL });
     const tenantPage = await tenantContext.newPage();
-    const tenantB = await account(tenantPage, admin, false);
+    const tenantB = await account(tenantPage, admin, backend, false);
     expect(tenantB).not.toBe(tenantId);
     const tenantClient = await userClient(tenantPage, backend);
     expect(

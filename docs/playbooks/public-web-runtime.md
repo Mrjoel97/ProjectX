@@ -1,5 +1,12 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-27 — the isolated Phase 49 integrated browser spec now waits for a
+> persisted signup JWT and confirms the authenticated backend owner flag before checking the
+> owner-only page. Its targeted fresh disposable stack, nine-project desktop/mobile matrix,
+> isolated audit and owned-root cleanup passed. This narrows an intermittent failure's diagnostic
+> boundary; it does not prove its root cause is fixed. Renew the 71-file aggregate and exact
+> source digest before citing repository/local qualification at the changed test revision.
+
 > Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
 > record, NOT a verification of the sections below.** No public-runtime code, route, form, renderer
 > or recipe changed, and no design-knowledge CONTENT changed.
