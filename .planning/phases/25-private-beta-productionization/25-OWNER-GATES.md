@@ -108,16 +108,17 @@ parity lane depends on it.
 
 **READ THIS BEFORE ANYTHING ELSE:** the plan describes a manual deploy. **There isn't one.**
 `deploy-production.yml`'s only trigger is `workflow_run` on `ci` completing, filtered to
-`conclusion=='success' && event=='push' && head_branch=='main'`. No `workflow_dispatch`, no SHA
-input. **The deployable SHA is whatever head of main last passed CI.**
+`conclusion=='success' && event=='push' && head_branch=='main'`, with the additional current
+promotion gate that the verified head commit message **starts** with `[deploy]`. No
+`workflow_dispatch`, no SHA input. **Only the exact opted-in main SHA that passed CI can promote.**
 
-So the release is: **merge → CI green → the pipeline promotes → record the run id and
+So the release is: **merge with a `[deploy]`-prefixed subject → CI green → the pipeline promotes → record the run id and
 `github.event.workflow_run.head_sha`.** A hand-run `convex deploy` / `vercel deploy` bypasses the
 staged-then-promote ordering, the `_generated` drift check, the SITE_URL read-back, and the seed
 step.
 
-**A red lint on main silently means production is never redeployed** — the deploy is gated on CI,
-and nothing on the deploy side reports it.
+**A red lint on main or a merge without the `[deploy]` prefix means production is not redeployed**
+— the deploy is gated on both CI and explicit promotion intent.
 
 Also correct the plan's env claim: Vercel production holds `NEXT_PUBLIC_CONVEX_URL`,
 `MEDIA_RENDER_SECRET` and `MEDIA_SANDBOX_SNAPSHOT_ID`; `CONVEX_DEPLOY_KEY` lives **only** in
