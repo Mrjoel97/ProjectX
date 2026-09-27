@@ -1,5 +1,11 @@
 # Plan 47-22 summary — derived due and bounded synthetic sweeps
 
+> **2026-09-28 current-source correction:** The historical independent GO below binds
+> three source hashes that do not match the current candidate. It remains a record of
+> the 2026-09-26 review, not independent acceptance of today's bytes. Current tests
+> still pass, but fresh exact-source review is required. See
+> [47-23 current-source and real-rail audit](47-23-CURRENT-SOURCE-AND-REAL-RAIL-AUDIT.md).
+
 **Status:** Completed as independently accepted, isolated synthetic design evidence on 2026-09-26. Recurrence remains operationally `defer`; this is not D6, ROUT-02, Phase 47 or Wave 6 completion.
 
 The existing six-file disabled candidate no longer stores next-due or next-local fields. It derives the latest eligible local occurrence from the IANA rule and approval anchor, transactionally rechecks the claim, and never drains an outage backlog. Manually invoked, tenant-scoped due and recovery sweeps use bounded pages and durable cursor/high-water/epoch progress; recovery passes an unresolved early row to settle later known holds. The final tests also force a rollback before a due-claim commit and a restart after terminal rail settlement but before recovery-cursor advancement.

@@ -1,5 +1,9 @@
 # Plan 47-22 independent technical review — synthetic GO (2026-09-26)
 
+> **Current-source correction, 2026-09-28:** the three code/test SHA-256 values below do not
+> match the current tree. This review remains historical for its recorded bytes; it is not an
+> independent GO for the current candidate. See [47-23 current-source and real-rail audit](47-23-CURRENT-SOURCE-AND-REAL-RAIL-AUDIT.md).
+
 Reviewer: Codex `/root/candidate22_final_review`, independent of the implementer. I read the final schema, model, tests, README, Plan 47-22, its pre-edit baseline, the playbook, accepted ADR-046/050/051/052 and stage, and the historical `defer` decision. This verdict applies **only** to the exact source hashes below and the isolated, manually invoked synthetic candidate. It is not a D6, ROUT-02, live-evidence, production, or release verdict.
 
 ## Scope and actual-source findings

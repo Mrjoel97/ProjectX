@@ -1,5 +1,12 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — the 47-22 independent review's schema, model and test
+> hashes differ from the current disabled candidate; its historical synthetic GO
+> must not be applied to the current bytes. Current candidate tests pass 35/35,
+> but a fresh exact-source review is required. The real spend limiter also lacks
+> the candidate's per-run keyed reserve/lookup/release contract; production rail
+> integration remains unproved. See the [current-source and real-rail audit](../../.planning/phases/47-the-schedule-row-that-re-arms/47-23-CURRENT-SOURCE-AND-REAL-RAIL-AUDIT.md).
+
 > Last verified: 2026-09-27 — the closed scheduling call-site inventory now names
 > `tenantCatalogue.ts` for a one-shot, absolute expiry callback per authenticated
 > standalone stock hold. Source review and focused tests show its due landing never
