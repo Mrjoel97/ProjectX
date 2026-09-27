@@ -258,9 +258,11 @@ export const configure = tenantMutation({
       if (previous < 0) confirmedWorkloads.push(value);
       else confirmedWorkloads[previous] = value;
     }
+    const legalPlaybookDocId =
+      args.legalPlaybookDocId ?? profile.verticalPreferences?.legalPlaybookDocId;
     await ctx.db.patch(profile._id, {
       verticalPreferences: {
-        ...(args.legalPlaybookDocId ? { legalPlaybookDocId: args.legalPlaybookDocId } : {}),
+        ...(legalPlaybookDocId ? { legalPlaybookDocId } : {}),
         confirmedWorkloads,
         needs: [...new Set(args.needs)],
         reviewReady: [...new Set(args.reviewReady)],

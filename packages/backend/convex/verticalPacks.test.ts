@@ -219,4 +219,25 @@ describe("vertical controls use native tenant/version state", () => {
       asA.query(api.verticalPacks.discover, { released: ["legal"] } as never),
     ).rejects.toThrow();
   });
+
+  test("updating workload choices without a playbook argument preserves the confirmed playbook", async () => {
+    const { t, asA, a, artifact } = await setup();
+    await asA.mutation(api.verticalPacks.configure, {
+      needs: ["legal"],
+      reviewReady: ["legal"],
+      legalPlaybookDocId: artifact,
+    });
+    await asA.mutation(api.verticalPacks.configure, {
+      needs: ["legal", "data"],
+      reviewReady: ["legal"],
+    });
+    const profile = await t.run((ctx) =>
+      ctx.db
+        .query("tenantProfiles")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", String(a)))
+        .unique(),
+    );
+    expect(profile?.verticalPreferences?.legalPlaybookDocId).toBe(artifact);
+    expect(profile?.verticalPreferences?.needs).toEqual(["legal", "data"]);
+  });
 });

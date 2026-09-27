@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-27 — the tenant `verticalPacks.configure` mutation now preserves an
+already selected legal-playbook document when a workload-choice update omits the optional
+`legalPlaybookDocId`. A new test reproduced the loss before the repair and passed afterward;
+the focused vertical controls/telemetry suite passed 8/8, the workload form suite passed 7/7,
+and backend TypeScript passed. Explicit replacement still validates tenant ownership and ready
+status. This is repository-only preference integrity, not a Phase 30 candidate-eval, semantic
+review, pack exposure, provider, or Wave 4 acceptance result.
+
 Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
 record, NOT a verification of the sections below.** No vertical case, lane or pack content changed.
 The offline generator reconciled the generated native evaluator field to the current source-derived
