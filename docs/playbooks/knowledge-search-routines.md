@@ -1,5 +1,13 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-27 — the closed scheduling call-site inventory now names
+> `tenantCatalogue.ts` for a one-shot, absolute expiry callback per authenticated
+> standalone stock hold. Source review and focused tests show its due landing never
+> re-arms, refuses order-linked holds, and does not add cadence or tenant recurrence.
+> `routines.test.ts`, `routineDecision.test.ts`, catalogue and order tests passed
+> 137/137 after the inventory update. The historical operational recurrence decision
+> remains `defer`; this stock-hygiene timer supplies no D6, ROUT-02 or live evidence.
+
 > Last verified: 2026-09-26 — Plan 47-22's isolated six-file candidate now derives
 > the latest local occurrence from the IANA rule and approval anchor at claim time;
 > routine rows no longer store a next-due instant or next-local fields. Manually

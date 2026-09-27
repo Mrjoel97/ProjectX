@@ -11,9 +11,10 @@ import {
   type StockReservation,
   validateInventory,
 } from "@pikar/core/tenantInventory";
+import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import { appendAudit } from "./audit";
 import { tenantMutation, tenantQuery } from "./lib/functions";
 
@@ -27,6 +28,11 @@ const stockInput = v.union(
   }),
   v.object({ kind: v.literal("untracked"), approved: v.boolean() }),
 );
+const expireReservationDueRef = makeFunctionReference<
+  "mutation",
+  { tenantId: string; productId: Id<"tenantProducts">; reservationId: Id<"tenantReservations"> },
+  null
+>("tenantCatalogue:expireReservationDue");
 
 function itemFrom(row: Doc<"tenantProducts">): CatalogueItem {
   return {
@@ -332,6 +338,11 @@ export const reserveProduct = tenantMutation({
       ...(next.stock.kind === "finite" ? { reserved: next.stock.reserved } : {}),
       updatedAt: now,
     });
+    await ctx.scheduler.runAt(next.reservation.expiresAt, expireReservationDueRef, {
+      tenantId: ctx.tenantId,
+      productId: args.productId,
+      reservationId,
+    });
     await stockAudit(
       ctx,
       ctx.tenantId,
@@ -360,6 +371,8 @@ export const releaseReservation = tenantMutation({
       reservation.productId !== args.productId
     )
       throw new Error("RESERVATION_UNAVAILABLE");
+    if (reservation.orderId || reservation.attemptId)
+      throw new Error("ORDER_HOLD_MANAGED_BY_ORDER");
     const stock = await stockFor(ctx, ctx.tenantId, args.productId);
     const next = releaseInventory(
       stockFrom(stock),
@@ -400,6 +413,8 @@ export const expireReservation = tenantMutation({
       reservation.productId !== args.productId
     )
       throw new Error("RESERVATION_UNAVAILABLE");
+    if (reservation.orderId || reservation.attemptId)
+      throw new Error("ORDER_HOLD_MANAGED_BY_ORDER");
     const stock = await stockFor(ctx, ctx.tenantId, args.productId);
     const next = expireInventory(
       stockFrom(stock),
@@ -423,6 +438,58 @@ export const expireReservation = tenantMutation({
       { reservationId: args.reservationId, quantity: reservation.quantity },
     );
     return { stockRevision: next.stock.revision };
+  },
+});
+
+/** Journaled due-time release for standalone catalogue holds. Order-linked holds have their own
+ * order timer and cannot be closed by this path, including after a link is changed. */
+export const expireReservationDue = internalMutation({
+  args: {
+    tenantId: v.string(),
+    productId: v.id("tenantProducts"),
+    reservationId: v.id("tenantReservations"),
+  },
+  handler: async (ctx, args) => {
+    const reservation = await ctx.db.get(args.reservationId);
+    if (
+      !reservation ||
+      reservation.tenantId !== args.tenantId ||
+      reservation.productId !== args.productId ||
+      reservation.orderId ||
+      reservation.attemptId ||
+      reservation.status !== "held"
+    )
+      return null;
+    const now = Date.now();
+    if (now < reservation.expiresAt) return null;
+    const product = await ctx.db.get(args.productId);
+    if (!product || product.tenantId !== args.tenantId) throw new Error("PRODUCT_UNAVAILABLE");
+    const stock = await stockFor(ctx, args.tenantId, args.productId);
+    const next = expireInventory(
+      stockFrom(stock),
+      reservationFrom(reservation),
+      now,
+      stock.revision,
+    );
+    await ctx.db.patch(stock._id, {
+      revision: next.stock.revision,
+      ...(next.stock.kind === "finite" ? { reserved: next.stock.reserved } : {}),
+      updatedAt: now,
+    });
+    await ctx.db.patch(reservation._id, { status: "expired", updatedAt: now });
+    await stockAudit(
+      ctx,
+      args.tenantId,
+      "system",
+      "tenant.stock.expired",
+      args.productId,
+      next.stock.revision,
+      {
+        reservationId: args.reservationId,
+        quantity: reservation.quantity,
+      },
+    );
+    return null;
   },
 });
 

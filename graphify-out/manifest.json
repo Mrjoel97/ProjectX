@@ -11425,8 +11425,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/routines.test.ts": {
-    "mtime": 1790261525.0275106,
-    "ast_hash": "ad3ff9cf343496ba55a54f0531b06283",
+    "mtime": 1790540609.3108385,
+    "ast_hash": "02fd993d4bd2382b045d2018231d700f",
     "semantic_hash": ""
   },
   "packages/backend/convex/scaleConstants.test.ts": {
@@ -11915,8 +11915,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/knowledge-search-routines.md": {
-    "mtime": 1790416130.1819963,
-    "ast_hash": "3054aff9467f9b1d9cf85f3a609c44aa",
+    "mtime": 1790540719.2626631,
+    "ast_hash": "204178935a939d0208ee84abb8c1c43e",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-05-promotion.md": {
@@ -15245,18 +15245,18 @@
     "semantic_hash": ""
   },
   "docs/playbooks/tenant-commerce.md": {
-    "mtime": 1790531057.1286561,
-    "ast_hash": "521b4f5b9711a545839cc3fdba64bd68",
+    "mtime": 1790539960.7661786,
+    "ast_hash": "5142a37ca13be8ed91878fe48044f6be",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantCatalogue.test.ts": {
-    "mtime": 1790471242.0915208,
-    "ast_hash": "9de90cb7fa745dadf3955137761733ff",
+    "mtime": 1790539810.2771888,
+    "ast_hash": "da5acbb2f6f1076ffe88eb89977de8a4",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantCatalogue.ts": {
-    "mtime": 1790471242.1989195,
-    "ast_hash": "c0e8a2f51748a7275844e63247adb102",
+    "mtime": 1790539879.293485,
+    "ast_hash": "71853ee522be98db3e1e8b231ddf7004",
     "semantic_hash": ""
   },
   "packages/core/src/tenantInventory.test.ts": {
@@ -15295,8 +15295,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantOrders.test.ts": {
-    "mtime": 1790530948.490803,
-    "ast_hash": "3abe83c42c9b8a94627cec112ca7ffb9",
+    "mtime": 1790539761.1636665,
+    "ast_hash": "4e0eee45099320a72a7cf228392585ca",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantOrders.ts": {
@@ -17060,8 +17060,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-20-SUMMARY.md": {
-    "mtime": 1790531384.1581547,
-    "ast_hash": "98bc8dc6a74c3be1e423e53243e5d7b7",
+    "mtime": 1790540661.6663828,
+    "ast_hash": "c9f0f580b666d8d6a0163bbc3f825908",
     "semantic_hash": ""
   },
   "docs/evidence/recurrence/auckland-2026-09-26/dst-boundary.md": {

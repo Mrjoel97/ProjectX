@@ -132,6 +132,21 @@ const exportTenantData = makeFunctionReference<
 const expireDue = makeFunctionReference<"mutation", { tenantId: string; orderId: string }, null>(
   "tenantOrders:expireDue",
 );
+const releaseCatalogueReservation = makeFunctionReference<
+  "mutation",
+  { productId: string; reservationId: string; expectedStockRevision: number },
+  unknown
+>("tenantCatalogue:releaseReservation");
+const expireCatalogueReservation = makeFunctionReference<
+  "mutation",
+  { productId: string; reservationId: string; expectedStockRevision: number },
+  unknown
+>("tenantCatalogue:expireReservation");
+const expireStandaloneDue = makeFunctionReference<
+  "mutation",
+  { tenantId: string; productId: string; reservationId: string },
+  null
+>("tenantCatalogue:expireReservationDue");
 
 function harness() {
   const t = convexTest(schema, modules);
@@ -211,6 +226,41 @@ async function setup(t: ReturnType<typeof harness>, email: string) {
 }
 
 describe("local tenant order adapter", () => {
+  test("catalogue release and expiry cannot bypass the linked order hold", async () => {
+    const t = harness();
+    const a = await setup(t, "linked-hold@example.test");
+    const placed = await a.actor.mutation(placeOrder, {
+      cartId: a.cart.cartId,
+      expectedCartRevision: 1,
+      retryKey: "linked-hold",
+    });
+    const before = await t.run(async (ctx) => ({
+      order: await ctx.db.get(placed.orderId as never),
+      stock: await ctx.db.query("tenantStock").first(),
+      hold: await ctx.db.query("tenantReservations").first(),
+    }));
+    expect(before.hold?.status).toBe("held");
+    for (const fn of [releaseCatalogueReservation, expireCatalogueReservation])
+      await expect(
+        a.actor.mutation(fn, {
+          productId: a.productId,
+          reservationId: String(before.hold?._id),
+          expectedStockRevision: before.stock?.revision ?? -1,
+        }),
+      ).rejects.toThrow("ORDER_HOLD_MANAGED_BY_ORDER");
+    await t.mutation(expireStandaloneDue, {
+      tenantId: String(a.userId),
+      productId: a.productId,
+      reservationId: String(before.hold?._id),
+    });
+    expect(
+      await t.run(async (ctx) => ({
+        order: await ctx.db.get(placed.orderId as never),
+        stock: await ctx.db.query("tenantStock").first(),
+        hold: await ctx.db.query("tenantReservations").first(),
+      })),
+    ).toEqual(before);
+  });
   test("digital-only and mixed carts pin branch facts and charge physical shipping once", async () => {
     const t = harness();
     const a = await setup(t, "digital@example.test");

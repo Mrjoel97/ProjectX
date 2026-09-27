@@ -294,6 +294,9 @@ const SCHEDULER_CALL_SITES = [
   "researchControl.ts",
   "review.ts",
   "smoke.ts",
+  // Phase 50 catalogue: one absolute expiry callback per authenticated standalone stock hold.
+  // Its internal landing never schedules again; order-linked holds use tenantOrders instead.
+  "tenantCatalogue.ts",
   // Phase 50 local checkout: one expiry callback per newly placed order. `expireDue` only
   // closes that order's held stock and never schedules another callback or cadence.
   "tenantOrders.ts",

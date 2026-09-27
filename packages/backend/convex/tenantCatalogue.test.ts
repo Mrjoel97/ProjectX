@@ -1,6 +1,6 @@
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import schema from "./schema";
 
@@ -58,6 +58,11 @@ const releaseReservation = makeFunctionReference<
   { productId: string; reservationId: string; expectedStockRevision: number },
   { stockRevision: number }
 >("tenantCatalogue:releaseReservation");
+const expireReservationDue = makeFunctionReference<
+  "mutation",
+  { tenantId: string; productId: string; reservationId: string },
+  null
+>("tenantCatalogue:expireReservationDue");
 const listProducts = makeFunctionReference<
   "query",
   { cursor?: string | null; limit?: number },
@@ -80,6 +85,67 @@ function harness() {
 }
 
 describe("tenant catalogue adapter", () => {
+  test("standalone holds journal an exact due timer with tenant-bound replay-safe release", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const t = harness();
+      const userId = await t.run((ctx) => ctx.db.insert("users", { email: "held@example.test" }));
+      const actor = t.withIdentity({ subject: `${userId}|session` });
+      const created = await actor.mutation(createProduct, {
+        sku: "timed-lamp",
+        variant: "one",
+        currency: "USD",
+        priceMinor: 1250,
+        status: "active",
+        goodsKind: "physical",
+        stock: { kind: "finite", onHand: 1, reservationTtlMs: 60_000 },
+      });
+      const held = await actor.mutation(reserveProduct, {
+        productId: created.productId,
+        expectedStockRevision: 1,
+        quantity: 1,
+      });
+      const scheduled = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
+      const before = await t.run(async (ctx) => ({
+        stock: await ctx.db.query("tenantStock").first(),
+        hold: await ctx.db.query("tenantReservations").first(),
+      }));
+      expect(scheduled).toHaveLength(1);
+      expect(String(scheduled[0]?.name)).toContain("tenantCatalogue:expireReservationDue");
+      expect(scheduled[0]?.scheduledTime).toBe(before.hold?.expiresAt);
+      await t.mutation(expireReservationDue, {
+        tenantId: "another-tenant",
+        productId: created.productId,
+        reservationId: held.reservationId,
+      });
+      await t.mutation(expireReservationDue, {
+        tenantId: String(userId),
+        productId: created.productId,
+        reservationId: held.reservationId,
+      });
+      expect(await t.run((ctx) => ctx.db.query("tenantReservations").first())).toEqual(before.hold);
+      vi.setSystemTime(new Date((before.hold?.expiresAt ?? 0) + 1));
+      await t.mutation(expireReservationDue, {
+        tenantId: String(userId),
+        productId: created.productId,
+        reservationId: held.reservationId,
+      });
+      await t.mutation(expireReservationDue, {
+        tenantId: String(userId),
+        productId: created.productId,
+        reservationId: held.reservationId,
+      });
+      const after = await t.run(async (ctx) => ({
+        stock: await ctx.db.query("tenantStock").first(),
+        hold: await ctx.db.query("tenantReservations").first(),
+      }));
+      expect(after.hold?.status).toBe("expired");
+      expect(after.stock?.reserved).toBe(0);
+      expect(after.stock?.revision).toBe((before.stock?.revision ?? 0) + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   test("create/edit/pause, CAS stock and exact finite availability", async () => {
     const t = harness();
     const a = await t.run((ctx) => ctx.db.insert("users", { email: "merchant-a@example.test" }));
