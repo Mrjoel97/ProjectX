@@ -20,7 +20,8 @@
       "!docs/design/mockups",
       "!graphify-out",
       "!packages/core/src/__fixtures__/assembly/empty.json",
-      "!packages/core/src/__fixtures__/assembly/malformed.json"
+      "!packages/core/src/__fixtures__/assembly/malformed.json",
+      "!packages/core/src/designKnowledge.generated.ts"
     ]
   },
   "formatter": {

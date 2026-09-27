@@ -84,3 +84,25 @@ node scripts/verify-knowledge-work-provenance.mjs --check-source
 ```
 
 Offline and read-only: it fetches nothing, publishes nothing, and activates nothing.
+
+---
+
+## Phase 49 design-knowledge snapshots
+
+The following three MIT-licensed repositories are included only as reviewed, immutable source
+bytes. They are not runtime dependencies, prompts, tools, installers, network authorities, or
+commerce integrations. The compiler emits a small closed data bundle from explicitly reviewed
+records; upstream prose and executable sections remain excluded.
+
+| Source | Exact commit and tree | Preserved notice | Snapshot inventory |
+|---|---|---|---|
+| [UI/UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | `dcc40ff5133ef78276117db0cc34e7b83cc8aeba` / `c03629e2ecd9ccab3a39dbceaadf60458e2de5d0` | [`ui-ux-pro-max.LICENSE`](third_party/design-knowledge/LICENSES/ui-ux-pro-max.LICENSE) | `third_party/design-knowledge/source-snapshot/ui-ux-pro-max/` |
+| [Taste Skill](https://github.com/leonxlnx/taste-skill) | `5217fb45be2c0b302f29c9cd31cbd3237501c684` / `b2b06b063de0511b27de4d1f497200573d0af336` | [`taste-skill.LICENSE`](third_party/design-knowledge/LICENSES/taste-skill.LICENSE) | `third_party/design-knowledge/source-snapshot/taste-skill/` |
+| [Nexscope eCommerce-Skills](https://github.com/nexscope-ai/eCommerce-Skills) | `ee0fb29433d02ccc22e3e6cea9ab4586d49fd42e` / `e12da108464664ed9b85b177577c7fcfe21a30bb` | [`ecommerce-skills.LICENSE`](third_party/design-knowledge/LICENSES/ecommerce-skills.LICENSE) | `third_party/design-knowledge/source-snapshot/nexscope-ecommerce/` |
+
+The complete per-file byte, Git blob, disposition, and transformation inventory is
+[`third_party/design-knowledge/manifest.json`](third_party/design-knowledge/manifest.json).
+The exact MIT notices are redistributed unchanged. Files containing installation, fetch,
+prompting, tool, or commerce instructions are retained solely for review provenance and marked
+with explicit excluded sections; they are never loaded or executed. `scripts/verify-design-knowledge-provenance.mjs`
+and `scripts/compile-design-knowledge.mjs` are offline and fail closed on drift.
