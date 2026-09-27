@@ -13165,13 +13165,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.test.ts": {
-    "mtime": 1790525925.8982685,
-    "ast_hash": "ca6b8cdac92413a75e7f384973fb6f60",
+    "mtime": 1790526874.3102279,
+    "ast_hash": "5b10348a0cf298accba2546d892c3cc9",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.ts": {
-    "mtime": 1790525924.600948,
-    "ast_hash": "e5fc8eb546450423260986df950dd571",
+    "mtime": 1790527019.6159103,
+    "ast_hash": "4a534feb1bd02eb61a68281308992862",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalProductDesign.test.ts": {
@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1789059515.6896074,
-    "ast_hash": "b9ac730934875cea4949d394cf6d56b6",
+    "mtime": 1790526949.930186,
+    "ast_hash": "9ab68e693e34b5099bb1b2dd4554ee9d",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790525941.1033669,
-    "ast_hash": "feb67a1bb51568c632ef21cc88a8c49d",
+    "mtime": 1790526948.7100086,
+    "ast_hash": "55f94875c88cba165683f9d71db079b4",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
