@@ -13165,13 +13165,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.test.ts": {
-    "mtime": 1790524822.5242424,
-    "ast_hash": "6dfe84946f73b2228673ebdeae4a8c96",
+    "mtime": 1790525925.8982685,
+    "ast_hash": "ca6b8cdac92413a75e7f384973fb6f60",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.ts": {
-    "mtime": 1790524858.928535,
-    "ast_hash": "407af0983a2acac1edd71342897258b1",
+    "mtime": 1790525924.600948,
+    "ast_hash": "e5fc8eb546450423260986df950dd571",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalProductDesign.test.ts": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790524935.69532,
-    "ast_hash": "4494fa70f92cf5843183e1c3880cdb04",
+    "mtime": 1790525941.1033669,
+    "ast_hash": "feb67a1bb51568c632ef21cc88a8c49d",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
