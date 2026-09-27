@@ -193,11 +193,16 @@ const budgetStatus = (overrides = {}) => ({
   closed: false,
   expired: false,
   breached: false,
+  capCents: 25,
+  remainingCents: 24,
   callCount: 1,
   settledCount: 1,
   unsettledCount: 0,
   unresolvedCents: 0,
   actualUsd: 0.01,
+  observedUsd: 0.01,
+  conservativeUsd: 0,
+  conservativeCount: 0,
   ...overrides,
 });
 
@@ -316,6 +321,35 @@ test("closed, expired, or breached budgets fail immediately instead of being tre
           quietMs: 2_000,
         }),
       PaidCallUnresolved,
+    );
+    assert.equal(clock.elapsed(), 0);
+  }
+});
+
+test("malformed or cross-budget settlement snapshots cannot satisfy the quiet window", () => {
+  for (const invalid of [
+    { budgetId: "different-budget" },
+    { callCount: 1, settledCount: 2 },
+    { callCount: 2, settledCount: 1, unsettledCount: 0 },
+    { actualUsd: "0.01" },
+    { observedUsd: Number.NaN },
+    { conservativeUsd: 0.02, conservativeCount: 2 },
+    { unresolvedCents: 0.5 },
+  ]) {
+    const clock = fakeClock();
+    assert.throws(
+      () =>
+        waitForPaidSettlement({
+          expectedBudgetId: "budget-ref",
+          readStatus: () => budgetStatus(invalid),
+          now: clock.now,
+          sleep: clock.sleep,
+          timeoutMs: 3_000,
+          pollMs: 1_000,
+          quietMs: 0,
+        }),
+      PaidCallUnresolved,
+      JSON.stringify(invalid),
     );
     assert.equal(clock.elapsed(), 0);
   }

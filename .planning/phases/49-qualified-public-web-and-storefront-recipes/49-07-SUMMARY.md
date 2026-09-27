@@ -12,14 +12,16 @@ provides:
   - code-owned claim guard and one-tree fail-closed qualification runner
   - watched runtime/registry playbooks and explicit Wave 7/8 re-entry packet
 affects: [SITE-03, LAND-03, SHOP-01, phase-50]
-reviewed: 2026-09-27
+reviewed: 2026-09-28
 ---
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-27 serialized aggregate passed all 21 planes on the current 71-file digest, including the Wave 1 golden target-guard repin and watched registry playbook. Prior passing digests are historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest after the settlement-integrity evaluator/registry repin. The preceding digest `559de608fee74224617997e8492860fef777325bb1a0d73cbf42a79d27751412` passed on its own source but is now historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `559de608fee74224617997e8492860fef777325bb1a0d73cbf42a79d27751412`
+Artifact-set SHA-256: `d87dc6088b176a5a8df6fa8dfcbb36272a353ddf2e384b4e2883433769dbd1dd`
+
+The direct golden settlement controls and both zero-cost evaluator self-checks pass on the new pins. The serialized 21-plane Phase 49 aggregate passed both fresh browser/audit stacks, three typechecks, production build, strict documents, claim controls and all 30 free gates with source identity stable throughout. The free golden preflight still refuses for lack of a named non-production target; no paid or hosted acceptance is inferred.
 
 The target-conflict guard changed the shared skill/evaluator pins in this declared source set. The exact digest passed both fresh browser/audit stacks, three typechecks, production build, strict documents, claim controls and all 30 free gates with source identity stable throughout. This renews repository/local evidence only; the golden live preflight remains red for want of a named non-production deployment.
 

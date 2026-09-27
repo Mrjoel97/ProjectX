@@ -132,6 +132,7 @@ export function invokePaidOnce({
  * injectable so the timeout and race are proved with a deterministic fake clock.
  */
 export function waitForPaidSettlement({
+  expectedBudgetId,
   readStatus,
   sleep,
   now = Date.now,
@@ -143,6 +144,8 @@ export function waitForPaidSettlement({
     typeof readStatus !== "function" ||
     typeof sleep !== "function" ||
     typeof now !== "function" ||
+    (expectedBudgetId !== undefined &&
+      (typeof expectedBudgetId !== "string" || expectedBudgetId.length === 0)) ||
     !Number.isFinite(timeoutMs) ||
     timeoutMs <= 0 ||
     !Number.isFinite(pollMs) ||
@@ -161,14 +164,37 @@ export function waitForPaidSettlement({
     const status = readStatus();
     if (
       !status ||
+      typeof status.budgetId !== "string" ||
+      status.budgetId.length === 0 ||
+      (expectedBudgetId !== undefined && status.budgetId !== expectedBudgetId) ||
+      !Number.isSafeInteger(status.capCents) ||
+      status.capCents <= 0 ||
+      !Number.isSafeInteger(status.remainingCents) ||
+      status.remainingCents < 0 ||
       !Number.isInteger(status.callCount) ||
       !Number.isInteger(status.settledCount) ||
       !Number.isInteger(status.unsettledCount) ||
-      !Number.isFinite(status.unresolvedCents) ||
+      !Number.isSafeInteger(status.unresolvedCents) ||
+      !Number.isFinite(status.actualUsd) ||
+      !Number.isFinite(status.observedUsd) ||
+      !Number.isFinite(status.conservativeUsd) ||
+      !Number.isSafeInteger(status.conservativeCount) ||
       status.callCount < 0 ||
       status.settledCount < 0 ||
       status.unsettledCount < 0 ||
       status.unresolvedCents < 0 ||
+      status.callCount !== status.settledCount + status.unsettledCount ||
+      (status.unsettledCount === 0 && status.unresolvedCents !== 0) ||
+      status.actualUsd < 0 ||
+      status.observedUsd < 0 ||
+      status.conservativeUsd < 0 ||
+      status.conservativeUsd > status.actualUsd ||
+      status.observedUsd > status.actualUsd ||
+      status.conservativeCount < 0 ||
+      status.conservativeCount > status.settledCount ||
+      typeof status.breached !== "boolean" ||
+      typeof status.expired !== "boolean" ||
+      typeof status.closed !== "boolean" ||
       status.breached ||
       status.expired ||
       status.closed

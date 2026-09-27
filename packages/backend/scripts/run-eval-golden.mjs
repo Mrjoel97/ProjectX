@@ -5224,6 +5224,7 @@ async function runLive(pins, filters = [], tenantSkillIdArgs = [], automaticRetr
   console.log(`[eval:golden] budget ${evalBudgetId}; unresolved calls retain their reservation`);
   const settlePaidCalls = () =>
     waitForPaidSettlement({
+      expectedBudgetId: evalBudgetId,
       readStatus: () =>
         parse(must("guardrails:evalBudgetStatus", { budgetId: evalBudgetId }, RETRY_READ)),
       sleep: sleepSync,

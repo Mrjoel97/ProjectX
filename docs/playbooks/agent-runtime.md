@@ -1,3 +1,7 @@
+> Last verified: 2026-09-28 — the golden runner binds its quiet-window settlement read to the
+> opened budget and refuses malformed count/cost snapshots. This is an offline evidence-integrity
+> guard, not a live model verdict; the named non-production target remains unavailable.
+
 > Last verified: 2026-09-27 — the golden evaluator's free named-target preflight now checks
 > that explicit local/cloud URLs and ambient/file declarations agree with the selected
 > `CONVEX_DEPLOYMENT`. The 17 offline preflight controls pass. Its current real invocation

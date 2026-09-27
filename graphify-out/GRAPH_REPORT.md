@@ -1,7 +1,7 @@
-# Graph Report - Pikar-Ai  (2026-09-27)
+# Graph Report - Pikar-Ai  (2026-09-28)
 
 ## Corpus Check
-- 3066 files · ~5,992,341 words
+- 3066 files · ~5,992,981 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1393e280`
+- Built from commit: `e396a8dc`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

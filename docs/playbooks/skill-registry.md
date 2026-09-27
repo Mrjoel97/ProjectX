@@ -1,5 +1,16 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-28 — the golden evaluator's free settlement poll now rejects
+> malformed, inconsistent or cross-budget ledger snapshots before a quiet-window verdict.
+> The runner binds every read to its opened budget. An offline red-then-green control covers
+> wrong identity, impossible counts, invalid cost fields and contradictory conservative
+> totals; the 13 direct paid-attempt tests and 57-fixture golden self-check pass without
+> provider work. The unchanged 46-case corpus pins source-derived revision
+> `2026-09-11.budgeted-evaluator.8d2ce949da0f9f5c3e92cfe7e8751d6454b3464c7ca27f20f680c3cdaf2c5e6f`;
+> the dependent web-recipe implementation pin is
+> `814049b5638fc6307c194a9101f30cec8f391668fe1fff45e86b62cfe0e71321`.
+> No named non-production target, paid case verdict or skill activation is inferred.
+
 > Last verified: 2026-09-27 — the free golden preflight now rejects conflicting ambient/file
 > deployment declarations and explicit Convex URLs that contradict a named `local:` or `dev:`
 > target. Local URLs must be loopback; an explicit cloud-dev URL must name the same Convex

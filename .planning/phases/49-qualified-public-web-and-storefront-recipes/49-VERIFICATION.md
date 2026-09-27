@@ -1,15 +1,17 @@
 ---
 phase: 49-qualified-public-web-and-storefront-recipes
 status: repository-local-qualified
-reviewed: 2026-09-27
+reviewed: 2026-09-28
 requirements: [SITE-03, LAND-03, SHOP-01]
 ---
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-27 serialized aggregate passed on the current 71-file source digest below, including the Wave 1 golden target-guard repin and watched registry playbook. Prior passing digests are historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file source digest below after the Wave 1 settlement-integrity repin. The preceding `559de608fee74224617997e8492860fef777325bb1a0d73cbf42a79d27751412` passed on its former source and is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `559de608fee74224617997e8492860fef777325bb1a0d73cbf42a79d27751412`
+Artifact-set SHA-256: `d87dc6088b176a5a8df6fa8dfcbb36272a353ddf2e384b4e2883433769dbd1dd`
+
+**2026-09-28 settlement-snapshot requalification:** The golden runner now binds each free ledger poll to the opened budget and refuses malformed count/cost snapshots. Source-derived golden and dependent deterministic recipe pins changed without changing their fixture corpora. Direct red-then-green settlement tests and both evaluator self-checks pass. The full serialized Phase 49 runner passed all 21 planes with initial/final source digest equal, including two fresh disposable browser/audit stacks, three typechecks, production web build, strict documents, claim controls and all 30 free gates. The actual free golden preflight still refuses before a budget because no named non-production target is configured. No paid, live, hosted, founder or merchant acceptance follows.
 
 **2026-09-27 target-conflict requalification:** The golden preflight now rejects a named local/dev deployment declaration when an explicit backend URL or another declaration conflicts with it. Source-derived golden and deterministic recipe evaluator pins were refreshed without changing either fixture corpus. The full serialized Phase 49 runner passed all 21 planes on this initial/final-equal digest, including both fresh disposable browser/audit stacks, three typechecks, production web build, strict documents, claim controls and all 30 free gates. The actual free golden preflight still refuses before a budget because no named non-production target is configured. No paid, live, hosted, founder or merchant acceptance follows.
 
