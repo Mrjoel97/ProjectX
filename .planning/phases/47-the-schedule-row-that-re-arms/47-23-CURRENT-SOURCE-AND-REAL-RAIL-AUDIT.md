@@ -14,9 +14,9 @@ tree. Its recorded SHA-256 values for `schema.ts`, `model.ts` and `model.test.ts
 | Candidate path under `packages/backend/candidate/recurrence/` | Current SHA-256 |
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
-| `model.ts` | `a0e35f29918f4b3da46d45fea5723ea3fbc27ef5cb904849ceaff94a89fbc00a` |
-| `model.test.ts` | `e3a6c6edfc50f09b48df2ba5ea1c01b060f2dcb1d483af6f7027a0a4ecab7d18` |
-| `README.md` | `825e93bbc9fe3cf351bb00fb1f8d54b98de43870ae4ec8bb056d92c487d9be8d` |
+| `model.ts` | `99bc5ad58ba2a2e6d6289dc9cf0d28f4f7f6702c5211523e9fb41b9dc8e4e2ff` |
+| `model.test.ts` | `f0b385c42b5985f1ab970ed23b58dd60c242d5ae5be6331f1dd7b910711111c8` |
+| `README.md` | `e7e497c95aa67b9887145eee9cae84cdb757733c2e0d6edde5d34a958858a04e` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
@@ -31,6 +31,16 @@ negative controls and checks all six current raw-file hashes against this pendin
 CI run. It refuses an absent correction, a missing or stale audit hash, or a review identity that
 contradicts the pending classification. This guards the evidence identity; it is not the missing
 independent review.
+
+**2026-09-28 source amendment:** Two new adverse expectations failed on the previous candidate:
+calling `closeUnknownPaidStep` after a committed paid start let the recovery sweep release both
+envelope holds and clear the active run without proving whether the physical call spent money.
+The method is now `markUnknownPaidStep`: it durably quarantines the start-claimed identity and
+retains both holds; repeated synthetic attempts and recovery refuse redispatch and release. A
+later landing with the exact step ID/token can settle through the normal terminal path. The full
+candidate suite passes **35/35** and candidate TypeScript exits 0 after the fix. This is a
+synthetic fail-closed repair, not authenticated provider settlement, actual money accounting or a
+fresh independent review; the three current hashes above supersede this memo's earlier values.
 
 Current controls still have value but are narrower: explicit candidate Vitest passed **35/35**;
 candidate TypeScript passed; `routineDecision`, `routines` and `dstProbe` passed **108/108**;

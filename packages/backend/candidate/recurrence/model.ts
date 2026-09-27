@@ -571,6 +571,7 @@ export async function landPaidStep(
     throw new Error("candidate: paid step identity mismatch");
   await db.patch(runId, {
     paidStep: undefined,
+    ...(run.status === "reconciliation_required" ? { status: "running" as const } : {}),
     lastStepId: stepId,
     settledStepIds: [...(run.settledStepIds ?? []), stepId].slice(-MAX_ATTEMPTS),
   });
@@ -579,8 +580,8 @@ export async function landPaidStep(
   return outcome;
 }
 
-/** Explicit closure after a lost worker; never guesses that the physical call did not happen. */
-export async function closeUnknownPaidStep(
+/** Quarantine a lost worker without refunding a possibly spent envelope. */
+export async function markUnknownPaidStep(
   db: CandidateDb,
   tenantId: string,
   runId: RunId,
@@ -595,16 +596,12 @@ export async function closeUnknownPaidStep(
     run.paidStep.state !== "start_claimed"
   )
     throw new Error("candidate: unknown step identity mismatch");
-  await db.patch(runId, {
-    paidStep: undefined,
-    lastStepId: stepId,
-    settledStepIds: [...(run.settledStepIds ?? []), stepId].slice(-MAX_ATTEMPTS),
-  });
-  const updated = await db.get(runId);
-  getRun(updated, tenantId);
-  // An unknown physical outcome never enters retry_pending. The terminal result is
-  // durable but cannot clear activeRunId or audit until the two rails are reconciled.
-  return commitTerminal(db, updated, "failed_internal");
+  if (run.status !== "running" && run.status !== "reconciliation_required")
+    throw new Error("candidate: unknown step not running");
+  if (run.status === "running") await db.patch(runId, { status: "reconciliation_required" });
+  // Keep the start identity and both holds. Only an exact, later result landing can
+  // establish the physical outcome; a sweep cannot infer it from a lost worker.
+  return "reconciliation_required" as const;
 }
 
 async function releaseTerminal(
@@ -665,6 +662,9 @@ async function settlePendingTerminal(
   runId: RunId,
   rails: SyntheticRails,
 ) {
+  const before = await transaction((db) => db.get(runId));
+  getRun(before, tenantId);
+  if (before.paidStep?.state === "start_claimed") return "reconciliation_required" as const;
   if (!(await releaseTerminal(transaction, tenantId, runId, rails)))
     return "reconciliation_required" as const;
   return transaction(async (db) => {

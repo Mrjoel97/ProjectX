@@ -12,7 +12,6 @@ import {
   changeCandidate,
   claimPaidStepStart,
   claimTick,
-  closeUnknownPaidStep,
   createCandidate,
   DAILY_SPEND_CENTS,
   DEPLOYMENT_SPEND_CENTS,
@@ -20,6 +19,7 @@ import {
   landPaidStep,
   type Material,
   MISSED_GRACE_MS,
+  markUnknownPaidStep,
   materiallyChanged,
   pauseCandidate,
   type Rail,
@@ -717,13 +717,14 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
       await tx((db) => claimPaidStepStart(db, tenant, runId, "step_one", admitted.token!)),
     ).toBe(false);
     expect(
-      await tx((db) => closeUnknownPaidStep(db, tenant, runId, "step_one", admitted.token!)),
+      await tx((db) => markUnknownPaidStep(db, tenant, runId, "step_one", admitted.token!)),
     ).toBe("reconciliation_required");
     expect((await syntheticReconciliationSweep(tx, tenant, rails())).outcomes).toEqual([
-      "failed_internal",
+      "blocked_unknown_paid_step",
     ]);
+    expect((await tx((db) => db.get(runId)))?.paidStep?.state).toBe("start_claimed");
     expect((await tx((db) => admitPaidStep(db, tenant, runId, "step_two"))).outcome).toBe(
-      "not_ready",
+      "outstanding",
     );
   });
 
@@ -945,7 +946,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     expect(budget.released).toBe(50);
   });
 
-  it("closes a restart after start_claimed without redispatch or early active-run clearance", async () => {
+  it("quarantines a restart after start_claimed without redispatch or releasing an unknown spend", async () => {
     const { tx } = harness();
     const { id, runId } = await claimed(tx);
     const budget = rails();
@@ -977,18 +978,41 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     expect(physical).not.toHaveBeenCalled();
     expect((await tx((db) => db.get(id)))?.activeRunId).toBe(runId);
     expect(
-      await tx((db) => closeUnknownPaidStep(db, tenant, runId, "attempt_1", admitted.token!)),
+      await tx((db) => markUnknownPaidStep(db, tenant, runId, "attempt_1", admitted.token!)),
     ).toBe("reconciliation_required");
     expect((await tx((db) => db.get(id)))?.activeRunId).toBe(runId);
     expect(budget.held).toBe(50);
     expect((await syntheticReconciliationSweep(tx, tenant, budget)).outcomes).toEqual([
-      "failed_internal",
+      "blocked_unknown_paid_step",
     ]);
+    expect((await tx((db) => db.get(id)))?.activeRunId).toBe(runId);
+    expect(budget.held).toBe(50);
+    expect(budget.released).toBe(0);
+    expect(await syntheticAttempt(tx, tenant, runId, budget, physical)).toBe(
+      "reconciliation_required",
+    );
+    expect(physical).not.toHaveBeenCalled();
+    await expect(
+      tx((db) =>
+        landPaidStep(db, tenant, runId, "attempt_1", "wrong-token", {
+          kind: "prepared",
+          planRef: "plan:forged",
+        }),
+      ),
+    ).rejects.toThrow("identity mismatch");
+    expect(budget.held).toBe(50);
+    expect(
+      await tx((db) =>
+        landPaidStep(db, tenant, runId, "attempt_1", admitted.token!, {
+          kind: "prepared",
+          planRef: "plan:verified_late_landing",
+        }),
+      ),
+    ).toBe("reconciliation_required");
+    expect((await syntheticReconciliationSweep(tx, tenant, budget)).outcomes).toEqual(["prepared"]);
     expect((await tx((db) => db.get(id)))?.activeRunId).toBeUndefined();
     expect(budget.held).toBe(0);
     expect(budget.released).toBe(50);
-    expect(await syntheticAttempt(tx, tenant, runId, budget, physical)).toBe("not_claimed");
-    expect(physical).not.toHaveBeenCalled();
   });
 
   it("derives latest due across bounded pages, restart and wrap without outage catch-up", async () => {

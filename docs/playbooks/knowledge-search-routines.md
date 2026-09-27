@@ -1,5 +1,13 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — the disabled six-file candidate now quarantines an
+> unknown `start_claimed` paid step without releasing its synthetic budget holds or
+> clearing the active run. Two adverse expectations failed on the prior behavior;
+> all 35 candidate tests and candidate TypeScript pass after repair. An exact
+> step-ID/token landing can later settle the synthetic run. This is neither
+> authenticated provider settlement nor real spend-rail or independent-review proof;
+> the source-review gate still classifies current bytes as pending.
+
 > Last verified: 2026-09-28 — the 47-22 independent review's schema, model and test
 > hashes differ from the current disabled candidate; its historical synthetic GO
 > must not be applied to the current bytes. Current candidate tests pass 35/35,
