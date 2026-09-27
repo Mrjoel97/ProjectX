@@ -1,6 +1,18 @@
 # Playbook: Public web runtime
 
-> Last verified: 2026-09-25 — the anonymous form's active abuse-bucket lookup now bounds the
+> Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
+> record, NOT a verification of the sections below.** No public-runtime code, route, form, renderer
+> or recipe changed, and no design-knowledge CONTENT changed.
+> `third_party/design-knowledge/manifest.json` changed only because the offline compiler rewrote it,
+> and it is now excluded from biome alongside `designKnowledge.generated.ts`: the compiler and the
+> formatter each rewrote the other's bytes in a loop, so the compiler's hash-of-itself
+> (`compilerSha256`) and `compiledBundleHash` could never both satisfy `--check` and `biome ci` at
+> the same time. Byte-exactness is that file's contract, so the formatter must not own those bytes.
+> The bundle hash is unchanged at `d818e4d9ab6fcf85b3725d578edf2fbace642dc0472e1d94922c030f7df016a8`
+> across eight compiled records and three immutable MIT sources, so every page, proof and citation
+> below still resolves to the same knowledge as before.)
+
+> Last verified: 2026-09-25 - the anonymous form's active abuse-bucket lookup now bounds the
 > existing `by_tenant_abuse_bucket` index by `abuseWindowExpiresAt > now` before taking five
 > rows. Expired rows no longer require a post-index filter scan to find the active window;
 > the 15-minute policy, outcomes, stored fields and hourly retention sweep are unchanged.

@@ -48,7 +48,7 @@ test("actual embedding fetch follows reservation, carries ceiling policy and set
         only: ["openai"],
         order: ["openai"],
         allow_fallbacks: false,
-        max_price: { prompt: "0.02", completion: "0", request: "0" },
+        max_price: { prompt: 0.02, completion: 0, request: 0 },
       },
     });
     return Response.json({

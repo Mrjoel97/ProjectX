@@ -203,14 +203,24 @@ describe("the cron actually registers the sweep", () => {
     expect((await getJob(t, jobId))?.status).toBe("failed");
   });
 
-  test("crons.ts holds exactly SIX jobs — a sixth is a deliberate edit here", () => {
+  test("crons.ts holds exactly SEVEN jobs — a seventh is a deliberate edit here", () => {
     // A COUNT, not a ">= 1". A cron is unattended spend and unattended writes; the number of them
     // is a fact worth having to change on purpose.
     const jobs = [
       ...cronsSrc().matchAll(/\bcrons\.(daily|weekly|interval|hourly|monthly|cron)\(/g),
     ];
     // 28.1-07 added the sixth: `billing-invoice-rollup`, the daily invoice claim tick.
-    expect(jobs).toHaveLength(6);
+    // Phase 48 added the seventh: `web-form-retention`, the hourly anonymous-form expiry sweep
+    // that deletes coordination rows past their explicit expiry without retaining raw request
+    // bodies, addresses, IPs or user agents. Neither is a sweep-job concern, so this test grew by
+    // a comment and a digit — that is the intended cost of the pin.
+    //
+    // DO NOT let this number drift from `routines.test.ts`'s "crons.ts holds only global system
+    // jobs, by pinned name", which pins all SEVEN BY NAME and is the authoritative guard. This is
+    // deliberately a COUNT and not a copy of that enumeration: a redundant restatement of the same
+    // closed list in a second file is maintenance, not defence. A count fails if a job is added or
+    // removed; the by-name pin fails with the diff that says which one.
+    expect(jobs).toHaveLength(7);
   });
 });
 

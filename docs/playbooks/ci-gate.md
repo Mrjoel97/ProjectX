@@ -1,6 +1,23 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
-> Last verified: 2026-09-23 — strict qualification is explicit with `--exit-code` for both local
+> Last verified: 2026-09-27 - `biome.json`'s `files.includes` gained two exclusions, and this is the
+> gate-level reason they are correct rather than a convenience. `compile-design-knowledge.mjs` writes
+> `packages/core/src/designKnowledge.generated.ts` AND `third_party/design-knowledge/manifest.json`
+> in a form `biome check --write` then rewrites — each undoing the other, so the compiler's
+> `compilerSha256` and `compiledBundleHash` could never satisfy both `compile-design-knowledge.mjs
+> --check` and `biome ci` at the same time. That is a gate red for a non-reason, which is worse than
+> no gate: the aggregate's "offline compiler" plane and the lint step could not both be green, so
+> the Phase 49 digest could never settle. Both files are generator-owned and integrity-checked —
+> `compilerSha256` is literally the hash of the compiler, and `--check` demands a deterministic
+> recompile — so a consumer formatter must not own their bytes. This follows the convention already in
+> the same list for `**/_generated` and the assembly fixtures. Biome now checks 1142 files instead of
+> 1144. What this does NOT do is relax lint: the files are still fully covered by the compiler's own
+> `--check`, its provenance verifier, and the Phase 49 aggregate's provenance and compiler planes, so
+> coverage moved to the tool that can actually enforce it. Note the ordering this imposes: run
+> `pnpm format` BEFORE the generators, and the recipe implementation pin LAST, or the pins are
+> computed against bytes that are about to be rewritten.
+
+> Last verified: 2026-09-23 - strict qualification is explicit with `--exit-code` for both local
 > corpus checkers. Missing Git/root/diff discovery, absent or invalid watch data, and missing or
 > empty planning inputs now fail with structured `status: failed`; a successful qualification emits
 > `status: passed`. Editor-hook skips emit `status: skipped` and remain nonblocking. Subprocess

@@ -1,6 +1,18 @@
-# Playbook: Revenue connectors — shared lifecycle, gates and release semantics
+# Playbook: Revenue connectors - shared lifecycle, gates and release semantics
 
-> Last verified: 2026-09-06 (38-01 — `isRevenueToolGrant` (the IDENTITY check on `SPECIALISTS.revenue.tools`) moved to `packages/core/src/toolGrants.ts`, where `grantsFor` reads it; `revenueTools.ts` re-exports it so its importers and `revenueTools.test.ts` are unchanged. The revenue read tools and reminder staging are built under `grants.revenueReads` / `grants.invoiceReminderStage` now; the snapshot test pins the revenue specialist and both eval-seam variants.)
+> Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
+> record, NOT a verification of the sections below.** No connector code, grant, gate or release
+> semantic changed. `connectorCredentials.test.ts` changed because its provider-status-code leak
+> check was TIME-DEPENDENT: `expect(JSON.stringify(status)).not.toContain("503")` grepped the whole
+> serialized connector row, which includes `connectedAt`, an epoch-millis timestamp - so the
+> assertion passed or failed on the digits of the current clock (a `connectedAt` of 1790503470595
+> contains the sequence 5-0-3 and reddened a green gate). The intent, that a provider's status code
+> is operator detail and must not ride out to the browser, is unchanged and still asserted: the
+> property is now named directly and the substring check is scoped to the `revocation` projection,
+> which carries no timestamp. Nothing about revocation, retry offerability, credential custody or
+> the closed failure classes below moved.)
+
+> Last verified: 2026-09-06 (38-01 - `isRevenueToolGrant` (the IDENTITY check on `SPECIALISTS.revenue.tools`) moved to `packages/core/src/toolGrants.ts`, where `grantsFor` reads it; `revenueTools.ts` re-exports it so its importers and `revenueTools.test.ts` are unchanged. The revenue read tools and reminder staging are built under `grants.revenueReads` / `grants.invoiceReminderStage` now; the snapshot test pins the revenue specialist and both eval-seam variants.)
 >
 
 > Last verified: 2026-09-06 (28.2-01, G22 — **THE EVIDENCE WINDOW IS REACHABLE, AND AN INVOICE CAN BE PICKED.**

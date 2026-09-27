@@ -21,6 +21,12 @@ afterEach(() => {
 });
 
 describe("Playwright discovery", () => {
+  // This spawns the real Playwright CLI and lists a suite, which costs ~4s on its own. Vitest's
+  // 5s default is therefore inside the noise: under `turbo`'s parallel packages the test timed out
+  // at 5000ms while passing in isolation, which is a gate that is red for a non-reason. The budget
+  // is set explicitly and generously because the assertion that matters is the spawn's exit status
+  // and the listed/ignored paths - never the wall clock. A genuinely hung spawn still fails on the
+  // spawnSync timeout below, and a genuinely slow machine now fails on something real.
   it("lists a real spec while ignoring auth runtime artifacts", () => {
     expect(playwrightConfig.testIgnore).toEqual(["**/.auth/**"]);
     fixtureRoot = mkdtempSync(join(tempRoot, tempPrefix));
@@ -60,5 +66,5 @@ describe("Playwright discovery", () => {
     expect(output.includes("VALID_DISCOVERY_SENTINEL")).toBe(true);
     expect(output.includes("auth-artifact.spec.ts")).toBe(false);
     expect(output.includes("AUTH_ARTIFACT_MUST_NOT_BE_IMPORTED")).toBe(false);
-  });
+  }, 60_000);
 });

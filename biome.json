@@ -21,7 +21,8 @@
       "!graphify-out",
       "!packages/core/src/__fixtures__/assembly/empty.json",
       "!packages/core/src/__fixtures__/assembly/malformed.json",
-      "!packages/core/src/designKnowledge.generated.ts"
+      "!packages/core/src/designKnowledge.generated.ts",
+      "!third_party/design-knowledge/manifest.json"
     ]
   },
   "formatter": {

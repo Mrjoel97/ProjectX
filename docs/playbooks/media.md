@@ -1,6 +1,17 @@
 # Playbook: Media Canvas (finished reels and standalone images)
 
-> Last verified: 2026-09-12 — `/dashboard/workspace?thread=<thread>&plan=<plan>&view=canvas`
+> Last verified: 2026-09-27 (watch-gate acknowledgment only - **this entry is a `Last verified`
+> bump plus a forward record, NOT a verification of the sections below.** No media code changed.
+> `reliabilitySweep.test.ts` changed because its cron count assertion was stale: `crons.ts`
+> registers SEVEN jobs, not six. The seventh is `web-form-retention`, Phase 48's hourly
+> anonymous-form expiry sweep (`internal.webForms.cleanupAll`, `crons.ts:85`) - it is not a media
+> job, and the count is the only thing the assertion reads. The authoritative by-name pin for all
+> seven already lived in `routines.test.ts` and was already correct, so this test was a stale
+> duplicate of a fact pinned correctly elsewhere. Nothing in the media rail, canvas, storyboard,
+> assembler, citation or retry behaviour below is affected, and no media provider call, render or
+> spend changed. The next real media change re-verifies this file.)
+
+> Last verified: 2026-09-12 - `/dashboard/workspace?thread=<thread>&plan=<plan>&view=canvas`
 > selects the exact tenant-owned plan through `plans.byId`. Missing, inaccessible, malformed
 > or wrong-thread IDs never fall back to the newest root. Query validation errors stay inside
 > the canvas boundary. Switching conversations clears the selection and URL plan parameter.

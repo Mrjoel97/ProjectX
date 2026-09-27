@@ -19,7 +19,7 @@ reviewed: 2026-09-26
 
 **Current-tree repository/local qualified:** the 2026-09-26 serialized aggregate exited 0 on the expanded 71-file digest below. It adds runtime/form source and test files that the earlier 61-file aggregate exercised but had not pinned; that narrower `e4c3ba52ae5074eb22c45d0f79dfc2da97cee5b83be9b03f140834c245e09ebb` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `8d479392f108186e8e18c778f9ffed9c9a894655bc8184ea5b7ae7c4f37170f1`
+Artifact-set SHA-256: `a1b776516f06b5ce0576ed7fb1648739eb831b1925c207106416cd14a91310c5`
 
 The declared set is the 71 lexical file rows produced by `node scripts/check-phase49-qualification.mjs --manifest` from `ARTIFACT_INPUTS` in that script. Each row hashes exact file bytes; the set digest hashes `path\0sha256\n` rows in lexical order. This summary, `49-VERIFICATION.md` and mutable planning-status files are deliberately excluded to avoid self-reference. The aggregate checks this recorded digest before and after every required plane.
 

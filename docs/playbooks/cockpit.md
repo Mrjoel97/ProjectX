@@ -2712,10 +2712,14 @@
 > re-consent now. Mutation-proven: gating on `connected` reddens that case.
 >
 > **NO SECOND OAUTH SURFACE WAS ADDED, and a test asserts it** — `microsoftAuth.test.ts` pins
-> `http.route(` at exactly 11 (8 until the 28-09 connector callbacks; the pin is on the TOTAL, so
-> any route appearing or disappearing has to be justified) and at most one Microsoft callback path. 17-06 built the authorize
+> `http.route(` at exactly 14 (8 until the 28-09 connector callbacks, 12 at 31-03 with the
+> approved `/f/` bearer route, 14 after Phase 48's public `GET`/`POST /p/`; the pin is on the TOTAL,
+> so any route appearing or disappearing has to be justified) and at most one Microsoft callback path.
+> 17-06 built the authorize
 > URL, callback, consent page and token row; a plan named "provider lifecycle" is precisely the one
-> that would quietly add a second, so the absence is measured rather than assumed.
+> that would quietly add a second, so the absence is measured rather than assumed. The two `/p/`
+> routes are a published-page read and a CTA/form/cart preflight — no code exchange, no `state`,
+> no token write — so they widen the route count without adding a connection surface.
 >
 > **UNRESOLVED, DELIBERATELY NOT DECIDED HERE:** 17-06 shipped `/connect-microsoft` as its own page
 > beside `/connect-gmail`. Two connection pages is the landed reality. Merging them into one

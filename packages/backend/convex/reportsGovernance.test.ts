@@ -346,9 +346,18 @@ describe("the allowlist against the write sites it claims to cover", () => {
   }
 
   /**
-   * Event names written only by fixtures/probes. They are NOT in the viewer allowlist on purpose —
-   * inventing a row for an event production never writes is how 26-14's `DECISION_KEYS` shipped a
-   * permanent `edit: 0`.
+   * `eventType` literals that legitimately appear in production source but are NOT rows the browser
+   * audit viewer projects. Two honest classes, deliberately kept together because the allowlist's
+   * real failure mode is the one both share — a name reaching `AUDIT_VIEWER_EVENTS` that no audit
+   * row will ever carry is how 26-14's `DECISION_KEYS` shipped a permanent `edit: 0`.
+   *
+   * 1. Written only by fixtures/probes (`test.*`, `x`, `vertical_eval.provisioned`). A viewer row
+   *    for these would be a receipt for something production never did.
+   * 2. Real production writes that are NOT audit rows at all — the reserved control namespace
+   *    (`authoring_probe.*`, run only for explicitly registered operator acceptance probes) and
+   *    the BETA-03/Wave-2 journey plane below. These DO execute in production; they are simply
+   *    tenant content on their own table with their own governed read surface, not immutable
+   *    audit history, so projecting them would widen the browser payload for no reader.
    */
   const NOT_PRODUCTION = new Set([
     "test.control",
@@ -364,6 +373,29 @@ describe("the allowlist against the write sites it claims to cover", () => {
     "authoring_probe.finished",
     "authoring_probe.failed",
     "authoring_probe.contained",
+    // The BETA-03 / Wave-2 journey plane. Every one of these is a `betaJourneyEvents` row, NEVER
+    // an `audit` row: all seven are written through `internal.betaJourney.record` (or the
+    // tenant-mutation wrappers over its single `recordOnce` insert), whose only insert targets
+    // `betaJourneyEvents`. `schema.ts` calls that table tenant content rather than immutable
+    // audit, and it already has its own governed, hard-bounded read surface in `betaJourney.history`.
+    // `AUDIT_VIEWER_EVENTS` is consumed only by `projectAuditRow`, which is fed by the `audit`
+    // table — so these names belong to a different plane, not to a viewer that cannot show them.
+    //
+    // They surface in this test at all only because the forward scan is TABLE-AGNOSTIC: it greps
+    // `eventType: "literal"` across every non-test `convex/` file and cannot tell which table the
+    // write lands in. That is a deliberate trade — the scan cannot become table-aware without
+    // becoming a parser, and an omission here under-shows a category rather than inventing a row.
+    // Do NOT "fix" this by allowlisting them: the sibling invention guard below scans for names
+    // that CONTAIN A DOT, so every one of these bare snake_case names would read as an invented
+    // event and redden it. And `namespaceOf` derives `AUDIT_VIEWER_CATEGORIES` by splitting on ".",
+    // so a dotless name would inject a bogus pseudo-category equal to the whole event name.
+    "admission_succeeded",
+    "onboarding_completed",
+    "first_offer_shown",
+    "first_offer_started",
+    "prerequisite_recovered",
+    "approval_decided",
+    "delivery_held",
   ]);
 
   test("excluded authoring control events remain reserved operator probe receipts", () => {

@@ -1,6 +1,24 @@
 # Playbook: Connected dashboard pages
 
-> Last verified: 2026-09-21 — The protected `/dashboard/sites` route is live for tenant-scoped
+> Last verified: 2026-09-27 (watch-gate acknowledgment only - **this entry is a `Last verified`
+> bump plus a forward record, NOT a verification of the sections below.** The audit/governance
+> read plane described further down is deliberately UNCHANGED. `reportsGovernance.test.ts` failed
+> because its forward scan is table-agnostic: it flags every `eventType:` literal under `convex/`,
+> including seven that are `betaJourneyEvents` rows and never reach the `audit` table
+> (`admission_succeeded`, `onboarding_completed`, `first_offer_shown`, `first_offer_started`,
+> `prerequisite_recovered`, `approval_decided`, `delivery_held`). All seven are written solely
+> through `internal.betaJourney.record`, whose only handler inserts `betaJourneyEvents` - a table
+> `schema.ts` describes as tenant content rather than immutable audit, and which already has its
+> own bounded governed read surface in `betaJourney.history`. So they belong in the test's
+> `NOT_PRODUCTION` set, NOT in `AUDIT_VIEWER_EVENTS`. That is not a preference: the sibling
+> "the allowlist invents no event" guard only recognises a DOTTED event name, and all seven are
+> bare snake_case, so allowlisting any of them would have turned that passing guard red. It would
+> also have injected seven one-off pseudo-categories into the DERIVED `AUDIT_VIEWER_CATEGORIES`,
+> because `namespaceOf` splits on `.`. `projectAuditRow`, `AUDIT_VIEWER_EVENTS` and every audit
+> surface in this playbook are byte-for-byte unchanged, and no operator-visible audit projection
+> moved.)
+
+> Last verified: 2026-09-21 - The protected `/dashboard/sites` route is live for tenant-scoped
 > structured site and landing-page lifecycle work. It exposes honest loading, empty, unavailable,
 > stale-revision, approval, publish, and unpublish states; preview reads an exact immutable version
 > and renders the same deterministic runtime bytes used by the public path. The UI declares the

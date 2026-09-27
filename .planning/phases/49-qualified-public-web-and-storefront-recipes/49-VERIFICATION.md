@@ -9,7 +9,7 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 **Scope:** The 2026-09-26 serialized aggregate exited 0 on the expanded 71-file source digest below. A manifest-coverage review found that the earlier 61-file aggregate executed web-form and web-runtime tests without pinning several corresponding source/test files; the expanded aggregate has now passed. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `8d479392f108186e8e18c778f9ffed9c9a894655bc8184ea5b7ae7c4f37170f1`
+Artifact-set SHA-256: `a1b776516f06b5ce0576ed7fb1648739eb831b1925c207106416cd14a91310c5`
 
 This is the 2026-09-26 qualified expanded 71-file repository/local digest. The prior passing narrower digest was `e4c3ba52ae5074eb22c45d0f79dfc2da97cee5b83be9b03f140834c245e09ebb`.
 
