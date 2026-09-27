@@ -75,3 +75,11 @@ deduplicates repeated impressions in the bounded 200-event window for 30 minutes
 use an isolated synthetic qualified candidate only. These are exposure and user-selection
 signals, not proof of runtime quality, outcome acceptance, live qualification, or activation.
 Review-decision coverage and authenticated browser UAT remain open; status stays **partial**.
+
+## 2026-09-27 review-event provenance guard
+
+The internal telemetry writer now requires each review approval/edit/reject observation to
+reference an owned artifact with a bounded prior creation event for the same native candidate
+and vertical. Missing, foreign and wrong-candidate origins refuse; the focused telemetry suite
+passes 3/3 and backend TypeScript passes. This prevents an ungrounded review event but does not
+prove a person reviewed or edited output, supply a tenant review UI, or advance live UAT.

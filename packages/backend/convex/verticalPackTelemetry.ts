@@ -77,6 +77,26 @@ export const record = internalMutation({
       if (!artifact || artifact.tenantId !== args.tenantId) throw new Error("NOT_FOUND");
     }
     if (
+      args.event === "review_approved" ||
+      args.event === "review_edited" ||
+      args.event === "review_rejected"
+    ) {
+      if (!args.artifactId) throw new Error("ARTIFACT_REQUIRED");
+      // A review observation must answer a real artifact from this exact native candidate.
+      // If its origin fell outside the bounded history, omit the metric rather than guessing.
+      const history = await verticalEventsFor(ctx, args.tenantId);
+      if (
+        !history.rows.some(
+          (event) =>
+            event.payload?.event === "artifact_created" &&
+            event.payload?.candidateId === args.candidateId &&
+            event.payload?.verticalId === args.verticalId &&
+            event.payload?.artifactId === args.artifactId,
+        )
+      )
+        throw new Error("ARTIFACT_ORIGIN_UNVERIFIED");
+    }
+    if (
       (args.event === "artifact_created" || args.event === "repeat_use") &&
       args.artifactId === undefined
     )

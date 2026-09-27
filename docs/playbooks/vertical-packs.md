@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-27 — the internal vertical telemetry writer now refuses
+`review_approved`, `review_edited` and `review_rejected` without an owned artifact and a
+bounded prior `artifact_created` observation for the same exact tenant, vertical and candidate.
+If the origin has aged out of the 200-event window, the review metric refuses rather than
+guessing. Synthetic positive and foreign/missing/wrong-candidate negatives pass locally.
+This only hardens event provenance; it does not establish that a human actually reviewed or
+edited a document, add a review UI, or close native evaluation and UAT.
+
 Last verified: 2026-09-27 — discovery now refuses to recommend a globally active native
 candidate when this tenant has an active overlay for the same vertical, because the ordinary
 start path does not treat that overlay as released. The profile card records bounded,

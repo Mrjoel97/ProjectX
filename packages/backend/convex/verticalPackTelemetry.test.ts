@@ -104,3 +104,93 @@ test("aggregate samples are bounded and mark truncation without exposing payload
   });
   expect(Object.keys(summary).sort()).toEqual(["counts", "partial", "sampledEvents"]);
 });
+
+test("review observations require an owned artifact created by the exact native candidate", async () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  const { candidateId, otherCandidateId, artifactId, foreignArtifactId } = await t.run(
+    async (ctx) => {
+      const candidate = {
+        tenantId: "a",
+        name: verticalSkillName("product"),
+        version: 1,
+        status: "candidate" as const,
+        rollbackEligible: false,
+        body: "Synthetic candidate",
+        authoredBody: "",
+        author: "system" as const,
+        basedOnScope: "global" as const,
+        basedOnName: verticalSkillName("product"),
+        basedOnVersion: 1,
+        createdAt: 1,
+      };
+      const candidateId = await ctx.db.insert("tenantSkills", candidate);
+      const otherCandidateId = await ctx.db.insert("tenantSkills", {
+        ...candidate,
+        version: 2,
+      });
+      const document = {
+        title: "Synthetic draft",
+        kind: "document" as const,
+        category: "workspace-docs" as const,
+        source: "agent" as const,
+        mimeType: "text/markdown",
+        size: 12,
+        contentHash: "synthetic",
+        text: "Synthetic draft",
+        status: "ready" as const,
+        createdAt: 1,
+      };
+      const artifactId = await ctx.db.insert("vaultDocuments", { tenantId: "a", ...document });
+      const foreignArtifactId = await ctx.db.insert("vaultDocuments", {
+        tenantId: "b",
+        ...document,
+      });
+      return { candidateId, otherCandidateId, artifactId, foreignArtifactId };
+    },
+  );
+  const base = { tenantId: "a", candidateId, verticalId: "product" as const };
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      event: "review_approved",
+    }),
+  ).rejects.toThrow("ARTIFACT_REQUIRED");
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      event: "review_rejected",
+      artifactId: foreignArtifactId,
+    }),
+  ).rejects.toThrow("NOT_FOUND");
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      event: "review_edited",
+      artifactId,
+    }),
+  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "artifact_created",
+    artifactId,
+  });
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      candidateId: otherCandidateId,
+      event: "review_approved",
+      artifactId,
+    }),
+  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
+  for (const event of ["review_approved", "review_edited", "review_rejected"] as const)
+    await t.mutation(internal.verticalPackTelemetry.record, { ...base, event, artifactId });
+  expect(
+    (await t.withIdentity({ subject: "a" }).query(api.verticalPackTelemetry.summary, {})).counts,
+  ).toMatchObject({
+    artifact_created: 1,
+    review_approved: 1,
+    review_edited: 1,
+    review_rejected: 1,
+  });
+});

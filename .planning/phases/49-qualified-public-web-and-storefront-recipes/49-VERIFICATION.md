@@ -7,9 +7,11 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-27 serialized aggregate passed on the current 71-file source digest below, including the updated vertical-packs playbook. The previous digest is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-27 serialized aggregate passed on the current 71-file source digest below, including the vertical telemetry provenance playbook update. The earlier passing digest is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `93287ddb1308700c5ba71739786127d8e4184bf9792464a6ed3eee5e96438263`
+Artifact-set SHA-256: `dfb9c1d0e6fbd9d5e7c7ae36f5d88f13116cd46e3139d547aee4773996d41257`
+
+**2026-09-27 review-origin requalification:** The watched playbook changed for the bounded same-candidate artifact-origin guard on review telemetry. The full serialized runner passed all 21 required planes on the new initial/final-equal digest, including both fresh disposable browser/audit stacks, three typechecks, production build, strict documents, claim controls and all 30 free gates. Separate focused telemetry tests passed 3/3. This adds no human-review observation, native pack activation, provider fact or Wave 7/8 acceptance.
 
 **2026-09-27 vertical-observation requalification:** The updated playbook retired the prior 71-file digest. The full serialized runner passed all 21 required planes on the new initial/final-equal digest: provenance/compiler, core/backend/web regressions, evaluator pins, two fresh disposable browser stacks with in-stack audits, three typechecks, production web build, strict documents, claim guards and all 30 free gates. The vertical telemetry itself has separate 93/93 backend and 11/11 web focused tests. No native vertical candidate was actually qualified, activated or browser-accepted; no Wave 7/8, provider or paid claim was added.
 
