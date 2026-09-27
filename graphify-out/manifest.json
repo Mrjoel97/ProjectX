@@ -4075,8 +4075,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/onboarding.md": {
-    "mtime": 1789922337.5934856,
-    "ast_hash": "d0b6c2fd5f85793f860a0a068a7731f5",
+    "mtime": 1790532828.6625628,
+    "ast_hash": "fafabd8240f96dd7fd9f3b0fd7f2f6fb",
     "semantic_hash": ""
   },
   "packages/core/src/businessProfile.test.ts": {
@@ -12900,8 +12900,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/profile/VerticalPackRecommendations.tsx": {
-    "mtime": 1789059289.1455455,
-    "ast_hash": "6d80454af0e6a736c1b8da691e9fec28",
+    "mtime": 1790532827.2765665,
+    "ast_hash": "e88c60e15d5c4f0f2b19900c28bd74fa",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/profile/VerticalWorkloadConfirmation.tsx": {
@@ -12910,8 +12910,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations.container.test.tsx": {
-    "mtime": 1789059309.1304903,
-    "ast_hash": "fa66e8a32bf196444e0595f486361d0a",
+    "mtime": 1790532668.3348124,
+    "ast_hash": "c5335caea6b56dad3cd00361277c1692",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations.test.tsx": {
@@ -13090,8 +13090,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalEvalEvidence.test.ts": {
-    "mtime": 1789342912.6090512,
-    "ast_hash": "9ca7096d961fa26716ac27c250533ccd",
+    "mtime": 1790532493.538923,
+    "ast_hash": "1760a619f9a50099881ef18d0ef15975",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalEvalEvidence.ts": {
@@ -13165,13 +13165,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.test.ts": {
-    "mtime": 1790526874.3102279,
-    "ast_hash": "5b10348a0cf298accba2546d892c3cc9",
+    "mtime": 1790532221.2838104,
+    "ast_hash": "1ff34a5d8e88c916336a43fba255b9a8",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.ts": {
-    "mtime": 1790527019.6159103,
-    "ast_hash": "4a534feb1bd02eb61a68281308992862",
+    "mtime": 1790532506.5345159,
+    "ast_hash": "83f19487b839181727c655c1923b4744",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalProductDesign.test.ts": {
@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1790526949.930186,
-    "ast_hash": "9ab68e693e34b5099bb1b2dd4554ee9d",
+    "mtime": 1790532670.7825787,
+    "ast_hash": "7f31efd9e1ea2f8979c0d403e7c623ad",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790526948.7100086,
-    "ast_hash": "55f94875c88cba165683f9d71db079b4",
+    "mtime": 1790532669.562508,
+    "ast_hash": "79ddd2e934e7e30cd527f46e75a19ac4",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -17060,8 +17060,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-20-SUMMARY.md": {
-    "mtime": 1790515854.3124664,
-    "ast_hash": "3be76652996889ffa47c31748d55397c",
+    "mtime": 1790531384.1581547,
+    "ast_hash": "98bc8dc6a74c3be1e423e53243e5d7b7",
     "semantic_hash": ""
   },
   "docs/evidence/recurrence/auckland-2026-09-26/dst-boundary.md": {

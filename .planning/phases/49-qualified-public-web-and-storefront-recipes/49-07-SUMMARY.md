@@ -17,9 +17,11 @@ reviewed: 2026-09-27
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-27 serialized 71-file aggregate exited 0 after the Wave 1 golden named-target guard changed shared evaluator/contract artifacts. The preceding hand-off digest and earlier results are historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-27 serialized aggregate passed all 21 planes on the current 71-file digest, which includes the updated vertical-packs playbook. The prior passing digest is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `ab4cf8bd10e75e431b1c198a6532882e24030723f5b82cc70de2e074f5868682`
+Artifact-set SHA-256: `93287ddb1308700c5ba71739786127d8e4184bf9792464a6ed3eee5e96438263`
+
+The vertical-observation follow-up changed only the watched playbook within this declared artifact set. The new serialized run passed both disposable browser matrices, their audit witnesses, three typechecks, production web build, strict documents, claim controls and all 30 free gates with initial/final digest equal. This renews repository/local evidence only; it does not qualify or activate native vertical packs.
 
 The new browser assertion confirms persisted signup JWT and the same authenticated identity's backend owner flag before requiring the owner-only recipe heading. The targeted fresh-stack matrix and full aggregate both passed; the earlier intermittent heading failure remains root-cause-unproven, not declared fixed. See `49-VERIFICATION.md` for exact planes and the unchanged Wave 7/8 boundary.
 

@@ -1,5 +1,12 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> Last verified: 2026-09-27 — the Business shape vertical cards now attempt bounded,
+> server-validated recommendation-impression telemetry and record a Start selection against
+> the exact active candidate before the ordinary start action. Telemetry failure cannot block
+> the start. A card-version change causes a new impression attempt; identical rerenders do not.
+> Local UI tests cover these interactions, but authenticated browser UAT and actual vertical
+> release remain open.
+
 > 2026-09-20 — BETA-03 first-send cockpit bridge: a completed-profile `onboarding.firstSendOffer`
 > now has an ephemeral cockpit consumer. The launcher creates a normal thread, marks the plan with
 > the authenticated owner's address, and routes the draft through `proposeEmailPlan`; `executePlan`

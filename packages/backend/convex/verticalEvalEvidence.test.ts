@@ -95,7 +95,7 @@ async function setup(count = 1, verticalId: "engineering" | "legal" = "engineeri
     tenantIds: cases.map((c) => c.prepared.tenantId),
     capCents: 1000,
   });
-  return { t, owner, user, candidate, cases, budgetId };
+  return { t, owner, user, userId, candidate, cases, budgetId };
 }
 type Harness = Awaited<ReturnType<typeof setup>>;
 async function observe(h: Harness, index = 0, modify?: (value: any) => void) {
@@ -362,6 +362,73 @@ describe("native vertical exact-version issuer", () => {
       const candidate = await ctx.db.get(h.candidate._id);
       expect(candidate && (await hasNativeVerticalEvidence(ctx, candidate))).toBe(true);
     });
+    // This is a synthetic, isolated release fixture after the candidate-only assertion above,
+    // not an owner activation or evidence that the deployed pack is released.
+    await h.t.run(async (ctx) => {
+      await ctx.db.patch(h.candidate._id, {
+        status: "active",
+        browserEvidence: JSON.stringify({
+          pass: true,
+          authenticated: true,
+          viewports: 2,
+          skillVersions: { [h.candidate.name]: 1 },
+        }),
+      });
+      const artifactIds = [];
+      for (let i = 0; i < 2; i++)
+        artifactIds.push(
+          await ctx.db.insert("vaultDocuments", {
+            tenantId: String(h.userId),
+            title: `Synthetic prior run ${i}`,
+            kind: "document",
+            category: "workspace-docs",
+            source: "agent",
+            mimeType: "text/markdown",
+            size: 12,
+            contentHash: `synthetic-${i}`,
+            text: "Synthetic review source",
+            status: "ready",
+            createdAt: 1,
+          }),
+        );
+      await ctx.db.insert("tenantProfiles", {
+        tenantId: String(h.userId),
+        tier: "sme",
+        tierSource: "confirmed",
+        derivedAt: 1,
+        verticalPreferences: {
+          needs: ["engineering"],
+          reviewReady: ["engineering"],
+          confirmedWorkloads: [{ verticalId: "engineering", artifactIds, confirmedAt: 1 }],
+        },
+      });
+    });
+    expect((await h.user.query(api.verticalPacks.discover, {})).recommendations).toMatchObject([
+      { id: "engineering", state: "available" },
+    ]);
+    await expect(
+      h.user.mutation(api.verticalPacks.recordAccepted, { verticalId: "engineering" }),
+    ).rejects.toThrow("RECOMMENDATION_STALE");
+    expect(
+      await h.user.mutation(api.verticalPacks.recordShown, { verticalIds: ["engineering"] }),
+    ).toEqual({ recorded: 1 });
+    expect(
+      await h.user.mutation(api.verticalPacks.recordShown, { verticalIds: ["engineering"] }),
+    ).toEqual({ recorded: 0 });
+    expect(
+      await h.user.mutation(api.verticalPacks.recordAccepted, { verticalId: "engineering" }),
+    ).toEqual({ recorded: true });
+    expect((await h.user.query(api.verticalPackTelemetry.summary, {})).counts).toMatchObject({
+      recommendation_shown: 1,
+      recommendation_accepted: 1,
+    });
+    await h.user.mutation(api.verticalPacks.setDisabled, {
+      verticalId: "engineering",
+      disabled: true,
+    });
+    await expect(
+      h.user.mutation(api.verticalPacks.recordAccepted, { verticalId: "engineering" }),
+    ).rejects.toThrow("RECOMMENDATION_STALE");
   });
 
   test("native receipt is not a pass; filtered corpus and missing human reviews remain closed", async () => {

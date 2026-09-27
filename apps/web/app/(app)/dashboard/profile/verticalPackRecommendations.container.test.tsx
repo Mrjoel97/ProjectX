@@ -7,9 +7,12 @@ import { VerticalPackRecommendations } from "./VerticalPackRecommendations";
 
 const start = vi.fn();
 const disable = vi.fn();
+const shown = vi.fn();
+const accepted = vi.fn();
 let disabled = false;
 let available = true;
 let loading = false;
+let activeVersion = 1;
 vi.mock("convex/react", () => ({
   useQuery: (ref: never) => {
     expect(getFunctionName(ref)).toBe("verticalPacks:discover");
@@ -26,7 +29,7 @@ vi.mock("convex/react", () => ({
               missingSources: [],
             },
           ],
-      controls: [{ id: "engineering", disabled }],
+      controls: [{ id: "engineering", disabled, activeVersion }],
       partialHistory: false,
     };
   },
@@ -35,8 +38,11 @@ vi.mock("convex/react", () => ({
     return start;
   },
   useMutation: (ref: never) => {
-    expect(getFunctionName(ref)).toBe("verticalPacks:setDisabled");
-    return disable;
+    const name = getFunctionName(ref);
+    if (name === "verticalPacks:setDisabled") return disable;
+    if (name === "verticalPacks:recordShown") return shown;
+    if (name === "verticalPacks:recordAccepted") return accepted;
+    throw new Error(`Unexpected mutation: ${name}`);
   },
 }));
 
@@ -47,8 +53,13 @@ beforeEach(() => {
   disabled = false;
   available = true;
   loading = false;
+  activeVersion = 1;
   start.mockReset();
   disable.mockReset();
+  shown.mockReset();
+  accepted.mockReset();
+  shown.mockResolvedValue(undefined);
+  accepted.mockResolvedValue(undefined);
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -86,12 +97,36 @@ test("a start calls the server with the selected id, and a stale refusal does no
   await render();
   await click("Start workflow");
   expect(start).toHaveBeenCalledOnce();
+  expect(shown).toHaveBeenCalledOnce();
+  expect(shown).toHaveBeenCalledWith({ verticalIds: ["engineering"] });
+  expect(accepted).toHaveBeenCalledOnce();
+  expect(accepted).toHaveBeenCalledWith({ verticalId: "engineering" });
   expect(start.mock.calls[0]?.[0]).toEqual({
     verticalId: "engineering",
     text: expect.stringContaining("recorded evidence"),
   });
   expect(start.mock.calls[0]?.[0]).not.toHaveProperty("previewVersion");
   expect(host.textContent).toContain("no longer ready to start");
+});
+
+test("telemetry failure cannot prevent a qualified start", async () => {
+  shown.mockRejectedValue(new Error("telemetry unavailable"));
+  accepted.mockRejectedValue(new Error("telemetry unavailable"));
+  start.mockResolvedValue({ ok: false, reason: "not-released" });
+  await render();
+  await click("Start workflow");
+  expect(start).toHaveBeenCalledOnce();
+  expect(host.textContent).toContain("no longer ready to start");
+});
+
+test("a query rerender does not duplicate the same card impression", async () => {
+  await render();
+  await render();
+  expect(shown).toHaveBeenCalledOnce();
+  expect(accepted).not.toHaveBeenCalled();
+  activeVersion = 2;
+  await render();
+  expect(shown).toHaveBeenCalledTimes(2);
 });
 
 test("an uncertain action failure does not claim no work ran", async () => {
@@ -123,4 +158,5 @@ test("blocked requirements never render a start control", async () => {
   expect(host.textContent).toContain("Confirm who will review");
   expect(host.textContent).not.toContain("Start workflow");
   expect(start).not.toHaveBeenCalled();
+  expect(accepted).not.toHaveBeenCalled();
 });

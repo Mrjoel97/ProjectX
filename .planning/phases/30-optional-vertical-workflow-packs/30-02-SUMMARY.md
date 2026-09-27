@@ -64,3 +64,14 @@ checks passed. Graphify and Convex-edge refresh completed after the source edits
 repository-local integrity proof only. The plan remains **partial**: exact-version semantic
 evaluation, authenticated browser control/UAT, complete outcome-event coverage and release
 evidence are not supplied by these regressions; VERT-01/02 and Phase 30 remain open.
+
+## 2026-09-27 recommendation-observation follow-up
+
+Discovery now withholds a global native recommendation if a tenant overlay is active, matching
+the ordinary start path's release boundary. The profile card makes best-effort shown and Start
+selection observations; the server recomputes current recommendations, binds each event to the
+exact active native candidate, requires a recent matching impression before acceptance, and
+deduplicates repeated impressions in the bounded 200-event window for 30 minutes. Local tests
+use an isolated synthetic qualified candidate only. These are exposure and user-selection
+signals, not proof of runtime quality, outcome acceptance, live qualification, or activation.
+Review-decision coverage and authenticated browser UAT remain open; status stays **partial**.

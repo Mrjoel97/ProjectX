@@ -10,6 +10,7 @@ import {
 import { hasValidPackProvenance } from "@pikar/core/workflowPacks";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalQuery, type QueryCtx } from "./_generated/server";
 import { ownerMutation, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -18,6 +19,7 @@ import { sealedIn } from "./vaultFolders";
 import { verticalEventsFor } from "./verticalPackTelemetry";
 
 const verticalIdArg = v.union(...VERTICAL_IDS.map((id) => v.literal(id)));
+const RECOMMENDATION_WINDOW_MS = 30 * 60_000;
 
 async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
   const profile = await ctx.db
@@ -42,6 +44,7 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
     repeatCounts[id] = new Set([...observed, ...(confirmed?.artifactIds ?? [])]).size;
   }
   const released: VerticalId[] = [];
+  const activeCandidateIds: Partial<Record<VerticalId, Id<"skills">>> = {};
   const states = [];
   for (const id of VERTICAL_IDS) {
     const name = verticalSkillName(id);
@@ -66,15 +69,20 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
       .order("desc")
       .first();
     const candidate = tenantCandidate ?? globalCandidate;
-    const active = overlay ?? global;
-    const ready = active !== null && (await nativePackExposureReady(ctx, active));
-    if (ready) released.push(id);
+    // Ordinary prepare refuses an active tenant overlay until reviewed vertical customization
+    // exists. Discovery must not offer a workflow that the start door will reject.
+    const ready =
+      overlay === null && global !== null && (await nativePackExposureReady(ctx, global));
+    if (ready) {
+      released.push(id);
+      activeCandidateIds[id] = global._id;
+    }
     states.push({
       id,
       disabled: profile?.disabledVerticals?.includes(id) ?? false,
       candidateId: candidate?._id ?? null,
       candidateVersion: candidate?.version ?? null,
-      activeVersion: ready ? (active?.version ?? null) : null,
+      activeVersion: ready ? global.version : null,
       prerequisite: ready ? null : "native_evidence",
       requiredReview: VERTICAL_PACKS[id].requiredReview,
     });
@@ -136,6 +144,7 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
   };
   return {
     evidence,
+    activeCandidateIds,
     playbookText: evidence.confirmedLegalPlaybook ? playbook?.text : undefined,
     dataSourceId: dataSource?._id,
     visualSourceId: visualSource?._id,
@@ -150,6 +159,81 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
 export const discover = tenantQuery({
   args: {},
   handler: async (ctx) => (await verticalDiscoveryFor(ctx, ctx.tenantId)).presentation,
+});
+
+/** One card-render impression for the exact current server selection. This is observational
+ * telemetry, never evidence that a body earned release or authority to start. */
+export const recordShown = tenantMutation({
+  args: { verticalIds: v.array(verticalIdArg) },
+  handler: async (ctx, { verticalIds }) => {
+    const { presentation, activeCandidateIds } = await verticalDiscoveryFor(ctx, ctx.tenantId);
+    const current = presentation.recommendations.map((item) => item.id);
+    if (
+      verticalIds.length === 0 ||
+      verticalIds.length > 2 ||
+      JSON.stringify(verticalIds) !== JSON.stringify(current)
+    )
+      throw new Error("RECOMMENDATION_STALE");
+    const history = await verticalEventsFor(ctx, ctx.tenantId);
+    let recorded = 0;
+    for (const verticalId of verticalIds) {
+      const candidateId = activeCandidateIds[verticalId];
+      if (!candidateId) throw new Error("RECOMMENDATION_STALE");
+      if (
+        history.rows.some(
+          (row) =>
+            row.ts >= Date.now() - RECOMMENDATION_WINDOW_MS &&
+            row.payload?.event === "recommendation_shown" &&
+            row.payload?.verticalId === verticalId &&
+            row.payload?.candidateId === candidateId,
+        )
+      )
+        continue;
+      await ctx.runMutation(internal.verticalPackTelemetry.record, {
+        tenantId: ctx.tenantId,
+        candidateId,
+        verticalId,
+        event: "recommendation_shown",
+      });
+      recorded++;
+    }
+    return { recorded };
+  },
+});
+
+/** A user chose Start on a still-available recommendation. Direct cockpit/API starts do not
+ * masquerade as recommendation acceptance; this event never starts a model or workflow. */
+export const recordAccepted = tenantMutation({
+  args: { verticalId: verticalIdArg },
+  handler: async (ctx, { verticalId }) => {
+    const { presentation, activeCandidateIds } = await verticalDiscoveryFor(ctx, ctx.tenantId);
+    if (
+      !presentation.recommendations.some(
+        (item) => item.id === verticalId && item.state === "available",
+      )
+    )
+      throw new Error("RECOMMENDATION_STALE");
+    const candidateId = activeCandidateIds[verticalId];
+    if (!candidateId) throw new Error("RECOMMENDATION_STALE");
+    const history = await verticalEventsFor(ctx, ctx.tenantId);
+    if (
+      !history.rows.some(
+        (row) =>
+          row.ts >= Date.now() - RECOMMENDATION_WINDOW_MS &&
+          row.payload?.event === "recommendation_shown" &&
+          row.payload?.verticalId === verticalId &&
+          row.payload?.candidateId === candidateId,
+      )
+    )
+      throw new Error("RECOMMENDATION_STALE");
+    await ctx.runMutation(internal.verticalPackTelemetry.record, {
+      tenantId: ctx.tenantId,
+      candidateId,
+      verticalId,
+      event: "recommendation_accepted",
+    });
+    return { recorded: true };
+  },
 });
 
 /** Small native pages bound full-document reads; an empty filtered page can still have a cursor. */

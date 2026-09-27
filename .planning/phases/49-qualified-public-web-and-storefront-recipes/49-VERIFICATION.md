@@ -7,9 +7,11 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-27 serialized aggregate exited 0 on the expanded 71-file source digest below after the Wave 1 golden named-target guard repinned shared evaluator/contract artifacts. Earlier digests are historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-27 serialized aggregate passed on the current 71-file source digest below, including the updated vertical-packs playbook. The previous digest is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `ab4cf8bd10e75e431b1c198a6532882e24030723f5b82cc70de2e074f5868682`
+Artifact-set SHA-256: `93287ddb1308700c5ba71739786127d8e4184bf9792464a6ed3eee5e96438263`
+
+**2026-09-27 vertical-observation requalification:** The updated playbook retired the prior 71-file digest. The full serialized runner passed all 21 required planes on the new initial/final-equal digest: provenance/compiler, core/backend/web regressions, evaluator pins, two fresh disposable browser stacks with in-stack audits, three typechecks, production web build, strict documents, claim guards and all 30 free gates. The vertical telemetry itself has separate 93/93 backend and 11/11 web focused tests. No native vertical candidate was actually qualified, activated or browser-accepted; no Wave 7/8, provider or paid claim was added.
 
 **2026-09-27 named-target-guard requalification:** The first full run on this exact 71-file digest passed all 21 required planes, including two fresh disposable browser stacks, three typechecks, production web build, in-stack audit witnesses, strict documents and all 30 free gates. The golden guard refuses the current unnamed backend environment before a budget opens; its source-derived revision and the dependent deterministic recipe evaluator pin were refreshed. This run renews only repository/local Phase 49 evidence. The previous passing `5bb951c5ead33c303a43a02d051ded690ae872ef5dfcf0878b9fda771cf31cbd` digest is now historical; no hosted, founder, provider or merchant claim was added.
 

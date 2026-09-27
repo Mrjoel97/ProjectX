@@ -1,5 +1,17 @@
 # Optional vertical packs
 
+Last verified: 2026-09-27 — discovery now refuses to recommend a globally active native
+candidate when this tenant has an active overlay for the same vertical, because the ordinary
+start path does not treat that overlay as released. The profile card records bounded,
+server-recomputed `recommendation_shown` observations and, only after a recent matching
+impression for the exact active candidate, `recommendation_accepted` when Start is selected.
+The client attempts both without blocking the start if telemetry fails; duplicate impressions
+for the same candidate are suppressed for 30 minutes over the bounded 200-event read.
+Local focused backend and UI regressions cover stale/disabled/no-evidence paths and a
+synthetic fully qualified candidate. This is not evidence of actual native qualification,
+authenticated browser UAT, tenant activation, or useful outcome. Review-decision telemetry
+remains open.
+
 Last verified: 2026-09-27 — Data/Design source readiness now requires the selected owned,
 ready, unsealed Vault row's storage object to exist, not merely a stored `storageId`. A
 confirmed CSV preview incorrectly remained `ok:true` after its blob was deleted before this
@@ -182,8 +194,10 @@ owner/test plane. The native binding and ordinary-start path now both rerun elig
 candidate/artifact refs, closed event/outcome/reason/cost/latency buckets and bounded counts. It has
 no prompt, filename, person, clause, URL or dataset-value field. Aggregate reads use the exact
 tenant/event index, count at most 200 events, and mark truncation. Artifact and run-completion/failure
-events accompany actual runtime writes. User acceptance/review event coverage still requires the
-later workflow acceptance work. No live gate ran.
+events accompany actual runtime writes. Profile recommendation impressions and Start selections
+now emit bounded shown/accepted observations against the server's current exact candidate;
+review-decision and useful-outcome coverage still require later workflow acceptance work. No
+live gate ran.
 
 Check backend verticalPacks, verticalPackTelemetry, isolation, routines and skills tests, plus
 backend/core typecheck. The local generated API declaration received exact typed module entries;

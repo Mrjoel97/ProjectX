@@ -131,7 +131,7 @@ describe("vertical controls use native tenant/version state", () => {
   });
 
   test("unregistered or unevaluated rows cannot become recommendations or new activations", async () => {
-    const { t, asA, aPending, bOld } = await setup();
+    const { t, asA, a, aPending, bOld } = await setup();
     await asA.mutation(api.verticalPacks.configure, { needs: ["legal"], reviewReady: ["legal"] });
     const result = await asA.query(api.verticalPacks.discover, {});
     expect(result.recommendations).toEqual([]);
@@ -143,6 +143,22 @@ describe("vertical controls use native tenant/version state", () => {
     await expect(
       t.mutation(internal.skills.activateSkill, { name: verticalSkillName("legal"), version: 1 }),
     ).rejects.toThrow("NO_SUCH_SKILL_VERSION");
+    await expect(
+      asA.mutation(api.verticalPacks.recordShown, { verticalIds: ["legal"] }),
+    ).rejects.toThrow("RECOMMENDATION_STALE");
+    await expect(
+      asA.mutation(api.verticalPacks.recordAccepted, { verticalId: "legal" }),
+    ).rejects.toThrow("RECOMMENDATION_STALE");
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("audit")
+          .withIndex("by_tenant_event_ts", (q) =>
+            q.eq("tenantId", String(a)).eq("eventType", "vertical_pack.outcome"),
+          )
+          .collect(),
+      ),
+    ).toEqual([]);
   });
 
   test("disable blocks effective loading before global fallback, affects one tenant and preserves artifacts", async () => {
