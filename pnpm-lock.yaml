@@ -11,6 +11,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.5.3
         version: 2.5.3
+      convex:
+        specifier: 1.42.1
+        version: 1.42.1(react@19.2.7)
       turbo:
         specifier: 2.10.4
         version: 2.10.4
@@ -236,6 +239,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@pikar/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       ai:
         specifier: 7.0.20
         version: 7.0.20(zod@4.4.3)

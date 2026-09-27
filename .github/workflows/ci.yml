@@ -74,7 +74,7 @@ jobs:
       - name: Free gates
         run: |
           node scripts/check-free-gates.mjs --self-test
-          node scripts/check-free-gates.mjs
+          pnpm check:free-gates
 
       - name: Test
         run: pnpm test

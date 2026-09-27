@@ -19,6 +19,11 @@ import { readdirSync, readFileSync } from "node:fs";
 
 const git = (...args) =>
   execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+const strict = process.argv.includes("--exit-code");
+const report = (status, reason) => {
+  console.log(JSON.stringify({ status, ...(reason ? { reason } : {}) }));
+  process.exit(status === "failed" ? 1 : 0);
+};
 
 let input = {};
 try {
@@ -27,9 +32,12 @@ try {
 // Optional positional root (a scratch copy under test); flags start with "--".
 const root = process.argv.slice(2).find((a) => !a.startsWith("--"));
 try {
-  process.chdir(root || git("rev-parse", "--show-toplevel"));
-} catch {
-  process.exit(0); // not a repo — never block on our own failure
+  process.chdir(root ? root : git("rev-parse", "--show-toplevel"));
+} catch (error) {
+  const reason = root
+    ? `Planning root is unavailable: ${root}`
+    : `Git root discovery is unavailable: ${error.message}`;
+  report(strict ? "failed" : "skipped", reason);
 }
 const read = (p) => {
   try {
@@ -67,6 +75,31 @@ const isSuperseded = (status) => /^\**superseded\b/i.test(status.trim());
 
 const problems = [];
 
+// Strict qualification requires the corpus inputs themselves. Hook mode keeps its
+// historical non-blocking behavior for unrelated repositories and incomplete checkouts.
+const requiredFiles = [".planning/STATE.md", ".planning/ROADMAP.md", ".planning/REQUIREMENTS.md"];
+const missing = requiredFiles.filter((path) => read(path) === null);
+let phaseDirectories = [];
+try {
+  phaseDirectories = readdirSync(".planning/phases", { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+} catch {}
+if (strict && (missing.length || phaseDirectories.length === 0)) {
+  const absent = [
+    ...missing,
+    ...(phaseDirectories.length ? [] : [".planning/phases (no phase directories)"]),
+  ];
+  report("failed", `Required planning inputs are unavailable: ${absent.join(", ")}`);
+}
+if (!strict && (missing.length || phaseDirectories.length === 0)) {
+  const absent = [
+    ...missing,
+    ...(phaseDirectories.length ? [] : [".planning/phases (no phase directories)"]),
+  ];
+  report("skipped", `Planning corpus is unavailable: ${absent.join(", ")}`);
+}
+
 // 1. STATE.md
 const state = read(".planning/STATE.md");
 let statePhase;
@@ -86,6 +119,24 @@ if (state !== null) {
 // 2–6. ROADMAP + phase directories + REQUIREMENTS + routing derivative
 const roadmap = read(".planning/ROADMAP.md");
 const reqs = read(".planning/REQUIREMENTS.md");
+if (strict) {
+  const hasRoadmapPhase = roadmap !== null && /^### Phase [0-9.]+[a-z]?[:\s]/m.test(roadmap);
+  const hasPlan = phaseDirectories.some((directory) => {
+    try {
+      return readdirSync(`.planning/phases/${directory}`).some((name) => /-PLAN\.md$/.test(name));
+    } catch {
+      return false;
+    }
+  });
+  if (!hasRoadmapPhase || !hasPlan)
+    report(
+      "failed",
+      `Required planning discovery is empty: ${[
+        ...(!hasRoadmapPhase ? ["ROADMAP phase headings"] : []),
+        ...(!hasPlan ? ["canonical PLAN files"] : []),
+      ].join(", ")}`,
+    );
+}
 if (roadmap !== null) {
   const heads = [...roadmap.matchAll(/^### Phase ([0-9.]+[a-z]?)[:\s]/gm)].map((m) => norm(m[1]));
   const rows = new Map(
@@ -263,9 +314,12 @@ if (roadmap !== null) {
   }
 }
 
-if (!problems.length) process.exit(0);
+if (!problems.length) {
+  if (strict) report("passed");
+  process.exit(0);
+}
 
-if (input.stop_hook_active) {
+if (input.stop_hook_active && !strict) {
   console.log(
     JSON.stringify({
       systemMessage: `Planning-corpus check still failing (${problems.length} problems)`,
@@ -275,8 +329,8 @@ if (input.stop_hook_active) {
 }
 console.log(
   JSON.stringify({
-    decision: "block",
+    ...(strict ? { status: "failed" } : { decision: "block" }),
     reason: `Planning-corpus check (Phase 37, G26):\n\n- ${problems.slice(0, 12).join("\n- ")}`,
   }),
 );
-process.exit(process.argv.includes("--exit-code") ? 1 : 0);
+process.exit(strict ? 1 : 0);

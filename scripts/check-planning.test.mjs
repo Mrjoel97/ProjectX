@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -14,6 +14,13 @@ const scratchRepo = () => {
   scratches.add(scratch);
   mkdirSync(join(scratch, ".planning", "phases"), { recursive: true });
   writeFileSync(join(scratch, ".planning", "STATE.md"), "---\nstatus: in_progress\n---\n");
+  writeFileSync(
+    join(scratch, ".planning", "REQUIREMENTS.md"),
+    "# Requirements\n\n## Traceability\n",
+  );
+  const seed = join(scratch, ".planning", "phases", "01-fixture");
+  mkdirSync(seed, { recursive: true });
+  writePlan(seed, "01-01");
   return scratch;
 };
 
@@ -32,21 +39,65 @@ const writeRoadmap = (scratch, { phase = "30", progress = "0/1", status = "In pr
 const writePlan = (dir, id = "30-01") => writeFileSync(join(dir, `${id}-PLAN.md`), "# Plan\n");
 const writeSummary = (dir, id = "30-01", frontmatter = "status: complete") =>
   writeFileSync(join(dir, `${id}-SUMMARY.md`), `---\n${frontmatter}\n---\n# Summary\n`);
-const runCheck = (scratch) =>
-  spawnSync(process.execPath, [script, scratch, "--exit-code"], { input: "{}", encoding: "utf8" });
+const runCheck = (scratch, input = {}) =>
+  spawnSync(process.execPath, [script, scratch, "--exit-code"], {
+    input: JSON.stringify(input),
+    encoding: "utf8",
+  });
 const expectPass = (scratch) => {
   const result = runCheck(scratch);
   assert.equal(result.status, 0, result.stdout || result.stderr);
+  assert.equal(JSON.parse(result.stdout).status, "passed", result.stdout);
 };
 const expectFail = (scratch, diagnostic) => {
   const result = runCheck(scratch);
   assert.equal(result.status, 1, `checker unexpectedly passed; expected: ${diagnostic}`);
   const output = JSON.parse(result.stdout);
+  assert.equal(output.status, "failed", result.stdout);
   assert.ok(
     output.reason.includes(diagnostic),
     `missing diagnostic ${JSON.stringify(diagnostic)} in:\n${output.reason}`,
   );
 };
+
+test("strict qualification distinguishes unavailable roots, Git, and planning inputs", () => {
+  const scratch = scratchRepo();
+  const missingRoot = spawnSync(
+    process.execPath,
+    [script, join(scratch, "missing"), "--exit-code"],
+    {
+      input: "{}",
+      encoding: "utf8",
+    },
+  );
+  assert.equal(missingRoot.status, 1);
+  assert.match(JSON.parse(missingRoot.stdout).reason, /Planning root is unavailable/);
+
+  const noGit = spawnSync(process.execPath, [script, "--exit-code"], {
+    cwd: scratch,
+    input: "{}",
+    encoding: "utf8",
+  });
+  assert.equal(noGit.status, 1);
+  assert.match(JSON.parse(noGit.stdout).reason, /Git root discovery is unavailable/);
+
+  const skipped = spawnSync(process.execPath, [script], {
+    cwd: scratch,
+    input: "{}",
+    encoding: "utf8",
+  });
+  assert.equal(skipped.status, 0);
+  assert.equal(JSON.parse(skipped.stdout).status, "skipped");
+
+  writeRoadmap(scratch);
+  const requirementsPath = join(scratch, ".planning", "REQUIREMENTS.md");
+  const original = readFileSync(requirementsPath, "utf8");
+  rmSync(requirementsPath);
+  const missingInput = runCheck(scratch);
+  assert.equal(missingInput.status, 1);
+  assert.match(JSON.parse(missingInput.stdout).reason, /REQUIREMENTS\.md/);
+  writeFileSync(requirementsPath, original);
+});
 
 test.after(() => {
   for (const scratch of scratches) rmSync(scratch, { recursive: true, force: true });
@@ -61,6 +112,16 @@ test("STATE keeps exactly one frontmatter block", () => {
     "---\nstatus: stale\n---\n---\nstatus: in_progress\n---\n",
   );
   expectFail(scratch, "STATE.md has 2 frontmatter blocks; exactly one is allowed.");
+
+  const strictHook = runCheck(scratch, { stop_hook_active: true });
+  assert.equal(strictHook.status, 1);
+  assert.equal(JSON.parse(strictHook.stdout).status, "failed");
+  const hook = spawnSync(process.execPath, [script, scratch], {
+    input: JSON.stringify({ stop_hook_active: true }),
+    encoding: "utf8",
+  });
+  assert.equal(hook.status, 0);
+  assert.match(JSON.parse(hook.stdout).systemMessage, /still failing/);
 });
 
 test("open requirement traceability still blocks an unsupported Complete phase", () => {

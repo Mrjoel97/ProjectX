@@ -66,6 +66,10 @@ output/
 # preview snapshots, and binary renders while another task is actively writing them.
 /brag-output/
 /brag-series/
+# 2026-09-27: same class as the two roots above — a HyperFrames video-production workspace
+# (nested node_modules, per-scene scripts, QA contact sheets and multi-MB 1080/4K renders).
+# 220 MB of regenerable media output, not Pikar application source.
+/videos/
 
 # 16-09: detached eval run logs + pid files (launch-detached.ps1)
 packages/backend/.eval-runs/
