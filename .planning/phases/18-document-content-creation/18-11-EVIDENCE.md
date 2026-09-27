@@ -1,7 +1,7 @@
 # Phase 18 Plan 11 — Current Document Lifecycle Evidence
 
-**Recorded:** 2026-09-20  
-**Repository HEAD at Task 1:** `e035a858789a8d9fe1f4d2378e1ad7b0d9aac548`  
+**Recorded:** 2026-09-20<br>
+**Repository HEAD at Task 1:** `e035a858789a8d9fe1f4d2378e1ad7b0d9aac548`<br>
 **Scope:** repository-controlled Tasks 1–2 only; no provider, paid-model, deployment, production, tenant, send, or publish action is authorized.
 
 ## 17.1-11 Blueprint baseline pin

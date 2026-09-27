@@ -33,13 +33,13 @@ key-files:
     - packages/backend/convex/isolation.test.ts
 
 key-decisions:
-  - "All four Phase 48 persistence tables are tenant-owned and carry a tenant-leading by_tenant index; rendered version artifacts are reached through STORAGE_ID_FIELDS." 
-  - "Publication readiness is closed to Pikar's platform-path runtime and tenant structured content; pending or unverified custom-domain posture cannot publish." 
-  - "Publication attempts use the existing insert-only audit path with a closed refs/hashes/ids/counts payload; project pointers remain the lifecycle authority." 
+  - "All four Phase 48 persistence tables are tenant-owned and carry a tenant-leading by_tenant index; rendered version artifacts are reached through STORAGE_ID_FIELDS."
+  - "Publication readiness is closed to Pikar's platform-path runtime and tenant structured content; pending or unverified custom-domain posture cannot publish."
+  - "Publication attempts use the existing insert-only audit path with a closed refs/hashes/ids/counts payload; project pointers remain the lifecycle authority."
 
 patterns-established:
-  - "Validated AST is canonicalized, rendered and stored before immutable version append; append failure cleans only the unreferenced artifact." 
-  - "Save invalidates exact approval, and publish/update/unpublish/rollback require exact version/hash plus revision CAS." 
+  - "Validated AST is canonicalized, rendered and stored before immutable version append; append failure cleans only the unreferenced artifact."
+  - "Save invalidates exact approval, and publish/update/unpublish/rollback require exact version/hash plus revision CAS."
 
 requirements-completed: [SITE-01, SITE-02, LAND-01, LAND-02]
 

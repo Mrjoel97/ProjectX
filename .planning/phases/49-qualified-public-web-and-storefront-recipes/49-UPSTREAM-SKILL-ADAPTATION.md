@@ -136,4 +136,3 @@ Reviewing or vendoring these public repositories does not prove provider approva
 registration, custom-domain enablement, merchant readiness or production founder acceptance. The
 provisional name remains `pikar-ai`; registered facts remain pending. Wave 7 and Wave 8 re-entry
 requirements are unchanged.
-

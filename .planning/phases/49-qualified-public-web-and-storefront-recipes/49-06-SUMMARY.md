@@ -34,7 +34,7 @@ key-files:
     - apps/web/app/(app)/ops/WebRecipeQualification.tsx
     - apps/web/app/(app)/ops/webRecipeQualification.test.tsx
 decisions:
-  - "The exact suite is 60 cases: 20 equal cases per family, including valid partial/max/consent/attribution, required/unknown/non-canonical/one-over, injection, cross-family, identity mutation, deterministic repeat, design dials, source coverage/influence/removal and commerce attempts." 
+  - "The exact suite is 60 cases: 20 equal cases per family, including valid partial/max/consent/attribution, required/unknown/non-canonical/one-over, injection, cross-family, identity mutation, deterministic repeat, design dials, source coverage/influence/removal and commerce attempts."
   - "A same-byte recipe only allocates v2 after the prior exact row is active; an unchanged pending candidate remains idempotent."
   - "Browser evidence requires authenticated owner actor, rendered /ops route, exact id/name/version/body hash, desktop/mobile viewports, positive revision and a closed refs-only outcome set."
   - "Rendered evidence is issued only after a server-owned candidate run/challenge transcript is advanced by the owner UI; candidate preview materializes documents without publishing projects or tenant authority."

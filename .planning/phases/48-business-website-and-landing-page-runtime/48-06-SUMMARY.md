@@ -54,4 +54,3 @@ address remain pending. Custom-domain DNS/TLS, hosting/provider approval and ano
 traffic remain Wave 7 work under `docs/releases/phase-48-wave7-reentry.md`. Wave 8 still requires
 exact-production founder acceptance. Phase 48 therefore closes the technical/local layer only and
 does not claim those external or production layers.
-

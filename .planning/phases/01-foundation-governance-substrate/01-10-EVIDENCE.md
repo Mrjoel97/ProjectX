@@ -1,10 +1,10 @@
 # Phase 01-10 Google OAuth Readiness Evidence
 
-**Recorded:** 2026-09-19  
-**Implementation revision:** `c6b4127`  
+**Recorded:** 2026-09-19<br>
+**Implementation revision:** `c6b4127`<br>
 **Backend integration commit:** `81b4482` (mixed-attribution shared-index commit; contains the
-`http.ts` and `httpAuth.test.ts` 01-10 changes alongside the 17.1 lane)  
-**Browser/readiness commit:** `c6b4127`  
+`http.ts` and `httpAuth.test.ts` 01-10 changes alongside the 17.1 lane)<br>
+**Browser/readiness commit:** `c6b4127`<br>
 **Requirement:** SC-5 remains OPEN. This record authorizes no provider or production action.
 
 ## Six evidence layers

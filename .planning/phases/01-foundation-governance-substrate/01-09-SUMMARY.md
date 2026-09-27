@@ -26,4 +26,3 @@ Those criteria remain historical context; this summary does not claim they passe
 - Historical plan retained unchanged: `01-09-PLAN.md`.
 - Successor: `01-10-PLAN.md`.
 - Implemented/offline-tested/deployed/live-observed/owner-accepted/externally-enabled: not advanced by this supersession.
-

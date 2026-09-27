@@ -134,7 +134,7 @@ Wave 7 external remainder.**
   intentionally skipped because `allowed_shared_paths` is empty and the parent integration owner
   reserved those shared paths.
 
-**Total deviations:** 1 auto-fixed bug and 3 integration/process disclosures.  
+**Total deviations:** 1 auto-fixed bug and 3 integration/process disclosures.<br>
 **Impact:** OAuth safety and observability improved without widening scope or crossing an external boundary.
 
 ## Authentication Gates
