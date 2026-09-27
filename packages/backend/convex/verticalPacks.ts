@@ -103,18 +103,18 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
   const sealed = await sealedIn(ctx, docs);
   const readable = docs.filter((doc) => !sealed.has(doc._id));
   const hasSource = readable.some((doc) => Boolean(doc.text?.trim()));
-  const dataSource = readable.find(
-    (doc) =>
-      doc.storageId &&
-      [
-        "text/csv",
-        "application/csv",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      ].includes(doc.mimeType),
+  const stored = [];
+  for (const doc of readable)
+    if (doc.storageId && (await ctx.db.system.get("_storage", doc.storageId)) !== null)
+      stored.push(doc);
+  const dataSource = stored.find((doc) =>
+    [
+      "text/csv",
+      "application/csv",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ].includes(doc.mimeType),
   );
-  const visualSource = readable.find(
-    (doc) => doc.storageId && ["image/png", "image/jpeg"].includes(doc.mimeType),
-  );
+  const visualSource = stored.find((doc) => ["image/png", "image/jpeg"].includes(doc.mimeType));
   const playbookSealed = playbook ? (await sealedIn(ctx, [playbook])).has(playbook._id) : false;
   const evidence = {
     profileConfirmed: profile !== null && profile.tierSource !== "legacy",

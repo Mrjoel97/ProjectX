@@ -293,6 +293,12 @@ describe("vertical controls use native tenant/version state", () => {
       });
     expect(await prepare()).toMatchObject({ ok: true, dataSourceId: dataDocs[0] });
     await t.run(async (ctx) => {
+      const first = await ctx.db.get(dataDocs[0]);
+      if (!first?.storageId) throw new Error("missing test storage");
+      await ctx.storage.delete(first.storageId);
+    });
+    expect(await prepare()).toMatchObject({ ok: false, reason: "validator-unavailable" });
+    await t.run(async (ctx) => {
       await ctx.db.delete(dataDocs[0]);
       await ctx.db.delete(dataDocs[1]);
     });

@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-27 — Data/Design source readiness now requires the selected owned,
+ready, unsealed Vault row's storage object to exist, not merely a stored `storageId`. A
+confirmed CSV preview incorrectly remained `ok:true` after its blob was deleted before this
+repair; it now refuses with `validator-unavailable`, while the live-blob positive still passes.
+The lookup is bounded by the same confirmed-plus-five-row discovery set and does not read bytes
+or invoke a model. This is repository-local readiness honesty, not file-content validation or
+pack-release evidence.
+
 Last verified: 2026-09-27 — vertical discovery now reads the exact tenant-confirmed artifact
 IDs first (bounded to two per six packs), then its existing five-row fallback sample. A
 data-pack preview with two confirmed ready CSV files beyond that sample failed before the

@@ -46,3 +46,21 @@ updated with exact module imports/types locally; normal deployment codegen shoul
 Targeted backend vertical controls, telemetry, owner isolation, recurrence-absence and skill-registry
 tests; core vertical policy tests and typechecks. Final counts are reported with the enclosing audit
 implementation report after the concurrent worker changes settle.
+
+## 2026-09-27 repository-local integrity recheck
+
+Two current-tree regressions found that workload updates dropped a previously selected legal
+playbook when the optional argument was omitted, and that an exact confirmed CSV source beyond
+the five-row discovery sample was invisible to a Data preview. Both failed before their repairs
+and passed afterward. A third control kept the ready CSV rows but deleted their shared storage
+object: `prepare` incorrectly returned `ok:true` before the repair and now refuses with
+`validator-unavailable`. Deleted document rows also refuse. Discovery reads at most two confirmed
+artifact IDs per six packs plus the existing five-row sample, filters tenant/status/sealed rows,
+and now verifies storage metadata for Data/Design readiness without reading file bytes.
+
+The focused controls, native binding and telemetry selection passed 22/22 on the changed source;
+backend TypeScript, source formatting, all 30 registered free gates and strict planning/playbook
+checks passed. Graphify and Convex-edge refresh completed after the source edits. This adds
+repository-local integrity proof only. The plan remains **partial**: exact-version semantic
+evaluation, authenticated browser control/UAT, complete outcome-event coverage and release
+evidence are not supplied by these regressions; VERT-01/02 and Phase 30 remain open.
