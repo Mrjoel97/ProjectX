@@ -13890,8 +13890,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-AUTHORITY-BASELINE.md": {
-    "mtime": 1789819779.9205883,
-    "ast_hash": "44a5797666db281f5d1fc8ddba2bdc89",
+    "mtime": 1790516944.7008998,
+    "ast_hash": "b15ee92fea2154d098648bd6a1a00f76",
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-CONTEXT.md": {
@@ -13900,8 +13900,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-RESEARCH.md": {
-    "mtime": 1789816171.486691,
-    "ast_hash": "521edd9b7189d82c2e8caa7bf3c139e3",
+    "mtime": 1790516946.177243,
+    "ast_hash": "672acb84ee940f6a2aec4c34ed2808cf",
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-VALIDATION.md": {
@@ -13910,8 +13910,8 @@
     "semantic_hash": ""
   },
   ".planning/v2.0-MILESTONE-AUDIT.md": {
-    "mtime": 1789819969.287925,
-    "ast_hash": "3cd20684837e051e8ae623d40329f5d2",
+    "mtime": 1790516950.6039033,
+    "ast_hash": "5edfdcfef6294fa9d53789cda15ea181",
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-01-SUMMARY.md": {
@@ -13980,33 +13980,33 @@
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-09-SUMMARY.md": {
-    "mtime": 1789824065.883806,
-    "ast_hash": "234dc96a6a4ef90294392cbbe7cd24ef",
+    "mtime": 1790516935.5755856,
+    "ast_hash": "c7322ffb525ae5205b2c5d034ad5c471",
     "semantic_hash": ""
   },
   ".planning/phases/03.7-inbox-briefing/03.7-05-SUMMARY.md": {
-    "mtime": 1789824068.129327,
-    "ast_hash": "bdd33d0d353090883c61a57dbe9d18f6",
+    "mtime": 1790516938.3856418,
+    "ast_hash": "77c80fdcfad3cbf59ad2c45c90ee8da6",
     "semantic_hash": ""
   },
   ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-10-SUMMARY.md": {
-    "mtime": 1789824070.5275242,
-    "ast_hash": "f85a7391ca6a2401d05b50358e59d5bf",
+    "mtime": 1790516940.1949313,
+    "ast_hash": "5594de861734665e15e6013954c91cbb",
     "semantic_hash": ""
   },
   ".planning/phases/18-document-content-creation/18-09-SUMMARY.md": {
-    "mtime": 1789824072.7577052,
-    "ast_hash": "8fab19bded41ed5f42103879a614d5ab",
+    "mtime": 1790516941.6633172,
+    "ast_hash": "7aa2cd7abe5711ede6f9ffae894f897c",
     "semantic_hash": ""
   },
   ".planning/phases/18-document-content-creation/18-10-SUMMARY.md": {
-    "mtime": 1789824075.379228,
-    "ast_hash": "95ed36f811112443f9796c31d034cbba",
+    "mtime": 1790516943.2769177,
+    "ast_hash": "b8b83e5d9de22e031babec5d5622a4b7",
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-1-HANDOFF.md": {
-    "mtime": 1789904144.7893753,
-    "ast_hash": "89255d97dcd60956fdceafafc1dc0ccf",
+    "mtime": 1790516875.7666097,
+    "ast_hash": "75e4972a7fac001472bc8ef9c03b04f6",
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-06-SUMMARY.md": {
@@ -14045,18 +14045,18 @@
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-10-EVIDENCE.md": {
-    "mtime": 1789918753.7530415,
-    "ast_hash": "f16a700d6d3bcda50c45c3651362f34e",
+    "mtime": 1790516872.7649117,
+    "ast_hash": "10d2cafce02111c4ec7720f99e391429",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-VERIFICATION.md": {
-    "mtime": 1789918755.709557,
-    "ast_hash": "2b0b0faa486074d6b03e8b290417fbed",
+    "mtime": 1790516910.5661705,
+    "ast_hash": "a8ef434b93cf33b5b4adb74b63fb2dc9",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-10-SUMMARY.md": {
-    "mtime": 1789844899.9445467,
-    "ast_hash": "e11ac10b9ebddae4343b14343b35e661",
+    "mtime": 1790516907.9996116,
+    "ast_hash": "5a6bbc8c89e193c737e62d626915c8d8",
     "semantic_hash": ""
   },
   ".planning/phases/03.7-inbox-briefing/03.7-10-EVIDENCE.md": {
@@ -14170,8 +14170,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/18-document-content-creation/18-11-EVIDENCE.md": {
-    "mtime": 1790206078.6776862,
-    "ast_hash": "7713d2c01e53009b43ecb4949cba3bca",
+    "mtime": 1790516874.1858892,
+    "ast_hash": "0f5d048755c54626bea52b3d52555afc",
     "semantic_hash": ""
   },
   ".planning/audits/2026-09-20-standing-execution-authorization.md": {
@@ -14455,8 +14455,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/48-business-website-and-landing-page-runtime/48-02-SUMMARY.md": {
-    "mtime": 1789980148.118209,
-    "ast_hash": "59017451785cece29e86740141dbdb1b",
+    "mtime": 1790516877.1528885,
+    "ast_hash": "e699cb21c9366bfcdbb9dfaba04173e3",
     "semantic_hash": ""
   },
   ".planning/phases/48-business-website-and-landing-page-runtime/48-03-PLAN.md": {
@@ -14495,8 +14495,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/48-business-website-and-landing-page-runtime/48-06-SUMMARY.md": {
-    "mtime": 1790013782.977541,
-    "ast_hash": "edfba737fba7530e25f1f9e3eed46590",
+    "mtime": 1790516947.6312504,
+    "ast_hash": "d631a27c64f5231a23909a7031509719",
     "semantic_hash": ""
   },
   ".planning/phases/48-business-website-and-landing-page-runtime/48-CONTEXT.md": {
@@ -14825,8 +14825,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-06-SUMMARY.md": {
-    "mtime": 1790184407.7640479,
-    "ast_hash": "de509c441d4666d78c5a398daa529a8c",
+    "mtime": 1790516914.2817926,
+    "ast_hash": "c0e9c420d10874377ecc17d1d568ec4a",
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-07-PLAN.md": {
@@ -14845,8 +14845,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-UPSTREAM-SKILL-ADAPTATION.md": {
-    "mtime": 1790016672.411371,
-    "ast_hash": "4337f44c05131ee816febbc36dd80d79",
+    "mtime": 1790516949.1905646,
+    "ast_hash": "a8db51dc6bdab3cb878434af5a0bc51e",
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VALIDATION.md": {
@@ -15245,8 +15245,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/tenant-commerce.md": {
-    "mtime": 1790515827.3628404,
-    "ast_hash": "f56a9b445a24508f9a5417afc9ac7640",
+    "mtime": 1790519965.5408392,
+    "ast_hash": "4fe6f935e72d41deac002681cda138ea",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantCatalogue.test.ts": {
@@ -15360,8 +15360,8 @@
     "semantic_hash": ""
   },
   "scripts/check-phase50-merchant-decision.mjs": {
-    "mtime": 1790471229.4618444,
-    "ast_hash": "7374c604e87da2bbe136cdd0d36cbf81",
+    "mtime": 1790519897.2540703,
+    "ast_hash": "284fda4c3f1f696b2e2150720d1a7abf",
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-05-SUMMARY.md": {
@@ -15385,8 +15385,8 @@
     "semantic_hash": ""
   },
   "docs/releases/phase-50-merchant-decision.md": {
-    "mtime": 1790436348.085738,
-    "ast_hash": "d2d1a87257b6636b61be10f963e51e66",
+    "mtime": 1790519966.92451,
+    "ast_hash": "b5dbce4e6cf897dcaa11c5186906a875",
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-06-CHECKPOINT-2026-09-24.md": {
