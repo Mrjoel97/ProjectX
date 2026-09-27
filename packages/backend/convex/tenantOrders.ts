@@ -496,6 +496,46 @@ async function closeHeld(
   now: number,
   mode: "expire" | "cancel",
 ) {
+  // Convex may reorder object keys on read. Rebuild the exact quoteOrder body order before
+  // checking its existing digest; spreading the fetched snapshot produces a false mismatch.
+  const snapshot = order.snapshot;
+  const quotedBody = {
+    tenantId: snapshot.tenantId,
+    projectId: snapshot.projectId,
+    currency: snapshot.currency,
+    country: snapshot.country,
+    policyId: snapshot.policyId,
+    policyRevision: snapshot.policyRevision,
+    sellerOfRecordRef: snapshot.sellerOfRecordRef,
+    taxRounding: snapshot.taxRounding,
+    ...(snapshot.physicalPolicy ? { physicalPolicy: snapshot.physicalPolicy } : {}),
+    ...(snapshot.digitalPolicy ? { digitalPolicy: snapshot.digitalPolicy } : {}),
+    lines: snapshot.lines.map((line) => ({
+      presentationItemId: line.presentationItemId,
+      productId: line.productId,
+      sku: line.sku,
+      goodsKind: line.goodsKind,
+      taxSourceRef: line.taxSourceRef,
+      refundPolicyRef: line.refundPolicyRef,
+      buyerRetentionRef: line.buyerRetentionRef,
+      productRevision: line.productRevision,
+      stockRevision: line.stockRevision,
+      unitMinor: line.unitMinor,
+      quantity: line.quantity,
+      lineMinor: line.lineMinor,
+    })),
+    subtotalMinor: snapshot.subtotalMinor,
+    taxMinor: snapshot.taxMinor,
+    shippingMinor: snapshot.shippingMinor,
+    totalMinor: snapshot.totalMinor,
+  };
+  if (
+    snapshot.hash !== order.snapshotHash ||
+    snapshot.hash !== hash(JSON.stringify(quotedBody)) ||
+    snapshot.tenantId !== order.tenantId ||
+    snapshot.projectId !== order.projectId
+  )
+    throw new Error("RESERVATION_LINK_INCOMPLETE");
   const reservations = await ctx.db
     .query("tenantReservations")
     .withIndex("by_tenant_order", (q) => q.eq("tenantId", order.tenantId).eq("orderId", order._id))

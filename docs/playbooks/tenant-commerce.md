@@ -1,6 +1,6 @@
 # Playbook: Tenant commerce (Phase 50)
 
-> Last verified: 2026-09-27 against local policy-reference validation, order/attempt/hold close-path integrity and the owner's 1–60-minute finite-stock hold and merchant-admin late-paid resolution choices; the pending merchant decision, Plan 50-19 data classification and Plan 50-05 closed HTTP preflight remain unchanged
+> Last verified: 2026-09-27 against local policy-reference validation, order/attempt/hold and persisted quote-digest close-path integrity, and the owner's 1–60-minute finite-stock hold and merchant-admin late-paid resolution choices; the pending merchant decision, Plan 50-19 data classification and Plan 50-05 closed HTTP preflight remain unchanged
 > Build history: `.planning/phases/50-tenant-merchant-commerce/` · Related ADRs: ADR-049 pending owner decision
 
 ## Purpose
@@ -39,6 +39,11 @@ never an authoritative total. The server re-reads mapped product, stock and poli
 computes an exact minor-unit quote and immutable hash, then persists order, attempt and stock holds
 atomically. An identical retry returns the same attempt; a different retry key on the same cart
 revision refuses rather than creating a second hold. A cart edit requires a new retry key.
+Before cancellation or expiry releases a hold, the close path reconstructs the original quote
+field order and checks its digest against both stored hashes. Reading an object from Convex may
+reorder its keys, so hashing a spread of the fetched object is not equivalent to the quote-time
+hash. A changed persisted quote total now refuses with no order, attempt, hold or stock write;
+this local integrity check does not verify a provider payment or permit public checkout.
 Required seller, tax, shipping, return, refund, retention, delivery and revocation references must
 contain a non-whitespace character at both authenticated policy write and pure quote. The validator
 does not trim or silently rewrite a merchant's accepted reference; legacy blank-looking rows refuse

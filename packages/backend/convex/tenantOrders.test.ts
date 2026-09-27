@@ -832,6 +832,51 @@ describe("local tenant order adapter", () => {
   });
 
   test.each([
+    "cancel",
+    "expire",
+  ] as const)("%s refuses a changed quote snapshot even when its stored hash and hold still match", async (mode) => {
+    const t = harness();
+    const a = await setup(t, `changed-snapshot-${mode}@example.test`);
+    const placed = await a.actor.mutation(placeOrder, {
+      cartId: a.cart.cartId,
+      expectedCartRevision: 1,
+      retryKey: `changed-snapshot-${mode}`,
+    });
+    await t.run(async (ctx) => {
+      const order = await ctx.db.get(placed.orderId as never);
+      if (!order || !("snapshot" in order)) throw new Error("MISSING_ORDER");
+      await ctx.db.patch(placed.orderId as never, {
+        snapshot: { ...order.snapshot, totalMinor: order.snapshot.totalMinor + 1 },
+        ...(mode === "expire" ? { expiresAt: 1 } : {}),
+      });
+      if (mode === "expire") {
+        const hold = await ctx.db
+          .query("tenantReservations")
+          .withIndex("by_tenant_order", (q) =>
+            q.eq("tenantId", String(a.userId)).eq("orderId", placed.orderId as never),
+          )
+          .unique();
+        if (!hold) throw new Error("MISSING_HOLD");
+        await ctx.db.patch(hold._id, { expiresAt: 1 });
+      }
+    });
+    const rows = () =>
+      t.run(async (ctx) => ({
+        orders: await ctx.db.query("tenantOrders").collect(),
+        attempts: await ctx.db.query("tenantOrderAttempts").collect(),
+        holds: await ctx.db.query("tenantReservations").collect(),
+        stocks: await ctx.db.query("tenantStock").collect(),
+      }));
+    const before = await rows();
+    await expect(
+      a.actor.mutation(mode === "cancel" ? cancelOrder : expireOrder, {
+        orderId: placed.orderId,
+      }),
+    ).rejects.toThrow("RESERVATION_LINK_INCOMPLETE");
+    expect(await rows()).toEqual(before);
+  });
+
+  test.each([
     "cartId",
     "cartRevision",
     "status",
