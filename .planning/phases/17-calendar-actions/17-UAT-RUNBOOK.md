@@ -9,6 +9,10 @@ Google delete, and Microsoft's explicit delete refusal. It does not weaken the s
 contract. Microsoft delete remains unsupported because Graph ignored stale `If-Match` in the measured
 probe; cleanup of the Microsoft test event is therefore a separately recorded native action.
 
+The Plan 17-10 offline management-card browser gate passed on a fresh disposable loopback stack:
+one discovered Calendar feature test ran and passed, with zero skips and owned process/temp cleanup.
+That checks the staging/card/trace handoff; it does not supply either provider's live evidence below.
+
 ## Evidence artifact contract
 
 The agent creates `.planning/phases/17-calendar-actions/17-LIVE-EVIDENCE.json` with schema
@@ -19,8 +23,8 @@ schema, deploymentUrlHash, capturedAt, preflight, creates, conflicts,
 updates, deletes, cleanup, reconciliation
 ```
 
-Every lifecycle row is generated from `smoke.calendarLifecycleReadback`; prose markers, screenshots,
-and `rg` hits never satisfy a machine row. The artifact is refs/codes/counts/booleans only. It must
+Every lifecycle row embeds an unmodified `smoke.calendarLifecycleReadback` result; prose markers,
+screenshots, and `rg` hits never satisfy a machine row. The artifact is refs/codes/counts/booleans only. It must
 not contain event title, subject, body, description, attendees, email, raw provider response, token,
 refresh token, access token, or scope value.
 
@@ -29,8 +33,29 @@ For each applicable provider section record:
 - provider, plan id, calendar run/correlation id, registry id, external event id;
 - staged/provider/created/updated/deleted etags and their transitions;
 - exact audit names, payload-key sets, and counts;
-- provider/registry duplicate counts and replay result;
+- audit duplicate event types from the readback and separately measured provider/registry duplicate
+  counts and replay result (the readback does not count provider or registry duplicates);
 - conflict, cleanup, content-leak, and token-leak booleans.
+
+The exact `calendarLifecycleReadback` root keys, asserted by the offline test, are
+`schema, deploymentUrlHash, tenantIdHash, providerArg, providerOnRow, providerMatches, planId,
+managedEventId, correlationId, calendarRunId, externalEventId, managedEventRefOnPlan, planKind,
+planStatus, planCancelKind, planFailureCode, planOperation, approvedEtag, registryEtag,
+providerEtag, registryStatus, registryAttendeeFree, providerOutcome, providerExists,
+providerAttendeeCount, audit, auditRowCount, auditCapped, duplicateEventTypes, contentLeak,
+tokenLeak, contentChecked, tokensChecked`. `schema` must equal
+`phase17-calendar-lifecycle-readback.v1`. Each `audit` item has exactly `eventType, keys, count`;
+`keys` is the sorted payload-key set, with no payload values. Reject any extra key, capped audit,
+provider mismatch, zero `contentChecked` or zero `tokensChecked` on a connected success row, or
+any `contentLeak`/`tokenLeak` true. Preserve the full readback at each transition so the approved,
+registry and provider etags can be compared without inferring an earlier value.
+
+`preflight` and `cleanup` also require bounded operator measurements that this readback cannot
+produce: OAuth/callback presence, migration cursor and pending count, Graph probe binding, and
+provider-wide residue/duplicate counts. Store those as hashes, counts and booleans next to a
+readback witness; label their source and query bound. A readback of one event cannot establish that
+an entire calendar has no duplicates or residue. Until those independent measurements exist, the
+corresponding field stays `null` and the live artifact cannot be marked reconciled.
 
 `preflight` records only commit/build/deployment hashes, env/callback presence booleans, safe provider
 connection/account hashes, migration counts, H3 counts, and Graph-probe refs/statuses. `reconciliation`
@@ -51,8 +76,11 @@ records the owner's approval timestamp plus final zero-residue counts and leak b
 The agent performs all repository, build, server, deployment, and query work:
 
 1. Resolve the deployed commit, fresh web build timestamp, Convex deployment hash, and app URL.
-2. Confirm Google and Microsoft OAuth client/secret env names are present using booleans only. Confirm
-   callbacks return to the current app and both connection pages load.
+2. Confirm `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+   `GMAIL_OAUTH_REDIRECT_URI`, `MICROSOFT_OAUTH_CLIENT_ID`,
+   `MICROSOFT_OAUTH_CLIENT_SECRET`, and `MICROSOFT_CALENDAR_REDIRECT_URI` are present using
+   booleans only. Confirm each registered callback's origin/path matches the current app and both
+   connection pages load. Record no env values, OAuth state, scope string, or account address.
 3. Confirm fixture absence so provider availability cannot false-pass through offline data.
 4. Run the Plan-10 offline gates once: core Calendar tests, the 90-second backend matrix,
    typechecks/build/playbooks, and record exact counts/durations.

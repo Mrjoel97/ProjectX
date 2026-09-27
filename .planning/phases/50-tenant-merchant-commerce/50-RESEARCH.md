@@ -9,6 +9,8 @@ requirements: [SHOP-02, SHOP-03, SHOP-04, SHOP-05]
 
 # Phase 50 research — Tenant merchant commerce
 
+> **Supersession note (2026-09-24):** The owner subsequently locked **both Stripe and PayPal in the first test-mode release**, each merchant's own direct receiving account, target all seller countries and USD/EUR/GBP settlement, **both physical and digital goods**, and **merchant-authored tax, shipping, refund and buyer-retention policies**. Earlier references below to selecting one provider, a selected single adapter, or one candidate provider are historical research assumptions, not current execution guidance. Plans 50-06–18 and `50-CONTEXT.md` supersede them: independent provider proof, versioned per-provider/account-type/onboarding-flow/checkout-product/country/currency eligibility with explicit refusal, global both-integration release qualification but only the merchant's selected eligible connected account required, and actual separate sandbox/partner evidence plus owner activation before internet-facing test-mode opening. Physical shipping/returns and digital entitlement/delivery/revocation are separate merchant-policy branches; the existing flat local shipping quote cannot by itself qualify both. Quote/presentment currency is not actual settlement currency. Waves 7–8 remain separate production gates.
+
 ## Research question and authority
 
 How should Phase 50 implement the tenant's catalogue-to-fulfilment commerce lifecycle while preserving the Phase 48/49 publication contract, tenant isolation, approval/audit rules, and the hard separation from Pikar's own subscription billing? This is implementation research, not a provider selection, merchant approval, legal determination, or claim of readiness.

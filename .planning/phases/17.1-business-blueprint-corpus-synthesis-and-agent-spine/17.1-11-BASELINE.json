@@ -156,7 +156,7 @@
     "evidence_written": false,
     "cleanup": "retained by paid-call-unresolved policy; no extra command was issued"
   },
-  "latest_durable_attempt": {
+  "previous_durable_attempt_2026_09_20": {
     "authorization": "one free preflight, then only on PASS exactly one unfiltered current --no-retry corpus run capped at USD 2.00, with no second attempt",
     "target": "local:local-joel_feruzi-pikar_ai_50c69-1",
     "startup_timeout_seconds": 300,
@@ -193,6 +193,34 @@
     "preflight_log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-PREFLIGHT-2026-09-20-DURABLE.log",
     "run_log": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RUN-2026-09-20-DURABLE.log",
     "reconciliation": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RECONCILIATION-2026-09-20-DURABLE.json"
+  },
+  "latest_durable_attempt": {
+    "date": "2026-09-24",
+    "target": "local non-production backend at http://127.0.0.1:3210; instance name anonymous-backend observed, exact named identity not independently requalified",
+    "preflight_invocations": 1,
+    "preflight_status": "passed_secret_safe_no_budget",
+    "corpus_invocations": 1,
+    "automatic_retries": 0,
+    "run_id": "eadd4317",
+    "tenant_id": "eval-eadd4317",
+    "budget_id": "ps7ej4mwyaar7b3sknqx83by8d8ezdvt",
+    "cap_usd": 2.0,
+    "accounted_usd": 0.03000392,
+    "observed_usd": 0.00000392,
+    "conservative_usd": 0.03,
+    "calls": 6,
+    "settled_calls": 6,
+    "unsettled_calls": 0,
+    "unresolved_cents": 0,
+    "breached": false,
+    "budget_closed": true,
+    "cases_started": 1,
+    "cases_completed": 0,
+    "terminal_status": "GOLDEN_PAID_CALL_FAILED_before_first_case_verdict",
+    "failure_code": "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400",
+    "evidence_written": false,
+    "cleanup": "not invoked; failed-run tenant and spend evidence retained",
+    "reconciliation": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RECONCILIATION-2026-09-24.json"
   },
   "offline_reproof": {
     "observed_at": "2026-09-20T10:04:15Z",

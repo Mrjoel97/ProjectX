@@ -2,15 +2,15 @@
   "version": 1,
   "governing_reference": ".planning/audits/2026-09-10-merged-audit-codebase-review.md",
   "active": {
-    "phase": "03.7",
-    "plan": "03.7-10 + 17.1-11 blocked before founder verification",
-    "reason": "One diagnostic no-retry corpus run passed cases 1-23, case 24 failed semantic reply assertions because recipient/subject evidence was absent despite one reply call, and case 28 stopped GOLDEN_PAID_CALL_UNRESOLVED. One explicitly authorized isolated case-24 retry passed preflight but stopped on the same unresolved guard before verdict. Final ledgers settled at exact USD 0.16210262 and USD 0.00217592 with no breach or unresolved calls, but neither run certified. Baseline accepted:false, both founder gates blocked, and no further run authority exists."
+    "phase": "17.1",
+    "plan": "17.1-11 shared golden gate with 03.7-10",
+    "reason": "Phase 49 Plan 07 is repository/local qualified on the 2026-09-25 exact digest; its Wave 7/8 and Phase 50 layers remain open. Return to the governing Wave 1 sequence: Blueprint and inbox golden evidence, then founder acceptance and Phase 18 consumption. The OpenRouter request-shape repair and offline self-check are current, but the exact accepted baseline is still false."
   },
   "next": {
-    "phase": "Wave 1B",
+    "phase": "18",
     "plan": "18-11",
-    "handoff": ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-1-HANDOFF.md",
-    "reason": "Wave 1B remains gated because the current 17.1-11 baseline is accepted:false after the partial non-certifying run; 18-11 has not started."
+    "handoff": ".planning/phases/18-document-content-creation/18-11-PLAN.md",
+    "reason": "Only after the exact Phase 17.1-11 baseline is accepted and shared 03.7-10 live/founder evidence is reconciled; no partial golden run or offline pass unblocks document acceptance."
   },
   "queue": [
     "Wave 1",
@@ -27,7 +27,7 @@
     {
       "phase": "03.7 + 17.1",
       "wave": "1A",
-      "reason": "diagnostic run passed cases 1-23, case24 failed semantic assertions, and stopped case28 unresolved; one explicit isolated case24 retry stopped unresolved before verdict; both ledgers settled without breach, accepted:false, no further run authority"
+      "reason": "Historical paid attempts remain non-certifying and settled; current evaluator request-shape repair and source-derived revision pass offline checks. Named non-production backend is not currently ready, no fresh paid run has executed, and Blueprint baseline remains accepted:false."
     },
     {
       "phase": "32",

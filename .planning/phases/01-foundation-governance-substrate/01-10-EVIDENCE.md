@@ -100,6 +100,24 @@ result: PASS
 The plan's `pnpm --filter ... exec` wrappers did not resolve Windows `.bin` shims in this shared
 checkout, so the same locked package CLIs were invoked directly. No browser/provider test ran.
 
+## 2026-09-20 current-code recheck
+
+The repository-controlled OAuth tests were rerun through the installed Windows Vitest binary after
+the package wrapper failed to resolve it:
+
+| Check | Result |
+|---|---|
+| `& packages/backend/.\\node_modules\\.bin\\vitest.cmd run convex/gmail.test.ts convex/httpAuth.test.ts` | PASS — 95/95 tests |
+| `pnpm --filter @pikar/web test -- "app/(app)/_components/reconnectBanner.test.ts"` | PASS — 13/13 tests |
+| direct Node Playwright discovery with `PIKAR_E2E_PROVISION=1` | PASS — exactly six intended tests in three files |
+| production-build synthetic invalid-invite hydration probe on :3112 | PASS — React password toggle changed state and invalid terminal rendered |
+| production OAuth setup/readiness attempt | OPEN — retained browser state was stale; password setup returned closed `InvalidAccountId`; no provider navigation occurred |
+
+The comparison also found that the running `next dev` server on :3111 served the static signup shell
+without attaching React state. This is recorded in the Wave 1 transport debug record and does not
+change the OAuth contract or establish a provider failure. Implemented and offline-tested remain
+green; deployed, live-observed, owner-accepted, and externally-enabled remain open.
+
 ## Browser readiness result
 
 The repository now has observable loading, unavailable, connected, reconnect, callback-error, and
@@ -107,6 +125,21 @@ disconnect-result states. `google-oauth-readiness.spec.ts` asserts that the conf
 has the shared grant and explicitly stops before navigation to `accounts.google.com`; when
 unconfigured it asserts the bounded administrator message. Hostile callback input maps to generic
 copy. Runtime browser observation and founder acceptance remain OPEN.
+
+## 2026-09-20 local production browser readiness — PASS, pre-provider boundary
+
+The local Convex deployment was available on `:3210`; a disposable synthetic owner fixture was
+created through the sanctioned local invite/signup path, owner grant, and onboarding seed. The real
+password form authenticated successfully against a rebuilt production web server on `:3112`, and
+Playwright saved a fresh local storage state. The production build completed successfully before
+the run (Next.js build; only the existing NFT tracing warning was emitted).
+
+`google-oauth-readiness.spec.ts` then ran directly with the refreshed state and `--no-deps`: **4/4
+passed**. It observed the configured Google authorize URL and shared four-scope grant without
+navigating to Google, verified the terminal contract, and mapped hostile and `missing_refresh`
+callback inputs to bounded copy. No provider navigation, consent, token exchange, grant, outbound
+message, or paid call occurred. This is repository/local browser readiness only; provider-controlled,
+live round-trip, founder acceptance, and external-enablement gates remain open.
 
 ## Wave 7 re-entry packet — all items OPEN
 

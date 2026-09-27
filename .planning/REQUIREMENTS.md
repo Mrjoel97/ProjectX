@@ -72,7 +72,7 @@ Requirements for the 4-week private beta. Each maps to roadmap phases.
 - [x] **VALT-12**: Documents carry a machine-derived type and identity line that the user can correct, and a user correction is never overwritten
 - [ ] **VALT-13**: User can import a Google Drive folder once and re-import on demand, bounded by the same budget rail *(open: 15.3-VERIFICATION is `human_needed`; the owner UAT of folder import/re-import is not recorded)*
 - [x] **VALT-14**: The vault read surfaces remain within Convex's per-transaction read cap at folder-scale document counts
-- [ ] **VALT-15**: The Executive Agent can browse and search the user's Google Drive to answer "which folder has X", WITHOUT any path to importing it or to the ingest budget *(open: 20.1-01 defers closure to 20.1-02, which has not run)*
+- [ ] **VALT-15**: The Executive Agent can browse and search the user's Google Drive to answer "which folder has X", WITHOUT any path to importing it or to the ingest budget *(open: 20.1-01's read-only offline substrate and 20.1-02's body/fixture exist; a 2026-08-15 production gate/activation is documented historically, but current active identity and real zero-ingest Drive UAT are unverified — see 20.1-02 re-entry)*
 - [x] **VALT-16**: The Knowledge Vault matches the approved Nord Edge browse, folder, preview, and empty-state designs without regressing upload, Drive import, synthesis, metadata correction, citations, download, or delete; search is scoped to the current folder and the UI never fabricates exact counts the backend does not provide
 
 ### Live Voice Sessions
@@ -162,7 +162,7 @@ Private Beta section above and land in this milestone's **final** stage (S4) —
 ### S4 — Governance & Open the Beta
 
 - [x] **GOVN-01**: A `requireOwner` primitive gates the three Phase-8 functions (`setOptimizerEnabled`, `activateCandidate`, `candidatesForReview`) and the admin surface so non-owners cannot reach them — pulled early, since it gates S3 agent-authored skills and S4 multi-user
-- [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater *(open: the 24-02 corrective-action index already exists and its mechanical checks passed 2026-09-10; named owner/reviewer semantic scope approval remains outstanding, and organization-wide/live WORM limitations remain)*
+- [ ] **GOVN-02**: An ISO 9001:2015 QMS conformance foundation maps the existing audit / skill-versioning / GSD-playbook change-control to the relevant clauses and fills the gaps — a conformance map, not process theater *(open: the 24-02 corrective-action index and current-tree historical-map checks exist; named owner/reviewer semantic scope approval remains outstanding, and organization-wide/live WORM limitations remain. ISO 9001:2026 replaced the mapped edition on 2026-09-16; this 2015-scoped requirement does not authorize a current-edition claim.)*
 - [x] **GOVN-03**: Every user-exercisable data and connection control the published privacy policy promises actually exists in the product and does what the policy says — the policy is the specification, not the marketing. Covers in-app disconnection of a connected account WITH revocation at the provider (not merely a local token delete), and tenant data deletion and export. Minted 2026-08-01 after `apps/web/app/privacy/page.tsx:312` was found promising an in-app Google disconnect that had no implementation anywhere in the repo.
 - [ ] **BETA-05**: Cross-tenant isolation assertions are written as each new surface ships (S1–S3), culminating in a two-user test covering every new table and index *(open: the two-user isolation test needs a second tenant via the invite path; not run end to end)*
 
@@ -260,17 +260,17 @@ These are three distinct user outcomes. Generated HTML, tracked downloads, scree
 own subscription Checkout, and read-only tenant finance connectors are reusable inputs only; none
 is completion evidence for a maintained public site, measurable landing page, or tenant shop.
 
-- [ ] **SITE-01**: A nontechnical user creates and edits a structured multi-page business site with navigation, brand inputs, responsive preview, and durable versioned project state
-- [ ] **SITE-02**: The site publishes, updates, unpublishes, and rolls back through a declared hosting/source/domain ownership model, with accessibility, SEO, analytics, failure recovery, and exact-release acceptance; custom-domain external prerequisites remain Wave 7, not silently "done"
-- [ ] **SITE-03**: Business-site recipes are structured, editable, provenance-tracked, refusal-tested, eval/acceptance-gated, activatable, and genuinely rollbackable; a generic code prompt is insufficient
-- [ ] **LAND-01**: A user creates, edits, previews, approves, publishes, updates, unpublishes, and rolls back a campaign landing page on the same declared public runtime
-- [ ] **LAND-02**: Anonymous forms/lead capture apply abuse bounds and explicit consent/privacy semantics, preserve source attribution, write to the existing Phase 19 contacts/suppression substrate, and expose honest conversion measurements without raw-content telemetry
-- [ ] **LAND-03**: Campaign recipes are structured, editable, provenance-tracked, refusal-tested, eval/acceptance-gated, activatable, and rollbackable
-- [ ] **SHOP-01**: A storefront recipe renders an editable catalogue presentation over structured inputs and remains dark until the merchant lifecycle it references is available
+- [ ] **SITE-01**: A nontechnical user creates and edits a structured multi-page business site with navigation, brand inputs, responsive preview, and durable versioned project state *(open: Phase 48 is repository/local qualified; Wave 8 exact-production founder acceptance remains required.)*
+- [ ] **SITE-02**: The site publishes, updates, unpublishes, and rolls back through a declared hosting/source/domain ownership model, with accessibility, SEO, analytics, failure recovery, and exact-release acceptance; custom-domain external prerequisites remain Wave 7, not silently "done" *(open: Phase 48 is repository/local qualified; Wave 7 custom-domain evidence and Wave 8 exact-production acceptance remain required.)*
+- [x] **SITE-03**: Business-site recipes are structured, editable, provenance-tracked, refusal-tested, eval/acceptance-gated, activatable, and genuinely rollbackable; a generic code prompt is insufficient *(open: repository/local technical layer only; Wave 7 domain/hosting facts and Wave 8 exact-production founder acceptance remain required.)*
+- [ ] **LAND-01**: A user creates, edits, previews, approves, publishes, updates, unpublishes, and rolls back a campaign landing page on the same declared public runtime *(open: Phase 48 is repository/local qualified; Wave 8 exact-production founder acceptance remains required.)*
+- [ ] **LAND-02**: Anonymous forms/lead capture apply abuse bounds and explicit consent/privacy semantics, preserve source attribution, write to the existing Phase 19 contacts/suppression substrate, and expose honest conversion measurements without raw-content telemetry *(open: Phase 48 is repository/local qualified; Wave 7/8 external and exact-production evidence remains required.)*
+- [x] **LAND-03**: Campaign recipes are structured, editable, provenance-tracked, refusal-tested, eval/acceptance-gated, activatable, and rollbackable *(open: repository/local technical layer only; Wave 7 external facts and Wave 8 exact-production founder acceptance remain required.)*
+- [x] **SHOP-01**: A storefront recipe renders an editable catalogue presentation over structured inputs and remains dark until the merchant lifecycle it references is available *(open: repository/local private presentation only; Phase 50 commerce, Wave 7 external facts and Wave 8 exact-production founder acceptance remain required.)*
 - [ ] **SHOP-02**: Each tenant has an isolated catalogue and inventory source of truth with explicit availability/oversell behavior and auditable changes
 - [ ] **SHOP-03**: Cart and merchant checkout use the business's provider account and PCI-hosted boundary, with credentials and money flow structurally separate from Pikar's subscription billing
 - [ ] **SHOP-04**: Order/payment state is idempotent and reconcilable through success, pending, failure, retry, cancellation, refund, notification, and fulfilment hand-off, with approval and audit rules stated for every outbound action
-- [ ] **SHOP-05**: Taxes, shipping, refunds, provider refusal, public storefront publish/update/unpublish/rollback, responsive/accessibility/SEO/analytics, and custom-domain behavior have honest technical and Wave 7 external gates
+- [ ] **SHOP-05**: Physical and digital goods use explicit merchant-authored, versioned tax/shipping/refund/buyer-retention rules with separate physical fulfilment/returns and digital delivery/revocation; missing or unsupported branches refuse. Provider refusal, public storefront publish/update/unpublish/rollback, responsive/accessibility/SEO/analytics, and custom-domain behavior have honest technical and Wave 7 external gates
 
 ## v2 Requirements
 
@@ -441,13 +441,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MKTG-04 | Phase 32 | **BLOCKED** (legal entity) |
 | MKTG-05 | Phase 32 | **BLOCKED** (legal entity) |
 | MKTG-06 | Phase 32 | **BLOCKED** (legal entity) |
-| SITE-01 | Phase 48 | Pending — admitted by owner; Wave 0 planning only |
-| SITE-02 | Phase 48 | Pending — admitted by owner; Wave 0 planning only |
-| SITE-03 | Phase 49 | Pending — admitted by owner; Wave 0 planning only |
-| LAND-01 | Phase 48 | Pending — admitted by owner; Wave 0 planning only |
-| LAND-02 | Phase 48 | Pending — admitted by owner; Wave 0 planning only |
-| LAND-03 | Phase 49 | Pending — admitted by owner; Wave 0 planning only |
-| SHOP-01 | Phase 49 | Pending — admitted by owner; Wave 0 planning only |
+| SITE-01 | Phase 48 | Repository/local technical layer qualified 2026-09-21; Wave 8 exact-production founder acceptance remains open |
+| SITE-02 | Phase 48 | Repository/local technical layer qualified 2026-09-21; Wave 7 custom-domain evidence and Wave 8 exact-production acceptance remain open |
+| SITE-03 | Phase 49 | Repository/local technical layer qualified 2026-09-23; Wave 7 domain/hosting facts and Wave 8 exact-production founder acceptance remain open |
+| LAND-01 | Phase 48 | Repository/local technical layer qualified 2026-09-21; Wave 8 exact-production founder acceptance remains open |
+| LAND-02 | Phase 48 | Repository/local technical layer qualified 2026-09-21; Wave 7/8 external and exact-production evidence remains open |
+| LAND-03 | Phase 49 | Repository/local technical layer qualified 2026-09-23; Wave 7 external facts and Wave 8 exact-production founder acceptance remain open |
+| SHOP-01 | Phase 49 | Repository/local technical layer qualified 2026-09-23 for private catalogue presentation only; public commerce remains closed until Phase 50, Wave 7 prerequisites, and Wave 8 exact-production founder acceptance |
 | SHOP-02 | Phase 50 | Pending — admitted by owner; Wave 0 planning only |
 | SHOP-03 | Phase 50 | Pending — admitted by owner; Wave 0 planning only |
 | SHOP-04 | Phase 50 | Pending — admitted by owner; Wave 0 planning only |
@@ -479,8 +479,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Requirements: **11 total** (SITE-01..03; LAND-01..03; SHOP-01..05)
 - Mapped to phases 48-50: 11
 - Unmapped: 0 ✓
-- Status: **0 complete, 11 pending** — requirement ownership only; no product implementation or
-  public/merchant capability is claimed by this admission.
+- Status: **3 repository/local qualified, 8 pending** — no Wave 7 external facts or Wave 8 exact-production founder acceptance are complete; no storefront commerce is enabled or claimed.
 
 **Repository-wide checkbox coverage (recalculated 2026-09-19):**
 - Requirements with checkboxes: **137 total**
@@ -490,4 +489,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-09-19 — G26 audit integrity verified through Phase 37.1; SITE-01..03, LAND-01..03 and SHOP-01..05 remain pending intended-beta scope with Phases 48-50 as their single technical owners; historical product-requirement wording and completion state remain unchanged.*
+*Last updated: 2026-09-23 — SITE-03, LAND-03 and SHOP-01 have repository/local technical qualification only. Wave 7 external enablement, Wave 8 exact-production founder acceptance, and Phase 50 commerce remain open; historical product-requirement wording is unchanged.*

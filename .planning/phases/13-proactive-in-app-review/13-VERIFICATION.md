@@ -10,7 +10,7 @@ score: 6/6 must-haves verified
 **Phase Goal:** Scheduled recurring in-app business review, using no OAuth mailbox token (BEVL-03).
 **Verified:** 2026-07-25T18:40:00Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** 2026-09-27 evidence correction against the later 13-04 run summary; no new live run
 
 ## Goal Achievement
 
@@ -22,7 +22,7 @@ score: 6/6 must-haves verified
 | 2 | Each run writes an evaluation row on that tenant's stable review thread | ✓ VERIFIED | `proactiveReview.ts:59-105` `reviewOne` calls `internal.evaluations.runEvaluation({ tenantId, threadId: REVIEW_THREAD_ID, framework: last?.framework, withDelta: true })`, `REVIEW_THREAD_ID = "proactive-review"` (`notificationTemplates.ts:49`). Test `proactiveReview.test.ts > writes a review card and a notification` passes; live run confirmed an `evaluations` row with `threadId: "proactive-review"` created on both invocations (13-04-SUMMARY.md). |
 | 3 | An in-app notification appears when the review is new/changed, silent when unchanged | ✓ VERIFIED | `reviewOne`'s `changed` predicate (`!last \|\| last.verdict !== res.verdict \|\| delta non-empty`) gates the notification insert. Test `notifies only on change` passes (2 evaluation rows, exactly 1 notification). Live run reproduced this exactly: 2 `evaluations` rows, 1 `weekly_review` notification, `delta` on row 2 = `{gapsClosed: [], gapsOpened: [], newFindings: 0}`. |
 | 4 | A failed review still tells the user in-app, with no failure detail on the notification plane | ✓ VERIFIED | `reviewOne`'s `catch` block inserts `kind: "weekly_review_failed"` with the static `REVIEW_FAILED_MESSAGE` (no exception detail passed through). `insertReviewNotification` only accepts the two static kinds/messages — no free-text failure reason is representable in its args shape. |
-| 5 | No code path in the review touches Gmail, notifyExternal, or notifications.notify | ✓ VERIFIED | `proactiveReview.ts` imports only `@pikar/core`, `convex/values`, `./_generated/*` — no gmail/notifyExternal import. Static guard test `no mailbox token` (SC#2) asserts (comment-stripped source) no import of `gmail`/`gmailAuth`/`notifyExternal`, no `notifications.notify` call, and that neither `weekly_review` nor `weekly_review_failed` is in `NOTIFICATION_KINDS` (confirmed: the 9-member array in `notificationTemplates.ts:28-39` does not include either). Live run: Gmail was disconnected throughout and the review still generated/notified/rendered (13-04-SUMMARY.md, "SC#2 — proven the hard way"). |
+| 5 | No code path in the review touches Gmail, notifyExternal, or notifications.notify | ✓ VERIFIED IN CODE; TOKENLESS LIVE CASE OPEN | `proactiveReview.ts` imports no Gmail/notifyExternal module. The comment-stripped SC#2 guard rejects those imports and `notifications.notify`, and review kinds are absent from `NOTIFICATION_KINDS`. The two live runs generated/notified/rendered without a Gmail send or token access, but `13-04-SUMMARY.md` corrects the earlier claim: Gmail was **connected**. A live run with its token row absent/revoked has not been performed. |
 | 6 | Tenant A's review is unreadable by tenant B | ✓ VERIFIED | Static guard test `tenant-scoped` (SC#3) walks every `ctx.db.query(...)` in the module source and asserts each `.withIndex(` first `q.eq(` is `"tenantId"`, with exactly one named `by_kind` exception (the enumerator), and every `ctx.db.insert(` carries `tenantId`. Behavior test `cross-tenant isolation` passes: tenant B's rows carry only B's tenantId and tenant B's `api.evaluations.byThread` read never surfaces tenant A's row. |
 
 **Score:** 6/6 truths verified
@@ -58,7 +58,7 @@ score: 6/6 must-haves verified
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|--------------|--------|----------|
-| BEVL-03 | 13-01, 13-02, 13-03, 13-04 (all four plans declare it) | A proactive business review is delivered in-app on a recurring cadence, using no OAuth mailbox token | ✓ SATISFIED | REQUIREMENTS.md:122 already marked `[x]` and REQUIREMENTS.md:242 maps it to Phase 13 "Complete". All 6 truths above verified; live production-entry-point run (13-04-SUMMARY.md) confirms end-to-end behavior with Gmail disconnected throughout. No orphaned requirement IDs found for Phase 13 in REQUIREMENTS.md beyond BEVL-03. |
+| BEVL-03 | 13-01, 13-02, 13-03, 13-04 (all four plans declare it) | A proactive business review is delivered in-app on a recurring cadence, using no OAuth mailbox token | ✓ TECHNICAL PHASE; LIVE TOKENLESS CASE OPEN | REQUIREMENTS.md marks the phase complete. Source guards and local behavior support the no-mailbox dependency; the historical live run confirms end-to-end delivery with Gmail **connected**, not disconnected. The disconnected/revoked-token live case remains unobserved. No orphaned requirement IDs were found. |
 
 No orphaned requirements: BEVL-03 is the only ID mapped to Phase 13 in REQUIREMENTS.md and it appears in every plan's `requirements` frontmatter.
 
@@ -70,11 +70,13 @@ No orphaned requirements: BEVL-03 is the only ID mapped to Phase 13 in REQUIREME
 
 ### Human Verification Required
 
-None outstanding. The phase's one manual gate (Task 2 of 13-04-PLAN.md, `checkpoint:human-verify`) was already executed and recorded in `13-04-SUMMARY.md`: two real `proactiveReview:runWeekly` invocations via the Convex CLI (functionally identical production entry point to the dashboard runner named in the plan), producing 2 `proactive-review` evaluation rows, exactly 1 `weekly_review` notification, a stable `findingCount: 8` across the unchanged re-run (proving the provenance-collapse fix holds in production), refs-only audit with no new eventType, a pinned tab with composer suppressed, a clickable notification with working deep-link dedupe, and Gmail disconnected throughout (proving SC#2). This satisfies plan 13-04's `<resume-signal>` and `<done>` criteria.
+The phase's manual gate was executed and recorded in `13-04-SUMMARY.md`: two real `proactiveReview:runWeekly` invocations via the Convex CLI produced 2 review rows, exactly 1 notification, a stable `findingCount: 8`, refs-only audit, and the verified browser tab/deep link. The same summary's later correction establishes that Gmail was **connected** during these runs. A separate live run with the tenant's `gmailTokens` row absent/revoked remains outstanding before claiming tokenless live resilience; this correction does not authorize deleting or revoking a real user's grant.
 
 ### Gaps Summary
 
-None. All 6 observable truths verified against actual source and tests; all 11 required artifacts exist, are substantive, and are wired; all 7 key links confirmed; the sole requirement (BEVL-03) is satisfied with both automated and live human-verified evidence. The three pre-existing conditions noted in the verification brief (auditCounts test failure, 52 backend test-file typecheck errors, load-sensitive test timeouts) were independently re-confirmed as unchanged baselines during this verification and are not attributed to Phase 13.
+The technical phase passed its source, local behavior and connected-account live gates; the tokenless live case is **not** proved. Do not promote the historical "disconnected throughout" assertion to Wave 7/8 evidence. The three pre-existing conditions noted in the original verification brief (auditCounts test failure, 52 backend test-file typecheck errors, load-sensitive test timeouts) were historical baselines, not revalidated by this correction.
+
+**2026-09-27 local recheck:** `pnpm --filter @pikar/backend test -- convex/proactiveReview.test.ts convex/evaluations.test.ts` passed 53/53. This proves the scoped local behavior and guards at the current worktree, not a current deployment or tokenless live run.
 
 ---
 

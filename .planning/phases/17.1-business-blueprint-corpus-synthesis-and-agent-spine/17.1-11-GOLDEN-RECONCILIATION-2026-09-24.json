@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-24T02:06:39+03:00",
+  "target": {
+    "environment": "non-production",
+    "configuredLocalUrl": "http://127.0.0.1:3210",
+    "instanceNameReadback": "anonymous-backend",
+    "functionsReadyObserved": true,
+    "identityNote": "The HTTP instance name was observed; exact named deployment identity was not independently requalified in this attempt."
+  },
+  "preflight": {
+    "invocations": 1,
+    "status": "passed_secret_safe_no_budget"
+  },
+  "corpus": {
+    "invocations": 1,
+    "automaticRetries": 0,
+    "mode": "unfiltered_current_no_retry",
+    "pins": ["cockpit-agent@26", "inbox-digest@2"],
+    "maximumUsd": 2.0,
+    "runId": "eadd4317",
+    "tenantId": "eval-eadd4317",
+    "budgetId": "ps7ej4mwyaar7b3sknqx83by8d8ezdvt",
+    "manifestCases": 57,
+    "executableCases": 46,
+    "casesStarted": 1,
+    "casesCompleted": 0,
+    "terminalState": "GOLDEN_PAID_CALL_FAILED",
+    "firstCase": "01-happy-single",
+    "failureCode": "EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400",
+    "failureCodeSource": "Read-only Workflow component status inspection; raw error and response body were not emitted."
+  },
+  "durableAttempts": [
+    {
+      "attemptId": "144fc19b-25bf-47b5-b438-44696542c391",
+      "operation": "vaultSmoke:seedCorpus",
+      "workflowId": "jd753v4jrfjgdzkytzkx07s03n8ey0wd",
+      "state": "completed"
+    },
+    {
+      "attemptId": "66198cf1-abf7-4c4f-8c99-4a8870b46b67",
+      "operation": "llm:runCockpitAgent",
+      "workflowId": "jd7a7cddef1ftx2wnmea3vkcm18ez1yj",
+      "state": "failed"
+    }
+  ],
+  "spend": {
+    "capCents": 200,
+    "accountedUsd": 0.03000392,
+    "observedUsd": 0.00000392,
+    "conservativeUsd": 0.03,
+    "conservativeCount": 1,
+    "callCount": 6,
+    "settledCount": 6,
+    "unsettledCount": 0,
+    "unresolvedCents": 0,
+    "remainingCents": 192,
+    "breached": false,
+    "closed": true,
+    "note": "The failed HTTP 400 call was conservatively settled at its full USD 0.03 reservation; this is not observed provider usage."
+  },
+  "evidence": {
+    "registryEvidenceWritten": false,
+    "certifyingRun": false,
+    "founderAccepted": false,
+    "reason": "The first cockpit turn failed before a case verdict. No paid replay was attempted."
+  },
+  "cleanup": {
+    "invoked": false,
+    "tenantRetained": true,
+    "spendEventsRetained": true
+  }
+}

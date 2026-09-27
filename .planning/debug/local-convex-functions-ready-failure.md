@@ -2,15 +2,15 @@
 status: awaiting_human_verify
 trigger: "Diagnose why the approved local Convex deployment emitted `Hit an error while running local deployment` and never reached functions-ready, blocking bounded golden preflight."
 created: 2026-09-20T02:40:00+03:00
-updated: 2026-09-20T03:12:00+03:00
+updated: 2026-09-20T09:38:15+03:00
 ---
 
 ## Current Focus
 
-hypothesis: Confirmed — the launch omitted the process-scoped startup-timeout override required by this unusually large local deployment, so Convex killed its child after the built-in 30-second backend-start window, before function analysis or synchronization began.
-test: On the next separately authorized launch, set `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=300` for that process only, start from `packages/backend`, and wait for the exact `Convex functions ready!` marker without starting preflight or corpus automatically.
-expecting: The backend's `/instance_name` endpoint becomes available inside 300 seconds and the subsequent function push reaches ready; otherwise preserve the verbose launch logs and diagnose the new concrete terminal error.
-next_action: Human/operator performs the bounded 300-second launch and confirms the exact functions-ready marker. A standalone bounded preflight remains a separate authorized step; corpus remains forbidden unless preflight passes and fresh run authority exists.
+hypothesis: Confirmed — the initial `EACCES` was sandbox-only. The one escalated retry reached the exact named local deployment, and the process-local 300-second startup window permitted it to become functions-ready.
+test: Read the emitted ready marker and query only `http://127.0.0.1:3210/instance_name` while leaving the authorized watcher running.
+expecting: The marker names a successful functions-ready completion, and the endpoint returns `local-joel_feruzi-pikar_ai_50c69-1`.
+next_action: Hand the running backend to the coordinator. Do not start preflight, corpus, provider calls, cleanup, configuration/source/state mutations, or any additional launch.
 
 ## Symptoms
 
@@ -35,6 +35,36 @@ started: Observed on 2026-09-20 during the bounded settlement-fix preflight atte
   timestamp: 2026-09-20T03:07:00+03:00
 
 ## Evidence
+
+- timestamp: 2026-09-20T03:30:00+03:00
+  checked: Existing local-run logs and listener/process state before the authorized launch
+  found: The prior `convex-dev.stderr.log` ends at the known 30-second startup-timeout error; stdout is empty. No listener is present on port 3210 and no `convex*` process is running.
+  implication: The authorized launch can target the named existing local deployment without displacing an active backend process.
+
+- timestamp: 2026-09-20T09:32:56+03:00
+  checked: One authorized launch from `packages/backend`, with `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=300` set only in that launch process
+  found: The launcher (PID 17564) exited after about 2 seconds before emitting `Convex functions ready!`. Its redacted stderr says `Unexpected error when authorizing`, `TypeError: fetch failed`, and `connect EACCES 34.160.81.0:443`; stdout is empty.
+  implication: The local-backend startup window was never reached or tested. This is a distinct remote-authorization/connectivity block, not evidence that the 300-second timeout is ineffective.
+
+- timestamp: 2026-09-20T09:33:00+03:00
+  checked: Post-exit process, port, endpoint, and log-integrity state
+  found: No process named `convex` or `convex-local-backend` remains, port 3210 has no listener, and `/instance_name` is unavailable. Evidence is `packages/backend/.tmp/wave1-golden-20260920/launch-300s-20260920-093256/`; `stderr.log` SHA-256 is `4DD2A20394BCC5CFA26056BD0953F47E53284C0DEFAC2A79E7BC5167F0BBF02B` and `stdout.log` is the empty-file SHA-256.
+  implication: No spawned backend needed manual termination, no local state was changed by the launch, and no ready target exists for preflight or corpus work.
+
+- timestamp: 2026-09-20T09:35:00+03:00
+  checked: Authorization boundary after the failed sandboxed launch
+  found: The coordinating operator authorized exactly one repeat of the same launch using the required network escalation, because the observed `EACCES` occurred in the sandbox before any local backend process was created.
+  implication: One escalated retry is within the original narrow launch scope; any further retry remains forbidden.
+
+- timestamp: 2026-09-20T09:35:32+03:00 to 2026-09-20T09:37:57+03:00
+  checked: The one authorized escalated launch from `packages/backend`, with `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=300` scoped only to launcher PID 5020
+  found: The initial sandbox-only authorization block did not recur. The live launcher log reports the exact marker `√ 09:37:57 Convex functions ready! (1.21m)` after `Preparing Convex functions...`; it remains running and has moved to file watching.
+  implication: The local backend was successfully relaunched within the authorized 300-second window. No retry is needed and the backend should remain available for the coordinator.
+
+- timestamp: 2026-09-20T09:38:00+03:00
+  checked: Only the target identity endpoint after functions-ready
+  found: `http://127.0.0.1:3210/instance_name` returned `local-joel_feruzi-pikar_ai_50c69-1` exactly. The active launch evidence is `packages/backend/.tmp/wave1-golden-20260920/launch-300s-escalated-20260920-093532/stderr.log`; it is intentionally still locked by the live watcher.
+  implication: The running service is the authorized named non-production target, not another local deployment.
 
 - timestamp: 2026-09-20T02:48:00+03:00
   checked: `packages/backend/.tmp/wave1-golden-20260920/convex-dev.stderr.log`
@@ -75,6 +105,6 @@ started: Observed on 2026-09-20 during the bounded settlement-fix preflight atte
 
 root_cause: The approved Convex launch used the CLI's default 30-second local-backend startup window. The named deployment now has about 21.2 GiB of on-disk runtime state and historically needs 1.46–3.41 minutes to reach functions-ready. Convex therefore terminated its child at the `/instance_name` readiness gate before function analysis/sync. The later generic reported-to-team line merely wrapped this explicit timeout.
 fix: No repository application-source change is indicated. For the next separately authorized attempt, set `CONVEX_LOCAL_BACKEND_STARTUP_TIMEOUT_SECS=300` only in the launch process, invoke the existing backend dev command from `packages/backend`, and wait for the exact functions-ready marker. Do not use `--start-fresh`, delete state, edit `.env`, or chain preflight/corpus to startup. After ready, verify the named `/instance_name`; run standalone bounded preflight only under its own authority, and run corpus only after PASS plus fresh explicit authorization.
-verification: Offline mechanism verification is complete: exact log/CLI-source match, runtime-size measurement, current tsconfig inspection, immutable preflight hash, and four same-deployment successful-duration comparisons. End-to-end runtime verification intentionally remains pending because backend start/sync was prohibited in this investigation.
+verification: End-to-end launch verification now passes: after the sandbox-only attempt failed before startup, exactly one escalated retry reached `Convex functions ready! (1.21m)` and returned the exact `/instance_name` target. The watcher remains running. No preflight, corpus, provider call, or new evaluation/spend action was performed; no configuration/source/local-state mutation was made outside the normal existing `convex dev --run skills:seedSkills` launch behavior.
 files_changed:
   - .planning/debug/local-convex-functions-ready-failure.md

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generated_at": "2026-09-20",
+  "generated_at": "2026-09-21",
   "governing_reference": ".planning/audits/2026-09-10-merged-audit-codebase-review.md#9-owner-adopted-closure-programme--2026-09-19",
   "baseline_reference": ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-AUTHORITY-BASELINE.md",
   "allowed_dispositions": [
@@ -314,9 +314,6 @@
       "25-private-beta-productionization/25-12",
       "25-private-beta-productionization/25-13",
       "25-private-beta-productionization/25-14",
-      "25-private-beta-productionization/25-15",
-      "25-private-beta-productionization/25-16",
-      "25-private-beta-productionization/25-17",
       "25.1-consistency-and-reliability-hardening/25.1-02",
       "25.1-consistency-and-reliability-hardening/25.1-03",
       "25.1-consistency-and-reliability-hardening/25.1-04",
@@ -500,6 +497,7 @@
       ".planning/phases/03.7-inbox-briefing/03.7-04-SUMMARY.md",
       ".planning/phases/03.7-inbox-briefing/03.7-07-SUMMARY.md",
       ".planning/phases/03.7-inbox-briefing/03.7-09-SUMMARY.md",
+      ".planning/phases/03.7-inbox-briefing/03.7-10-SUMMARY.md",
       ".planning/phases/03.8-vault-document-extraction/03.8-02-SUMMARY.md",
       ".planning/phases/03.8-vault-document-extraction/03.8-05-SUMMARY.md",
       ".planning/phases/03.8-vault-document-extraction/03.8-06-SUMMARY.md",
@@ -655,6 +653,7 @@
       ".planning/phases/23-agent-authored-skills/23-04-SUMMARY.md",
       ".planning/phases/23-agent-authored-skills/23-06-SUMMARY.md",
       ".planning/phases/24-iso-9001-conformance-map/24-01-SUMMARY.md",
+      ".planning/phases/25-private-beta-productionization/25-14-SUMMARY.md",
       ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-02-SUMMARY.md",
       ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-03-SUMMARY.md",
       ".planning/phases/25.1-consistency-and-reliability-hardening/25.1-04-SUMMARY.md",
@@ -5939,7 +5938,9 @@
         "canonical_open_plan_ids": [
           "03.7-inbox-briefing/03.7-10"
         ],
-        "semantic_partial_summary_paths": [],
+        "semantic_partial_summary_paths": [
+          ".planning/phases/03.7-inbox-briefing/03.7-10-SUMMARY.md"
+        ],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
@@ -20226,17 +20227,21 @@
       "requirement_ids": [
         "BETA-03"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "historical_state": "executed_current_delta",
+      "current_disposition": "closed",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "not_applicable",
+      "live_observed": "not_applicable",
+      "owner_accepted": "not_applicable",
+      "externally_enabled": "not_applicable",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/25-private-beta-productionization/25-14-SUMMARY.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/25-private-beta-productionization/25-14-SUMMARY.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -20244,33 +20249,25 @@
         "source": [
           ".planning/phases/25-private-beta-productionization/25-14-PLAN.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/25-private-beta-productionization/25-14-SUMMARY.md"
+        ],
         "owner_decision": []
       },
-      "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
-      },
+      "missing_proof": {},
       "source_membership": {
         "canonical_open_plan_ids": [
           "25-private-beta-productionization/25-14"
         ],
-        "semantic_partial_summary_paths": [],
+        "semantic_partial_summary_paths": [
+          ".planning/phases/25-private-beta-productionization/25-14-SUMMARY.md"
+        ],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
-      "unmet_acceptance": [
-        "Plan unexecuted: all named implementation and verification tasks and the Wave 1 entry gate remain outstanding."
-      ],
-      "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
-      ],
+      "unmet_acceptance": [],
+      "remaining_work_classes": [],
       "closure_wave": 2,
       "owner_phase": "Phase 25",
       "dependencies": [
@@ -20299,17 +20296,21 @@
       "requirement_ids": [
         "BETA-03"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "historical_state": "executed_current_delta",
+      "current_disposition": "closed",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "not_applicable",
+      "live_observed": "not_applicable",
+      "owner_accepted": "not_applicable",
+      "externally_enabled": "not_applicable",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/25-private-beta-productionization/25-15-SUMMARY.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/25-private-beta-productionization/25-15-SUMMARY.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -20317,33 +20318,21 @@
         "source": [
           ".planning/phases/25-private-beta-productionization/25-15-PLAN.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/25-private-beta-productionization/25-15-SUMMARY.md"
+        ],
         "owner_decision": []
       },
-      "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
-      },
+      "missing_proof": {},
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "25-private-beta-productionization/25-15"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
-      "unmet_acceptance": [
-        "Plan unexecuted: all named implementation and verification tasks and the Wave 1 entry gate remain outstanding."
-      ],
-      "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
-      ],
+      "unmet_acceptance": [],
+      "remaining_work_classes": [],
       "closure_wave": 2,
       "owner_phase": "Phase 25",
       "dependencies": [
@@ -20370,17 +20359,22 @@
         "BETA-02",
         "BETA-05"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "historical_state": "executed_current_delta",
+      "current_disposition": "closed",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "not_applicable",
+      "live_observed": "not_applicable",
+      "owner_accepted": "not_applicable",
+      "externally_enabled": "not_applicable",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/25-private-beta-productionization/25-16-SUMMARY.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/25-private-beta-productionization/25-16-EVIDENCE.md",
+          ".planning/phases/25-private-beta-productionization/25-16-SUMMARY.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -20388,33 +20382,22 @@
         "source": [
           ".planning/phases/25-private-beta-productionization/25-16-PLAN.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/25-private-beta-productionization/25-16-EVIDENCE.md",
+          ".planning/phases/25-private-beta-productionization/25-16-SUMMARY.md"
+        ],
         "owner_decision": []
       },
-      "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
-      },
+      "missing_proof": {},
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "25-private-beta-productionization/25-16"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
-      "unmet_acceptance": [
-        "Plan unexecuted: all named implementation and verification tasks and the Wave 1 entry gate remain outstanding."
-      ],
-      "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
-      ],
+      "unmet_acceptance": [],
+      "remaining_work_classes": [],
       "closure_wave": 2,
       "owner_phase": "Phase 25",
       "dependencies": [
@@ -20440,17 +20423,21 @@
         "BETA-01",
         "BETA-03"
       ],
-      "historical_state": "plan_without_canonical_summary",
-      "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
-      "deployed": "unknown",
-      "live_observed": "unknown",
-      "owner_accepted": "unknown",
-      "externally_enabled": "unknown",
+      "historical_state": "executed_current_delta",
+      "current_disposition": "closed",
+      "implemented": "yes",
+      "offline_tested": "yes",
+      "deployed": "not_applicable",
+      "live_observed": "not_applicable",
+      "owner_accepted": "not_applicable",
+      "externally_enabled": "not_applicable",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/25-private-beta-productionization/25-17-SUMMARY.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/25-private-beta-productionization/25-17-SUMMARY.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -20458,33 +20445,21 @@
         "source": [
           ".planning/phases/25-private-beta-productionization/25-17-PLAN.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/25-private-beta-productionization/25-17-SUMMARY.md"
+        ],
         "owner_decision": []
       },
-      "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
-      },
+      "missing_proof": {},
       "source_membership": {
-        "canonical_open_plan_ids": [
-          "25-private-beta-productionization/25-17"
-        ],
+        "canonical_open_plan_ids": [],
         "semantic_partial_summary_paths": [],
         "missing_or_open_verification_phases": [],
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
-      "unmet_acceptance": [
-        "Plan unexecuted: all named implementation and verification tasks and the Wave 1 entry gate remain outstanding."
-      ],
-      "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
-      ],
+      "unmet_acceptance": [],
+      "remaining_work_classes": [],
       "closure_wave": 2,
       "owner_phase": "Phase 25",
       "dependencies": [
@@ -23541,15 +23516,19 @@
       ],
       "historical_state": "unchecked_requirement",
       "current_disposition": "open",
-      "implemented": "no",
-      "offline_tested": "no",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "no",
       "live_observed": "no",
       "owner_accepted": "no",
       "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/48-business-website-and-landing-page-runtime/48-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/48-business-website-and-landing-page-runtime/48-VERIFICATION.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -23572,7 +23551,7 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Build create/edit/preview/approve/publish/update/unpublish/rollback on Phase 48's public runtime.",
+        "Phase 48's exact current repository/local source set qualifies the landing lifecycle; production founder acceptance is not inferred.",
         "Founder browser acceptance; Wave 7 hosting/domain prerequisites."
       ],
       "remaining_work_classes": [
@@ -23605,15 +23584,19 @@
       ],
       "historical_state": "unchecked_requirement",
       "current_disposition": "open",
-      "implemented": "no",
-      "offline_tested": "no",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "no",
       "live_observed": "no",
       "owner_accepted": "no",
       "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/48-business-website-and-landing-page-runtime/48-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/48-business-website-and-landing-page-runtime/48-VERIFICATION.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -23636,7 +23619,7 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Implement bounded anonymous forms, consent/privacy, attribution, Phase 19 writes, suppression and raw-content-free conversion measurement.",
+        "Phase 48's exact current repository/local source set qualifies bounded anonymous forms, consent, attribution, suppression and conversion counts; production behavior is not inferred.",
         "Wave 7 domain/provider controls; Wave 8 anonymous production acceptance."
       ],
       "remaining_work_classes": [
@@ -23740,15 +23723,19 @@
       ],
       "historical_state": "unchecked_requirement",
       "current_disposition": "open",
-      "implemented": "no",
-      "offline_tested": "no",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "no",
       "live_observed": "no",
       "owner_accepted": "no",
       "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/48-business-website-and-landing-page-runtime/48-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/48-business-website-and-landing-page-runtime/48-VERIFICATION.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -23771,7 +23758,7 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Build structured versioned multi-page project state, navigation, brand inputs, nontechnical editing and responsive preview.",
+        "Phase 48's exact current repository/local source set qualifies durable multi-page editing and responsive preview; founder browser acceptance is not inferred.",
         "Founder browser acceptance; later external hosting/domain gates do not change technical owner."
       ],
       "remaining_work_classes": [
@@ -23804,15 +23791,19 @@
       ],
       "historical_state": "unchecked_requirement",
       "current_disposition": "open",
-      "implemented": "no",
-      "offline_tested": "no",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "no",
       "live_observed": "no",
       "owner_accepted": "no",
       "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/48-business-website-and-landing-page-runtime/48-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/48-business-website-and-landing-page-runtime/48-VERIFICATION.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -23835,7 +23826,7 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Implement declared hosting/source ownership and publish/update/unpublish/rollback plus accessibility, SEO, analytics and recovery.",
+        "Phase 48's exact current repository/local source set qualifies publish/update/unpublish/rollback and ownership/SEO/analytics/recovery; custom-domain and production acceptance remain open.",
         "Wave 7 custom domain/DNS/TLS/provider prerequisites; Wave 8 exact-release public use."
       ],
       "remaining_work_classes": [
@@ -26843,15 +26834,19 @@
       ],
       "historical_state": "unchecked_requirement",
       "current_disposition": "open",
-      "implemented": "no",
-      "offline_tested": "no",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "no",
       "live_observed": "no",
       "owner_accepted": "no",
       "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -26874,8 +26869,8 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Qualify structured editable campaign recipes with provenance, refusal/eval/activation and rollback.",
-        "Owner campaign/UAT judgment."
+        "Repository/local recipe qualification is proven only on Phase 49's exact artifact digest; production and external enablement are not inferred.",
+        "Exact-production founder campaign/UAT judgment and Wave 7 prerequisites remain open."
       ],
       "remaining_work_classes": [
         "requirement_acceptance",
@@ -26907,15 +26902,19 @@
       ],
       "historical_state": "unchecked_requirement",
       "current_disposition": "open",
-      "implemented": "no",
-      "offline_tested": "no",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "no",
       "live_observed": "no",
       "owner_accepted": "no",
       "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -26938,8 +26937,8 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Qualify an editable structured catalogue presentation recipe while enforcing the Phase 50 availability gate.",
-        "Merchant/provider enablement remains Wave 7."
+        "Repository/local editable storefront recipe and darkness guard are proven on Phase 49's exact artifact digest; public commerce remains closed.",
+        "Phase 50 commerce availability, Wave 7 merchant/provider enablement, and exact-production founder acceptance remain open."
       ],
       "remaining_work_classes": [
         "requirement_acceptance",
@@ -26971,15 +26970,19 @@
       ],
       "historical_state": "unchecked_requirement",
       "current_disposition": "open",
-      "implemented": "no",
-      "offline_tested": "no",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "no",
       "live_observed": "no",
       "owner_accepted": "no",
       "externally_enabled": "no",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -27002,8 +27005,8 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Qualify structured editable site recipes with provenance, refusal fixtures, eval, activation and exact rollback.",
-        "Owner recipe/UAT judgment; exposure follows Phase 48 and Wave 7 gates."
+        "Repository/local site recipe qualification is proven only on Phase 49's exact artifact digest; production and external enablement are not inferred.",
+        "Exact-production founder site/UAT judgment and Wave 7 prerequisites remain open."
       ],
       "remaining_work_classes": [
         "requirement_acceptance",

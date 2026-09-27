@@ -1,5 +1,9 @@
 # Phase 30-08 native evaluation and review producer — release incomplete
 
+## 2026-09-27 current-tree free re-entry check
+
+`node packages/backend/scripts/run-eval-vertical.mjs --fixtures-only` exited 0 and returned six exact v1 candidates, 40 total cases (Data 7, Product 5, Design 5, Legal 8, HR 10, Engineering 5), each `runtimeEnabled:false`, `modelEvaluated:false` and `evidenceRecorded:false`. The reported body hashes match the six candidate-only production read-back hashes recorded on September 25; that earlier read-back is not current production-state proof. Contracts body/source parity passed 56/56, and current backend binding/native-evidence tests passed 36/36 (13 + 23). These are free local checks only. Task 30-08-02 still lacks a complete current-revision real model corpus, authenticated semantic review, Legal/HR external qualification and owner acceptance; no candidate was activated or exposed, and no `30-08-SUMMARY.md` is due yet.
+
 ## September 12 live observation update
 
 One capped native run, `9bd1865a-58dd-4de0-be97-053383ca1a9b`, started against production

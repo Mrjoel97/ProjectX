@@ -52,7 +52,7 @@ created: 2026-08-05
 | 30-06-02 | 06 | 3 | VERT-02, VERT-03 | adversarial/refusal | `pnpm --filter @pikar/backend test -- verticalHr` | ❌ W3 | ⬜ pending |
 | 30-07-01 | 07 | 3 | VERT-02, VERT-03 | contract/eval fixture | `pnpm --filter @pikar/backend test -- verticalEngineering` | ❌ W3 | ⬜ pending |
 | 30-07-02 | 07 | 3 | VERT-02, VERT-03 | capability/injection | `pnpm --filter @pikar/backend test -- verticalEngineering` | ❌ W3 | ⬜ pending |
-| 30-08-01 | 08 | 4 | VERT-02, VERT-03, VERT-04 | registry/provenance | `pnpm --filter @pikar/contracts test -- skillBodies && pnpm --filter @pikar/backend test -- verticalPackRegistry` | ❌ W4 | ⬜ pending |
+| 30-08-01 | 08 | 4 | VERT-02, VERT-03, VERT-04 | registry/provenance | `vitest run src/skills/skillBodies.test.ts` (contracts); `vitest run convex/verticalPackBinding.test.ts convex/verticalEvalEvidence.test.ts --maxWorkers=1` (backend); `node packages/backend/scripts/run-eval-vertical.mjs --fixtures-only` | ✅ current equivalents | ✅ offline plus exact production candidate-only read-back (2026-09-25); no eval pass |
 | 30-08-02 | 08 | 4 | VERT-02, VERT-03 | pinned live eval | `pnpm eval:vertical -- --all-candidates --no-activate` | ❌ W4 | ⬜ pending |
 | 30-09-01 | 09 | 5 | VERT-01, VERT-02 | component/browser | `pnpm --filter @pikar/web test -- verticalPackRecommendations && pnpm --filter @pikar/web test:e2e -- e2e/vertical-packs.spec.ts` | ❌ W5 | ⬜ pending |
 | 30-09-02 | 09 | 5 | VERT-01, VERT-02, VERT-04 | exposure decision | `pnpm --filter @pikar/backend test -- verticalPackSelection` | ❌ W5 | ⬜ pending |
@@ -99,6 +99,27 @@ dispatch integration test. These counts qualify the local implementation boundar
 Task 30-08-02 and every manual-only row remain pending. No paid full-corpus evaluation,
 authenticated semantic review, qualified Legal/HR attestation, all-six responsive workflow UAT,
 two-version evidence, candidate activation or rollback drill was performed.
+
+## 2026-09-25 candidate-only requalification
+
+The original `verticalPackRegistry.test.ts` command in row 30-08-01 no longer names a file in the
+current tree. The current equivalent is `verticalPackBinding.test.ts`, backed by
+`verticalEvalEvidence.test.ts`; no passing result is attributed to the nonexistent filename.
+Direct current-tree Vitest runs passed **56/56** contracts body/provenance tests and **36/36**
+backend binding/evidence tests (13 binding, 23 evidence), both with process exit 0. The binding
+suite checks six exact LF body/hash mirrors, idempotent candidate publication, independent version
+allocation, refusal of activation without the pack gate, and dormant ordinary starts.
+`run-eval-vertical.mjs --fixtures-only` exited 0 and returned six prepared version-1 candidates;
+it explicitly reported `modelEvaluated:false`, `evidenceRecorded:false`, and
+`runtimeEnabled:false`. This is current repository/local Task 30-08-01 evidence only. It is **not**
+the paid all-candidate outcome/adversarial run of Task 30-08-02, owner acceptance, two-version
+qualification, or permission to activate Legal, HR, Data, or any other pack.
+
+The separate [production candidate read-back](30-08-PRODUCTION-CANDIDATE-READBACK-2026-09-25.md)
+found six exact v1 candidate rows, each body SHA-256 matching its local canonical adaptation,
+with no active row for any of them and no `vertical-bio` row. This is a current-status and
+source-identity checkpoint, not evaluation evidence or proof of every runtime exposure path.
+Task 30-08-02, owner review and all subsequent activation/rollback gates remain open.
 
 ---
 

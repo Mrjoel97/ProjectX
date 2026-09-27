@@ -12,6 +12,13 @@ created: 2026-08-10
 > Per-phase validation contract for an evidence map that must remain thin, truthful, and tied to
 > the controls the repository actually operates.
 
+> **2026-09-24 edition hold:** ISO's published-edition record now names ISO 9001:2026 (published
+> 2026-09-16), and its 2015 record marks this map's baseline withdrawn. The existing structure,
+> pointer and control tests verify only the historical 2015 + Amendment 1:2024 map. They cannot
+> turn GOVN-02's explicitly 2015-scoped foundation into a current-edition alignment. The original
+> owner semantic review remains open; a separate licensed 2026 requirements review, qualified
+> clause-by-clause rebaseline and new owner verdict are required before any current-edition claim.
+
 ---
 
 ## Test Infrastructure
@@ -21,7 +28,7 @@ created: 2026-08-10
 | **Framework** | Node assertions for the Markdown artifact; existing Vitest/convex-test suites for cited controls; existing eval self-check |
 | **Config file** | Existing repository/package configs; no new framework or dependency |
 | **Quick run command** | `node -e "const s=require('fs').readFileSync('docs/governance/iso-9001-conformance-map.md','utf8'); if(!s.includes('ISO 9001:2015')) throw new Error('missing baseline'); console.log('map readable')"` |
-| **Full suite command** | `pnpm --filter @pikar/backend exec vitest run convex/auditImmutability.test.ts convex/worm.test.ts convex/skills.test.ts convex/deadLetters.test.ts convex/notifications.test.ts --maxWorkers=1` plus `node packages/backend/scripts/run-eval-golden.mjs --self-check` and `node scripts/check-playbooks.mjs check` |
+| **Full suite command** | `pnpm --filter @pikar/backend test -- convex/auditImmutability.test.ts convex/worm.test.ts convex/skills.test.ts convex/deadLetters.test.ts convex/notifications.test.ts --maxWorkers=1` plus `node packages/backend/scripts/run-eval-golden.mjs --self-check` and `node scripts/check-playbooks.mjs check` |
 | **Estimated runtime** | ~3–5 minutes offline; live WORM/certification review remain manual-only |
 
 ---
@@ -32,8 +39,10 @@ created: 2026-08-10
   suite.
 - **After every plan wave:** Run the full offline suite above and the conformance-map integrity
   assertions.
-- **Before `$gsd-verify-work`:** Full offline suite green, every local evidence pointer resolved,
-  owner claim-boundary review complete, and live-only evidence labelled honestly.
+- **Before `$gsd-verify-work` for original GOVN-02:** Full offline suite green, every local evidence
+  pointer resolved, owner review of the historical 2015 scope complete, and live-only evidence
+  labelled honestly. Keep the separate 2026 rebaseline hold on any current-edition claim; historical
+  acceptance does not clear it.
 - **Max feedback latency:** 5 minutes offline.
 
 ---
@@ -43,7 +52,7 @@ created: 2026-08-10
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
 | 24-01-01 | 01 | 1 | GOVN-02 groundwork | static structure/claim boundary | `node -e "const fs=require('fs'); const p='docs/governance/iso-9001-conformance-map.md'; const s=fs.readFileSync(p,'utf8'); for(const x of ['ISO 9001:2015','Amendment 1:2024','defined scope','not a certificate']) if(!s.toLowerCase().includes(x.toLowerCase())) throw new Error('missing '+x); console.log('ok')"` | ❌ created in task |
-| 24-01-02 | 01 | 1 | GOVN-02 groundwork | evidence-family control suites | `pnpm --filter @pikar/backend exec vitest run convex/auditImmutability.test.ts convex/worm.test.ts convex/skills.test.ts convex/deadLetters.test.ts convex/notifications.test.ts --maxWorkers=1` | ✅ existing |
+| 24-01-02 | 01 | 1 | GOVN-02 groundwork | evidence-family control suites | `pnpm --filter @pikar/backend test -- convex/auditImmutability.test.ts convex/worm.test.ts convex/skills.test.ts convex/deadLetters.test.ts convex/notifications.test.ts --maxWorkers=1` | ✅ existing |
 | 24-01-03 | 01 | 1 | GOVN-02 groundwork | static clause/status coverage + eval self-check | `node packages/backend/scripts/run-eval-golden.mjs --self-check` plus the plan's Node map assertion | ✅ existing runner / assertion created in task |
 | 24-02-01 | 02 | 2 | GOVN-02 | exact corrective-action header and evidence-chain review | Run the exact **Corrective-action index assertion** below, followed by opening every linked artifact | ❌ map section created in task |
 | 24-02-02 | 02 | 2 | GOVN-02 | matrix/index structure, status vocabulary, pointer resolution and anti-overclaim | Run the exact **Map integrity assertion** below | ❌ map tables created during execution; one-off assertion is plan-owned and persists no checker |
@@ -94,7 +103,7 @@ Node assertions and the cited control suites rather than a new compliance engine
 | Clause applicability and claim boundary are semantically honest | GOVN-02 | Applicability and certification language require judgment; syntax cannot establish conformity | Owner reads scope/status/gap rows and confirms the map does not claim certification or organization-wide conformity; obtain qualified ISO review before any external conformity statement |
 | Real S3 Object Lock durability/delete refusal | GOVN-02 evidence boundary | Requires configured AWS Object-Lock infrastructure and credentials | Cite dated live evidence only if a real object shows COMPLIANCE mode, retention/checksum, and refused delete; otherwise retain `conditional/unverified in live infrastructure` |
 | Clauses 5, 7.2–7.4, 9.2, and 9.3 remain organization-wide/not assessed | GOVN-02 anti-theater boundary | Repository tests cannot prove leadership policy, competence, internal-audit program, or management review | Confirm these rows are not relabelled from owner checkpoints, CI, GSD verification, or product authorization controls |
-| ISO edition re-baseline | GOVN-02 maintenance | The next ISO 9001 edition is not yet this phase's published baseline | Confirm the map names 2015 + Amd 1:2024 and a future review trigger, without guessing new-edition requirements |
+| ISO edition re-baseline | Current-edition claim gate, separate from GOVN-02's 2015 scope | ISO 9001:2026 was published on 2026-09-16 and the mapped 2015 edition is withdrawn | Hold current-edition claims; review the licensed 2026 requirements with a qualified reviewer, update the clause/evidence/gap matrix, and obtain a fresh owner verdict. Do not infer equivalence from the historical map. |
 
 ---
 

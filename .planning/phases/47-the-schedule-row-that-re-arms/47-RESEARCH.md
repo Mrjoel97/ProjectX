@@ -1,5 +1,20 @@
 # 47-RESEARCH — the G25 consuming phase: a schedule row that re-arms, a per-run reservation, a DLQ
 
+## 2026-09-24 evidence-status update
+
+The original findings below describe the gated implementation design, not permission to build it. Since they were written, `convex/dstProbe.ts` and `collect-recurrence-evidence.mjs` have landed. The playbook records four production jobs armed and confirmed pending on 2026-09-09: Auckland (2026-09-26), Lord Howe (2026-10-03), Berlin (2026-10-25), and New York (2026-11-01). As of this update, none of those fire times has arrived, so there is no fired trace or `dst-boundary` artifact. Preserve the module and export names until the last job fires. `29-RECURRENCE-DECISION.md` still says `defer`; neither a green collector self-check nor an armed job changes that. `oauth-expiry-reauth` still needs a real grant and elapsed expiry/reconnect observation. Planning should therefore separate bounded evidence collection from the later, gated table build and must not create a synthetic live artifact.
+
+Two additional 2026-09-24 findings make a simple “collect two traces, then build” plan unsound. First, the production DST collector refused `UNREACHABLE` from this shell: the backend environment has no valid linked deployment, so current pending state was not observed. Second, the OAuth collector's former `OBSERVED` path measured silent **access-token** refresh, not seven-day grant expiry, explicit reconnect and absence of a catch-up burst. It has been changed to refuse that weaker path without making a provider read or writing an artifact. Finally, ADR-046 says the D1-D8 matrix rows move to `pass` only after implementation and tests, while the existing `defer` guards forbid the recurrence implementation. That is a genuine governance cycle requiring an explicit owner-reviewed bootstrap decision; neither artifact relabelling nor an ADR filename trick is a resolution.
+
+The current gate run was `--matrix` exit 0, `--eligibility` exit 1 with **14** problems, and `--validate-decision` exit 0. The extra eligibility problem beyond missing rows is important: `provider-read` is marked `pass/live` in the historical artifact, but its citation is an agent-written summary, not a collector-produced live artifact, and the current gate rejects it. A fresh bounded unattended provider-read artifact is needed; the old row is not presently eligible despite its frontmatter status.
+
+## Validation Architecture
+
+- **Fast feedback:** `pnpm --dir packages/backend exec vitest run convex/dstProbe.test.ts convex/routineDecision.test.ts convex/routines.test.ts`; `node packages/backend/scripts/collect-recurrence-evidence.mjs --self-check`; `node packages/backend/scripts/check-routine-gate.mjs --self-check`.
+- **Decision feedback:** run `--matrix`, `--eligibility`, and `--validate-decision` on the actual decision file and retain all exit codes. While `defer` is current, `--eligibility` is expected to refuse and `--validate-decision` is expected to pass; a green self-check is not live evidence.
+- **Live-only acceptance:** inspect the paired production `clock.dst_probe` audit rows and the collector's `OBSERVED` artifact after an actual transition; inspect a real Google expiry/reauth and unattended provider-read trace without token or message content. These observations cannot be replaced by unit tests or a planning summary. If a prerequisite is absent, record the refusal and leave the gate closed.
+- **Regression boundary:** backend typecheck, the closed Convex module/scheduler inventory test, strict planning check, and playbook check. A future gated implementation must add specific tests for the approved schedule, reservation, idempotency, overlap, pause and DLQ paths before changing the decision.
+
 **Measured 2026-09-09 at `dd13f77`.** Research only. No code, no schema change — this note
 establishes what the tree already provides so the phase builds the smallest thing that satisfies
 ADR-046, and asks the four questions that materially change the design.

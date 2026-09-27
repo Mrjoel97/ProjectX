@@ -139,3 +139,22 @@ Task 3 remains the next plan step, but execution stops here because the upstream
 with exact release/skill/evaluation identities; live UAT then still requires its own bounded
 authorization and founder BRAND judgment. No current deployment, live observation, owner acceptance,
 external enablement, send, or publish claim is made.
+
+## 2026-09-24 current-tree offline recheck
+
+The current baseline file is 13,123 bytes, SHA-256
+`6267c1c44d7d6a31061a59cad7e817d2ee6e3d1cbc511554a0e42a688cbf4cc6`, and still has
+`accepted:false`. It now records the non-certifying `eadd4317` golden attempt: its first cockpit
+case failed with `EVAL_MODEL_RESPONSE_FAILED_CONSERVATIVE_HTTP_400` and no case verdict. The
+repository HEAD is `10123eb2ee910bcd35c6a7ce4194e954a6b6134b`; the shared worktree has
+uncommitted changes, so HEAD is not an exact source digest.
+
+On this tree, `pnpm --filter @pikar/core test -- documentGen` passed 27/27,
+`pnpm --filter @pikar/backend test -- convex/createdDocs.test.ts convex/documentDraft.test.ts convex/cockpitTools.test.ts convex/runCockpitAgent.test.ts`
+passed 230/230, and `pnpm --filter @pikar/web test -- "app/(app)/dashboard/workspace/outputCard.test.ts"`
+passed 13/13. `pnpm --filter @pikar/web test:e2e -- e2e/cockpit-created-document.spec.ts --list`
+discovered setup plus two Chromium cases but did not run them. The package scripts were used because
+`pnpm --filter ... exec vitest/playwright` did not resolve the Windows binaries in this environment.
+Current-tree backend and web `typecheck` scripts both exited 0.
+This recheck refreshes only the offline-tested layer; it does not change the live, deployed, or
+owner-accepted disposition above.
