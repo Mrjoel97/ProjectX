@@ -642,6 +642,9 @@ async function expireHeldRows(
       await expireOrderInTx(ctx, order, now);
       continue;
     }
+    // A payment-attempt link is also an order ownership signal. Losing just the orderId must
+    // never turn an active checkout hold into a standalone reservation that this drain may free.
+    if (reservation.attemptId) throw new Error("RESERVATION_LINK_INCOMPLETE");
     const stock = await ctx.db
       .query("tenantStock")
       .withIndex("by_tenant_product", (q) =>

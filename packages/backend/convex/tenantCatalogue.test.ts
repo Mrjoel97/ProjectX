@@ -85,6 +85,39 @@ function harness() {
 }
 
 describe("tenant catalogue adapter", () => {
+  test("the scheduled standalone expiry actually lands without a later checkout", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-27T00:00:00.000Z"));
+      const t = harness();
+      const userId = await t.run((ctx) => ctx.db.insert("users", { email: "idle@example.test" }));
+      const actor = t.withIdentity({ subject: `${userId}|session` });
+      const created = await actor.mutation(createProduct, {
+        sku: "idle-lamp",
+        variant: "one",
+        currency: "USD",
+        priceMinor: 1250,
+        status: "active",
+        goodsKind: "physical",
+        stock: { kind: "finite", onHand: 1, reservationTtlMs: 60_000 },
+      });
+      await actor.mutation(reserveProduct, {
+        productId: created.productId,
+        expectedStockRevision: 1,
+        quantity: 1,
+      });
+      await t.finishAllScheduledFunctions(vi.runAllTimers);
+      const landed = await t.run(async (ctx) => ({
+        stock: await ctx.db.query("tenantStock").first(),
+        hold: await ctx.db.query("tenantReservations").first(),
+      }));
+      expect(landed.stock?.reserved).toBe(0);
+      expect(landed.hold?.status).toBe("expired");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("standalone holds journal an exact due timer with tenant-bound replay-safe release", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {

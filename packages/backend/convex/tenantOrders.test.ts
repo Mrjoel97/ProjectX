@@ -1193,6 +1193,44 @@ describe("local tenant order adapter", () => {
     expect((await t.run((ctx) => ctx.db.query("tenantStock").collect()))[0]?.reserved).toBe(1);
   });
 
+  test("expiry drain refuses an attempt-linked hold with a missing order link", async () => {
+    const t = harness();
+    const a = await setup(t, "orphan-attempt@example.test");
+    const placed = await a.actor.mutation(placeOrder, {
+      cartId: a.cart.cartId,
+      expectedCartRevision: 1,
+      retryKey: "orphan-attempt",
+    });
+    await t.run(async (ctx) => {
+      const held = await ctx.db
+        .query("tenantReservations")
+        .withIndex("by_tenant_order", (q) =>
+          q.eq("tenantId", String(a.userId)).eq("orderId", placed.orderId as never),
+        )
+        .unique();
+      if (!held) throw new Error("MISSING_HOLD");
+      await ctx.db.patch(held._id, { orderId: undefined, expiresAt: 1 });
+    });
+    const before = await t.run(async (ctx) => ({
+      order: await ctx.db.get(placed.orderId as never),
+      attempts: await ctx.db.query("tenantOrderAttempts").collect(),
+      holds: await ctx.db.query("tenantReservations").collect(),
+      stocks: await ctx.db.query("tenantStock").collect(),
+    }));
+    expect(before.holds[0]?.attemptId).toBe(placed.attemptId);
+    await expect(
+      a.actor.mutation(reconcileExpiredProduct, { productId: a.productId }),
+    ).rejects.toThrow("RESERVATION_LINK_INCOMPLETE");
+    expect(
+      await t.run(async (ctx) => ({
+        order: await ctx.db.get(placed.orderId as never),
+        attempts: await ctx.db.query("tenantOrderAttempts").collect(),
+        holds: await ctx.db.query("tenantReservations").collect(),
+        stocks: await ctx.db.query("tenantStock").collect(),
+      })),
+    ).toEqual(before);
+  });
+
   test("order creation durably arms exact expiry; timer landing is tenant-bound and idempotent", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
