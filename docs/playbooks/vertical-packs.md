@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-27 — vertical discovery now reads the exact tenant-confirmed artifact
+IDs first (bounded to two per six packs), then its existing five-row fallback sample. A
+data-pack preview with two confirmed ready CSV files beyond that sample failed before the
+repair and passes afterward; deleting those files restores `validator-unavailable`. Read-time
+tenant ownership, ready status and sealed-folder checks still apply. The focused controls,
+binding and telemetry suites passed 22/22 and backend TypeScript passed. This is local source
+selection integrity, not a paid native evaluation, owner review or pack activation.
+
 Last verified: 2026-09-27 — the tenant `verticalPacks.configure` mutation now preserves an
 already selected legal-playbook document when a workload-choice update omits the optional
 `legalPlaybookDocId`. A new test reproduced the loss before the repair and passed afterward;

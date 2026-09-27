@@ -83,10 +83,23 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
     profile?.verticalPreferences?.legalPlaybookDocId === undefined
       ? null
       : await ctx.db.get(profile.verticalPreferences.legalPlaybookDocId);
-  const docs = await ctx.db
+  // Confirmation is an exact, bounded source selection (two artifacts for each of six packs).
+  // A five-row catalogue sample must not hide sources the tenant explicitly selected earlier.
+  const confirmedIds = new Set(
+    (profile?.verticalPreferences?.confirmedWorkloads ?? [])
+      .slice(0, VERTICAL_IDS.length)
+      .flatMap((row) => row.artifactIds.slice(0, 2)),
+  );
+  const confirmedDocs = [];
+  for (const id of confirmedIds) {
+    const doc = await ctx.db.get(id);
+    if (doc?.tenantId === tenantId && doc.status === "ready") confirmedDocs.push(doc);
+  }
+  const sampledDocs = await ctx.db
     .query("vaultDocuments")
     .withIndex("by_tenant_status", (q) => q.eq("tenantId", tenantId).eq("status", "ready"))
     .take(5);
+  const docs = [...confirmedDocs, ...sampledDocs.filter((doc) => !confirmedIds.has(doc._id))];
   const sealed = await sealedIn(ctx, docs);
   const readable = docs.filter((doc) => !sealed.has(doc._id));
   const hasSource = readable.some((doc) => Boolean(doc.text?.trim()));

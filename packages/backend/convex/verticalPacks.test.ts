@@ -240,4 +240,62 @@ describe("vertical controls use native tenant/version state", () => {
     expect(profile?.verticalPreferences?.legalPlaybookDocId).toBe(artifact);
     expect(profile?.verticalPreferences?.needs).toEqual(["legal", "data"]);
   });
+
+  test("a confirmed data source remains reachable beyond the five-row discovery window", async () => {
+    const { t, asA, a } = await setup();
+    await t.mutation(internal.skills.seedVerticalCandidates, {});
+    const dataDocs = await t.run(async (ctx) => {
+      const base = {
+        tenantId: String(a),
+        title: "Prior work",
+        kind: "document" as const,
+        category: "workspace-docs" as const,
+        source: "agent" as const,
+        size: 10,
+        contentHash: "h",
+        status: "ready" as const,
+        createdAt: 1,
+      };
+      for (let i = 0; i < 5; i++)
+        await ctx.db.insert("vaultDocuments", {
+          ...base,
+          title: `Unrelated text ${i}`,
+          mimeType: "text/markdown",
+          text: "Unrelated source",
+        });
+      const storageId = await ctx.storage.store(
+        new Blob(["name,value\na,1\n"], { type: "text/csv" }),
+      );
+      const first = await ctx.db.insert("vaultDocuments", {
+        ...base,
+        title: "Confirmed data one",
+        mimeType: "text/csv",
+        storageId,
+      });
+      const second = await ctx.db.insert("vaultDocuments", {
+        ...base,
+        title: "Confirmed data two",
+        mimeType: "text/csv",
+        storageId,
+      });
+      return [first, second] as const;
+    });
+    await asA.mutation(api.verticalPacks.configure, {
+      needs: ["data"],
+      reviewReady: ["data"],
+      confirmWorkload: { verticalId: "data", artifactIds: [...dataDocs] },
+    });
+    const prepare = () =>
+      t.query(internal.verticalPacks.prepare, {
+        tenantId: String(a),
+        verticalId: "data",
+        previewVersion: 1,
+      });
+    expect(await prepare()).toMatchObject({ ok: true, dataSourceId: dataDocs[0] });
+    await t.run(async (ctx) => {
+      await ctx.db.delete(dataDocs[0]);
+      await ctx.db.delete(dataDocs[1]);
+    });
+    expect(await prepare()).toMatchObject({ ok: false, reason: "validator-unavailable" });
+  });
 });
