@@ -3,6 +3,7 @@
 **Disposition:** evidence correction and implementation handoff only. Operational recurrence remains
 `defer`; the six-file candidate remains isolated under the accepted `build-for-evidence` stage. This
 record does not accept D6, ROUT-02, eligibility, tenant activation, a provider call or release.
+**Current-source review:** pending
 
 ## Exact-source integrity
 
@@ -25,6 +26,11 @@ reviewed pre-commit bytes are not available in Git (`git log` shows the candidat
 cite that prior hash-bound GO as an independent review of these current bytes. This finding changes
 the next action: obtain a new exact-source independent review before treating the candidate as
 reviewed design evidence. Do not rewrite the historical review's hashes to hide the mismatch.
+The registered free gate `scripts/check-recurrence-source-review.mjs --self-test` now exercises
+negative controls and checks all six current raw-file hashes against this pending audit on every
+CI run. It refuses an absent correction, a missing or stale audit hash, or a review identity that
+contradicts the pending classification. This guards the evidence identity; it is not the missing
+independent review.
 
 Current controls still have value but are narrower: explicit candidate Vitest passed **35/35**;
 candidate TypeScript passed; `routineDecision`, `routines` and `dstProbe` passed **108/108**;

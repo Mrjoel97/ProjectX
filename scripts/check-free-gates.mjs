@@ -70,6 +70,7 @@ const GATES = [
   { path: "scripts/check-phase49-qualification.mjs", flag: "--self-test" },
   { path: "scripts/check-phase50-merchant-decision.mjs", flag: "--self-test" },
   { path: "scripts/check-provider-lane.mjs", flag: "--self-test" },
+  { path: "scripts/check-recurrence-source-review.mjs", flag: "--self-test" },
   { path: "scripts/check-tenant-commerce-boundary.mjs", flag: "--self-test" },
   { path: "scripts/smoke-hubspot-read.mjs", flag: "--self-test" },
   { path: "scripts/smoke-paypal-read.mjs", flag: "--self-test" },
