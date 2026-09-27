@@ -35,8 +35,11 @@ vi.mock("convex/react", () => ({
     return start;
   },
   useMutation: (ref: never) => {
-    if (getFunctionName(ref) === "verticalPacks:configure") return configure;
-    expect(getFunctionName(ref)).toBe("verticalPacks:setDisabled");
+    const name = getFunctionName(ref);
+    if (name === "verticalPacks:configure") return configure;
+    if (name === "verticalPacks:recordShown" || name === "verticalPacks:recordAccepted")
+      return vi.fn();
+    expect(name).toBe("verticalPacks:setDisabled");
     return disable;
   },
 }));

@@ -1,5 +1,10 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-27 — the profile workload-confirmation container test's shared
+> recommendation-card mock now recognizes the newly mounted shown/accepted telemetry hooks.
+> This repairs test wiring only: the full web suite passes 69/69 files locally, while the
+> release and authenticated-UAT boundaries of vertical packs are unchanged.
+
 > Last verified: 2026-09-27 (watch-gate acknowledgment only - **this entry is a `Last verified`
 > bump plus a forward record, NOT a verification of the sections below.** The audit/governance
 > read plane described further down is deliberately UNCHANGED. `reportsGovernance.test.ts` failed

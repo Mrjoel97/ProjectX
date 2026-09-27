@@ -5,7 +5,8 @@
 > the exact active candidate before the ordinary start action. Telemetry failure cannot block
 > the start. A card-version change causes a new impression attempt; identical rerenders do not.
 > Local UI tests cover these interactions, but authenticated browser UAT and actual vertical
-> release remain open.
+> release remain open. The full web suite also covers the collapsed workload form: its shared
+> card-container mock recognizes the new telemetry hooks, and all 69 files pass locally.
 
 > 2026-09-20 — BETA-03 first-send cockpit bridge: a completed-profile `onboarding.firstSendOffer`
 > now has an ephemeral cockpit consumer. The launcher creates a normal thread, marks the plan with
