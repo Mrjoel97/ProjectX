@@ -173,6 +173,23 @@ describe("tenant inventory pure rules", () => {
     expect(consumeInventory(held.stock, held.reservation, 901_000, 2)).toMatchObject({
       kind: "late_paid_exception",
     });
+    expect(consumeInventory(released.stock, released.reservation, 2_000, 3)).toEqual({
+      kind: "released_paid_exception",
+      stock: released.stock,
+      reservation: released.reservation,
+    });
+    expect(() => consumeInventory(released.stock, released.reservation, 2_000, 2)).toThrow(
+      "STALE_REVISION",
+    );
+    expect(() =>
+      consumeInventory(released.stock, { ...released.reservation, tenantId: "tenant-b" }, 2_000, 3),
+    ).toThrow("FOREIGN_PRODUCT");
+    expect(() =>
+      consumeInventory(released.stock, { ...released.reservation, quantity: 0 }, 2_000, 3),
+    ).toThrow("INVALID_QUANTITY");
+    expect(() =>
+      consumeInventory(released.stock, { ...released.reservation, expiresAt: -1 }, 2_000, 3),
+    ).toThrow("INVALID_TIME");
   });
 
   test("reservation ids, quantities, product refs and stock shape are bounded", () => {

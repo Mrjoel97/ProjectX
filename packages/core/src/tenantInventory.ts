@@ -277,6 +277,20 @@ export function consumeInventory(
   if (stock.revision !== expectedRevision) throw new Error("STALE_REVISION");
   if (!Number.isSafeInteger(now) || now < 0) throw new Error("INVALID_TIME");
   if (
+    !Number.isSafeInteger(reservation.quantity) ||
+    reservation.quantity < 1 ||
+    reservation.quantity > MAX_QUANTITY
+  )
+    throw new Error("INVALID_QUANTITY");
+  if (!Number.isSafeInteger(reservation.expiresAt) || reservation.expiresAt < 0)
+    throw new Error("INVALID_TIME");
+  // A payment that arrives after an explicit release (for example cancellation)
+  // cannot consume returned stock, even when the original expiry is still future.
+  // Keep it distinct from an expired hold so the eventual provider/order adapter
+  // can journal and reconcile the correct cause without guessing.
+  if (reservation.status === "released")
+    return { kind: "released_paid_exception" as const, stock, reservation };
+  if (
     reservation.status === "expired" ||
     (reservation.status === "held" && now >= reservation.expiresAt)
   ) {
