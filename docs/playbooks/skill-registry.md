@@ -1,5 +1,15 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-27 (Wave 1 golden target-guard acknowledgment only). The free golden
+> preflight now requires an explicit named `dev:` or `local:` `CONVEX_DEPLOYMENT` before querying
+> readiness; missing, anonymous and production declarations fail closed. A declared name alone is
+> not actual `/instance_name` or source proof. The code-owned golden evaluator revision and 46-case
+> manifest are `2026-09-11.budgeted-evaluator.03cd0dcac6b310b93920e702b8cc868a92297117573e6a474d7c639136d1ca00`;
+> the 57-fixture self-check passes, while the current real preflight refuses before a budget opens.
+> Because `skill.ts` is also in the web-recipe evaluator inventory, its normalized digest moved to
+> `5faad16e49354a4a48735f91fa602a9b3bac0c807baad74579f5f7fd0b493d00` and the old
+> exact-revision evidence is retired. This makes no activation or paid-verdict claim.
+
 > Last verified: 2026-09-27 (watch-gate acknowledgment only - **a `Last verified` bump plus a forward
 > record, NOT a verification of the sections below.** No skill or prompt body changed. The current
 > evaluator source moved the golden revision to

@@ -1,4 +1,6 @@
-import { writeSync } from "node:fs";
+import { existsSync, readFileSync, writeSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const PREFLIGHT_PASSED_LINE =
   "[eval:golden] provider preflight PASSED (secret-safe; no budget opened)";
@@ -10,6 +12,7 @@ export const PREFLIGHT_REFUSAL_REASONS = Object.freeze([
   "tavily_credit_attestation_invalid",
   "backend_unavailable",
   "production_target_forbidden",
+  "named_nonproduction_target_required",
   "transport_error",
   "readiness_response_invalid",
 ]);
@@ -31,11 +34,22 @@ export class ProviderPreflightRefusal extends Error {
   }
 }
 
-/** The shared Convex runner permits an explicit production override for other smoke gates.
- * The golden corpus is a non-production qualification and must never inherit that override. */
-export function assertGoldenNonProductionTarget(env = process.env) {
+const backendEnvPath = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env.local");
+
+/** The shared Convex runner permits a production override for other smoke gates. A golden run
+ * also needs an explicit named dev/local selection: a live anonymous listener is not a qualified
+ * target. This is necessary but not sufficient; operators still verify /instance_name and source. */
+export function assertGoldenNonProductionTarget(
+  env = process.env,
+  envFile = existsSync(backendEnvPath) ? readFileSync(backendEnvPath, "utf8") : "",
+) {
   if (env.PIKAR_CONVEX_TARGET === "prod")
     throw new ProviderPreflightRefusal("production_target_forbidden");
+  const fileDeclarations = [...envFile.matchAll(/^CONVEX_DEPLOYMENT\s*=\s*([^\r\n#]*)/gm)];
+  const deployment =
+    env.CONVEX_DEPLOYMENT ?? (fileDeclarations.length === 1 ? fileDeclarations[0][1].trim() : null);
+  if (!/^(?:dev|local):[A-Za-z0-9][A-Za-z0-9_-]*$/.test(deployment ?? ""))
+    throw new ProviderPreflightRefusal("named_nonproduction_target_required");
   return true;
 }
 

@@ -73,11 +73,33 @@ test("an unrecognized refusal reason cannot reach terminal output", () => {
 });
 
 test("golden readiness refuses an ambient production target before a deployment call", () => {
-  assert.equal(assertGoldenNonProductionTarget({}), true);
-  assert.equal(assertGoldenNonProductionTarget({ PIKAR_CONVEX_TARGET: "dev" }), true);
+  const namedLocal = "CONVEX_DEPLOYMENT=local:local-golden-test # team: test, project: test";
+  assert.equal(assertGoldenNonProductionTarget({}, namedLocal), true);
+  assert.equal(assertGoldenNonProductionTarget({ PIKAR_CONVEX_TARGET: "dev" }, namedLocal), true);
   assert.throws(
-    () => assertGoldenNonProductionTarget({ PIKAR_CONVEX_TARGET: "prod" }),
+    () => assertGoldenNonProductionTarget({ PIKAR_CONVEX_TARGET: "prod" }, namedLocal),
     (error) =>
       error instanceof ProviderPreflightRefusal && error.reason === "production_target_forbidden",
+  );
+});
+
+test("golden readiness needs an explicitly named non-production deployment", () => {
+  for (const declared of [
+    "",
+    "CONVEX_URL=http://127.0.0.1:3210",
+    "CONVEX_DEPLOYMENT=anonymous:anonymous-Pikar-Ai",
+    "CONVEX_DEPLOYMENT=prod:production-example",
+  ]) {
+    assert.throws(
+      () => assertGoldenNonProductionTarget({}, declared),
+      (error) =>
+        error instanceof ProviderPreflightRefusal &&
+        error.reason === "named_nonproduction_target_required",
+      `refuse missing, anonymous or production target: ${declared.split("=")[0]}`,
+    );
+  }
+  assert.equal(
+    assertGoldenNonProductionTarget({ CONVEX_DEPLOYMENT: "dev:named-golden-test" }, ""),
+    true,
   );
 });

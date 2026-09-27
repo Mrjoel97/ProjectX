@@ -17,9 +17,9 @@ reviewed: 2026-09-27
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-27 serialized 71-file aggregate exited 0 after the authenticated browser hand-off assertion changed one pinned test file. The 2026-09-26 digest and earlier 61-file result are historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-27 serialized 71-file aggregate exited 0 after the Wave 1 golden named-target guard changed shared evaluator/contract artifacts. The preceding hand-off digest and earlier results are historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `5bb951c5ead33c303a43a02d051ded690ae872ef5dfcf0878b9fda771cf31cbd`
+Artifact-set SHA-256: `ab4cf8bd10e75e431b1c198a6532882e24030723f5b82cc70de2e074f5868682`
 
 The new browser assertion confirms persisted signup JWT and the same authenticated identity's backend owner flag before requiring the owner-only recipe heading. The targeted fresh-stack matrix and full aggregate both passed; the earlier intermittent heading failure remains root-cause-unproven, not declared fixed. See `49-VERIFICATION.md` for exact planes and the unchanged Wave 7/8 boundary.
 
