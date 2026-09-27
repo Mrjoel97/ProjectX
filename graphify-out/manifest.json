@@ -45,8 +45,8 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1789994815.9627168,
-    "ast_hash": "04c8bc15013e39601d4183b1666a930a",
+    "mtime": 1790546429.7748415,
+    "ast_hash": "a82e2eb96919fe384799d4960b4428c9",
     "semantic_hash": ""
   },
   "packages/audit/package.json": {
@@ -180,8 +180,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skill.ts": {
-    "mtime": 1790542719.1605787,
-    "ast_hash": "1e39f4adb93d6411545105ac20cc2842",
+    "mtime": 1790546811.4664,
+    "ast_hash": "a4ec512cc618ec21a69f0da7fffbd982",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/executiveAgentClassifier.ts": {
@@ -1585,13 +1585,13 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1790521300.2349985,
+    "mtime": 1790546687.789858,
     "ast_hash": "ecc4eb0cbb422a0eb1378237033803cf",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1790542838.1003554,
-    "ast_hash": "e9c367570f114e6f5d74c18d1f31a6f2",
+    "mtime": 1790547633.8888297,
+    "ast_hash": "46a6a2c6b98135e8cb03a5a25beb9da3",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -6080,8 +6080,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/ci-gate.md": {
-    "mtime": 1790504733.882494,
-    "ast_hash": "8f285142d76e1b6c2a378fa0aebce55a",
+    "mtime": 1790546689.0214763,
+    "ast_hash": "004c3dd12e0d0f3f60281643de8ac83c",
     "semantic_hash": ""
   },
   "packages/backend/convex/createdDocs.test.ts": {
@@ -9495,8 +9495,8 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-suite-manifest.json": {
-    "mtime": 1790542696.277866,
-    "ast_hash": "f4a520a2e14400e842489770f03f64e6",
+    "mtime": 1790546803.779614,
+    "ast_hash": "e98d644c605894a89efc87fb278d60b3",
     "semantic_hash": ""
   },
   "packages/contracts/src/auditProjection.test.ts": {
@@ -11735,8 +11735,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/29-unified-knowledge-and-routines/29-SMOKE-SEAM-DEBT.md": {
-    "mtime": 1788686869.348459,
-    "ast_hash": "2a7bcb668e49c769b6f9a023db065459",
+    "mtime": 1790546592.5255034,
+    "ast_hash": "00924f2a1942789a02e2ce9c782e8dc2",
     "semantic_hash": ""
   },
   ".planning/phases/29-unified-knowledge-and-routines/29-VERIFICATION.md": {
@@ -12795,8 +12795,8 @@
     "semantic_hash": ""
   },
   "scripts/check-free-gates.mjs": {
-    "mtime": 1790262803.3824437,
-    "ast_hash": "6f0ff1e01649fd34d346ab0bf0e2cdfd",
+    "mtime": 1790546325.4658267,
+    "ast_hash": "ce63a4b38b6dc12f20699a50409d241c",
     "semantic_hash": ""
   },
   ".planning/phases/45-free-gates-and-a-connector-nobody-could-connect/45-SUMMARY.md": {
@@ -13380,8 +13380,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/verticalEvalCorpus.ts": {
-    "mtime": 1790499530.9610972,
-    "ast_hash": "dff12d654e900ece9b376ef53c347039",
+    "mtime": 1790547599.9850318,
+    "ast_hash": "3f11cf23d9dcd985ed84ed03b8fe9813",
     "semantic_hash": ""
   },
   "packages/core/src/dataProfile.test.ts": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790535159.0774403,
-    "ast_hash": "84e1fd4dfe7d8045d0c802e2a525b9d8",
+    "mtime": 1790547660.2037537,
+    "ast_hash": "d5ca85f3274811f70cde4913657f7770",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -13940,8 +13940,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-MAP.md": {
-    "mtime": 1790543589.7731364,
-    "ast_hash": "b40f959f4fa34331b44059a3b700c5db",
+    "mtime": 1790548337.5821657,
+    "ast_hash": "efbd4a8d46af9dbe1f481c8f2bb7fe3e",
     "semantic_hash": ""
   },
   ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-03-SUMMARY.md": {
@@ -14835,8 +14835,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-07-SUMMARY.md": {
-    "mtime": 1790543588.4661386,
-    "ast_hash": "ed49bac9c184a116651fe42c2f0f79b9",
+    "mtime": 1790548336.4184666,
+    "ast_hash": "c06b557baeff361b30ef75314ec4535f",
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-RESEARCH.md": {
@@ -14855,8 +14855,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md": {
-    "mtime": 1790543587.2672188,
-    "ast_hash": "ca112d6e4bc463dc4d0c8bf9b618c6a2",
+    "mtime": 1790548335.2219596,
+    "ast_hash": "7ccfed5158951ea5dfe5a155380d63b1",
     "semantic_hash": ""
   },
   "docs/agent-work/astra-routing-status.md": {
@@ -17082,6 +17082,11 @@
   ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-TASK1-OFFLINE-2026-09-27.md": {
     "mtime": 1790523542.1471777,
     "ast_hash": "bb13310123a12ae772672611411b24b2",
+    "semantic_hash": ""
+  },
+  "scripts/check-model-provider-boundary.mjs": {
+    "mtime": 1790546615.0825367,
+    "ast_hash": "192cd6218297600092ce1768f89f316f",
     "semantic_hash": ""
   }
 }

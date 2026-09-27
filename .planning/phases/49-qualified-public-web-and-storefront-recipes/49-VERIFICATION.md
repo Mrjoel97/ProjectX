@@ -7,9 +7,19 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file source digest below after the Wave 1 settlement-integrity repin. The preceding `559de608fee74224617997e8492860fef777325bb1a0d73cbf42a79d27751412` passed on its former source and is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file source digest below after the CI model-boundary dependency and evaluator repin. The prior `d87dc6088b176a5a8df6fa8dfcbb36272a353ddf2e384b4e2883433769dbd1dd` passed on its former source and is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `d87dc6088b176a5a8df6fa8dfcbb36272a353ddf2e384b4e2883433769dbd1dd`
+Artifact-set SHA-256: `e23ed020d37dcf9aa16ed7b9f62ee6f405fc486761abceb557d77f37caaebbcc`
+
+**2026-09-28 SDK-boundary requalification:** An AST-based CI gate now refuses provider-SDK
+imports outside the two existing Convex model owners, with 11 source mutation/negative controls.
+Its pinned TypeScript 5 API added a lockfile entry, retiring source-derived golden, native vertical
+and deterministic recipe evaluator identities without changing their fixture corpora. The first
+aggregate passed the browser/build planes but correctly refused the stale vertical pin and
+strict playbook note; after regenerating the native pin and updating the watched playbooks, a
+new exact-source aggregate passed all 21 planes with stable initial/final digest, including both
+fresh browser/audit stacks, three typechecks, production build and all 31 free gates. This is
+not a provider or paid verdict, a whole-program model-route proof, or Wave 7/8 acceptance.
 
 **2026-09-28 settlement-snapshot requalification:** The golden runner now binds each free ledger poll to the opened budget and refuses malformed count/cost snapshots. Source-derived golden and dependent deterministic recipe pins changed without changing their fixture corpora. Direct red-then-green settlement tests and both evaluator self-checks pass. The full serialized Phase 49 runner passed all 21 planes with initial/final source digest equal, including two fresh disposable browser/audit stacks, three typechecks, production web build, strict documents, claim controls and all 30 free gates. The actual free golden preflight still refuses before a budget because no named non-production target is configured. No paid, live, hosted, founder or merchant acceptance follows.
 

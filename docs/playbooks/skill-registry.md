@@ -1,5 +1,16 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-28 — adding the CI-only model-provider AST dependency changed the
+> lockfile in the source-derived evaluator set, so prior golden and deterministic recipe
+> evidence identities are retired without changing either fixture corpus. The 46-case golden
+> manifest and contracts now pin
+> `2026-09-11.budgeted-evaluator.2f6e88af89b316f8a99538629bb6034f36fe139242e3ae69f842d2e75777d503`;
+> the zero-cost recipe implementation pin is
+> `361c791efb232e3465f4f7c99ff6e08a1a4cf9b3fd8027723175d8067898623f`.
+> The native vertical generated corpus was also refreshed after the lockfile change. Both
+> evaluator self-checks and the native corpus check pass; Phase 49's new exact-source aggregate
+> must pass separately. No paid verdict or skill activation follows from these repins.
+>
 > Last verified: 2026-09-28 — the golden evaluator's free settlement poll now rejects
 > malformed, inconsistent or cross-budget ledger snapshots before a quiet-window verdict.
 > The runner binds every read to its opened budget. An offline red-then-green control covers

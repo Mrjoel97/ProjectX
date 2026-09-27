@@ -51,7 +51,7 @@ export const WEB_RECIPE_EVAL_RUNNER = "eval:web-recipe-deterministic" as const;
 export const WEB_RECIPE_EVAL_FIXTURE_HASH =
   "fc9ff50300ef7de36d4b2e7f28ea32518e10d7f2ad4e18d258ec6e80caa2b379" as const;
 export const WEB_RECIPE_EVAL_IMPLEMENTATION_HASH =
-  "814049b5638fc6307c194a9101f30cec8f391668fe1fff45e86b62cfe0e71321" as const;
+  "361c791efb232e3465f4f7c99ff6e08a1a4cf9b3fd8027723175d8067898623f" as const;
 export const WEB_RECIPE_BROWSER_RUNNER = "playwright:web-recipe" as const;
 export const WEB_RECIPE_BROWSER_ROUTE = "/ops" as const;
 export const WEB_RECIPE_BROWSER_EVIDENCE_REVISION = "browser-observed-v2" as const;
@@ -1225,7 +1225,7 @@ export function hasPassingTenantEvidence(
  */
 export const AGENT_EVAL_SUITE = {
   revision:
-    "2026-09-11.budgeted-evaluator.8d2ce949da0f9f5c3e92cfe7e8751d6454b3464c7ca27f20f680c3cdaf2c5e6f",
+    "2026-09-11.budgeted-evaluator.2f6e88af89b316f8a99538629bb6034f36fe139242e3ae69f842d2e75777d503",
   casesHash: "5794b8b0a9716d76bb3cab9f513f251994ad832eaf87d443cef4b3787db6f4fa",
   caseCount: 46,
 } as const;

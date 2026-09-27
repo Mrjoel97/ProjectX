@@ -1,5 +1,13 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-09-28 - `check-model-provider-boundary.mjs` is a registered free gate.
+> It parses production Convex modules and refuses direct provider-SDK imports/re-exports,
+> including subpaths and computed dynamic imports, outside `lib/models.ts` and `llm.ts`.
+> Eleven synthetic controls and the real tree run in CI. Root `package.json` pins a stable
+> TypeScript 5 AST API as `typescript-ast` because TypeScript 7's top-level export no longer
+> exposes `createSourceFile`. This is an SDK-import boundary, not a proof against raw HTTP or
+> every possible indirect model route.
+>
 > Last verified: 2026-09-27 - `biome.json`'s `files.includes` gained two exclusions, and this is the
 > gate-level reason they are correct rather than a convenience. `compile-design-knowledge.mjs` writes
 > `packages/core/src/designKnowledge.generated.ts` AND `third_party/design-knowledge/manifest.json`

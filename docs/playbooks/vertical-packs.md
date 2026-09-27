@@ -1,5 +1,12 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — the generated native vertical evaluator revision is
+`1accbd5f9d1a91901f49bae828f106a0700f3690fbcac3b930703f7fa6c36168` after
+the lockfile dependency change; the six-lane, 40-case corpus hash remains
+`dc21fea0660d041e0c3ee5ed9b2ea0448f53c4834f9566b6c0180a11578bcc69`.
+The generator's `--check` passes. This retires older source-derived evidence; no
+native candidate is qualified or activated by regenerating the pin.
+
 Last verified: 2026-09-27 — the internal vertical telemetry writer now refuses
 `review_approved`, `review_edited` and `review_rejected` without an owned artifact and a
 bounded prior `artifact_created` observation for the same exact tenant, vertical and candidate.
