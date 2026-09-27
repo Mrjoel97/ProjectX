@@ -1,5 +1,17 @@
 # Playbook: Connected dashboard pages
 
+> Last verified: 2026-09-21 — The protected `/dashboard/sites` route is live for tenant-scoped
+> structured site and landing-page lifecycle work. It exposes honest loading, empty, unavailable,
+> stale-revision, approval, publish, and unpublish states; preview reads an exact immutable version
+> and renders the same deterministic runtime bytes used by the public path. The UI declares the
+> current hosting boundary as the Pikar platform path and does not imply custom-domain readiness.
+
+> Last verified: 2026-09-20 — Approvals now renders a bounded newest-first journey result history
+> containing only event state and typed approval/plan/request/audit references. The backend uses
+> tenant-leading indexes, append-only idempotent journey events, explicit metric denominators, and
+> settled-spend coverage; missing evidence stays unavailable rather than becoming zero. This is
+> repository/offline evidence only, not a live cohort or exact-release claim.
+
 > Last verified: 2026-09-20 — evaluation settlement rows now distinguish exact provider-observed
 > usage from a failed request booked at its full conservative ceiling. Existing dashboard dollar
 > totals remain safe because both consume the same numeric spend field; no current dashboard claims

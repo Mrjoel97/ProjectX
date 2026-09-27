@@ -1,3 +1,11 @@
+> Last verified: 2026-09-25 — Plan 20.1-01's existing read-only Drive search still reuses the
+> tenant-scoped Drive client, escapes backslashes and apostrophes before URL encoding, caps one
+> `files.list` page at 20, and carries both shared-drive flags. The cockpit list/search tools and
+> their offline SMOKE routes have trace parity; a temporary import-call mutation made the
+> no-import guard fail and was restored. A Drive API failure now names a read/search failure,
+> distinct from a token-refresh failure. Neither tool spends, imports, or becomes available to
+> ordinary model turns until Plan 20.1-02 teaches and activates the versioned skill body.
+>
 > Browser-evidence procedure (prepared 2026-09-20) — `blueprint-active-spine.spec.ts` has an
 > opt-in `PIKAR_E2E_BROWSER_EVIDENCE_DIR` capture path. It saves the confirmed Blueprint state at
 > 1280×1000 and 390×844 only after the existing derived-target and no-horizontal-overflow checks;

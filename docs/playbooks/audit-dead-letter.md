@@ -1,5 +1,36 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+Last verified: 2026-09-26 — ADR-045's one-time production
+`tenantDelete:sweepOrphanedInviteIdentities` reached `done: true` on the verified target:
+two invites scanned, zero orphan identity links cleared. The bounded target check and
+count-only terminal result are recorded in the [sweep evidence](../../.planning/phases/44-erasure-actually-erases/44-INVITE-SWEEP-2026-09-26.md).
+This closes the historical invite-sweep operation only. ADR-044's separate immutable
+`billingEvents` bridge and WORM arming triggers remain open; `WORM_BUCKET` was not changed.
+
+Last verified: 2026-09-24 — Plan 50-19 projects closed merchant-safe commerce fields rather
+than dumping raw policy/order documents; attempt retry-key hashes are omitted and unknown nested
+buyer/policy fields refuse. Audit still receives only order/attempt refs and snapshot hash, never
+buyer values, policy prose, provider credentials or export payloads. Unused buyer-free rows erase;
+orders, attempts and linked reservations refuse with named unresolved-retention reasons before
+deletion. The attempt-only reservation probe has a 256-row fail-closed scan cap, not a guessed
+retention period. No live erasure or provider operation was performed.
+
+Last verified: 2026-09-24 — Plan 50-04 classifies local policy, mapping, cart, order and attempt
+rows as tenant-owned content. Export uses the existing tenant-index walk; deletion preflight
+refuses any order until accounting retention is decided. Local order audit has only order/attempt
+refs and immutable snapshot hash; no buyer address, email, policy text or client retry key.
+
+Last verified: 2026-09-24 — Plan 50-02 classifies buyer-free `tenantProducts`, `tenantStock`
+and `tenantReservations` as tenant-owned. The generic export and deletion walkers include all
+three without new branches; two-tenant tests prove foreign rows survive another tenant's erasure.
+Catalogue/stock audit receipts carry product/reservation refs, revision, quantity, delta and
+closed status only. No future order/payment retention exception is inferred from this classification.
+
+Last verified: 2026-09-20 — `betaJourneyEvents` is classified tenant-owned, refs/enums/counts only,
+and participates in the existing bounded export and erasure walkers. It is not immutable audit and
+never stores recipient, subject, body, URL, user-agent, prompt, or provider content. The separate
+append-only audit contract remains unchanged.
+
 Last verified: 2026-09-20 — `goldenEvalAttempts` is a refs/hash-only, insert-only recovery
 journal classified `audit_immutable`. It may retain an optional spend-event reference after the
 synthetic eval tenant is erased, but stores no prompt, fixture, reply, provider error, or result.

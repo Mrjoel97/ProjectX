@@ -1,0 +1,15 @@
+# Phase 49 Plan 07 implementation brief
+
+Status: root dispatch after Plan 06 repository/local acceptance, 2026-09-23.
+
+Authoritative specification: `.planning/phases/49-qualified-public-web-and-storefront-recipes/49-07-PLAN.md`, with `49-VALIDATION.md`, `49-UPSTREAM-SKILL-ADAPTATION.md`, `docs/agent-work/phase49-final-review-map.md` and the final Plan 06 review. Do not narrow the plan to an owner qualification replay. The owner accepts only after one batched source and evidence review.
+
+Implement the three tasks serially:
+
+1. An isolated production-build browser matrix for complete site and landing owner/anonymous lifecycles at desktop/mobile, two tenants, stale/refusal/recovery, exact bytes/forms/consent/attribution/rollback, plus private storefront owner path and direct/non-owner/tenant/HTTP/resolver darkness including malformed pointer.
+2. Runtime/registry playbooks and watch coverage; precise Wave 7 and Wave 8 re-entry packet. Registered name is provisional `pikar-ai`; registered facts are pending. Stage Phase 49 at 6/7 In Progress before any interim planning check.
+3. Positive-control claim guard, registered free gates, aggregate script with self-test, final artifact manifest/hash, summary and verification. The aggregate must execute the exact promised regression/evaluator/both browser/type/build/audit/playbook/planning/claim/free planes against current bytes and fail on any missing, skipped, stale or nonzero required plane. Preserve external/production and Phase 50 open boundaries.
+
+File ownership: all `files_modified` in 49-07-PLAN.md, plus a narrowly scoped modification to `apps/web/e2e/phase49-disposable-stack.mjs` if necessary to run both exact browser specs in one fresh owned stack. Any new runner/helper/test must live under `apps/web/e2e/` with `phase49-` prefix and be registered in the playbook watch map. Existing backend/web API source outside `smoke.ts` is read-only unless root approves a concrete defect fix. Planning files are owned only as required by Plan 07; preserve existing root Plan 06 state. Do not touch default `.convex/local/default`, production, provider rails, customer data, or historical empty temp directories.
+
+One writer in the shared worktree; you are not alone and must preserve others' edits. No recursive agents, dependency installs, paid calls, external Router, commits without Git, or fabricated green check. Read `CLAUDE.md`, the relevant GSD execution context, playbooks and BRAND for UI changes. Attempt Graphify-first scoped discovery; if it hangs, stop the exact handle after a bounded period and report. Git is absent in the current PATH: strict playbook check fails closed; do not use hook exit 0 as evidence. A root read-only environment investigation may run concurrently; coordinate any tooling change. Capture closed test output and exact source/evidence identities. Return `ready_for_review` only with all plan criteria and coverage addressed; if a required gate cannot run, report that gate as open and continue all other safe work.

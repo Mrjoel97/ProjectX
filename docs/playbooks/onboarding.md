@@ -1,5 +1,12 @@
 # Playbook: Persona Onboarding & Business Profile
 
+> 2026-09-20 — BETA-03 first-send cockpit bridge: a completed-profile `onboarding.firstSendOffer`
+> now has an ephemeral cockpit consumer. The launcher creates a normal thread, marks the plan with
+> the authenticated owner's address, and routes the draft through `proposeEmailPlan`; `executePlan`
+> re-checks the marker before its approval CAS. The opt-in browser fixture stops at the plan/report
+> or refusal UI and makes no provider, deployment, paid, or Wave 8 claim. The provisional entity is
+> `pikar-ai`; registration details and provider enablement remain pending.
+
 > Last verified: 2026-09-19 (01-10 — Google OAuth repository readiness). The connect page now
 > renders closed callback codes through bounded user copy, exposes deterministic loading,
 > unavailable, connected/reconnect, and disconnect-result selectors, and never echoes provider

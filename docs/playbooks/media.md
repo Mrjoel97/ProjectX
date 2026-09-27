@@ -2028,6 +2028,16 @@
 > history, not a hold, while landed siblings stay fresh (the fixes are CONTENT-class, no
 > `shotsChangedAt`). Retry-twice observed RED on the mutation; core 1003/1003, media suites green.)
 
+> Last verified: 2026-09-25 (MEDIA-01 frozen-frame escalation rechecked locally. The current
+> `assemble_final.sh` and its shipped `assembleScript.ts` mirror passed the 23/23 focused tests,
+> including byte identity. The complete, unsuppressed `smoke_assemble.sh` rendered the 30.016s
+> `video,image,card,video` reel and measured **48 unique decoded frame hashes out of 48** inside
+> the image scene; its deliberately muted second render failed at the narration gate as intended.
+> Holding the synthetic input, dimensions, FPS and filters constant and changing only `pzoom`
+> back to the historical `zoom` yielded just 4 unique hashes out of 48 (44 identical frames),
+> below the smoke's 36/48 minimum. The earlier 1/48 report was from before the mirrored `pzoom`
+> correction was verified. No new renderer change was needed.)
+
 > Last verified: 2026-08-16 (Ken Burns `pzoom` fix MIRRORED — motion NOT re-observed. The still
 > path used `zoompan=z='min(zoom+0.0012,1.20)'`, but `zoom` resets to 1.0 on every INPUT frame,
 > and `-loop 1` feeds identical frames — so the expression re-evaluated `min(1.0012,1.20)`

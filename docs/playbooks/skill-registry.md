@@ -1,5 +1,49 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-25 — the current evaluator source moved the golden revision to
+> `2026-09-11.budgeted-evaluator.d324ea865ac2dfc43fe6f0a04131f35d240a193d9c11502265e8f2aa010bc74e`.
+> The code-owned `AGENT_EVAL_SUITE` and regenerated 46-case manifest agree; the 57-fixture
+> offline self-check passes. Older exact-evaluator evidence is retired. The free provider
+> preflight still refuses against the unavailable local deployment, so no paid or live pass
+> follows from this identity refresh.
+
+> Last verified: 2026-09-24 — Plan 50-19 closes tenant commerce export/deletion field
+> classification, omits attempt retry-key hashes and refuses undecided order retention. Skill
+> registry tables, bodies, routing and activation are unchanged; this is not a provider gate.
+
+> Last verified: 2026-09-24 — Plan 50-18 adds optional legacy-compatible goods-kind,
+> branch-policy and snapshot fields to tenant commerce schema. Merchant writes and local
+> quote refuse absent required facts. Skill registry tables and prompts are unchanged;
+> Plan 50-19 now supplies the separate export/delete classification described above.
+
+> Last verified: 2026-09-24 — Plan 50-04 adds five tenant-leading local commerce
+> policy/mapping/cart/order/attempt tables and reservation linkage, with classification,
+> export/erasure refusal and focused adapter tests. Skill registry tables and prompts are unchanged.
+
+> Last verified: 2026-09-24 — Plan 50-02 adds three tenant-leading catalogue/stock/reservation
+> schema tables, independently classified in tenantData and covered by focused adapter,
+> export and erasure tests. The skill-registry tables and runtime prompts are unchanged.
+
+> Last verified: 2026-09-23 — Phase 49 integrates the three pinned offline design-knowledge
+> sources, exact evaluator/browser/owner conjunction, active version rollback and a separate
+> site/landing/storefront lifecycle matrix. Final local gate status is in `49-VERIFICATION.md`;
+> Wave 7/8 remain open.
+
+> Last verified: 2026-09-23 — Phase 49 deterministic web-recipe evaluator now binds every ordered
+> fixture input/expectation, fixture builder, evidence predicate, runner, and pure rendering sources.
+> The designed renderer is pure core code pending backend/owner-preview integration.
+> See the evaluator invariant at the end of this playbook.
+
+> Last verified: 2026-09-23 — Phase 49 browser qualification cleanup requires an empty recipe
+> baseline, explicit offline fixture consent, a loopback HTTP site origin, and captured fixture row
+> ids. Cleanup refuses deletion if any recipe-family row is uncaptured. See the Phase 49 cleanup
+> invariant at the end of this playbook.
+
+> Last verified: 2026-09-20 — the governed first-send and journey-terminal source changes moved
+> the golden evaluator identity. `AGENT_EVAL_SUITE.revision` and the mechanical manifest now pin
+> the same recomputed hash, and the offline self-check is green. All older evaluator evidence is
+> retired; no paid diagnostic was rerun and no semantic/provider pass is claimed.
+
 > Last verified: 2026-09-20 — terminal golden provider failures now settle conservatively and close
 > their budget without replay. That evaluator-source change refreshed `AGENT_EVAL_SUITE.revision`
 > and the golden manifest together. It retires older exact-evaluator evidence and does not create a
@@ -3114,3 +3158,119 @@ neuter the `row.tenantId !== tenantId` comparison in `runPackTurn`; drop the `te
 into `runSpecialistTurn`; hardcode `const name = "pack-business-pulse"` in
 `publishPackCustomization`; delete the `template_not_active` early return; remove the `pack-`
 refusal from `assertEvaluableCandidate`.
+
+## Phase 49 browser qualification cleanup
+
+The local browser drill requires the shared `offlineSeamAvailable()` consent (`PIKAR_OFFLINE_FIXTURES=1`
+and no OpenAI or OpenRouter key), plus a server `CONVEX_SITE_URL` that is exactly an HTTP loopback
+origin (`localhost`, `127.0.0.1`, or `[::1]`) with an explicit valid port. A disposable isolated
+deployment's three web-recipe families must be empty before setup. Setup must stop before seeding
+if any family already has a row;
+it must not snapshot historical ids for later restoration. The dedicated fixture seeder mints a run
+token and stamps it on inserted rows. Version 2 requires the same token and one fully evidenced,
+active v1 in every family. Capture the seeder's exact created row ids and pass those ids plus the
+token to `cleanupWebRecipeQualification`.
+
+The server verifies offline fixture consent, the loopback site origin, each marker, all ids and all
+three recipe families before deleting anything. ID counts are capped at six and each family scan
+stops at seven rows, so overflow fails closed. Wrong-run or non-recipe ids, duplicate ids, or any
+family row outside the captured id set cause the mutation to fail without changing a row. Cleanup
+never patches captured rows back to a presumed baseline. A failed isolation check leaves the
+existing registry state untouched and requires a fresh disposable deployment.
+
+## Phase 49 deterministic web-recipe evaluator
+
+The zero-cost receipt is pinned to the exact candidate row body, full ordered three-family fixture
+content (including every grouped input and expected outcome), and an implementation digest covering
+the evaluator, fixture builder, evidence predicate contract, runner, recipe materializer, design
+selector/bundle, and both legacy and designed renderers. The contract's own digest field is replaced
+by a fixed placeholder when computing that digest; all other contract source bytes are bound.
+`WEB_RECIPE_EVAL_SUITE.casesHash` combines the fixture and implementation digests. Any change to
+those sources retires prior receipts; update the manifest only after review and rerun
+`node packages/backend/scripts/run-web-recipe-evals.mjs --self-check`. The self-check compares
+actual source bytes, checks source-only tamper controls, and executes the production evaluator
+against exact seeded candidate rows.
+
+Every grouped refusal input must be independently exercised. Only a bounded recipe input or
+document validation error counts as expected refusal; an assertion failure, exception in a
+mutation control, or accepted later input fails the whole candidate. Every required scalar/item
+field has its own refusal input. The CTA path enforces its declared 256-character limit.
+Changed-bundle and source-removal controls parse a known-good raw generated bundle first, then
+tamper its label/data or remove each role's raw records and require the production parser to reject.
+Every source role is also required by the designed renderer's selected-profile verifier. The renderer
+emits code-owned accessible CSS from the closed profile; each Taste dial changes its corresponding
+rendered style independently while the canonical document, form,
+consent, attribution, route and analytics identities remain unchanged. New recipe-backed project
+versions now pin the selected renderer profile for their stored immutable artifact and owner
+preview. Older stored versions retain their bytes. Disabled or reduced motion suppresses hover
+translation, and long content can wrap on narrow screens. Browser evidence and activation remain
+separate gates.
+
+## Phase 49 server-observed browser qualification
+
+An owner begins a fresh run for one exact candidate identity. The server captures the candidate,
+fixture, implementation, bundle, and renderer hashes and clears previous browser evidence. The
+owner selects each viewport lane with a revision compare-and-swap, then calls the server preview
+for ordered partial, refusal, recovery, changed edit, and final preview stages. Preview
+materializes the design on the server, records input/document/artifact hashes and byte length, and
+returns actual designed HTML. Only bounded validation refusal counts; other errors abort the
+transcript. The changed edit must change input and artifact hashes; final preview must agree with
+that edited artifact. Each lane is independent.
+
+After both desktop and mobile lanes are complete, the owner finalizes a transcript hash. This
+does not create evidence. A trusted internal runner separately verifies browser observations and
+writes a witness against that exact finalized hash, run id, revision, and current candidate
+identity. Owner-provided outcomes, hashes, or legacy witness rows do not qualify activation. A
+new run or candidate version invalidates earlier browser evidence. The sandboxed owner iframe
+displays server-returned HTML; its presence alone is not a browser witness. Use an isolated
+production-build E2E, never the normal database or production owner storage, for the full path.
+The owner UI completes an opened lane before opening the other, so neither lane can be stranded;
+an empty owner review has an explicit empty state. Browser E2E compares each created site's,
+landing page's, and private storefront's recipe name, skill ID, body hash, and version to the
+captured exact v1/v2 candidates, including immutable v2 readback after rollback.
+
+The disposable stack's cleanup is part of the gate, not a best-effort success footer. On Windows,
+the backend starts through one PowerShell broker that owns a kill-on-close Job Object. Its gated
+launcher receives the backend request over private stdin **only after** job assignment, so the
+backend and descendants inherit job membership before execution. The broker verifies the
+kill-on-close flag and documented process-ID-list membership; query errors (including bad buffer
+length) fail closed. A normal stop or owner stdin EOF closes the sole job handle. The runner
+requires the broker's observed stop and exit, then independently checks listeners and exact root
+removal; a stop timeout, missing broker result, remaining listener, or remaining root fails. The
+non-Windows direct-child path does **not** claim descendant-tree proof. Recursive deletion requires the fresh direct-child temp root and its
+per-run ownership marker. A failed or unverifiable cleanup exits nonzero even if browser
+assertions passed, and original browser failure metadata is retained without raw stdout/stderr.
+SQLite can contain deployment secrets after `env set`, so deleting standalone key files never
+proves that a residual database is inert. Treat any remaining database/storage as potentially
+sensitive and unresolved until exact, verified cleanup finishes. Browser page/console diagnostics
+report event presence only, never arbitrary messages.
+The designed renderer's hash canonicalizes every validated profile field in fixed key order so
+Convex persistence cannot change an identical document/profile hash. Its renderer ID stays v1:
+the designed project path had not entered accepted production when this correction landed, and
+legacy/manual renderer bytes are unchanged. The changed evaluator implementation digest retires
+all provisional exact-source receipts regardless of the unchanged renderer ID.
+
+## Phase 49 recipe operations and change review
+
+`third_party/design-knowledge/` preserves reviewed MIT notices and immutable source identities
+for interface patterns, visual-quality guidance and commerce-safety boundaries. The compiler
+consumes an audited subset offline and emits a closed Pikar recipe/design bundle. Upstream text is
+data, never a runtime prompt or instruction. Do not install its tools, execute its code, fetch its
+links or pass source/fixture bodies into tenant output, evidence or audit.
+
+Before changing source bytes, exclusions, compiler, recipe definition, evaluator or renderer,
+review the diff and update the pinned manifest. Run provenance actual/self-test, compiler check,
+the deterministic evaluator self-check and both isolated production-build browser specs. Evidence
+binds the exact candidate id/version/body/definition, bundle and renderer, fixture and
+implementation digests. A stale or missing plane refuses activation; an owner transcript alone
+does not mint the trusted browser witness. The owner may activate only the exact passing row and
+roll back to an eligible earlier exact version. Already stored project/artifact bytes and origin
+lineage do not change when that registry pointer moves.
+
+The ordinary tenant sees only site and landing active recipes. Storefront is an owner-only private
+qualification artifact with explicit commerce-unavailable copy. Its activation never authorizes a
+tenant card, publication mutation, resolver or anonymous route. The code-owned false commerce
+seam remains until Phase 50's typed lifecycle and separate merchant gates are accepted. Use
+`node scripts/check-phase49-qualification.mjs` for the final repository/local source set; an
+unavailable Git/Graphify or cleanup gate stays open. See
+`docs/releases/phase-49-wave7-wave8-reentry.md` for external and exact-production re-entry.

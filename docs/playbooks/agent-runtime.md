@@ -1,3 +1,12 @@
+> Last verified: 2026-09-23 — Phase 49's local-only `smoke:seedPhase49MalformedStorefrontPointer`
+> fixture is available only with `PIKAR_OFFLINE_FIXTURES=1`, for an exact disposable private
+> storefront project belonging to the supplied tenant. It deliberately seeds a malformed
+> published pointer so the resolver and anonymous HTTP boundary can prove refusal; it does
+> not publish or enable commerce. Phase 48's internal collision, suppression, submission-window,
+> inspection and cleanup seams remain disposable browser fixtures, not ordinary tenant actions.
+> The fresh isolated desktop/mobile matrix passed with exact fixture cleanup and owned-root
+> removal; no hosted or production acceptance is inferred.
+
 > Last verified: 2026-09-20 — a terminal golden provider failure is never replayed and no longer
 > strands its budget. The low-level reservation settles at its full ceiling with the explicit
 > `conservative_ceiling` basis, the durable Workflow remains `failed`, and the runner closes the

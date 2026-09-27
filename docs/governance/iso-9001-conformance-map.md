@@ -1,10 +1,19 @@
-# ISO 9001 Evidence-Alignment Map
+# ISO 9001:2015 historical evidence-alignment map — 2026 rebaseline pending
 
 - **Owner:** _TBD_
 - **Reviewer:** _TBD_
 - **Last reviewed: 2026-08-10**
 
-**Baseline:** ISO 9001:2015 including Amendment 1:2024
+**Mapped historical baseline:** ISO 9001:2015 including Amendment 1:2024. **Current-edition
+assessment:** not performed. ISO 9001:2026 replaced this edition on 2026-09-16.
+
+**Edition-status check, 2026-09-24:** [ISO's current-edition record](https://www.iso.org/standard/9001)
+identifies ISO 9001:2026 as published, and [ISO's 2015 record](https://www.iso.org/standard/62085.html)
+marks the mapped edition withdrawn. The publication trigger below has fired. This table remains a
+historical, defined-scope evidence index only; none of its clause statuses is a verdict against
+ISO 9001:2026. Do not use it for a current-edition procurement, marketing, or certification claim.
+Rebaseline against the published 2026 requirements with a licensed copy and qualified review before
+making any such claim. This status correction does not change source controls or certify a QMS.
 
 ## Defined scope and claim boundary
 
@@ -22,8 +31,8 @@ are historical inputs, not evidence systems: `repo:.planning/design/iso9001-qms-
 The baseline is [ISO 9001:2015](https://www.iso.org/standard/62085.html), including
 [Amendment 1:2024](https://www.iso.org/standard/88431.html). The
 [ISO/IAF climate amendment communique](https://committee.iso.org/files/live/sites/jtcg/files/news/Joint%20ISO-IAF%20Communique%20re%20Climate%20Change%20Amds%20to%20ISO%20MSS%20Feb%202024a.pdf)
-informs the climate-context disposition. Publication of the next ISO 9001 edition triggers a
-review; this map does not anticipate unpublished requirements.
+informed the historical climate-context disposition. ISO 9001:2026 has now been published; this
+map does not infer its requirements from a public summary or carry forward the 2015 statuses.
 
 For clauses 4.1 and 4.2, climate relevance was considered for this defined evidence-map scope.
 No repository evidence presently shows climate change to be a material requirement of the mapped
@@ -109,7 +118,8 @@ enter automatically. Future rows may be appended only after the complete evidenc
 
 ## Maintenance triggers
 
-Review this map only when one of these evidence mechanisms or claim boundaries changes:
+Review this map only when one of these evidence mechanisms or claim boundaries changes. The
+edition-publication trigger fired on 2026-09-16 and remains unresolved:
 
 - ISO publishes a new edition or an applicable amendment;
 - the audit or WORM mechanism, retention boundary, or live preservation evidence changes;
@@ -128,14 +138,14 @@ they do not establish certification, organization-wide conformity, or live infra
 
 ```powershell
 node -e "const s=require('fs').readFileSync('docs/governance/iso-9001-conformance-map.md','utf8'); if(!s.includes('ISO 9001:2015')) throw new Error('missing baseline'); console.log('map readable')"
-pnpm --filter @pikar/backend exec vitest run convex/auditImmutability.test.ts convex/worm.test.ts convex/skills.test.ts convex/deadLetters.test.ts convex/notifications.test.ts --maxWorkers=1
+pnpm --filter @pikar/backend test -- convex/auditImmutability.test.ts convex/worm.test.ts convex/skills.test.ts convex/deadLetters.test.ts convex/notifications.test.ts --maxWorkers=1
 node packages/backend/scripts/run-eval-golden.mjs --self-check
 node scripts/check-playbooks.mjs check
 ```
 
-When the shell does not expose the package-local binary directory, repair that local execution
-environment before interpreting a wrapper failure as a control failure. Do not replace these
-bounded commands with a paid live eval or production mutation.
+The package `test` script resolves Vitest on Windows where `pnpm exec vitest` may not. A wrapper
+resolution failure is not a control failure. Do not replace these bounded commands with a paid
+live eval or production mutation.
 
 ## Manual-Only verification
 
@@ -144,7 +154,7 @@ bounded commands with a paid live eval or production mutation.
 | Claim boundary and clause applicability | Syntax and unit tests cannot decide legal/compliance meaning or organization-wide applicability. | The owner reviews the defined scope and statuses; obtain qualified ISO review before any external conformity statement. |
 | Real S3 Object Lock durability and delete refusal | It requires configured AWS infrastructure, credentials, an actual retained object, and a refused delete. | Cite dated live evidence only when performed; otherwise keep preservation conditional and the claim blocked. |
 | Leadership, competence, internal audit, and management review | Evidence belongs to people and company processes, not repository implementation. | Keep clauses 5, 7.2–7.4, 9.2, and 9.3 not assessed until actual organization-wide evidence exists. |
-| ISO edition re-baseline | The next edition is not yet the baseline mapped here. | Review after publication; do not guess future requirements. |
+| ISO edition re-baseline | ISO 9001:2026 was published on 2026-09-16; this map still indexes the withdrawn 2015 edition and has not been assessed against the new requirements. | Hold current-edition claims. Obtain a licensed 2026 copy and qualified clause-by-clause review, record changed/unchanged applicability and exact evidence gaps, then seek owner review of the revised map. Do not infer equivalence from this historical table. |
 
 ## Known limitations
 

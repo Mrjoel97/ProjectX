@@ -51,3 +51,5 @@ Numbering: `NNN-<slug>.md`, next free number.
 Governance indexes connect existing controls and evidence across subsystems. They are not another
 family of runbooks and do not hold mutable runtime records. The canonical ISO evidence-alignment
 index is [`governance/iso-9001-conformance-map.md`](governance/iso-9001-conformance-map.md).
+It currently maps the withdrawn 2015 edition as historical evidence; a 2026-edition review is
+pending before any current-edition claim.

@@ -1,5 +1,78 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-26 — Plan 47-22's isolated six-file candidate now derives
+> the latest local occurrence from the IANA rule and approval anchor at claim time;
+> routine rows no longer store a next-due instant or next-local fields. Manually
+> invoked tenant-scoped due and recovery sweeps use durable, bounded cursor/watermark
+> lanes. A crash-before-commit claim and a crash-after-settlement/before-cursor replay
+> now have explicit controls. The candidate suite passed 35/35; candidate and
+> backend TypeScript checks passed, and focused backend governance/DST suites passed
+> 108/108. The [independent review](../../.planning/phases/47-the-schedule-row-that-re-arms/47-22-TECHNICAL-REVIEW.md)
+> gives a hash-bound GO for isolated synthetic design evidence only. Historical
+> `defer` and matrix/eligibility/
+> decision/stage exits remain `0/1/0/0`, with eligibility refusing. No production
+> sweep/caller, real spend rails, deployed recovery liveness, D6, ROUT-02, live
+> DST/OAuth/provider evidence, tenant activation, provider/paid call or send has
+> been established or authorized.
+
+> Last verified: 2026-09-25 — Plan 47-21 materialized the owner's exact-hash accepted
+> [ADR-052](../decisions/052-sweep-only-recurrence-d6-evidence-reconciliation.md).
+> It conditionally replaces only ADR-050's callback-shaped D6 candidate-evidence words
+> when ADR-051's bounded sweep/no-pending-routine-function invariant is actually proved.
+> The historical defer checker has a third, separately hash-pinned accepted-ADR exception;
+> missing ADR-052 leaves defer valid, while altered/forged/extra or recurrence-matching
+> renamed ADRs refuse. The stage frontmatter and validator remain byte-identical and
+> disabled. Run `node packages/backend/scripts/check-routine-gate.mjs --self-check`,
+> then each historical `--matrix`, `--eligibility`, `--validate-decision` and stage
+> `--validate-stage` separately: expected exits `0/1/0/0`. The refusal has 14 findings.
+> This reconciles text, not D6 proof: no deployed sweep, real spend rails, real approval
+> integration, live DST/OAuth/provider trace, tenant activation, provider/paid call or send
+> is authorized or established.
+
+> Last verified: 2026-09-25 — Plan 47-19 materialized the owner's exact accepted
+> ADR-051 draft (source SHA-256 `fffda838ac5f4ec9364c6721f51e6e129d669e5ab515704366625da2868bbc03`)
+> as a conditional sweep-only D6 amendment. Its own exact path, accepted status and byte
+> hash are a separate governance-metadata exception under historical `defer`; ADR-050's
+> exact exception and disabled six-file `build-for-evidence` stage are unchanged. The
+> gate results remain matrix/eligibility/defer/stage `0/1/0/0`: eligibility refuses.
+> At that checkpoint, D6 implementation and ADR-050's literal pause/cancel
+> reconciliation remained open, and no tenant activation, deployment,
+> paid/provider call or send was authorized.
+> Real fired DST, seven-day Google grant expiry with explicit reconnect and no burst,
+> and unattended provider-read traces still require separate collection and review.
+
+> Last verified: 2026-09-25 — Plan 47-16 added a six-file, explicit-runner recurrence
+> candidate outside the production Convex root. Its separate schema and synthetic
+> `convex-test` transactions exercise bounded occurrence, approval, reservation-stub,
+> retry and refs-only outcomes. This is automated design evidence only: no tenant route,
+> cron, self-arm, provider/paid call, external send or production deployment exists.
+> ADR-046 D6 pending-function cancellation and real rate-limiter integration remain
+> unproved. The historical `defer` branch and required live traces remain open.
+
+> Last verified: 2026-09-25 — Plan 47-15's pre-build technical review accepted exactly six isolated candidate paths and the separate stage checker now pins that inventory through 2026-12-31. No candidate file is built by this plan; the production Convex root and app imports remain outside it. Historical `decision: defer` still validates and `--eligibility` still refuses. No recurrence table, runtime, tenant activation, production deployment, provider/paid call or external send was authorized or added. ADR-046 D6 cancellation, the three live rows and all twelve substantive reviews remain required before `enable-safe`.
+
+> Last verified: 2026-09-24 — Plan 47-10 restored a **read-only production target** using
+> a production-scoped deploy key whose deployment token matched independent release records.
+> Bounded production audit and scheduler queries found all four `clock.dst_probe` `armed`
+> correlations and all four exact-time scheduled jobs still `pending` (eight scheduler rows
+> scanned, cap 800); zero `fired` audit rows were present. See
+> `.planning/phases/47-the-schedule-row-that-re-arms/47-10-TARGET-CHECK.md` for the
+> fingerprint, refs and exact instants. The earlier unlinked-target `UNREACHABLE` result below
+> remains a historical attempt, now superseded for target readability only. A subsequent
+> key-scoped collector preflight reached production and correctly refused with one Auckland
+> armed row and no fired row. No live DST crossing, collector artifact, recurrence permission
+> or decision change is inferred.
+
+> Last verified: 2026-09-24 — `oauth-expiry-reauth` is FAIL-CLOSED. The earlier collector
+> treated an expired Gmail **access token** silently refreshing during a read as live
+> reauthorization. That does not satisfy `29-RECURRENCE-DECISION.md` §7's real seven-day
+> grant expiry, explicit user reconnect and no-catch-up-burst requirement. The collector
+> now refuses that path without making the provider read or writing an artifact. Its
+> self-check passes; this is a guard correction, not the missing live evidence. The
+> production DST collector's earlier unlinked-shell attempt refused `UNREACHABLE` (no
+> artifact). That target-access diagnosis was superseded by the verified production read
+> and collector preflight above; it was never evidence that an armed job was absent.
+
 > Last verified: 2026-09-14 — the closed Convex module inventory includes
 > `researchDeliverable.ts`, the one-shot deterministic derivative workflow for an explicitly
 > requested research PDF. It is started only from an existing research plan, never re-arms, and
@@ -46,8 +119,12 @@
 > genuinely throwaway and should be deleted, along with its `CONVEX_MODULES`,
 > `SCHEDULER_CALL_SITES` and `watch.json` entries.
 >
-> To check progress at any time (it prints “armed row(s) are waiting … nothing is wrong” until the
-> transition, then writes the artifact):
+> To check progress with the verified production target: before its exact scheduled fire, the
+> collector reports the armed row and target instant without suggesting a duplicate arm. After
+> that instant, an absent fired row is reported as elapsed/unobserved, **not** “nothing is wrong.”
+> A paired armed/fired trace is required before it writes an artifact. Its no-arm guidance now
+> derives a far-side instant from the actual ICU offset change; UTC noon on the transition date
+> is not necessarily after the boundary (Auckland changes at 14:00Z on 2026-09-26).
 >
 > ```
 > PIKAR_CONVEX_TARGET=prod PIKAR_DST_ZONE=Pacific/Auckland \
@@ -1350,13 +1427,14 @@ the other ~90 events in `AUDIT_VIEWER_EVENTS` to derived key sets is out of scop
 > let a fully fabricated `enable-safe` clear all three modes. Fixed, and every exit code is now
 > asserted from a spawned process. See "Round 2" at the foot of this section.**)
 
-**What the gate is.** Three modes over one artifact:
+**What the historical gate is.** Three original modes over the 29 decision artifact; Plan 47-14 adds a separate fourth mode over a different stage artifact:
 
 | Mode | Contract |
 |---|---|
 | `--matrix` | Closed schema + enumerations, valid even when every row is red. Refuses a fifth key, an unknown row id, a duplicate row, a missing row, an unknown enum member, an empty `evidenceRef`, a `decidedBy` outside `owner`/`agent`/`fixture`, and a `pass` row whose citation does not hold up. **A citation "holds up" means exactly this and no more:** it names a path (not just an `#anchor`), the path stays inside the repo, it resolves to a regular non-empty **file**, it is not the artifact under validation, and no two `pass` rows resolve to the same **file** (round 2 keyed this on the raw string, so twelve `#anchor`s on one file passed all three modes). It does **not** mean the file substantiates the row — no parser can check that, and the script header says so. |
 | `--eligibility` | Exit 0 **only** when all twelve rows are `pass`, every ref is non-empty, and `oauth-expiry-reauth` / `dst-boundary` / `provider-read` each carry `evidenceType: live`. |
-| `--validate-decision` | `defer` is accepted (plus absence checks: no `routine\|recurrence\|schedul` ADR, no `temporal` dependency in **five** manifests — root, core, backend, `apps/web` and `pnpm-lock.yaml`). `enable-safe` gets the **identical** eligibility check. Both absence rules are driven against fixture roots that really contain the forbidden thing, one per manifest, in `routineDecision.test.ts`. |
+| `--validate-decision` | `defer` is accepted, including absence checks: no `routine\|recurrence\|schedul` ADR except the three separately exact path/hash/status-pinned accepted ADR-050, ADR-051 and ADR-052 governance amendments. A missing ADR-052 does not invalidate defer; changed, forged or extra recurrence-matching ADRs do. The scheduler dependency scan derives manifests from the workspace filesystem. `enable-safe` gets the **identical** eligibility check. These exceptions grant no runtime authority. |
+| `--validate-stage` | A different artifact, `47-14-STAGE-DECISION.md`, must exactly declare accepted `build-for-evidence`, the hash-pinned ADR-050, owner review, an unexpired 2026-12-31 checkpoint, isolated test environment, the **reviewed six-path candidate inventory**, and disabled/forbidden tenant, production, provider, paid, external-write and send edges. It also requires the historical operational decision to remain valid `defer` and rejects unlisted candidate files, production/app imports and candidate callable/scheduler/outbound primitives. A pass permits bounded synthetic candidate work only; it is not live evidence, enable-safe, tenant/production authorization or release approval. |
 
 **The distinction the whole artifact turns on.** `status` says whether the evidence meets the row's
 requirement; `evidenceType` says what class the best available evidence is. A row can carry good,
@@ -1412,10 +1490,32 @@ unreachable, and every number in §4 of the decision record reproduced. The *gat
 
 **What is still true and deliberately not "fixed":** the ADR rule matches ADR **filenames** against
 `routine|recurrence|schedul`, so an unrelated future `0NN-scheduled-*.md` will trip
-`--validate-decision`. Fail-closed in a governance gate is the correct direction — rename the ADR
-or lift the defer. And the gate is in no CI workflow and no npm script: its automatic run is
+`--validate-decision`. ADR-050, ADR-051 and ADR-052 each have a separately hash-pinned exception as governance metadata; a changed
+copy or any other recurrence ADR still trips the historical defer guard. And the gate is in no CI workflow and no npm script: its automatic run is
 `routineDecision.test.ts`, which does execute under `pnpm test` in `ci.yml`. Adding a script would
 mean editing `packages/backend/package.json`, which the `defer` branch forbids touching.
+
+## Plan 47-14 — accepted but disabled build-for-evidence boundary (2026-09-24)
+
+> Last verified: 2026-09-24. The owner accepted the exact ADR-050 draft for a bounded governance-order change. The operational 29 record remains `decision: defer`; the candidate file inventory is empty and there is no recurrence runtime or tenant route. The focused `routineDecision`, `routines`, and `dstProbe` suites passed (103 tests). The stage artifact expires 2026-12-31.
+
+ADR-050 changes the order from `defer` directly to `enable-safe` into `defer` → `build-for-evidence` → `enable-safe`, solely so an isolated, disabled candidate can later be built and tested under a **separate** reviewed plan. It does not relax ADR-046 D1–D9, twelve matrix rows, the three required real collected traces, or the later owner release decision. At the Plan 47-14 checkpoint candidate files were forbidden under `candidateFiles: []`. Plan 47-15 subsequently reviewed and declared exactly six candidate paths; none is built by that inventory amendment. Plan 47-16 must still build with synthetic tenants and stub providers and pass a separate source/reachability and isolation review. No production deploy, tenant/public activation, provider/paid call, external write or send is authorized. A feature flag is not isolation.
+
+Run each mode separately and inspect its own exit code: historical `--matrix` = 0, `--eligibility` = 1 (expected refusal), `--validate-decision` = 0, and stage `--validate-stage` = 0 while unexpired. The named `stage cannot launder fabricated enable-safe` test asserts direct CLI exit 1 for both eligibility and decision validation on twelve syntactically passing rows with non-collected live citations. Structural absence guards in `routines.test.ts` are additional review tripwires, not a proof of semantic unreachability. The four `dstProbe` jobs remain independent live-evidence probes and are not candidate runtime.
+
+If the stage expires, its isolation fails, or technical review is refused, return to defer/manual reruns. Stage validation never changes the historical decision, fills a row, or authorizes a send.
+
+## Plan 47-20 — isolated reservation and paid-step candidate (2026-09-25)
+
+> Last verified: 2026-09-25 against the explicit synthetic candidate suite (25/25) and candidate TypeScript check (exit 0). Historical matrix/eligibility/defer/stage exits remain 0/1/0/0; eligibility refuses 14 findings. Independent source review and production evidence remain separate.
+
+The six-file candidate records a run-scoped reservation admission, separate stable daily/deployment rail keys and keyed outcome lookup/compensation. An unknown allocation or refund stays reconciliation-required and blocks paid admission. A confirmed whole-run hold remains through bounded `retry_pending` attempts and is released at terminal settlement. Paid-step admission and a one-winner start claim are separate committed transitions: same-ID replay cannot invoke the mock call twice, a different ID waits for a closed outcome, and an unknown started call fails closed. Pause and material change increment the approval fence; later admissions and actionable-plan/external-action checks revalidate it. External-action admission is only a synthetic check requiring distinct per-run human approval, with no send path.
+
+Interrupted terminal work keeps `activeRunId` and a pending terminal outcome until keyed release is confirmed; audit and dead-letter are written only at that finalization. The bounded, test-only reconciliation sweep handles those durable rows, including direct retry-stop and unknown-start closure. Running-attempt replay looks up rail keys before any repeated reserve and uses the paid-step start claim before any mock call. The synthetic rail contract requires keyed release to tombstone even an absent key, preventing a late reserve on that key. There is no registered or scheduled reconciliation worker in this candidate, so this proves a recovery interface and test ordering, not production liveness or real limiter behavior.
+The admitted-but-not-started restart case reuses its stored step ID and token after pause. Two resumed workers still yield one start-claim winner and one mock call; landing records stopped-paused, refunds the held stubs, and leaves no actionable plan or external-action admission.
+
+These checks use `convex-test` and injected stubs. They do not prove real rate-limiter atomicity/refunds, a deployed bounded sweep, real per-run approval integration, pending-function cancellation, or live DST/OAuth/provider evidence. The candidate still stores next-due fields and direct prompt fields and uses a separate dead-letter table. ADR-050 literal pause/cancel reconciliation, ADR-051 D6 acceptance, ROUT-02, tenant activation and release remain open. Use the explicit candidate config; the candidate stays outside normal backend discovery and `convex.json`'s functions root.
+
 ## Plan 29-12 — the deferred branch, proven absent (2026-08-29)
 
 > Last verified: 2026-08-29 (29-12 — `--validate-decision` was run FIRST and returned

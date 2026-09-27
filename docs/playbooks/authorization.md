@@ -1,5 +1,24 @@
 # Playbook: Authorization (tenancy + ownership)
 
+> Last verified: 2026-09-24 — Plan 50-05 adds a direct anonymous HTTP cart-preflight
+> refusal and a production-adapter cross-tenant cart test. A caller-supplied product,
+> tenant, account or cart id is refused before a write; authenticated A cannot place B's
+> cart, and both paths create no order or stock hold. This does not open storefront auth.
+
+> Last verified: 2026-09-24 — Plan 50-03 drives the real `tenantCatalogue` query and
+> mutations with two authenticated tenants, a separate owner identity and an anonymous
+> caller. Product, stock and reservation ids cannot be swapped across tenants; an owner
+> remains scoped to their own catalogue, and rejected calls add no audit receipt. The
+> dashboard sites catalogue mounts only inside the authenticated app route. This is
+> repository/local proof, not public storefront or merchant-provider authorization.
+
+> Last verified: 2026-09-20 — the runtime-derived isolation suite now exercises non-empty A/B
+> tenant rows through production APIs and the tenant export surface. Direct HTTP-router tests cover
+> malformed/tampered funnel and unsubscribe capabilities, valid anonymous/other-tenant public
+> bearers, unsupported methods, and the internal SkillOpt bearer refusal. Public bearer scope is
+> the signed token/domain/stage—not the visitor's tenant identity—and no authorization rule was
+> broadened for the tests.
+
 > Last verified: 2026-09-20 — the local browser provisioner now calls
 > `owner.findUserIdByEmailForProvisioning`, a private read-only envelope around the same exact
 > resolver as nullable `findUserIdByEmail`. This preserves the established operator contract

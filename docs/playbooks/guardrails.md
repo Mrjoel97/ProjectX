@@ -1,5 +1,19 @@
 # Playbook: Guardrails (the spend rails, the kill switches, the redaction choke point)
 
+Last verified: 2026-09-25 — golden text-chat routing now limits `provider.max_price` to
+OpenRouter's documented prompt, completion, request and image fields. The unused `audio: 0`
+field was removed from that request; the whole-context reservation, per-run cap, pinned
+OpenAI route and no-retry behavior are unchanged. Offline exact-wire tests verify the shape.
+This documentation alignment does not classify the historical HTTP 400 or establish a live pass.
+
+Last verified: 2026-09-23 — golden OpenRouter chat requests now omit `n`, empty `plugins`,
+`transforms`, and `require_parameters`; the provider is pinned with OpenAI-only `only`/`order`
+and `allow_fallbacks: false`, with numeric `max_price` fields. The provider integration spreads
+these options into the request body; the removed fields could filter the exact endpoint
+or contribute to the prior HTTP 400. Offline wire-shape and budget tests
+verify this correction; the redacted provider error does not prove its precise cause, and no
+paid retry, live semantic acceptance, or new billing authorization is claimed.
+
 Last verified: 2026-09-20 — a thrown golden chat request is terminal and is never replayed. Its
 reservation is settled at the full reserved ceiling with `evalSettlementBasis:
 "conservative_ceiling"`, so exposure cannot be understated and the budget can close. Status

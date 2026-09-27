@@ -1,3 +1,30 @@
+> Last verified: 2026-09-25 — Plan 20.1-01's two read-only Drive tools retain closed
+> `agentSteps.tool`/workspace VERB parity and `drive=list:`/`drive=find:` SMOKE routes.
+> Refusal copy now distinguishes disconnected, Drive-scope reauth, invalid folder id,
+> refresh failure, and Drive API failure; it never claims a refresh failed when the API did.
+> The structural no-import/no-spend guard turned RED on a temporary import call and returned
+> GREEN after restoration. The active skill body is unchanged; Plan 20.1-02 alone owns
+> teaching, candidate evaluation, activation, and real Drive UAT.
+>
+> Last verified: 2026-09-25 — Phase 17's bounded offline Calendar matrix passed 457/457 in
+> 25.32 seconds; the focused core matrix passed 72/72. The live UAT contract now preserves exact
+> `smoke.calendarLifecycleReadback` rows and distinguishes its audit duplicate signal from separate
+> provider/registry counts. The repo's offline-font Webpack production build passes. The Calendar
+> browser spec provisions a fresh disposable loopback account, finishes local CLI fixtures, then
+> signs in again after session invalidation. Its exact Calendar browser gate passed 1/1 with zero
+> skips and owned stack cleanup. Real-provider and owner UAT evidence remain open.
+>
+> Last verified: 2026-09-24 — Plan 50-05 touches the shared `http.ts` router only for a
+> bounded anonymous commerce cart preflight under `/p/`. It keeps the authenticated
+> cockpit, billing, connector and existing site/landing routes unchanged. Direct HTTP
+> tests prove unsafe-origin and caller-tenancy refusal with no commerce write.
+>
+> 2026-09-20 — BETA-03 first-send cockpit bridge: the fresh-chat surface exposes one ephemeral
+> self-send offer when onboarding is complete. The launcher accepts only an optional existing thread
+> id, derives the recipient from the authenticated projection, and uses the existing approval path;
+> a server-owned marker is checked at proposal and before CAS. `onboarding-first-send.spec.ts` is
+> controlled and opt-in, with no provider, deployment, paid, or Wave 8 claim.
+>
 > Browser-evidence procedure (prepared 2026-09-20) — `cockpit-briefing.spec.ts` has an opt-in
 > `PIKAR_E2E_BROWSER_EVIDENCE_DIR` capture path for its already deterministic, local offline
 > fixture. Only when set, it saves the rendered briefing at 1280×1000 and 390×844 after checking
@@ -16,6 +43,15 @@
 > stderr, addresses, passwords, or invite codes into Playwright artifacts. A terminal browser
 > setup failure is not evidence that an invite mutation did or did not land; reconcile state
 > read-only before retrying.
+>
+> Current browser-server qualification (2026-09-20) — the existing Next 16.2.10 `next dev` server
+> on :3111 served the static signup shell but did not attach React state: 20 script responses
+> finished, the password-toggle click dispatched, and the field stayed `type=password`; its only
+> WebSockets were failing HMR sockets. The same synthetic invalid-invite probe against the existing
+> production build via `next start` on :3112 changed the field to `type=text` and reached the honest
+> invalid-invite terminal. Use a verified production build for current browser acceptance until the
+> development-server hydration defect is separately repaired. This is not evidence of a Convex
+> preflight or invite defect, and no provider navigation is implied.
 >
 > Playwright discovery safety (prepared 2026-09-20) — `playwright.config.ts` excludes
 > `**/.auth/**`: storage state and Chrome profiles are runtime artifacts, never source tests. The

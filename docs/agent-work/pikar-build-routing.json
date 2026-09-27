@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "scope": "development-only",
+  "execution": "native-collaboration-tool",
+  "optionalDevelopmentRoute": "docs/agent-work/pikar-flash-routing.json",
+  "providerPolicy": "current-openai-account-only",
+  "externalRouterAllowed": false,
+  "externalProviderKeysAllowed": false,
+  "root": {
+    "selection": "preserve-user-selected-astra",
+    "responsibilities": ["planning", "architecture", "risk-decisions", "batched-acceptance-review"]
+  },
+  "workers": {
+    "routine": {
+      "model": "gpt-6-luna",
+      "reasoningEffort": "high",
+      "tasks": ["bounded-implementation", "focused-tests", "mechanical-fixes", "offline-dev-tools"]
+    },
+    "straightforward": {
+      "model": "gpt-5.6-terra",
+      "reasoningEffort": "medium",
+      "tasks": [
+        "well-specified-docs-and-config",
+        "bounded-analysis",
+        "low-risk-straightforward-work"
+      ]
+    },
+    "complex": {
+      "model": "gpt-6-sol",
+      "reasoningEffort": "high",
+      "tasks": [
+        "cross-module-implementation",
+        "complex-debugging",
+        "protocol-integration",
+        "browser-workflow-tests"
+      ]
+    }
+  },
+  "dispatch": {
+    "agentType": "worker",
+    "forkTurns": "none",
+    "explicitModelRequired": true,
+    "verifyModelAdvertisedByHost": true,
+    "silentFallbackAllowed": false,
+    "recursiveDelegationAllowed": false,
+    "defaultActiveWriters": 1,
+    "reviewCyclesBeforeReassessment": 1
+  },
+  "evidence": {
+    "route": "host-turn-context-model-and-session-provider",
+    "selfReportIsProof": false,
+    "usage": "observed-session-counters-and-compatible-interval-deltas",
+    "billingFromTokensAllowed": false,
+    "savingsClaimRequiresMeasuredComparableBaseline": true
+  }
+}

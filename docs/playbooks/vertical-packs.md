@@ -1,5 +1,12 @@
 # Optional vertical packs
 
+Last verified: 2026-09-23 — the offline generator reconciled the six-lane/forty-case native
+corpus's stale generated evaluator field to the current source-derived revision
+`721b8f452746ee434cd012925fde549c1cd573fc8cceab28495d2dff3b85a54e`.
+The corpus hash and cases did not change; `--check` and all four focused pin tests pass.
+This does not issue native semantic observations, authenticated review, activation, or production
+acceptance.
+
 Last verified: 2026-09-14 — `/admin` now contains a closed owner review console for an exact native
 evaluation run UUID. It displays sealed output bytes and hash, exact source links, stable criterion
 IDs and mechanically resolved runtime facts; every other criterion requires an explicit decision

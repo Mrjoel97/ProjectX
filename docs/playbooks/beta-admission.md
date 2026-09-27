@@ -1,5 +1,10 @@
 # Playbook: Beta Admission (BETA-01)
 
+> Last verified: 2026-09-20 — repository-controlled admission evidence now includes a controlled
+> owner/non-owner `/admin` browser spec. The owner mount can approve and mint an invite; the second
+> authenticated identity sees neither the waitlist nor its controls. The spec is deliberately
+> opt-in and local-only, so this does not claim hosted identity, provider, or Wave 8 acceptance.
+
 > Last verified: 2026-09-14 — `/admin` now mounts an owner-only vertical review console that
 > loads one exact native evaluation run UUID and binds every decision to the sealed output's
 > SHA-256 and UTF-8 byte length. The existing owner mount gate remains the admission boundary:

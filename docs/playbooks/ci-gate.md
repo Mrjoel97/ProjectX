@@ -1,5 +1,19 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-09-23 — strict qualification is explicit with `--exit-code` for both local
+> corpus checkers. Missing Git/root/diff discovery, absent or invalid watch data, and missing or
+> empty planning inputs now fail with structured `status: failed`; a successful qualification emits
+> `status: passed`. Editor-hook skips emit `status: skipped` and remain nonblocking. Subprocess
+> fixtures cover these outcomes, existing planning contradictions, valid corpora, and uncovered
+> playbook changes. Run `node --test scripts/check-planning.test.mjs scripts/check-playbooks.test.mjs`.
+> This check validates local corpus consistency; it does not accept or close a phase.
+
+> Last verified: 2026-09-20 — the source-anchored capability-claim checker is registered in the
+> hand-maintained free-gate allowlist, exposed as `pnpm check:free-gates`, and invoked by normal CI.
+> Its mutation suite rejects deleted claim inventory and positive invite, legal, or social copy
+> when the named capability is unavailable. The checker proves repository copy alignment only; it
+> does not claim deployment, provider approval, legal formation, or Wave 8 qualification.
+
 > Last verified: 2026-09-19 (37.1 closeout — **planning completion is semantic, not a filename
 > count**, and the verified route now advances to Wave 1A). `node --test scripts/check-planning.test.mjs` passed **11/11** focused tests. The
 > fixtures mutation-prove exact PLAN-to-SUMMARY identity, explicit open statuses, named
