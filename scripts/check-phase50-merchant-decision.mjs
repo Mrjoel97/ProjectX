@@ -53,12 +53,21 @@ const present = (value) =>
   typeof value === "string" &&
   value.trim().length > 0 &&
   !/^(?:pending|unknown|tbd|n\/a)$/i.test(value.trim());
+const evidencedDate = (value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return (
+    Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value &&
+    value <= new Date().toISOString().slice(0, 10)
+  );
+};
 const record = (value, synthetic = false) =>
   value &&
   present(value.value) &&
   present(value.source) &&
   (synthetic || !/synthetic|placeholder|example/i.test(`${value.value} ${value.source}`)) &&
-  /^\d{4}-\d{2}-\d{2}$/.test(value.checkedAt || "");
+  evidencedDate(value.checkedAt);
 
 function parsePacket(markdown) {
   const blocks = [...markdown.matchAll(/```phase50-decision-json\s*\r?\n([\s\S]*?)\r?\n```/g)];
@@ -175,7 +184,7 @@ function validate(decision, adrBytes, synthetic = false) {
   const matrix = decision?.capabilityMatrix;
   need(
     present(matrix?.version) &&
-      /^\d{4}-\d{2}-\d{2}$/.test(matrix?.checkedAt || "") &&
+      evidencedDate(matrix?.checkedAt) &&
       matrix?.defaultStatus === "unverified",
     "matrix_version_or_default_missing",
   );
@@ -345,6 +354,30 @@ function selfTest() {
       "missing_field",
       (d) => {
         delete d.providers.stripe.rawBodySignature;
+      },
+    ],
+    [
+      "impossible_provider_evidence_date",
+      (d) => {
+        d.providers.stripe.rawBodySignature.checkedAt = "2026-02-30";
+      },
+    ],
+    [
+      "future_owner_approval_date",
+      (d) => {
+        d.owner.approval.checkedAt = "2099-01-01";
+      },
+    ],
+    [
+      "impossible_matrix_date",
+      (d) => {
+        d.capabilityMatrix.checkedAt = "2026-13-01";
+      },
+    ],
+    [
+      "future_matrix_date",
+      (d) => {
+        d.capabilityMatrix.checkedAt = "2099-01-01";
       },
     ],
     [
