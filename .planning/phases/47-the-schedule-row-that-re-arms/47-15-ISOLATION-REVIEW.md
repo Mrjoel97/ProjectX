@@ -57,3 +57,12 @@ Graphify refresh is the remaining tooling exception. `graphify update . --no-clu
 ## Later tooling resolution — 2026-09-25
 
 The paragraph above records the original checkpoint, not current graph state. A later guarded full Graphify refresh completed successfully, followed by the Convex-edge fixup. The stage checker self-check now passes 32/32 and the four independent decision exits remain 0/1/0/0. The exact six-file inventory is still the only accepted candidate scope; see the current-file addendum in `47-16-TECHNICAL-REVIEW.md`. Atomic GSD summary/commit bookkeeping remains pending in the shared dirty worktree, and this update grants no runtime or release authority.
+
+## 2026-09-28 plan-record closure
+
+The preceding bookkeeping sentence is historical. [47-15-SUMMARY.md](47-15-SUMMARY.md) now
+records this plan's narrow completed inventory/harness/stage transition and the non-atomic shared
+integration commit. Current gate self-check passes 32/32, `routineDecision.test.ts` passes 92/92,
+and matrix/eligibility/defer/stage exits remain 0/1/0/0 with 14 eligibility findings. The current
+candidate's later source changes still await independent review; Plan 47-16, D6, ROUT-02 and
+Wave 6 are not closed by this plan-record update.
