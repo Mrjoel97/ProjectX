@@ -1,5 +1,14 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-28 — the Phase 49 qualification checker now requires
+> the Wave 3 and Wave 4 **current local checkpoint** hashes in the governing
+> wave map to equal the same 71-file artifact digest pinned by the Phase 49
+> verification and summary. A stale or missing map pin fails before any
+> expensive browser plane runs. This closes a planning-evidence drift path;
+> it does not expand local qualification into hosting, merchant or founder
+> acceptance. The changed checker and this watched playbook retire the prior
+> digest until a fresh serialized aggregate passes.
+>
 > Last verified: 2026-09-28 — `web-form-retention` still starts hourly, but an
 > expired backlog now schedules the next 100-row `cleanupAll` batch after one
 > second in the same transaction as the preceding deletes. A 101-expired-row,

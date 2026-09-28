@@ -17,9 +17,9 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local requalification passed:** the watched vertical-packs playbook changed for derived repeat-use telemetry, retiring the previous `c1e4699509bf24d7d9d9df5ee89d747c2773b7e54827afa28b89d74cff37e63e` result. A fresh serialized 21-plane aggregate passed on the current source identity below, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local requalification passed:** the qualification checker now requires the Wave 3/4 map to pin the exact current digest. A fresh serialized 21-plane aggregate passed on the current identity below, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The previous result on `60471042d458df7616f7cc535dc5110fb2ec9fca1df4d625293c5b3412ed9c60` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `60471042d458df7616f7cc535dc5110fb2ec9fca1df4d625293c5b3412ed9c60`
+Artifact-set SHA-256: `62ecb91255d78f37105efcf8fcb48d65fdf4fd39a9374a6c09174b2fb3989d43`
 
 The changed skill contract and watched playbooks for a CLI-compatible named
 self-hosted golden diagnostic retired the prior Phase 49 digest. The new

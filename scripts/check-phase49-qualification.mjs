@@ -11,6 +11,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const verification =
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md";
 const summary = ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-07-SUMMARY.md";
+const waveMap =
+  ".planning/phases/37.1-closure-programme-integration-and-wave-0-baseline/37.1-WAVE-MAP.md";
 // This is the declared implementation artifact set. Directory entries expand recursively and
 // lexically; summary, verification and mutable planning status are deliberately excluded.
 export const ARTIFACT_INPUTS = [
@@ -105,14 +107,23 @@ function manifest(inputs = ARTIFACT_INPUTS, base = root) {
 function recordedHash(text) {
   return text.match(/^Artifact-set SHA-256: `([a-f0-9]{64})`$/m)?.[1] ?? null;
 }
+function currentWaveHash(text, wave) {
+  const section = text.split(new RegExp(`^## Wave ${wave} \\u2014[^\\r\\n]*$`, "m"))[1];
+  const current = section?.split(/^## Wave \d+ /m)[0];
+  return current?.match(/\*\*Current local checkpoint[^\n]*\*\*[^\n]*\n?`([a-f0-9]{64})`/)?.[1] ?? null;
+}
 function finalState() {
   const report = readFileSync(resolve(root, verification), "utf8");
   const note = readFileSync(resolve(root, summary), "utf8");
   const roadmap = readFileSync(resolve(root, ".planning/ROADMAP.md"), "utf8");
   const requirements = readFileSync(resolve(root, ".planning/REQUIREMENTS.md"), "utf8");
+  const map = readFileSync(resolve(root, waveMap), "utf8");
   const actual = manifest();
   if (recordedHash(report) !== actual.digest || recordedHash(note) !== actual.digest)
     throw new Error("recorded Phase 49 artifact hash is missing or stale");
+  for (const wave of [3, 4])
+    if (currentWaveHash(map, wave) !== actual.digest)
+      throw new Error(`Wave ${wave} current checkpoint hash is missing or stale`);
   if (
     !/^\| 49\. Qualified Public-Web and Storefront Recipes[^\n]*\| 7\/7 \| Complete \(repository\/local technical layer only\)/m.test(
       roadmap,
@@ -331,6 +342,14 @@ function selfTest() {
   if (
     digestRows([{ path: "control", sha256: "a".repeat(64) }]) ===
     digestRows([{ path: "control", sha256: "b".repeat(64) }])
+  )
+    bad += 1;
+  const checkpointFixture = `## Wave 3 \u2014 test\n**Current local checkpoint:**\n\`${"a".repeat(64)}\`\n## Wave 4 \u2014 test\n**Current local checkpoint:** \`${"b".repeat(64)}\`\n`;
+  if (
+    currentWaveHash(checkpointFixture, 3) !== "a".repeat(64) ||
+    currentWaveHash(checkpointFixture, 4) !== "b".repeat(64) ||
+    currentWaveHash(checkpointFixture.replace("Current local checkpoint", "Retired checkpoint"), 3) !==
+      null
   )
     bad += 1;
   stdout.write(
