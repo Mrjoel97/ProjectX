@@ -7,9 +7,9 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-28 serialized `node scripts/check-phase49-qualification.mjs` run passed all 21 required planes on the current 71-file digest below with identical initial/final identity. It included fresh owner-candidate and integrated three-family disposable browser stacks with independent in-stack audit witnesses, production web build, three typechecks, core/backend/web regressions, evaluator pins, claim controls, strict planning/playbooks and all 34 free gates. The previous result on `3436015858c83f571bc74390e7530a6524aecb11159b0584d8c33ec1f3e53366` is historical. This is repository/local technical qualification only; Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `3436015858c83f571bc74390e7530a6524aecb11159b0584d8c33ec1f3e53366`
+Artifact-set SHA-256: `c1e4699509bf24d7d9d9df5ee89d747c2773b7e54827afa28b89d74cff37e63e`
 
 **2026-09-28 local provider-egress requalification:** A filtered golden diagnostic
 stopped with an unresolved first embedding reservation after sandboxed TCP/443
