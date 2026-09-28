@@ -1,11 +1,16 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
-> Last verified: 2026-09-29 — Phase 8 Nyquist revalidation added five offline
-> SkillOpt contract checks (one green, four red). The candidate/eval registry
-> seam remains tested, but the Python optimizer route is not operational proof:
-> pinned v0.2.0 adapter imports/call shape and workflow entrypoint mismatch,
-> while the hard reward copies historical feedback. Keep the optimizer disabled;
-> see `08-VALIDATION.md`. No live optimizer or provider call was run.
+> Last verified: 2026-09-29 — the pinned SkillOpt 0.2.0 adapter, split loader,
+> config and registration shim pass seven offline checks against an installed
+> wheel. The main workflow now has an independent qualification latch; a
+> credentials-free workflow runs these checks. This does not prove a trainer
+> run, feedback-sensitive semantic improvement or privacy qualification.
+>
+> Historical 2026-09-29 audit — Phase 8 Nyquist revalidation initially added
+> five offline SkillOpt contract checks (one green, four red), identifying wrong
+> adapter imports/call shape and workflow entrypoint plus a fixed historical
+> reward. The next entry above records the offline repairs; neither audit ran
+> a live optimizer or provider call. See `08-VALIDATION.md`.
 >
 > Last verified: 2026-09-28 — the Data preview final-write guard changed
 > `vault.ts`, which is inside the source-derived golden evaluator identity.
@@ -2615,10 +2620,12 @@ Phase 8 wires an **offline** prompt-optimization loop ON TOP of this registry. T
 candidate→active gate is the load-bearing invariant it reuses — SkillOpt never bypasses it.
 
 **Current qualification (2026-09-29):** This is the intended design, not a proven operating loop.
-`skillopt/tests/test_skillopt_contract.py` demonstrates four red integration/scoring checks against the
-pinned package contract. The July dry run used a hand-edited candidate, so it proved steps 1–3 and
-5–7's seam but not step 4. Do not enable the kill switch or dispatch the workflow until the Python
-route, candidate-sensitive score, installed-package smoke and controlled end-to-end proof pass.
+`skillopt/tests/test_skillopt_contract.py` now passes seven offline checks against the installed
+pinned package, repairing the initially red adapter, CLI and score seams. The candidate-observed
+hard score is only structural plan completeness; it cannot prove an edit resolved the user's
+feedback. The July dry run used a hand-edited candidate, so it proved steps 1–3 and 5–7's seam but
+not step 4. Do not enable the app kill switch or set `SKILLOPT_RUNTIME_QUALIFIED=true` until a
+feedback-sensitive quality measure, privacy review and controlled end-to-end proof pass.
 
 **The loop (ships DORMANT):**
 
@@ -2632,10 +2639,10 @@ route, candidate-sensitive score, installed-package smoke and controlled end-to-
    every text field runs through `packages/pii` `scanText`; only `safeText`+counts leave, fail-closed
    (a scan `Err` drops that trajectory). This is a SEPARATE export plane from the refs-only audit (§4).
 4. **SkillOpt CI batch (unqualified)** (`skillopt/`, `.github/workflows/skillopt.yml`, `skillopt==0.2.0`):
-   intends to read `optimizerConfig.enabled` first and no-op when dormant, then run
-   rollout→reflect→edit→held-out accept and emit `best_skill.md`. The current Python/CLI route cannot
-   establish that behavior and must remain disabled. The golden `eval-cases/` set is an independent
-   repository gate, not an export/train source.
+   reads `optimizerConfig.enabled` first and no-ops when dormant; a separate absent-by-default CI
+   qualification latch prevents training if the app switch is flipped alone. The pinned adapter,
+   config and entrypoint load offline, but rollout→reflect→edit→held-out accept has not been run.
+   The golden `eval-cases/` set is an independent repository gate, not an export/train source.
 5. **Write-back → CANDIDATE** (`POST /skillopt/writeback` → `skills.insertCandidate`): the accepted body
    lands as a NEW `candidate` version (`maxVersion+1`), prior rows immutable. `insertCandidate` rejects a
    non-gated name (`NOT_GATED`) and is idempotent vs the newest row (identical body → `inserted:false`,
