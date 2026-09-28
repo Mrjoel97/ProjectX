@@ -1,3 +1,10 @@
+> Last verified: 2026-09-28 — the workspace Output card's verified vertical draft control
+> now offers a human edit alongside accept/needs-changes. It loads only the selected owned
+> document text, persists a changed body through a server-side CAS with PDF/workbook
+> replacement where applicable, and records a refs-only user outcome after persistence.
+> The control neither sends nor activates a pack. Focused UI/backend tests pass; an
+> authenticated deployed browser walkthrough remains open.
+>
 > Last verified: 2026-09-28 — the Output card now mounts an authenticated vertical-artifact
 > review control only when the server can bind the selected owned document to one ordinary-run
 > native candidate creation event. Accept/needs-changes records a single refs-only user decision;

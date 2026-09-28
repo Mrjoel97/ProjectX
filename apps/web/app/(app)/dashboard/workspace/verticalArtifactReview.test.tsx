@@ -6,16 +6,30 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { VerticalArtifactReview } from "./VerticalArtifactReview";
 
 const record = vi.fn();
-let target: { verticalId: string; decision: "approve" | "reject" | null } | null | undefined;
+const save = vi.fn();
+let target:
+  | { verticalId: string; decision: "approve" | "reject" | "edit" | null }
+  | null
+  | undefined;
+let artifact: { text: string; status: string } | null | undefined;
 vi.mock("convex/react", () => ({
-  useQuery: (ref: never, args: { artifactId: string }) => {
-    expect(getFunctionName(ref)).toBe("verticalPacks:reviewTarget");
-    expect(args).toEqual({ artifactId: "doc-a" });
-    return target;
+  useQuery: (ref: never, args: { artifactId?: string; vaultDocId?: string }) => {
+    const name = getFunctionName(ref);
+    if (name === "verticalPacks:reviewTarget") {
+      expect(args).toEqual({ artifactId: "doc-a" });
+      return target;
+    }
+    expect(name).toBe("vault:vaultDocText");
+    expect(args).toEqual({ vaultDocId: "doc-a" });
+    return artifact;
   },
   useMutation: (ref: never) => {
     expect(getFunctionName(ref)).toBe("verticalPacks:recordReview");
     return record;
+  },
+  useAction: (ref: never) => {
+    expect(getFunctionName(ref)).toBe("verticalArtifactEdit:save");
+    return save;
   },
 }));
 
@@ -24,7 +38,10 @@ let root: Root;
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   target = { verticalId: "product", decision: null };
+  artifact = { text: "Original draft", status: "ready" };
   record.mockReset();
+  save.mockReset();
+  save.mockResolvedValue({ saved: true });
   record.mockResolvedValue({ recorded: true, decision: "approve" });
   host = document.createElement("div");
   document.body.append(host);
@@ -72,4 +89,49 @@ test("a rejected or failed review stays explicit rather than looking accepted", 
   expect(record).toHaveBeenCalledExactlyOnceWith({ artifactId: "doc-a", decision: "reject" });
   expect(host.querySelector('p[role="alert"]')?.textContent).toContain("could not be recorded");
   expect(host.querySelector('p[role="status"]')).toBeNull();
+});
+
+test("edit opens the persisted text, refuses no-op and calls only the authenticated edit action", async () => {
+  await render();
+  await click("Edit draft");
+  const textarea = host.querySelector("textarea");
+  expect(textarea?.value).toBe("Original draft");
+  expect(
+    [...host.querySelectorAll("button")].find((b) => b.textContent === "Save edited draft")
+      ?.disabled,
+  ).toBe(true);
+  await act(async () => {
+    if (textarea) {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+      setter?.call(textarea, "Human revision");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
+  await click("Save edited draft");
+  expect(save).toHaveBeenCalledExactlyOnceWith({ artifactId: "doc-a", markdown: "Human revision" });
+  expect(record).not.toHaveBeenCalled();
+  target = { verticalId: "product", decision: "edit" };
+  artifact = { text: "Human revision", status: "ready" };
+  await render();
+  expect(host.querySelector('p[role="status"]')?.textContent).toContain("edited draft saved");
+});
+
+test("a table-free spreadsheet edit shows an actionable refusal without a review outcome", async () => {
+  save.mockRejectedValue(new Error("ARTIFACT_EDIT_NO_TABLE"));
+  await render();
+  await click("Edit draft");
+  const textarea = host.querySelector("textarea");
+  await act(async () => {
+    if (textarea) {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
+        textarea,
+        "No table",
+      );
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
+  await click("Save edited draft");
+  expect(host.querySelector('p[role="alert"]')?.textContent).toContain("needs a Markdown table");
+  expect(host.querySelector('p[role="status"]')).toBeNull();
+  expect(record).not.toHaveBeenCalled();
 });

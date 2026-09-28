@@ -240,6 +240,7 @@ const CONVEX_MODULES = [
   "vaultSources.ts",
   "vaultSweep.ts",
   "vaultTranscribe.ts",
+  "verticalArtifactEdit.ts", // tenant-triggered artifact edit; no recurrence or scheduler grant
   "verticalData.ts",
   "verticalEvalEvidence.ts",
   "verticalEvalSources.ts",

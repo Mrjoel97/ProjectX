@@ -510,6 +510,7 @@
     "packages/backend/scripts/smokeRun.mjs",
     "packages/vault/src/dataWorkbook",
     "packages/backend/convex/verticalPacks",
+    "packages/backend/convex/verticalArtifactEdit.ts",
     "packages/backend/convex/verticalPackTelemetry",
     "packages/backend/convex/verticalPackBinding",
     "packages/contracts/src/skills/vertical",

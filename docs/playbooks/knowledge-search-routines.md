@@ -1,5 +1,10 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — the closed Convex-module inventory now explicitly includes
+> `verticalArtifactEdit.ts`, an authenticated artifact-edit action with no recurrence,
+> scheduler or cron call. The exact inventory and ten-token absence scans pass 9/9; this
+> does not change the operational `defer` decision or enable any routine runtime.
+>
 > Last verified: 2026-09-28 — a red-before-green 36th synthetic candidate test
 > showed that an unconfirmed paid-step timeout could enter `retry_pending` and
 > permit another physical call. The disabled model now quarantines ambiguous

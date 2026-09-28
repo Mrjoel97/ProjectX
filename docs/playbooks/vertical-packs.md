@@ -1,5 +1,14 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — the Output card now has a genuine authenticated edit path.
+It seeds an editor from the owned artifact text; a changed draft is rendered to replacement
+PDF/workbook bytes where applicable and committed with an exact original-content CAS.
+Only after the content and bytes persist does one user-actor, refs-only `review_edited`
+event record revision 1. No-op, foreign, stale, preview, duplicate and table-free edits
+refuse; a later model rewrite invalidates the edit outcome's current-artifact attribution.
+Focused backend and DOM tests pass. This is local runtime proof, not deployed browser UAT,
+semantic qualification, candidate approval, activation or delivery.
+
 Last verified: 2026-09-28 — ordinary artifact review now refuses an agent document
 rewritten in place after its original `artifact_created` event. `vaultDocuments.contentRevision`
 starts at zero for new agent content and advances on the created-document replacement seam;
@@ -8,8 +17,7 @@ non-agent uploads, so it cannot bypass this review provenance check. Local red-t
 Vault and vertical tests pass. The source change retires the old native evaluator revision;
 its generated six-lane/40-case corpus now pins
 `1accbd5f9d1a91901f49bae828f106a0700f3690fbcac3b930703f7fa6c36168` with
-unchanged corpus hash. This does not count an AI rewrite as a human edit or complete
-the `review_edited` path, semantic evaluation, browser UAT, or activation.
+unchanged corpus hash. AI rewrites still do not count as human edits.
 
 Last verified: 2026-09-28 — an authenticated Output-card action can now record one
 accept-or-needs-changes decision for an owned ordinary-run vertical artifact. The server

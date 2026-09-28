@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@pikar/backend/api";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 import { useState } from "react";
 
@@ -10,19 +10,44 @@ type ArtifactId = FunctionArgs<typeof api.verticalPacks.reviewTarget>["artifactI
 /** An authenticated artifact decision, not candidate approval, publication or a send. */
 export function VerticalArtifactReview({ artifactId }: { artifactId: ArtifactId }) {
   const target = useQuery(api.verticalPacks.reviewTarget, { artifactId });
+  const artifact = useQuery(api.vault.vaultDocText, { vaultDocId: artifactId });
   const recordReview = useMutation(api.verticalPacks.recordReview);
+  const saveEdit = useAction(api.verticalArtifactEdit.save);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
 
   if (!target) return null;
 
   const decide = async (decision: "approve" | "reject") => {
     setSaving(true);
-    setError(false);
+    setError(null);
     try {
       await recordReview({ artifactId, decision });
     } catch {
-      setError(true);
+      setError("Review could not be recorded. Reopen the artifact and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await saveEdit({ artifactId, markdown: draft });
+      setEditing(false);
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : "";
+      setError(
+        code.includes("ARTIFACT_EDIT_NO_TABLE")
+          ? "This spreadsheet needs a Markdown table before it can be saved."
+          : code.includes("ARTIFACT_EDIT_STALE_OR_UNCHANGED") ||
+              code.includes("ARTIFACT_ORIGIN_UNVERIFIED")
+            ? "This draft changed while you were editing. Reopen it before trying again."
+            : "Edited draft could not be saved. Your original artifact is unchanged.",
+      );
     } finally {
       setSaving(false);
     }
@@ -36,8 +61,39 @@ export function VerticalArtifactReview({ artifactId }: { artifactId: ArtifactId 
       </p>
       {target.decision ? (
         <p role="status">
-          Review recorded: {target.decision === "approve" ? "acceptable" : "needs changes"}.
+          Review recorded:{" "}
+          {target.decision === "approve"
+            ? "acceptable"
+            : target.decision === "edit"
+              ? "edited draft saved"
+              : "needs changes"}
+          .
         </p>
+      ) : editing ? (
+        <div>
+          <label htmlFor="vertical-artifact-edit">Edit this draft</label>
+          <textarea
+            id="vertical-artifact-edit"
+            aria-label="Edit vertical draft"
+            value={draft}
+            maxLength={25_000}
+            onChange={(event) => setDraft(event.target.value)}
+            rows={12}
+            style={{ width: "100%" }}
+          />
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button"
+              disabled={saving || !draft.trim() || draft === artifact?.text}
+              onClick={() => void save()}
+            >
+              Save edited draft
+            </button>
+            <button type="button" disabled={saving} onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           <button type="button" disabled={saving} onClick={() => void decide("approve")}>
@@ -46,11 +102,19 @@ export function VerticalArtifactReview({ artifactId }: { artifactId: ArtifactId 
           <button type="button" disabled={saving} onClick={() => void decide("reject")}>
             Needs changes
           </button>
+          <button
+            type="button"
+            disabled={saving || artifact?.text == null || artifact.status !== "ready"}
+            onClick={() => {
+              setDraft(artifact?.text ?? "");
+              setEditing(true);
+            }}
+          >
+            Edit draft
+          </button>
         </div>
       )}
-      {error && (
-        <p role="alert">Review could not be recorded. Reopen the artifact and try again.</p>
-      )}
+      {error && <p role="alert">{error}</p>}
     </section>
   );
 }

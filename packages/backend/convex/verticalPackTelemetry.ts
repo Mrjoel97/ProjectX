@@ -30,6 +30,7 @@ export const record = internalMutation({
     actor: v.optional(v.literal("user")),
     preview: v.optional(v.boolean()),
     artifactId: v.optional(v.id("vaultDocuments")),
+    contentRevision: v.optional(v.number()),
     claimCount: v.optional(v.number()),
     citedClaimCount: v.optional(v.number()),
     unsupportedClaimCount: v.optional(v.number()),
@@ -64,7 +65,8 @@ export const record = internalMutation({
     if (
       args.actor === "user" &&
       args.event !== "review_approved" &&
-      args.event !== "review_rejected"
+      args.event !== "review_rejected" &&
+      args.event !== "review_edited"
     )
       throw new Error("ACTOR_EVENT_MISMATCH");
     const row = await ctx.db.get(args.candidateId);
@@ -90,6 +92,19 @@ export const record = internalMutation({
       args.event === "review_rejected"
     ) {
       if (!args.artifactId) throw new Error("ARTIFACT_REQUIRED");
+      if (args.event === "review_edited") {
+        const artifact = await ctx.db.get(args.artifactId);
+        if (
+          args.actor !== "user" ||
+          !artifact ||
+          !Number.isSafeInteger(args.contentRevision) ||
+          (args.contentRevision ?? 0) < 1 ||
+          artifact.contentRevision !== args.contentRevision
+        )
+          throw new Error("EDIT_REVISION_UNVERIFIED");
+      } else if (args.contentRevision !== undefined) {
+        throw new Error("EDIT_REVISION_UNEXPECTED");
+      }
       // A review observation must answer a real artifact from this exact native candidate.
       // If its origin fell outside the bounded history, omit the metric rather than guessing.
       const history = await verticalEventsFor(ctx, args.tenantId);

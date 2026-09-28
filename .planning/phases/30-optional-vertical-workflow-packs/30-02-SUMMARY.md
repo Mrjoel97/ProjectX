@@ -135,3 +135,20 @@ revision for the unchanged six-lane/40-case corpus; the exact corpus check and f
 focused tests pass. No semantic verdict was minted by regeneration.
 The uncontended local `pnpm test` then passed all 11 package test tasks, including
 backend **182 files/4,617 tests** and web **70 files/1,067 tests** (two existing skips).
+
+## 2026-09-28 authenticated human edit path
+
+The Output card can now edit the selected owned vertical artifact. The server checks its
+ordinary-run candidate provenance and unchanged original content, re-renders PDF or XLSX
+bytes where needed, then atomically persists the text/bytes and a refs-only user
+`review_edited` outcome. A stale or no-op edit cannot inflate the count; model rewrites
+are not treated as human edits. Focused backend and DOM tests cover text, PDF, workbook,
+foreign/stale/no-op and review terminal behavior. Deployed browser UAT, semantic
+evaluation, activation and pack release remain open; Plan 30-02 is still partial.
+The full local suite subsequently passed all 11 package tasks, including backend
+**182 files/4,622 tests** and web **70 files/1,067 tests** (two existing skips).
+The new Convex module was also admitted to the closed recurrence absence inventory
+after its no-scheduler posture was checked; that suite passes 9/9 and operational
+recurrence remains `defer`.
+All 12 workspace typecheck tasks, repository lint, all 32 free gates, strict
+planning/playbook checks and Graphify/Convex-edge refresh passed locally.

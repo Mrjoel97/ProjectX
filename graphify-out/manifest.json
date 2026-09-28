@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1790556293.0481045,
-    "ast_hash": "1ea9773a136c77ec3820e6abca39a366",
+    "mtime": 1790561083.785318,
+    "ast_hash": "7dc978471096e1ff950e514babc50020",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -1585,8 +1585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1790556282.0105796,
-    "ast_hash": "851a0314a0ca7b047ce0f8427a548180",
+    "mtime": 1790561035.8611321,
+    "ast_hash": "0aab804021ef75233e98dd2b5f0c313a",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -6810,8 +6810,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.d.ts": {
-    "mtime": 1790203674.2891088,
-    "ast_hash": "653edc1c11b7c2bb0c65fb2313c76a7b",
+    "mtime": 1790560590.9833982,
+    "ast_hash": "30bb6408d1056efaf694925eef75e7a0",
     "semantic_hash": ""
   },
   "packages/backend/convex/_generated/api.js": {
@@ -11425,8 +11425,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/routines.test.ts": {
-    "mtime": 1790540609.3108385,
-    "ast_hash": "02fd993d4bd2382b045d2018231d700f",
+    "mtime": 1790561574.9505744,
+    "ast_hash": "66a77b0a4a11b8c560b68cbe6c435c82",
     "semantic_hash": ""
   },
   "packages/backend/convex/scaleConstants.test.ts": {
@@ -11915,8 +11915,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/knowledge-search-routines.md": {
-    "mtime": 1790552312.5921302,
-    "ast_hash": "bd18d0102582ce06766ce87c2ef06515",
+    "mtime": 1790561622.469221,
+    "ast_hash": "be1129327e516170d267d187d06482cb",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-05-promotion.md": {
@@ -13155,13 +13155,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPackTelemetry.test.ts": {
-    "mtime": 1790556587.5244093,
-    "ast_hash": "e526c1ec286f17f25835ab1756a2932e",
+    "mtime": 1790561002.4217744,
+    "ast_hash": "7cfe2453b5d796a5f7f51f81ce776a04",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPackTelemetry.ts": {
-    "mtime": 1790556198.7903144,
-    "ast_hash": "4c797343d243fe27da7022bf34c3b99b",
+    "mtime": 1790560340.5800369,
+    "ast_hash": "e20ef63064f7283dd24773d63ee45fe0",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.test.ts": {
@@ -13170,8 +13170,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.ts": {
-    "mtime": 1790557681.502221,
-    "ast_hash": "968521e91e4d0b9ffed16f16584cd58a",
+    "mtime": 1790561002.4373825,
+    "ast_hash": "77a21ff431b9f6e101f0b3be2bc8d8a7",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalProductDesign.test.ts": {
@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1790559170.1581514,
-    "ast_hash": "3240e26a1d152da17b1f4d05358d24a6",
+    "mtime": 1790561940.1061525,
+    "ast_hash": "0df69c920e54041f840c84716c9e32a3",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790559168.963656,
-    "ast_hash": "8ec3ee0f618cddc0e767898599b38d0e",
+    "mtime": 1790561034.6036673,
+    "ast_hash": "5d031ec9a0a58fb18e65118387b2050f",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -17100,18 +17100,23 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/VerticalArtifactReview.tsx": {
-    "mtime": 1790556084.7279372,
-    "ast_hash": "9da9569c07321feb32f1ba635ca37556",
+    "mtime": 1790561100.5305543,
+    "ast_hash": "8a119c6271478cb93a55eb96e591f9e3",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/verticalArtifactReview.test.tsx": {
-    "mtime": 1790556087.0701482,
-    "ast_hash": "861f1edcd82b6e2c08582f6b2085410e",
+    "mtime": 1790561144.3357973,
+    "ast_hash": "a6130438e8fa5177f430e4e43b2e633c",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.review.test.ts": {
-    "mtime": 1790557640.695766,
-    "ast_hash": "ac0b9e54c29540c7a49605f23b7b1fb6",
+    "mtime": 1790561002.4373825,
+    "ast_hash": "5132ac101fd7461e86a5b3292de60ce0",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/verticalArtifactEdit.ts": {
+    "mtime": 1790561002.4217744,
+    "ast_hash": "dbc22610e167e04c3e5aa12d95f5ddb0",
     "semantic_hash": ""
   }
 }

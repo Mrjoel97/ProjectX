@@ -11,7 +11,7 @@ import { hasValidPackProvenance } from "@pikar/core/workflowPacks";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalQuery, type QueryCtx } from "./_generated/server";
+import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
 import { ownerMutation, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { nativePackExposureReady, rollbackVerticalForTenant } from "./skills";
@@ -21,7 +21,7 @@ import { verticalEventsFor } from "./verticalPackTelemetry";
 const verticalIdArg = v.union(...VERTICAL_IDS.map((id) => v.literal(id)));
 const RECOMMENDATION_WINDOW_MS = 30 * 60_000;
 
-type ReviewDecision = "approve" | "reject";
+type ReviewDecision = "approve" | "reject" | "edit";
 type ReviewOrigin = {
   verticalId: VerticalId;
   candidateId: Id<"skills"> | Id<"tenantSkills">;
@@ -39,8 +39,7 @@ async function reviewOriginFor(
     !artifact ||
     artifact.tenantId !== tenantId ||
     artifact.status !== "ready" ||
-    artifact.origin !== "agent" ||
-    (artifact.contentRevision ?? 0) !== 0
+    artifact.origin !== "agent"
   )
     return { kind: "missing" };
   const history = await verticalEventsFor(ctx, tenantId);
@@ -76,16 +75,27 @@ async function reviewOriginFor(
     ("tenantId" in candidate && candidate.tenantId !== tenantId)
   )
     return { kind: "missing" };
+  const revision = artifact.contentRevision ?? 0;
+  if (!Number.isSafeInteger(revision) || revision < 0) return { kind: "missing" };
   const reviews = history.rows.filter(
     (row) =>
       row.actor === "user" &&
-      (row.payload?.event === "review_approved" || row.payload?.event === "review_rejected") &&
+      (row.payload?.event === "review_approved" ||
+        row.payload?.event === "review_rejected" ||
+        row.payload?.event === "review_edited") &&
       row.payload?.artifactId === artifactId &&
       row.payload?.candidateId === candidateId &&
       row.payload?.verticalId === verticalId &&
       row.payload?.preview !== true,
   );
   if (reviews.length > 1) return { kind: "ambiguous" };
+  if (
+    revision > 0 &&
+    (reviews[0]?.payload?.event !== "review_edited" ||
+      reviews[0]?.payload?.contentRevision !== revision)
+  )
+    return { kind: "missing" };
+  if (revision === 0 && reviews[0]?.payload?.event === "review_edited") return { kind: "missing" };
   return {
     kind: "found",
     value: {
@@ -96,7 +106,9 @@ async function reviewOriginFor(
           ? "approve"
           : reviews[0]?.payload?.event === "review_rejected"
             ? "reject"
-            : null,
+            : reviews[0]?.payload?.event === "review_edited"
+              ? "edit"
+              : null,
     },
   };
 }
@@ -277,6 +289,85 @@ export const recordReview = tenantMutation({
       actor: "user",
     });
     return { recorded: true, decision };
+  },
+});
+
+/** The action's read-side pin. Content stays in the authenticated Vault text query, not audit. */
+export const editPreparation = internalQuery({
+  args: { tenantId: v.string(), artifactId: v.id("vaultDocuments") },
+  handler: async (ctx, { tenantId, artifactId }) => {
+    const origin = await reviewOriginFor(ctx, tenantId, artifactId);
+    if (origin.kind !== "found" || origin.value.decision !== null) return null;
+    const artifact = await ctx.db.get(artifactId);
+    if (!artifact || artifact.tenantId !== tenantId || !artifact.text) return null;
+    const form: "short" | "long" | "sheet" =
+      artifact.kind === "created_content"
+        ? "short"
+        : artifact.storedMimeType ===
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ? "sheet"
+          : "long";
+    return { title: artifact.title, text: artifact.text, contentHash: artifact.contentHash, form };
+  },
+});
+
+/** Atomic compare-and-swap of the human-edited body, rendered bytes and refs-only outcome. */
+export const commitEdit = internalMutation({
+  args: {
+    tenantId: v.string(),
+    artifactId: v.id("vaultDocuments"),
+    expectedContentHash: v.string(),
+    markdown: v.string(),
+    contentHash: v.string(),
+    form: v.union(v.literal("short"), v.literal("long"), v.literal("sheet")),
+    storageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, a) => {
+    const origin = await reviewOriginFor(ctx, a.tenantId, a.artifactId);
+    if (origin.kind !== "found" || origin.value.decision !== null)
+      throw new Error("ARTIFACT_ORIGIN_UNVERIFIED");
+    const artifact = await ctx.db.get(a.artifactId);
+    if (
+      !artifact ||
+      artifact.tenantId !== a.tenantId ||
+      artifact.contentHash !== a.expectedContentHash ||
+      (artifact.contentRevision ?? 0) !== 0 ||
+      artifact.text === a.markdown
+    )
+      throw new Error("ARTIFACT_EDIT_STALE_OR_UNCHANGED");
+    const form =
+      artifact.kind === "created_content"
+        ? "short"
+        : artifact.storedMimeType ===
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ? "sheet"
+          : "long";
+    if (form !== a.form || (form === "short") !== (a.storageId === undefined))
+      throw new Error("ARTIFACT_EDIT_FORMAT_MISMATCH");
+    const oldStorageId = artifact.storageId;
+    await ctx.db.patch(a.artifactId, {
+      text: a.markdown,
+      size: new TextEncoder().encode(a.markdown).length,
+      contentHash: a.contentHash,
+      contentRevision: 1,
+      storageId: a.storageId,
+      storedMimeType:
+        form === "short"
+          ? undefined
+          : form === "long"
+            ? "application/pdf"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    await ctx.runMutation(internal.verticalPackTelemetry.record, {
+      tenantId: a.tenantId,
+      verticalId: origin.value.verticalId,
+      candidateId: origin.value.candidateId,
+      artifactId: a.artifactId,
+      event: "review_edited",
+      actor: "user",
+      contentRevision: 1,
+    });
+    return { oldStorageId };
   },
 });
 

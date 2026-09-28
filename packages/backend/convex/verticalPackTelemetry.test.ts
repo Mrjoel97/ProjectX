@@ -170,7 +170,7 @@ test("review observations require an owned artifact created by the exact native 
       event: "review_edited",
       artifactId,
     }),
-  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
+  ).rejects.toThrow("EDIT_REVISION_UNVERIFIED");
   await t.mutation(internal.verticalPackTelemetry.record, {
     ...base,
     event: "artifact_created",
@@ -184,8 +184,15 @@ test("review observations require an owned artifact created by the exact native 
       artifactId,
     }),
   ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
-  for (const event of ["review_approved", "review_edited", "review_rejected"] as const)
+  for (const event of ["review_approved", "review_rejected"] as const)
     await t.mutation(internal.verticalPackTelemetry.record, { ...base, event, artifactId });
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      event: "review_edited",
+      artifactId,
+    }),
+  ).rejects.toThrow("EDIT_REVISION_UNVERIFIED");
   expect(
     (await t.withIdentity({ subject: "a" }).query(api.verticalPackTelemetry.summary, {})).counts,
   ).toMatchObject({

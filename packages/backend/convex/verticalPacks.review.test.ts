@@ -204,3 +204,168 @@ test("a document rewritten in place cannot retain its original vertical review p
     owner.mutation(api.verticalPacks.recordReview, { artifactId, decision: "approve" }),
   ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
 });
+
+test("a real authenticated text edit persists before one user edit outcome", async () => {
+  const { t, candidateId, artifactId } = await setup();
+  await t.run((ctx) => ctx.db.patch(artifactId, { kind: "created_content" }));
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    tenantId: "a",
+    candidateId,
+    verticalId: "product",
+    event: "artifact_created",
+    artifactId,
+  });
+  const owner = t.withIdentity({ subject: "a" });
+  await expect(
+    owner.action(api.verticalArtifactEdit.save, { artifactId, markdown: "Private draft body" }),
+  ).rejects.toThrow("ARTIFACT_EDIT_UNCHANGED");
+  expect(
+    await owner.action(api.verticalArtifactEdit.save, {
+      artifactId,
+      markdown: "Human-edited draft body",
+    }),
+  ).toEqual({ saved: true });
+  expect((await t.run((ctx) => ctx.db.get(artifactId)))?.text).toBe("Human-edited draft body");
+  expect((await t.run((ctx) => ctx.db.get(artifactId)))?.contentRevision).toBe(1);
+  expect(await owner.query(api.verticalPacks.reviewTarget, { artifactId })).toEqual({
+    verticalId: "product",
+    decision: "edit",
+  });
+  const userReviews = (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+    (row) => row.actor === "user" && row.eventType === "vertical_pack.outcome",
+  );
+  expect(userReviews).toHaveLength(1);
+  expect(userReviews[0]?.payload).toMatchObject({
+    candidateId,
+    artifactId,
+    event: "review_edited",
+    contentRevision: 1,
+  });
+  expect(JSON.stringify(userReviews)).not.toContain("Human-edited");
+  await expect(
+    owner.action(api.verticalArtifactEdit.save, {
+      artifactId,
+      markdown: "Another edit",
+    }),
+  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
+  await expect(
+    owner.mutation(api.verticalPacks.recordReview, {
+      artifactId,
+      decision: "approve",
+    }),
+  ).rejects.toThrow("REVIEW_ALREADY_RECORDED");
+});
+
+test("foreign and stale edits cannot overwrite an artifact or claim a user outcome", async () => {
+  const { t, candidateId, artifactId } = await setup();
+  await t.run((ctx) => ctx.db.patch(artifactId, { kind: "created_content" }));
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    tenantId: "a",
+    candidateId,
+    verticalId: "product",
+    event: "artifact_created",
+    artifactId,
+  });
+  await expect(
+    t.withIdentity({ subject: "b" }).action(api.verticalArtifactEdit.save, {
+      artifactId,
+      markdown: "Foreign rewrite",
+    }),
+  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
+  await expect(
+    t.mutation(internal.verticalPacks.commitEdit, {
+      tenantId: "a",
+      artifactId,
+      expectedContentHash: "wrong",
+      markdown: "Stale rewrite",
+      contentHash: "new",
+      form: "short",
+    }),
+  ).rejects.toThrow("ARTIFACT_EDIT_STALE_OR_UNCHANGED");
+  expect((await t.run((ctx) => ctx.db.get(artifactId)))?.text).toBe("Private draft body");
+  expect(
+    (await t.withIdentity({ subject: "a" }).query(api.verticalPackTelemetry.summary, {})).counts
+      .review_edited,
+  ).toBe(0);
+});
+
+test("editing a long document replaces its PDF bytes with the edited rendering", async () => {
+  const { t, candidateId, artifactId } = await setup();
+  const oldStorageId = await t.run(async (ctx) => {
+    const id = await ctx.storage.store(new Blob(["old PDF"], { type: "application/pdf" }));
+    await ctx.db.patch(artifactId, {
+      kind: "created_document",
+      storageId: id,
+      storedMimeType: "application/pdf",
+    });
+    return id;
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    tenantId: "a",
+    candidateId,
+    verticalId: "product",
+    event: "artifact_created",
+    artifactId,
+  });
+  expect(
+    await t.withIdentity({ subject: "a" }).action(api.verticalArtifactEdit.save, {
+      artifactId,
+      markdown: "# Human-edited title\n\nA corrected paragraph.",
+    }),
+  ).toEqual({ saved: true });
+  const doc = await t.run((ctx) => ctx.db.get(artifactId));
+  expect(doc?.contentRevision).toBe(1);
+  expect(doc?.storedMimeType).toBe("application/pdf");
+  expect(doc?.storageId).not.toBe(oldStorageId);
+  const pdfHead = await t.run(async (ctx) => {
+    const blob = doc?.storageId ? await ctx.storage.get(doc.storageId) : null;
+    return blob ? (await blob.text()).slice(0, 4) : null;
+  });
+  expect(pdfHead).toBe("%PDF");
+  expect(await t.run(async (ctx) => (await ctx.storage.get(oldStorageId)) === null)).toBe(true);
+});
+
+test("editing a spreadsheet replaces workbook bytes and refuses a table-free draft", async () => {
+  const { t, candidateId, artifactId } = await setup();
+  const oldStorageId = await t.run(async (ctx) => {
+    const id = await ctx.storage.store(new Blob(["old workbook"]));
+    await ctx.db.patch(artifactId, {
+      kind: "created_document",
+      storageId: id,
+      storedMimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    return id;
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    tenantId: "a",
+    candidateId,
+    verticalId: "product",
+    event: "artifact_created",
+    artifactId,
+  });
+  const owner = t.withIdentity({ subject: "a" });
+  await expect(
+    owner.action(api.verticalArtifactEdit.save, {
+      artifactId,
+      markdown: "A paragraph without a table",
+    }),
+  ).rejects.toThrow("ARTIFACT_EDIT_NO_TABLE");
+  expect(
+    await owner.action(api.verticalArtifactEdit.save, {
+      artifactId,
+      markdown: "| Item | Count |\n| --- | --- |\n| Revised | 2 |",
+    }),
+  ).toEqual({ saved: true });
+  const doc = await t.run((ctx) => ctx.db.get(artifactId));
+  expect(doc?.contentRevision).toBe(1);
+  expect(doc?.storedMimeType).toBe(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  expect(doc?.storageId).not.toBe(oldStorageId);
+  const byteCount = await t.run(async (ctx) => {
+    const blob = doc?.storageId ? await ctx.storage.get(doc.storageId) : null;
+    return blob?.size ?? 0;
+  });
+  expect(byteCount).toBeGreaterThan(100);
+  expect(await t.run(async (ctx) => (await ctx.storage.get(oldStorageId)) === null)).toBe(true);
+});
