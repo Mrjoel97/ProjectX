@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — review outcome telemetry now requires its owned artifact's
+bounded `artifact_created` event to match the review's preview-versus-ordinary-run status
+as well as tenant, vertical and candidate. A preview artifact previously grounded a
+non-preview approval; the new negative control failed before the guard and passes now,
+alongside the reverse mismatch and two matching positive controls. Focused vertical tests
+pass 24/24 and backend TypeScript passes. This is event-provenance integrity only, not
+proof of a human review, a review UI, native evaluation or pack activation.
+
 Last verified: 2026-09-28 — the generated native vertical evaluator revision is
 `1accbd5f9d1a91901f49bae828f106a0700f3690fbcac3b930703f7fa6c36168` after
 the lockfile dependency change; the six-lane, 40-case corpus hash remains

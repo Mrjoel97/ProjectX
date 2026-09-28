@@ -91,7 +91,8 @@ export const record = internalMutation({
             event.payload?.event === "artifact_created" &&
             event.payload?.candidateId === args.candidateId &&
             event.payload?.verticalId === args.verticalId &&
-            event.payload?.artifactId === args.artifactId,
+            event.payload?.artifactId === args.artifactId &&
+            (event.payload?.preview === true) === (args.preview === true),
         )
       )
         throw new Error("ARTIFACT_ORIGIN_UNVERIFIED");

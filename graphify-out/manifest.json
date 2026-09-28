@@ -13155,13 +13155,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPackTelemetry.test.ts": {
-    "mtime": 1790535145.530853,
-    "ast_hash": "288cea3aaec6c1a17a6f0f7b08507b5b",
+    "mtime": 1790554932.346223,
+    "ast_hash": "ffacb5c55a3379e87c59e5a6727329b1",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPackTelemetry.ts": {
-    "mtime": 1790535067.165046,
-    "ast_hash": "9617994d44abf877609407697467bbb8",
+    "mtime": 1790554957.6935818,
+    "ast_hash": "21bc03bf083b5213d96436175590cc86",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.test.ts": {
@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1790535160.2671509,
-    "ast_hash": "6f7e3a81b47e9442e31521e5c39f2a45",
+    "mtime": 1790555065.3419163,
+    "ast_hash": "9da3fc9a20119ed40ce8cf399afc545b",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790547660.2037537,
-    "ast_hash": "d5ca85f3274811f70cde4913657f7770",
+    "mtime": 1790555055.0555596,
+    "ast_hash": "27f7b63d7010c369c3321e607038dc43",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {

@@ -194,3 +194,78 @@ test("review observations require an owned artifact created by the exact native 
     review_rejected: 1,
   });
 });
+
+test("preview artifacts cannot ground non-preview review outcomes", async () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  const { candidateId, previewArtifactId, productionArtifactId } = await t.run(async (ctx) => {
+    const candidateId = await ctx.db.insert("tenantSkills", {
+      tenantId: "a",
+      name: verticalSkillName("product"),
+      version: 1,
+      status: "candidate",
+      rollbackEligible: false,
+      body: "Synthetic candidate",
+      authoredBody: "",
+      author: "system",
+      basedOnScope: "global",
+      basedOnName: verticalSkillName("product"),
+      basedOnVersion: 1,
+      createdAt: 1,
+    });
+    const document = {
+      tenantId: "a",
+      title: "Synthetic draft",
+      kind: "document" as const,
+      category: "workspace-docs" as const,
+      source: "agent" as const,
+      mimeType: "text/markdown",
+      size: 12,
+      contentHash: "synthetic",
+      text: "Synthetic draft",
+      status: "ready" as const,
+      createdAt: 1,
+    };
+    const previewArtifactId = await ctx.db.insert("vaultDocuments", document);
+    const productionArtifactId = await ctx.db.insert("vaultDocuments", document);
+    return { candidateId, previewArtifactId, productionArtifactId };
+  });
+  const base = { tenantId: "a", candidateId, verticalId: "product" as const };
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "artifact_created",
+    artifactId: previewArtifactId,
+    preview: true,
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "artifact_created",
+    artifactId: productionArtifactId,
+  });
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      event: "review_approved",
+      artifactId: previewArtifactId,
+    }),
+  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      event: "review_approved",
+      artifactId: productionArtifactId,
+      preview: true,
+    }),
+  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "review_approved",
+    artifactId: previewArtifactId,
+    preview: true,
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "review_approved",
+    artifactId: productionArtifactId,
+  });
+});

@@ -83,3 +83,14 @@ reference an owned artifact with a bounded prior creation event for the same nat
 and vertical. Missing, foreign and wrong-candidate origins refuse; the focused telemetry suite
 passes 3/3 and backend TypeScript passes. This prevents an ungrounded review event but does not
 prove a person reviewed or edited output, supply a tenant review UI, or advance live UAT.
+
+## 2026-09-28 preview/prod review-origin separation
+
+A new negative control showed that a preview-created artifact could ground a non-preview
+`review_approved` event (and vice versa) because the origin check ignored `preview`. The writer
+now requires the prior creation observation and review event to agree on preview status.
+Both mismatches refuse; matching preview and ordinary-run observations remain permitted.
+The focused vertical selection passes 24/24, backend TypeScript and repository lint pass.
+This is a local telemetry-provenance repair only. No authenticated human review UI,
+actual edit/reject/approval decision, native paid evaluation, UAT, or activation is proven;
+Plan 30-02 and the VERT requirements remain partial/open.
