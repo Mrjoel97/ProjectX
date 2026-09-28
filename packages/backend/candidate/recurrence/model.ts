@@ -358,7 +358,7 @@ async function finishAttempt(
   if (routine.status !== "approved" || routine.version !== run.routineVersion) {
     status = routine.status === "paused" ? "stopped_paused" : "stopped_changed";
   } else if (result.kind === "prepared") {
-    if (!/^plan:[A-Za-z0-9_-]{1,80}$/.test(result.planRef))
+    if (typeof result.planRef !== "string" || !/^plan:[A-Za-z0-9_-]{1,80}$/.test(result.planRef))
       throw new Error("candidate: invalid plan ref");
     status = "prepared";
   } else {
@@ -585,6 +585,8 @@ export async function landPaidStep(
 ) {
   const run = await db.get(runId);
   getRun(run, tenantId);
+  if (token !== `${runId}:step:${stepId}`)
+    throw new Error("candidate: paid step identity mismatch");
   if (!run.paidStep && run.lastStepId === stepId) return run.lastStepOutcome;
   if (!run.paidStep && run.settledStepIds?.includes(stepId)) return "already_settled";
   if (
@@ -933,7 +935,7 @@ async function dispatchAdmittedStep(
     | { kind: "prepared"; planRef: string }
     | { kind: "failure"; failureClass: FailureClass };
   try {
-    result = { kind: "prepared", ...(await prepare()) };
+    result = { kind: "prepared", planRef: (await prepare())?.planRef };
   } catch (error) {
     // Once start_claimed, a thrown timeout/5xx/internal error cannot prove the
     // provider did nothing. Do not invent a second physical call or refund its
@@ -947,6 +949,15 @@ async function dispatchAdmittedStep(
       kind: "failure",
       failureClass: error.failureClass,
     };
+  }
+  // A resolved but malformed response does not prove the physical call was free. Quarantine
+  // the exact start identity; do not roll back into an unhandled running row or refund its holds.
+  if (
+    result.kind === "prepared" &&
+    (typeof result.planRef !== "string" || !/^plan:[A-Za-z0-9_-]{1,80}$/.test(result.planRef))
+  ) {
+    await transaction((db) => markUnknownPaidStep(db, tenantId, runId, stepId, token));
+    return "reconciliation_required";
   }
   const status = await transaction((db) =>
     landPaidStep(db, tenantId, runId, stepId, token, result),

@@ -1,5 +1,11 @@
 # Wave 6 disabled recurrence candidate — independent current-source review packet
 
+> Historical packet for the earlier 41-test candidate bytes below. The current
+> six-file identity and limited independent candidate review are recorded in
+> [47-24](47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md); this packet's hashes
+> and awaiting-review status must not be read as current. Real rails and
+> operational recurrence remain unapproved.
+
 **Status:** awaiting a reviewer independent of the candidate implementer. This packet requests a
 GO/NO-GO on the **current isolated synthetic design only**. It is not a review verdict, D6 pass,
 ROUT-02 completion, `enable-safe` decision, deployment, tenant activation, provider/paid call or

@@ -789,6 +789,14 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
         landPaidStep(db, tenant, runId, stepId, token, { kind: "prepared", planRef: "plan:one" }),
       ),
     ).toBe("prepared");
+    await expect(
+      tx((db) =>
+        landPaidStep(db, tenant, runId, stepId, "wrong-token", {
+          kind: "prepared",
+          planRef: "plan:one",
+        }),
+      ),
+    ).rejects.toThrow("identity mismatch");
     expect((await tx((db) => admitPaidStep(db, tenant, runId, stepId))).outcome).toBe(
       "already_settled",
     );
@@ -807,6 +815,44 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     expect(results).toContain("prepared");
     expect(physical).toHaveBeenCalledOnce();
     expect(budget.reserve).toHaveBeenCalledTimes(2);
+    expect(budget.released).toBe(50);
+  });
+
+  it("quarantines a malformed paid callback until its exact step has a verified landing", async () => {
+    const { tx } = harness();
+    const { id, runId } = await claimed(tx);
+    const budget = rails();
+    const physical = vi.fn(async () => ({ planRef: "bad" }));
+    expect(await syntheticAttempt(tx, tenant, runId, budget, physical)).toBe(
+      "reconciliation_required",
+    );
+    expect(physical).toHaveBeenCalledOnce();
+    const held = await tx((db) => db.get(runId));
+    expect(held?.status).toBe("reconciliation_required");
+    expect(held?.paidStep?.state).toBe("start_claimed");
+    expect((await tx((db) => db.get(id)))?.activeRunId).toBe(runId);
+    expect(budget.held).toBe(50);
+    expect(budget.released).toBe(0);
+    expect(await syntheticAttempt(tx, tenant, runId, budget, physical)).toBe(
+      "reconciliation_required",
+    );
+    expect(physical).toHaveBeenCalledOnce();
+    expect((await syntheticReconciliationSweep(tx, tenant, budget)).outcomes).toEqual([
+      "blocked_unknown_paid_step",
+    ]);
+    const step = held?.paidStep;
+    if (!step) throw new Error("test setup: paid step absent");
+    expect(
+      await tx((db) =>
+        landPaidStep(db, tenant, runId, step.stepId, step.token, {
+          kind: "prepared",
+          planRef: "plan:verified_late_landing",
+        }),
+      ),
+    ).toBe("reconciliation_required");
+    expect((await syntheticReconciliationSweep(tx, tenant, budget)).outcomes).toEqual(["prepared"]);
+    expect((await tx((db) => db.get(id)))?.activeRunId).toBeUndefined();
+    expect(budget.held).toBe(0);
     expect(budget.released).toBe(50);
   });
 

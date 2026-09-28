@@ -3,7 +3,7 @@
 **Disposition:** evidence correction and implementation handoff only. Operational recurrence remains
 `defer`; the six-file candidate remains isolated under the accepted `build-for-evidence` stage. This
 record does not accept D6, ROUT-02, eligibility, tenant activation, a provider call or release.
-**Current-source review:** pending
+**Current-source review:** limited candidate design review at `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md`; real rails and activation unreviewed
 
 ## Exact-source integrity
 
@@ -14,23 +14,21 @@ tree. Its recorded SHA-256 values for `schema.ts`, `model.ts` and `model.test.ts
 | Candidate path under `packages/backend/candidate/recurrence/` | Current SHA-256 |
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
-| `model.ts` | `7a533c5004990dfda0f891333f7ef7d1c9b3695f3241a3e9fa8781a891f65564` |
-| `model.test.ts` | `47a7cac50098f08096c01f05a0d1c7982a460f2bd66490da4e0f4d0dd3daabdf` |
-| `README.md` | `59afaabf1acdccfcec0956977ebec437403c54de65a19e76be152a145ead0669` |
+| `model.ts` | `164a0d6513da8ab84932fc44b9b48a1b195b27078a84334d204cb94920424f61` |
+| `model.test.ts` | `87c15f701d54e950e1be9900d438e42f59203caede0eb24fb2a3e43660cc3f0f` |
+| `README.md` | `6e7e76db5822a211750299f9a7b69fe47595fb48ac46fb169274b97f5cf01d68` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
 CRLF expansion of the current three differing files does not reproduce the old hashes. The
 reviewed pre-commit bytes are not available in Git (`git log` shows the candidate first landed in
 `6e0db5b`), so the reason for the mismatch cannot be established from the retained source. Do not
-cite that prior hash-bound GO as an independent review of these current bytes. This finding changes
-the next action: obtain a new exact-source independent review before treating the candidate as
-reviewed design evidence. Do not rewrite the historical review's hashes to hide the mismatch.
-The registered free gate `scripts/check-recurrence-source-review.mjs --self-test` now exercises
-negative controls and checks all six current raw-file hashes against this pending audit on every
-CI run. It refuses an absent correction, a missing or stale audit hash, or a review identity that
-contradicts the pending classification. This guards the evidence identity; it is not the missing
-independent review.
+cite that prior hash-bound GO as an independent review of these current bytes. A new limited
+exact-source review is recorded separately in `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md`;
+do not rewrite the historical review's hashes to hide the mismatch. The registered free gate
+`scripts/check-recurrence-source-review.mjs --self-test` checks all six current raw-file hashes
+against both this audit and the limited review. It refuses an absent historical correction or
+missing/stale review identity. This guards evidence identity, not the real rail.
 
 **2026-09-28 source amendment:** Two new adverse expectations failed on the previous candidate:
 calling `closeUnknownPaidStep` after a committed paid start let the recovery sweep release both
@@ -110,8 +108,20 @@ TypeScript exits 0. The three changed candidate hashes in the table above
 supersede the earlier ones; independent current-source review remains pending.
 No deployed scheduler, provider, paid call or tenant activation follows.
 
+**2026-09-28 independent-review repair:** A separate read-only reviewer found that a
+resolved malformed paid callback threw in landing and that a terminal duplicate landing
+returned before checking its token. Two new expectations were red on those old paths.
+The candidate now quarantines a malformed return with the exact `start_claimed` step and
+both holds intact: a response shape does not prove zero provider spend. It refuses
+redispatch and automatic refund, and a later exact-ID/token result can settle through
+normal reconciliation. Wrong-token duplicate landing refuses before replay. The
+reviewer checked the corrected code and README against the six current hashes above;
+the separate limited review is `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md`. Explicit
+candidate Vitest passes **46/46** and candidate TypeScript exits 0. This is a
+candidate-only review, not a real paid-rail or D6 pass.
+
 Current controls still have value but are narrower: the exact six source hashes above were
-rechecked on 2026-09-28 and explicit candidate Vitest passed **45/45** on the current tree;
+rechecked on 2026-09-28 and explicit candidate Vitest passed **46/46** on the current tree;
 candidate TypeScript passed; `routineDecision`, `routines`, `dstProbe` and `schema` passed **149/149**;
 checker self-check passed **32/32**. The actual governance modes returned matrix `0`, eligibility
 `1` with **14** findings, operational `defer` decision `0`, and disabled stage `0`. `convex.json`
@@ -140,6 +150,14 @@ reconciliation boundary **without** making a separate run bucket stand in for th
 prove atomic admission/compensation or a conservative held/uncertain stop across crashes; and test
 both real windows, cross-window release, pause, retry, duplicate workers and an unknown physical
 paid start. The actual component and ledger integration must be tested, not inferred from stubs.
+One possible design route follows [Convex's documented component transaction semantics](https://docs.convex.dev/components/using): a single top-level mutation can atomically commit
+app journal rows and nested rate-limiter component writes, while an action's separate
+`runMutation` calls are **not** one transaction. This is an inference for a future
+reviewed design, not a tested recurrence adapter. It would have to pin exact run/rail
+identities in an app journal, preserve the tenant daily and shared deployment bucket
+keys, make admission/compensation idempotent within one mutation, and refuse any
+cross-window refund that credits a new window. It still cannot authenticate an unknown
+physical provider effect or furnish a production reconciliation operator by itself.
 Any production module/table/caller would require a separately reviewed governance transition;
 ADR-050's six-file disabled stage does not grant it. D6's sweep-only amendment, live DST/OAuth/
 provider observations and the separate owner release decision remain additional gates.

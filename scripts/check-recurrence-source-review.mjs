@@ -11,7 +11,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const base = "packages/backend/candidate/recurrence";
 const auditPath =
   ".planning/phases/47-the-schedule-row-that-re-arms/47-23-CURRENT-SOURCE-AND-REAL-RAIL-AUDIT.md";
-const reviewPath = ".planning/phases/47-the-schedule-row-that-re-arms/47-22-TECHNICAL-REVIEW.md";
+const historicalReviewPath =
+  ".planning/phases/47-the-schedule-row-that-re-arms/47-22-TECHNICAL-REVIEW.md";
+const reviewPath =
+  ".planning/phases/47-the-schedule-row-that-re-arms/47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md";
 const files = [
   "schema.ts",
   "model.ts",
@@ -32,24 +35,37 @@ function recordedHash(markdown, name) {
   return matches.length === 1 ? matches[0][1] : null;
 }
 
-function checkIdentity(actual, audit, review) {
+function checkIdentity(actual, audit, review, historicalReview) {
   const errors = [];
-  if (!/^\*\*Current-source review:\*\* pending$/m.test(audit))
-    errors.push(
-      "current-source review must be explicitly pending until a fresh review is recorded",
-    );
+  if (
+    !/^\*\*Current-source review:\*\* limited candidate design review at `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW\.md`; real rails and activation unreviewed$/m.test(
+      audit,
+    )
+  )
+    errors.push("current-source review status is not the limited exact-source verdict");
+  if (
+    !review.includes(
+      "**Verdict:** limited candidate design review accepted; operational recurrence remains `defer`.",
+    )
+  )
+    errors.push("current review lacks the limited defer verdict");
   for (const name of files) {
-    const recorded = recordedHash(audit, name);
-    if (!recorded) errors.push(`missing or ambiguous audit hash: ${name}`);
-    else if (recorded !== actual[name]) errors.push(`stale audit hash: ${name}`);
+    for (const [label, text] of [
+      ["audit", audit],
+      ["current review", review],
+    ]) {
+      const recorded = recordedHash(text, name);
+      if (!recorded) errors.push(`missing or ambiguous ${label} hash: ${name}`);
+      else if (recorded !== actual[name]) errors.push(`stale ${label} hash: ${name}`);
+    }
   }
   for (const name of files.slice(0, 3)) {
-    const old = recordedHash(review, name);
+    const old = recordedHash(historicalReview, name);
     if (!old) errors.push(`missing or ambiguous historical review hash: ${name}`);
     else if (old === actual[name])
       errors.push(`pending correction contradicts matching review hash: ${name}`);
   }
-  if (!review.includes("not an\n> independent GO for the current candidate"))
+  if (!historicalReview.includes("not an\n> independent GO for the current candidate"))
     errors.push("historical review lacks its current-source correction");
   return errors;
 }
@@ -57,37 +73,72 @@ function checkIdentity(actual, audit, review) {
 function selfTest() {
   const h = (char) => char.repeat(64);
   const actual = Object.fromEntries(files.map((name) => [name, h("a")]));
-  const audit = `**Current-source review:** pending\n${files.map((name) => `| \`${name}\` | \`${h("a")}\` |`).join("\n")}`;
-  const review = `${files
+  const audit = `**Current-source review:** limited candidate design review at \`47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md\`; real rails and activation unreviewed\n${files.map((name) => `| \`${name}\` | \`${h("a")}\` |`).join("\n")}`;
+  const review = `**Verdict:** limited candidate design review accepted; operational recurrence remains \`defer\`.\n${files.map((name) => `| \`${name}\` | \`${h("a")}\` |`).join("\n")}`;
+  const historicalReview = `${files
     .slice(0, 3)
     .map((name) => `| \`${name}\` | \`${h("b")}\` |`)
     .join("\n")}\n> not an\n> independent GO for the current candidate`;
   const cases = [
-    ["valid pending identity", checkIdentity(actual, audit, review).length === 0],
+    ["valid limited identity", checkIdentity(actual, audit, review, historicalReview).length === 0],
     [
       "changed candidate",
-      checkIdentity({ ...actual, "model.ts": h("c") }, audit, review).some((e) =>
+      checkIdentity({ ...actual, "model.ts": h("c") }, audit, review, historicalReview).some((e) =>
         e.includes("stale audit hash: model.ts"),
       ),
     ],
     [
       "missing audit row",
-      checkIdentity(actual, audit.replace(`| \`README.md\` | \`${h("a")}\` |`, ""), review).some(
-        (e) => e.includes("missing or ambiguous audit hash: README.md"),
+      checkIdentity(
+        actual,
+        audit.replace(`| \`README.md\` | \`${h("a")}\` |`, ""),
+        review,
+        historicalReview,
+      ).some((e) => e.includes("missing or ambiguous audit hash: README.md")),
+    ],
+    [
+      "stale current review",
+      checkIdentity(actual, audit, review.replace(h("a"), h("c")), historicalReview).some((e) =>
+        e.includes("stale current review hash: schema.ts"),
       ),
     ],
     [
-      "missing pending status",
-      checkIdentity(actual, audit.replace("pending", "accepted"), review).some((e) =>
-        e.includes("explicitly pending"),
-      ),
+      "missing current review row",
+      checkIdentity(
+        actual,
+        audit,
+        review.replace(`| \`model.ts\` | \`${h("a")}\` |`, ""),
+        historicalReview,
+      ).some((e) => e.includes("missing or ambiguous current review hash: model.ts")),
+    ],
+    [
+      "missing limited review verdict",
+      checkIdentity(
+        actual,
+        audit,
+        review.replace("limited candidate design review accepted", "enable-safe"),
+        historicalReview,
+      ).some((e) => e.includes("lacks the limited defer verdict")),
+    ],
+    [
+      "missing limited status",
+      checkIdentity(
+        actual,
+        audit.replace("limited candidate design review", "accepted"),
+        review,
+        historicalReview,
+      ).some((e) => e.includes("limited exact-source verdict")),
     ],
     [
       "historical hash silently matches",
       checkIdentity(
         actual,
         audit,
-        review.replace(`| \`schema.ts\` | \`${h("b")}\` |`, `| \`schema.ts\` | \`${h("a")}\` |`),
+        review,
+        historicalReview.replace(
+          `| \`schema.ts\` | \`${h("b")}\` |`,
+          `| \`schema.ts\` | \`${h("a")}\` |`,
+        ),
       ).some((e) => e.includes("contradicts matching review hash: schema.ts")),
     ],
     [
@@ -95,7 +146,11 @@ function selfTest() {
       checkIdentity(
         actual,
         audit,
-        review.replace("not an\n> independent GO for the current candidate", "independent GO"),
+        review,
+        historicalReview.replace(
+          "not an\n> independent GO for the current candidate",
+          "independent GO",
+        ),
       ).some((e) => e.includes("lacks its current-source correction")),
     ],
   ];
@@ -113,11 +168,12 @@ const errors = checkIdentity(
   actual,
   readFileSync(join(root, auditPath), "utf8"),
   readFileSync(join(root, reviewPath), "utf8"),
+  readFileSync(join(root, historicalReviewPath), "utf8"),
 );
 for (const error of errors) stdout.write(`REFUSED ${error}\n`);
 stdout.write(
   errors.length
     ? `REFUSED ${errors.length} source-review identity error(s)\n`
-    : "PASS disabled candidate identity is pinned as pending fresh review\n",
+    : "PASS disabled candidate identity is pinned to limited current-source review\n",
 );
 exit(errors.length ? 1 : 0);

@@ -1,5 +1,17 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — an exact-source independent review of the isolated
+> six-file recurrence candidate found malformed paid-response landing and
+> wrong-token duplicate replay gaps. Red-before-green tests now prove that a
+> malformed response quarantines the claimed step and both holds without
+> redispatch/refund, then an exact later landing settles; wrong-token replay
+> refuses. Candidate Vitest passes 46/46 and TypeScript passes. The six current
+> source hashes and limited review are pinned in Phase 47, with a free identity
+> gate. Operational recurrence remains `defer`: the installed limiter has no
+> synthetic keyed-rail API, provider-result authenticity and transactional
+> external-action admission are unproven, and no app caller, paid call or send
+> was added.
+>
 > Last verified: 2026-09-28 — two red-before-green disabled-candidate controls
 > found that a finite fractional/negative/unsafe due-sweep clock could pass the
 > old guard and that an exhausted attempt count could enter `running` with an
