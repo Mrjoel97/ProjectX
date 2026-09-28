@@ -17,9 +17,14 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates. The prior digest `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates. The prior digest `e3c80fab2c0f2e28e2c3409bd51419aec3516913a3ac8e8d72e85ec781a5897f` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `e3c80fab2c0f2e28e2c3409bd51419aec3516913a3ac8e8d72e85ec781a5897f`
+Artifact-set SHA-256: `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71`
+
+The watched vertical-packs playbook now includes the synthetic browser's actual
+XLSX download-content parse, not only its ZIP/MIME shape. The new serialized
+21-plane aggregate passed on this exact digest with stable initial/final identity.
+This renews repository/local qualification only.
 
 The watched vertical-packs playbook now records the synthetic workbook-content
 readback separately from the browser's ZIP/MIME download check. That edit retired

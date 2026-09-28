@@ -182,3 +182,10 @@ ZIP-signature bytes. The sheet fixture's *initial* stored bytes were a synthetic
 placeholder, so this does not prove original-workbook parsing or cell-level workbook
 semantics. The second stack's audit check and owned-root removal passed. Hosted UAT,
 the remaining refusal matrix and semantic/candidate gates remain open.
+A third fresh disposable browser run clicked the app's **Download original** control
+after a synthetic spreadsheet edit. The actual downloaded XLSX parsed to one sheet
+with `Item | Value` and `Browser Edited | 7`; SHA-256
+`8903621f230361e31d9d17ede123e1d9816512969aba02cc64036e074bd311a1`.
+Its isolated audit and exact-root cleanup passed. This closes the local
+browser-download cell-content observation, not hosted UAT, original-workbook
+validity, semantic quality or candidate activation.

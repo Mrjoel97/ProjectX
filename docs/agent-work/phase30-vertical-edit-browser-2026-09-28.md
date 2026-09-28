@@ -62,3 +62,22 @@ the replacement blob through Convex storage, parses it as XLSX, and asserts the
 actual `Item, Count` header and `Revised, 2` row. The same test checks that the
 old blob is gone. This is a synthetic local workbook-content proof, not a
 cell-level parse of the particular browser-downloaded bytes or hosted UAT.
+
+## Third disposable browser run: downloaded workbook cells
+
+A further fresh owned loopback stack used a new invited synthetic tenant and the
+real Output-card editor. The signed-in tenant upload door supplied initial
+placeholder bytes solely to classify the created artifact as a spreadsheet;
+those initial bytes were not a valid workbook. The browser changed the table
+to `Item | Value` / `Browser Edited | 7`, saved it, and displayed the edited
+cells and review-recorded status. From the app's full-document preview, the
+browser clicked **Download original** and saved the resulting file to
+`output/playwright/phase30-browser-sheet-2026-09-28.xlsx` (local, ignored).
+An independent local SheetJS parse of those *actual browser-downloaded bytes*
+found one sheet named `Sheet 1` with exactly those two rows; the 16,145-byte
+file's SHA-256 was
+`8903621f230361e31d9d17ede123e1d9816512969aba02cc64036e074bd311a1`.
+The isolated audit exited 0, the exact owned root was removed, and ports
+3112/3410/3411 had no listeners after shutdown. This is local synthetic
+download-content evidence, not proof that the original placeholder was a valid
+workbook, hosted tenant UAT, semantic quality or native pack activation.

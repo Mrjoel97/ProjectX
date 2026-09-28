@@ -7,9 +7,19 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `e3c80fab2c0f2e28e2c3409bd51419aec3516913a3ac8e8d72e85ec781a5897f` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `e3c80fab2c0f2e28e2c3409bd51419aec3516913a3ac8e8d72e85ec781a5897f`
+Artifact-set SHA-256: `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71`
+
+**2026-09-28 browser-download content requalification:** A fresh disposable
+synthetic tenant clicked the app's **Download original** control after editing a
+spreadsheet. The actual browser-downloaded XLSX parsed to the edited header and
+row; the isolated audit passed and exact owned-root cleanup completed. The
+watched playbook recorded this narrower proof, retiring the prior source digest.
+The serialized aggregate then passed all 21 planes with identical initial/final
+digest, including both fresh browser/audit stacks, three typechecks, production
+build, strict documents and all registered free gates. This does not prove hosted
+tenant UAT, original-workbook validity, paid semantics or Waves 7/8 acceptance.
 
 **2026-09-28 workbook-content requalification:** The watched vertical-packs playbook
 now distinguishes the browser's XLSX ZIP/MIME observation from a separate backend

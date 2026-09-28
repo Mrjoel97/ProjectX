@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1790568997.634413,
-    "ast_hash": "aae566f1351dee28acc4166b3adb400f",
+    "mtime": 1790572286.0895593,
+    "ast_hash": "d2dcfce6f48f115769f5ea9a87ca3e2f",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790570005.3649347,
-    "ast_hash": "ba5f42d329fe2a50c273a0f7b7c450cf",
+    "mtime": 1790572287.2699287,
+    "ast_hash": "7be04d4637edd406641f054e32a51529",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -14835,8 +14835,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-07-SUMMARY.md": {
-    "mtime": 1790566701.6725266,
-    "ast_hash": "fe4297c6e7421f8c122e99c1f4b2ad11",
+    "mtime": 1790572939.8314087,
+    "ast_hash": "a2047d7b50f5eabd93c38dd930e8377d",
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-RESEARCH.md": {
@@ -14855,8 +14855,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md": {
-    "mtime": 1790566700.4592214,
-    "ast_hash": "6db56897b6c85d56cc7a42c6cd727a3b",
+    "mtime": 1790572938.6212673,
+    "ast_hash": "ba8b312ac501e09054258ea9e343b22c",
     "semantic_hash": ""
   },
   "docs/agent-work/astra-routing-status.md": {
@@ -17125,8 +17125,8 @@
     "semantic_hash": ""
   },
   "docs/agent-work/phase30-vertical-edit-browser-2026-09-28.md": {
-    "mtime": 1790569930.2914047,
-    "ast_hash": "5e05b476547f3da3b0f68f6a93494daa",
+    "mtime": 1790572284.8614364,
+    "ast_hash": "e42abef7a5cf01e1b61527e7a62edb7c",
     "semantic_hash": ""
   }
 }
