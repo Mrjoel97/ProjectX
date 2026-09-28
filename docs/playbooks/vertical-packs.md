@@ -1,5 +1,12 @@
 # Optional vertical packs
 
+Last verified: 2026-09-29 — the native release gate may accept authenticated
+browser evidence without a run ID. Discovery now projects its SHA-256 evidence
+reference in that case, with a run ID only when valid and present; it never
+exposes the browser payload. The focused native-issuance and discovery suites
+pass 31/31. This repairs a CI regression without changing the release gate or
+claiming actual UAT.
+
 Last verified: 2026-09-28 — post-prepare Design/Data source failures and a
 budget pre-call refusal each emit one exact-candidate, refs-only `blocked`
 outcome with a closed reason; pre-prepare refusals cannot safely attribute a
@@ -8,7 +15,8 @@ selection passes 47/47. This closes Plan 30-02's repository controls, not
 actual candidate evaluation, tenant UAT, owner acceptance or activation.
 
 Last verified: 2026-09-28 — tenant discovery projects only source commit/body
-hash, native issuance/run id and authenticated browser run id from the exact
+hash, native issuance/run id and authenticated browser evidence hash (plus an
+optional run id) from the exact
 active global vertical after its native exposure gate passes. A tenant overlay
 suppresses those global refs; stale or missing evidence exposes none. An
 isolated synthetic issuance test covers two tenants and does not establish

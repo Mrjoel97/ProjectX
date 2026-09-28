@@ -7,13 +7,21 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
+**2026-09-29 exact-source renewal:** The browser-evidence projection repair
+retired the prior `1a4796d0…` source identity. The serialized aggregate passed
+all **21/21** planes on the 71-file `cdccf465…` digest pinned below, with two
+independent disposable browser/audit stacks, production build, three
+typechecks, strict documents and all 34 free gates. This is repository/local
+site, landing and private-storefront qualification only; public commerce,
+external enablement and founder acceptance remain open.
+
 **2026-09-28 Wave 4 vertical-control renewal:** The watched
 vertical-packs playbook and backend source changed for bounded active evidence
 refs, candidate-bound blocked telemetry and six-candidate registry controls.
 The first aggregate on `5c2a7150…` passed 20/21 planes but correctly failed
 the native evaluator pin after the vertical binding changed. The six-lane,
 40-case corpus was regenerated from the new evaluator source; the current
-71-file identity below is `1a4796d0…`; a fresh serialized **21/21-plane**
+earlier 71-file identity was `1a4796d0…`; a fresh serialized **21/21-plane**
 rerun passed with identical initial/final source identity, two independent
 disposable browser/audit stacks, production build, three typechecks, strict
 documents and all 34 free gates. The prior public-form identity `badd8614…` and the historical
@@ -58,7 +66,7 @@ checkout, external provider, hosted release or founder acceptance.
 
 **Earlier scope:** Requalification passed for a then-current 71-file digest after tenant-first indexed vertical audit provenance, its watched playbooks and dependent evaluator pins changed. A serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `1a4796d0de147976dbf0711299ce54bbf74e7eceea68d59655b789f1947acd1d`
+Artifact-set SHA-256: `cdccf465047db1dd02534f8ec745a506bd96a52507b7dfbc61c1258710927f1b`
 
 The earlier code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. It binds older source bytes; exact-head CI for the renewed digest is pending. Neither run certifies deployment or founder acceptance.
 

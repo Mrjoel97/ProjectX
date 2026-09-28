@@ -403,9 +403,12 @@ describe("native vertical exact-version issuer", () => {
         },
       });
     });
-    expect((await h.user.query(api.verticalPacks.discover, {})).recommendations).toMatchObject([
-      { id: "engineering", state: "available" },
-    ]);
+    const discovered = await h.user.query(api.verticalPacks.discover, {});
+    expect(discovered.recommendations).toMatchObject([{ id: "engineering", state: "available" }]);
+    const uatRef = discovered.controls.find((row) => row.id === "engineering")?.activeEvidenceRefs
+      ?.uat;
+    expect(uatRef).toMatchObject({ evidenceSha256: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(uatRef).not.toHaveProperty("runId");
     await expect(
       h.user.mutation(api.verticalPacks.recordAccepted, { verticalId: "engineering" }),
     ).rejects.toThrow("RECOMMENDATION_STALE");

@@ -173,7 +173,7 @@ describe("vertical controls use native tenant/version state", () => {
         bodySha256: VERTICAL_CANDIDATES[name].provenance.bodySha256,
       },
       eval: { runId: "123e4567-e89b-42d3-a456-426614174000", issuanceId: expect.any(String) },
-      uat: { runId: "browser-product-1" },
+      uat: { runId: "browser-product-1", evidenceSha256: await contentHash(browserEvidence) },
     });
     expect(JSON.stringify(released)).not.toContain("private deployment details");
     expect(JSON.stringify(released)).not.toContain(body);

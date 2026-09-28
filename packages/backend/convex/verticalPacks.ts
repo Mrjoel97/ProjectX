@@ -21,7 +21,7 @@ import { verticalArtifactEventsFor, verticalEventsFor } from "./verticalPackTele
 const verticalIdArg = v.union(...VERTICAL_IDS.map((id) => v.literal(id)));
 const RECOMMENDATION_WINDOW_MS = 30 * 60_000;
 
-function activeEvidenceRefs(row: Doc<"skills">) {
+async function activeEvidenceRefs(row: Doc<"skills">) {
   try {
     const provenance = JSON.parse(row.provenance ?? "null") as Record<string, unknown> | null;
     const evaluation = JSON.parse(row.evidence ?? "null") as Record<string, unknown> | null;
@@ -37,9 +37,7 @@ function activeEvidenceRefs(row: Doc<"skills">) {
       typeof evaluation.runId !== "string" ||
       !/^[0-9a-f-]{36}$/.test(evaluation.runId) ||
       typeof evaluation.issuanceId !== "string" ||
-      !/^[a-zA-Z0-9_-]{1,128}$/.test(evaluation.issuanceId) ||
-      typeof browser.runId !== "string" ||
-      !/^[a-zA-Z0-9_-]{1,128}$/.test(browser.runId)
+      !/^[a-zA-Z0-9_-]{1,128}$/.test(evaluation.issuanceId)
     )
       return null;
     return {
@@ -48,7 +46,12 @@ function activeEvidenceRefs(row: Doc<"skills">) {
         bodySha256: provenance.bodySha256,
       },
       eval: { runId: evaluation.runId, issuanceId: evaluation.issuanceId },
-      uat: { runId: browser.runId },
+      uat: {
+        evidenceSha256: await contentHash(row.browserEvidence ?? ""),
+        ...(typeof browser.runId === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(browser.runId)
+          ? { runId: browser.runId }
+          : {}),
+      },
     };
   } catch {
     return null;
@@ -200,7 +203,7 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
     // exists. Discovery must not offer a workflow that the start door will reject.
     const refs =
       overlay === null && global !== null && (await nativePackExposureReady(ctx, global))
-        ? activeEvidenceRefs(global)
+        ? await activeEvidenceRefs(global)
         : null;
     const ready = global !== null && refs !== null;
     if (ready && global) {

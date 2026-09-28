@@ -8,6 +8,17 @@ date: 2026-09-10
 
 # 30-02 — Native vertical controls and evidence-aware discovery
 
+## 2026-09-29 CI regression repair
+
+The native gate permits authenticated browser evidence without a run ID, but
+the first bounded discovery projection required one and hid a valid released
+candidate. Discovery now returns a SHA-256 UAT evidence ref for that case,
+adding a run ID only when valid and present. The native gate remains
+authoritative. The formerly failing native issuance test now asserts the
+no-run-ID discovery path; the focused issuance/discovery suites pass **31/31**,
+the full backend suite passes **4,644/4,644** across 183 files, and backend
+TypeScript passes. Exact-head CI verification follows.
+
 ## 2026-09-28 scoped plan completion
 
 Plan 30-02's repository-controlled discovery, independent disable/rollback and
