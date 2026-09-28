@@ -45,11 +45,10 @@ function publicHost(req: Request): string {
   return new URL(req.url).hostname.toLowerCase();
 }
 
-// ponytail: this is a bounded, read-only seam while the code-owned storefront gate is false.
-// The joint Stripe/PayPal readiness plan may add a write only after that same gate authorizes
-// the exact host/page/version; this preflight never calls tenantOrders or persists buyer input.
-async function readClosedCartIntent(req: Request): Promise<"valid" | "invalid" | "too_large"> {
-  const limit = 8192;
+async function readBoundedPublicBody(
+  req: Request,
+  limit: number,
+): Promise<ArrayBuffer | "invalid" | "too_large"> {
   const declared = req.headers.get("Content-Length");
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > limit)) return "too_large";
   const reader = req.body?.getReader();
@@ -72,6 +71,16 @@ async function readClosedCartIntent(req: Request): Promise<"valid" | "invalid" |
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  // The fresh allocation is zero-offset and exactly `size` bytes; no caller buffer is exposed.
+  return bytes.buffer as ArrayBuffer;
+}
+
+// ponytail: this is a bounded, read-only seam while the code-owned storefront gate is false.
+// The joint Stripe/PayPal readiness plan may add a write only after that same gate authorizes
+// the exact host/page/version; this preflight never calls tenantOrders or persists buyer input.
+async function readClosedCartIntent(req: Request): Promise<"valid" | "invalid" | "too_large"> {
+  const bytes = await readBoundedPublicBody(req, 8192);
+  if (typeof bytes === "string") return bytes;
   try {
     const input: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     if (!input || typeof input !== "object" || Array.isArray(input)) return "invalid";
@@ -224,7 +233,27 @@ http.route({
     });
     if (resolved.state !== "published" || resolved.project.kind === "storefront")
       return publicNotFound();
-    const form = await req.formData();
+    // Bound the actual stream, not just caller-controlled Content-Length, before formData
+    // materializes any fields or files and before the form mutation can write coordination state.
+    const bytes = await readBoundedPublicBody(req, 8192);
+    if (bytes === "too_large")
+      return new Response("too large", { status: 413, headers: publicHeaders });
+    if (bytes === "invalid")
+      return Response.json(
+        { ok: false, outcome: "invalid" },
+        { status: 400, headers: runtimeHeaders(resolved.project.hostingDeclaration) },
+      );
+    let form: FormData;
+    try {
+      const contentType = req.headers.get("Content-Type");
+      if (!contentType) throw new Error("missing form content type");
+      form = await new Response(bytes, { headers: { "Content-Type": contentType } }).formData();
+    } catch {
+      return Response.json(
+        { ok: false, outcome: "invalid" },
+        { status: 400, headers: runtimeHeaders(resolved.project.hostingDeclaration) },
+      );
+    }
     const raw: Record<string, unknown> = {};
     for (const [key, value] of form.entries()) if (typeof value === "string") raw[key] = value;
     const bodyKey = [raw.email, raw.name, raw.company, raw.consent]

@@ -1,5 +1,11 @@
 # Playbook: Tenant commerce (Phase 50)
 
+> Last verified: 2026-09-28 — the shared HTTP request reader was factored so
+> anonymous forms can enforce an 8,192-byte stream cap before parsing. The
+> existing read-only, dark commerce cart preflight still uses the same 8,192-
+> byte bound and returns the same closed outcomes; its focused 4/4 tests pass.
+> This neither enables checkout nor changes the pending Stripe/PayPal decision.
+>
 > Last verified: 2026-09-28 — a matched but unsafe live product revision no longer
 > enters a provider-independent order quote or snapshot hash. The new pure test
 > failed before the guard and passes afterward; core commerce 22/22, backend

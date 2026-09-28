@@ -17,6 +17,18 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
+**2026-09-28 public-form byte-bound checkpoint:** The HTTP form route
+now caps the actual stream before parsing or persisting. Focused tests,
+backend typecheck and 34 free gates pass. A fresh serialized 21/21-plane
+aggregate passed the changed 71-file digest below with stable initial/final
+identity, both browser/audit stacks, three typechecks, production build and
+strict documents. Its first attempt failed only the strict playbook plane;
+after the two overlapping playbooks were updated, the complete rerun passed.
+The previous
+`5b2186187cb23ce99fa6d69eac93193da82dad7ca257c567eb9079b3cb8acc8f`
+qualification applies only to older bytes. No hosted, founder or merchant
+claim follows.
+
 **2026-09-28 form-refusal replay checkpoint:** Rejected form attempts
 now replay the original refusal rather than a successful duplicate. Focused
 form/HTTP tests and backend typecheck pass. The changed watched 71-file
@@ -35,7 +47,7 @@ is inferred.
 
 **Earlier repository/local requalification passed:** tenant-first indexed vertical audit provenance, watched playbooks and dependent evaluator pins changed. A serialized 21-plane aggregate passed on its then-current identity, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `5b2186187cb23ce99fa6d69eac93193da82dad7ca257c567eb9079b3cb8acc8f`
+Artifact-set SHA-256: `badd8614300b6d810b8544e8ab5cd12019822b66473e989e96881b6402aef461`
 
 The changed skill contract and watched playbooks for a CLI-compatible named
 self-hosted golden diagnostic retired the prior Phase 49 digest. The new

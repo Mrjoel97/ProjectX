@@ -1,5 +1,14 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-28 — the anonymous `/p/.../forms/...` POST now
+> bounds the actual request stream to 8,192 bytes before `formData()` or the
+> form mutation. An oversized unannounced body and an oversized declared
+> `Content-Length` both return 413 without a contact, coordination row or
+> metric; a normal bounded multipart form still succeeds. The shared reader
+> keeps the closed commerce preflight bounded as before. Focused local
+> Convex tests and backend typecheck pass; this is not live ingress capacity
+> or hosted-release evidence.
+>
 > Last verified: 2026-09-28 — form idempotency replays now preserve an earlier
 > `invalid`, `consent_required`, or `suppressed` refusal. Only a previously
 > accepted submission returns successful `duplicate`; an ambiguous legacy

@@ -7,6 +7,19 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
+**2026-09-28 public-form byte-bound renewal:** The HTTP route and
+watched playbook changed to refuse an oversized form stream before parsing or
+writing form state. The new 71-file digest below passed a fresh serialized
+**21/21-plane** aggregate with identical initial/final source identity, two
+independent disposable browser/audit stacks, production web build, three
+typechecks, strict documents and all 34 free gates. The first aggregate on
+this digest had 20 passing planes but correctly failed strict playbooks until
+Cockpit and tenant-commerce ownership notes were updated; the full rerun
+passed. The
+earlier `5b2186187cb23ce99fa6d69eac93193da82dad7ca257c567eb9079b3cb8acc8f`
+aggregate is historical evidence for its own source bytes. Focused HTTP,
+commerce-boundary and form tests pass; this is repository/local evidence only.
+
 **2026-09-28 form-refusal replay renewal:** `webForms.ts`, its
 regression test and the watched public-runtime playbook changed after a
 red-before-green check found that rejected submissions replayed as successful
@@ -31,7 +44,7 @@ checkout, external provider, hosted release or founder acceptance.
 
 **Earlier scope:** Requalification passed for a then-current 71-file digest after tenant-first indexed vertical audit provenance, its watched playbooks and dependent evaluator pins changed. A serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `5b2186187cb23ce99fa6d69eac93193da82dad7ca257c567eb9079b3cb8acc8f`
+Artifact-set SHA-256: `badd8614300b6d810b8544e8ab5cd12019822b66473e989e96881b6402aef461`
 
 The earlier code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. It binds older source bytes; exact-head CI for the renewed digest is pending. Neither run certifies deployment or founder acceptance.
 

@@ -136,6 +136,51 @@ describe("Phase 48 public HTTP runtime", () => {
     });
   });
 
+  test("rejects an oversized public form before parsing or persisting it", async () => {
+    const h = await harness();
+    const action = "/p/acme/home/forms/contact";
+    const body = new URLSearchParams({
+      email: "lead@example.com",
+      name: "x".repeat(8192),
+      consent: "on",
+    });
+    const response = await h.t.fetch(action, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    expect(response.status).toBe(413);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    const declared = await h.t.fetch(action, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": "999999",
+      },
+      body: new URLSearchParams({ email: "lead@example.com", consent: "on" }),
+    });
+    expect(declared.status).toBe(413);
+    expect(await h.t.run((ctx) => ctx.db.query("webSubmissions").collect())).toEqual([]);
+    expect(await h.t.run((ctx) => ctx.db.query("webMetrics").collect())).toEqual([]);
+    expect(await h.t.run((ctx) => ctx.db.query("contacts").collect())).toEqual([]);
+  });
+
+  test("accepts a bounded multipart form after the stream guard", async () => {
+    const h = await harness();
+    const form = new FormData();
+    form.set("email", "lead@example.com");
+    form.set("name", "Lead");
+    form.set("consent", "on");
+    const response = await h.t.fetch("/p/acme/home/forms/contact", {
+      method: "POST",
+      body: form,
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, outcome: "accepted" });
+    expect(await h.t.run((ctx) => ctx.db.query("contacts").collect())).toHaveLength(1);
+  });
+
   test("has no draft fallback and refuses malformed, unpublished, and unsupported routes", async () => {
     const h = await harness();
     await h.t.run(async (ctx) => {

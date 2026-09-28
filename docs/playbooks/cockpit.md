@@ -1,3 +1,10 @@
+> Last verified: 2026-09-28 — the shared public HTTP reader now caps anonymous
+> form bodies at 8,192 actual bytes before parsing or form-state writes. This
+> change does not alter cockpit agent dispatch, approval or provider routes;
+> it only refactors the existing closed commerce preflight reader into a shared
+> bounded helper. Focused public-form and commerce-boundary tests plus backend
+> typecheck pass. It is local ingress evidence, not a live cockpit claim.
+>
 > Last verified: 2026-09-28 — `dispatch.test.ts` now freezes scheduled timeout callbacks
 > per test to keep workflow-backed research ingest from escaping its Vitest file. Its one
 > direct scripted retry/fallback test uses real timers because SDK backoff needs them and
