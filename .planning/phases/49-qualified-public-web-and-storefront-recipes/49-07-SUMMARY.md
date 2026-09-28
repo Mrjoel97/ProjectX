@@ -17,9 +17,15 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates. The prior digest `e3c80fab2c0f2e28e2c3409bd51419aec3516913a3ac8e8d72e85ec781a5897f` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates. The prior digest `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71`
+Artifact-set SHA-256: `881e840e66402c1ac069676f8c59a70b95a5240dcdbbad2751dc42ef4ce9b121`
+
+The changed skill contract and watched playbooks for a CLI-compatible named
+self-hosted golden diagnostic retired the prior Phase 49 digest. The new
+serialized 21-plane aggregate passed with stable initial/final identity.
+The free diagnostic still refused the disposable instance's missing provider
+key; no paid verdict or external release evidence follows.
 
 The watched vertical-packs playbook now includes the synthetic browser's actual
 XLSX download-content parse, not only its ZIP/MIME shape. The new serialized

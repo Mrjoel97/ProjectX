@@ -7,9 +7,22 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `e3c80fab2c0f2e28e2c3409bd51419aec3516913a3ac8e8d72e85ec781a5897f` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71`
+Artifact-set SHA-256: `881e840e66402c1ac069676f8c59a70b95a5240dcdbbad2751dc42ef4ce9b121`
+
+**2026-09-28 named-local golden-route requalification:** The golden preflight now
+has a process-scoped self-hosted local instance declaration compatible with the
+installed Convex CLI. A fresh exact-source disposable instance matched
+`/instance_name`; the free preflight reached the read-only readiness query and
+returned a secret-safe missing-key refusal before any budget/provider call.
+Empty final CLI output is now classified as transport failure, with a red-before-
+green control. The golden and dependent recipe evaluator source pins changed,
+retiring prior evidence without changing either fixture corpus. The new
+serialized aggregate passed all 21 planes with identical initial/final digest,
+including both fresh browser/audit stacks, three typechecks, production build,
+strict documents and all registered free gates. No paid, hosted or Wave 7/8
+acceptance follows.
 
 **2026-09-28 browser-download content requalification:** A fresh disposable
 synthetic tenant clicked the app's **Download original** control after editing a

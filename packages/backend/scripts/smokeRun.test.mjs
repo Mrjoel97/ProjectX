@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { convexSpawnOptions, safeConvexFailureReason } from "./smokeRun.mjs";
+import { convexSpawnOptions, requireConvexResult, safeConvexFailureReason } from "./smokeRun.mjs";
+
+test("an empty Convex CLI result is transport failure after any opt-in retry", () => {
+  assert.equal(requireConvexResult('{"ready":false}\n'), '{"ready":false}\n');
+  for (const output of ["", " \r\n"]) {
+    assert.throws(
+      () => requireConvexResult(output),
+      (error) => {
+        assert.equal(error.message, "CONVEX_EMPTY_RESULT");
+        assert.equal(error.safeReason, "transport_error");
+        return true;
+      },
+    );
+  }
+});
 
 test("Convex child options carry a finite timeout and deterministic termination signal", () => {
   assert.deepEqual(convexSpawnOptions(20_000), {

@@ -38,7 +38,9 @@ const backendEnvPath = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".
 
 /** The shared Convex runner permits a production override for other smoke gates. A golden run
  * also needs an explicit named dev/local selection: a live anonymous listener is not a qualified
- * target. This is necessary but not sufficient; operators still verify /instance_name and source. */
+ * target. Self-hosted Convex CLI calls cannot combine CONVEX_DEPLOYMENT with the self-hosted URL
+ * and admin key, so that route uses a separate process-scoped instance declaration. This is
+ * necessary but not sufficient; operators still verify /instance_name and source. */
 export function assertGoldenNonProductionTarget(
   env = process.env,
   envFile = existsSync(backendEnvPath) ? readFileSync(backendEnvPath, "utf8") : "",
@@ -53,6 +55,52 @@ export function assertGoldenNonProductionTarget(
     );
   const fileDeployment = declarations("CONVEX_DEPLOYMENT");
   const ambientDeployment = env.CONVEX_DEPLOYMENT?.trim();
+  const localInstance = env.PIKAR_GOLDEN_LOCAL_INSTANCE?.trim();
+  if (localInstance) {
+    const selfHostedUrls = declarations("CONVEX_SELF_HOSTED_URL");
+    const ambientSelfHostedUrl = env.CONVEX_SELF_HOSTED_URL?.trim();
+    const fileUrls = declarations("CONVEX_URL");
+    const ambientUrl = env.CONVEX_URL?.trim();
+    if (
+      !/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(localInstance) ||
+      fileDeployment.length !== 0 ||
+      ambientDeployment ||
+      !env.CONVEX_SELF_HOSTED_ADMIN_KEY?.trim() ||
+      selfHostedUrls.length > 1 ||
+      (ambientSelfHostedUrl &&
+        selfHostedUrls.length === 1 &&
+        ambientSelfHostedUrl !== selfHostedUrls[0]) ||
+      fileUrls.length > 1 ||
+      (ambientUrl && fileUrls.length === 1 && ambientUrl !== fileUrls[0])
+    )
+      throw new ProviderPreflightRefusal("named_nonproduction_target_required");
+    const target = ambientSelfHostedUrl || selfHostedUrls[0];
+    try {
+      const url = new URL(target);
+      const declaredUrl = ambientUrl || fileUrls[0];
+      const comparable = declaredUrl ? new URL(declaredUrl) : null;
+      if (
+        !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        url.pathname !== "/" ||
+        (comparable &&
+          (comparable.origin !== url.origin ||
+            comparable.pathname !== "/" ||
+            comparable.search ||
+            comparable.hash ||
+            comparable.username ||
+            comparable.password))
+      )
+        throw new Error("local target mismatch");
+    } catch {
+      throw new ProviderPreflightRefusal("named_nonproduction_target_required");
+    }
+    return true;
+  }
   if (
     fileDeployment.length > 1 ||
     (ambientDeployment && fileDeployment.length === 1 && ambientDeployment !== fileDeployment[0])
@@ -61,6 +109,10 @@ export function assertGoldenNonProductionTarget(
   const deployment = ambientDeployment || fileDeployment[0] || null;
   const match = /^(dev|local):([A-Za-z0-9][A-Za-z0-9_-]*)$/.exec(deployment ?? "");
   if (!match) throw new ProviderPreflightRefusal("named_nonproduction_target_required");
+  // The Convex CLI refuses this combination even if the two declarations describe the same
+  // instance. Do not let an empty CLI result masquerade as a malformed readiness response.
+  if (env.CONVEX_SELF_HOSTED_URL?.trim() || declarations("CONVEX_SELF_HOSTED_URL").length)
+    throw new ProviderPreflightRefusal("named_nonproduction_target_required");
   const explicitUrls = [];
   for (const key of ["CONVEX_URL", "CONVEX_SELF_HOSTED_URL"]) {
     const fileUrls = declarations(key);

@@ -74,6 +74,15 @@ function invoke(fn, args, timeoutMs) {
   return out;
 }
 
+/** `convex run` prints JSON even for void results. An empty final stdout is a transport
+ * failure, not a malformed function response; the caller may first opt into one safe read retry. */
+export function requireConvexResult(output) {
+  if (typeof output === "string" && output.trim() !== "") return output;
+  const error = new Error("CONVEX_EMPTY_RESULT");
+  error.safeReason = "transport_error";
+  throw error;
+}
+
 /** Run once; on failure print the deployment's output and rethrow.
  *
  * `retryOnEmpty` (16-09) — retry ONCE when stdout is EMPTY and no failure banner was printed.
@@ -96,7 +105,9 @@ export function must(
 ) {
   try {
     const out = invoke(fn, args, timeoutMs);
-    return retryOnEmpty && out.trim() === "" ? invoke(fn, args, timeoutMs) : out;
+    return requireConvexResult(
+      retryOnEmpty && out.trim() === "" ? invoke(fn, args, timeoutMs) : out,
+    );
   } catch (e) {
     if (redactErrors) {
       const redacted = new Error("CONVEX_FUNCTION_FAILED");

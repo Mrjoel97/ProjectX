@@ -1,5 +1,11 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — the shared Convex smoke/evaluation runner now
+classifies an empty final CLI result as a safe transport failure after any
+opt-in idempotent-read retry. This changes no vertical candidate, browser review,
+native evaluator corpus or activation policy. The watched source change retires
+the prior Phase 49 local aggregate digest until its exact-source rerun passes.
+
 Last verified: 2026-09-28 — the Output card now has a genuine authenticated edit path.
 It seeds an editor from the owned artifact text; a changed draft is rendered to replacement
 PDF/workbook bytes where applicable and committed with an exact original-content CAS.

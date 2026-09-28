@@ -180,8 +180,8 @@
     "semantic_hash": ""
   },
   "packages/contracts/src/skill.ts": {
-    "mtime": 1790558639.3122728,
-    "ast_hash": "92cd7b99236cea87a18cd887178bb096",
+    "mtime": 1790574979.0758598,
+    "ast_hash": "b068ea01ac285cf09d0612273f3ee8a3",
     "semantic_hash": ""
   },
   "packages/contracts/src/skills/executiveAgentClassifier.ts": {
@@ -440,8 +440,8 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/smokeRun.mjs": {
-    "mtime": 1789887062.7682147,
-    "ast_hash": "8431f3ec61f42b9b54c2f5c79d315a61",
+    "mtime": 1790574886.3641844,
+    "ast_hash": "7409c57415610235fff13f791e1b7859",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-06-SUMMARY.md": {
@@ -1590,8 +1590,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1790565953.1073754,
-    "ast_hash": "0f0d0731ad9727589a647a75a86a5ad3",
+    "mtime": 1790574980.2688255,
+    "ast_hash": "b38fbab66ff586de1bacf01d028003f8",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -9495,8 +9495,8 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/eval-suite-manifest.json": {
-    "mtime": 1790558570.014776,
-    "ast_hash": "c76fefae4063edcd660e7c9f19a49b2a",
+    "mtime": 1790574949.5411415,
+    "ast_hash": "657df5eead23a949fee66ea83d96393c",
     "semantic_hash": ""
   },
   "packages/contracts/src/auditProjection.test.ts": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790572287.2699287,
-    "ast_hash": "7be04d4637edd406641f054e32a51529",
+    "mtime": 1790574865.667739,
+    "ast_hash": "8c2749c7332a0f2f368e4c09012ba352",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -14080,8 +14080,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/03.7-inbox-briefing/03.7-10-GOLDEN-PREFLIGHT.md": {
-    "mtime": 1789850559.7422502,
-    "ast_hash": "02d4caaa209f55583696083a49042908",
+    "mtime": 1790574829.5882277,
+    "ast_hash": "9bb448987b4797d03f37f0bea891029e",
     "semantic_hash": ""
   },
   ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-VERIFICATION.md": {
@@ -14090,18 +14090,18 @@
     "semantic_hash": ""
   },
   "packages/backend/scripts/goldenProviderPreflight.mjs": {
-    "mtime": 1790537518.0561054,
-    "ast_hash": "0d14dd9c4dce4e561ff63725456362f7",
+    "mtime": 1790574141.5668764,
+    "ast_hash": "362ce9b4c5343355eb4dc93853424629",
     "semantic_hash": ""
   },
   "packages/backend/scripts/goldenProviderPreflight.test.mjs": {
-    "mtime": 1790537417.6661432,
-    "ast_hash": "8a5f2c1188b629ac8dc6373cf4aa0166",
+    "mtime": 1790574096.5533075,
+    "ast_hash": "73003551d5aa151ad9ae41b1a472b5b3",
     "semantic_hash": ""
   },
   "packages/backend/scripts/smokeRun.test.mjs": {
-    "mtime": 1789887119.5047505,
-    "ast_hash": "9f76e6c32fad08ded1e593ed07c891b9",
+    "mtime": 1790574886.3641844,
+    "ast_hash": "10d4f2a109ea633531ec118f86166c51",
     "semantic_hash": ""
   },
   ".planning/debug/local-convex-functions-ready-failure.md": {
@@ -14835,8 +14835,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-07-SUMMARY.md": {
-    "mtime": 1790572939.8314087,
-    "ast_hash": "a2047d7b50f5eabd93c38dd930e8377d",
+    "mtime": 1790575929.2142253,
+    "ast_hash": "cf1aadfb2c0a0434f382bda7b292269f",
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-RESEARCH.md": {
@@ -14855,8 +14855,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md": {
-    "mtime": 1790572938.6212673,
-    "ast_hash": "ba8b312ac501e09054258ea9e343b22c",
+    "mtime": 1790575928.014042,
+    "ast_hash": "c4cd76c1b0c569473b9b0d43729d52df",
     "semantic_hash": ""
   },
   "docs/agent-work/astra-routing-status.md": {
@@ -16995,8 +16995,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-PREFLIGHT-2026-09-25.md": {
-    "mtime": 1790542840.6332622,
-    "ast_hash": "d8b46dd0680ec71959f404562315d2a2",
+    "mtime": 1790575266.4134133,
+    "ast_hash": "4087130ee18ce08d381e5feba445b055",
     "semantic_hash": ""
   },
   "videos/pikar-social/renders/tutorial-plan-4k.mp4": {

@@ -1,5 +1,19 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-28 — the free golden preflight now supports the Convex
+> CLI's self-hosted local route with a separate process-scoped
+> `PIKAR_GOLDEN_LOCAL_INSTANCE` declaration. It refuses a simultaneous
+> `CONVEX_DEPLOYMENT`, remote/mismatched URLs, missing admin key, or production
+> override. A fresh disposable instance matched `/instance_name`; the current
+> source reached the read-only readiness function and returned the closed
+> missing-OpenRouter-key refusal before any budget or provider call. Empty final
+> Convex CLI output now becomes a transport failure rather than an invented
+> readiness response. The unchanged 46-case golden corpus is repinned to
+> `2026-09-11.budgeted-evaluator.76cef090db5f54c02f78556778e33c4f8b6a6cad9d72aaa4b69644860cd6d0c0`;
+> the dependent deterministic web-recipe source pin is
+> `6e98f7daa7ad7adfff0c90a5c3953cf8e65ed4286764a7727cfefed1826afc50`.
+> Neither repin is a paid verdict, native activation, or Wave 7/8 acceptance.
+>
 > Last verified: 2026-09-28 — the disposable Phase 49 runner now supports a bounded
 > terminal-held browser session for synthetic local review. It does not alter skill
 > bodies, versions, activation or routing. Because this runner is in Phase 49's pinned

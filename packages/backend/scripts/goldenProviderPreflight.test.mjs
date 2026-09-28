@@ -133,6 +133,35 @@ test("a named local target cannot disguise a remote or conflicting Convex endpoi
   );
 });
 
+test("a named self-hosted local target uses the CLI-supported route without CONVEX_DEPLOYMENT", () => {
+  const local = {
+    PIKAR_GOLDEN_LOCAL_INSTANCE: "phase49-test-instance",
+    CONVEX_SELF_HOSTED_URL: "http://127.0.0.1:3410",
+    CONVEX_SELF_HOSTED_ADMIN_KEY: "synthetic-admin-key",
+    CONVEX_URL: "http://127.0.0.1:3410",
+  };
+  assert.equal(assertGoldenNonProductionTarget(local, ""), true);
+  for (const env of [
+    { ...local, CONVEX_DEPLOYMENT: "local:phase49-test-instance" },
+    { ...local, PIKAR_GOLDEN_LOCAL_INSTANCE: "" },
+    { ...local, CONVEX_SELF_HOSTED_ADMIN_KEY: "" },
+    { ...local, CONVEX_URL: "http://127.0.0.1:3411" },
+    { ...local, CONVEX_SELF_HOSTED_URL: "https://remote.example.com" },
+  ])
+    assert.throws(
+      () => assertGoldenNonProductionTarget(env, ""),
+      (error) =>
+        error instanceof ProviderPreflightRefusal &&
+        error.reason === "named_nonproduction_target_required",
+    );
+  assert.throws(
+    () => assertGoldenNonProductionTarget(local, "CONVEX_DEPLOYMENT=local:other"),
+    (error) =>
+      error instanceof ProviderPreflightRefusal &&
+      error.reason === "named_nonproduction_target_required",
+  );
+});
+
 test("a named cloud dev target refuses a mismatched explicit URL or declaration", () => {
   const named = "CONVEX_DEPLOYMENT=dev:named-golden-test";
   assert.equal(
