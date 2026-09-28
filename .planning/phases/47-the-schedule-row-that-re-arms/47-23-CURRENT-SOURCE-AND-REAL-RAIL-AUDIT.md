@@ -53,7 +53,8 @@ TypeScript exits 0. Production must authenticate/settle the first effect before 
 budget release. Current hashes above replace the prior repair's source identities; independent
 current-source review remains pending.
 
-Current controls still have value but are narrower: explicit candidate Vitest passed **35/35**;
+Current controls still have value but are narrower: the exact six source hashes above were
+rechecked on 2026-09-28 and explicit candidate Vitest passed **36/36** on the current tree;
 candidate TypeScript passed; `routineDecision`, `routines` and `dstProbe` passed **108/108**;
 checker self-check passed **32/32**. The actual governance modes returned matrix `0`, eligibility
 `1` with **14** findings, operational `defer` decision `0`, and disabled stage `0`. `convex.json`
