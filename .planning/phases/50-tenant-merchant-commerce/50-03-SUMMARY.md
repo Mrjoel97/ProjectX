@@ -38,6 +38,19 @@ completed: 2026-09-24
 
 # Phase 50 Plan 03: Tenant catalogue isolation and operator controls
 
+## 2026-09-29 painted-browser re-entry attempt
+
+A fresh loopback-only disposable Convex/production-web stack built and started
+successfully, but no browser inspection occurred. The prescribed Playwright CLI
+wrapper could not launch Git Bash in this sandbox (`E_ACCESSDENIED`), the direct
+CLI package fetch failed `EACCES`, and the available computer-use runtimes
+exposed no browser or usable kernel. The stack's own teardown exited 0,
+confirmed its isolated audit, removed its exact owned temporary root, and left
+no listeners on ports 3112/3410/3411. This is a tooling refusal, **not**
+painted desktop/mobile proof or founder acceptance. The DOM/CSS and production
+build evidence below remains the narrower local claim; re-entry needs a working
+browser surface or preinstalled Playwright CLI package.
+
 The authenticated sites workspace now has live tenant-scoped product and inventory controls; a production-adapter test proves swapped A/B product, stock and reservation IDs cannot cross tenants, including through an owner identity.
 
 ## Scope and claim boundary
