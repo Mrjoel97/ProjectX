@@ -418,7 +418,8 @@
     "packages/backend/convex/fixtureSeam.test.ts",
     "packages/backend/convex/ops.ts",
     ".github/workflows/deploy-production.yml",
-    "scripts/check-production-head.mjs"
+    "scripts/check-production-head.mjs",
+    "scripts/check-production-vercel-project.mjs"
   ],
   "workflow-packs.md": [
     "packages/core/src/workflowPack",

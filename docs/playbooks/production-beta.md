@@ -1,5 +1,17 @@
 # Playbook: Production Beta Readiness (25-10)
 
+Last verified: 2026-09-28 — after `vercel pull`, the opt-in production
+workflow now refuses unless `.vercel/project.json` names the root-linked
+`pikar-ai-convex` project (`prj_WmCtlmOX0ZsIxusuSc6Zwad3otN0`), matches
+the configured organization ID, and declares `apps/web` as its root
+directory. The local root link provides the reviewed pin; the workflow must
+read it back after the provider pull before any build or production mutation.
+The separate `apps/web/.vercel/project.json` names a different `web` project
+and is an adverse test. The offline self-test exercises missing/mismatched
+readback and workflow placement. This is a fail-closed configuration guard,
+not evidence of current provider ownership, domain linkage or a successful
+production deployment; none was attempted.
+
 Last verified: 2026-09-28 — the opt-in `[deploy]` workflow now compares its
 CI-qualified `DEPLOY_SHA` with the live `refs/heads/main` before release work,
 again before any Convex production mutation, and again before Vercel promotion.

@@ -135,6 +135,9 @@ jobs:
       - name: Pull Vercel production settings
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
+      - name: Verify production Vercel project identity
+        run: node scripts/check-production-vercel-project.mjs
+
       - name: Validate Vercel client/deploy environment
         shell: bash
         run: |
