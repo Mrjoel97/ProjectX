@@ -367,7 +367,15 @@ export const commitEdit = internalMutation({
       actor: "user",
       contentRevision: 1,
     });
-    return { oldStorageId };
+    // Convex storage deletion is transactional with this mutation. If cleanup fails, the
+    // text/bytes swap and review event roll back together; the action removes its staged blob.
+    if (
+      oldStorageId &&
+      oldStorageId !== a.storageId &&
+      (await ctx.db.system.get("_storage", oldStorageId)) !== null
+    )
+      await ctx.storage.delete(oldStorageId);
+    return { saved: true };
   },
 });
 

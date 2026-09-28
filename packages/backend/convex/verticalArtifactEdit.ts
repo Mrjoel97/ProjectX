@@ -40,9 +40,8 @@ export const save = tenantAction({
       );
     }
 
-    let result: { oldStorageId?: Id<"_storage"> };
     try {
-      result = await ctx.runMutation(internal.verticalPacks.commitEdit, {
+      await ctx.runMutation(internal.verticalPacks.commitEdit, {
         tenantId: ctx.tenantId,
         artifactId,
         expectedContentHash: prior.contentHash,
@@ -54,15 +53,6 @@ export const save = tenantAction({
     } catch (error) {
       if (storageId) await ctx.storage.delete(storageId);
       throw error;
-    }
-    // The new bytes are already referenced by the committed row. A failed old-blob cleanup
-    // cannot roll that transaction back, so it must never enter the catch that deletes new bytes.
-    if (result.oldStorageId && result.oldStorageId !== storageId) {
-      try {
-        await ctx.storage.delete(result.oldStorageId);
-      } catch {
-        // Orphan cleanup is separate maintenance; the persisted edit remains successful.
-      }
     }
     return { saved: true };
   },

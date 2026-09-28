@@ -6,6 +6,10 @@ PDF/workbook bytes where applicable and committed with an exact original-content
 Only after the content and bytes persist does one user-actor, refs-only `review_edited`
 event record revision 1. No-op, foreign, stale, preview, duplicate and table-free edits
 refuse; a later model rewrite invalidates the edit outcome's current-artifact attribution.
+Superseded PDF/workbook deletion now shares the content/outcome transaction; an
+injected post-patch audit failure rolls back the row and retains the old bytes,
+while the action deletes its newly staged blob. The old-blob cleanup is not silently
+swallowed after a successful save.
 Focused backend and DOM tests pass. This is local runtime proof, not deployed browser UAT,
 semantic qualification, candidate approval, activation or delivery.
 

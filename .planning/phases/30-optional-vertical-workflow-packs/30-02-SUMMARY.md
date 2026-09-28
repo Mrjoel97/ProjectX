@@ -152,3 +152,9 @@ after its no-scheduler posture was checked; that suite passes 9/9 and operationa
 recurrence remains `defer`.
 All 12 workspace typecheck tasks, repository lint, all 32 free gates, strict
 planning/playbook checks and Graphify/Convex-edge refresh passed locally.
+Follow-up integrity repair moved superseded PDF/workbook deletion into the same
+Convex mutation as the text swap and user outcome. A failure injected after the
+patch proves rollback retains the original text/blob and creates no user outcome;
+the staged replacement blob is removed by the action. The focused review suite
+passes 9/9. Rendered authenticated browser evidence remains open because no local
+web/Convex listener is currently running; no production target was substituted.

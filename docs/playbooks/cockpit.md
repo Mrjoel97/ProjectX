@@ -2,6 +2,8 @@
 > now offers a human edit alongside accept/needs-changes. It loads only the selected owned
 > document text, persists a changed body through a server-side CAS with PDF/workbook
 > replacement where applicable, and records a refs-only user outcome after persistence.
+> Superseded bytes are deleted in that same transaction, so an audit/storage failure
+> rolls back the edit instead of leaving a purported success with an orphaned blob.
 > The control neither sends nor activates a pack. Focused UI/backend tests pass; an
 > authenticated deployed browser walkthrough remains open.
 >

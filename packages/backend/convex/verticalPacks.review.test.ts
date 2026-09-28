@@ -10,9 +10,9 @@ const aggregateModules = import.meta.glob(
   "../node_modules/@convex-dev/aggregate/src/component/**/!(*.test).ts",
 );
 
-async function setup() {
+async function setup(registerAggregate = true) {
   const t = convexTest(schema, modules);
-  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  if (registerAggregate) t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
   const ids = await t.run(async (ctx) => {
     const candidate = {
       tenantId: "a",
@@ -368,4 +368,42 @@ test("editing a spreadsheet replaces workbook bytes and refuses a table-free dra
   });
   expect(byteCount).toBeGreaterThan(100);
   expect(await t.run(async (ctx) => (await ctx.storage.get(oldStorageId)) === null)).toBe(true);
+});
+
+test("a post-patch audit failure rolls back the edit and retains its original PDF", async () => {
+  const { t, candidateId, artifactId } = await setup(false);
+  const oldStorageId = await t.run(async (ctx) => {
+    const id = await ctx.storage.store(new Blob(["original PDF"], { type: "application/pdf" }));
+    await ctx.db.patch(artifactId, {
+      kind: "created_document",
+      storageId: id,
+      storedMimeType: "application/pdf",
+    });
+    await ctx.db.insert("audit", {
+      tenantId: "a",
+      correlationId: String(candidateId),
+      eventType: "vertical_pack.outcome",
+      actor: "system",
+      ts: Date.now(),
+      payload: { candidateId, artifactId, verticalId: "product", event: "artifact_created" },
+    });
+    return id;
+  });
+  await expect(
+    t.withIdentity({ subject: "a" }).action(api.verticalArtifactEdit.save, {
+      artifactId,
+      markdown: "# Revised PDF\n\nEdited content.",
+    }),
+  ).rejects.toThrow();
+  const doc = await t.run((ctx) => ctx.db.get(artifactId));
+  expect(doc?.text).toBe("Private draft body");
+  expect(doc?.contentRevision).toBeUndefined();
+  expect(doc?.storageId).toBe(oldStorageId);
+  expect(await t.run(async (ctx) => (await ctx.storage.get(oldStorageId)) !== null)).toBe(true);
+  const storageRows = await t.run((ctx) => ctx.db.system.query("_storage").collect());
+  expect(storageRows.map((row) => row._id)).toEqual([oldStorageId]);
+  const userOutcomes = (await t.run((ctx) => ctx.db.query("audit").collect())).filter(
+    (row) => row.actor === "user" && row.eventType === "vertical_pack.outcome",
+  );
+  expect(userOutcomes).toEqual([]);
 });
