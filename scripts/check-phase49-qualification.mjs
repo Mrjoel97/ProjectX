@@ -110,7 +110,9 @@ function recordedHash(text) {
 function currentWaveHash(text, wave) {
   const section = text.split(new RegExp(`^## Wave ${wave} \\u2014[^\\r\\n]*$`, "m"))[1];
   const current = section?.split(/^## Wave \d+ /m)[0];
-  return current?.match(/\*\*Current local checkpoint[^\n]*\*\*[^\n]*\n?`([a-f0-9]{64})`/)?.[1] ?? null;
+  return (
+    current?.match(/\*\*Current local checkpoint[^\n]*\*\*[^\n]*\n?`([a-f0-9]{64})`/)?.[1] ?? null
+  );
 }
 function finalState() {
   const report = readFileSync(resolve(root, verification), "utf8");
@@ -348,8 +350,10 @@ function selfTest() {
   if (
     currentWaveHash(checkpointFixture, 3) !== "a".repeat(64) ||
     currentWaveHash(checkpointFixture, 4) !== "b".repeat(64) ||
-    currentWaveHash(checkpointFixture.replace("Current local checkpoint", "Retired checkpoint"), 3) !==
-      null
+    currentWaveHash(
+      checkpointFixture.replace("Current local checkpoint", "Retired checkpoint"),
+      3,
+    ) !== null
   )
     bad += 1;
   stdout.write(

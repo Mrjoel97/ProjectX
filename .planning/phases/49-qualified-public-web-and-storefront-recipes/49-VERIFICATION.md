@@ -7,9 +7,9 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** Requalification passed for the current 71-file digest below after the qualification checker added exact Wave 3/4 map parity. A fresh serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The previous 21-plane result on `60471042d458df7616f7cc535dc5110fb2ec9fca1df4d625293c5b3412ed9c60` is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** Requalification passed for the current 71-file digest below after the qualification checker's CI formatting correction. A fresh serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. An earlier attempt on these bytes failed when C: reached `ENOSPC`; after removing only regenerable Next.js caches, the exact backend selection, free gates and one isolated browser passed, followed by the complete clean aggregate. The previous 21-plane result on `62ecb91255d78f37105efcf8fcb48d65fdf4fd39a9374a6c09174b2fb3989d43` is historical and its exact-head CI failed lint. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `62ecb91255d78f37105efcf8fcb48d65fdf4fd39a9374a6c09174b2fb3989d43`
+Artifact-set SHA-256: `c334ae749350573c5b300e0967b308aec12062d9dbb6fb7e41d93710fca98345`
 
 **2026-09-28 local provider-egress requalification:** A filtered golden diagnostic
 stopped with an unresolved first embedding reservation after sandboxed TCP/443

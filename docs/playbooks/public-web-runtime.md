@@ -1,5 +1,12 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-28 — the checkpoint-parity guard received a
+> formatter-only correction after exact-head CI lint rejected its layout.
+> The guard's Wave 3/4 digest comparison and repository/local-only boundary
+> are unchanged. This note acknowledges the changed watched checker bytes;
+> requalification on the resulting artifact digest is required before citing
+> them as passed.
+>
 > Last verified: 2026-09-28 — the Phase 49 qualification checker now requires
 > the Wave 3 and Wave 4 **current local checkpoint** hashes in the governing
 > wave map to equal the same 71-file artifact digest pinned by the Phase 49
