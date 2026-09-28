@@ -424,7 +424,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     }
   });
 
-  it("contains a reservation exception and a pause while mock preparation is in flight", async () => {
+  it("quarantines an unproved reservation and fences a separate in-flight preparation", async () => {
     const { tx } = harness();
     const { id, routine, key } = await approved(tx);
     const claim = await tx((db) =>
@@ -440,7 +440,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
       }),
       lookup: vi.fn(async () => "absent" as const),
       release: vi.fn(async () => {
-        heldOnThrow = -1;
+        throw new Error("no release tombstone");
       }),
     };
     const refused = await syntheticAttempt(
@@ -450,18 +450,24 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
       throwingBudget,
       mockBeforeReserve,
     );
-    expect(refused).toBe("retry_pending");
+    expect(refused).toBe("reconciliation_required");
     expect(heldOnThrow).toBe(0);
-    expect(throwingBudget.release).not.toHaveBeenCalled();
+    expect(throwingBudget.release).toHaveBeenCalled();
     expect(mockBeforeReserve).not.toHaveBeenCalled();
+    expect(await syntheticAttempt(tx, tenant, claim.runId, throwingBudget, mockBeforeReserve)).toBe(
+      "reconciliation_required",
+    );
+    expect(throwingBudget.reserve).toHaveBeenCalledOnce();
+
+    const separate = await claimed(tx);
     const budget = rails();
-    const moved = await syntheticAttempt(tx, tenant, claim.runId, budget, async () => {
-      await tx((db) => pauseCandidate(db, tenant, id));
+    const moved = await syntheticAttempt(tx, tenant, separate.runId, budget, async () => {
+      await tx((db) => pauseCandidate(db, tenant, separate.id));
       return { planRef: "plan:never_committed" };
     });
     expect(moved).toBe("stopped_paused");
     expect(budget.held).toBe(0);
-    expect((await tx((db) => db.get(claim.runId!)))?.planRef).toBeUndefined();
+    expect((await tx((db) => db.get(separate.runId)))?.planRef).toBeUndefined();
   });
 
   it("bounds retries and writes refs-only audit/dead-letter despite hostile prose", async () => {
@@ -800,6 +806,44 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
     expect(await syntheticAttempt(tx, tenant, runId, budget, mock)).toBe("not_claimed");
     expect(budget.reserve).toHaveBeenCalledTimes(2);
     expect(budget.release).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not clear an absent rail unless release established its tombstone", async () => {
+    const { tx } = harness();
+    const { id, runId } = await claimed(tx);
+    const budget = rails();
+    const reserve = budget.reserve;
+    budget.reserve = vi.fn(async (...args: Parameters<typeof reserve>) => {
+      if (args[0] === "daily") throw new Error("reserve failed before effect");
+      return reserve(...args);
+    });
+    const release = budget.release;
+    let releaseUnavailable = true;
+    budget.release = vi.fn(async (...args: Parameters<typeof release>) => {
+      if (releaseUnavailable) throw new Error("release failed before tombstone");
+      return release(...args);
+    });
+    const mock = vi.fn(async () => ({ planRef: "plan:must-not-run" }));
+    expect(await syntheticAttempt(tx, tenant, runId, budget, mock)).toBe("reconciliation_required");
+    expect(budget.credits.size).toBe(0);
+    expect((await tx((db) => db.get(runId)))?.reservation?.daily).toBe("uncertain");
+    expect((await tx((db) => db.get(id)))?.activeRunId).toBe(runId);
+    expect(mock).not.toHaveBeenCalled();
+    const key = (await tx((db) => db.get(runId)))?.reservation?.dailyKey;
+    if (!key) throw new Error("test setup: daily key absent");
+    // The original reservation can still land after the absent lookup. No terminal
+    // or new paid attempt is permitted until this exact key is compensated.
+    expect(await reserve("daily", key, tenant, ROUTINE_RUN_ENVELOPE_CENTS, DAILY_SPEND_CENTS)).toBe(
+      true,
+    );
+    expect(budget.held).toBe(ROUTINE_RUN_ENVELOPE_CENTS);
+    expect(await syntheticAttempt(tx, tenant, runId, budget, mock)).toBe("reconciliation_required");
+    releaseUnavailable = false;
+    expect(await syntheticAttempt(tx, tenant, runId, budget, mock)).toBe("failed_internal");
+    expect(budget.credits.size).toBe(2);
+    expect(budget.held).toBe(0);
+    expect((await tx((db) => db.get(id)))?.activeRunId).toBeUndefined();
+    expect(mock).not.toHaveBeenCalled();
   });
 
   it("blocks paid work while a rail lookup is unresolved and closes after keyed compensation", async () => {

@@ -14,9 +14,9 @@ tree. Its recorded SHA-256 values for `schema.ts`, `model.ts` and `model.test.ts
 | Candidate path under `packages/backend/candidate/recurrence/` | Current SHA-256 |
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
-| `model.ts` | `61a908a419a21703d53a18e93e9efbb862d516e6e3115e3b886a483d9c103ba9` |
-| `model.test.ts` | `56b605ba4c61dabc86e677cecb43ef9cb6757bdb50a0a307d4f15ba77a33df40` |
-| `README.md` | `be7c8983ac665b9daf6068a61500383697885ca98b85c6900ac1025165905452` |
+| `model.ts` | `3e28fd90801b36e0aabb996a480d66ee3d988586ade57bfaf0a592fc8254ff1b` |
+| `model.test.ts` | `faa3c8ff373235d3856a14a94d453ea6a3df2a6e1ef1373c9be47ac362ae0504` |
+| `README.md` | `7f25bc904bd8fc56b75fb20546c9aa26679e9a97ca6a0afa3a91d89992f9ffe3` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
@@ -53,8 +53,21 @@ TypeScript exits 0. Production must authenticate/settle the first effect before 
 budget release. Current hashes above replace the prior repair's source identities; independent
 current-source review remains pending.
 
+**2026-09-28 absent-is-not-released amendment:** A red-before-green adverse control found that
+`reserve` throwing before its effect and returning an `absent` lookup became `retry_pending`,
+while `release` throwing before its tombstone and returning `absent` could clear the run. The
+original reservation could still allocate after that lookup. The disabled reducer now quarantines
+the thrown reserve even on `absent` and requires affirmative `released` tombstone evidence before
+terminal release. The regression lands the original keyed reservation after the first absent
+lookup, verifies no paid call or second reserve, then proves exact-key compensation and closure.
+The older test's retryable expectation was unsafe and was corrected; its pause race now runs on a
+separate clean fixture. Current candidate Vitest passes **37/37** and candidate TypeScript exits 0.
+This is a synthetic rail contract only; the installed limiter still lacks the keyed tombstone API,
+and fresh independent source review remains pending. The exact hashes above supersede the earlier
+candidate revisions.
+
 Current controls still have value but are narrower: the exact six source hashes above were
-rechecked on 2026-09-28 and explicit candidate Vitest passed **36/36** on the current tree;
+rechecked on 2026-09-28 and explicit candidate Vitest passed **37/37** on the current tree;
 candidate TypeScript passed; `routineDecision`, `routines` and `dstProbe` passed **108/108**;
 checker self-check passed **32/32**. The actual governance modes returned matrix `0`, eligibility
 `1` with **14** findings, operational `defer` decision `0`, and disabled stage `0`. `convex.json`

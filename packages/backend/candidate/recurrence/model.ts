@@ -487,7 +487,9 @@ async function reserveRail(
         : "denied";
     } catch {
       const found = await lookupSafe(rails, rail, key, tenantId);
-      state = found === "held" ? "held" : found === "absent" ? "pending" : "uncertain";
+      // An absent lookup is not a tombstone: a reserve whose response was lost
+      // may still land later. Quarantine until keyed release proves compensation.
+      state = found === "held" ? "held" : "uncertain";
     }
   }
   await transaction((db) =>
@@ -633,7 +635,9 @@ async function releaseTerminal(
         reservation.admissionId,
         rail,
         key,
-        found === "released" || found === "absent" ? "released" : "uncertain",
+        // Only a persisted release tombstone proves an absent/in-flight reserve
+        // cannot allocate later. An absent lookup after a release throw is not proof.
+        found === "released" ? "released" : "uncertain",
       ),
     );
   }
@@ -995,7 +999,7 @@ export async function syntheticAttempt(
   }
   for (const rail of ["daily", "deployment"] as const) {
     const state = await reserveRail(transaction, tenantId, runId, rails, rail);
-    if (state === "denied" || state === "uncertain" || state === "pending") {
+    if (state === "denied" || state === "uncertain") {
       if (state === "uncertain") {
         await transaction(async (db) => {
           const run = await db.get(runId);
@@ -1007,7 +1011,7 @@ export async function syntheticAttempt(
       const status = await transaction((db) =>
         finishAttempt(db, tenantId, runId, {
           kind: "failure",
-          failureClass: state === "denied" ? "budget" : "internal",
+          failureClass: "budget",
         }),
       );
       return status === "reconciliation_required"
