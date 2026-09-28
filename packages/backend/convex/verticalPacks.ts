@@ -10,7 +10,7 @@ import {
 import { hasValidPackProvenance } from "@pikar/core/workflowPacks";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
 import { ownerMutation, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
@@ -20,6 +20,40 @@ import { verticalArtifactEventsFor, verticalEventsFor } from "./verticalPackTele
 
 const verticalIdArg = v.union(...VERTICAL_IDS.map((id) => v.literal(id)));
 const RECOMMENDATION_WINDOW_MS = 30 * 60_000;
+
+function activeEvidenceRefs(row: Doc<"skills">) {
+  try {
+    const provenance = JSON.parse(row.provenance ?? "null") as Record<string, unknown> | null;
+    const evaluation = JSON.parse(row.evidence ?? "null") as Record<string, unknown> | null;
+    const browser = JSON.parse(row.browserEvidence ?? "null") as Record<string, unknown> | null;
+    if (
+      !provenance ||
+      !evaluation ||
+      !browser ||
+      typeof provenance.sourceCommit !== "string" ||
+      !/^[0-9a-f]{40}$/.test(provenance.sourceCommit) ||
+      typeof provenance.bodySha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(provenance.bodySha256) ||
+      typeof evaluation.runId !== "string" ||
+      !/^[0-9a-f-]{36}$/.test(evaluation.runId) ||
+      typeof evaluation.issuanceId !== "string" ||
+      !/^[a-zA-Z0-9_-]{1,128}$/.test(evaluation.issuanceId) ||
+      typeof browser.runId !== "string" ||
+      !/^[a-zA-Z0-9_-]{1,128}$/.test(browser.runId)
+    )
+      return null;
+    return {
+      provenance: {
+        sourceCommit: provenance.sourceCommit,
+        bodySha256: provenance.bodySha256,
+      },
+      eval: { runId: evaluation.runId, issuanceId: evaluation.issuanceId },
+      uat: { runId: browser.runId },
+    };
+  } catch {
+    return null;
+  }
+}
 
 type ReviewDecision = "approve" | "reject" | "edit";
 type ReviewOrigin = {
@@ -164,9 +198,12 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
     const candidate = tenantCandidate ?? globalCandidate;
     // Ordinary prepare refuses an active tenant overlay until reviewed vertical customization
     // exists. Discovery must not offer a workflow that the start door will reject.
-    const ready =
-      overlay === null && global !== null && (await nativePackExposureReady(ctx, global));
-    if (ready) {
+    const refs =
+      overlay === null && global !== null && (await nativePackExposureReady(ctx, global))
+        ? activeEvidenceRefs(global)
+        : null;
+    const ready = global !== null && refs !== null;
+    if (ready && global) {
       released.push(id);
       activeCandidateIds[id] = global._id;
     }
@@ -175,7 +212,8 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
       disabled: profile?.disabledVerticals?.includes(id) ?? false,
       candidateId: candidate?._id ?? null,
       candidateVersion: candidate?.version ?? null,
-      activeVersion: ready ? global.version : null,
+      activeVersion: ready && global ? global.version : null,
+      activeEvidenceRefs: refs,
       prerequisite: ready ? null : "native_evidence",
       requiredReview: VERTICAL_PACKS[id].requiredReview,
     });

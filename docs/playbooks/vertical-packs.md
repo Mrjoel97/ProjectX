@@ -1,5 +1,23 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — post-prepare Design/Data source failures and a
+budget pre-call refusal each emit one exact-candidate, refs-only `blocked`
+outcome with a closed reason; pre-prepare refusals cannot safely attribute a
+candidate and emit none. The current discovery/review/telemetry/binding/registry
+selection passes 47/47. This closes Plan 30-02's repository controls, not
+actual candidate evaluation, tenant UAT, owner acceptance or activation.
+
+Last verified: 2026-09-28 — tenant discovery projects only source commit/body
+hash, native issuance/run id and authenticated browser run id from the exact
+active global vertical after its native exposure gate passes. A tenant overlay
+suppresses those global refs; stale or missing evidence exposes none. An
+isolated synthetic issuance test covers two tenants and does not establish
+real qualification. The closed outcome writer requires a `blocked` event to
+carry one of its enumerated reasons and refuses a reason on any other event.
+Its new `budget_paused` reason stays a closed enum, with no free-text budget
+payload. Red-before-green controls cover the refs and writer gaps. This is
+repository integrity, not live use, semantic quality, UAT or activation.
+
 Last verified: 2026-09-28 — the Data operator preview's final Vault insert now
 rechecks the exact prepared source in the same mutation as artifact creation.
 A red-before-green control changed the source between preparation and insert;

@@ -1,12 +1,54 @@
 ---
 phase: 30-optional-vertical-workflow-packs
 plan: 02
-status: partial
+status: complete
 requirements: [VERT-01, VERT-02]
 date: 2026-09-10
 ---
 
 # 30-02 — Native vertical controls and evidence-aware discovery
+
+## 2026-09-28 scoped plan completion
+
+Plan 30-02's repository-controlled discovery, independent disable/rollback and
+closed outcome-telemetry contract is now complete. The exact active global
+candidate returns bounded provenance, native eval issuance and browser-UAT
+refs only after the existing release gate passes; a tenant overlay or
+missing/stale evidence withholds them. Post-prepare Design/Data source refusals
+and budget refusal now write one candidate-bound, refs-only blocked event with
+closed `missing_source` or `budget_paused` reason. Pre-prepare refusals do not
+guess a candidate identity and write no vertical outcome event.
+
+The integrated discovery/review/telemetry/binding/registry selection passes
+**47/47** tests; backend and contracts TypeScript, targeted formatting,
+strict planning/playbook checks and all **34/34** free gates pass. This closes
+Plan 02's local controls, not VERT-01/02 or Phase 30: actual six-candidate
+semantic evaluations, authenticated responsive UAT, owner review, activation
+and lifecycle drills remain in Plans 08–10. The dated `partial` statements
+below describe earlier checkpoints, not the current Plan 02 disposition.
+
+## 2026-09-28 blocked-reason event contract reconciliation
+
+A red-before-green boundary test showed the closed writer accepted a `blocked`
+event with no reason and a `run_completed` event carrying a blocked reason.
+The writer now requires an enumerated reason exactly when the event is
+`blocked`. A second red-before-green control added the closed `budget_paused`
+reason without a free-text budget field. Discovery now projects only the
+source commit/body hash, native issuance/run ID and browser run ID from the
+exact active global candidate after the native release gate passes. A synthetic
+qualified-candidate test proves a tenant overlay shadows the global refs,
+and missing/stale UAT or eval evidence removes them. It supplies local
+two-tenant, exact-version and non-disclosure controls, not a real issuance.
+
+The three focused discovery/telemetry/binding suites pass **31/31**; backend
+TypeScript, targeted formatting, strict planning/playbook checks and all
+**34/34** registered free gates pass on the updated source.
+Status remains **partial** pending producer coverage in `verticalPackBinding.ts`:
+Design and Data missing-source returns and a post-prepare budget refusal do
+not yet emit blocked events. Pre-prepare refusals lack a verified candidate
+identity and must not be attributed to a guessed row. No exact-version
+semantic evaluation, hosted tenant UAT, live usage, activation or release is
+inferred; VERT-01/02 remain open.
 
 ## 2026-09-28 derived repeat-use telemetry
 

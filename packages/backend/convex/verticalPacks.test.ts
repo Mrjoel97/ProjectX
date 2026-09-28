@@ -1,9 +1,17 @@
+import { VERTICAL_CANDIDATES } from "@pikar/contracts/skills/verticalCandidates";
+import { VERTICAL_EVAL_MODELS } from "@pikar/contracts/verticalEval";
+import {
+  VERTICAL_CORPUS,
+  VERTICAL_CORPUS_SHA256,
+  VERTICAL_EVALUATOR_SHA256,
+} from "@pikar/contracts/verticalEvalCorpus";
 import { verticalSkillName } from "@pikar/core/verticalPacks";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
 import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import { VERTICAL_EVAL_AUDIT_NAMESPACE } from "./audit";
+import { contentHash } from "./lib/hash";
 import schema from "./schema";
 
 const modules = import.meta.glob(["./**/*.ts", "!./**/*.test.ts"]);
@@ -75,6 +83,148 @@ async function setup() {
 }
 
 describe("vertical controls use native tenant/version state", () => {
+  test("only the exact released active row exposes bounded refs, never a foreign overlay or stale planes", async () => {
+    const { t, asA, asB, a, b } = await setup();
+    const name = "vertical-product" as const;
+    const body = VERTICAL_CANDIDATES[name].body;
+    const browserEvidence = JSON.stringify({
+      runner: "playwright:pack",
+      runId: "browser-product-1",
+      pass: true,
+      skillVersions: { [name]: 1 },
+      authenticated: true,
+      viewports: 2,
+      casesPassed: 2,
+      casesTotal: 2,
+      deploymentRef: "private deployment details",
+      ts: 1,
+    });
+    const globalId = await t.run(async (ctx) => {
+      const candidateId = await ctx.db.insert("skills", {
+        name,
+        version: 1,
+        body,
+        provenance: JSON.stringify(VERTICAL_CANDIDATES[name].provenance),
+        browserEvidence,
+        status: "active",
+        createdAt: 1,
+      });
+      const core = {
+        schemaVersion: 1,
+        kind: "native-owner-reviewed-vertical",
+        name,
+        version: 1,
+        candidateId,
+        bodyHash: await contentHash(body),
+        runId: "123e4567-e89b-42d3-a456-426614174000",
+        corpusHash: VERTICAL_CORPUS_SHA256,
+        evaluatorHash: VERTICAL_EVALUATOR_SHA256,
+        caseHashes: VERTICAL_CORPUS.product.map((item) => item.caseHash),
+        caseReceiptIds: VERTICAL_CORPUS.product.map((_, i) => `case-${i}`),
+        reviewReceiptIds: VERTICAL_CORPUS.product.map((_, i) => `review-${i}`),
+        modelIds: [VERTICAL_EVAL_MODELS[0]],
+        budgetId: "budget-1",
+        passed: true,
+      };
+      const issuanceId = await ctx.db.insert("audit", {
+        tenantId: VERTICAL_EVAL_AUDIT_NAMESPACE,
+        correlationId: `verticalissuance:${core.runId}:${name}:1`,
+        eventType: "vertical_evidence.issuance",
+        actor: "system",
+        ts: 1,
+        payload: {
+          evidenceHash: await contentHash(JSON.stringify(core)),
+          candidateId,
+          bodyHash: core.bodyHash,
+        },
+      });
+      await ctx.db.patch(candidateId, { evidence: JSON.stringify({ ...core, issuanceId }) });
+      return candidateId;
+    });
+    const workloadIds = await t.run(async (ctx) =>
+      Promise.all(
+        [1, 2].map((i) =>
+          ctx.db.insert("vaultDocuments", {
+            tenantId: String(b),
+            title: `Prior product draft ${i}`,
+            kind: "document",
+            category: "workspace-docs",
+            source: "agent",
+            mimeType: "text/markdown",
+            size: 12,
+            contentHash: `h-${i}`,
+            text: "Owned product source",
+            status: "ready",
+            createdAt: i,
+          }),
+        ),
+      ),
+    );
+    await asB.mutation(api.verticalPacks.configure, {
+      needs: ["product"],
+      reviewReady: ["product"],
+      confirmWorkload: { verticalId: "product", artifactIds: workloadIds },
+    });
+    const released = await asB.query(api.verticalPacks.discover, {});
+    expect(released.recommendations).toMatchObject([{ id: "product", state: "available" }]);
+    expect(released.controls.find((row) => row.id === "product")?.activeEvidenceRefs).toEqual({
+      provenance: {
+        sourceCommit: VERTICAL_CANDIDATES[name].provenance.sourceCommit,
+        bodySha256: VERTICAL_CANDIDATES[name].provenance.bodySha256,
+      },
+      eval: { runId: "123e4567-e89b-42d3-a456-426614174000", issuanceId: expect.any(String) },
+      uat: { runId: "browser-product-1" },
+    });
+    expect(JSON.stringify(released)).not.toContain("private deployment details");
+    expect(JSON.stringify(released)).not.toContain(body);
+
+    const overlayId = await t.run((ctx) =>
+      ctx.db.insert("tenantSkills", {
+        tenantId: String(a),
+        name,
+        version: 1,
+        status: "active",
+        rollbackEligible: false,
+        body: "Private overlay",
+        authoredBody: "",
+        author: "system",
+        basedOnScope: "global",
+        basedOnName: name,
+        basedOnVersion: 1,
+        createdAt: 1,
+      }),
+    );
+    const shadowed = await asA.query(api.verticalPacks.discover, {});
+    expect(shadowed.controls.find((row) => row.id === "product")).toMatchObject({
+      candidateId: overlayId,
+      activeVersion: null,
+      activeEvidenceRefs: null,
+    });
+    expect(JSON.stringify(shadowed)).not.toContain(globalId);
+    expect(JSON.stringify(shadowed)).not.toContain("Private overlay");
+    expect(shadowed.recommendations).toEqual([]);
+    expect(String(a)).not.toBe(String(b));
+
+    await t.run((ctx) => ctx.db.patch(globalId, { browserEvidence: undefined }));
+    expect(
+      (await asB.query(api.verticalPacks.discover, {})).controls.find((row) => row.id === "product")
+        ?.activeEvidenceRefs,
+    ).toBeNull();
+    await t.run((ctx) => ctx.db.patch(globalId, { browserEvidence, evidence: undefined }));
+    expect(
+      (await asB.query(api.verticalPacks.discover, {})).controls.find((row) => row.id === "product")
+        ?.activeEvidenceRefs,
+    ).toBeNull();
+    await t.run((ctx) =>
+      ctx.db.patch(globalId, {
+        browserEvidence: browserEvidence.replace('"vertical-product":1', '"vertical-product":2'),
+      }),
+    );
+    expect(
+      (await asB.query(api.verticalPacks.discover, {})).controls.find((row) => row.id === "product")
+        ?.activeEvidenceRefs,
+    ).toBeNull();
+  });
   test("workload picker paginates past sealed sources without exposing content or another tenant", async () => {
     const { t, asA, asB, a, b, artifact } = await setup();
     const foreign = await t.run(async (ctx) => {

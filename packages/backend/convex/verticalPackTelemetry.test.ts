@@ -45,6 +45,8 @@ test("closed vertical event boundary rejects prose, malformed counts and cross-t
     { reason: "alice@example.com" },
     { costBucket: "account balance 450" },
     { actor: "user" },
+    { reason: undefined },
+    { event: "run_completed" },
   ])
     await expect(
       t.mutation(internal.verticalPackTelemetry.record, { ...args, ...extra } as never),
@@ -72,6 +74,43 @@ test("closed vertical event boundary rejects prose, malformed counts and cross-t
     (await t.withIdentity({ subject: "b" }).query(api.verticalPackTelemetry.summary, {}))
       .sampledEvents,
   ).toBe(0);
+});
+
+test("budget refusal has one closed blocked reason and no free-text budget payload", async () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  const candidateId = await t.run((ctx) =>
+    ctx.db.insert("tenantSkills", {
+      tenantId: "a",
+      name: verticalSkillName("product"),
+      version: 1,
+      status: "candidate",
+      rollbackEligible: false,
+      body: "Private budget context",
+      authoredBody: "",
+      author: "system",
+      basedOnScope: "global",
+      basedOnName: verticalSkillName("product"),
+      basedOnVersion: 1,
+      createdAt: 1,
+    }),
+  );
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    tenantId: "a",
+    candidateId,
+    verticalId: "product",
+    event: "blocked",
+    reason: "budget_paused",
+  });
+  const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.payload).toEqual({
+    candidateId,
+    verticalId: "product",
+    event: "blocked",
+    reason: "budget_paused",
+  });
+  expect(JSON.stringify(rows)).not.toContain("Private budget context");
 });
 
 test("aggregate samples are bounded and mark truncation without exposing payloads", async () => {

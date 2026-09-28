@@ -17,6 +17,18 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
+**2026-09-28 Wave 4 vertical-control renewal:** The watched
+vertical-packs playbook and shared backend source retired the prior
+`badd8614300b6d810b8544e8ab5cd12019822b66473e989e96881b6402aef461`
+identity. The first aggregate on `5c2a7150…` passed 20/21 planes but refused
+the stale native evaluator pin. The six-lane, 40-case corpus was regenerated
+from the changed binding source. The current 71-file digest below passed a
+fresh serialized **21/21-plane** aggregate with stable initial/final identity,
+two independent browser/audit stacks, production build, three typechecks,
+strict documents and all 34 free gates. Older "digest below" prose is
+historical to its own source identity. This is only repository/local
+qualification, not hosted, merchant or founder acceptance.
+
 **2026-09-28 public-form byte-bound checkpoint:** The HTTP form route
 now caps the actual stream before parsing or persisting. Focused tests,
 backend typecheck and 34 free gates pass. A fresh serialized 21/21-plane
@@ -47,7 +59,7 @@ is inferred.
 
 **Earlier repository/local requalification passed:** tenant-first indexed vertical audit provenance, watched playbooks and dependent evaluator pins changed. A serialized 21-plane aggregate passed on its then-current identity, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `badd8614300b6d810b8544e8ab5cd12019822b66473e989e96881b6402aef461`
+Artifact-set SHA-256: `1a4796d0de147976dbf0711299ce54bbf74e7eceea68d59655b789f1947acd1d`
 
 The changed skill contract and watched playbooks for a CLI-compatible named
 self-hosted golden diagnostic retired the prior Phase 49 digest. The new

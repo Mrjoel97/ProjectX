@@ -533,7 +533,7 @@ Plans:
 
 Plans:
 - [x] 30-01-PLAN.md — Shared vertical safety/relevance contracts and structural Bio exclusion (Wave 1); summary `status: complete` dated 2026-09-10, current pure contract 5/5 and core TypeScript pass 2026-09-28. This is only the repository policy deliverable; VERT-01–04 and Phase 30 exposure remain open.
-- [ ] 30-02-PLAN.md — Tenant discovery, evidence, telemetry and independent controls (Wave 2)
+- [x] 30-02-PLAN.md — Tenant discovery, evidence, telemetry and independent controls (Wave 2); repository-controlled contract verified 2026-09-28, with live eval/UAT/exposure still in Plans 08–10.
 - [ ] 30-03-PLAN.md — Deterministic file-first Data pack (Wave 3)
 - [ ] 30-04-PLAN.md — Product and Design artifact-only candidates (Wave 3)
 - [ ] 30-05-PLAN.md — Legal issue-spotting candidate and high-stakes boundary (Wave 3)
@@ -1824,7 +1824,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 28.1. Stripe Billing, Invoicing and Tax for Pikar's own merchant account (INSERTED) | 10/11 | Partial; merchant-origin/configuration checkpoint and live acceptance open | 2026-09-10 |
 | 28.2. Unpark ONE connector + invoice reminders (INSERTED 2026-09-06) | 1/1 | Complete | 2026-09-06 |
 | 29. Unified Knowledge and Routines | 13/13 | Complete (VERIFICATION present) | 2026-08-29 |
-| 30. Optional Vertical Workflow Packs | 1/10 | Partial — 30-01 verified; six dormant draft candidates, guarded native binding, Data validation, tenant controls and the closed exact-byte owner review console are implemented. Focused offline checks pass; paid exact-version evaluation, authenticated semantic/qualified Legal-HR review, all-six UAT, two-version evidence and lifecycle drills remain | - |
+| 30. Optional Vertical Workflow Packs | 2/10 | Partial — 30-01 and 30-02 repository-controlled contracts verified; six dormant draft candidates, guarded native binding, Data validation, tenant controls and the closed exact-byte owner review console are implemented. Plan 08 Task 1's six-candidate registry regressions pass, but exact-version outcome evaluation, authenticated semantic/qualified Legal-HR review, all-six UAT, two-version evidence and lifecycle drills remain. No pack exposure or VERT requirement closure follows from this count. | - |
 | 31. Marketing surface and funnel v0 (TRANCHE A — buildable now) | 8/8 | Complete — approved contract and navigation, direct live acceptance and deployed desktop/mobile checks; see 31-VERIFICATION.md for method and cleanup limits | 2026-09-12 |
 | 32. Channel Connection, Publishing & Metrics (tranche B) | 0/TBD | **BLOCKED — registered legal details pending.** Owner confirmed provisional name `pikar-ai` on 2026-09-20; it is not a verified legal entity. The phase directory records the external gate; no PLAN until that gate clears. | - |
 | 33. Media creation UX overhaul: guided intake, storyboard variations, auto-assembled reel, reel-first canvas, clear failure retry, grounded citations | 10/10 | Complete | 2026-08-16 |

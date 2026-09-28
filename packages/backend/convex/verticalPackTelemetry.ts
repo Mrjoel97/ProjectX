@@ -44,6 +44,7 @@ export const record = internalMutation({
         v.literal("missing_source"),
         v.literal("review_required"),
         v.literal("not_released"),
+        v.literal("budget_paused"),
       ),
     ),
     costBucket: v.optional(
@@ -63,6 +64,8 @@ export const record = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
+    if ((args.event === "blocked") !== (args.reason !== undefined))
+      throw new Error("BLOCKED_REASON_MISMATCH");
     if (
       args.actor === "user" &&
       args.event !== "review_approved" &&
