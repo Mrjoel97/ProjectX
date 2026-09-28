@@ -358,6 +358,7 @@ describe("server order quote", () => {
   test("cancellation before and after verified payment are distinct", () => {
     expect(transitionOrder("pending", "cancel")).toBe("cancelled");
     expect(transitionOrder("paid", "cancel")).toBe("cancel_requested");
+    expect(transitionOrder("expired", "cancel")).toBe("expired");
     expect(transitionOrder("expired", "payment_confirmed")).toBe("paid_needs_review");
   });
 });

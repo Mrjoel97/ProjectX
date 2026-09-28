@@ -323,7 +323,7 @@ export function transitionOrder(
   fact: "cancel" | "expire" | "payment_confirmed",
 ): OrderStatus {
   if (fact === "cancel")
-    return status === "pending" || status === "expired"
+    return status === "pending"
       ? "cancelled"
       : status === "paid"
         ? "cancel_requested"

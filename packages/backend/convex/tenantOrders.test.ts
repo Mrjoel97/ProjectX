@@ -769,6 +769,22 @@ describe("local tenant order adapter", () => {
     expect(await a.actor.mutation(expireOrder, { orderId: first.orderId })).toEqual({
       status: "expired",
     });
+    expect(await a.actor.mutation(cancelOrder, { orderId: first.orderId })).toEqual({
+      status: "expired",
+    });
+    expect(await a.actor.query(getOrder, { orderId: first.orderId })).toMatchObject({
+      status: "expired",
+    });
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("tenantOrderAttempts")
+          .withIndex("by_tenant_order", (q) =>
+            q.eq("tenantId", String(a.userId)).eq("orderId", first.orderId as never),
+          )
+          .unique(),
+      ),
+    ).toMatchObject({ status: "expired" });
     expect(
       await a.actor.mutation(placeOrder, {
         cartId: a.cart.cartId,
