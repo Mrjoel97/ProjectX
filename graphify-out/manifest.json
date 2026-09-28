@@ -255,13 +255,13 @@
     "semantic_hash": ""
   },
   ".planning/ROADMAP.md": {
-    "mtime": 1790522449.6257422,
-    "ast_hash": "7d65818321d29b20e8e2729c46a8cc85",
+    "mtime": 1790552895.299654,
+    "ast_hash": "f7d3b53cbe9a58406506823469873d24",
     "semantic_hash": ""
   },
   ".planning/STATE.md": {
-    "mtime": 1790522448.218172,
-    "ast_hash": "7ef30bdd274f7d7d04750f385dc36874",
+    "mtime": 1790552313.8550332,
+    "ast_hash": "f913fe7089aad3bd2ef0946c198cadcf",
     "semantic_hash": ""
   },
   ".planning/phases/01-foundation-governance-substrate/01-01-PLAN.md": {
@@ -11915,8 +11915,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/knowledge-search-routines.md": {
-    "mtime": 1790540719.2626631,
-    "ast_hash": "204178935a939d0208ee84abb8c1c43e",
+    "mtime": 1790552312.5921302,
+    "ast_hash": "bd18d0102582ce06766ce87c2ef06515",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-05-promotion.md": {
@@ -12795,8 +12795,8 @@
     "semantic_hash": ""
   },
   "scripts/check-free-gates.mjs": {
-    "mtime": 1790546325.4658267,
-    "ast_hash": "ce63a4b38b6dc12f20699a50409d241c",
+    "mtime": 1790550055.9811246,
+    "ast_hash": "ee5436a8fcaf8092254bb8113a0a3ccc",
     "semantic_hash": ""
   },
   ".planning/phases/45-free-gates-and-a-connector-nobody-could-connect/45-SUMMARY.md": {
@@ -15245,8 +15245,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/tenant-commerce.md": {
-    "mtime": 1790541573.4732203,
-    "ast_hash": "e3df6e0e87f06083164978e017e3af1d",
+    "mtime": 1790553803.247756,
+    "ast_hash": "327ea5ba6893d70a5815dd0cac879b12",
     "semantic_hash": ""
   },
   "packages/backend/convex/tenantCatalogue.test.ts": {
@@ -15260,13 +15260,13 @@
     "semantic_hash": ""
   },
   "packages/core/src/tenantInventory.test.ts": {
-    "mtime": 1790471234.7723408,
-    "ast_hash": "c47ec00c094cd65710a9c141ea1c7d79",
+    "mtime": 1790553661.5324583,
+    "ast_hash": "1061e7b314c797de786ed9d6efca1b13",
     "semantic_hash": ""
   },
   "packages/core/src/tenantInventory.ts": {
-    "mtime": 1790471234.7094858,
-    "ast_hash": "5cf4e203e007d1328149a18403d486c2",
+    "mtime": 1790553678.123039,
+    "ast_hash": "747a13c466a19a22a958e02f1b08f2d2",
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-01-SUMMARY.md": {
@@ -15470,13 +15470,13 @@
     "semantic_hash": ""
   },
   "packages/backend/candidate/recurrence/model.test.ts": {
-    "mtime": 1790471232.9667895,
-    "ast_hash": "13d59653630292132e3e28317a3f1e59",
+    "mtime": 1790552234.5034263,
+    "ast_hash": "693ed812760b81b0daf3fd8bc7c336cc",
     "semantic_hash": ""
   },
   "packages/backend/candidate/recurrence/model.ts": {
-    "mtime": 1790471232.7074265,
-    "ast_hash": "6e0eca13f1d293228715f31ec5366201",
+    "mtime": 1790552173.5596316,
+    "ast_hash": "f2938e77cd27e7e3eade5ca84ee71107",
     "semantic_hash": ""
   },
   "packages/backend/candidate/recurrence/schema.ts": {
@@ -15810,8 +15810,8 @@
     "semantic_hash": ""
   },
   "packages/backend/candidate/recurrence/README.md": {
-    "mtime": 1790385483.300256,
-    "ast_hash": "41b8d67a77619b5ca5f156b501339742",
+    "mtime": 1790552254.004286,
+    "ast_hash": "ec2d975754eb032f0d7464576e58a65a",
     "semantic_hash": ""
   },
   "videos/pikar-social/.media/index.md": {
@@ -17030,13 +17030,13 @@
     "semantic_hash": ""
   },
   ".planning/phases/47-the-schedule-row-that-re-arms/47-22-SUMMARY.md": {
-    "mtime": 1790416227.141163,
-    "ast_hash": "c8c16d9113c16afbdb233d97602e0ab9",
+    "mtime": 1790549577.6227202,
+    "ast_hash": "00ecbd089fd85829932303f1178c549a",
     "semantic_hash": ""
   },
   ".planning/phases/47-the-schedule-row-that-re-arms/47-22-TECHNICAL-REVIEW.md": {
-    "mtime": 1790416075.6429114,
-    "ast_hash": "7fc7aa9e7c2eaa70eb485460ecb10cc0",
+    "mtime": 1790549492.0622168,
+    "ast_hash": "1961c4127a3c0f2c38633fe883c290a8",
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-20-BASELINE.md": {
@@ -17060,8 +17060,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-20-SUMMARY.md": {
-    "mtime": 1790541557.7379282,
-    "ast_hash": "8d25be2d7ca3b53a271969129eb4842a",
+    "mtime": 1790553736.1233003,
+    "ast_hash": "cfb8d600bcd8b81f128f2212f0293d3f",
     "semantic_hash": ""
   },
   "docs/evidence/recurrence/auckland-2026-09-26/dst-boundary.md": {
@@ -17087,6 +17087,16 @@
   "scripts/check-model-provider-boundary.mjs": {
     "mtime": 1790546615.0825367,
     "ast_hash": "192cd6218297600092ce1768f89f316f",
+    "semantic_hash": ""
+  },
+  "scripts/check-recurrence-source-review.mjs": {
+    "mtime": 1790550141.6218302,
+    "ast_hash": "434789cec27a286cea3d4bd4f19851e1",
+    "semantic_hash": ""
+  },
+  ".planning/phases/47-the-schedule-row-that-re-arms/47-23-CURRENT-SOURCE-AND-REAL-RAIL-AUDIT.md": {
+    "mtime": 1790552298.9146516,
+    "ast_hash": "9f2e3f649e63cad5301839428afe10e2",
     "semantic_hash": ""
   }
 }

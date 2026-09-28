@@ -192,6 +192,17 @@ describe("tenant inventory pure rules", () => {
     ).toThrow("INVALID_TIME");
   });
 
+  test("expiry refuses a malformed hold deadline without releasing stock", () => {
+    const held = reserveInventory(active, "tenant-a", finite, "r1", 1, 1_000, 1);
+    for (const expiresAt of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5]) {
+      expect(() =>
+        expireInventory(held.stock, { ...held.reservation, expiresAt }, 901_000, 2),
+      ).toThrow("INVALID_TIME");
+    }
+    expect(() => expireInventory(held.stock, held.reservation, -1, 2)).toThrow("INVALID_TIME");
+    expect(held.stock).toMatchObject({ onHand: 2, reserved: 1, revision: 2 });
+  });
+
   test("reservation ids, quantities, product refs and stock shape are bounded", () => {
     expect(() => reserveInventory(active, "tenant-a", finite, "", 1, 0, 1)).toThrow(
       "INVALID_RESERVATION",

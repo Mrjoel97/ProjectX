@@ -261,7 +261,14 @@ export function expireInventory(
   expectedRevision: number,
 ) {
   requireHeld(stock, reservation, expectedRevision);
-  if (!Number.isSafeInteger(now) || now < reservation.expiresAt)
+  if (
+    !Number.isSafeInteger(now) ||
+    now < 0 ||
+    !Number.isSafeInteger(reservation.expiresAt) ||
+    reservation.expiresAt < 0
+  )
+    throw new Error("INVALID_TIME");
+  if (now < reservation.expiresAt)
     throw new Error("RESERVATION_NOT_EXPIRED");
   const released = releaseInventory(stock, reservation, expectedRevision);
   return { ...released, reservation: { ...reservation, status: "expired" as const } };

@@ -1,6 +1,6 @@
 # Playbook: Tenant commerce (Phase 50)
 
-> Last verified: 2026-09-28 against the provider-independent inventory rule that a payment after an explicitly released hold returns a distinct `released_paid_exception` without consuming stock, including stale-revision, foreign-product and malformed-reservation refusals. This is a pure local outcome, not a signed payment landing, durable merchant-review workflow, refund or buyer notice. The 2026-09-27 policy/clock/link checks below and pending merchant decision remain unchanged.
+> Last verified: 2026-09-28 against the provider-independent inventory expiry and paid-after-release guards. Malformed hold deadlines now refuse before stock release; a payment after an explicitly released hold returns a distinct `released_paid_exception` without consuming stock. These are pure local outcomes, not a signed payment landing, durable merchant-review workflow, refund or buyer notice. The pending merchant decision remains unchanged.
 > Build history: `.planning/phases/50-tenant-merchant-commerce/` · Related ADRs: ADR-049 pending owner decision
 
 ## Purpose
@@ -57,6 +57,8 @@ up to five expired reservations. A larger backlog refuses checkout and the tenan
 linked hold once and marks the local attempt expired; cancellation marks it refused.
 The drain refuses a due held reservation linked to a terminal or not-yet-due order; it must not
 count an unchanged hold as processed and leave finite stock stranded on every retry.
+The pure expiry transition also requires safe, nonnegative current and persisted expiry times;
+`NaN`, infinity, fractional or negative deadlines refuse before reserved stock is released.
 Before either close path releases stock, it requires one still-local-pending payment attempt whose
 snapshot hash, cart identity and cart revision match the order, and every held reservation's product,
 quantity, attempt link and expiry
