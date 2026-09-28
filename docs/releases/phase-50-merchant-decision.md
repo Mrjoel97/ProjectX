@@ -1,6 +1,6 @@
 # Phase 50 merchant decision packet — pending
 
-**Reviewed:** 2026-09-28. **Status:** pending remaining provider, legal and operating evidence; this is not ADR-049, adapter authority, merchant approval, or release evidence. Public storefront and live commerce remain closed.
+**Reviewed:** 2026-09-29. **Status:** pending remaining provider, legal and operating evidence; this is not ADR-049, adapter authority, merchant approval, or release evidence. Public storefront and live commerce remain closed.
 
 ## Locked scope and decision boundary
 
@@ -57,6 +57,12 @@ The decision checker now rejects impossible or future owner/provider evidence an
 The current [partner Standard Checkout guide](https://developer.paypal.com/platforms/checkout/standard/integrate) still shows a **v5** browser sample with the platform client ID and the exact seller's `merchant-id`; PayPal's [v5 SDK configuration](https://developer.paypal.com/sdk/js/configuration/) explicitly describes that parameter for partner transactions. The same partner guide directs new integrations to **v6**, but the public [v6 setup](https://developer.paypal.com/sdk/js/set-up/) lists `partnerAttributionId` in its `createInstance` options without documenting an exact seller-merchant-ID binding there. The [v6 reference](https://developer.paypal.com/sdk/js/reference/) likewise does not supply that missing partner binding in its published API text. Absence from these pages is **not** proof that v6 cannot support a partner flow; it is insufficient evidence to implement that flow safely. The v6 setup page also presents client-ID and client-token initialization examples, so the chosen authentication route must be pinned to the actual partner configuration rather than inferred from a generic example.
 
 Keep `buyerSdkMerchantBinding` unverified. Before Plan 50-08, obtain a provider-documented v6 exact-seller binding and test it with the platform's partner app, **or** record a reviewed v5 exception using the documented `merchant-id` route and its own sandbox proof. `partnerAttributionId`/BN code alone is attribution, not seller identity. Neither public page establishes Pikar-AI partner approval, delegated grant, seller eligibility, settlement currency or refund permission; the real decision remains pending.
+
+### 2026-09-29 PayPal flow-identity recheck
+
+PayPal's newly published [embedded partner-account setup](https://developer.paypal.com/platforms/embedded-integration/set-up-partner-account/) distinguishes a merchant's Primary Business Account from a **Partner Delegated Merchant Account**, a separate sub-account created and managed by the partner on the merchant's behalf. Its [onboarding-flow description](https://developer.paypal.com/platforms/embedded-integration/merchant-onboarding-flows/) says an existing merchant consents to linking those accounts and describes account-created and capability-status events. This is **not automatically the owner's selected merchant-owned direct receiving-account model**. Do not substitute the embedded sub-account route for the selected direct-account route without an explicit account-ownership, proceeds, control and liability review; the provider-specific account model remains unverified.
+
+The current [v6 setup page](https://developer.paypal.com/sdk/js/set-up/) recommends `clientId` for Standard Checkout near its start but later describes `clientToken` as required and uses it in its recommended frontend example. It lists `partnerAttributionId`, not an exact seller-ID binding, in the published `createInstance` options. This documentation inconsistency and the separate v5 [partner Checkout sample](https://developer.paypal.com/platforms/checkout/standard/integrate) leave the v6 partner authentication and exact seller binding unresolved. Request an exact provider-supported flow or record a reviewed v5 exception; do not infer that BN attribution selects the receiving merchant. No adapter, provider application or test-mode opening follows from this documentation review.
 
 ## Evidence to resolve before accepted ADR-049
 
