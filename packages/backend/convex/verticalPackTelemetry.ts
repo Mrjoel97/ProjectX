@@ -125,6 +125,47 @@ export const record = internalMutation({
       args.artifactId === undefined
     )
       throw new Error("ARTIFACT_REQUIRED");
+    if (args.event === "artifact_created" && args.artifactId) {
+      // A second distinct ordinary artifact on the same exact version is repeat use. Preview
+      // artifacts, a different candidate version and replay of the same artifact do not count.
+      const history = await verticalEventsFor(ctx, args.tenantId);
+      const created = history.rows.filter(
+        (event) =>
+          event.payload?.event === "artifact_created" &&
+          event.payload?.candidateId === args.candidateId &&
+          event.payload?.verticalId === args.verticalId &&
+          typeof event.payload?.artifactId === "string" &&
+          (event.payload?.preview === true) === (args.preview === true),
+      );
+      if (created.some((event) => event.payload?.artifactId === args.artifactId)) return;
+      const { tenantId, actor, ...payload } = args;
+      await ctx.runMutation(internal.audit.log, {
+        tenantId,
+        correlationId: String(args.candidateId),
+        eventType: VERTICAL_EVENT_TYPE,
+        actor: actor ?? "system",
+        payload,
+      });
+      if (
+        args.preview !== true &&
+        created.some((event) => event.payload?.artifactId !== args.artifactId)
+      ) {
+        await ctx.runMutation(internal.audit.log, {
+          tenantId,
+          correlationId: String(args.candidateId),
+          eventType: VERTICAL_EVENT_TYPE,
+          actor: "system",
+          payload: {
+            event: "repeat_use",
+            verticalId: args.verticalId,
+            candidateId: args.candidateId,
+            artifactId: args.artifactId,
+          },
+        });
+      }
+      return;
+    }
+    if (args.event === "repeat_use") throw new Error("REPEAT_USE_DERIVED_ONLY");
     const { tenantId, actor, ...payload } = args;
     await ctx.runMutation(internal.audit.log, {
       tenantId,

@@ -106,6 +106,107 @@ test("aggregate samples are bounded and mark truncation without exposing payload
   expect(Object.keys(summary).sort()).toEqual(["counts", "partial", "sampledEvents"]);
 });
 
+test("repeat use is derived only from a second distinct ordinary artifact on one exact candidate", async () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  const {
+    candidateId,
+    otherVersionId,
+    firstId,
+    previewId,
+    otherVersionArtifactId,
+    repeatId,
+    foreignId,
+  } = await t.run(async (ctx) => {
+    const candidate = {
+      tenantId: "a",
+      name: verticalSkillName("product"),
+      status: "candidate" as const,
+      rollbackEligible: false,
+      body: "Synthetic candidate",
+      authoredBody: "",
+      author: "system" as const,
+      basedOnScope: "global" as const,
+      basedOnName: verticalSkillName("product"),
+      basedOnVersion: 1,
+      createdAt: 1,
+    };
+    const candidateId = await ctx.db.insert("tenantSkills", { ...candidate, version: 1 });
+    const otherVersionId = await ctx.db.insert("tenantSkills", { ...candidate, version: 2 });
+    const document = {
+      title: "Synthetic draft",
+      kind: "document" as const,
+      category: "workspace-docs" as const,
+      source: "agent" as const,
+      mimeType: "text/markdown",
+      size: 12,
+      contentHash: "synthetic",
+      text: "Synthetic draft",
+      status: "ready" as const,
+      createdAt: 1,
+    };
+    const firstId = await ctx.db.insert("vaultDocuments", { tenantId: "a", ...document });
+    const previewId = await ctx.db.insert("vaultDocuments", { tenantId: "a", ...document });
+    const otherVersionArtifactId = await ctx.db.insert("vaultDocuments", {
+      tenantId: "a",
+      ...document,
+    });
+    const repeatId = await ctx.db.insert("vaultDocuments", { tenantId: "a", ...document });
+    const foreignId = await ctx.db.insert("vaultDocuments", { tenantId: "b", ...document });
+    return {
+      candidateId,
+      otherVersionId,
+      firstId,
+      previewId,
+      otherVersionArtifactId,
+      repeatId,
+      foreignId,
+    };
+  });
+  const base = {
+    tenantId: "a",
+    verticalId: "product" as const,
+    candidateId,
+    event: "artifact_created" as const,
+  };
+  await t.mutation(internal.verticalPackTelemetry.record, { ...base, artifactId: firstId });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    artifactId: previewId,
+    preview: true,
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    candidateId: otherVersionId,
+    artifactId: otherVersionArtifactId,
+  });
+  expect(
+    (await t.withIdentity({ subject: "a" }).query(api.verticalPackTelemetry.summary, {})).counts
+      .repeat_use,
+  ).toBe(0);
+  await t.mutation(internal.verticalPackTelemetry.record, { ...base, artifactId: repeatId });
+  await t.mutation(internal.verticalPackTelemetry.record, { ...base, artifactId: repeatId });
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, { ...base, artifactId: foreignId }),
+  ).rejects.toThrow("NOT_FOUND");
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      event: "repeat_use",
+      artifactId: repeatId,
+    }),
+  ).rejects.toThrow("REPEAT_USE_DERIVED_ONLY");
+  const summary = await t
+    .withIdentity({ subject: "a" })
+    .query(api.verticalPackTelemetry.summary, {});
+  expect(summary.counts).toMatchObject({ artifact_created: 4, repeat_use: 1 });
+  const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+  expect(rows.filter((row) => row.payload?.event === "repeat_use")).toMatchObject([
+    { payload: { candidateId, verticalId: "product", artifactId: repeatId } },
+  ]);
+  expect(JSON.stringify(rows)).not.toContain("Synthetic draft");
+});
+
 test("review observations require an owned artifact created by the exact native candidate", async () => {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);

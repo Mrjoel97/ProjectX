@@ -8,6 +8,18 @@ date: 2026-09-10
 
 # 30-02 — Native vertical controls and evidence-aware discovery
 
+## 2026-09-28 derived repeat-use telemetry
+
+The internal writer now emits a refs-only `repeat_use` audit event when a second
+distinct ordinary-run artifact is recorded for the same tenant and exact native
+candidate. It refuses direct writes of that derived event and excludes preview
+artifacts, another version, same-artifact replay and foreign artifacts. Four
+focused vertical suites pass 34/34; backend TypeScript, the six-lane/40-case
+native corpus check, strict planning/playbook checks and all 34 free gates pass.
+The lookup is limited to the latest 200 events and may undercount older demand.
+No live tenant use, semantic evaluation, UAT, activation or release is inferred;
+Plan 30-02 and VERT-01/02 remain partial/open.
+
 Implemented tenant-scoped explicit intent/reviewer preferences, independent disable, same-tenant
 owner rollback, and bounded closed telemetry. `skills` and `tenantSkills` remain the only version,
 candidate, activation and rollback state. No release-proof flags, parallel registry or new ledger

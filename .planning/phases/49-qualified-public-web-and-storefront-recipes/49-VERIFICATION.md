@@ -7,9 +7,9 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-28 serialized `node scripts/check-phase49-qualification.mjs` run passed all 21 required planes on the current 71-file digest below with identical initial/final identity. It included fresh owner-candidate and integrated three-family disposable browser stacks with independent in-stack audit witnesses, production web build, three typechecks, core/backend/web regressions, evaluator pins, claim controls, strict planning/playbooks and all 34 free gates. The previous result on `3436015858c83f571bc74390e7530a6524aecb11159b0584d8c33ec1f3e53366` is historical. This is repository/local technical qualification only; Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** Requalification passed for the current 71-file digest below after the watched vertical-packs playbook changed for derived repeat-use telemetry. A fresh serialized aggregate passed all 21 required planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The previous result on `c1e4699509bf24d7d9d9df5ee89d747c2773b7e54827afa28b89d74cff37e63e` is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `c1e4699509bf24d7d9d9df5ee89d747c2773b7e54827afa28b89d74cff37e63e`
+Artifact-set SHA-256: `60471042d458df7616f7cc535dc5110fb2ec9fca1df4d625293c5b3412ed9c60`
 
 **2026-09-28 local provider-egress requalification:** A filtered golden diagnostic
 stopped with an unresolved first embedding reservation after sandboxed TCP/443

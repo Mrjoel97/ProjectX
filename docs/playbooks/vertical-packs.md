@@ -1,5 +1,14 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — `repeat_use` is now derived by the refs-only
+telemetry writer when a second distinct ordinary-run artifact is recorded for
+the same tenant and exact native candidate. Previews, another candidate
+version, replay of the same artifact, foreign artifacts and direct attempts to
+write a repeat event do not count. The focused telemetry/binding suites pass
+18/18 and backend TypeScript passes. The lookup is bounded to the latest 200
+vertical events, so it can conservatively undercount older repeat demand; this
+is not live tenant usage, semantic acceptance, model-eval or pack activation.
+
 Last verified: 2026-09-28 — the shared Convex smoke/evaluation runner now
 classifies an empty final CLI result as a safe transport failure after any
 opt-in idempotent-read retry. This changes no vertical candidate, browser review,
