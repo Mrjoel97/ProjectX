@@ -176,7 +176,26 @@ jobs:
         if: steps.eligibility.outputs.proceed == 'true'
         env:
           SKILLOPT_EXPORT: ${{ github.workspace }}/export.json
+          # Never mint per-edit candidates or synthetic plans in the source deployment.
+          CONVEX_DEPLOY_KEY: ${{ secrets.SKILLOPT_EVAL_CONVEX_DEPLOY_KEY }}
+          SKILLOPT_HTTP_URL: ${{ secrets.SKILLOPT_EVAL_HTTP_URL }}
+          SKILLOPT_TOKEN: ${{ secrets.SKILLOPT_EVAL_TOKEN }}
+          SKILLOPT_PROD_HTTP_URL: ${{ secrets.SKILLOPT_HTTP_URL }}
+          SKILLOPT_PROD_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          SKILLOPT_EVAL_ISOLATED: "true"
         run: |
+          if [ -z "$CONVEX_DEPLOY_KEY" ] || [ -z "$SKILLOPT_HTTP_URL" ] || [ -z "$SKILLOPT_TOKEN" ]; then
+            echo "::error::isolated SkillOpt evaluation deployment credentials are required"
+            exit 1
+          fi
+          if [ "$SKILLOPT_HTTP_URL" = "$SKILLOPT_PROD_HTTP_URL" ]; then
+            echo "::error::SkillOpt evaluation URL equals the source deployment URL"
+            exit 1
+          fi
+          if [ "$CONVEX_DEPLOY_KEY" = "$SKILLOPT_PROD_DEPLOY_KEY" ]; then
+            echo "::error::SkillOpt evaluation deploy key equals the source deploy key"
+            exit 1
+          fi
           # The installed skillopt-train entrypoint has only built-in environments.
           # This local shim registers pikar_cockpit, then calls the same pinned main().
           mkdir -p outputs/skillopt_split/train outputs/skillopt_split/val outputs/skillopt_split/test

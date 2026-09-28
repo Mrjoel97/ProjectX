@@ -1,5 +1,11 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-29 — rollout now refuses candidate pinning unless
+> marked for an isolated evaluation deployment. The CI train step requires
+> distinct eval deployment credentials and rejects the source URL; no live
+> deployment or provider test was run. Eight offline checks pass locally (the
+> installed-package case is skipped when that package is absent).
+>
 > Last verified: 2026-09-29 — the pinned SkillOpt 0.2.0 adapter, split loader,
 > config and registration shim pass seven offline checks against an installed
 > wheel. The main workflow now has an independent qualification latch; a
@@ -2643,6 +2649,11 @@ feedback-sensitive quality measure, privacy review and controlled end-to-end pro
    qualification latch prevents training if the app switch is flipped alone. The pinned adapter,
    config and entrypoint load offline, but rollout→reflect→edit→held-out accept has not been run.
    The golden `eval-cases/` set is an independent repository gate, not an export/train source.
+   Per-edit candidate pins and synthetic plans must go to a separate disposable deployment:
+   `SKILLOPT_EVAL_CONVEX_DEPLOY_KEY`, `SKILLOPT_EVAL_HTTP_URL` and `SKILLOPT_EVAL_TOKEN` are required
+   for the train step, and the workflow refuses an eval URL equal to the source URL. The source
+   deployment receives only the final write-back after training; these secrets are not yet set or
+   qualified. A local flag alone is not proof of deployment separation.
 5. **Write-back → CANDIDATE** (`POST /skillopt/writeback` → `skills.insertCandidate`): the accepted body
    lands as a NEW `candidate` version (`maxVersion+1`), prior rows immutable. `insertCandidate` rejects a
    non-gated name (`NOT_GATED`) and is idempotent vs the newest row (identical body → `inserted:false`,

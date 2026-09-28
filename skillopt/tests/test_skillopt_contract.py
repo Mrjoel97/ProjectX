@@ -127,6 +127,12 @@ class SkillOptContractTests(unittest.TestCase):
         }
         self.assertEqual(rollout._user_turns(item), ["Draft an update"])
 
+    def test_candidate_pin_refuses_nonisolated_deployment_before_network(self):
+        _, _, rollout, _, _ = _load_local_env()
+        with patch.dict("os.environ", {"SKILLOPT_EVAL_ISOLATED": "false"}):
+            with self.assertRaisesRegex(RuntimeError, "isolated evaluation deployment"):
+                rollout._pin_candidate("synthetic candidate")
+
     def test_workflow_invokes_the_installed_optimizer_entrypoint(self):
         workflow = (REPO_ROOT / ".github" / "workflows" / "skillopt.yml").read_text(
             encoding="utf-8"
@@ -138,6 +144,9 @@ class SkillOptContractTests(unittest.TestCase):
         self.assertIn("upstream.main()", wrapper)
         self.assertNotIn("python scripts/train.py", workflow)
         self.assertIn("SKILLOPT_RUNTIME_QUALIFIED", workflow)
+        self.assertIn("SKILLOPT_EVAL_CONVEX_DEPLOY_KEY", workflow)
+        self.assertIn("SKILLOPT_EVAL_HTTP_URL", workflow)
+        self.assertIn('"$CONVEX_DEPLOY_KEY" = "$SKILLOPT_PROD_DEPLOY_KEY"', workflow)
 
     def test_installed_pinned_package_config_registration_and_split(self):
         try:

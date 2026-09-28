@@ -50,11 +50,12 @@ def _pin_candidate(skill_content: str, *, name: str = SKILL_NAME) -> int:
     """Materialize `skill_content` as a pinnable registry version and return its number.
 
     The only body->version seam that exists is POST /skillopt/writeback (08-05), which inserts a
-    gated CANDIDATE (never active). ponytail: writeback also writes an audit row + owner notification
-    per call, so a long train run mints several candidates — acceptable for the dormant dry-run
-    (low edit budget, one run_batch -> one candidate). Upgrade path: a dedicated ephemeral no-notify
-    dev-pin seam, decided at the 08-08 dry-run if a real cadence makes the noise matter.
+    gated CANDIDATE (never active). Training can mint many such rows, so this path is restricted to
+    a separate disposable evaluation deployment. Only the final accepted body may be written back
+    to the source deployment after the optimizer finishes and its later gates pass.
     """
+    if os.environ.get("SKILLOPT_EVAL_ISOLATED") != "true":
+        raise RuntimeError("SkillOpt candidate pin requires an isolated evaluation deployment")
     base = os.environ["SKILLOPT_HTTP_URL"].rstrip("/")
     token = os.environ["SKILLOPT_TOKEN"]
     payload = {
