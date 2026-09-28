@@ -1,5 +1,12 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — the disabled recurrence candidate's synthetic rail
+> fixture now tracks tenant-daily and shared-deployment held balances separately.
+> Two new exact-ceiling/cross-tenant controls failed on the old shared counter;
+> the corrected 41/41 candidate suite, candidate TypeScript, 149/149 backend
+> guard tests and stage checker pass. The real limiter, independent current-source
+> review, live observations and operational `enable-safe` remain open.
+>
 > Last verified: 2026-09-28 — the isolated, disabled recurrence candidate now validates
 > schedule time, zone and wall-time rules at creation, material edit and approval. A malformed
 > approved row can no longer repeatedly throw before the synthetic due-sweep cursor advances;

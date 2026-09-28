@@ -15,8 +15,8 @@ if any identity differs. The packet may have later prose-only commits without ch
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
 | `model.ts` | `7bd28255330933ac7741e138915cb621e982c684bd867b6a4a9d0d30a8212145` |
-| `model.test.ts` | `391838fe13db84ff8403949857d0ca8fd3dc30140ba5165c7c5fbb627ffe134b` |
-| `README.md` | `9212386644ab21fb5c02765ba50ff49af9060c1b27af6b2d3033ffa837427988` |
+| `model.test.ts` | `287855c39518760053e6042187aa0e8f06f2f00773e1c444b63400c0ea5baffb` |
+| `README.md` | `7892c0048ba36de799ff2c9f6f9f69ea0a2380a7edbe14a98793a31db7a8fd18` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
@@ -46,8 +46,10 @@ installed limiter mismatch. Do not carry forward the old GO without inspecting t
 4. Inspect the real integration boundary separately. The injected `SyntheticRails` protocol is
    **not** implemented by `@convex-dev/rate-limiter@0.3.2`; its bucket `key` is not a per-run
    reservation identity, and `guardrails.ts` uses tenant-keyed daily and shared keyless deployment
-   windows. A synthetic GO must name this gap, not claim real atomic reserve/refund, provider-result
-   authentication or recovery liveness. No production rail, table or caller may be added under
+   windows. Challenge the synthetic fixture's tenant-daily versus shared-deployment balances at
+   exact ceilings as well as its keyed tombstone behavior. A synthetic GO must name this gap,
+   not claim real atomic reserve/refund, provider-result authentication or recovery liveness.
+   No production rail, table or caller may be added under
    this review packet.
 5. Verify isolation: the exact six stage-listed files stay outside `convex.json`'s production
    functions root and app/core imports, with no registered scheduler/cron, tenant-callable arm,
@@ -65,7 +67,7 @@ node scripts/check-recurrence-source-review.mjs
 node packages/backend/scripts/check-routine-gate.mjs .planning/phases/47-the-schedule-row-that-re-arms/47-14-STAGE-DECISION.md --validate-stage
 ```
 
-At this packet's source identity, the candidate suite passed **38/38**, candidate TypeScript,
+At this packet's source identity, the candidate suite passed **41/41**, candidate TypeScript,
 source-review self-test/real check and stage validation exited 0. The real governance modes were
 re-run on 2026-09-28: matrix/eligibility/historical-defer/stage exits `0/1/0/0`, with **14**
 eligibility findings. These are author-side reproduction results, not independent review.

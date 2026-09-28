@@ -15,8 +15,8 @@ tree. Its recorded SHA-256 values for `schema.ts`, `model.ts` and `model.test.ts
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
 | `model.ts` | `7bd28255330933ac7741e138915cb621e982c684bd867b6a4a9d0d30a8212145` |
-| `model.test.ts` | `391838fe13db84ff8403949857d0ca8fd3dc30140ba5165c7c5fbb627ffe134b` |
-| `README.md` | `9212386644ab21fb5c02765ba50ff49af9060c1b27af6b2d3033ffa837427988` |
+| `model.test.ts` | `287855c39518760053e6042187aa0e8f06f2f00773e1c444b63400c0ea5baffb` |
+| `README.md` | `7892c0048ba36de799ff2c9f6f9f69ea0a2380a7edbe14a98793a31db7a8fd18` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
@@ -75,9 +75,20 @@ rule untouched. The isolated candidate suite passes **38/38** and candidate Type
 This is only candidate liveness design evidence; the current six hashes above supersede the
 prior revision and require a fresh independent review.
 
+**2026-09-28 rail-fixture accounting amendment:** Two new expectations failed on the prior
+synthetic fixture: at 475/500 cents, the deployment rail refused its valid 25-cent hold because
+it counted the daily hold again; a second tenant's valid daily hold was also refused because
+the first tenant's holds entered the same counter. The fixture now tracks tenant-daily and
+shared-deployment balances separately. A third control proves the shared deployment ceiling
+still refuses a second tenant and compensates its daily hold. Candidate Vitest passes **41/41**,
+candidate and backend TypeScript pass, and four focused backend guard files pass **149/149**.
+Only `model.test.ts` and `README.md` candidate bytes changed; the hash table above binds them.
+This corrects a synthetic test oracle, not the installed limiter, production money accounting
+or the pending independent current-source review.
+
 Current controls still have value but are narrower: the exact six source hashes above were
-rechecked on 2026-09-28 and explicit candidate Vitest passed **38/38** on the current tree;
-candidate TypeScript passed; `routineDecision`, `routines` and `dstProbe` passed **108/108**;
+rechecked on 2026-09-28 and explicit candidate Vitest passed **41/41** on the current tree;
+candidate TypeScript passed; `routineDecision`, `routines`, `dstProbe` and `schema` passed **149/149**;
 checker self-check passed **32/32**. The actual governance modes returned matrix `0`, eligibility
 `1` with **14** findings, operational `defer` decision `0`, and disabled stage `0`. `convex.json`
 still points only at `packages/backend/convex`; the stage lists exactly six candidate files. A

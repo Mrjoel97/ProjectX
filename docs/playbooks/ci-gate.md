@@ -1,5 +1,11 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-09-28 — CI now runs the disabled Wave 6 recurrence candidate
+> through its own edge-runtime Vitest config and TypeScript project after checking the
+> exact accepted stage inventory. Default backend discovery still excludes the six-file
+> candidate, and the workflow does not deploy or activate it. This closes a synthetic
+> test-coverage gap, not the independent source review, real limiter, D6 or live gates.
+>
 > Last verified: 2026-09-28 - `check-model-provider-boundary.mjs` is a registered free gate.
 > It parses production Convex modules and refuses direct provider-SDK imports/re-exports,
 > including subpaths and computed dynamic imports, outside `lib/models.ts` and `llm.ts`.

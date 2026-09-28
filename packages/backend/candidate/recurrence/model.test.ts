@@ -105,18 +105,28 @@ function rails({ dailySpendCents = 0, deploymentSpendCents = 0, accept = true } 
   let released = 0;
   const reservations = new Set<string>();
   const credits = new Set<string>();
+  const scopes = new Map<string, string>();
+  const heldByScope = new Map<string, number>();
+  const scopeFor = (rail: Rail, tenantId: string) =>
+    rail === "daily" ? `daily:${tenantId}` : "deployment";
   const reserve = vi.fn(
-    async (rail: Rail, railKey: string, _tenant: string, cents: number, cap: number) => {
+    async (rail: Rail, railKey: string, tenantId: string, cents: number, cap: number) => {
       expect(cents).toBe(25);
       expect(cap).toBe(rail === "daily" ? DAILY_SPEND_CENTS : DEPLOYMENT_SPEND_CENTS);
       if (reservations.has(railKey)) return true;
       if (credits.has(railKey)) return false;
+      const scope = scopeFor(rail, tenantId);
       if (
         !accept ||
-        (rail === "daily" ? dailySpendCents : deploymentSpendCents) + held + cents > cap
+        (rail === "daily" ? dailySpendCents : deploymentSpendCents) +
+          (heldByScope.get(scope) ?? 0) +
+          cents >
+          cap
       )
         return false;
       reservations.add(railKey);
+      scopes.set(railKey, scope);
+      heldByScope.set(scope, (heldByScope.get(scope) ?? 0) + cents);
       held += cents;
       return true;
     },
@@ -130,6 +140,10 @@ function rails({ dailySpendCents = 0, deploymentSpendCents = 0, accept = true } 
   );
   const release = vi.fn(async (_rail: Rail, railKey: string) => {
     if (reservations.delete(railKey)) {
+      const scope = scopes.get(railKey);
+      if (!scope) throw new Error("test rail: missing reservation scope");
+      heldByScope.set(scope, (heldByScope.get(scope) ?? 0) - ROUTINE_RUN_ENVELOPE_CENTS);
+      scopes.delete(railKey);
       held -= ROUTINE_RUN_ENVELOPE_CENTS;
       released += ROUTINE_RUN_ENVELOPE_CENTS;
     }
@@ -448,6 +462,52 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
       expect(budget.reserve).toHaveBeenCalledTimes(spent.dailySpendCents ? 1 : 2);
       expect(budget.held).toBe(0);
     }
+  });
+
+  it("admits at the exact deployment ceiling without charging the daily hold twice", async () => {
+    const { tx } = harness();
+    const { runId } = await claimed(tx);
+    const budget = rails({ deploymentSpendCents: DEPLOYMENT_SPEND_CENTS - 25 });
+    const mock = vi.fn(async () => ({ planRef: "plan:at_ceiling" }));
+    expect(await syntheticAttempt(tx, tenant, runId, budget, mock)).toBe("prepared");
+    expect(mock).toHaveBeenCalledOnce();
+    expect(budget.held).toBe(0);
+    expect(budget.released).toBe(50);
+  });
+
+  it("keeps daily holds tenant-scoped while deployment holds remain shared", async () => {
+    const { tx } = harness();
+    const first = await claimed(tx);
+    const second = await claimed(tx, other);
+    const budget = rails({ dailySpendCents: DAILY_SPEND_CENTS - 25 });
+    expect(
+      await syntheticAttempt(tx, tenant, first.runId, budget, async () => {
+        throw new SyntheticFailure("provider_5xx", true);
+      }),
+    ).toBe("retry_pending");
+    expect(budget.held).toBe(50);
+    const mock = vi.fn(async () => ({ planRef: "plan:other_tenant" }));
+    expect(await syntheticAttempt(tx, other, second.runId, budget, mock)).toBe("prepared");
+    expect(mock).toHaveBeenCalledOnce();
+    expect(budget.held).toBe(50);
+    expect(budget.released).toBe(50);
+  });
+
+  it("refuses a second tenant when the shared deployment ceiling is exhausted", async () => {
+    const { tx } = harness();
+    const first = await claimed(tx);
+    const second = await claimed(tx, other);
+    const budget = rails({ deploymentSpendCents: DEPLOYMENT_SPEND_CENTS - 25 });
+    expect(
+      await syntheticAttempt(tx, tenant, first.runId, budget, async () => {
+        throw new SyntheticFailure("provider_timeout", true);
+      }),
+    ).toBe("retry_pending");
+    const mock = vi.fn(async () => ({ planRef: "plan:must_not_run" }));
+    expect(await syntheticAttempt(tx, other, second.runId, budget, mock)).toBe("failed_budget");
+    expect(mock).not.toHaveBeenCalled();
+    expect(budget.held).toBe(50);
+    expect(budget.released).toBe(25);
   });
 
   it("quarantines an unproved reservation and fences a separate in-flight preparation", async () => {
