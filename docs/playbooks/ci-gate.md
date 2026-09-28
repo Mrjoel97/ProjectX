@@ -1,5 +1,11 @@
 # Playbook: CI gate (typecheck / lint / test / build)
 
+> Last verified: 2026-09-28 — the hand-written free-gate registry includes
+> `check-production-head.mjs --self-test`, so CI verifies the release-head
+> comparison and its three workflow placements without querying GitHub or
+> touching production. The live main-ref check runs only inside an opted-in
+> production workflow and fails closed on stale or unavailable remote state.
+
 > Last verified: 2026-09-28 — CI now runs the disabled Wave 6 recurrence candidate
 > through its own edge-runtime Vitest config and TypeScript project after checking the
 > exact accepted stage inventory. Default backend discovery still excludes the six-file

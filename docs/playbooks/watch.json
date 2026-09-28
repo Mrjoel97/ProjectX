@@ -25,6 +25,7 @@
     "tsconfig.base.json",
     "scripts/check-playbooks.mjs",
     "scripts/check-playbooks.test.mjs",
+    "scripts/check-free-gates.mjs",
     "scripts/check-claim-capabilities.mjs",
     "scripts/check-claim-capabilities.test.mjs",
     "packages/core/src/capabilityClaims.ts",
@@ -416,7 +417,8 @@
     "packages/backend/convex/env.test.ts",
     "packages/backend/convex/fixtureSeam.test.ts",
     "packages/backend/convex/ops.ts",
-    ".github/workflows/deploy-production.yml"
+    ".github/workflows/deploy-production.yml",
+    "scripts/check-production-head.mjs"
   ],
   "workflow-packs.md": [
     "packages/core/src/workflowPack",
