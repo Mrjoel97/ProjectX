@@ -3,7 +3,12 @@
 > Last verified: 2026-09-28 — the Vault schema adds an optional content-revision marker
 > for agent-created document replacements. It does not alter skill versions, activation,
 > rollback, tool grants or model routing; vertical artifact review uses the marker only
-> to refuse a decision after the original candidate output has been rewritten.
+> to refuse a decision after the original candidate output has been rewritten. This
+> source-derived evaluator change retires the previous golden revision; the new exact
+> revision is `2026-09-11.budgeted-evaluator.f9ef2ac4d2958a75b7bcfe82684e52f7845620aedd1d4ff0c9b7b371610ed8fb`.
+> The contracts source pin also changes the deterministic web-recipe evaluator identity to
+> `b3b91687fdff807461b480ab07e2b52ae0813e30b04832dc5ed2800fba2eccde`;
+> previous recipe evidence is retired without changing its fixture corpus or claiming a paid pass.
 >
 > Last verified: 2026-09-28 — adding the CI-only model-provider AST dependency changed the
 > lockfile in the source-derived evaluator set, so prior golden and deterministic recipe

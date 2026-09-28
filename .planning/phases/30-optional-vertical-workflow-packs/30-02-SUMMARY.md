@@ -125,3 +125,7 @@ integrity hardening only: model-driven rewrites are not human edits, `review_edi
 unimplemented, and native semantic evaluation, deployed browser UAT and activation remain
 open. The commerce owner's late-paid/unavailable-stock policy is separately recorded in
 Plan 50-06 owner inputs; it does not imply a refund, alternative-fulfilment or notice runtime.
+The first exact-head CI passed typecheck/lint but stopped at the golden evaluator's
+source-derived revision gate. The code-owned golden/manifest revision and the dependent
+web-recipe implementation pin were refreshed from current sources; both self-checks and
+all 32 local free gates pass. This retires old evaluator evidence, not requalification.
