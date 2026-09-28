@@ -518,7 +518,9 @@
     "packages/backend/convex/verticalEngineering.test.ts",
     "packages/backend/convex/verticalProductDesign.test.ts",
     "apps/web/app/(app)/dashboard/profile/VerticalPackRecommendations.tsx",
-    "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations"
+    "apps/web/app/(app)/dashboard/profile/verticalPackRecommendations",
+    "apps/web/app/(app)/dashboard/workspace/VerticalArtifactReview.tsx",
+    "apps/web/app/(app)/dashboard/workspace/verticalArtifactReview.test.tsx"
   ],
   "public-web-runtime.md": [
     "third_party/design-knowledge/",

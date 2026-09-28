@@ -31,6 +31,7 @@ import { PreviewModal } from "../vault/PreviewModal";
 import { MediaCanvas, ProposalFailureCanvas } from "./MediaCanvas";
 import { RevenuePackPanel } from "./RevenuePackPanel";
 import { useSendCockpitMessage } from "./useSendCockpitMessage";
+import { VerticalArtifactReview } from "./VerticalArtifactReview";
 
 // SC3/SC5 render: the right-pane artifact dispatcher over the live `plans` row + REPORT
 // projection. Cards are plain inline-styled <div>s (the `box` style mirrors review/[id]).
@@ -2958,6 +2959,7 @@ function OutputCard({ threadId }: { threadId?: string }) {
           textPreview
         )}
       </section>
+      {selectedId && <VerticalArtifactReview key={selectedId} artifactId={selectedId} />}
       {/* The full document, HERE. The inline preview above is the text; this opens the shipped
           vault viewer over the workspace for the rest of it — the stored PDF, download, entities,
           rename/delete — without leaving the conversation that produced it. */}

@@ -19,6 +19,7 @@ const EVENTS = [
 ] as const;
 export const VERTICAL_EVENT_TYPE = "vertical_pack.outcome";
 export const VERTICAL_EVENT_LIMIT = 200;
+const USER_REVIEW_EVENTS = new Set(["review_approved", "review_edited", "review_rejected"]);
 
 export const record = internalMutation({
   args: {
@@ -26,6 +27,7 @@ export const record = internalMutation({
     verticalId: v.union(...VERTICAL_IDS.map((id) => v.literal(id))),
     candidateId: v.union(v.id("tenantSkills"), v.id("skills")),
     event: v.union(...EVENTS.map((event) => v.literal(event))),
+    actor: v.optional(v.literal("user")),
     preview: v.optional(v.boolean()),
     artifactId: v.optional(v.id("vaultDocuments")),
     claimCount: v.optional(v.number()),
@@ -59,6 +61,12 @@ export const record = internalMutation({
     ),
   },
   handler: async (ctx, args) => {
+    if (
+      args.actor === "user" &&
+      args.event !== "review_approved" &&
+      args.event !== "review_rejected"
+    )
+      throw new Error("ACTOR_EVENT_MISMATCH");
     const row = await ctx.db.get(args.candidateId);
     if (
       !row ||
@@ -102,12 +110,12 @@ export const record = internalMutation({
       args.artifactId === undefined
     )
       throw new Error("ARTIFACT_REQUIRED");
-    const { tenantId, ...payload } = args;
+    const { tenantId, actor, ...payload } = args;
     await ctx.runMutation(internal.audit.log, {
       tenantId,
       correlationId: String(args.candidateId),
       eventType: VERTICAL_EVENT_TYPE,
-      actor: "system",
+      actor: actor ?? "system",
       payload,
     });
   },
@@ -132,7 +140,14 @@ export const summary = tenantQuery({
       partial,
       sampledEvents: rows.length,
       counts: Object.fromEntries(
-        EVENTS.map((event) => [event, rows.filter((row) => row.payload?.event === event).length]),
+        EVENTS.map((event) => [
+          event,
+          rows.filter(
+            (row) =>
+              row.payload?.event === event &&
+              (!USER_REVIEW_EVENTS.has(event) || row.actor === "user"),
+          ).length,
+        ]),
       ),
     };
   },

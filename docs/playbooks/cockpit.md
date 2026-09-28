@@ -1,3 +1,9 @@
+> Last verified: 2026-09-28 — the Output card now mounts an authenticated vertical-artifact
+> review control only when the server can bind the selected owned document to one ordinary-run
+> native candidate creation event. Accept/needs-changes records a single refs-only user decision;
+> it cannot publish, activate or send. Local component and backend tests pass, but no authenticated
+> browser UAT or semantic quality verdict is inferred.
+>
 > Last verified: 2026-09-27 — the Phase 49 isolated owner-browser qualification now confirms
 > signup JWT persistence and the authenticated backend owner flag before checking the owner-only
 > recipe heading. The targeted integrated browser matrix and isolated audit passed on a fresh

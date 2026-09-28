@@ -21,6 +21,80 @@ import { verticalEventsFor } from "./verticalPackTelemetry";
 const verticalIdArg = v.union(...VERTICAL_IDS.map((id) => v.literal(id)));
 const RECOMMENDATION_WINDOW_MS = 30 * 60_000;
 
+type ReviewDecision = "approve" | "reject";
+type ReviewOrigin = {
+  verticalId: VerticalId;
+  candidateId: Id<"skills"> | Id<"tenantSkills">;
+  decision: ReviewDecision | null;
+};
+
+/** Only the bounded, exact ordinary-run creation event can authorize a user review metric. */
+async function reviewOriginFor(
+  ctx: QueryCtx,
+  tenantId: string,
+  artifactId: Id<"vaultDocuments">,
+): Promise<{ kind: "missing" | "ambiguous" } | { kind: "found"; value: ReviewOrigin }> {
+  const artifact = await ctx.db.get(artifactId);
+  if (!artifact || artifact.tenantId !== tenantId || artifact.status !== "ready")
+    return { kind: "missing" };
+  const history = await verticalEventsFor(ctx, tenantId);
+  const origins = history.rows.filter(
+    (row) =>
+      row.payload?.event === "artifact_created" &&
+      row.payload?.artifactId === artifactId &&
+      row.payload?.preview !== true,
+  );
+  if (origins.length === 0) return { kind: "missing" };
+  const first = origins[0]?.payload;
+  if (
+    typeof first?.verticalId !== "string" ||
+    !VERTICAL_IDS.some((id) => id === first.verticalId) ||
+    typeof first.candidateId !== "string"
+  )
+    return { kind: "missing" };
+  const verticalId = first.verticalId as VerticalId;
+  const candidateId =
+    ctx.db.normalizeId("skills", first.candidateId) ??
+    ctx.db.normalizeId("tenantSkills", first.candidateId);
+  if (!candidateId) return { kind: "missing" };
+  if (
+    origins.some(
+      (row) => row.payload?.verticalId !== verticalId || row.payload?.candidateId !== candidateId,
+    )
+  )
+    return { kind: "ambiguous" };
+  const candidate = await ctx.db.get(candidateId);
+  if (
+    !candidate ||
+    candidate.name !== verticalSkillName(verticalId) ||
+    ("tenantId" in candidate && candidate.tenantId !== tenantId)
+  )
+    return { kind: "missing" };
+  const reviews = history.rows.filter(
+    (row) =>
+      row.actor === "user" &&
+      (row.payload?.event === "review_approved" || row.payload?.event === "review_rejected") &&
+      row.payload?.artifactId === artifactId &&
+      row.payload?.candidateId === candidateId &&
+      row.payload?.verticalId === verticalId &&
+      row.payload?.preview !== true,
+  );
+  if (reviews.length > 1) return { kind: "ambiguous" };
+  return {
+    kind: "found",
+    value: {
+      verticalId,
+      candidateId,
+      decision:
+        reviews[0]?.payload?.event === "review_approved"
+          ? "approve"
+          : reviews[0]?.payload?.event === "review_rejected"
+            ? "reject"
+            : null,
+    },
+  };
+}
+
 async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
   const profile = await ctx.db
     .query("tenantProfiles")
@@ -159,6 +233,45 @@ async function verticalDiscoveryFor(ctx: QueryCtx, tenantId: string) {
 export const discover = tenantQuery({
   args: {},
   handler: async (ctx) => (await verticalDiscoveryFor(ctx, ctx.tenantId)).presentation,
+});
+
+/** The Output card receives no candidate id from the browser: origin is derived server-side. */
+export const reviewTarget = tenantQuery({
+  args: { artifactId: v.id("vaultDocuments") },
+  handler: async (ctx, { artifactId }) => {
+    const origin = await reviewOriginFor(ctx, ctx.tenantId, artifactId);
+    return origin.kind === "found"
+      ? { verticalId: origin.value.verticalId, decision: origin.value.decision }
+      : null;
+  },
+});
+
+/** One authenticated decision for one ordinary artifact, not a release or publication verdict. */
+export const recordReview = tenantMutation({
+  args: {
+    artifactId: v.id("vaultDocuments"),
+    decision: v.union(v.literal("approve"), v.literal("reject")),
+  },
+  handler: async (ctx, { artifactId, decision }) => {
+    const artifact = await ctx.db.get(artifactId);
+    if (!artifact || artifact.tenantId !== ctx.tenantId) throw new Error("NOT_FOUND");
+    const origin = await reviewOriginFor(ctx, ctx.tenantId, artifactId);
+    if (origin.kind === "ambiguous") throw new Error("ARTIFACT_ORIGIN_AMBIGUOUS");
+    if (origin.kind !== "found") throw new Error("ARTIFACT_ORIGIN_UNVERIFIED");
+    if (origin.value.decision !== null) {
+      if (origin.value.decision !== decision) throw new Error("REVIEW_ALREADY_RECORDED");
+      return { recorded: false, decision };
+    }
+    await ctx.runMutation(internal.verticalPackTelemetry.record, {
+      tenantId: ctx.tenantId,
+      verticalId: origin.value.verticalId,
+      candidateId: origin.value.candidateId,
+      artifactId,
+      event: decision === "approve" ? "review_approved" : "review_rejected",
+      actor: "user",
+    });
+    return { recorded: true, decision };
+  },
 });
 
 /** One card-render impression for the exact current server selection. This is observational

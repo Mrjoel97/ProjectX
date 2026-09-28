@@ -1,5 +1,14 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — an authenticated Output-card action can now record one
+accept-or-needs-changes decision for an owned ordinary-run vertical artifact. The server
+derives its exact candidate from bounded creation history; missing, foreign, preview,
+ambiguous, stale and contradictory-review cases refuse. Review counts include only
+`actor: "user"` events, not synthetic system observations, and the audit carries only
+candidate/artifact refs and closed enums. The action does not edit the artifact, approve
+a native candidate, publish, activate or send. The edited-outcome path, semantic review
+and authenticated browser UAT remain open.
+
 Last verified: 2026-09-28 — review outcome telemetry now requires its owned artifact's
 bounded `artifact_created` event to match the review's preview-versus-ordinary-run status
 as well as tenant, vertical and candidate. A preview artifact previously grounded a

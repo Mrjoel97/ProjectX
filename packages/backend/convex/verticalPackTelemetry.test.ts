@@ -44,6 +44,7 @@ test("closed vertical event boundary rejects prose, malformed counts and cross-t
     { claimCount: 1, citedClaimCount: 2 },
     { reason: "alice@example.com" },
     { costBucket: "account balance 450" },
+    { actor: "user" },
   ])
     await expect(
       t.mutation(internal.verticalPackTelemetry.record, { ...args, ...extra } as never),
@@ -189,9 +190,9 @@ test("review observations require an owned artifact created by the exact native 
     (await t.withIdentity({ subject: "a" }).query(api.verticalPackTelemetry.summary, {})).counts,
   ).toMatchObject({
     artifact_created: 1,
-    review_approved: 1,
-    review_edited: 1,
-    review_rejected: 1,
+    review_approved: 0,
+    review_edited: 0,
+    review_rejected: 0,
   });
 });
 

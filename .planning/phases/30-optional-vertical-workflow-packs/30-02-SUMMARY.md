@@ -94,3 +94,22 @@ The focused vertical selection passes 24/24, backend TypeScript and repository l
 This is a local telemetry-provenance repair only. No authenticated human review UI,
 actual edit/reject/approval decision, native paid evaluation, UAT, or activation is proven;
 Plan 30-02 and the VERT requirements remain partial/open.
+
+## 2026-09-28 authenticated artifact decision path
+
+The existing workspace Output card now offers accept/needs-changes only when an authenticated
+tenant's selected ready artifact has one unambiguous ordinary-run `artifact_created` origin
+for the exact native candidate within the bounded audit window. The browser supplies only
+the artifact ID and closed decision; the server derives candidate/vertical identity. Missing,
+foreign, preview, ambiguous and contradictory decisions refuse; same-decision retries are
+idempotent. One user-actor refs-only event records the decision, while system-actor synthetic
+review observations no longer contribute to review counts. The artifact and candidate remain
+unchanged. Local backend and DOM controls pass; the actual edit path, authenticated browser
+acceptance, semantic evaluation and pack activation remain open. Plan 30-02 remains partial.
+
+The focused backend vertical selection passes **27/27** and tenant-isolation suite **61/61**;
+the uncontended full web suite passes **70 files, 1,067 tests, two existing skips**. Backend/web
+TypeScript, lint, all 32 free gates, strict planning/playbook and graph/Convex-edge refresh pass.
+An earlier concurrent full-web run had one 5-second local media sandbox timeout; that test
+passed **10/10** alone and in the uncontended full run. These local controls do not replace
+an authenticated deployed browser review or actual native model evaluation.

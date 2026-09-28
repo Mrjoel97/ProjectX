@@ -1525,8 +1525,8 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/cards.tsx": {
-    "mtime": 1790471230.5887997,
-    "ast_hash": "d88746ed8a8d3503586ec4675ddf95c3",
+    "mtime": 1790556103.0600467,
+    "ast_hash": "19ada751f24140a378476b428fc35718",
     "semantic_hash": ""
   },
   ".planning/phases/03.1-cockpit-core/03.1-08-SUMMARY.md": {
@@ -1545,8 +1545,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/watch.json": {
-    "mtime": 1790286528.0802333,
-    "ast_hash": "6bb13503c8c6937b79c32536ee156283",
+    "mtime": 1790556293.0481045,
+    "ast_hash": "1ea9773a136c77ec3820e6abca39a366",
     "semantic_hash": ""
   },
   "scripts/check-playbooks.mjs": {
@@ -1585,8 +1585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1790546687.789858,
-    "ast_hash": "ecc4eb0cbb422a0eb1378237033803cf",
+    "mtime": 1790556282.0105796,
+    "ast_hash": "851a0314a0ca7b047ce0f8427a548180",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -13155,13 +13155,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPackTelemetry.test.ts": {
-    "mtime": 1790554932.346223,
-    "ast_hash": "ffacb5c55a3379e87c59e5a6727329b1",
+    "mtime": 1790556587.5244093,
+    "ast_hash": "e526c1ec286f17f25835ab1756a2932e",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPackTelemetry.ts": {
-    "mtime": 1790554957.6935818,
-    "ast_hash": "21bc03bf083b5213d96436175590cc86",
+    "mtime": 1790556198.7903144,
+    "ast_hash": "4c797343d243fe27da7022bf34c3b99b",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.test.ts": {
@@ -13170,8 +13170,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.ts": {
-    "mtime": 1790532506.5345159,
-    "ast_hash": "83f19487b839181727c655c1923b4744",
+    "mtime": 1790556088.265146,
+    "ast_hash": "025b09ff1bf365b6c75c3524aa9e9c7c",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalProductDesign.test.ts": {
@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1790555065.3419163,
-    "ast_hash": "9da3fc9a20119ed40ce8cf399afc545b",
+    "mtime": 1790556284.414355,
+    "ast_hash": "dd8e61ef0344ec5a41eb88cace3c86f0",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790555055.0555596,
-    "ast_hash": "27f7b63d7010c369c3321e607038dc43",
+    "mtime": 1790556283.2343194,
+    "ast_hash": "f1dad5d9a63bc640735b4d77f720addb",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -17097,6 +17097,21 @@
   ".planning/phases/47-the-schedule-row-that-re-arms/47-23-CURRENT-SOURCE-AND-REAL-RAIL-AUDIT.md": {
     "mtime": 1790552298.9146516,
     "ast_hash": "9f2e3f649e63cad5301839428afe10e2",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/workspace/VerticalArtifactReview.tsx": {
+    "mtime": 1790556084.7279372,
+    "ast_hash": "9da9569c07321feb32f1ba635ca37556",
+    "semantic_hash": ""
+  },
+  "apps/web/app/(app)/dashboard/workspace/verticalArtifactReview.test.tsx": {
+    "mtime": 1790556087.0701482,
+    "ast_hash": "861f1edcd82b6e2c08582f6b2085410e",
+    "semantic_hash": ""
+  },
+  "packages/backend/convex/verticalPacks.review.test.ts": {
+    "mtime": 1790556362.6449683,
+    "ast_hash": "94c248113e9617fd98ba3b3a64247f4f",
     "semantic_hash": ""
   }
 }
