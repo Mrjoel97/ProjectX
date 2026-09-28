@@ -1,5 +1,11 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — the isolated, disabled recurrence candidate now validates
+> schedule time, zone and wall-time rules at creation, material edit and approval. A malformed
+> approved row can no longer repeatedly throw before the synthetic due-sweep cursor advances;
+> 38/38 candidate tests and candidate TypeScript pass. This is not a live scheduler, real limiter
+> integration, independent source review, `enable-safe` decision or tenant activation.
+>
 > Last verified: 2026-09-28 — the closed Convex-module inventory now explicitly includes
 > `verticalArtifactEdit.ts`, an authenticated artifact-edit action with no recurrence,
 > scheduler or cron call. The exact inventory and ten-token absence scans pass 9/9; this

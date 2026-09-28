@@ -14,9 +14,9 @@ tree. Its recorded SHA-256 values for `schema.ts`, `model.ts` and `model.test.ts
 | Candidate path under `packages/backend/candidate/recurrence/` | Current SHA-256 |
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
-| `model.ts` | `3e28fd90801b36e0aabb996a480d66ee3d988586ade57bfaf0a592fc8254ff1b` |
-| `model.test.ts` | `faa3c8ff373235d3856a14a94d453ea6a3df2a6e1ef1373c9be47ac362ae0504` |
-| `README.md` | `7f25bc904bd8fc56b75fb20546c9aa26679e9a97ca6a0afa3a91d89992f9ffe3` |
+| `model.ts` | `7bd28255330933ac7741e138915cb621e982c684bd867b6a4a9d0d30a8212145` |
+| `model.test.ts` | `391838fe13db84ff8403949857d0ca8fd3dc30140ba5165c7c5fbb627ffe134b` |
+| `README.md` | `9212386644ab21fb5c02765ba50ff49af9060c1b27af6b2d3033ffa837427988` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
@@ -66,8 +66,17 @@ This is a synthetic rail contract only; the installed limiter still lacks the ke
 and fresh independent source review remains pending. The exact hashes above supersede the earlier
 candidate revisions.
 
+**2026-09-28 schedule-write amendment:** A red-before-green control showed that creation accepted
+an invalid hour or IANA zone, and material change accepted an invalid minute. An approved invalid
+row would throw in the due sweep before its cursor advanced, repeatedly blocking later rows.
+Creation, change and approval now validate a safe nonnegative timestamp and resolve the rule with
+the shared core scheduler before persisting. Failed changes leave the prior approved version and
+rule untouched. The isolated candidate suite passes **38/38** and candidate TypeScript exits 0.
+This is only candidate liveness design evidence; the current six hashes above supersede the
+prior revision and require a fresh independent review.
+
 Current controls still have value but are narrower: the exact six source hashes above were
-rechecked on 2026-09-28 and explicit candidate Vitest passed **37/37** on the current tree;
+rechecked on 2026-09-28 and explicit candidate Vitest passed **38/38** on the current tree;
 candidate TypeScript passed; `routineDecision`, `routines` and `dstProbe` passed **108/108**;
 checker self-check passed **32/32**. The actual governance modes returned matrix `0`, eligibility
 `1` with **14** findings, operational `defer` decision `0`, and disabled stage `0`. `convex.json`

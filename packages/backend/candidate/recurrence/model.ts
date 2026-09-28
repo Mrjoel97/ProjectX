@@ -78,6 +78,14 @@ function assertMaterial(input: Material) {
   }
 }
 
+function assertScheduleAt(rule: LocalRecurrenceRule, afterUtcMs: number) {
+  if (!Number.isSafeInteger(afterUtcMs) || afterUtcMs < 0)
+    throw new Error("candidate: invalid schedule time");
+  // Validate zone, cadence and wall time before storing an approved row. A bad
+  // rule would otherwise throw on every due pass before its cursor advances.
+  nextOccurrence(afterUtcMs, rule);
+}
+
 async function progressFor(db: CandidateDb, tenantId: string): Promise<Progress> {
   const existing = await db
     .query("candidateSweepProgress")
@@ -126,6 +134,7 @@ export async function createCandidate(
 ) {
   if (!safeRef(tenantId)) throw new Error("candidate: invalid tenant ref");
   assertMaterial(material);
+  assertScheduleAt(material.rule as LocalRecurrenceRule, afterUtcMs);
   const scanOrdinal = await nextOrdinal(db, tenantId, "routine");
   return db.insert("candidateRoutines", {
     tenantId,
@@ -145,7 +154,7 @@ export async function approveCandidate(
   const routine = await db.get(routineId);
   assertTenant(routine, tenantId);
   if (routine.status !== "awaiting_approval") throw new Error("candidate: approval not pending");
-  if (!Number.isFinite(nowUtcMs)) throw new Error("candidate: invalid approval time");
+  assertScheduleAt(routine.rule as LocalRecurrenceRule, nowUtcMs);
   await db.patch(routineId, {
     status: "approved",
     activatedAtUtcMs: nowUtcMs,
@@ -163,6 +172,7 @@ export async function changeCandidate(
   const routine = await db.get(routineId);
   assertTenant(routine, tenantId);
   assertMaterial(material);
+  assertScheduleAt(material.rule as LocalRecurrenceRule, nowUtcMs);
   const changed = materiallyChanged(routine, material);
   await db.patch(routineId, {
     ...material,

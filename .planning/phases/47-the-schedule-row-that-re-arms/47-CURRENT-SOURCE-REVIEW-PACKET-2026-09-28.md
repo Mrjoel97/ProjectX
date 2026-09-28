@@ -7,16 +7,16 @@ external-send authority. Operational recurrence remains `defer`.
 
 ## Exact review target
 
-Review the six files under `packages/backend/candidate/recurrence/` at commit
-`834bd78f87e2da5eb1f23b995781884c3ed549f7`. Recompute SHA-256 from raw local bytes before
-reading the tests as evidence; stop and rebaseline if any identity differs.
+Review the six files under `packages/backend/candidate/recurrence/` at the exact hashes below.
+Recompute SHA-256 from raw local bytes before reading the tests as evidence; stop and rebaseline
+if any identity differs. The packet may have later prose-only commits without changing these bytes.
 
 | File | SHA-256 |
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
-| `model.ts` | `3e28fd90801b36e0aabb996a480d66ee3d988586ade57bfaf0a592fc8254ff1b` |
-| `model.test.ts` | `faa3c8ff373235d3856a14a94d453ea6a3df2a6e1ef1373c9be47ac362ae0504` |
-| `README.md` | `7f25bc904bd8fc56b75fb20546c9aa26679e9a97ca6a0afa3a91d89992f9ffe3` |
+| `model.ts` | `7bd28255330933ac7741e138915cb621e982c684bd867b6a4a9d0d30a8212145` |
+| `model.test.ts` | `391838fe13db84ff8403949857d0ca8fd3dc30140ba5165c7c5fbb627ffe134b` |
+| `README.md` | `9212386644ab21fb5c02765ba50ff49af9060c1b27af6b2d3033ffa837427988` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
@@ -34,7 +34,9 @@ installed limiter mismatch. Do not carry forward the old GO without inspecting t
 2. Trace tenant/status/version and occurrence identity from due selection through atomic claim,
    reservation admission, paid-step admission/start/landing, recovery and external-action
    admission. Inspect both pause-first and admission-first orders, duplicate workers, retry,
-   restart, DST fold/gap/deleted date, backlog/watermark and no-burst behavior.
+   restart, DST fold/gap/deleted date, backlog/watermark and no-burst behavior. Challenge invalid
+   schedule writes: creation, material edit and approval must reject bad time/zone/rule before a
+   stored row can repeatedly throw ahead of the due-sweep cursor.
 3. Challenge ambiguous physical effects. A lost paid start, timeout or generic throw must retain
    the exact step and both holds without a second physical call. A thrown `reserve` followed by
    `absent` is **not** confirmed no effect; a terminal `release` needs a `released` tombstone, not
@@ -63,7 +65,7 @@ node scripts/check-recurrence-source-review.mjs
 node packages/backend/scripts/check-routine-gate.mjs .planning/phases/47-the-schedule-row-that-re-arms/47-14-STAGE-DECISION.md --validate-stage
 ```
 
-At this packet's source identity, the candidate suite passed **37/37**, candidate TypeScript,
+At this packet's source identity, the candidate suite passed **38/38**, candidate TypeScript,
 source-review self-test/real check and stage validation exited 0. The real governance modes were
 re-run on 2026-09-28: matrix/eligibility/historical-defer/stage exits `0/1/0/0`, with **14**
 eligibility findings. These are author-side reproduction results, not independent review.

@@ -151,6 +151,32 @@ function rails({ dailySpendCents = 0, deploymentSpendCents = 0, accept = true } 
 }
 
 describe("disabled recurrence candidate: actual convex-test transactions", () => {
+  it("rejects malformed schedule writes before they can poison a due sweep", async () => {
+    const { tx } = harness();
+    for (const invalid of [
+      { ...base, rule: { ...base.rule, hour: 24 } },
+      { ...base, rule: { ...base.rule, timeZone: "Mars/Olympus" } },
+    ]) {
+      await expect(tx((db) => createCandidate(db, tenant, invalid, t0))).rejects.toThrow();
+    }
+    await expect(tx((db) => createCandidate(db, tenant, base, Number.NaN))).rejects.toThrow(
+      "candidate: invalid schedule time",
+    );
+    const id = await tx((db) => createCandidate(db, tenant, base, t0));
+    await tx((db) => approveCandidate(db, tenant, id, t0));
+    await expect(
+      tx((db) =>
+        changeCandidate(db, tenant, id, { ...base, rule: { ...base.rule, minute: 60 } }, t0),
+      ),
+    ).rejects.toThrow();
+    expect(await tx((db) => db.get(id))).toMatchObject({
+      status: "approved",
+      version: 1,
+      rule: base.rule,
+    });
+    expect(await tx((db) => db.query("candidateRoutines").collect())).toHaveLength(1);
+  });
+
   it("keeps structured recipient boundaries and all closed material fields", async () => {
     expect(materiallyChanged(base, { ...base, recipients: ["recipient:a", "recipient:b"] })).toBe(
       true,
