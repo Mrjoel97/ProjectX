@@ -39,6 +39,7 @@ async function setup() {
       size: 12,
       contentHash: "synthetic",
       text: "Private draft body",
+      origin: "agent" as const,
       status: "ready" as const,
       createdAt: 1,
     };
@@ -161,4 +162,45 @@ test("needs-changes records a rejection without publishing or changing the artif
   expect(state.artifact).toMatchObject({ status: "ready", text: "Private draft body" });
   expect(state.candidate).toMatchObject({ status: "candidate" });
   expect((await owner.query(api.verticalPackTelemetry.summary, {})).counts.review_rejected).toBe(1);
+});
+
+test("a document rewritten in place cannot retain its original vertical review provenance", async () => {
+  const { t, candidateId, artifactId } = await setup();
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    tenantId: "a",
+    candidateId,
+    verticalId: "product",
+    event: "artifact_created",
+    artifactId,
+  });
+  await t.mutation(internal.vaultSources.insert, {
+    tenantId: "a",
+    threadId: "review-thread",
+    docIds: [artifactId],
+    titles: ["Private draft"],
+    count: 1,
+    role: "created",
+    snippet: "Private draft body",
+    form: "long",
+    createdAt: Date.now(),
+  });
+  const owner = t.withIdentity({ subject: "a" });
+  expect(await owner.query(api.verticalPacks.reviewTarget, { artifactId })).toMatchObject({
+    verticalId: "product",
+  });
+  expect(
+    await t.mutation(internal.vault.patchCreatedDoc, {
+      tenantId: "a",
+      threadId: "review-thread",
+      index: 1,
+      title: "Rewritten draft",
+      form: "long",
+      markdown: "A different document",
+      contentHash: "revised-hash",
+    }),
+  ).toMatchObject({ ok: true });
+  expect(await owner.query(api.verticalPacks.reviewTarget, { artifactId })).toBeNull();
+  await expect(
+    owner.mutation(api.verticalPacks.recordReview, { artifactId, decision: "approve" }),
+  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
 });

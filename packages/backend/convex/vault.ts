@@ -164,6 +164,10 @@ export const vaultIngestText = tenantMutation({
     if (docId) {
       const existing = await ctx.db.get(docId);
       if (!existing || existing.tenantId !== ctx.tenantId) throw new Error("vault: doc not found");
+      // This seam exists only for a stored upload awaiting extraction. A caller must never
+      // overwrite a ready document (especially an agent-created review candidate) in place.
+      if (existing.status !== "pending_extraction" || existing.origin === "agent")
+        throw new Error("vault: late-text target not pending upload");
       await ctx.db.patch(docId, {
         text,
         contentHash: hash,
@@ -1547,6 +1551,7 @@ export const insertCreatedDoc = internalMutation({
       mimeType: "text/markdown",
       size: byteLen(markdown),
       contentHash: hash,
+      contentRevision: 0,
       text: markdown,
       storageId, // absent ⇒ PreviewModal's canDownload is false ⇒ no Download button, for free
       // The LOCKED line above stays locked, and this is why it can: `mimeType` answers "what is the
@@ -1609,6 +1614,9 @@ export const patchCreatedDoc = internalMutation({
     // BOTH guards, not one: tenant (isolation) AND origin (never let a revise overwrite an UPLOAD,
     // and never silently rewrite a doc the user PROMOTED to reference material).
     if (!doc || doc.tenantId !== a.tenantId || doc.origin !== "agent") return { ok: false };
+    const revision = doc.contentRevision ?? 0;
+    if (!Number.isSafeInteger(revision) || revision < 0 || revision >= Number.MAX_SAFE_INTEGER)
+      return { ok: false };
 
     const oldStorageId = doc.storageId;
     await ctx.db.patch(docId, {
@@ -1617,6 +1625,7 @@ export const patchCreatedDoc = internalMutation({
       text: a.markdown,
       size: byteLen(a.markdown),
       contentHash: a.contentHash,
+      contentRevision: revision + 1,
       storageId: a.storageId, // undefined REMOVES it ⇒ long→short drops the Download button
       // Phase 40: the bytes' type is REVISED with them. Without this line a long→sheet rewrite
       // kept `application/pdf` over .xlsx bytes and PreviewModal framed a workbook in the PDF

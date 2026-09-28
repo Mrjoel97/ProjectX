@@ -1,3 +1,11 @@
+> Last verified: 2026-09-28 — `vaultIngestText(docId)` now refuses ready rows and
+> agent-origin documents; its late-text write is limited to same-tenant rows awaiting
+> extraction. The general agent-created-document replacement seam increments a private
+> revision marker so vertical artifact review cannot attribute replaced prose to the
+> original candidate. A failing-before-fix test proves the public overwrite was real;
+> existing pending-upload ingest remains green. This is local integrity evidence, not
+> proof of a human edit or deployed workflow.
+>
 > Last verified: 2026-09-25 — Plan 20.1-01's existing read-only Drive search still reuses the
 > tenant-scoped Drive client, escapes backslashes and apostrophes before URL encoding, caps one
 > `files.list` page at 20, and carries both shared-drive flags. The cockpit list/search tools and

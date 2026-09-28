@@ -125,8 +125,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/schema.ts": {
-    "mtime": 1790471241.183499,
-    "ast_hash": "5801dd6ecbb233e5745574da02033d7f",
+    "mtime": 1790557679.0239503,
+    "ast_hash": "bab8cf9b0d1a6d1521f3ff8f68154596",
     "semantic_hash": ""
   },
   "packages/backend/convex/skills.test.ts": {
@@ -1590,8 +1590,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1790547633.8888297,
-    "ast_hash": "46a6a2c6b98135e8cb03a5a25beb9da3",
+    "mtime": 1790558021.2743804,
+    "ast_hash": "efbd85c8d1e7d2aa0b2a7fdeb7cd7fd6",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -2365,13 +2365,13 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/vault.test.ts": {
-    "mtime": 1788879467.8428154,
-    "ast_hash": "7f8485edb33cccf49351ef306acccd72",
+    "mtime": 1790557918.510846,
+    "ast_hash": "21b0050413ec3854c5665bfdee6251fd",
     "semantic_hash": ""
   },
   "packages/backend/convex/vault.ts": {
-    "mtime": 1789342694.953926,
-    "ast_hash": "d86ac012ea3ba62692a16369572c733e",
+    "mtime": 1790557949.0933115,
+    "ast_hash": "9a53f43e8f8a1c4a4cc290bee2e67b6d",
     "semantic_hash": ""
   },
   "packages/backend/convex/vaultGraph.test.ts": {
@@ -2580,8 +2580,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vault.md": {
-    "mtime": 1790306162.6291978,
-    "ast_hash": "05c27e31cfb7061ffbc4542b19c4ee36",
+    "mtime": 1790558020.0781238,
+    "ast_hash": "5ea15cae7d097f145fbd99b31821c44c",
     "semantic_hash": ""
   },
   "packages/contracts/skills/graph-extractor.md": {
@@ -6085,8 +6085,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/createdDocs.test.ts": {
-    "mtime": 1788722978.909507,
-    "ast_hash": "8700543c62f96fad5ae7a7c376451e34",
+    "mtime": 1790557682.912725,
+    "ast_hash": "6fba68cc5acfec045c96ebeebbbe63eb",
     "semantic_hash": ""
   },
   ".planning/phases/18-document-content-creation/18-04-SUMMARY.md": {
@@ -13170,8 +13170,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.ts": {
-    "mtime": 1790556088.265146,
-    "ast_hash": "025b09ff1bf365b6c75c3524aa9e9c7c",
+    "mtime": 1790557681.502221,
+    "ast_hash": "968521e91e4d0b9ffed16f16584cd58a",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalProductDesign.test.ts": {
@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1790556284.414355,
-    "ast_hash": "dd8e61ef0344ec5a41eb88cace3c86f0",
+    "mtime": 1790558022.4695427,
+    "ast_hash": "58e6cd51f30b969cd81fc47295485bba",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790556283.2343194,
-    "ast_hash": "f1dad5d9a63bc640735b4d77f720addb",
+    "mtime": 1790558018.8830204,
+    "ast_hash": "15d6eb8124f9bd8431909ec029fef9ff",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -17110,8 +17110,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.review.test.ts": {
-    "mtime": 1790556362.6449683,
-    "ast_hash": "94c248113e9617fd98ba3b3a64247f4f",
+    "mtime": 1790557640.695766,
+    "ast_hash": "ac0b9e54c29540c7a49605f23b7b1fb6",
     "semantic_hash": ""
   }
 }

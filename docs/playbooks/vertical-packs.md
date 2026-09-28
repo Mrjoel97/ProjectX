@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — ordinary artifact review now refuses an agent document
+rewritten in place after its original `artifact_created` event. `vaultDocuments.contentRevision`
+starts at zero for new agent content and advances on the created-document replacement seam;
+legacy absence means zero. The public Vault late-text seam is also restricted to pending
+non-agent uploads, so it cannot bypass this review provenance check. Local red-then-green
+Vault and vertical tests pass. This does not count an AI rewrite as a human edit or complete
+the `review_edited` path, semantic evaluation, browser UAT, or activation.
+
 Last verified: 2026-09-28 — an authenticated Output-card action can now record one
 accept-or-needs-changes decision for an owned ordinary-run vertical artifact. The server
 derives its exact candidate from bounded creation history; missing, foreign, preview,

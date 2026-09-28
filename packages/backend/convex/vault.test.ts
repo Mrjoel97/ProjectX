@@ -256,6 +256,32 @@ describe("vaultIngestText (paste / brain-dump ingest)", () => {
     expect(doc?.status).toBe("processing");
     expect(doc?.text).toBe("OCR'd body");
   });
+
+  test("docId seam cannot rewrite an agent artifact or a ready upload", async () => {
+    const t = withIngest();
+    const agentId = await seedDoc(t, {
+      origin: "agent",
+      source: "agent",
+      status: "ready",
+      text: "Approved candidate",
+      contentRevision: 0,
+    });
+    const readyUploadId = await seedDoc(t, { status: "ready", text: "Uploaded body" });
+    const pendingAgentId = await seedDoc(t, {
+      origin: "agent",
+      source: "agent",
+      status: "pending_extraction",
+      text: undefined,
+    });
+    for (const docId of [agentId, readyUploadId, pendingAgentId]) {
+      await expect(
+        asTenant(t).mutation(api.vault.vaultIngestText, { text: "Replacement", docId }),
+      ).rejects.toThrow("vault: late-text target not pending upload");
+    }
+    expect((await t.run((ctx) => ctx.db.get(agentId)))?.text).toBe("Approved candidate");
+    expect((await t.run((ctx) => ctx.db.get(agentId)))?.contentRevision).toBe(0);
+    expect((await t.run((ctx) => ctx.db.get(readyUploadId)))?.text).toBe("Uploaded body");
+  });
 });
 
 describe("vaultUpload (file ingest + accept-but-defer)", () => {

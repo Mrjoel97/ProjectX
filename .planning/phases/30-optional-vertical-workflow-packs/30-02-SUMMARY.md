@@ -113,3 +113,15 @@ TypeScript, lint, all 32 free gates, strict planning/playbook and graph/Convex-e
 An earlier concurrent full-web run had one 5-second local media sandbox timeout; that test
 passed **10/10** alone and in the uncontended full run. These local controls do not replace
 an authenticated deployed browser review or actual native model evaluation.
+
+## 2026-09-28 in-place rewrite provenance repair
+
+The created-document replacement seam now advances an optional private Vault revision,
+and the authenticated vertical artifact decision refuses a document rewritten after its
+original creation event. A separate public late-text ingest path previously accepted any
+owned `docId`, including a ready agent artifact; a red-then-green regression now restricts
+it to pending non-agent uploads. Five focused backend test files pass **80/80**. This is
+integrity hardening only: model-driven rewrites are not human edits, `review_edited` is
+unimplemented, and native semantic evaluation, deployed browser UAT and activation remain
+open. The commerce owner's late-paid/unavailable-stock policy is separately recorded in
+Plan 50-06 owner inputs; it does not imply a refund, alternative-fulfilment or notice runtime.

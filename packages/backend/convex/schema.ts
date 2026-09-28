@@ -2168,6 +2168,10 @@ export default defineSchema({
     mimeType: v.string(),
     size: v.number(),
     contentHash: v.string(), // sha-256 hex → cross-doc dedup
+    // Only an in-place rewrite of an agent-created document increments this. Legacy absence is
+    // revision zero; the value lets a later review refuse to attribute rewritten prose to the
+    // original vertical candidate without logging generated content or a reversible content hash.
+    contentRevision: v.optional(v.number()),
     storageId: v.optional(v.id("_storage")), // stored bytes for downloadable uploads
     // WHAT THE BYTES ARE, when that differs from what the ROW is. `mimeType` above is the artifact
     // of record — it drives extraction routing and searchability, and for an agent-created document

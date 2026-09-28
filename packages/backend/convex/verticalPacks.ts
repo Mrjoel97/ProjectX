@@ -35,7 +35,13 @@ async function reviewOriginFor(
   artifactId: Id<"vaultDocuments">,
 ): Promise<{ kind: "missing" | "ambiguous" } | { kind: "found"; value: ReviewOrigin }> {
   const artifact = await ctx.db.get(artifactId);
-  if (!artifact || artifact.tenantId !== tenantId || artifact.status !== "ready")
+  if (
+    !artifact ||
+    artifact.tenantId !== tenantId ||
+    artifact.status !== "ready" ||
+    artifact.origin !== "agent" ||
+    (artifact.contentRevision ?? 0) !== 0
+  )
     return { kind: "missing" };
   const history = await verticalEventsFor(ctx, tenantId);
   const origins = history.rows.filter(

@@ -1,5 +1,10 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-28 — the Vault schema adds an optional content-revision marker
+> for agent-created document replacements. It does not alter skill versions, activation,
+> rollback, tool grants or model routing; vertical artifact review uses the marker only
+> to refuse a decision after the original candidate output has been rewritten.
+>
 > Last verified: 2026-09-28 — adding the CI-only model-provider AST dependency changed the
 > lockfile in the source-derived evaluator set, so prior golden and deterministic recipe
 > evidence identities are retired without changing either fixture corpus. The 46-case golden
