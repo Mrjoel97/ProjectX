@@ -212,3 +212,23 @@ with `Item | Value` and `Browser Edited | 7`; SHA-256
 Its isolated audit and exact-root cleanup passed. This closes the local
 browser-download cell-content observation, not hosted UAT, original-workbook
 validity, semantic quality or candidate activation.
+
+## 2026-09-28 indexed vertical provenance correction
+
+The candidate-scoped 200-row audit read still lost an older origin after 201 newer
+events for that same candidate, and the authenticated review route separately used
+the tenant-wide 200-row sample. Both failures were reproduced before the repair.
+New vertical outcome audit rows now carry tenant-first, ref-only candidate/artifact/
+event/preview index keys. The closed writer uses the existing insert-only audit
+primitive; generic `audit.log` refuses this reserved outcome type, and indexed
+reads verify payload/index agreement. Exact candidate repeat/replay and authenticated
+review/readback pass after 201 newer rows. Eight focused vertical/audit/schema/
+isolation suites pass 148/148; backend TypeScript passes. Immutable pre-index
+rows remain on a bounded legacy fallback: recent origins work, aged-out origins
+refuse, and old all-time repeat history is not reconstructed. Public summary
+sampling, live tenant usage, semantic evaluation, hosted UAT and activation
+remain open.
+The unchanged six-lane/40-case generated native corpus was repinned to
+evaluator revision `702affb25661fbd4b1f2640b1342b6e7a93dbc6e4522cd4c9db03b6f4e876633`
+after its audit/schema source inventory moved; `--check` passes. No case was run
+against a paid model or assigned a semantic verdict by that generation.

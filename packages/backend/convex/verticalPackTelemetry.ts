@@ -1,9 +1,9 @@
 // Vertical outcomes share the insert-only audit plane. No bodies, free-text refs or second ledger.
 import { VERTICAL_IDS, verticalSkillName } from "@pikar/core/verticalPacks";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type QueryCtx } from "./_generated/server";
+import { appendAudit } from "./audit";
 import { tenantQuery } from "./lib/functions";
 
 const EVENTS = [
@@ -107,18 +107,17 @@ export const record = internalMutation({
         if (args.actor !== "user") throw new Error("USER_REVIEW_ACTOR_REQUIRED");
         if (args.contentRevision !== undefined) throw new Error("EDIT_REVISION_UNEXPECTED");
       }
-      // A review observation must answer a real artifact from this exact native candidate.
-      // If its origin fell outside the bounded history, omit the metric rather than guessing.
-      const history = await verticalCandidateEventsFor(ctx, args.tenantId, args.candidateId);
+      // New rows have an exact indexed origin. Historical immutable rows retain a bounded
+      // fallback, which refuses when the source has aged out rather than inventing review.
       if (
-        !history.rows.some(
-          (event) =>
-            event.payload?.event === "artifact_created" &&
-            event.payload?.candidateId === args.candidateId &&
-            event.payload?.verticalId === args.verticalId &&
-            event.payload?.artifactId === args.artifactId &&
-            (event.payload?.preview === true) === (args.preview === true),
-        )
+        !(await createdFor(
+          ctx,
+          args.tenantId,
+          args.candidateId,
+          args.verticalId,
+          args.preview === true,
+          args.artifactId,
+        ))
       )
         throw new Error("ARTIFACT_ORIGIN_UNVERIFIED");
     }
@@ -130,33 +129,44 @@ export const record = internalMutation({
     if (args.event === "artifact_created" && args.artifactId) {
       // A second distinct ordinary artifact on the same exact version is repeat use. Preview
       // artifacts, a different candidate version and replay of the same artifact do not count.
-      const history = await verticalCandidateEventsFor(ctx, args.tenantId, args.candidateId);
-      const created = history.rows.filter(
-        (event) =>
-          event.payload?.event === "artifact_created" &&
-          event.payload?.candidateId === args.candidateId &&
-          event.payload?.verticalId === args.verticalId &&
-          typeof event.payload?.artifactId === "string" &&
-          (event.payload?.preview === true) === (args.preview === true),
+      if (
+        await createdFor(
+          ctx,
+          args.tenantId,
+          args.candidateId,
+          args.verticalId,
+          args.preview === true,
+          args.artifactId,
+        )
+      )
+        return;
+      const prior = await createdFor(
+        ctx,
+        args.tenantId,
+        args.candidateId,
+        args.verticalId,
+        args.preview === true,
       );
-      if (created.some((event) => event.payload?.artifactId === args.artifactId)) return;
       const { tenantId, actor, ...payload } = args;
-      await ctx.runMutation(internal.audit.log, {
+      await appendAudit(ctx, {
         tenantId,
         correlationId: String(args.candidateId),
         eventType: VERTICAL_EVENT_TYPE,
         actor: actor ?? "system",
         payload,
+        verticalEvent: args.event,
+        verticalPreview: args.preview === true,
+        verticalArtifactId: args.artifactId,
       });
-      if (
-        args.preview !== true &&
-        created.some((event) => event.payload?.artifactId !== args.artifactId)
-      ) {
-        await ctx.runMutation(internal.audit.log, {
+      if (args.preview !== true && prior) {
+        await appendAudit(ctx, {
           tenantId,
           correlationId: String(args.candidateId),
           eventType: VERTICAL_EVENT_TYPE,
           actor: "system",
+          verticalEvent: "repeat_use",
+          verticalPreview: false,
+          verticalArtifactId: args.artifactId,
           payload: {
             event: "repeat_use",
             verticalId: args.verticalId,
@@ -169,12 +179,15 @@ export const record = internalMutation({
     }
     if (args.event === "repeat_use") throw new Error("REPEAT_USE_DERIVED_ONLY");
     const { tenantId, actor, ...payload } = args;
-    await ctx.runMutation(internal.audit.log, {
+    await appendAudit(ctx, {
       tenantId,
       correlationId: String(args.candidateId),
       eventType: VERTICAL_EVENT_TYPE,
       actor: actor ?? "system",
       payload,
+      verticalEvent: args.event,
+      verticalPreview: args.preview === true,
+      ...(args.artifactId ? { verticalArtifactId: args.artifactId } : {}),
     });
   },
 });
@@ -188,6 +201,65 @@ export async function verticalEventsFor(ctx: QueryCtx, tenantId: string) {
     .order("desc")
     .take(VERTICAL_EVENT_LIMIT + 1);
   return { rows: rows.slice(0, VERTICAL_EVENT_LIMIT), partial: rows.length > VERTICAL_EVENT_LIMIT };
+}
+
+/** Exact new artifact events plus a bounded fallback for immutable pre-index rows. */
+export async function verticalArtifactEventsFor(
+  ctx: QueryCtx,
+  tenantId: string,
+  artifactId: Id<"vaultDocuments">,
+): Promise<{ rows: Doc<"audit">[]; ambiguous: boolean }> {
+  const eventNames = [
+    "artifact_created",
+    "review_approved",
+    "review_rejected",
+    "review_edited",
+  ] as const;
+  const selections = await Promise.all(
+    eventNames.map(async (event) => ({
+      event,
+      rows: await ctx.db
+        .query("audit")
+        .withIndex("by_tenant_vertical_artifact_event_preview", (q) =>
+          q
+            .eq("tenantId", tenantId)
+            .eq("verticalArtifactId", artifactId)
+            .eq("verticalEvent", event)
+            .eq("verticalPreview", false),
+        )
+        .take(3),
+    })),
+  );
+  const ambiguous = selections.some(
+    ({ event, rows }) =>
+      rows.length === 3 ||
+      rows.some(
+        (row) =>
+          row.tenantId !== tenantId ||
+          row.eventType !== VERTICAL_EVENT_TYPE ||
+          row.payload?.event !== event ||
+          row.payload?.artifactId !== artifactId ||
+          row.payload?.candidateId !== row.correlationId ||
+          !VERTICAL_IDS.some((id) => id === row.payload?.verticalId) ||
+          row.payload?.preview === true ||
+          (event !== "artifact_created" && row.actor !== "user"),
+      ),
+  );
+  if (ambiguous) return { rows: [], ambiguous: true };
+  const indexedRows = selections.flatMap(({ rows }) => rows);
+  const legacy = await verticalEventsFor(ctx, tenantId);
+  return {
+    rows: [
+      ...indexedRows,
+      ...legacy.rows.filter(
+        (row) =>
+          row.verticalEvent === undefined &&
+          row.payload?.artifactId === artifactId &&
+          eventNames.some((event) => event === row.payload?.event),
+      ),
+    ],
+    ambiguous: false,
+  };
 }
 
 async function verticalCandidateEventsFor(
@@ -208,6 +280,51 @@ async function verticalCandidateEventsFor(
       .filter((row) => row.tenantId === tenantId && row.eventType === VERTICAL_EVENT_TYPE),
     partial: rows.length > VERTICAL_EVENT_LIMIT,
   };
+}
+
+async function createdFor(
+  ctx: QueryCtx,
+  tenantId: string,
+  candidateId: Id<"tenantSkills"> | Id<"skills">,
+  verticalId: (typeof VERTICAL_IDS)[number],
+  preview: boolean,
+  artifactId?: Id<"vaultDocuments">,
+): Promise<boolean> {
+  const indexed = await ctx.db
+    .query("audit")
+    .withIndex("by_tenant_correlation_vertical_event_preview_artifact", (q) => {
+      const prefix = q
+        .eq("tenantId", tenantId)
+        .eq("correlationId", String(candidateId))
+        .eq("verticalEvent", "artifact_created")
+        .eq("verticalPreview", preview);
+      return artifactId ? prefix.eq("verticalArtifactId", artifactId) : prefix;
+    })
+    .take(2);
+  for (const row of indexed) {
+    if (
+      row.tenantId !== tenantId ||
+      row.eventType !== VERTICAL_EVENT_TYPE ||
+      row.payload?.event !== "artifact_created" ||
+      row.payload?.candidateId !== candidateId ||
+      row.payload?.verticalId !== verticalId ||
+      !row.verticalArtifactId ||
+      row.payload?.artifactId !== row.verticalArtifactId ||
+      (row.payload?.preview === true) !== preview
+    )
+      throw new Error("VERTICAL_AUDIT_INDEX_MISMATCH");
+  }
+  if (indexed.length > 0) return true;
+  const history = await verticalCandidateEventsFor(ctx, tenantId, candidateId);
+  return history.rows.some(
+    (row) =>
+      row.payload?.event === "artifact_created" &&
+      row.payload?.candidateId === candidateId &&
+      row.payload?.verticalId === verticalId &&
+      typeof row.payload?.artifactId === "string" &&
+      (artifactId === undefined || row.payload?.artifactId === artifactId) &&
+      (row.payload?.preview === true) === preview,
+  );
 }
 
 export const summary = tenantQuery({

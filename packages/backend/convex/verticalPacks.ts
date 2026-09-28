@@ -16,7 +16,7 @@ import { ownerMutation, tenantMutation, tenantQuery } from "./lib/functions";
 import { contentHash } from "./lib/hash";
 import { nativePackExposureReady, rollbackVerticalForTenant } from "./skills";
 import { sealedIn } from "./vaultFolders";
-import { verticalEventsFor } from "./verticalPackTelemetry";
+import { verticalArtifactEventsFor, verticalEventsFor } from "./verticalPackTelemetry";
 
 const verticalIdArg = v.union(...VERTICAL_IDS.map((id) => v.literal(id)));
 const RECOMMENDATION_WINDOW_MS = 30 * 60_000;
@@ -28,7 +28,7 @@ type ReviewOrigin = {
   decision: ReviewDecision | null;
 };
 
-/** Only the bounded, exact ordinary-run creation event can authorize a user review metric. */
+/** Only an exact ordinary-run creation event can authorize a user review metric. */
 async function reviewOriginFor(
   ctx: QueryCtx,
   tenantId: string,
@@ -42,7 +42,8 @@ async function reviewOriginFor(
     artifact.origin !== "agent"
   )
     return { kind: "missing" };
-  const history = await verticalEventsFor(ctx, tenantId);
+  const history = await verticalArtifactEventsFor(ctx, tenantId, artifactId);
+  if (history.ambiguous) return { kind: "ambiguous" };
   const origins = history.rows.filter(
     (row) =>
       row.payload?.event === "artifact_created" &&

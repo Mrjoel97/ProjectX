@@ -277,6 +277,155 @@ test("another candidate's events cannot evict exact-candidate artifact provenanc
   expect(rows.filter((row) => row.payload?.event === "review_approved")).toHaveLength(1);
 });
 
+test("same-candidate history beyond 200 rows keeps exact origin, repeat use and replay", async () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  const { candidateId, firstId, secondId } = await t.run(async (ctx) => {
+    const candidateId = await ctx.db.insert("tenantSkills", {
+      tenantId: "a",
+      name: verticalSkillName("product"),
+      version: 1,
+      status: "candidate",
+      rollbackEligible: false,
+      body: "Synthetic candidate",
+      authoredBody: "",
+      author: "system",
+      basedOnScope: "global",
+      basedOnName: verticalSkillName("product"),
+      basedOnVersion: 1,
+      createdAt: 1,
+    });
+    const document = {
+      tenantId: "a",
+      title: "Synthetic draft",
+      kind: "document" as const,
+      category: "workspace-docs" as const,
+      source: "agent" as const,
+      mimeType: "text/markdown",
+      size: 12,
+      contentHash: "synthetic",
+      text: "Synthetic draft",
+      status: "ready" as const,
+      createdAt: 1,
+    };
+    const firstId = await ctx.db.insert("vaultDocuments", document);
+    const secondId = await ctx.db.insert("vaultDocuments", document);
+    return { candidateId, firstId, secondId };
+  });
+  const base = { tenantId: "a", candidateId, verticalId: "product" as const };
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "artifact_created",
+    artifactId: firstId,
+  });
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 201; i++)
+      await ctx.db.insert("audit", {
+        tenantId: "a",
+        correlationId: String(candidateId),
+        eventType: "vertical_pack.outcome",
+        actor: "system",
+        ts: Date.now() + i,
+        payload: { event: "blocked", verticalId: "product", candidateId },
+      });
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "review_approved",
+    actor: "user",
+    artifactId: firstId,
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "artifact_created",
+    artifactId: secondId,
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "artifact_created",
+    artifactId: firstId,
+  });
+  const events = await t.run((ctx) =>
+    ctx.db
+      .query("audit")
+      .withIndex("by_correlation", (q) => q.eq("correlationId", String(candidateId)))
+      .collect(),
+  );
+  expect(events.filter((row) => row.payload?.event === "artifact_created")).toHaveLength(2);
+  expect(events.filter((row) => row.payload?.event === "repeat_use")).toHaveLength(1);
+  expect(events.filter((row) => row.payload?.event === "review_approved")).toHaveLength(1);
+});
+
+test("generic audit logging cannot mint an unindexed vertical origin", async () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  await expect(
+    t.mutation(internal.audit.log, {
+      tenantId: "a",
+      correlationId: "candidate-ref",
+      eventType: "vertical_pack.outcome",
+      actor: "system",
+      payload: { event: "artifact_created", candidateId: "candidate-ref" },
+    }),
+  ).rejects.toThrow("RESERVED_EVIDENCE_NAMESPACE");
+});
+
+test("a mismatched vertical audit index cannot ground review provenance", async () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  const { candidateId, artifactId } = await t.run(async (ctx) => {
+    const candidateId = await ctx.db.insert("tenantSkills", {
+      tenantId: "a",
+      name: verticalSkillName("product"),
+      version: 1,
+      status: "candidate",
+      rollbackEligible: false,
+      body: "Synthetic candidate",
+      authoredBody: "",
+      author: "system",
+      basedOnScope: "global",
+      basedOnName: verticalSkillName("product"),
+      basedOnVersion: 1,
+      createdAt: 1,
+    });
+    const artifactId = await ctx.db.insert("vaultDocuments", {
+      tenantId: "a",
+      title: "Synthetic draft",
+      kind: "document",
+      category: "workspace-docs",
+      source: "agent",
+      mimeType: "text/markdown",
+      size: 12,
+      contentHash: "synthetic",
+      text: "Synthetic draft",
+      status: "ready",
+      createdAt: 1,
+    });
+    await ctx.db.insert("audit", {
+      tenantId: "a",
+      correlationId: String(candidateId),
+      eventType: "vertical_pack.outcome",
+      actor: "system",
+      ts: 1,
+      verticalEvent: "artifact_created",
+      verticalPreview: false,
+      verticalArtifactId: artifactId,
+      payload: { event: "blocked", candidateId, verticalId: "product", artifactId },
+    });
+    return { candidateId, artifactId };
+  });
+  await expect(
+    t.mutation(internal.verticalPackTelemetry.record, {
+      tenantId: "a",
+      candidateId,
+      verticalId: "product",
+      event: "review_approved",
+      actor: "user",
+      artifactId,
+    }),
+  ).rejects.toThrow("VERTICAL_AUDIT_INDEX_MISMATCH");
+});
+
 test("review observations require an owned artifact created by the exact native candidate", async () => {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);

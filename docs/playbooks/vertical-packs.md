@@ -1,5 +1,23 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — new `vertical_pack.outcome` rows now carry
+tenant-first, ref-only audit index keys for the exact candidate, artifact,
+event and preview posture. The generic audit RPC refuses this event type;
+the closed writer appends through the same insert-only audit primitive and
+checks indexed keys against payload refs on read. A red-before-green control
+buried a creation event under 201 newer same-candidate rows; exact review,
+second-artifact repeat use and replay now pass. Another red-before-green
+control buried the authenticated review target under 201 newer tenant rows;
+the user approval and later idempotent readback now pass. Eight focused
+vertical/audit/schema/isolation suites pass 148/148, and backend TypeScript
+passes. Historical immutable rows have no new keys: a bounded 200-event
+fallback preserves recent origins but refuses an aged-out origin. The public
+summary is still a 200-event sample, not an all-time count. This is repository
+integrity, not live usage, semantic review or activation.
+The unchanged six-lane/40-case native corpus was regenerated only to renew its
+source-derived evaluator revision to `702affb25661fbd4b1f2640b1342b6e7a93dbc6e4522cd4c9db03b6f4e876633`;
+`--check` passes. This is not a semantic pass.
+
 Last verified: 2026-09-28 — the internal outcome writer now refuses
 `review_approved` and `review_rejected` without the closed `actor: user` value,
 as it already did for `review_edited`. An owned artifact and exact-candidate

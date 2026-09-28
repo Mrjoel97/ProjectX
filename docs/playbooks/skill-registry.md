@@ -1,5 +1,14 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-28 — the tenant-first vertical audit indexes changed
+> `schema.ts` and `audit.ts`, both pinned by the free golden evaluator. Its
+> unchanged 46-case corpus now uses revision
+> `2026-09-11.budgeted-evaluator.0915149bddb4b591b8e8ad4c603c1c04a80db6c2ae4690809346ab976af66e79`;
+> the dependent zero-cost web-recipe implementation hash is
+> `1a6c05f8ee8d6200f17ad9c0a58c0f0ec31bb83ef45783273d23ad16d86ad6f1`.
+> This retires prior source identities, not the missing paid golden verdict,
+> vertical semantic evaluation, hosted UAT or activation.
+
 > Last verified: 2026-09-28 — the local-only golden provider egress refusal
 > retires the previous evaluator identity. The unchanged 46-case corpus now
 > pins `2026-09-11.budgeted-evaluator.60d0fbcc22d14d608e4ce7245fb60a5c81b507f0368c874b8b7f9a149038bd0d`;

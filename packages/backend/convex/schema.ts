@@ -293,10 +293,28 @@ export default defineSchema({
     payload: v.any(),
     ts: v.number(),
     exportVersion: v.optional(v.literal(2)),
+    // Ref-only lookup keys for new vertical outcome rows. Historical immutable audit
+    // rows lack them and are handled by the bounded legacy fallback.
+    verticalEvent: v.optional(v.string()),
+    verticalPreview: v.optional(v.boolean()),
+    verticalArtifactId: v.optional(v.id("vaultDocuments")),
   })
     .index("by_tenant_ts", ["tenantId", "ts"])
     .index("by_tenant_event_ts", ["tenantId", "eventType", "ts"])
     .index("by_correlation", ["correlationId"])
+    .index("by_tenant_correlation_vertical_event_preview_artifact", [
+      "tenantId",
+      "correlationId",
+      "verticalEvent",
+      "verticalPreview",
+      "verticalArtifactId",
+    ])
+    .index("by_tenant_vertical_artifact_event_preview", [
+      "tenantId",
+      "verticalArtifactId",
+      "verticalEvent",
+      "verticalPreview",
+    ])
     // OPSG-03 WORM export windows CROSS-tenant by ts (by_tenant_ts is per-tenant, useless
     // for the global export). Adding an index is not a write path — Convex backfills it
     // (no migration; OPSG-06 moot). Backs auditSince, which previously full-scanned.

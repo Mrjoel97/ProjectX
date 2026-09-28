@@ -139,6 +139,88 @@ test("one ordinary artifact accepts one authenticated refs-only decision", async
   expect((await owner.query(api.verticalPackTelemetry.summary, {})).counts.review_approved).toBe(1);
 });
 
+test("authenticated review remains available after 201 newer tenant outcome rows", async () => {
+  const { t, candidateId, artifactId } = await setup();
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    tenantId: "a",
+    candidateId,
+    verticalId: "product",
+    event: "artifact_created",
+    artifactId,
+  });
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 201; i++)
+      await ctx.db.insert("audit", {
+        tenantId: "a",
+        correlationId: String(candidateId),
+        eventType: "vertical_pack.outcome",
+        actor: "system",
+        ts: Date.now() + i,
+        payload: { event: "blocked", candidateId, verticalId: "product" },
+      });
+  });
+  const owner = t.withIdentity({ subject: "a" });
+  expect(await owner.query(api.verticalPacks.reviewTarget, { artifactId })).toEqual({
+    verticalId: "product",
+    decision: null,
+  });
+  expect(
+    await owner.mutation(api.verticalPacks.recordReview, { artifactId, decision: "approve" }),
+  ).toEqual({ recorded: true, decision: "approve" });
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 201; i++)
+      await ctx.db.insert("audit", {
+        tenantId: "a",
+        correlationId: String(candidateId),
+        eventType: "vertical_pack.outcome",
+        actor: "system",
+        ts: Date.now() + 1_000 + i,
+        payload: { event: "blocked", candidateId, verticalId: "product" },
+      });
+  });
+  expect(await owner.query(api.verticalPacks.reviewTarget, { artifactId })).toEqual({
+    verticalId: "product",
+    decision: "approve",
+  });
+  expect(
+    await owner.mutation(api.verticalPacks.recordReview, { artifactId, decision: "approve" }),
+  ).toEqual({ recorded: false, decision: "approve" });
+});
+
+test("immutable pre-index origin uses only the bounded legacy window", async () => {
+  const { t, candidateId, artifactId } = await setup();
+  await t.run((ctx) =>
+    ctx.db.insert("audit", {
+      tenantId: "a",
+      correlationId: String(candidateId),
+      eventType: "vertical_pack.outcome",
+      actor: "system",
+      ts: 1,
+      payload: { event: "artifact_created", candidateId, verticalId: "product", artifactId },
+    }),
+  );
+  const owner = t.withIdentity({ subject: "a" });
+  expect(await owner.query(api.verticalPacks.reviewTarget, { artifactId })).toEqual({
+    verticalId: "product",
+    decision: null,
+  });
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 201; i++)
+      await ctx.db.insert("audit", {
+        tenantId: "a",
+        correlationId: String(candidateId),
+        eventType: "vertical_pack.outcome",
+        actor: "system",
+        ts: i + 2,
+        payload: { event: "blocked", candidateId, verticalId: "product" },
+      });
+  });
+  expect(await owner.query(api.verticalPacks.reviewTarget, { artifactId })).toBeNull();
+  await expect(
+    owner.mutation(api.verticalPacks.recordReview, { artifactId, decision: "approve" }),
+  ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
+});
+
 test("needs-changes records a rejection without publishing or changing the artifact", async () => {
   const { t, candidateId, artifactId } = await setup();
   await t.mutation(internal.verticalPackTelemetry.record, {

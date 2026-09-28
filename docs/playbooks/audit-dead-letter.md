@@ -1,5 +1,12 @@
 # Playbook: Audit Log & Dead-Letter Pipeline
 
+Last verified: 2026-09-28 — the generic audit RPC now refuses
+`vertical_pack.outcome`: the closed vertical writer alone appends those
+refs-only rows through the existing insert-only audit primitive, export queue
+and aggregate update. New rows carry tenant-first candidate/artifact/event/
+preview index keys; reads check key/payload agreement. This does not arm WORM,
+rewrite historical immutable rows, or change dead-letter retention.
+
 Last verified: 2026-09-26 — ADR-045's one-time production
 `tenantDelete:sweepOrphanedInviteIdentities` reached `done: true` on the verified target:
 two invites scanned, zero orphan identity links cleared. The bounded target check and
