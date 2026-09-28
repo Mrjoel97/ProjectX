@@ -1,5 +1,15 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-28 — the local-only golden provider egress refusal
+> retires the previous evaluator identity. The unchanged 46-case corpus now
+> pins `2026-09-11.budgeted-evaluator.60d0fbcc22d14d608e4ce7245fb60a5c81b507f0368c874b8b7f9a149038bd0d`;
+> the dependent zero-cost web-recipe implementation pin is
+> `50a35a4465c578ebbcb396c3648f5ce880a046a728250a17d77fc432b678c406`.
+> The 57-fixture self-check, local preflight controls and recipe self-check pass.
+> A filtered diagnostic stopped unresolved during its first embedding seed, so
+> it provided no passing registry evidence or skill activation. Phase 49's
+> new watched-source aggregate must pass separately.
+
 > Last verified: 2026-09-28 — the free golden preflight now supports the Convex
 > CLI's self-hosted local route with a separate process-scoped
 > `PIKAR_GOLDEN_LOCAL_INSTANCE` declaration. It refuses a simultaneous

@@ -64,6 +64,7 @@ import {
   waitForPaidSettlement,
 } from "./goldenPaidAttempt.mjs";
 import {
+  assertGoldenLocalProviderEgress,
   assertGoldenNonProductionTarget,
   PREFLIGHT_PASSED_LINE,
   ProviderPreflightRefusal,
@@ -1317,6 +1318,7 @@ function assertProviderReadiness(readiness) {
 
 function checkProviderReadiness() {
   assertGoldenNonProductionTarget();
+  assertGoldenLocalProviderEgress();
   let output;
   try {
     output = must(

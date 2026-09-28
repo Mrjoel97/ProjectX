@@ -19,7 +19,7 @@ reviewed: 2026-09-28
 
 **Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates. The prior digest `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `881e840e66402c1ac069676f8c59a70b95a5240dcdbbad2751dc42ef4ce9b121`
+Artifact-set SHA-256: `3436015858c83f571bc74390e7530a6524aecb11159b0584d8c33ec1f3e53366`
 
 The changed skill contract and watched playbooks for a CLI-compatible named
 self-hosted golden diagnostic retired the prior Phase 49 digest. The new

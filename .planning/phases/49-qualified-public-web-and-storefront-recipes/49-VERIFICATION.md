@@ -9,7 +9,19 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 **Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `8b4a232901fca6b7b532bb73f30e68a973c8cb942a83eb7af0a72dc98b9c3f71` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `881e840e66402c1ac069676f8c59a70b95a5240dcdbbad2751dc42ef4ce9b121`
+Artifact-set SHA-256: `3436015858c83f571bc74390e7530a6524aecb11159b0584d8c33ec1f3e53366`
+
+**2026-09-28 local provider-egress requalification:** A filtered golden diagnostic
+stopped with an unresolved first embedding reservation after sandboxed TCP/443
+to OpenRouter failed, while an unsandboxed read-only probe succeeded. The
+local-only free preflight now checks no-payload TCP reachability to OpenRouter
+and Tavily before opening a budget. Golden and dependent deterministic recipe
+identities were repinned with unchanged fixture corpora. The first exact-source
+aggregate found the required playbook updates missing; after those updates, a
+new serialized aggregate passed all 21 planes on the digest above, including
+both fresh browser stacks, production build, three typechecks, strict documents
+and free gates. The diagnostic is neither settled provider usage nor a golden
+case verdict. Wave 7/8 and full Wave 1 qualification remain open.
 
 **2026-09-28 named-local golden-route requalification:** The golden preflight now
 has a process-scoped self-hosted local instance declaration compatible with the

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertGoldenLocalProviderEgress,
   assertGoldenNonProductionTarget,
   PREFLIGHT_PASSED_LINE,
   PREFLIGHT_REFUSAL_REASONS,
@@ -8,6 +9,26 @@ import {
   preflightRefusedLine,
   runStandaloneProviderPreflight,
 } from "./goldenProviderPreflight.mjs";
+
+test("local golden preflight refuses failed provider TCP routes before budget", () => {
+  const local = { PIKAR_GOLDEN_LOCAL_INSTANCE: "golden-test" };
+  const checked = [];
+  assert.throws(
+    () =>
+      assertGoldenLocalProviderEgress(local, "", (host) => {
+        checked.push(host);
+        return host !== "api.tavily.com";
+      }),
+    (error) =>
+      error instanceof ProviderPreflightRefusal &&
+      error.reason === "local_provider_egress_unavailable",
+  );
+  assert.deepEqual(checked, ["openrouter.ai", "api.tavily.com"]);
+  assert.equal(
+    assertGoldenLocalProviderEgress({}, "CONVEX_DEPLOYMENT=dev:cloud-test", () => false),
+    true,
+  );
+});
 
 test("standalone preflight emits one canonical ready line and returns exit code zero", () => {
   const stdout = [];

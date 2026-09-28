@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +16,7 @@ export const PREFLIGHT_REFUSAL_REASONS = Object.freeze([
   "named_nonproduction_target_required",
   "transport_error",
   "readiness_response_invalid",
+  "local_provider_egress_unavailable",
 ]);
 const PREFLIGHT_REFUSAL_REASON_SET = new Set(PREFLIGHT_REFUSAL_REASONS);
 
@@ -35,6 +37,40 @@ export class ProviderPreflightRefusal extends Error {
 }
 
 const backendEnvPath = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env.local");
+
+const localProviderHosts = Object.freeze(["openrouter.ai", "api.tavily.com"]);
+const tcpProbeSource =
+  "const s=require('node:net').connect({host:process.argv[1],port:443,timeout:3000});" +
+  "s.once('connect',()=>{s.destroy();process.exit(0)});" +
+  "s.once('error',()=>process.exit(2));" +
+  "s.once('timeout',()=>{s.destroy();process.exit(2)});";
+
+function probeLocalProviderHost(host) {
+  const result = spawnSync(process.execPath, ["-e", tcpProbeSource, host], {
+    timeout: 5000,
+    windowsHide: true,
+    stdio: "ignore",
+  });
+  return !result.error && result.status === 0;
+}
+
+/** No request bytes, credentials, or paid call: a local runner must be able to open both
+ * provider TCP routes before it opens an evaluation budget. A cloud target's egress is not
+ * inferred from this CLI machine and is deliberately outside this local-only check. */
+export function assertGoldenLocalProviderEgress(
+  env = process.env,
+  envFile = existsSync(backendEnvPath) ? readFileSync(backendEnvPath, "utf8") : "",
+  probe = probeLocalProviderHost,
+) {
+  const local =
+    Boolean(env.PIKAR_GOLDEN_LOCAL_INSTANCE?.trim()) ||
+    env.CONVEX_DEPLOYMENT?.trim().startsWith("local:") ||
+    /^CONVEX_DEPLOYMENT\s*=\s*["']?local:/m.test(envFile);
+  if (!local) return true;
+  for (const host of localProviderHosts)
+    if (!probe(host)) throw new ProviderPreflightRefusal("local_provider_egress_unavailable");
+  return true;
+}
 
 /** The shared Convex runner permits a production override for other smoke gates. A golden run
  * also needs an explicit named dev/local selection: a live anonymous listener is not a qualified

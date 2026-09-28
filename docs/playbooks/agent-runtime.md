@@ -1,3 +1,12 @@
+> Last verified: 2026-09-28 — the local golden runner now checks no-payload
+> TCP/443 reachability to its OpenRouter and Tavily endpoints before the free
+> readiness query and budget path. A sandboxed diagnostic had one unresolved
+> embedding reservation, zero observed spend and no case verdict; sandboxed
+> TCP was unavailable while the unsandboxed route was reachable. The closed
+> `local_provider_egress_unavailable` refusal prevents the same local
+> configuration from opening a new budget. This does not settle the historical
+> attempt or establish cloud-backend egress or a paid golden pass.
+
 > Last verified: 2026-09-28 — the golden runner binds its quiet-window settlement read to the
 > opened budget and refuses malformed count/cost snapshots. This is an offline evidence-integrity
 > guard, not a live model verdict; the named non-production target remains unavailable.
