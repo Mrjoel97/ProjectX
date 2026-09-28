@@ -1,5 +1,16 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-28 — `web-form-retention` still starts hourly, but an
+> expired backlog now schedules the next 100-row `cleanupAll` batch after one
+> second in the same transaction as the preceding deletes. A 101-expired-row,
+> two-tenant test proves the first batch arms exactly one continuation; the
+> terminal batch arms no new continuation and leaves a live row untouched.
+> This improves backlog drain while keeping each mutation bounded. It is not
+> live scheduler/throughput proof or an exact 24-hour deletion guarantee; the
+> hourly cron remains the recovery trigger if a continuation fails. Verify
+> production ingress, scheduler completion and expiry lag before claiming an
+> operational retention SLA.
+>
 > Last verified: 2026-09-28 — the Phase 49 disposable runner has a terminal-only,
 > 20-minute-bounded `--interactive` mode for CLI-driven local browser review. It uses the
 > same loopback backend, production web build, in-stack audit and owned-root cleanup as

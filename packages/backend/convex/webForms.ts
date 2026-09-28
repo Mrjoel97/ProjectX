@@ -266,8 +266,8 @@ export const cleanup = internalMutation({
 });
 
 /** Scheduled retention sweep. The global expiry index selects the oldest expired rows across
- * tenants, so one mutation has a fixed read/write ceiling and no tenant is starved by project
- * ordering. A backlog is visible in the result and drains over subsequent hourly ticks. */
+ * tenants. Each transaction is bounded; an expired backlog arms another bounded batch instead
+ * of waiting for the next hourly tick. The hourly cron remains the recovery trigger. */
 export const cleanupAll = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -277,6 +277,9 @@ export const cleanupAll = internalMutation({
       .withIndex("by_expires_at", (q) => q.lt("expiresAt", now))
       .take(CLEANUP_BATCH_SIZE + 1);
     for (const row of page.slice(0, CLEANUP_BATCH_SIZE)) await ctx.db.delete(row._id);
+    if (page.length > CLEANUP_BATCH_SIZE) {
+      await ctx.scheduler.runAfter(1_000, internal.webForms.cleanupAll, {});
+    }
     return {
       deleted: Math.min(page.length, CLEANUP_BATCH_SIZE),
       hasMore: page.length > CLEANUP_BATCH_SIZE,

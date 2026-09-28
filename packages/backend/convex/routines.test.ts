@@ -272,8 +272,8 @@ const CONVEX_MODULES = [
 // loop MUST reach for `ctx.scheduler`. Every construction that defeated round 3 did.
 //
 // These lists are the answer to "who may schedule work at all". Each file below schedules a
-// FOLLOW-UP STEP of a run the user started: a poll for a media job, a watchdog timeout, the next
-// page of a folder walk. None re-arms itself on a cadence.
+// bounded FOLLOW-UP STEP of a run or system cleanup: a media poll, watchdog, next folder page,
+// or another expired-form deletion page. None re-arms itself on a routine cadence.
 const SCHEDULER_CALL_SITES = [
   "billingRollup.ts",
   "cockpit.ts",
@@ -305,6 +305,9 @@ const SCHEDULER_CALL_SITES = [
   "vaultDrive.ts",
   "vaultFolders.ts",
   "voice.ts",
+  // Phase 48 form retention: one more 100-row page only when the global expiry index proves
+  // backlog remains. The hourly system cron starts/restarts cleanup; no tenant routine is armed.
+  "webForms.ts",
 ];
 const CRON_REGISTRARS = ["crons.ts"];
 

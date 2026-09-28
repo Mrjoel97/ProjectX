@@ -1,5 +1,14 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — the closed `SCHEDULER_CALL_SITES` set now names
+> `webForms.ts`. Its sole new schedule is a one-second continuation only when
+> the global form-expiry index returns more than 100 expired rows; the hourly
+> `web-form-retention` system cron remains the recovery entry. The focused
+> routines, form and reliability suites passed 42/42. This is bounded system
+> cleanup, not a tenant-authored routine, cadence rule or `enable-safe` change.
+> Operational recurrence remains `defer` under the existing six-file isolated
+> candidate boundary.
+>
 > Last verified: 2026-09-28 — two red-before-green candidate controls found
 > unsafe-number overflow in approval versions, scan ordinals and sweep epochs.
 > One checked increment now refuses both version changes, both ordinal counters

@@ -269,6 +269,9 @@ describe("Phase 48 anonymous form integration", () => {
       deleted: 100,
       hasMore: true,
     });
+    const scheduled = await h.t.run((ctx) => ctx.db.system.query("_scheduled_functions").take(5));
+    expect(scheduled).toHaveLength(1);
+    expect(scheduled[0]?.name).toContain("webForms:cleanupAll");
     let remaining = await h.t.run((ctx) => ctx.db.query("webSubmissions").collect());
     expect(remaining).toHaveLength(2);
     expect(remaining.map((row) => row.idempotencyKeyHash).sort()).toEqual(["expired-100", "live"]);
@@ -277,11 +280,17 @@ describe("Phase 48 anonymous form integration", () => {
       deleted: 1,
       hasMore: false,
     });
+    expect(
+      await h.t.run((ctx) => ctx.db.system.query("_scheduled_functions").take(5)),
+    ).toHaveLength(1);
     remaining = await h.t.run((ctx) => ctx.db.query("webSubmissions").collect());
     expect(remaining.map((row) => row.idempotencyKeyHash)).toEqual(["live"]);
 
     const cleanupSource = SOURCE.slice(SOURCE.indexOf("export const cleanupAll"));
     expect(cleanupSource).toContain('withIndex("by_expires_at"');
+    expect(cleanupSource).toContain(
+      "ctx.scheduler.runAfter(1_000, internal.webForms.cleanupAll, {})",
+    );
     expect(cleanupSource).not.toContain('query("webProjects")');
     expect(cleanupSource).not.toContain(".collect()");
   });
