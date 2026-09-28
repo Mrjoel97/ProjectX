@@ -165,6 +165,88 @@ function rails({ dailySpendCents = 0, deploymentSpendCents = 0, accept = true } 
 }
 
 describe("disabled recurrence candidate: actual convex-test transactions", () => {
+  it("refuses approval-version overflow before pause or material change", async () => {
+    for (const transition of ["pause", "change"] as const) {
+      const { tx } = harness();
+      const { id } = await approved(tx);
+      await tx((db) => db.patch(id, { version: Number.MAX_SAFE_INTEGER }));
+      const before = await tx((db) => db.get(id));
+      await expect(
+        tx(async (db) => {
+          if (transition === "pause") await pauseCandidate(db, tenant, id);
+          else await changeCandidate(db, tenant, id, { ...base, promptVersion: 2 }, t0 + 1);
+        }),
+      ).rejects.toThrow("candidate: counter exhausted");
+      expect(await tx((db) => db.get(id))).toEqual(before);
+    }
+  });
+
+  it("refuses ordinal and sweep-epoch overflow without persisting a partial claim", async () => {
+    const { tx } = harness();
+    const { id, routine, key } = await approved(tx);
+    const otherRoutine = await approved(tx, base, t0, other);
+    const otherProgress = await tx((db) =>
+      db
+        .query("candidateSweepProgress")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", other))
+        .unique(),
+    );
+    if (!otherProgress) throw new Error("test setup: other progress absent");
+    await tx((db) => db.patch(otherProgress._id, { routineOrdinal: Number.MAX_SAFE_INTEGER }));
+    await expect(tx((db) => createCandidate(db, other, base, t0))).rejects.toThrow(
+      "candidate: counter exhausted",
+    );
+    expect(
+      await tx((db) =>
+        db
+          .query("candidateRoutines")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", other))
+          .take(2),
+      ),
+    ).toHaveLength(1);
+    expect((await tx((db) => db.get(otherRoutine.id)))?.scanOrdinal).toBe(1);
+    const progress = await tx((db) =>
+      db
+        .query("candidateSweepProgress")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenant))
+        .unique(),
+    );
+    if (!progress) throw new Error("test setup: progress absent");
+    await tx((db) => db.patch(progress._id, { runOrdinal: Number.MAX_SAFE_INTEGER }));
+    await expect(
+      tx((db) => claimTick(db, tenant, id, key, routine.version, routine.nextDueUtcMs)),
+    ).rejects.toThrow("candidate: counter exhausted");
+    expect((await tx((db) => db.get(id)))?.lastOccurrenceKey).toBeUndefined();
+    expect(
+      await tx((db) =>
+        db
+          .query("candidateRuns")
+          .withIndex("by_tenant_routine", (q) => q.eq("tenantId", tenant).eq("routineId", id))
+          .take(1),
+      ),
+    ).toHaveLength(0);
+    await tx((db) =>
+      db.patch(progress._id, { due: { cursor: 0, highWater: 0, epoch: Number.MAX_SAFE_INTEGER } }),
+    );
+    await expect(syntheticDueSweep(tx, tenant, routine.nextDueUtcMs, 1)).rejects.toThrow(
+      "candidate: counter exhausted",
+    );
+    expect((await tx((db) => db.get(progress._id)))?.due).toEqual({
+      cursor: 0,
+      highWater: 0,
+      epoch: Number.MAX_SAFE_INTEGER,
+    });
+    await tx((db) =>
+      db.patch(progress._id, {
+        recovery: { cursor: 0, highWater: 0, epoch: Number.MAX_SAFE_INTEGER },
+      }),
+    );
+    await expect(syntheticReconciliationSweep(tx, tenant, rails(), 1)).rejects.toThrow(
+      "candidate: counter exhausted",
+    );
+    expect((await tx((db) => db.get(progress._id)))?.recovery.epoch).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
   it("rejects malformed schedule writes before they can poison a due sweep", async () => {
     const { tx } = harness();
     for (const invalid of [

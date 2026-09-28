@@ -1,5 +1,13 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — two red-before-green candidate controls found
+> unsafe-number overflow in approval versions, scan ordinals and sweep epochs.
+> One checked increment now refuses both version changes, both ordinal counters
+> and both sweep lanes before persisting a rounded fence/cursor; the isolated
+> candidate passes 43/43 and candidate TypeScript passes. Current hashes are
+> pinned in the Phase 47 source audit, but independent current-source review,
+> real spend rails, deployed sweep/recovery, D6 and operational release remain open.
+
 > Last verified: 2026-09-28 — the disabled recurrence candidate's synthetic rail
 > fixture now tracks tenant-daily and shared-deployment held balances separately.
 > Two new exact-ceiling/cross-tenant controls failed on the old shared counter;

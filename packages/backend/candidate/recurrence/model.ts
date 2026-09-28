@@ -22,6 +22,12 @@ export const DEPLOYMENT_SPEND_CENTS = 500;
 export const SWEEP_PAGE_LIMIT = 16;
 const CADENCE_HORIZON_MS = 15 * 24 * 60 * 60_000;
 
+function nextCounter(value: number) {
+  if (!Number.isSafeInteger(value) || value < 0 || value === Number.MAX_SAFE_INTEGER)
+    throw new Error("candidate: counter exhausted");
+  return value + 1;
+}
+
 export type Material = Pick<
   Routine,
   "promptVersion" | "promptHash" | "recipients" | "accountRef" | "envelopeCents" | "rule"
@@ -107,7 +113,7 @@ async function progressFor(db: CandidateDb, tenantId: string): Promise<Progress>
 async function nextOrdinal(db: CandidateDb, tenantId: string, kind: "routine" | "run") {
   const progress = await progressFor(db, tenantId);
   const field = kind === "routine" ? "routineOrdinal" : "runOrdinal";
-  const ordinal = progress[field] + 1;
+  const ordinal = nextCounter(progress[field]);
   await db.patch(progress._id, { [field]: ordinal });
   return ordinal;
 }
@@ -179,7 +185,7 @@ export async function changeCandidate(
     ...(changed
       ? {
           status: "awaiting_approval" as const,
-          version: routine.version + 1,
+          version: nextCounter(routine.version),
           activatedAtUtcMs: undefined,
           lastOccurrenceKey: undefined,
         }
@@ -192,7 +198,7 @@ export async function changeCandidate(
 export async function pauseCandidate(db: CandidateDb, tenantId: string, routineId: RoutineId) {
   const routine = await db.get(routineId);
   assertTenant(routine, tenantId);
-  await db.patch(routineId, { status: "paused", version: routine.version + 1 });
+  await db.patch(routineId, { status: "paused", version: nextCounter(routine.version) });
   await stopUnstartedActiveRun(db, routine, "stopped_paused");
   // No pending per-routine scheduled function exists in this sweep-only candidate. D6 is open.
 }
@@ -705,7 +711,7 @@ async function sweepPass(db: CandidateDb, tenantId: string, lane: Lane) {
   const next = {
     cursor: 0,
     highWater: lane === "due" ? progress.routineOrdinal : progress.runOrdinal,
-    epoch: previous.epoch + 1,
+    epoch: nextCounter(previous.epoch),
   };
   await db.patch(progress._id, { [lane]: next });
   return next;
