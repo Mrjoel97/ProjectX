@@ -1585,13 +1585,13 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1790563909.9871385,
-    "ast_hash": "26a361f878e57b1192912e6e2b420e79",
+    "mtime": 1790565915.244249,
+    "ast_hash": "b53fa1617a151e1b7488b73f13ca7116",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
-    "mtime": 1790558640.5404003,
-    "ast_hash": "f92b97dbae91523ee58eceb35ebc1bc9",
+    "mtime": 1790565953.1073754,
+    "ast_hash": "0f0d0731ad9727589a647a75a86a5ad3",
     "semantic_hash": ""
   },
   "scripts/extract-convex-edges.mjs": {
@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1790563925.0405772,
-    "ast_hash": "90c78d36584fda1cc346154cf7b07a73",
+    "mtime": 1790565917.6012793,
+    "ast_hash": "cf9a3110cb374be19e1a3f3965a5beb5",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790563911.2013018,
-    "ast_hash": "24f7c7f542c0f5c2493d53ffd89dad02",
+    "mtime": 1790565916.4216545,
+    "ast_hash": "5a58e26a9b83f4ac48ee27f4ae6c6276",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -14520,8 +14520,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/public-web-runtime.md": {
-    "mtime": 1790521260.0390756,
-    "ast_hash": "21da5ac9a743bde95ebbfea6153a41f2",
+    "mtime": 1790565951.9109683,
+    "ast_hash": "f79f6a81f1b13a1b742d7946cc788ad4",
     "semantic_hash": ""
   },
   "docs/releases/phase-48-wave7-reentry.md": {
@@ -14555,8 +14555,8 @@
     "semantic_hash": ""
   },
   "apps/web/e2e/phase49-disposable-stack.mjs": {
-    "mtime": 1790471231.838913,
-    "ast_hash": "c08480e7d3949fffb6bd0d0fa75bfd4c",
+    "mtime": 1790565889.274845,
+    "ast_hash": "058cda513f2ecbe750fd526fb8db87e8",
     "semantic_hash": ""
   },
   "apps/web/e2e/phase49-recipe-qualification.spec.ts": {
@@ -14835,8 +14835,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-07-SUMMARY.md": {
-    "mtime": 1790548336.4184666,
-    "ast_hash": "c06b557baeff361b30ef75314ec4535f",
+    "mtime": 1790566701.6725266,
+    "ast_hash": "fe4297c6e7421f8c122e99c1f4b2ad11",
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-RESEARCH.md": {
@@ -14855,8 +14855,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/49-qualified-public-web-and-storefront-recipes/49-VERIFICATION.md": {
-    "mtime": 1790548335.2219596,
-    "ast_hash": "7ccfed5158951ea5dfe5a155380d63b1",
+    "mtime": 1790566700.4592214,
+    "ast_hash": "6db56897b6c85d56cc7a42c6cd727a3b",
     "semantic_hash": ""
   },
   "docs/agent-work/astra-routing-status.md": {
@@ -17117,6 +17117,16 @@
   "packages/backend/convex/verticalArtifactEdit.ts": {
     "mtime": 1790562876.8211088,
     "ast_hash": "f50be335d1b9f474851d5f49d302b56a",
+    "semantic_hash": ""
+  },
+  "apps/web/e2e/phase30-vertical-browser-fixture.mjs": {
+    "mtime": 1790567169.7563405,
+    "ast_hash": "aff94d78b0e0562ca21fc5d937074e3b",
+    "semantic_hash": ""
+  },
+  "docs/agent-work/phase30-vertical-edit-browser-2026-09-28.md": {
+    "mtime": 1790566901.5960505,
+    "ast_hash": "8ec9ee5a80468b06452865d1b89ece77",
     "semantic_hash": ""
   }
 }

@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import {
   assertOwnedRoot,
   concludeRun,
@@ -33,10 +34,11 @@ const specs = new Set([
   "e2e/phase49-web-recipes.spec.ts",
   "e2e/calendar-management.spec.ts",
 ]);
-const spec = process.argv[2] ?? "e2e/phase49-recipe-qualification.spec.ts";
+const interactive = process.argv[2] === "--interactive";
+const spec = interactive ? null : (process.argv[2] ?? "e2e/phase49-recipe-qualification.spec.ts");
 const calendarSpec = spec === "e2e/calendar-management.spec.ts";
-if (!specs.has(spec) || process.argv.length > 3)
-  throw new Error("Phase 49 disposable runner requires one allowlisted exact browser spec");
+if ((!interactive && !specs.has(spec)) || process.argv.length > 3)
+  throw new Error("Phase 49 disposable runner requires one allowlisted spec or --interactive");
 const cloud = 3410;
 const site = 3411;
 const app = 3112;
@@ -281,87 +283,103 @@ try {
   });
   webState = trackOwnedChild(web, "web");
   await waitHttp(`${appUrl}/signin`, async (response) => response.ok, "production web app");
-  const browserOutput = run(
-    calendarSpec ? "Calendar browser process" : "authenticated Phase 49 browser E2E",
-    process.execPath,
-    [
-      playwright,
-      "test",
-      spec,
-      "--project=chromium",
-      "--output",
-      join(root, "playwright-results"),
-      ...(calendarSpec ? ["--reporter=json"] : []),
-    ],
-    {
-      cwd: webDir,
-      timeout: 1_800_000,
-      env: env({
-        ...webEnv,
-        PIKAR_PHASE49_QUALIFICATION: "1",
-        PIKAR_PHASE49_DISPOSABLE: "1",
-        PIKAR_PHASE49_FIXTURE_CONFIG: config,
-        PIKAR_PHASE49_DISPOSABLE_ROOT: root,
-        PIKAR_PHASE49_BACKEND_URL: backendUrl,
-        ...(calendarSpec
-          ? {
-              PIKAR_PHASE17_DISPOSABLE: "1",
-              CONVEX_SELF_HOSTED_URL: backendUrl,
-              CONVEX_SELF_HOSTED_ADMIN_KEY: adminKey,
-            }
-          : {}),
-        ...(spec === "e2e/phase48-web-runtime.spec.ts"
-          ? {
-              PIKAR_PHASE48_DISPOSABLE: "1",
-              PIKAR_PHASE48_FIXTURE_CONFIG: config,
-              PIKAR_PHASE48_DISPOSABLE_ROOT: root,
-              PIKAR_PHASE48_PUBLIC_ORIGIN: siteUrl,
-            }
-          : {}),
-      }),
-    },
-  );
-  if (calendarSpec) {
-    let report;
+  if (interactive) {
+    // CLI-driven browser review can use the same owned loopback stack and cleanup path as the
+    // allowlisted specs. Only the root path is printed; its admin key and JWT never are.
+    if (!process.stdin.isTTY) throw new Error("interactive stack requires a terminal");
+    process.stdout.write(`Disposable browser ready: ${appUrl} root=${root}\n`);
+    const terminal = createInterface({ input: process.stdin, output: process.stdout });
     try {
-      report = JSON.parse(browserOutput);
-    } catch {
-      throw new Phase49LifecycleError("CALENDAR_REPORT_INVALID", "browser");
+      const answer = await terminal.question("Type stop to close the disposable stack: ", {
+        signal: AbortSignal.timeout(20 * 60_000),
+      });
+      if (answer.trim() !== "stop") throw new Error("interactive stack did not receive stop");
+    } finally {
+      terminal.close();
     }
-    const specs = [];
-    const visit = (suite) => {
-      specs.push(...(suite.specs ?? []));
-      for (const child of suite.suites ?? []) visit(child);
-    };
-    for (const suite of report.suites ?? []) visit(suite);
-    const only = specs[0]?.tests?.[0];
-    if (
-      specs.length !== 1 ||
-      specs[0].tests?.length !== 1 ||
-      only.projectName !== "chromium" ||
-      only.status !== "expected" ||
-      only.results?.length !== 1 ||
-      only.results[0].status !== "passed" ||
-      report.stats?.expected !== 1 ||
-      report.stats?.skipped !== 0 ||
-      report.stats?.unexpected !== 0 ||
-      !Number.isFinite(report.stats?.duration) ||
-      report.stats.duration < 0
-    )
-      throw new Phase49LifecycleError("CALENDAR_TEST_COUNT_INVALID", "browser");
-    process.stdout.write(
-      `Calendar isolated browser matrix: 1/1 passed, 0 skipped, durationMs=${report.stats.duration}\n`,
+  } else {
+    const browserOutput = run(
+      calendarSpec ? "Calendar browser process" : "authenticated Phase 49 browser E2E",
+      process.execPath,
+      [
+        playwright,
+        "test",
+        spec,
+        "--project=chromium",
+        "--output",
+        join(root, "playwright-results"),
+        ...(calendarSpec ? ["--reporter=json"] : []),
+      ],
+      {
+        cwd: webDir,
+        timeout: 1_800_000,
+        env: env({
+          ...webEnv,
+          PIKAR_PHASE49_QUALIFICATION: "1",
+          PIKAR_PHASE49_DISPOSABLE: "1",
+          PIKAR_PHASE49_FIXTURE_CONFIG: config,
+          PIKAR_PHASE49_DISPOSABLE_ROOT: root,
+          PIKAR_PHASE49_BACKEND_URL: backendUrl,
+          ...(calendarSpec
+            ? {
+                PIKAR_PHASE17_DISPOSABLE: "1",
+                CONVEX_SELF_HOSTED_URL: backendUrl,
+                CONVEX_SELF_HOSTED_ADMIN_KEY: adminKey,
+              }
+            : {}),
+          ...(spec === "e2e/phase48-web-runtime.spec.ts"
+            ? {
+                PIKAR_PHASE48_DISPOSABLE: "1",
+                PIKAR_PHASE48_FIXTURE_CONFIG: config,
+                PIKAR_PHASE48_DISPOSABLE_ROOT: root,
+                PIKAR_PHASE48_PUBLIC_ORIGIN: siteUrl,
+              }
+            : {}),
+        }),
+      },
     );
-  }
-  for (const line of browserOutput.split(/\r?\n/)) {
-    if (
-      /^Phase 49 isolated browser qualification: six exact candidate runs, three immutable v2 artifacts, three v1 post-rollback artifacts; refs [a-z0-9]+(?:,[a-z0-9]+){2}$/.test(
-        line,
-      ) ||
-      /^Phase 49 exact fixture rows cleaned: 6$/.test(line) ||
-      /^Phase 49 integrated browser matrix: /.test(line)
-    )
-      process.stdout.write(`${line}\n`);
+    if (calendarSpec) {
+      let report;
+      try {
+        report = JSON.parse(browserOutput);
+      } catch {
+        throw new Phase49LifecycleError("CALENDAR_REPORT_INVALID", "browser");
+      }
+      const specs = [];
+      const visit = (suite) => {
+        specs.push(...(suite.specs ?? []));
+        for (const child of suite.suites ?? []) visit(child);
+      };
+      for (const suite of report.suites ?? []) visit(suite);
+      const only = specs[0]?.tests?.[0];
+      if (
+        specs.length !== 1 ||
+        specs[0].tests?.length !== 1 ||
+        only.projectName !== "chromium" ||
+        only.status !== "expected" ||
+        only.results?.length !== 1 ||
+        only.results[0].status !== "passed" ||
+        report.stats?.expected !== 1 ||
+        report.stats?.skipped !== 0 ||
+        report.stats?.unexpected !== 0 ||
+        !Number.isFinite(report.stats?.duration) ||
+        report.stats.duration < 0
+      )
+        throw new Phase49LifecycleError("CALENDAR_TEST_COUNT_INVALID", "browser");
+      process.stdout.write(
+        `Calendar isolated browser matrix: 1/1 passed, 0 skipped, durationMs=${report.stats.duration}\n`,
+      );
+    }
+    for (const line of browserOutput.split(/\r?\n/)) {
+      if (
+        /^Phase 49 isolated browser qualification: six exact candidate runs, three immutable v2 artifacts, three v1 post-rollback artifacts; refs [a-z0-9]+(?:,[a-z0-9]+){2}$/.test(
+          line,
+        ) ||
+        /^Phase 49 exact fixture rows cleaned: 6$/.test(line) ||
+        /^Phase 49 integrated browser matrix: /.test(line)
+      )
+        process.stdout.write(`${line}\n`);
+    }
   }
   run(
     "Phase 49 isolated audit actual",

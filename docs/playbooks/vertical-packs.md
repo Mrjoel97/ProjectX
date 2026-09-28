@@ -12,6 +12,11 @@ while the action deletes its newly staged blob. The old-blob cleanup is not sile
 swallowed after a successful save.
 If the save response is lost, the UI does not infer rollback; it asks the reviewer to
 reopen the artifact and confirm its persisted state. A DOM regression pins this ambiguity.
+An authenticated disposable Chromium run on 2026-09-28 exercised the ordinary product
+artifact's long-form edit through the Output card. The PDF/status persisted across reload,
+and independent server readback found the exact edited text hash, stored PDF and one
+`review_edited` outcome. This is one synthetic local positive path, not hosted tenant UAT,
+cross-format qualification, exact-version semantic evaluation or activation.
 Focused backend and DOM tests pass. This is local runtime proof, not deployed browser UAT,
 semantic qualification, candidate approval, activation or delivery.
 

@@ -17,9 +17,14 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the 71-file digest below after the CI model-boundary dependency and evaluator repin. The prior `d87dc6088b176a5a8df6fa8dfcbb36272a353ddf2e384b4e2883433769dbd1dd` passed on its own source but is now historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates. The prior digest `e23ed020d37dcf9aa16ed7b9f62ee6f405fc486761abceb557d77f37caaebbcc` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `e23ed020d37dcf9aa16ed7b9f62ee6f405fc486761abceb557d77f37caaebbcc`
+Artifact-set SHA-256: `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd`
+
+The new terminal-held disposable mode enabled a synthetic authenticated Wave 4
+long-form edit browser walkthrough, with persisted PDF/status and independent
+tenant-bound readback. It does not replace the two existing Phase 49 browser specs;
+the exact 71-file aggregate passed on this digest. No hosted or production acceptance follows.
 
 The SDK-import boundary's 11 controls and real-tree scan pass as the 31st free gate. Its
 lockfile change retired and repinned the golden, native vertical and deterministic recipe

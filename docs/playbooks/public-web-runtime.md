@@ -1,5 +1,12 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-28 — the Phase 49 disposable runner has a terminal-only,
+> 20-minute-bounded `--interactive` mode for CLI-driven local browser review. It uses the
+> same loopback backend, production web build, in-stack audit and owned-root cleanup as
+> its allowlisted specs; it does not run or replace those qualification specs. A synthetic
+> Wave 4 edit walkthrough completed and cleanup removed its exact root. The runner source
+> changed, so Phase 49's prior 71-file aggregate identity is retired until requalified.
+>
 > Last verified: 2026-09-27 — the isolated Phase 49 integrated browser spec now waits for a
 > persisted signup JWT and confirms the authenticated backend owner flag before checking the
 > owner-only page. Its targeted fresh disposable stack, nine-project desktop/mobile matrix,

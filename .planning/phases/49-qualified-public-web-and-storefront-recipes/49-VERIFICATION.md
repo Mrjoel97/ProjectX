@@ -7,9 +7,18 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file source digest below after the CI model-boundary dependency and evaluator repin. The prior `d87dc6088b176a5a8df6fa8dfcbb36272a353ddf2e384b4e2883433769dbd1dd` passed on its former source and is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `e23ed020d37dcf9aa16ed7b9f62ee6f405fc486761abceb557d77f37caaebbcc` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `e23ed020d37dcf9aa16ed7b9f62ee6f405fc486761abceb557d77f37caaebbcc`
+Artifact-set SHA-256: `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd`
+
+**2026-09-28 interactive local-browser checkpoint:** The disposable runner now holds its
+owned loopback stack for terminal-driven Playwright CLI review, with a terminal guard,
+20-minute question timeout, and the same in-stack audit and owned-root cleanup. A
+synthetic Wave 4 long-form edit succeeded in a real authenticated browser, with PDF and
+status surviving reload and separate server readback. The browser run preceded the
+terminal/timeout hardening; it does not by itself requalify the changed runner source.
+The current 71-file aggregate passed all 21 planes on the digest above. This does not
+close Wave 7/8 or merchant commerce.
 
 **2026-09-28 SDK-boundary requalification:** An AST-based CI gate now refuses provider-SDK
 imports outside the two existing Convex model owners, with 11 source mutation/negative controls.

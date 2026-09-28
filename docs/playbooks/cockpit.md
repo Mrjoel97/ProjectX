@@ -6,6 +6,10 @@
 > rolls back the edit instead of leaving a purported success with an orphaned blob.
 > A generic lost save response is ambiguous: the UI asks the user to reopen the artifact
 > and verify the result, rather than asserting that the original remained unchanged.
+> A disposable authenticated Chromium walkthrough on 2026-09-28 saved a synthetic long-form
+> edit through this card; after reload, the status and inline PDF persisted. Server readback
+> matched the edited text hash, PDF storage presence and one refs-only `review_edited` event.
+> This is local isolated UAT, not hosted or production acceptance.
 > The control neither sends nor activates a pack. Focused UI/backend tests pass; an
 > authenticated deployed browser walkthrough remains open.
 >

@@ -163,3 +163,12 @@ original artifact was unchanged after every generic error. The UI now asks the r
 to reopen and verify the persisted result, since a lost response may follow a committed
 edit. The focused DOM suite passes 6/6 and web TypeScript exits 0. This is honest
 failure messaging, not browser UAT or a guarantee that the save committed.
+An isolated production-build/loopback Convex stack subsequently supported an actual
+authenticated Chromium CLI walkthrough. A synthetic invited tenant opened the Output
+card for an ordinary product artifact, observed the no-op Save disabled, edited and
+saved the long-form document, then reloaded. The browser retained the edited status and
+inline PDF; an independent tenant-bound server readback matched the edited text hash,
+PDF storage presence and exactly one `review_edited` audit outcome. The stack's isolated
+audit check passed and its exact owned temporary root was removed. This closes the
+previously absent *local positive browser path* only; hosted/deployed tenant UAT,
+negative browser paths, semantic qualification and activation remain open.

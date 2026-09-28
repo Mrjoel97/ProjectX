@@ -1,5 +1,10 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-28 — the disposable Phase 49 runner now supports a bounded
+> terminal-held browser session for synthetic local review. It does not alter skill
+> bodies, versions, activation or routing. Because this runner is in Phase 49's pinned
+> source set, its previous aggregate digest is stale until exact-source requalification.
+>
 > Last verified: 2026-09-28 — the Vault schema adds an optional content-revision marker
 > for agent-created document replacements. It does not alter skill versions, activation,
 > rollback, tool grants or model routing; vertical artifact review uses the marker only
