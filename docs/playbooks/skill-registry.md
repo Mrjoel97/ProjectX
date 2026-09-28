@@ -1,5 +1,12 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-29 — Phase 8 Nyquist revalidation added five offline
+> SkillOpt contract checks (one green, four red). The candidate/eval registry
+> seam remains tested, but the Python optimizer route is not operational proof:
+> pinned v0.2.0 adapter imports/call shape and workflow entrypoint mismatch,
+> while the hard reward copies historical feedback. Keep the optimizer disabled;
+> see `08-VALIDATION.md`. No live optimizer or provider call was run.
+>
 > Last verified: 2026-09-28 — the Data preview final-write guard changed
 > `vault.ts`, which is inside the source-derived golden evaluator identity.
 > The unchanged 46-case corpus is now pinned to
@@ -2607,6 +2614,12 @@ cached outputs.
 Phase 8 wires an **offline** prompt-optimization loop ON TOP of this registry. The registry's
 candidate→active gate is the load-bearing invariant it reuses — SkillOpt never bypasses it.
 
+**Current qualification (2026-09-29):** This is the intended design, not a proven operating loop.
+`skillopt/tests/test_skillopt_contract.py` demonstrates four red integration/scoring checks against the
+pinned package contract. The July dry run used a hand-edited candidate, so it proved steps 1–3 and
+5–7's seam but not step 4. Do not enable the kill switch or dispatch the workflow until the Python
+route, candidate-sensitive score, installed-package smoke and controlled end-to-end proof pass.
+
 **The loop (ships DORMANT):**
 
 1. **Feedback capture** (`convex/feedback.ts`, IMPR-01): a thumbs±comment on a delivered response
@@ -2618,10 +2631,11 @@ candidate→active gate is the load-bearing invariant it reuses — SkillOpt nev
 3. **Scrubbed export** (`convex/skilloptExport.ts` → `GET /skillopt/export`, bearer `SKILLOPT_TOKEN`):
    every text field runs through `packages/pii` `scanText`; only `safeText`+counts leave, fail-closed
    (a scan `Err` drops that trajectory). This is a SEPARATE export plane from the refs-only audit (§4).
-4. **SkillOpt CI batch** (`skillopt/`, `.github/workflows/skillopt.yml`, `skillopt==0.2.0`): reads
-   `optimizerConfig.enabled` FIRST and no-ops when dormant; otherwise runs rollout→reflect→edit→held-out
-   accept and emits `best_skill.md`. The optimizer NEVER sees the golden `eval-cases/` set — that
-   in-repo partition is the independent third gate.
+4. **SkillOpt CI batch (unqualified)** (`skillopt/`, `.github/workflows/skillopt.yml`, `skillopt==0.2.0`):
+   intends to read `optimizerConfig.enabled` first and no-op when dormant, then run
+   rollout→reflect→edit→held-out accept and emit `best_skill.md`. The current Python/CLI route cannot
+   establish that behavior and must remain disabled. The golden `eval-cases/` set is an independent
+   repository gate, not an export/train source.
 5. **Write-back → CANDIDATE** (`POST /skillopt/writeback` → `skills.insertCandidate`): the accepted body
    lands as a NEW `candidate` version (`maxVersion+1`), prior rows immutable. `insertCandidate` rejects a
    non-gated name (`NOT_GATED`) and is idempotent vs the newest row (identical body → `inserted:false`,

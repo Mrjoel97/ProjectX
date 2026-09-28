@@ -1,7 +1,7 @@
 ---
 phase: 8
 slug: self-improvement
-status: draft
+status: partial
 nyquist_compliant: false
 wave_0_complete: false
 created: 2026-07-21
@@ -43,17 +43,18 @@ Seeded at requirement level from research; the planner/executor expands to per-t
 
 | Req / Criterion | Observable proof | Test Type | Automated Command | Exists | Status |
 |-----------------|------------------|-----------|-------------------|--------|--------|
-| IMPR-01 capture | thumbs±comment insert → tenant-scoped `feedback` row keyed requestId+skillName+skillVersion; edit/undo mutates same row | unit | `pnpm --filter @pikar/backend test feedback` | ❌ W0 | ⬜ |
-| IMPR-01 attribution | `plans.skillVersion` set at propose; copied to `requests` at executePlan | unit | `pnpm --filter @pikar/backend test cockpit` | ❌ W0 | ⬜ |
-| IMPR-01 UI | control renders on delivered PlanCard/request row; BRAND-compliant + a11y | manual + offline E2E | dev UI walkthrough | ❌ W0 (manual) | ⬜ |
-| IMPR-02 trigger | breach query `eligible=true` only when negativeRate≥threshold AND count≥floor AND past cooldown; below floor → false | unit | `pnpm --filter @pikar/backend test optimizerEligibility` | ❌ W0 | ⬜ |
-| IMPR-02 export scrub | export emits only `safeText`+counts; seeded email/SSN/phone absent; scan error drops the trajectory | unit | `pnpm --filter @pikar/backend test skilloptExport` | ❌ W0 | ⬜ |
-| IMPR-02 write-back | POST inserts `status="candidate"`, `version=maxVer+1`, prior rows immutable; non-gated name rejected; idempotent | unit | `pnpm --filter @pikar/backend test skills` | ⚠ partial | ⬜ |
-| IMPR-02 eval gate | `eval:golden --skill cockpit-agent@N` green → evidence recorded; `activateSkill` refuses candidate w/o evidence | eval-fixture + unit | `pnpm eval:golden --skill cockpit-agent@N` | ✅ | ⬜ |
-| IMPR-02 kill switch | `optimizerConfig.enabled=false` → CI no-ops at step 1; ops toggle flips it | unit + manual | `pnpm --filter @pikar/backend test optimizerConfig` | ❌ W0 | ⬜ |
-| IMPR-02 rollback | `activateSkill(prior)` reactivates without an eval run (status-exempt) | unit | `pnpm --filter @pikar/backend test skills` | ✅ | ⬜ |
-| IMPR-03 versioning | each optimization = new candidate row (before=prior active, after=candidate); insert-only `audit` row carries refs/counts only (§4) | unit | `pnpm --filter @pikar/backend test skills audit` | ⚠ partial | ⬜ |
-| Proof-of-life | ONE manual cockpit-agent dry-run: export → SkillOpt → best_skill.md → write-back candidate → eval green → owner activate → active flips | manual dry-run | end-to-end, owner-verified | ❌ Wave 6 | ⬜ |
+| IMPR-01 capture | thumbs±comment insert → tenant-scoped `feedback` row; edit/undo mutates same row | unit | `pnpm --filter @pikar/backend test feedback` | ✅ | ✅ |
+| IMPR-01 attribution | `plans.skillVersion` set at propose; copied to `requests` at executePlan | unit | `pnpm --filter @pikar/backend test cockpit` | ✅ | ✅ historical; not rerun in this audit |
+| IMPR-01 UI | control renders on delivered response; BRAND-compliant + a11y | manual + offline E2E | dev UI walkthrough | ✅ historical owner dry-run | ⚠ manual-only |
+| IMPR-02 trigger | threshold, sample floor and cooldown gate | unit | `pnpm --filter @pikar/backend test optimizerEligibility`; `pnpm --filter @pikar/core test optimizerBreach` | ✅ | ✅ |
+| IMPR-02 export scrub | scrubbed train/valid trajectory export | unit | `pnpm --filter @pikar/backend test skilloptExport` | ✅ | ✅ |
+| IMPR-02 write-back | new gated candidate, immutable prior, idempotence | unit | `pnpm --filter @pikar/backend test skills` | ✅ | ✅ |
+| IMPR-02 Python optimizer contract | pinned v0.2.0 adapter, loader, config and installed entrypoint drive a candidate-sensitive training run | offline contract + installed-package smoke | `python -m unittest discover -s skillopt/tests -p 'test_*.py' -v` | ✅ new regression | ❌ 4 red, 1 green; installed-package smoke owed |
+| IMPR-02 eval gate | candidate activation requires passing evidence | unit + live-model eval | `pnpm --filter @pikar/backend test skills`; `pnpm --filter @pikar/backend eval:golden --skill cockpit-agent@N` | ✅ | ⚠ unit green; live candidate eval not rerun |
+| IMPR-02 kill switch | default off; CI refuses unreadable gate | unit + workflow review | `pnpm --filter @pikar/backend test optimizerConfig` | ✅ | ✅ unit; live CI no-op not rerun |
+| IMPR-02 rollback | prior active version can be restored | unit | `pnpm --filter @pikar/backend test skills` | ✅ | ✅ |
+| IMPR-03 versioning | candidate and audit preserve before/after version and trigger evidence | unit | `pnpm --filter @pikar/backend test skills` | ✅ | ✅ |
+| Proof-of-life | export → actual SkillOpt optimizer → best_skill.md → candidate → eval → owner activation | manual dry-run | end-to-end, owner-verified | ⚠ hand-edited candidate seam only | ❌ actual optimizer never run |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -104,4 +105,14 @@ Three disjoint sets — the partition **is** the "optimizer never sees it" guara
 - [ ] Feedback latency < 15s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** partial; IMPR-02 optimizer proof is not accepted for activation.
+
+## Validation Audit 2026-09-29
+
+| Metric | Count |
+|--------|-------|
+| New optimizer-contract gaps | 2 |
+| Resolved | 0 |
+| Escalated implementation gaps | 2 |
+
+The five new offline checks in `skillopt/tests/test_skillopt_contract.py` return one pass and four failures. The pinned v0.2.0 base classes are not imported, its positional rollout call is rejected, the workflow calls a nonexistent repository script rather than the installed optimizer entrypoint, and the hard reward copies historical feedback even when the observed candidate outcome changes. A hand-edited candidate proved the Convex write-back/eval seam in July, not the Python optimizer. Keep `optimizerConfig.enabled=false`; do not dispatch the optimizer, activate its output, or claim IMPR-02 complete until the contract is repaired, an installed-package smoke passes, candidate-sensitive scoring is demonstrated, and the controlled end-to-end proof is reviewed. This audit preserves the July report as historical evidence while superseding its full-loop conclusion.

@@ -123,7 +123,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Knowledge Vault & GraphRAG** - Briefs/docs stored, embedded, graph-extracted, and grounded via hybrid retrieval per user (7/7 plans, live in-browser verified + P0 embed fix 2026-07-14)
 - [x] **Phase 6: Live Voice Sessions** (VOIC-01..04 live human-verified 2026-07-21) - 15-min bidirectional voice with server watchdog â durable brief â optional executable plan
 - [x] **Phase 7: Resilience & Operations Hardening** (AGNT-04/REVW-02/REVW-03/OPSG-03/OPSG-05; owner-approved 2026-07-21 — live smokes green + OPSG-05 email & in-app matrix owner live-verified; real-S3 Object-Lock durability owner-deferred) - Timeouts, retry escalation, notifications, dead-letter completeness, WORM archival export
-- [x] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch (completed 2026-07-23)
+- [ ] **Phase 8: Self-Improvement** - Feedback capture â eval-gated autonomous prompt optimization with versioning + rollback + kill switch (reopened 2026-09-29: pinned optimizer route/scoring gap; disabled)
 - [~] **Phase 9: Private Beta Productionization** - **SUPERSEDED (2026-07-24) -> absorbed into Phase 25.** Productionization moves to the END of milestone v2.0 (executes LAST, after all Phase 10+ platform work). `09-CONTEXT.md` remains the spec for that final phase.
 
 ### Phase 26: Connected product pages
@@ -1144,6 +1144,8 @@ Plans:
 - [x] 07-06-PLAN.md — Phase close: full offline sweep + fail-closed grep-proofs + live smokes (worm/pipeline/dlq) + owner human-verify of the notification matrix + SC#4-partial record (Wave 4) — 6/6 COMPLETE, owner-approved 2026-07-21. Offline sweep green (core 145/145, backend 398/399 sole documented red, check-playbooks 0); four fail-closed grep-proofs hold; runnable live smokes PASSED on :3210 (worm stub, pipeline 3 terminals, dlq); SC#4-partial recorded. Two cloud-infra-only checks (real S3 Object-Lock durability, real external email delivery) owner-DEFERRED as Manual-Only (3.8/6 precedent — not silent gaps). Commits c7da38b, 2ffa989, 02e8c2b. Orchestrator to run gsd-verifier + phase-complete next.
 
 ### Phase 8: Self-Improvement
+**Revalidation 2026-09-29:** Feedback, breach, scrubbed export, candidate registry, gate, rollback and kill-switch tests remain green; IMPR-02's Python optimizer route is not proven. The pinned v0.2.0 adapter/CLI contract and candidate-sensitive hard reward fail the new offline tests in `skillopt/tests/test_skillopt_contract.py`. `08-08`'s hand-edited-candidate dry run proves the Convex seam only. Keep the optimizer disabled until repaired and reverified; see `08-VALIDATION.md`.
+
 **Goal**: The system learns from real feedback and improves its own skills (versioned agent skill documents, optimized via the SkillOpt sidecar's held-out-validation loop â see research/SKILLOPT.md) under automated evaluation guardrails with instant rollback â sequenced last because the loop is meaningless until review/feedback data has accumulated.
 **Depends on**: Phase 7 (needs delivered-response feedback and a stable pipeline)
 **Requirements**: IMPR-01, IMPR-02, IMPR-03
@@ -1788,7 +1790,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 5. Knowledge Vault & GraphRAG | 7/7 | Complete (repository-controlled) — current offline Vault suites pass; the superseding Phase 15.4 UI is owner/browser-approved; one exact current-release `smoke:vault` provider re-entry is packeted for Wave 7 | - |
 | 6. Live Voice Sessions | 8/8 | Complete (VOIC-01..04 live human-verified) | 2026-07-21 |
 | 7. Resilience & Operations Hardening | 6/6 | Complete (owner-approved; email + in-app matrix live-verified; real-S3 durability owner-deferred) | 2026-07-21 |
-| 8. Self-Improvement | 8/8 | Complete    | 2026-07-23 |
+| 8. Self-Improvement | 8/8 executed | Reopened — IMPR-02 gap | 2026-09-29 |
 | 9. Private Beta Productionization | 0/0 | Superseded — re-scoped into Phase 25 (and 25.1–25.3); the directory is empty | - |
 | 10. Vault->Agent Grounding | 4/4 | Complete    | 2026-07-24 |
 | 11. Persona Onboarding & Business Profile | 4/4 | Complete    | 2026-07-24 |
