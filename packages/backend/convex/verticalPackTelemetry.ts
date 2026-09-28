@@ -2,6 +2,7 @@
 import { VERTICAL_IDS, verticalSkillName } from "@pikar/core/verticalPacks";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation, type QueryCtx } from "./_generated/server";
 import { tenantQuery } from "./lib/functions";
 
@@ -107,7 +108,7 @@ export const record = internalMutation({
       }
       // A review observation must answer a real artifact from this exact native candidate.
       // If its origin fell outside the bounded history, omit the metric rather than guessing.
-      const history = await verticalEventsFor(ctx, args.tenantId);
+      const history = await verticalCandidateEventsFor(ctx, args.tenantId, args.candidateId);
       if (
         !history.rows.some(
           (event) =>
@@ -128,7 +129,7 @@ export const record = internalMutation({
     if (args.event === "artifact_created" && args.artifactId) {
       // A second distinct ordinary artifact on the same exact version is repeat use. Preview
       // artifacts, a different candidate version and replay of the same artifact do not count.
-      const history = await verticalEventsFor(ctx, args.tenantId);
+      const history = await verticalCandidateEventsFor(ctx, args.tenantId, args.candidateId);
       const created = history.rows.filter(
         (event) =>
           event.payload?.event === "artifact_created" &&
@@ -186,6 +187,26 @@ export async function verticalEventsFor(ctx: QueryCtx, tenantId: string) {
     .order("desc")
     .take(VERTICAL_EVENT_LIMIT + 1);
   return { rows: rows.slice(0, VERTICAL_EVENT_LIMIT), partial: rows.length > VERTICAL_EVENT_LIMIT };
+}
+
+async function verticalCandidateEventsFor(
+  ctx: QueryCtx,
+  tenantId: string,
+  candidateId: Id<"tenantSkills"> | Id<"skills">,
+) {
+  // Keep origin and repeat checks bounded to the exact candidate. Other candidates' activity
+  // must not evict this candidate's provenance from the tenant-wide display sample.
+  const rows = await ctx.db
+    .query("audit")
+    .withIndex("by_correlation", (q) => q.eq("correlationId", String(candidateId)))
+    .order("desc")
+    .take(VERTICAL_EVENT_LIMIT + 1);
+  return {
+    rows: rows
+      .slice(0, VERTICAL_EVENT_LIMIT)
+      .filter((row) => row.tenantId === tenantId && row.eventType === VERTICAL_EVENT_TYPE),
+    partial: rows.length > VERTICAL_EVENT_LIMIT,
+  };
 }
 
 export const summary = tenantQuery({

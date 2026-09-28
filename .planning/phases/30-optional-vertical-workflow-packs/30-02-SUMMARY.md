@@ -10,13 +10,24 @@ date: 2026-09-10
 
 ## 2026-09-28 derived repeat-use telemetry
 
+The provenance/repeat lookup now uses the existing exact-candidate audit
+correlation index rather than the tenant-wide display sample. A red-before-
+green control proved 201 newer events from another candidate could previously
+evict a valid origin and refuse human review; after the change, review and a
+second-artifact repeat event both survive that noise. The lookup remains
+bounded to 200 candidate-correlated rows, so older same-candidate activity
+can still undercount or refuse. Four focused suites pass 35/35, backend
+TypeScript and formatter checks pass. This improves local evidence fidelity,
+not live usage, semantic qualification, activation or VERT closure.
+
 The internal writer now emits a refs-only `repeat_use` audit event when a second
 distinct ordinary-run artifact is recorded for the same tenant and exact native
 candidate. It refuses direct writes of that derived event and excludes preview
 artifacts, another version, same-artifact replay and foreign artifacts. Four
 focused vertical suites pass 34/34; backend TypeScript, the six-lane/40-case
 native corpus check, strict planning/playbook checks and all 34 free gates pass.
-The lookup is limited to the latest 200 events and may undercount older demand.
+The lookup is limited to the latest 200 candidate-correlated events and may
+undercount older demand.
 No live tenant use, semantic evaluation, UAT, activation or release is inferred;
 Plan 30-02 and VERT-01/02 remain partial/open.
 

@@ -207,6 +207,76 @@ test("repeat use is derived only from a second distinct ordinary artifact on one
   expect(JSON.stringify(rows)).not.toContain("Synthetic draft");
 });
 
+test("another candidate's events cannot evict exact-candidate artifact provenance", async () => {
+  const t = convexTest(schema, modules);
+  t.registerComponent("auditCounts", aggregateSchema, aggregateModules);
+  const { candidateId, firstId, secondId } = await t.run(async (ctx) => {
+    const candidateId = await ctx.db.insert("tenantSkills", {
+      tenantId: "a",
+      name: verticalSkillName("product"),
+      version: 1,
+      status: "candidate",
+      rollbackEligible: false,
+      body: "Synthetic candidate",
+      authoredBody: "",
+      author: "system",
+      basedOnScope: "global",
+      basedOnName: verticalSkillName("product"),
+      basedOnVersion: 1,
+      createdAt: 1,
+    });
+    const document = {
+      tenantId: "a",
+      title: "Synthetic draft",
+      kind: "document" as const,
+      category: "workspace-docs" as const,
+      source: "agent" as const,
+      mimeType: "text/markdown",
+      size: 12,
+      contentHash: "synthetic",
+      text: "Synthetic draft",
+      status: "ready" as const,
+      createdAt: 1,
+    };
+    const firstId = await ctx.db.insert("vaultDocuments", document);
+    const secondId = await ctx.db.insert("vaultDocuments", document);
+    return { candidateId, firstId, secondId };
+  });
+  const base = { tenantId: "a", verticalId: "product" as const, candidateId };
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "artifact_created",
+    artifactId: firstId,
+  });
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 201; i++)
+      await ctx.db.insert("audit", {
+        tenantId: "a",
+        correlationId: "other-candidate",
+        eventType: "vertical_pack.outcome",
+        actor: "system",
+        ts: Date.now() + 1_000_000 + i,
+        payload: { event: "blocked", verticalId: "product" },
+      });
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "review_approved",
+    actor: "user",
+    artifactId: firstId,
+  });
+  await t.mutation(internal.verticalPackTelemetry.record, {
+    ...base,
+    event: "artifact_created",
+    artifactId: secondId,
+  });
+  const rows = await t.run((ctx) => ctx.db.query("audit").collect());
+  expect(rows.filter((row) => row.payload?.event === "repeat_use")).toMatchObject([
+    { payload: { candidateId, artifactId: secondId } },
+  ]);
+  expect(rows.filter((row) => row.payload?.event === "review_approved")).toHaveLength(1);
+});
+
 test("review observations require an owned artifact created by the exact native candidate", async () => {
   const t = convexTest(schema, modules);
   t.registerComponent("auditCounts", aggregateSchema, aggregateModules);

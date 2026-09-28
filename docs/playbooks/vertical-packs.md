@@ -1,12 +1,24 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — review-origin and derived repeat-use checks now
+read at most 200 audit rows correlated to the exact native candidate, then
+require the same tenant and vertical event type. A red-before-green control
+inserted 201 newer events for another candidate: the old tenant-wide sample
+lost a valid artifact origin, while the candidate-indexed lookup preserves
+both its user review and second-artifact repeat signal. The public summary
+remains a separate bounded tenant-wide sample. More than 200 events for the
+same candidate can still cause conservative undercount/refusal; no durable
+all-time uniqueness or live usage claim follows. Four focused suites pass
+35/35 and backend TypeScript and source formatting pass.
+
 Last verified: 2026-09-28 — `repeat_use` is now derived by the refs-only
 telemetry writer when a second distinct ordinary-run artifact is recorded for
 the same tenant and exact native candidate. Previews, another candidate
 version, replay of the same artifact, foreign artifacts and direct attempts to
 write a repeat event do not count. The focused telemetry/binding suites pass
 18/18 and backend TypeScript passes. The lookup is bounded to the latest 200
-vertical events, so it can conservatively undercount older repeat demand; this
+candidate-correlated audit rows, so it can conservatively undercount older
+repeat demand; this
 is not live tenant usage, semantic acceptance, model-eval or pack activation.
 
 Last verified: 2026-09-28 — the shared Convex smoke/evaluation runner now
