@@ -18994,18 +18994,21 @@
         "PIPE-01"
       ],
       "historical_state": "semantic_open_summary",
-      "current_disposition": "open",
-      "implemented": "partial",
-      "offline_tested": "unknown",
+      "current_disposition": "closed",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
         "implemented": [
-          ".planning/phases/19-contacts-crm-follow-ups/19-01-SUMMARY.md"
+          ".planning/phases/19-contacts-crm-follow-ups/19-01-SUMMARY.md",
+          ".planning/phases/19-contacts-crm-follow-ups/19-01-02-CURRENT-SOURCE-RECHECK-2026-09-29.md"
         ],
-        "offline_tested": [],
+        "offline_tested": [
+          ".planning/phases/19-contacts-crm-follow-ups/19-01-02-CURRENT-SOURCE-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -19014,11 +19017,12 @@
           ".planning/phases/19-contacts-crm-follow-ups/19-01-PLAN.md",
           ".planning/phases/19-contacts-crm-follow-ups/19-01-SUMMARY.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/19-contacts-crm-follow-ups/19-01-02-CURRENT-SOURCE-RECHECK-2026-09-29.md"
+        ],
         "owner_decision": []
       },
       "missing_proof": {
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -19035,13 +19039,8 @@
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
-      "unmet_acceptance": [
-        "VALIDATION rows 2 and 3 are green. All four functions exported from the barrel; `pnpm --filter @pikar/core test -- contacts` passes with the boundary cases above; `renderFooter` throws on an empty address."
-      ],
-      "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
-      ],
+      "unmet_acceptance": [],
+      "remaining_work_classes": [],
       "closure_wave": 2,
       "owner_phase": "Phase 19",
       "dependencies": [
@@ -19068,18 +19067,21 @@
         "PIPE-01"
       ],
       "historical_state": "semantic_open_summary",
-      "current_disposition": "open",
-      "implemented": "partial",
-      "offline_tested": "unknown",
+      "current_disposition": "closed",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
         "implemented": [
-          ".planning/phases/19-contacts-crm-follow-ups/19-02-SUMMARY.md"
+          ".planning/phases/19-contacts-crm-follow-ups/19-02-SUMMARY.md",
+          ".planning/phases/19-contacts-crm-follow-ups/19-01-02-CURRENT-SOURCE-RECHECK-2026-09-29.md"
         ],
-        "offline_tested": [],
+        "offline_tested": [
+          ".planning/phases/19-contacts-crm-follow-ups/19-01-02-CURRENT-SOURCE-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -19088,11 +19090,12 @@
           ".planning/phases/19-contacts-crm-follow-ups/19-02-PLAN.md",
           ".planning/phases/19-contacts-crm-follow-ups/19-02-SUMMARY.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/19-contacts-crm-follow-ups/19-01-02-CURRENT-SOURCE-RECHECK-2026-09-29.md"
+        ],
         "owner_decision": []
       },
       "missing_proof": {
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -19109,13 +19112,8 @@
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
-      "unmet_acceptance": [
-        "Every public function goes through `tenantQuery`/`tenantMutation`; `importGuard.test.ts` stays green; `unsuppress` refuses without `acknowledged: true`; `isSuppressed` handles the comma-joined group string; `resolveUnsubToken` returns `null` with the env unset."
-      ],
-      "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
-      ],
+      "unmet_acceptance": [],
+      "remaining_work_classes": [],
       "closure_wave": 2,
       "owner_phase": "Phase 19",
       "dependencies": [
@@ -19657,18 +19655,21 @@
       ],
       "requirement_ids": [],
       "historical_state": "semantic_open_summary",
-      "current_disposition": "open",
-      "implemented": "partial",
-      "offline_tested": "unknown",
+      "current_disposition": "closed",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
         "implemented": [
-          ".planning/phases/19-contacts-crm-follow-ups/19-13-SUMMARY.md"
+          ".planning/phases/19-contacts-crm-follow-ups/19-13-SUMMARY.md",
+          ".planning/phases/19-contacts-crm-follow-ups/19-13-CURRENT-SOURCE-RECHECK-2026-09-29.md"
         ],
-        "offline_tested": [],
+        "offline_tested": [
+          ".planning/phases/19-contacts-crm-follow-ups/19-13-CURRENT-SOURCE-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -19677,11 +19678,12 @@
           ".planning/phases/19-contacts-crm-follow-ups/19-13-PLAN.md",
           ".planning/phases/19-contacts-crm-follow-ups/19-13-SUMMARY.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/19-contacts-crm-follow-ups/19-13-CURRENT-SOURCE-RECHECK-2026-09-29.md"
+        ],
         "owner_decision": []
       },
       "missing_proof": {
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -19698,13 +19700,8 @@
         "open_requirement_ids": [],
         "semantic_partial_requirement_ids": []
       },
-      "unmet_acceptance": [
-        "The public query returns the complete stored consent record only to its owning tenant, remains point-bounded and audit-free, and all focused backend tests/typecheck pass."
-      ],
-      "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
-      ],
+      "unmet_acceptance": [],
+      "remaining_work_classes": [],
       "closure_wave": 2,
       "owner_phase": "Phase 19",
       "dependencies": [
