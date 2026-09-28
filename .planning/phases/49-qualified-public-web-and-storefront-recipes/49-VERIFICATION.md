@@ -11,7 +11,7 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 Artifact-set SHA-256: `5f5446ecf82da01f9c6178cf250778b247da08fb31e87c69c57b1a2162645c8b`
 
-The prior code-bearing `ba74395` [CI run 36436062524](https://github.com/Mrjoel97/ProjectX/actions/runs/36436062524) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. It certifies only the retired digest, not the current changed artifact bytes, deployment or founder acceptance.
+The current code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. This certifies the pinned repository bytes, not deployment or founder acceptance.
 
 **2026-09-28 local provider-egress requalification:** A filtered golden diagnostic
 stopped with an unresolved first embedding reservation after sandboxed TCP/443
