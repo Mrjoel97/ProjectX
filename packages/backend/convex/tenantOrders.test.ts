@@ -821,6 +821,45 @@ describe("local tenant order adapter", () => {
     });
   });
 
+  test("cancellation after the deadline but before its callback records expiry, not refusal", async () => {
+    const t = harness();
+    const a = await setup(t, "cancel-after-deadline@example.test");
+    const placed = await a.actor.mutation(placeOrder, {
+      cartId: a.cart.cartId,
+      expectedCartRevision: 1,
+      retryKey: "cancel-after-deadline",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(placed.orderId as never, { expiresAt: 1 });
+      const hold = await ctx.db
+        .query("tenantReservations")
+        .withIndex("by_tenant_order", (q) =>
+          q.eq("tenantId", String(a.userId)).eq("orderId", placed.orderId as never),
+        )
+        .unique();
+      if (!hold) throw new Error("MISSING_HOLD");
+      await ctx.db.patch(hold._id, { expiresAt: 1 });
+    });
+    expect(await a.actor.mutation(cancelOrder, { orderId: placed.orderId })).toEqual({
+      status: "expired",
+    });
+    const after = await t.run(async (ctx) => ({
+      order: await ctx.db.get(placed.orderId as never),
+      attempt: await ctx.db.get(placed.attemptId as never),
+      hold: await ctx.db.query("tenantReservations").unique(),
+      stock: await ctx.db.query("tenantStock").unique(),
+    }));
+    expect(after.order).toMatchObject({ status: "expired" });
+    expect(after.attempt).toMatchObject({ status: "expired" });
+    expect(after.hold).toMatchObject({ status: "expired" });
+    expect(after.stock).toMatchObject({ reserved: 0, onHand: 2 });
+    await t.mutation(expireDue, { tenantId: String(a.userId), orderId: placed.orderId });
+    expect(await a.actor.mutation(cancelOrder, { orderId: placed.orderId })).toEqual({
+      status: "expired",
+    });
+    expect(await t.run((ctx) => ctx.db.query("tenantStock").unique())).toEqual(after.stock);
+  });
+
   test("cancellation refuses a reservation linked to the wrong snapshot product before releasing stock", async () => {
     const t = harness();
     const a = await setup(t, "wrong-hold@example.test");

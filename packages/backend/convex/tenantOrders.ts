@@ -728,10 +728,16 @@ export const cancelOrder = tenantMutation({
   handler: async (ctx, args) => {
     const order = await ctx.db.get(args.orderId);
     if (!order || order.tenantId !== ctx.tenantId) throw new Error("ORDER_UNAVAILABLE");
+    const now = Date.now();
+    // The hold deadline wins over a cancellation that races its scheduled
+    // callback; preserve the expired cause and attempt status in either order.
+    if (order.status === "pending" && now >= order.expiresAt) {
+      await expireOrderInTx(ctx, order, now);
+      return { status: "expired" as const };
+    }
     const next = transitionOrder(order.status, "cancel");
-    if (order.status === "pending") await closeHeld(ctx, order, Date.now(), "cancel");
-    if (next !== order.status)
-      await ctx.db.patch(order._id, { status: next, updatedAt: Date.now() });
+    if (order.status === "pending") await closeHeld(ctx, order, now, "cancel");
+    if (next !== order.status) await ctx.db.patch(order._id, { status: next, updatedAt: now });
     if (next === "cancelled" && next !== order.status) {
       const attempts = await ctx.db
         .query("tenantOrderAttempts")
@@ -740,7 +746,7 @@ export const cancelOrder = tenantMutation({
         )
         .take(2);
       for (const attempt of attempts)
-        await ctx.db.patch(attempt._id, { status: "refused", updatedAt: Date.now() });
+        await ctx.db.patch(attempt._id, { status: "refused", updatedAt: now });
     }
     return { status: next };
   },

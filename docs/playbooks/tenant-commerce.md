@@ -1,6 +1,6 @@
 # Playbook: Tenant commerce (Phase 50)
 
-> Last verified: 2026-09-28 against the provider-independent inventory expiry, payment-at-expiry and paid-after-release guards and monotonic expired-order cancellation. A payment arriving while a hold is still `held` at its deadline expires and releases that hold in the pure transition; an already expired or explicitly released hold is not released twice or consumed. These are pure local outcomes, not a signed payment landing, durable merchant-review workflow, refund or buyer notice. The pending merchant decision remains unchanged.
+> Last verified: 2026-09-28 against the provider-independent inventory expiry, payment-at-expiry and paid-after-release guards and monotonic expired-order cancellation. A payment arriving while a hold is still `held` at its deadline expires and releases that hold in the pure transition; an already expired or explicitly released hold is not released twice or consumed. The local cancellation mutation also lets an elapsed hold deadline win over an unrun expiry callback. These are local outcomes, not a signed payment landing, durable merchant-review workflow, refund or buyer notice. The pending merchant decision remains unchanged.
 > Build history: `.planning/phases/50-tenant-merchant-commerce/` · Related ADRs: ADR-049 pending owner decision
 
 ## Purpose
@@ -57,6 +57,8 @@ up to five expired reservations. A larger backlog refuses checkout and the tenan
 linked hold once and marks the local attempt expired; cancellation of a pending order marks its
 attempt refused. Cancellation after expiry is idempotent: the order and attempt remain expired,
 preserving that cause for later payment reconciliation.
+If cancellation reaches a still-pending order at or after its hold deadline, it performs the same
+expiry transition before the timer callback; that callback later makes no second stock change.
 The drain refuses a due held reservation linked to a terminal or not-yet-due order; it must not
 count an unchanged hold as processed and leave finite stock stranded on every retry.
 The pure expiry transition also requires safe, nonnegative current and persisted expiry times;
