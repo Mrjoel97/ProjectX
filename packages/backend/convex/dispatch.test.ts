@@ -23,7 +23,7 @@ import {
 } from "@pikar/cost";
 import { APICallError } from "ai";
 import { convexTest, type TestConvex } from "convex-test";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 // The dispatcher's lineage audits hit the auditCounts aggregate and its envelope reads/spends hit
 // the rate-limiter's daily-spend window. Register both (relative imports — the packages block the
 // deep specifier) so the REAL paths run under convex-test instead of throwing "component not
@@ -184,10 +184,14 @@ const searchedSteps = (text: string, urls: readonly string[]) => {
   ];
 };
 
-// The Tavily edge, stubbed. Anything that is not Tavily falls through to the real fetch so no other
-// outbound path is silently changed by this file.
+// Workflow-backed findings schedule ingest work after the assertion. Freeze scheduled callbacks
+// in this suite so they cannot escape into the next Vitest file after its VM is disposed. The
+// retry/fallback test below opts back into real timers because the SDK's retry wait is its subject.
+// Only timeout functions are faked: elapsed timestamps and budgets keep reading the real clock.
+// The Tavily edge is stubbed. Anything else still falls through to the real fetch.
 const realFetch = globalThis.fetch;
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   vi.stubEnv("TAVILY_API_KEY", "test-key");
   vi.stubGlobal("fetch", async (input: unknown, init?: unknown) => {
     if (String(input).includes("api.tavily.com")) {
@@ -204,6 +208,9 @@ beforeEach(() => {
     }
     return (realFetch as (a: unknown, b?: unknown) => Promise<Response>)(input, init);
   });
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 const textToolStep = (text: string, toolName: string, input: unknown, callId: string) => ({
   ...toolStep(toolName, input, callId),
@@ -1244,6 +1251,8 @@ describe("the MEDIA prompt shape — a brief is a SUBJECT, not a task (the third
 
 describe("runResearch — the scheduled entry point inherits every guard (16-06 Task 1)", () => {
   test("search call errors: retryable failures fall back, non-retryable failures propagate", async () => {
+    // This direct, scripted model-loop test starts no ingest workflow. Its retry backoff must run.
+    vi.useRealTimers();
     const { t, planId } = await setup();
     const ctxBackedTurn = (
       primary: unknown,

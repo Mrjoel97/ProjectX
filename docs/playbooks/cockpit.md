@@ -1,3 +1,10 @@
+> Last verified: 2026-09-28 — `dispatch.test.ts` now freezes scheduled timeout callbacks
+> per test to keep workflow-backed research ingest from escaping its Vitest file. Its one
+> direct scripted retry/fallback test uses real timers because SDK backoff needs them and
+> does not start ingest. Focused dispatcher 128/128 and full backend 182 files / 4,624
+> tests passed locally. This is a test-harness fix, not a runtime or live-provider claim;
+> other suites still emit scheduler/component warnings.
+>
 > Last verified: 2026-09-28 — the workspace Output card's verified vertical draft control
 > now offers a human edit alongside accept/needs-changes. It loads only the selected owned
 > document text, persists a changed body through a server-side CAS with PDF/workbook

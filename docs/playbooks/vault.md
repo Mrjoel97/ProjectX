@@ -1,3 +1,8 @@
+> Last verified: 2026-09-28 — dispatcher research tests that start vault ingest now
+> freeze scheduled timeout callbacks; the sole scripted retry test keeps real timers.
+> Focused dispatcher and one full backend suite pass. See the dated dispatcher residual
+> follow-up below; other suites' scheduler/component warnings remain separate.
+>
 > Last verified: 2026-09-28 — `vaultIngestText(docId)` now refuses ready rows and
 > agent-origin documents; its late-text write is limited to same-tenant rows awaiting
 > extraction. The general agent-created-document replacement seam increments a private
@@ -4464,6 +4469,18 @@ either freeze the clock or drain the scheduler; doing neither pushes a failure i
 file, where it is nearly undiagnosable. (2) **Validate a flake fix on the FULL suite, never a
 subset.** Both wrong theories here looked confirmed on a two-file reproducer — `fileParallelism:
 false` went 6/6 and `pool: threads` went 9/9 on the pair, and both still failed the full suite.
+
+**2026-09-28 dispatcher residual follow-up:** The statement above that `dispatch.test.ts` still
+leaks is historical. Its one real-timer dependency is the direct scripted retry/fallback test;
+that test does not start ingest. With only `setTimeout`/`clearTimeout` faked for the rest of the
+file, 127 tests passed and that retry test timed out. Letting that single test use real timers
+restored **128/128**, with no post-file workflow errors in the focused run. A real-timer teardown
+experiment also passed 128 assertions, but continued to report unregistered RAG-component work
+after the file; it was reverted, not counted as a fix. Backend typecheck and Biome passed. One
+full cross-file backend run passed **182 files / 4,624 tests**. This narrows the known dispatcher
+leak; it does not certify all remaining backend scheduler logs are clean. The full run still printed
+unregistered-component warnings from other suites, and one successful run is not a flake-rate
+measurement. Recheck on exact-head CI before treating the dispatcher change as integrated.
 
 ### 15.3-09 — the Google Drive rail (VALT-13)
 
