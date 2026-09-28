@@ -11,6 +11,8 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 Artifact-set SHA-256: `c334ae749350573c5b300e0967b308aec12062d9dbb6fb7e41d93710fca98345`
 
+The code-bearing `ba74395` [CI run 36436062524](https://github.com/Mrjoel97/ProjectX/actions/runs/36436062524) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. This is CI for the pinned artifact bytes, not deployed or founder evidence.
+
 **2026-09-28 local provider-egress requalification:** A filtered golden diagnostic
 stopped with an unresolved first embedding reservation after sandboxed TCP/443
 to OpenRouter failed, while an unsandboxed read-only probe succeeded. The
