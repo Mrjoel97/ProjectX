@@ -222,6 +222,29 @@
     "cleanup": "not invoked; failed-run tenant and spend evidence retained",
     "reconciliation": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-GOLDEN-RECONCILIATION-2026-09-24.json"
   },
+  "latest_disposable_diagnostic": {
+    "date": "2026-09-28",
+    "record": ".planning/phases/17.1-business-blueprint-corpus-synthesis-and-agent-spine/17.1-11-DIAGNOSTIC-2026-09-28.md",
+    "scope": "one isolated synthetic case with cockpit-agent@26 and inbox-digest@2; no automatic retry; USD 0.25 cap",
+    "run_id": "0ad07729",
+    "budget_id": "s574g3xtxxzg29qngch9ty7m018f9948",
+    "case_verdicts": 0,
+    "failed_step_code": "EVAL_EMBEDDING_RESPONSE_UNRESOLVED",
+    "terminal_runner_code": "GOLDEN_PAID_CALL_UNRESOLVED",
+    "budget_snapshot_before_instance_removal": {
+      "call_count": 1,
+      "settled_count": 0,
+      "unsettled_count": 1,
+      "unresolved_cents": 1,
+      "observed_usd": 0,
+      "conservative_usd": 0,
+      "closed": false
+    },
+    "retained_export_sha256": "d31758f9bb7db6c05c80d25c8f45ec6f99486672ad7591f45a21764846b3b77e",
+    "instance_removed": true,
+    "accounting_note": "The retained export proves a reservation and failed workflow step, not provider completion, a free call, a settled charge, or a closed live budget. The removed instance cannot be queried again.",
+    "gate_effect": "non_certifying; full L6 corpus and founder L1/L7 remain open"
+  },
   "offline_reproof": {
     "observed_at": "2026-09-20T10:04:15Z",
     "revision": "f6c711e1481c09098877414e4bcad46b62ffb49c",
@@ -290,5 +313,5 @@
     "externally-enabled": "provider-access-observed-for-eval-only; Gmail grant remains open"
   },
   "accepted": false,
-  "blocker": "the latest authorized preflight passed, but the sole permitted corpus command failed durably on the first cockpit turn before any case verdict. Its ambiguous request is now accounted at the full USD 0.03 conservative ceiling and the budget is closed without breach; no registry evidence exists and founder/browser verification remains gated."
+  "blocker": "The historical full corpus attempt failed before a case verdict. The later isolated USD 0.25 diagnostic also produced zero case verdicts and ended at embedding seed with one unresolved one-cent reservation in the retained export; its disposable instance is gone, so no provider or live-budget settlement is inferred. The diagnostic authorization was consumed, and a further paid attempt was rejected by execution control. No conclusive current L6 evidence or founder cockpit/contradiction/voice acceptance exists; Phase 18 remains gated."
 }
