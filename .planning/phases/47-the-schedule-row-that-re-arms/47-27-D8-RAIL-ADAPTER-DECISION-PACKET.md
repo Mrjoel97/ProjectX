@@ -1,0 +1,31 @@
+# Wave 6 D8 — keyed spend-rail adapter decision packet
+
+**Prepared:** 2026-09-28. **Status:** proposal for technical and governance review, not an accepted ADR or implementation permission. Operational recurrence stays `defer` under ADR-050's isolated six-file stage. This packet adds no candidate or production file and authorizes no paid call, provider read, tenant activation or send.
+
+## Decision to make
+
+ADR-046 D8 requires a whole-run hold before the first paid call and release on *every* terminal path. The installed `@convex-dev/rate-limiter@0.3.2` and the current `dailySpendCents` (tenant-keyed) / `deploymentSpendCents` (keyless) fixed windows can debit together in one mutation, as the isolated 47-25 probe shows, but expose neither a run-keyed reservation nor its release/tombstone. The source finding and the unsafe shortcuts are pinned in [47-26](47-26-D8-REAL-RAIL-DESIGN-GAP.md). The phrase “reuses the shipped mechanism” in ADR-046 is therefore insufficient as a terminal-release design; `limit({ reserve: true })` is a debit, not a keyed escrow.
+
+The reviewer must choose one of these paths *before* a production adapter is proposed:
+
+1. **Recommended: a reviewed migration to one transactionally keyed accounting rail for all callers of the LLM tenant and deployment spend windows.** The migration retains both budget ceilings, their tenant/global scopes and fail-closed admission. It owns operation journals, an explicit window identity and exact-once settlement. Existing attended callers cannot continue debiting an uncoordinated old deployment bucket while recurrence uses a private replacement. A separately reviewed ADR must specify cutover and treatment of in-flight reservations; the current six-file stage does not permit this implementation.
+2. **Retain the installed component only if an exact-source adapter proof first establishes keyed terminal release across rollover.** This needs a same-transaction operation journal and affirmative released tombstones, not `getValue` followed by an unqualified negative count. The adapter must identify the component window debited and make a release incapable of crediting a newer window. The current component API does not expose that identity, so this route is unproven and likely requires a pinned component fork or upstream API change, itself a reviewed dependency/rail migration.
+3. **Explicitly amend D8 to accept a conservative, unreleased debit.** This is a product/governance change, not an implementation interpretation: it permits temporarily or permanently stranded capacity and conflicts with ADR-046's present release-on-every-terminal wording. No engineer may select this route by treating a cleared app journal as a physical refund.
+
+No route is selected by this packet. Until reviewed, the D8 matrix row must remain non-passing.
+
+## Required adapter contract for routes 1 or 2
+
+An operation identity is `(tenantId, routineId, occurrenceKey, runId, rail)`; the shared deployment rail must not gain a tenant bucket. A successful admission atomically records the run, both hold records, original window IDs, ceiling versions and whole-run cents *before* any paid step may start. Failure of either rail leaves neither debit nor an active run. A repeated admission with identical identity returns the same holds without a second debit; conflicting cents, tenant, window or run identity refuses.
+
+The journal has closed states `held`, `effect_unknown`, `settling`, `released` (or an explicitly named consumed/settled state for actual spend). A terminal transition may clear the run only when **both** rail records are affirmatively settled. An absent record after a thrown reserve is `uncertain`, never evidence of release; an explicit tombstone must defeat a reserve that lands later. A duplicate terminal callback or recovery sweep is idempotent. A paid effect with an unknown physical outcome retains conservative exposure and blocks retry/release until a source-backed reconciliation resolves it. Actual spend is charged exactly once and unused reserved cents are released only to the *original* still-open windows; after rollover, closing the old hold must never mint capacity in the new window. The tenant and deployment ledger entries, run transition and refs-only audit write are one top-level Convex transaction wherever atomicity is claimed.
+
+The operator reconciliation record must reveal run/rail IDs, original window IDs, cents, state, reason code and provider request correlation **without** prompt, response, token or customer content. It must allow replay-safe settlement after a crash between paid effect and result landing. A stale or mismatched provider result cannot settle another run.
+
+## Falsification and cutover gates
+
+The reviewed implementation must produce red-before-green tests for: second-rail refusal after first-rail admission; top-level throw after both debits; duplicate claim; cancellation/pause/skip/overlap; each D5 terminal class; retry exhaustion; release throw followed by an `absent` lookup and a late original reserve; duplicate callback and sweep; paid-effect unknown across crash/restart; original-window rollover during settlement; exact boundary timing; and simultaneous attended plus recurrence consumption of the same deployment cap. Tests must assert the *real persisted rail balance/journal*, not only reducer output. The existing 49/49 isolated candidate tests and three installed-component transaction probes are prerequisites, not substitutes.
+
+If route 1 is chosen, cutover must enumerate every caller of `dailySpendCents` and `deploymentSpendCents`, preserve existing live exposure and reservations, quiesce or dual-account through the transition without double credit/debit, and refuse recurrence until post-cutover readback proves a single shared ceiling. The migration and rollback procedure require their own technical review, stage/governance decision, and bounded deployment evidence. There is no permission here to edit `guardrails.ts`, the production schema, the installed package or a live limiter.
+
+Even a passing adapter does not close Wave 6: the separate D6 sweep evidence, real DST/OAuth/provider traces, eligibility checker and owner `enable-safe` release decision remain mandatory.
