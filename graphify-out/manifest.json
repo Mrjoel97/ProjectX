@@ -15265,8 +15265,8 @@
     "semantic_hash": ""
   },
   "packages/core/src/tenantInventory.ts": {
-    "mtime": 1790553678.123039,
-    "ast_hash": "747a13c466a19a22a958e02f1b08f2d2",
+    "mtime": 1790554326.013683,
+    "ast_hash": "7c60e7a10e1be1a1629e7b309a2b3564",
     "semantic_hash": ""
   },
   ".planning/phases/50-tenant-merchant-commerce/50-01-SUMMARY.md": {

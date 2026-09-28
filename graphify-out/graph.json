@@ -41985,7 +41985,7 @@
       "source_location": "L386",
       "_origin": "ast",
       "id": "packages_backend_convex_paypalconnector_currenciesof",
-      "community": 2,
+      "community": 157,
       "norm_label": "currenciesof()"
     },
     {
@@ -46573,7 +46573,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuecrm",
-      "community": 348,
+      "community": 2,
       "norm_label": "revenuecrm.ts"
     },
     {
@@ -46583,7 +46583,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuecrm_localinputs",
-      "community": 348,
+      "community": 2,
       "norm_label": "localinputs()"
     },
     {
@@ -46593,7 +46593,7 @@
       "source_location": "L102",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuecrm_attentionview",
-      "community": 348,
+      "community": 2,
       "norm_label": "attentionview"
     },
     {
@@ -46603,7 +46603,7 @@
       "source_location": "L122",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuecrm_attentionlist",
-      "community": 348,
+      "community": 2,
       "norm_label": "attentionlist"
     },
     {
@@ -46613,7 +46613,7 @@
       "source_location": "L137",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuecrm_contactpulse",
-      "community": 348,
+      "community": 2,
       "norm_label": "contactpulse"
     },
     {
@@ -46623,7 +46623,7 @@
       "source_location": "L173",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuecrm_attentionfortenant",
-      "community": 348,
+      "community": 2,
       "norm_label": "attentionfortenant"
     },
     {
@@ -46633,7 +46633,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test",
-      "community": 2,
+      "community": 481,
       "norm_label": "revenuefinance.test.ts"
     },
     {
@@ -46643,7 +46643,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_now",
-      "community": 2,
+      "community": 481,
       "norm_label": "now"
     },
     {
@@ -46653,7 +46653,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_window",
-      "community": 2,
+      "community": 481,
       "norm_label": "window"
     },
     {
@@ -46663,7 +46663,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_money",
-      "community": 2,
+      "community": 481,
       "norm_label": "money()"
     },
     {
@@ -46673,7 +46673,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_ready",
-      "community": 2,
+      "community": 481,
       "norm_label": "ready()"
     },
     {
@@ -46683,7 +46683,7 @@
       "source_location": "L48",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_partial",
-      "community": 2,
+      "community": 481,
       "norm_label": "partial()"
     },
     {
@@ -46693,7 +46693,7 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_unavailable",
-      "community": 2,
+      "community": 481,
       "norm_label": "unavailable()"
     },
     {
@@ -46703,7 +46703,7 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_invoice",
-      "community": 2,
+      "community": 481,
       "norm_label": "invoice()"
     },
     {
@@ -46713,7 +46713,7 @@
       "source_location": "L78",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_payment",
-      "community": 2,
+      "community": 481,
       "norm_label": "payment()"
     },
     {
@@ -46723,7 +46723,7 @@
       "source_location": "L92",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_obligation",
-      "community": 2,
+      "community": 481,
       "norm_label": "obligation()"
     },
     {
@@ -46733,7 +46733,7 @@
       "source_location": "L99",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_qbo",
-      "community": 2,
+      "community": 481,
       "norm_label": "qbo()"
     },
     {
@@ -46743,7 +46743,7 @@
       "source_location": "L118",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_stripe",
-      "community": 2,
+      "community": 481,
       "norm_label": "stripe()"
     },
     {
@@ -46753,7 +46753,7 @@
       "source_location": "L130",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_paypal",
-      "community": 2,
+      "community": 481,
       "norm_label": "paypal()"
     },
     {
@@ -46763,7 +46763,7 @@
       "source_location": "L139",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_compose",
-      "community": 2,
+      "community": 157,
       "norm_label": "compose()"
     },
     {
@@ -46773,7 +46773,7 @@
       "source_location": "L142",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_passed",
-      "community": 2,
+      "community": 481,
       "norm_label": "passed"
     },
     {
@@ -46783,7 +46783,7 @@
       "source_location": "L143",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_parked",
-      "community": 2,
+      "community": 481,
       "norm_label": "parked"
     },
     {
@@ -46793,7 +46793,7 @@
       "source_location": "L149",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_test_readsfortenant",
-      "community": 2,
+      "community": 157,
       "norm_label": "readsfortenant()"
     },
     {
@@ -46803,7 +46803,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance",
-      "community": 2,
+      "community": 157,
       "norm_label": "revenuefinance.ts"
     },
     {
@@ -46813,7 +46813,7 @@
       "source_location": "L42",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_finance_providers",
-      "community": 2,
+      "community": 157,
       "norm_label": "finance_providers"
     },
     {
@@ -46823,7 +46823,7 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_financeprovider",
-      "community": 2,
+      "community": 157,
       "norm_label": "financeprovider"
     },
     {
@@ -46833,7 +46833,7 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_financesourcereads",
-      "community": 2,
+      "community": 481,
       "norm_label": "financesourcereads"
     },
     {
@@ -46843,7 +46843,7 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_financesourcestatus",
-      "community": 2,
+      "community": 157,
       "norm_label": "financesourcestatus"
     },
     {
@@ -46853,7 +46853,7 @@
       "source_location": "L75",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_financeexclusion",
-      "community": 2,
+      "community": 157,
       "norm_label": "financeexclusion"
     },
     {
@@ -46863,7 +46863,7 @@
       "source_location": "L81",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_cashview",
-      "community": 2,
+      "community": 157,
       "norm_label": "cashview"
     },
     {
@@ -46873,7 +46873,7 @@
       "source_location": "L86",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_payrollview",
-      "community": 2,
+      "community": 157,
       "norm_label": "payrollview"
     },
     {
@@ -46893,7 +46893,7 @@
       "source_location": "L103",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_unavailable",
-      "community": 2,
+      "community": 157,
       "norm_label": "unavailable()"
     },
     {
@@ -46903,7 +46903,7 @@
       "source_location": "L110",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_accepted",
-      "community": 2,
+      "community": 157,
       "norm_label": "accepted()"
     },
     {
@@ -46913,7 +46913,7 @@
       "source_location": "L118",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_projectionsfor",
-      "community": 2,
+      "community": 157,
       "norm_label": "projectionsfor()"
     },
     {
@@ -46923,7 +46923,7 @@
       "source_location": "L149",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_sourcestatus",
-      "community": 2,
+      "community": 157,
       "norm_label": "sourcestatus()"
     },
     {
@@ -46933,7 +46933,7 @@
       "source_location": "L175",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_bycurrency",
-      "community": 2,
+      "community": 157,
       "norm_label": "bycurrency()"
     },
     {
@@ -46943,7 +46943,7 @@
       "source_location": "L186",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_availableitems",
-      "community": 2,
+      "community": 157,
       "norm_label": "availableitems()"
     },
     {
@@ -46953,7 +46953,7 @@
       "source_location": "L189",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_outputcoverage",
-      "community": 2,
+      "community": 157,
       "norm_label": "outputcoverage()"
     },
     {
@@ -46963,7 +46963,7 @@
       "source_location": "L192",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_degraded",
-      "community": 2,
+      "community": 157,
       "norm_label": "degraded()"
     },
     {
@@ -46973,7 +46973,7 @@
       "source_location": "L201",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_sortedcurrencies",
-      "community": 2,
+      "community": 157,
       "norm_label": "sortedcurrencies()"
     },
     {
@@ -46983,7 +46983,7 @@
       "source_location": "L210",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_composebusinessfinance",
-      "community": 2,
+      "community": 157,
       "norm_label": "composebusinessfinance()"
     },
     {
@@ -46993,7 +46993,7 @@
       "source_location": "L511",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_gateargs",
-      "community": 2,
+      "community": 157,
       "norm_label": "gateargs"
     },
     {
@@ -47003,7 +47003,7 @@
       "source_location": "L512",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_gateeligibility",
-      "community": 2,
+      "community": 157,
       "norm_label": "gateeligibility"
     },
     {
@@ -47013,7 +47013,7 @@
       "source_location": "L516",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_quickbooksread",
-      "community": 2,
+      "community": 157,
       "norm_label": "quickbooksread()"
     },
     {
@@ -47023,7 +47023,7 @@
       "source_location": "L522",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_striperead",
-      "community": 2,
+      "community": 157,
       "norm_label": "striperead()"
     },
     {
@@ -47033,7 +47033,7 @@
       "source_location": "L528",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_paypalread",
-      "community": 2,
+      "community": 157,
       "norm_label": "paypalread()"
     },
     {
@@ -47043,7 +47043,7 @@
       "source_location": "L535",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_safeaction",
-      "community": 2,
+      "community": 157,
       "norm_label": "safeaction()"
     },
     {
@@ -47053,7 +47053,7 @@
       "source_location": "L550",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_readpassedfinancesources",
-      "community": 2,
+      "community": 157,
       "norm_label": "readpassedfinancesources()"
     },
     {
@@ -47063,7 +47063,7 @@
       "source_location": "L657",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_environmentarg",
-      "community": 2,
+      "community": 157,
       "norm_label": "environmentarg"
     },
     {
@@ -47073,7 +47073,7 @@
       "source_location": "L660",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuefinance_businessfinance",
-      "community": 2,
+      "community": 157,
       "norm_label": "businessfinance"
     },
     {
@@ -47293,7 +47293,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuetelemetry",
-      "community": 53,
+      "community": 2,
       "norm_label": "revenuetelemetry.ts"
     },
     {
@@ -47303,7 +47303,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuetelemetry_revenuetelemetryargs",
-      "community": 53,
+      "community": 2,
       "norm_label": "revenuetelemetryargs"
     },
     {
@@ -47313,7 +47313,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuetelemetry_recordrevenueevent",
-      "community": 53,
+      "community": 2,
       "norm_label": "recordrevenueevent()"
     },
     {
@@ -47323,7 +47323,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuetelemetry_emitrevenueevent",
-      "community": 53,
+      "community": 2,
       "norm_label": "emitrevenueevent()"
     },
     {
@@ -47333,7 +47333,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuetelemetry_emitconnectorreadevent",
-      "community": 53,
+      "community": 2,
       "norm_label": "emitconnectorreadevent()"
     },
     {
@@ -47343,7 +47343,7 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuetelemetry_revenuesubjectref",
-      "community": 53,
+      "community": 2,
       "norm_label": "revenuesubjectref()"
     },
     {
@@ -47353,7 +47353,7 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuetelemetry_revenuerecoveryobservation",
-      "community": 53,
+      "community": 2,
       "norm_label": "revenuerecoveryobservation"
     },
     {
@@ -47363,7 +47363,7 @@
       "source_location": "L77",
       "_origin": "ast",
       "id": "packages_backend_convex_revenuetelemetry_emitobservedrecoveryevents",
-      "community": 53,
+      "community": 2,
       "norm_label": "emitobservedrecoveryevents()"
     },
     {
@@ -61413,7 +61413,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_backend_convex_workflowpackeventlog_test",
-      "community": 145,
+      "community": 1707,
       "norm_label": "workflowpackeventlog.test.ts"
     },
     {
@@ -61423,7 +61423,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "packages_backend_convex_workflowpackeventlog_test_modules",
-      "community": 145,
+      "community": 1707,
       "norm_label": "modules"
     },
     {
@@ -61433,7 +61433,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "packages_backend_convex_workflowpackeventlog_test_base",
-      "community": 145,
+      "community": 1707,
       "norm_label": "base"
     },
     {
@@ -61533,7 +61533,7 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "packages_backend_convex_workflowpackeventlog_workflowpackeventinput",
-      "community": 53,
+      "community": 2,
       "norm_label": "workflowpackeventinput"
     },
     {
@@ -61593,7 +61593,7 @@
       "source_location": "L143",
       "_origin": "ast",
       "id": "packages_backend_convex_workflowpackeventlog_writeworkflowpackevent",
-      "community": 53,
+      "community": 2,
       "norm_label": "writeworkflowpackevent()"
     },
     {
@@ -71833,7 +71833,7 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "packages_contracts_src_verticaleval_requireverticalcorpuscase",
-      "community": 194,
+      "community": 94,
       "norm_label": "requireverticalcorpuscase()"
     },
     {
@@ -72883,7 +72883,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "packages_core_src_blueprint_blueprint_fields",
-      "community": 132,
+      "community": 649,
       "norm_label": "blueprint_fields"
     },
     {
@@ -77113,7 +77113,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "packages_core_src_financeclaim_figureconfidence",
-      "community": 132,
+      "community": 649,
       "norm_label": "figureconfidence"
     },
     {
@@ -79003,7 +79003,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_proposal_test",
-      "community": 132,
+      "community": 649,
       "norm_label": "proposal.test.ts"
     },
     {
@@ -79013,7 +79013,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "packages_core_src_proposal_test_profile_keys",
-      "community": 132,
+      "community": 649,
       "norm_label": "profile_keys"
     },
     {
@@ -79023,7 +79023,7 @@
       "source_location": "L93",
       "_origin": "ast",
       "id": "packages_core_src_proposal_test_fact",
-      "community": 132,
+      "community": 649,
       "norm_label": "fact"
     },
     {
@@ -79033,7 +79033,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_proposal",
-      "community": 132,
+      "community": 649,
       "norm_label": "proposal.ts"
     },
     {
@@ -79043,7 +79043,7 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "packages_core_src_proposal_profile_writable_fields",
-      "community": 132,
+      "community": 649,
       "norm_label": "profile_writable_fields"
     },
     {
@@ -79053,7 +79053,7 @@
       "source_location": "L48",
       "_origin": "ast",
       "id": "packages_core_src_proposal_proposalstore",
-      "community": 132,
+      "community": 649,
       "norm_label": "proposalstore"
     },
     {
@@ -79063,7 +79063,7 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "packages_core_src_proposal_proposaltarget",
-      "community": 132,
+      "community": 649,
       "norm_label": "proposaltarget"
     },
     {
@@ -79073,7 +79073,7 @@
       "source_location": "L60",
       "_origin": "ast",
       "id": "packages_core_src_proposal_proposalsourcelocator",
-      "community": 132,
+      "community": 649,
       "norm_label": "proposalsourcelocator"
     },
     {
@@ -79083,7 +79083,7 @@
       "source_location": "L65",
       "_origin": "ast",
       "id": "packages_core_src_proposal_proposedfact",
-      "community": 132,
+      "community": 649,
       "norm_label": "proposedfact"
     },
     {
@@ -79093,7 +79093,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "packages_core_src_proposal_contact_targets",
-      "community": 132,
+      "community": 649,
       "norm_label": "contact_targets"
     },
     {
@@ -79103,7 +79103,7 @@
       "source_location": "L96",
       "_origin": "ast",
       "id": "packages_core_src_proposal_proposal_targets",
-      "community": 132,
+      "community": 649,
       "norm_label": "proposal_targets"
     },
     {
@@ -79113,7 +79113,7 @@
       "source_location": "L116",
       "_origin": "ast",
       "id": "packages_core_src_proposal_by_key",
-      "community": 132,
+      "community": 649,
       "norm_label": "by_key"
     },
     {
@@ -79123,7 +79123,7 @@
       "source_location": "L125",
       "_origin": "ast",
       "id": "packages_core_src_proposal_currentvalue",
-      "community": 132,
+      "community": 649,
       "norm_label": "currentvalue"
     },
     {
@@ -79143,7 +79143,7 @@
       "source_location": "L140",
       "_origin": "ast",
       "id": "packages_core_src_proposal_classifyproposal",
-      "community": 132,
+      "community": 649,
       "norm_label": "classifyproposal()"
     },
     {
@@ -79153,7 +79153,7 @@
       "source_location": "L154",
       "_origin": "ast",
       "id": "packages_core_src_proposal_sweepable",
-      "community": 132,
+      "community": 649,
       "norm_label": "sweepable()"
     },
     {
@@ -80073,7 +80073,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_core_src_result",
-      "community": 157,
+      "community": 55,
       "norm_label": "result.ts"
     },
     {
@@ -80083,7 +80083,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "packages_core_src_result_ok",
-      "community": 157,
+      "community": 55,
       "norm_label": "ok"
     },
     {
@@ -80093,7 +80093,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "packages_core_src_result_err",
-      "community": 157,
+      "community": 55,
       "norm_label": "err"
     },
     {
@@ -80113,7 +80113,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "packages_core_src_result_isok",
-      "community": 157,
+      "community": 55,
       "norm_label": "isok()"
     },
     {
@@ -80123,7 +80123,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "packages_core_src_result_iserr",
-      "community": 157,
+      "community": 55,
       "norm_label": "iserr()"
     },
     {
@@ -82490,7 +82490,7 @@
       "label": "consumeInventory()",
       "file_type": "code",
       "source_file": "packages/core/src/tenantInventory.ts",
-      "source_location": "L277",
+      "source_location": "L276",
       "_origin": "ast",
       "id": "packages_core_src_tenantinventory_consumeinventory",
       "community": 95,
@@ -85073,7 +85073,7 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "packages_core_src_workflowpackmetrics_revenueeventkind",
-      "community": 53,
+      "community": 2,
       "norm_label": "revenueeventkind"
     },
     {
@@ -85093,7 +85093,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "packages_core_src_workflowpackmetrics_revenueprovider",
-      "community": 53,
+      "community": 2,
       "norm_label": "revenueprovider"
     },
     {
@@ -85323,7 +85323,7 @@
       "source_location": "L267",
       "_origin": "ast",
       "id": "packages_core_src_workflowpackmetrics_plandecisions",
-      "community": 145,
+      "community": 1707,
       "norm_label": "plandecisions()"
     },
     {
@@ -85393,7 +85393,7 @@
       "source_location": "L385",
       "_origin": "ast",
       "id": "packages_core_src_workflowpackmetrics_projectrevenuesignals",
-      "community": 94,
+      "community": 145,
       "norm_label": "projectrevenuesignals()"
     },
     {
@@ -87033,7 +87033,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "packages_revenue_src_contracts_sourceauthority",
-      "community": 2,
+      "community": 481,
       "norm_label": "sourceauthority"
     },
     {
@@ -87313,7 +87313,7 @@
       "source_location": "L386",
       "_origin": "ast",
       "id": "packages_revenue_src_contracts_moneyfigure",
-      "community": 348,
+      "community": 2,
       "norm_label": "moneyfigure"
     },
     {
@@ -87413,7 +87413,7 @@
       "source_location": "L451",
       "_origin": "ast",
       "id": "packages_revenue_src_contracts_payment",
-      "community": 157,
+      "community": 481,
       "norm_label": "payment"
     },
     {
@@ -87423,7 +87423,7 @@
       "source_location": "L460",
       "_origin": "ast",
       "id": "packages_revenue_src_contracts_obligation",
-      "community": 2,
+      "community": 157,
       "norm_label": "obligation"
     },
     {
@@ -87713,7 +87713,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_test",
-      "community": 348,
+      "community": 2,
       "norm_label": "crm.test.ts"
     },
     {
@@ -87723,7 +87723,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_test_contact",
-      "community": 348,
+      "community": 2,
       "norm_label": "contact()"
     },
     {
@@ -87733,7 +87733,7 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_test_unknown_amount",
-      "community": 348,
+      "community": 2,
       "norm_label": "unknown_amount"
     },
     {
@@ -87743,7 +87743,7 @@
       "source_location": "L42",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_test_ids",
-      "community": 348,
+      "community": 2,
       "norm_label": "ids()"
     },
     {
@@ -87753,7 +87753,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "packages_revenue_src_crm",
-      "community": 348,
+      "community": 2,
       "norm_label": "crm.ts"
     },
     {
@@ -87763,7 +87763,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_factsource",
-      "community": 348,
+      "community": 2,
       "norm_label": "factsource"
     },
     {
@@ -87773,7 +87773,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_attentioninput",
-      "community": 348,
+      "community": 2,
       "norm_label": "attentioninput"
     },
     {
@@ -87783,7 +87783,7 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_attentiondeal",
-      "community": 348,
+      "community": 2,
       "norm_label": "attentiondeal"
     },
     {
@@ -87793,7 +87793,7 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_attentionreason",
-      "community": 348,
+      "community": 2,
       "norm_label": "attentionreason"
     },
     {
@@ -87803,7 +87803,7 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_attentionrow",
-      "community": 348,
+      "community": 2,
       "norm_label": "attentionrow"
     },
     {
@@ -87813,7 +87813,7 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_weights",
-      "community": 348,
+      "community": 2,
       "norm_label": "weights"
     },
     {
@@ -87823,7 +87823,7 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_reason_order",
-      "community": 348,
+      "community": 2,
       "norm_label": "reason_order"
     },
     {
@@ -87833,7 +87833,7 @@
       "source_location": "L113",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_reasonsfor",
-      "community": 348,
+      "community": 2,
       "norm_label": "reasonsfor()"
     },
     {
@@ -87843,7 +87843,7 @@
       "source_location": "L150",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_rankattention",
-      "community": 348,
+      "community": 2,
       "norm_label": "rankattention()"
     },
     {
@@ -87853,7 +87853,7 @@
       "source_location": "L183",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_pulsesignals",
-      "community": 348,
+      "community": 2,
       "norm_label": "pulsesignals"
     },
     {
@@ -87863,7 +87863,7 @@
       "source_location": "L201",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_pulsestatus",
-      "community": 348,
+      "community": 2,
       "norm_label": "pulsestatus"
     },
     {
@@ -87873,7 +87873,7 @@
       "source_location": "L203",
       "_origin": "ast",
       "id": "packages_revenue_src_crm_customerpulse",
-      "community": 348,
+      "community": 2,
       "norm_label": "customerpulse()"
     },
     {
@@ -88063,7 +88063,7 @@
       "source_location": "L84",
       "_origin": "ast",
       "id": "packages_revenue_src_finance_aging",
-      "community": 2,
+      "community": 157,
       "norm_label": "aging"
     },
     {
@@ -88153,7 +88153,7 @@
       "source_location": "L304",
       "_origin": "ast",
       "id": "packages_revenue_src_finance_payrolloutlook",
-      "community": 2,
+      "community": 157,
       "norm_label": "payrolloutlook"
     },
     {
@@ -88213,7 +88213,7 @@
       "source_location": "L433",
       "_origin": "ast",
       "id": "packages_revenue_src_finance_receiptstotal",
-      "community": 2,
+      "community": 157,
       "norm_label": "receiptstotal()"
     },
     {
@@ -88223,7 +88223,7 @@
       "source_location": "L441",
       "_origin": "ast",
       "id": "packages_revenue_src_finance_coverageof",
-      "community": 2,
+      "community": 157,
       "norm_label": "coverageof()"
     },
     {
@@ -88493,7 +88493,7 @@
       "source_location": "L162",
       "_origin": "ast",
       "id": "packages_revenue_src_money_summoney",
-      "community": 2,
+      "community": 157,
       "norm_label": "summoney()"
     },
     {
@@ -88503,7 +88503,7 @@
       "source_location": "L177",
       "_origin": "ast",
       "id": "packages_revenue_src_money_groupbycurrency",
-      "community": 2,
+      "community": 157,
       "norm_label": "groupbycurrency()"
     },
     {
@@ -89143,7 +89143,7 @@
       "source_location": "L312",
       "_origin": "ast",
       "id": "packages_revenue_src_providers_paypal_paypalbalances",
-      "community": 2,
+      "community": 481,
       "norm_label": "paypalbalances"
     },
     {
@@ -89623,7 +89623,7 @@
       "source_location": "L148",
       "_origin": "ast",
       "id": "packages_revenue_src_providers_stripe_stripebalance",
-      "community": 2,
+      "community": 481,
       "norm_label": "stripebalance"
     },
     {
@@ -315668,7 +315668,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/tenantInventory.ts",
-      "source_location": "L277",
+      "source_location": "L276",
       "weight": 1,
       "source": "packages_core_src_tenantinventory",
       "target": "packages_core_src_tenantinventory_consumeinventory",
@@ -315951,7 +315951,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/tenantInventory.ts",
-      "source_location": "L307",
+      "source_location": "L306",
       "weight": 1,
       "source": "packages_core_src_tenantinventory_consumeinventory",
       "target": "packages_core_src_tenantinventory_nextrevision",
@@ -316017,7 +316017,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/tenantInventory.ts",
-      "source_location": "L283",
+      "source_location": "L282",
       "weight": 1,
       "source": "packages_core_src_tenantinventory_consumeinventory",
       "target": "packages_core_src_tenantinventory_validateinventory",
@@ -316149,7 +316149,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/tenantInventory.ts",
-      "source_location": "L306",
+      "source_location": "L305",
       "weight": 1,
       "source": "packages_core_src_tenantinventory_consumeinventory",
       "target": "packages_core_src_tenantinventory_requireheld",
@@ -316182,7 +316182,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "packages/core/src/tenantInventory.ts",
-      "source_location": "L273",
+      "source_location": "L272",
       "weight": 1,
       "source": "packages_core_src_tenantinventory_expireinventory",
       "target": "packages_core_src_tenantinventory_releaseinventory",
@@ -394235,5 +394235,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "8e53bfc1d3117d3e15d67bb92e2f68f8e22263fa"
+  "built_at_commit": "701497c5790ac8461f5c9657319a2f379ff26220"
 }

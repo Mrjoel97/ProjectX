@@ -268,8 +268,7 @@ export function expireInventory(
     reservation.expiresAt < 0
   )
     throw new Error("INVALID_TIME");
-  if (now < reservation.expiresAt)
-    throw new Error("RESERVATION_NOT_EXPIRED");
+  if (now < reservation.expiresAt) throw new Error("RESERVATION_NOT_EXPIRED");
   const released = releaseInventory(stock, reservation, expectedRevision);
   return { ...released, reservation: { ...reservation, status: "expired" as const } };
 }
