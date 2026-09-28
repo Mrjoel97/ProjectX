@@ -178,3 +178,8 @@ physical provider effect or furnish a production reconciliation operator by itse
 Any production module/table/caller would require a separately reviewed governance transition;
 ADR-050's six-file disabled stage does not grant it. D6's sweep-only amendment, live DST/OAuth/
 provider observations and the separate owner release decision remain additional gates.
+
+**D8 release design follow-up:** [47-26](47-26-D8-REAL-RAIL-DESIGN-GAP.md) pins the
+source-level mismatch between ADR-046's terminal-release requirement and the installed
+limiter's bucket API. The 49-test installed-component probe settles atomic admission
+only; it must not be cited as proof of keyed terminal release or cross-window refund.

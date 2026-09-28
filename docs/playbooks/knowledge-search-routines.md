@@ -1,5 +1,12 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — the D8 real-rail follow-up in Phase 47-26 pins an
+> unresolved production design mismatch: ADR-046 requires every terminal run's
+> whole-envelope reservation to be released, while the installed rate limiter
+> exposes bucket operations, not keyed release/tombstones. The existing folder
+> negative-count credit is not recurrence settlement proof. The isolated 49-test
+> probe proves same-mutation admission/rollback only; recurrence remains `defer`.
+>
 > Last verified: 2026-09-28 — the disabled six-file recurrence candidate now has
 > a 49/49 isolated `convex-test` probe of the installed rate-limiter component:
 > tenant-keyed daily and shared deployment debits, replay without re-debit, and
