@@ -221,6 +221,8 @@ export function quoteOrder(input: OrderQuoteInput): OrderQuoteResult {
       return refuse("configuration_required");
     if (
       mapping.product.status !== "active" ||
+      !Number.isSafeInteger(mapping.product.revision) ||
+      mapping.product.revision < 1 ||
       mapping.product.revision !== request.expectedProductRevision ||
       mapping.product.priceMinor !== request.expectedUnitMinor ||
       !minor(mapping.product.priceMinor) ||

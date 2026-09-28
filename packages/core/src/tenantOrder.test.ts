@@ -288,6 +288,17 @@ describe("server order quote", () => {
     ).toMatchObject({ ok: false, reason: "stale" });
   });
 
+  test("refuses a matched but unsafe product revision before creating a quote", () => {
+    const unsafeRevision = Number.MAX_SAFE_INTEGER + 1;
+    expect(
+      quoteOrder({
+        ...input,
+        lines: [{ ...input.lines[0]!, expectedProductRevision: unsafeRevision }],
+        mappings: [{ ...input.mappings[0]!, product: { ...product, revision: unsafeRevision } }],
+      }),
+    ).toMatchObject({ ok: false, reason: "stale" });
+  });
+
   test("missing policies, unsupported geography/currency and overflow refuse", () => {
     expect(
       quoteOrder({

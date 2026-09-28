@@ -1,5 +1,13 @@
 # Playbook: Tenant commerce (Phase 50)
 
+> Last verified: 2026-09-28 — a matched but unsafe live product revision no longer
+> enters a provider-independent order quote or snapshot hash. The new pure test
+> failed before the guard and passes afterward; core commerce 22/22, backend
+> commerce/export/erasure 90/90, and both TypeScript checks pass. The current
+> authenticated cart writer already refused an unsafe expected revision. This
+> hardens the reusable quote seam only; the merchant decision and both payment
+> adapters remain gated.
+
 > Last verified: 2026-09-28 against the provider-independent inventory expiry, payment-at-expiry and paid-after-release guards and monotonic expired-order cancellation. A payment arriving while a hold is still `held` at its deadline expires and releases that hold in the pure transition; an already expired or explicitly released hold is not released twice or consumed. The local cancellation mutation also lets an elapsed hold deadline win over an unrun expiry callback. These are local outcomes, not a signed payment landing, durable merchant-review workflow, refund or buyer notice. The pending merchant decision remains unchanged.
 > Build history: `.planning/phases/50-tenant-merchant-commerce/` · Related ADRs: ADR-049 pending owner decision
 
