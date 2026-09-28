@@ -129,3 +129,9 @@ The first exact-head CI passed typecheck/lint but stopped at the golden evaluato
 source-derived revision gate. The code-owned golden/manifest revision and the dependent
 web-recipe implementation pin were refreshed from current sources; both self-checks and
 all 32 local free gates pass. This retires old evaluator evidence, not requalification.
+The next exact-head CI passed those gates and found the source-derived native vertical
+evaluator revision stale in the full backend suite. Its generator refreshed only that
+revision for the unchanged six-lane/40-case corpus; the exact corpus check and four
+focused tests pass. No semantic verdict was minted by regeneration.
+The uncontended local `pnpm test` then passed all 11 package test tasks, including
+backend **182 files/4,617 tests** and web **70 files/1,067 tests** (two existing skips).

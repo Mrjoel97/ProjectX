@@ -5,7 +5,10 @@ rewritten in place after its original `artifact_created` event. `vaultDocuments.
 starts at zero for new agent content and advances on the created-document replacement seam;
 legacy absence means zero. The public Vault late-text seam is also restricted to pending
 non-agent uploads, so it cannot bypass this review provenance check. Local red-then-green
-Vault and vertical tests pass. This does not count an AI rewrite as a human edit or complete
+Vault and vertical tests pass. The source change retires the old native evaluator revision;
+its generated six-lane/40-case corpus now pins
+`1accbd5f9d1a91901f49bae828f106a0700f3690fbcac3b930703f7fa6c36168` with
+unchanged corpus hash. This does not count an AI rewrite as a human edit or complete
 the `review_edited` path, semantic evaluation, browser UAT, or activation.
 
 Last verified: 2026-09-28 — an authenticated Output-card action can now record one
