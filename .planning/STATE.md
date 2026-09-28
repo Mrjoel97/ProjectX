@@ -6,7 +6,7 @@ current_phase: 17.1
 current_phase_name: Business Blueprint - Corpus Synthesis and Agent Spine
 current_plan: continue 17.1-11 shared golden gate with 03.7-10
 status: executing
-last_updated: "2026-09-27"
+last_updated: "2026-09-28"
 progress:
   total_phases: 79
   completed_phases: 53
@@ -24,7 +24,7 @@ progress:
 **Current Plan:** continue 17.1-11 shared golden gate with 03.7-10
 **Status:** Phase 49 repository/local layer is qualified on its current digest; overall closure remains in progress and no external/provider/founder layer is inferred
 
-- **Wave 1 local egress and unresolved diagnostic (2026-09-28):** A fresh exact-identity loopback target passed the prior secret-safe configuration preflight, then one synthetic `01-happy-single`/two-pin `--no-retry` diagnostic under a USD 0.25 cap ended `GOLDEN_PAID_CALL_UNRESOLVED` during its first embedding seed. Its budget retained one unsettled 1-cent reservation, zero observed spend, zero case verdicts and no passing evidence; the temporary stack was removed after a Git-ignored synthetic database export. Sandboxed OpenRouter TCP/443 failed and unsandboxed TCP/443 passed, isolating an execution-context egress difference but not proving the physical provider outcome. The local-only free preflight now refuses missing OpenRouter/Tavily TCP reachability before budget opening; 20/20 focused controls, 57-fixture evaluator self-check, dependent recipe self-check, contracts/backend typechecks and Phase 49's full 21-plane aggregate pass on digest `3436015858c83f571bc74390e7530a6524aecb11159b0584d8c33ec1f3e53366`. This retires the earlier evaluator pin. L6, founder acceptance and the Blueprint baseline remain open; see `17.1-11-DIAGNOSTIC-2026-09-28.md`.
+- **Wave 1 local egress and unresolved diagnostic (2026-09-28):** A fresh exact-identity loopback target passed the prior secret-safe configuration preflight, then one synthetic `01-happy-single`/two-pin `--no-retry` diagnostic under a USD 0.25 cap ended `GOLDEN_PAID_CALL_UNRESOLVED` during its first embedding seed. Its budget retained one unsettled 1-cent reservation, zero observed spend, zero case verdicts and no passing evidence; the temporary stack was removed after a Git-ignored synthetic database export. Sandboxed OpenRouter TCP/443 failed and unsandboxed TCP/443 passed, isolating an execution-context egress difference but not proving the physical provider outcome. The local-only free preflight now refuses missing OpenRouter/Tavily TCP reachability before budget opening; 20/20 focused controls, 57-fixture evaluator self-check, dependent recipe self-check, contracts/backend typechecks and Phase 49's full 21-plane aggregate pass on digest `3436015858c83f571bc74390e7530a6524aecb11159b0584d8c33ec1f3e53366`. An additional fresh egress-capable loopback stack passed the **current** free preflight end-to-end on revision `60d0fbcc…`, with no budget/provider call, and removed its owned root. This retires the earlier evaluator pin but does not reconcile the diagnostic or qualify L6; founder acceptance and the Blueprint baseline remain open. See `17.1-11-DIAGNOSTIC-2026-09-28.md` and `17.1-11-PREFLIGHT-2026-09-25.md`.
 **Progress:** 444/490 canonical plans recorded complete; 39 open and 7 superseded. This is a plan-disposition count, not proof of wave or release closure.
 
 - **Governing reference:** [merged audit](audits/2026-09-10-merged-audit-codebase-review.md), including its G1–G26/H1–H5 reconciliation and owner-adopted Waves 0–8.
