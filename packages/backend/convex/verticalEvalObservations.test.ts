@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
-import { qualifyVerticalObservation } from "../scripts/vertical-eval-observations.mjs";
+import {
+  assessVerticalCase,
+  qualifyVerticalObservation,
+} from "../scripts/vertical-eval-observations.mjs";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 function sample() {
@@ -92,6 +95,68 @@ function sample() {
 }
 
 describe("mechanical vertical observations, never semantic acceptance", () => {
+  test("compares measured artifact, partial and blocked states to exact fixture expectations without granting a pass", () => {
+    const input = sample();
+    const observed = qualifyVerticalObservation(input);
+    const expected = { state: "artifact", requiredSourceRefs: [] };
+    expect(
+      assessVerticalCase({ expected, observation: observed, provision: input.provision }),
+    ).toMatchObject({
+      expectedState: "artifact",
+      observedState: "artifact",
+      stateMatches: true,
+      semanticReviewRequired: true,
+      releasePassed: false,
+    });
+    input.observation.result.facts.truncated = true;
+    expect(
+      assessVerticalCase({
+        expected,
+        observation: qualifyVerticalObservation(input),
+        provision: input.provision,
+      }).stateMatches,
+    ).toBe(false);
+    const blocked = sample();
+    blocked.observation.budget = { ...blocked.budgetBefore };
+    blocked.observation.result = {
+      ok: false,
+      reason: "missing-source",
+    } as unknown as typeof blocked.observation.result;
+    expect(
+      assessVerticalCase({
+        expected: { state: "blocked" },
+        observation: qualifyVerticalObservation(blocked),
+        provision: blocked.provision,
+      }),
+    ).toMatchObject({ observedState: "blocked", stateMatches: true });
+  });
+
+  test("refusal, cited sources and forbidden tools require exact measured evidence", () => {
+    const input = sample();
+    const observed = qualifyVerticalObservation(input);
+    expect(
+      assessVerticalCase({
+        expected: { state: "refused" },
+        observation: observed,
+        provision: input.provision,
+      }),
+    ).toMatchObject({ observedState: "artifact", stateMatches: false });
+    expect(
+      assessVerticalCase({
+        expected: { state: "artifact", requiredSourceRefs: ["fixture:design:missing"] },
+        observation: observed,
+        provision: input.provision,
+      }),
+    ).toMatchObject({ requiredSourcesRead: false, mechanicalCriteriaMet: false });
+    input.observation.result.facts.ungrantedToolAttemptCount = 1;
+    expect(
+      assessVerticalCase({
+        expected: { state: "partial", forbiddenTools: ["sendEmail"] },
+        observation: qualifyVerticalObservation(input),
+        provision: input.provision,
+      }),
+    ).toMatchObject({ forbiddenToolsAbsent: false, mechanicalCriteriaMet: false });
+  });
   test("binds real facts and returns only refs/hashes/counts with mandatory review", () => {
     const input = sample();
     const output = qualifyVerticalObservation(input);

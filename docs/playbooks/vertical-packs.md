@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-29 — the offline vertical collector now records closed
+expected/observed state and source/tool checks alongside each exact-candidate
+mechanical observation. A blocked result stays blocked even when its fixture
+expects an artifact; ungranted tool attempts and missing required source reads
+fail mechanical criteria. These booleans never count as semantic approval or
+release evidence. The full paid six-candidate run and authenticated owner
+review remain open; no model call or activation was made for this change.
+
 Last verified: 2026-09-29 — the native release gate may accept authenticated
 browser evidence without a run ID. Discovery now projects its SHA-256 evidence
 reference in that case, with a run ID only when valid and present; it never

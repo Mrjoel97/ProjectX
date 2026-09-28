@@ -330,7 +330,33 @@ describe("native vertical exact-version issuer", () => {
     });
     expect(view.output).toBe(reply);
     expect(view.binding.artifactId).toBeTypeOf("string");
+    expect(view.binding.observedOutcome).toBe("artifact");
     expect(view.binding.sourceDocIds).toEqual(c.prepared.sourceRefs.map((s) => s.docId));
+    const reviewId = await h.owner.mutation(api.verticalEvalEvidence.reviewCase, {
+      ...(await reviewArgs(h, result.nativeCaseReceiptId!)),
+      outcome: "artifact",
+    });
+    await h.t.run(async (ctx) => {
+      const review = await ctx.db.get(reviewId);
+      expect(review?.payload).toMatchObject({ outcome: "artifact", accepted: true });
+    });
+  });
+  test("owner may review a model refusal without treating a partial runtime result as a mechanical refusal", async () => {
+    const h = await setup();
+    const { receiptId } = await observe(h, 0, (observation) => {
+      if (observation.result.ok)
+        observation.result.reply = "I cannot decide that without evidence.";
+    });
+    await h.t.mutation(internal.guardrails.closeEvalBudget, { budgetId: h.budgetId });
+    const args = await reviewArgs(h, receiptId);
+    const reviewId = await h.owner.mutation(api.verticalEvalEvidence.reviewCase, {
+      ...args,
+      outcome: "refused",
+    });
+    await h.t.run(async (ctx) => {
+      const review = await ctx.db.get(reviewId);
+      expect(review?.payload).toMatchObject({ outcome: "refused", accepted: true });
+    });
   });
   test("complete current corpus + authenticated explicit reviews issue evidence without activation; later cleanup preserves authority", async () => {
     const h = await setup(VERTICAL_CORPUS.engineering.length);

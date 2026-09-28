@@ -232,6 +232,19 @@ describe("vertical source compiler and collection coordination", () => {
         mechanicalOutcome: "blocked",
         blockedReason: "missing-source",
       });
+    expect(report.observations[0]?.assessment).toMatchObject({
+      expectedState: "artifact",
+      observedState: "blocked",
+      stateMatches: false,
+      mechanicalCriteriaMet: false,
+      semanticReviewRequired: true,
+      releasePassed: false,
+    });
+    expect(
+      report.observations.every(
+        (item: { assessment: { releasePassed: boolean } }) => !item.assessment.releasePassed,
+      ),
+    ).toBe(true);
     expect(report.releaseEvidenceRecorded).toBe(false);
     expect(report.activated).toBe(false);
     expect(report.retention).toBe("authenticated-owner-review-required");

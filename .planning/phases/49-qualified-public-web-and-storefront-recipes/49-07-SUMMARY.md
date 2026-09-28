@@ -17,6 +17,13 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
+**2026-09-29 evaluator-source renewal:** The native vertical outcome/assessment
+repair and watched playbook retired `cdccf465…`. A fresh serialized Phase 49
+aggregate passed **21/21** repository/local planes on the pinned 71-file
+`77280787…` digest, including both disposable browser/audit stacks, three
+typechecks, production build and 34 free gates. The vertical paid corpus,
+semantic/owner review, public commerce and Wave 7/8 acceptance remain open.
+
 **2026-09-29 exact-source renewal:** The valid browser-evidence/no-run-ID
 projection repair retired the earlier `1a4796d0…` identity. The complete
 serialized aggregate passed **21/21** planes on the pinned 71-file
@@ -66,7 +73,7 @@ is inferred.
 
 **Earlier repository/local requalification passed:** tenant-first indexed vertical audit provenance, watched playbooks and dependent evaluator pins changed. A serialized 21-plane aggregate passed on its then-current identity, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `cdccf465047db1dd02534f8ec745a506bd96a52507b7dfbc61c1258710927f1b`
+Artifact-set SHA-256: `772807877106ce6f6f8273a72f661a71308ab9c05d9753995e343b7c97ac3b56`
 
 The changed skill contract and watched playbooks for a CLI-compatible named
 self-hosted golden diagnostic retired the prior Phase 49 digest. The new
