@@ -347,16 +347,26 @@ test("review observations require an owned artifact created by the exact native 
     event: "artifact_created",
     artifactId,
   });
+  for (const event of ["review_approved", "review_rejected"] as const)
+    await expect(
+      t.mutation(internal.verticalPackTelemetry.record, { ...base, event, artifactId }),
+    ).rejects.toThrow("USER_REVIEW_ACTOR_REQUIRED");
   await expect(
     t.mutation(internal.verticalPackTelemetry.record, {
       ...base,
       candidateId: otherCandidateId,
       event: "review_approved",
+      actor: "user",
       artifactId,
     }),
   ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
   for (const event of ["review_approved", "review_rejected"] as const)
-    await t.mutation(internal.verticalPackTelemetry.record, { ...base, event, artifactId });
+    await t.mutation(internal.verticalPackTelemetry.record, {
+      ...base,
+      event,
+      artifactId,
+      actor: "user",
+    });
   await expect(
     t.mutation(internal.verticalPackTelemetry.record, {
       ...base,
@@ -368,9 +378,9 @@ test("review observations require an owned artifact created by the exact native 
     (await t.withIdentity({ subject: "a" }).query(api.verticalPackTelemetry.summary, {})).counts,
   ).toMatchObject({
     artifact_created: 1,
-    review_approved: 0,
+    review_approved: 1,
     review_edited: 0,
-    review_rejected: 0,
+    review_rejected: 1,
   });
 });
 
@@ -425,6 +435,7 @@ test("preview artifacts cannot ground non-preview review outcomes", async () => 
     t.mutation(internal.verticalPackTelemetry.record, {
       ...base,
       event: "review_approved",
+      actor: "user",
       artifactId: previewArtifactId,
     }),
   ).rejects.toThrow("ARTIFACT_ORIGIN_UNVERIFIED");
@@ -432,6 +443,7 @@ test("preview artifacts cannot ground non-preview review outcomes", async () => 
     t.mutation(internal.verticalPackTelemetry.record, {
       ...base,
       event: "review_approved",
+      actor: "user",
       artifactId: productionArtifactId,
       preview: true,
     }),
@@ -439,12 +451,14 @@ test("preview artifacts cannot ground non-preview review outcomes", async () => 
   await t.mutation(internal.verticalPackTelemetry.record, {
     ...base,
     event: "review_approved",
+    actor: "user",
     artifactId: previewArtifactId,
     preview: true,
   });
   await t.mutation(internal.verticalPackTelemetry.record, {
     ...base,
     event: "review_approved",
+    actor: "user",
     artifactId: productionArtifactId,
   });
 });

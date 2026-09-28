@@ -7,9 +7,9 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** Requalification passed for the current 71-file digest below after the watched vertical-packs playbook changed for exact-candidate telemetry provenance. A fresh serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The previous result on `c334ae749350573c5b300e0967b308aec12062d9dbb6fb7e41d93710fca98345` is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** Requalification passed for the current 71-file digest below after the watched vertical-packs playbook changed for user-actor review-event integrity. A fresh serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `5f5446ecf82da01f9c6178cf250778b247da08fb31e87c69c57b1a2162645c8b` result is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `5f5446ecf82da01f9c6178cf250778b247da08fb31e87c69c57b1a2162645c8b`
+Artifact-set SHA-256: `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61`
 
 The current code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. This certifies the pinned repository bytes, not deployment or founder acceptance.
 

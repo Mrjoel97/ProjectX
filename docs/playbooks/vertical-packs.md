@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — the internal outcome writer now refuses
+`review_approved` and `review_rejected` without the closed `actor: user` value,
+as it already did for `review_edited`. An owned artifact and exact-candidate
+origin remain required. The two prior system-actor writes failed red-before-green;
+focused vertical tests pass 35/35 and backend TypeScript passes. This establishes
+event-shape integrity, not human presence or semantic approval. The exact-candidate
+200-row history ceiling, native evaluation, tenant UAT and activation remain open.
+
 Last verified: 2026-09-28 — review-origin and derived repeat-use checks now
 read at most 200 audit rows correlated to the exact native candidate, then
 require the same tenant and vertical event type. A red-before-green control

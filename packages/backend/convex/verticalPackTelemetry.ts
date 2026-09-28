@@ -103,8 +103,9 @@ export const record = internalMutation({
           artifact.contentRevision !== args.contentRevision
         )
           throw new Error("EDIT_REVISION_UNVERIFIED");
-      } else if (args.contentRevision !== undefined) {
-        throw new Error("EDIT_REVISION_UNEXPECTED");
+      } else {
+        if (args.actor !== "user") throw new Error("USER_REVIEW_ACTOR_REQUIRED");
+        if (args.contentRevision !== undefined) throw new Error("EDIT_REVISION_UNEXPECTED");
       }
       // A review observation must answer a real artifact from this exact native candidate.
       // If its origin fell outside the bounded history, omit the metric rather than guessing.
