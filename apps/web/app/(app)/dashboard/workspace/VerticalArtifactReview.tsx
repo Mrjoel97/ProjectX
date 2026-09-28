@@ -46,7 +46,7 @@ export function VerticalArtifactReview({ artifactId }: { artifactId: ArtifactId 
           : code.includes("ARTIFACT_EDIT_STALE_OR_UNCHANGED") ||
               code.includes("ARTIFACT_ORIGIN_UNVERIFIED")
             ? "This draft changed while you were editing. Reopen it before trying again."
-            : "Edited draft could not be saved. Your original artifact is unchanged.",
+            : "Save result could not be confirmed. Reopen the artifact to check whether your edit was saved.",
       );
     } finally {
       setSaving(false);

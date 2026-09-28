@@ -1585,8 +1585,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/cockpit.md": {
-    "mtime": 1790562977.722901,
-    "ast_hash": "015b82fa0551ab351af1c0218570afde",
+    "mtime": 1790563909.9871385,
+    "ast_hash": "26a361f878e57b1192912e6e2b420e79",
     "semantic_hash": ""
   },
   "docs/playbooks/skill-registry.md": {
@@ -13560,8 +13560,8 @@
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-02-SUMMARY.md": {
-    "mtime": 1790562978.9017797,
-    "ast_hash": "e8a432c4c82efcef36c8021a509e0b1c",
+    "mtime": 1790563925.0405772,
+    "ast_hash": "90c78d36584fda1cc346154cf7b07a73",
     "semantic_hash": ""
   },
   ".planning/phases/30-optional-vertical-workflow-packs/30-03-SUMMARY.md": {
@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790562976.4959867,
-    "ast_hash": "5555db2a0909f9ecc407e743e1dd0dc3",
+    "mtime": 1790563911.2013018,
+    "ast_hash": "24f7c7f542c0f5c2493d53ffd89dad02",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -17100,13 +17100,13 @@
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/VerticalArtifactReview.tsx": {
-    "mtime": 1790561100.5305543,
-    "ast_hash": "8a119c6271478cb93a55eb96e591f9e3",
+    "mtime": 1790563846.8623722,
+    "ast_hash": "f7d86ad0534623791f8a30868d4ce72c",
     "semantic_hash": ""
   },
   "apps/web/app/(app)/dashboard/workspace/verticalArtifactReview.test.tsx": {
-    "mtime": 1790561144.3357973,
-    "ast_hash": "a6130438e8fa5177f430e4e43b2e633c",
+    "mtime": 1790563828.1646104,
+    "ast_hash": "882d243050e86a5f14421dca7abb2f9a",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.review.test.ts": {

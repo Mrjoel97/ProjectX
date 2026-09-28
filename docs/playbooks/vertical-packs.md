@@ -10,6 +10,8 @@ Superseded PDF/workbook deletion now shares the content/outcome transaction; an
 injected post-patch audit failure rolls back the row and retains the old bytes,
 while the action deletes its newly staged blob. The old-blob cleanup is not silently
 swallowed after a successful save.
+If the save response is lost, the UI does not infer rollback; it asks the reviewer to
+reopen the artifact and confirm its persisted state. A DOM regression pins this ambiguity.
 Focused backend and DOM tests pass. This is local runtime proof, not deployed browser UAT,
 semantic qualification, candidate approval, activation or delivery.
 

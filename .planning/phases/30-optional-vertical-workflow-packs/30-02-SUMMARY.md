@@ -158,3 +158,8 @@ patch proves rollback retains the original text/blob and creates no user outcome
 the staged replacement blob is removed by the action. The focused review suite
 passes 9/9. Rendered authenticated browser evidence remains open because no local
 web/Convex listener is currently running; no production target was substituted.
+An ambiguous save-response regression then failed on the Output card's claim that the
+original artifact was unchanged after every generic error. The UI now asks the reviewer
+to reopen and verify the persisted result, since a lost response may follow a committed
+edit. The focused DOM suite passes 6/6 and web TypeScript exits 0. This is honest
+failure messaging, not browser UAT or a guarantee that the save committed.

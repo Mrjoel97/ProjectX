@@ -135,3 +135,25 @@ test("a table-free spreadsheet edit shows an actionable refusal without a review
   expect(host.querySelector('p[role="status"]')).toBeNull();
   expect(record).not.toHaveBeenCalled();
 });
+
+test("an ambiguous save failure does not claim the original artifact survived", async () => {
+  save.mockRejectedValue(new Error("NETWORK_RESPONSE_LOST"));
+  await render();
+  await click("Edit draft");
+  const textarea = host.querySelector("textarea");
+  await act(async () => {
+    if (textarea) {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
+        textarea,
+        "Human revision",
+      );
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
+  await click("Save edited draft");
+  expect(host.querySelector('p[role="alert"]')?.textContent).toContain(
+    "Reopen the artifact to check whether your edit was saved",
+  );
+  expect(host.querySelector('p[role="alert"]')?.textContent).not.toContain("unchanged");
+  expect(host.querySelector('p[role="status"]')).toBeNull();
+});

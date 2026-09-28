@@ -4,6 +4,8 @@
 > replacement where applicable, and records a refs-only user outcome after persistence.
 > Superseded bytes are deleted in that same transaction, so an audit/storage failure
 > rolls back the edit instead of leaving a purported success with an orphaned blob.
+> A generic lost save response is ambiguous: the UI asks the user to reopen the artifact
+> and verify the result, rather than asserting that the original remained unchanged.
 > The control neither sends nor activates a pack. Focused UI/backend tests pass; an
 > authenticated deployed browser walkthrough remains open.
 >
