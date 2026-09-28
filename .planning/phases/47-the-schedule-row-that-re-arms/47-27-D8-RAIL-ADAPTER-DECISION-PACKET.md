@@ -14,6 +14,10 @@ The reviewer must choose one of these paths *before* a production adapter is pro
 
 No route is selected by this packet. Until reviewed, the D8 matrix row must remain non-passing.
 
+### Executed rollover falsification for an unqualified component refund
+
+On 2026-09-28, Node 24 imported the **installed** `@convex-dev/rate-limiter@0.3.2/dist/shared.js` and called its `calculateRateLimit` with a fixed 1,000-cent/86,400,000-ms window anchored at zero. A 50-cent debit at t=1,000 yielded `value=950, ts=0`. At t=86,401,000, one new-window cent yielded `value=999, ts=86400000`. Applying the old hold's `count=-50` at that same instant yielded `value=1049, ts=86400000`: **49 cents above the new window ceiling**. The command exited 0 only after asserting all three exact values. The installed component's `rateLimit` mutation persists values returned through `checkRateLimitOrThrow` / `_checkRateLimitInternal`, which calls this helper; it does not attach the negative count to the original window. Its `getValue` returns the stored value/ts rather than a present-time rolled balance. This is a deterministic helper/source proof of the rollover hazard, not a persisted-component or production-run test. It eliminates an unconditional negative-count refund as route 2's implementation; the independent installed-component transaction probe still proves only debit atomicity.
+
 ## Required adapter contract for routes 1 or 2
 
 An operation identity is `(tenantId, routineId, occurrenceKey, runId, rail)`; the shared deployment rail must not gain a tenant bucket. A successful admission atomically records the run, both hold records, original window IDs, ceiling versions and whole-run cents *before* any paid step may start. Failure of either rail leaves neither debit nor an active run. A repeated admission with identical identity returns the same holds without a second debit; conflicting cents, tenant, window or run identity refuses.
