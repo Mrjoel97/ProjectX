@@ -170,8 +170,16 @@ describe("tenant inventory pure rules", () => {
     expect(consumeInventory(expired.stock, expired.reservation, 901_001, 3)).toMatchObject({
       kind: "late_paid_exception",
     });
-    expect(consumeInventory(held.stock, held.reservation, 901_000, 2)).toMatchObject({
+    const paidAtExpiry = consumeInventory(held.stock, held.reservation, 901_000, 2);
+    expect(paidAtExpiry).toMatchObject({
       kind: "late_paid_exception",
+      stock: { onHand: 2, reserved: 0, revision: 3 },
+      reservation: { status: "expired" },
+    });
+    expect(consumeInventory(paidAtExpiry.stock, paidAtExpiry.reservation, 901_001, 3)).toEqual({
+      kind: "late_paid_exception",
+      stock: paidAtExpiry.stock,
+      reservation: paidAtExpiry.reservation,
     });
     expect(consumeInventory(released.stock, released.reservation, 2_000, 3)).toEqual({
       kind: "released_paid_exception",
@@ -306,9 +314,6 @@ describe("tenant inventory pure rules", () => {
         max,
       ),
     ).toThrow("INVALID_REVISION");
-    expect(consumeInventory(heldStock, held, 100_000, max)).toMatchObject({
-      kind: "late_paid_exception",
-      stock: heldStock,
-    });
+    expect(() => consumeInventory(heldStock, held, 100_000, max)).toThrow("INVALID_REVISION");
   });
 });

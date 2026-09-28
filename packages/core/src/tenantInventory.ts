@@ -296,11 +296,15 @@ export function consumeInventory(
   // can journal and reconcile the correct cause without guessing.
   if (reservation.status === "released")
     return { kind: "released_paid_exception" as const, stock, reservation };
-  if (
-    reservation.status === "expired" ||
-    (reservation.status === "held" && now >= reservation.expiresAt)
-  ) {
+  if (reservation.status === "expired") {
     return { kind: "late_paid_exception" as const, stock, reservation };
+  }
+  if (reservation.status === "held" && now >= reservation.expiresAt) {
+    // A verified payment may race the expiry callback. Release the still-held
+    // stock in this same transition; leaving it held while reporting a late
+    // payment would strand stock once the order leaves the pending queue.
+    const expired = expireInventory(stock, reservation, now, expectedRevision);
+    return { kind: "late_paid_exception" as const, ...expired };
   }
   requireHeld(stock, reservation, expectedRevision);
   const revision = nextRevision(stock.revision);
