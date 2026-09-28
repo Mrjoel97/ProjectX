@@ -6,13 +6,9 @@ Consumes the scrubbed trajectory JSON pulled from GET /skillopt/export (pinned i
       "items": [ { "id", "task_description", "conversation", "hard", "soft",
                    "skillVersion", "split": "train"|"valid", "counts" }, ... ] }
 
-`load_split_items(split_path)` returns only the items whose exported `split` matches the split the
-path names. The golden in-repo eval-cases/*.json are NEVER an export source (held-out integrity) —
-the export is feedback->request rows only (08-04), so nothing to exclude here.
-
-ponytail: the exact SkillOpt YAML key -> split_path mapping is LOW-confidence (RESEARCH OQ2) and is
-verified in the 08-08 dry-run. This loader is correct-by-contract regardless: it keys the split off
-the path BASENAME, so a key-name fix at dry-run needs no code change here.
+`load_split_items(split_path)` maps export `train` to upstream `train/`, export `valid` to upstream
+`val/`, and leaves upstream `test/` empty rather than fabricating a third partition. The separate
+golden eval cases are never an export source.
 """
 
 from __future__ import annotations
@@ -24,7 +20,7 @@ from pathlib import Path
 # skillopt is pip-installed only in CI (requirements.txt). Fall back to `object` so this module
 # still imports for the offline self-check / lint (`python dataloader.py`) without skillopt present.
 try:  # pragma: no cover - import shim
-    from skillopt.data import SplitDataLoader  # exact path verified at the 08-08 dry-run
+    from skillopt.datasets.base import SplitDataLoader
 except Exception:  # pragma: no cover
     SplitDataLoader = object  # type: ignore[assignment,misc]
 
@@ -32,14 +28,15 @@ EXPORT_FILENAME = "export.json"
 
 
 def norm_split(name: str) -> str:
-    """Map SkillOpt's split names onto the export's two-valued `split` field.
-
-    SkillOpt uses `valid_unseen` for the held-out split; the export writes `valid`.
-    """
+    """Map SkillOpt train/val/test names without inventing a third export split."""
     s = str(name).strip().lower()
-    if s in ("valid_unseen", "valid", "validation", "dev"):
+    if s in ("valid_seen", "val", "valid", "validation", "dev"):
         return "valid"
-    return "train"
+    if s in ("valid_unseen", "test"):
+        return "test"
+    if s == "train":
+        return "train"
+    raise ValueError(f"unsupported SkillOpt split: {name!r}")
 
 
 def split_of_path(split_path) -> str:
@@ -71,7 +68,17 @@ def _resolve_export(split_path) -> Path:
 def partition(items, split: str):
     """Pure: the items whose exported `split` field matches `split` (already normalized)."""
     want = norm_split(split)
-    return [it for it in items if norm_split(it.get("split", "train")) == want]
+    if not isinstance(items, list):
+        raise ValueError("SkillOpt export items must be a list")
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            raise ValueError("SkillOpt export item needs a string id")
+        if item["id"] in seen:
+            raise ValueError("duplicate SkillOpt export item id")
+        seen.add(item["id"])
+        norm_split(item.get("split", ""))
+    return [it for it in items if norm_split(it["split"]) == want]
 
 
 def read_split_items(split_path):
@@ -89,10 +96,17 @@ class PikarCockpitDataLoader(SplitDataLoader):  # type: ignore[misc,valid-type]
     def load_split_items(self, split_path):
         return read_split_items(split_path)
 
+    def setup(self, cfg: dict) -> None:
+        super().setup(cfg)
+        if not self.train_items or not self.val_items:
+            raise ValueError("SkillOpt requires nonempty, disjoint train and validation partitions")
+        if self.test_items:
+            raise ValueError("Pikar export has no independent SkillOpt test partition")
+
 
 if __name__ == "__main__":
     # ONE runnable check (no network, no SkillOpt): the split partition of a tiny inline fixture
-    # must match the export "split" field, and valid_unseen must normalize onto "valid".
+    # must match the export "split" field, with upstream val kept separate from test.
     import tempfile
 
     fixture = {
@@ -107,16 +121,19 @@ if __name__ == "__main__":
     items = fixture["items"]
     assert [it["id"] for it in partition(items, "train")] == ["a", "c"], "train partition"
     assert [it["id"] for it in partition(items, "valid")] == ["b", "d"], "valid partition"
-    assert norm_split("valid_unseen") == "valid", "valid_unseen normalizes to valid"
-    assert split_of_path("/x/y/valid_unseen") == "valid", "path basename -> split"
+    assert norm_split("val") == "valid", "val normalizes to export valid"
+    assert split_of_path("/x/y/val") == "valid", "path basename -> split"
+    assert split_of_path("/x/y/test") == "test", "test remains separate"
     assert split_of_path("/x/y/train.json") == "train", "train path -> split"
 
     with tempfile.TemporaryDirectory() as d:
         (Path(d) / EXPORT_FILENAME).write_text(json.dumps(fixture), encoding="utf-8")
         loader = PikarCockpitDataLoader()
         train = loader.load_split_items(str(Path(d) / "train"))
-        valid = loader.load_split_items(str(Path(d) / "valid_unseen"))
+        valid = loader.load_split_items(str(Path(d) / "val"))
+        test = loader.load_split_items(str(Path(d) / "test"))
         assert {it["id"] for it in train} == {"a", "c"}, "load_split_items train"
-        assert {it["id"] for it in valid} == {"b", "d"}, "load_split_items valid_unseen"
+        assert {it["id"] for it in valid} == {"b", "d"}, "load_split_items val"
+        assert not test, "no fabricated third partition"
 
     print("dataloader self-check PASSED")
