@@ -9,6 +9,11 @@
 > A disposable authenticated Chromium walkthrough on 2026-09-28 saved a synthetic long-form
 > edit through this card; after reload, the status and inline PDF persisted. Server readback
 > matched the edited text hash, PDF storage presence and one refs-only `review_edited` event.
+> A second disposable Chromium run exercised short-content save (no replacement bytes)
+> and spreadsheet edit: table-free text visibly refused without a stored change or outcome;
+> a valid table saved, survived reload and produced one outcome plus XLSX-MIME ZIP bytes.
+> The original sheet fixture had placeholder storage bytes, so this does not prove an
+> original workbook's parsing or full XLSX semantic equivalence.
 > This is local isolated UAT, not hosted or production acceptance.
 > The control neither sends nor activates a pack. Focused UI/backend tests pass; an
 > authenticated deployed browser walkthrough remains open.

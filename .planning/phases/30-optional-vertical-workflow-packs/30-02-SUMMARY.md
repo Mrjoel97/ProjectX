@@ -171,4 +171,14 @@ inline PDF; an independent tenant-bound server readback matched the edited text 
 PDF storage presence and exactly one `review_edited` audit outcome. The stack's isolated
 audit check passed and its exact owned temporary root was removed. This closes the
 previously absent *local positive browser path* only; hosted/deployed tenant UAT,
-negative browser paths, semantic qualification and activation remain open.
+other negative browser paths, semantic qualification and activation remain open.
+An independent second disposable authenticated browser run covered the short-content
+and spreadsheet branches. Short content saved and survived server readback with its
+edited hash, no stored bytes and one `review_edited` outcome. A table-free spreadsheet
+edit displayed the specific refusal; server readback retained the original hash and
+zero edit outcomes. A valid Markdown table then saved, survived reload in the Output
+card and produced one outcome; the replacement download had XLSX MIME and 16,137
+ZIP-signature bytes. The sheet fixture's *initial* stored bytes were a synthetic
+placeholder, so this does not prove original-workbook parsing or cell-level workbook
+semantics. The second stack's audit check and owned-root removal passed. Hosted UAT,
+the remaining refusal matrix and semantic/candidate gates remain open.

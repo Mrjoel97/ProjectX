@@ -8,15 +8,15 @@ import { internal } from "@pikar/backend/api";
 import { ConvexHttpClient } from "convex/browser";
 import { OWNERSHIP_MARKER } from "./phase49-stack-lifecycle.mjs";
 
-const [mode, suppliedRoot, email, artifactId] = process.argv.slice(2);
+const [mode, suppliedRoot, email, fourth, fifth] = process.argv.slice(2);
 if (
-  !["invite", "artifact", "verify"].includes(mode) ||
+  !["invite", "artifact", "verify", "verify-refusal"].includes(mode) ||
   !suppliedRoot ||
   !/^phase30-[a-f0-9-]+@example\.test$/.test(email ?? "") ||
-  (mode === "verify" && !artifactId)
+  ((mode === "verify" || mode === "verify-refusal") && !fourth)
 )
   throw new Error(
-    "expected invite|artifact|verify, exact disposable root and synthetic example.test email",
+    "expected invite|artifact|verify|verify-refusal, exact disposable root and synthetic example.test email",
   );
 const root = realpathSync(suppliedRoot);
 const fromTemp = relative(tmpdir(), root);
@@ -47,6 +47,9 @@ if (mode === "invite") {
   const invite = await client.mutation(internal.invites.__seedInvite, { email });
   process.stdout.write(`invite=${invite.code}\n`);
 } else if (mode === "artifact") {
+  const form = fourth ?? "long";
+  if (!["long", "short", "sheet"].includes(form) || (form === "sheet") !== Boolean(fifth))
+    throw new Error("artifact form/storage mismatch");
   const found = await client.query(internal.owner.findUserIdByEmailForProvisioning, { email });
   const tenantId = found.result?.userId;
   if (!tenantId) throw new Error("synthetic browser signup has not completed");
@@ -57,13 +60,20 @@ if (mode === "invite") {
     name: "vertical-product",
     version: 1,
   });
-  const markdown = "# Disposable product review\n\nOriginal synthetic draft.";
+  const markdown =
+    form === "sheet"
+      ? "| Item | Value |\n| --- | --- |\n| Original | 1 |"
+      : form === "short"
+        ? "Short synthetic draft."
+        : "# Disposable product review\n\nOriginal synthetic draft.";
+  const title = `Disposable ${form} review`;
   const artifactId = await client.mutation(internal.vault.insertCreatedDoc, {
     tenantId,
-    title: "Disposable product review",
-    form: "long",
+    title,
+    form,
     markdown,
     contentHash: createHash("sha256").update(markdown).digest("hex"),
+    ...(fifth ? { storageId: fifth } : {}),
   });
   await client.mutation(internal.verticalPackTelemetry.record, {
     tenantId,
@@ -77,18 +87,28 @@ if (mode === "invite") {
     tenantId,
     threadId,
     docIds: [artifactId],
-    titles: ["Disposable product review"],
+    titles: [title],
     count: 1,
     role: "created",
-    form: "long",
+    form,
     createdAt: Date.now(),
   });
   process.stdout.write(`artifact=${artifactId} thread=${threadId}\n`);
 } else {
+  const artifactId = fourth;
+  const form = fifth ?? "long";
+  if (!["long", "short", "sheet"].includes(form)) throw new Error("unknown verification form");
   const found = await client.query(internal.owner.findUserIdByEmailForProvisioning, { email });
   const tenantId = found.result?.userId;
   if (!tenantId) throw new Error("synthetic browser signup missing at readback");
-  const expected = "# Human-edited synthetic product draft";
+  const expected =
+    mode === "verify-refusal"
+      ? "| Item | Value |\n| --- | --- |\n| Original | 1 |"
+      : form === "sheet"
+        ? "| Item | Value |\n| --- | --- |\n| Edited | 2 |"
+        : form === "short"
+          ? "Human-edited short synthetic draft."
+          : "# Human-edited synthetic product draft";
   const doc = await client.query(internal.vault.getDoc, { tenantId, vaultDocId: artifactId });
   const storage = await client.query(internal.vault.getDocForExtraction, {
     tenantId,
@@ -109,11 +129,13 @@ if (mode === "invite") {
   if (
     doc.text !== expected ||
     doc.contentHash !== createHash("sha256").update(expected).digest("hex") ||
-    !storage.storageId ||
+    Boolean(storage.storageId) !== (form !== "short") ||
     storage.status !== "ready" ||
-    edits.length !== 1 ||
+    edits.length !== (mode === "verify-refusal" ? 0 : 1) ||
     JSON.stringify(edits).includes(expected)
   )
     throw new Error("synthetic artifact edit readback did not match UI outcome");
-  process.stdout.write("verified=true textHash=match pdfStorage=present reviewEdited=1\n");
+  process.stdout.write(
+    `verified=true form=${form} textHash=match storage=${storage.storageId ? "present" : "absent"} reviewEdited=${edits.length}\n`,
+  );
 }

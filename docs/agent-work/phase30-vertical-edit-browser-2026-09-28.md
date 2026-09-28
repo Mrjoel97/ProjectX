@@ -35,3 +35,23 @@ exercises the current interactive branch's startup/normal shutdown, not its 20-m
 timeout or a second edit. The current 71-file Phase 49 aggregate separately passed
 all 21 required repository/local planes on digest
 `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd`.
+
+## Second disposable browser run: short and sheet
+
+A new synthetic invited tenant on another fresh owned loopback stack exercised two
+separate ordinary product artifacts. Short content began with no file bytes; the
+browser saved a changed body and the server readback matched its edited hash, absent
+storage and one `review_edited` outcome. For the spreadsheet branch, the signed-in
+browser's tenant upload door supplied initial placeholder storage bytes so the
+server could identify the artifact as a sheet. The initial bytes were *not* a valid
+workbook fixture and were never presented as one. The Output card showed the
+original Markdown table. A table-free edit displayed the specific refusal; server
+readback retained the original hash and zero edit outcomes. A valid multiline table
+then saved; after reload the browser showed the edited cells and recorded status.
+Server readback matched the edited text hash and one outcome. The browser's
+authenticated download of the replacement returned XLSX MIME and 16,137 bytes with
+a ZIP `PK` signature. This checks transport/rendering shape, not cell-level workbook
+parsing or semantic quality. The isolated audit exited 0, its exact root was removed,
+and ports 3112/3410/3411 were not listening after shutdown. Synthetic screenshots
+are in `output/playwright/phase30-sheet-edited-2026-09-28.png` and
+`output/playwright/phase30-sheet-status-2026-09-28.png` (local, not committed).
