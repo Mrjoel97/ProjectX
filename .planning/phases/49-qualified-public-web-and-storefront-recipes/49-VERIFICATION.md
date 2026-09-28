@@ -7,11 +7,21 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
+**2026-09-28 Data-preview source-guard renewal:** The shared `vault.ts` final-write
+guard changed the golden evaluator identity, its dependent deterministic recipe
+pin, the native vertical evaluator pin and watched playbooks. The 71-file digest
+below passed a fresh serialized **21/21-plane** aggregate with identical
+initial/final identity, two independent disposable browser/audit stacks,
+production build, three typechecks, strict documents and all **34** free gates.
+The previous `cf5aa3dbdc6972121a3142cf0d0ee93cd050bd66bcd8fff59a671b39d22c7fa0`
+identity is historical. This does not qualify a native Data model, merchant
+checkout, external provider, hosted release or founder acceptance.
+
 **Scope:** Requalification passed for the current 71-file digest below after tenant-first indexed vertical audit provenance, its watched playbooks and dependent evaluator pins changed. A fresh serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `cf5aa3dbdc6972121a3142cf0d0ee93cd050bd66bcd8fff59a671b39d22c7fa0`
+Artifact-set SHA-256: `c64396efd1c966a69ec429bb9bf27562197a561be6403290a551353ffafa6e91`
 
-The current code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. This certifies the pinned repository bytes, not deployment or founder acceptance.
+The earlier code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. It binds older source bytes; exact-head CI for the renewed digest is pending. Neither run certifies deployment or founder acceptance.
 
 **2026-09-28 local provider-egress requalification:** A filtered golden diagnostic
 stopped with an unresolved first embedding reservation after sandboxed TCP/443

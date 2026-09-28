@@ -1528,6 +1528,15 @@ export const insertCreatedDoc = internalMutation({
     markdown: v.string(),
     contentHash: v.string(),
     storageId: v.optional(v.id("_storage")),
+    // Operator Data previews pass the exact source they prepared so a later source-state
+    // change cannot be hidden by the action's separate read and write transactions.
+    sourceCheck: v.optional(
+      v.object({
+        sourceDocId: v.id("vaultDocuments"),
+        storageId: v.id("_storage"),
+        mimeType: v.string(),
+      }),
+    ),
     // 26-11 (CONT-01): which conversation produced this artifact. BOTH are v.optional -- the nine
     // createdDocs.test.ts call sites and the over-the-wire e2e call pass neither, and a legacy row
     // carrying neither must keep validating (dashboardSchema.test.ts). The caller takes them from
@@ -1537,9 +1546,34 @@ export const insertCreatedDoc = internalMutation({
   },
   handler: async (
     ctx,
-    { tenantId, title, form, markdown, contentHash: hash, storageId, sourceThreadId, sourcePlanId },
-  ): Promise<Id<"vaultDocuments">> =>
-    await ctx.db.insert("vaultDocuments", {
+    {
+      tenantId,
+      title,
+      form,
+      markdown,
+      contentHash: hash,
+      storageId,
+      sourceCheck,
+      sourceThreadId,
+      sourcePlanId,
+    },
+  ): Promise<Id<"vaultDocuments">> => {
+    if (sourceCheck) {
+      const source = await ctx.db.get(sourceCheck.sourceDocId);
+      if (
+        !source ||
+        source.tenantId !== tenantId ||
+        source.status !== "ready" ||
+        source.storageId !== sourceCheck.storageId ||
+        source.mimeType !== sourceCheck.mimeType ||
+        !(await ctx.db.system.get(sourceCheck.storageId))
+      )
+        throw new Error("DATA_SOURCE_CHANGED");
+      const folder = source.folderId ? await ctx.db.get(source.folderId) : null;
+      if (folder && (folder.tenantId !== tenantId || folder.status === "ingesting"))
+        throw new Error("DATA_SOURCE_SEALED");
+    }
+    return await ctx.db.insert("vaultDocuments", {
       tenantId,
       title,
       // Free-string `kind`. NOT "document" — smoke.ts seedVoiceDocSession already writes that.
@@ -1565,7 +1599,8 @@ export const insertCreatedDoc = internalMutation({
       sourcePlanId,
       status: "ready", // ready WITHOUT ingest — see the block comment above
       createdAt: Date.now(),
-    }),
+    });
+  },
 });
 
 /**

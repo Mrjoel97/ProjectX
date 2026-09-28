@@ -1,5 +1,13 @@
 # Optional vertical packs
 
+Last verified: 2026-09-28 — the Data operator preview's final Vault insert now
+rechecks the exact prepared source in the same mutation as artifact creation.
+A red-before-green control changed the source between preparation and insert;
+ready-state, folder-seal, storage-pointer, MIME and missing-blob refusals leave
+no preview artifact. The existing deterministic profile action still returns
+the same profile shape, and unrelated created-document callers remain valid.
+This is local source integrity, not a candidate model eval, UAT or activation.
+
 Last verified: 2026-09-28 — new `vertical_pack.outcome` rows now carry
 tenant-first, ref-only audit index keys for the exact candidate, artifact,
 event and preview posture. The generic audit RPC refuses this event type;

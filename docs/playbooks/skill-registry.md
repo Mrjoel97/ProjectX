@@ -1,5 +1,15 @@
 # Playbook: Skill Registry (versioned LLM prompts)
 
+> Last verified: 2026-09-28 — the Data preview final-write guard changed
+> `vault.ts`, which is inside the source-derived golden evaluator identity.
+> The unchanged 46-case corpus is now pinned to
+> `2026-09-11.budgeted-evaluator.9be6709f0bef7daf69909e80624cb7214661f1c2747c7ce658d62201fec29811`;
+> its dependent zero-cost web-recipe implementation hash is
+> `33669c54554f457ba3b5fbbeb20dba6f55fa29786bc6eac529ab814c07836ce6`.
+> The generated six-lane/40-case native vertical corpus was repinned for the
+> same source change. These pins retire old evidence; no paid evaluation,
+> semantic verdict or activation follows from regeneration.
+>
 > Last verified: 2026-09-28 — the tenant-first vertical audit indexes changed
 > `schema.ts` and `audit.ts`, both pinned by the free golden evaluator. Its
 > unchanged 46-case corpus now uses revision

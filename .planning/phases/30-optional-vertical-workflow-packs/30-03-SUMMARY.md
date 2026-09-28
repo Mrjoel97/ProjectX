@@ -8,6 +8,32 @@ requirements-completed: []
 
 # 30-03 — Deterministic Data core and adapter
 
+## 2026-09-28 final-write source-state correction
+
+The Data operator preview used separate action reads and a generic Vault insert.
+A source could become non-ready, sealed, repointed, retyped or lose its blob
+after profiling but before the artifact write. A test using that exact two-step
+ordering failed on the old insert validator, then passed after an optional
+source check was added to the final `insertCreatedDoc` mutation and the preview
+passed its prepared storage/MIME identity. The final mutation checks tenant,
+ready state, exact storage and MIME, stored-byte presence and current folder
+seal before inserting. Existing created-document callers omit the check and
+retain their behavior. This is local source integrity only; native semantic
+evaluation, authenticated UAT and activation remain open.
+
+The focused Data/created-document/native-binding/discovery selection passes
+**42/42** after a structural action-to-final-write wiring guard was added;
+backend TypeScript passes. The shared Vault source edit retired the
+old golden evaluator revision and its dependent web-recipe hash. The code-owned
+golden revision, manifest, web-recipe hash and generated native vertical
+revision were refreshed from current bytes; regeneration did not run a model
+or mint evidence. All **34** free gates then passed. The shared Phase 49
+71-file set was independently requalified by its serialized **21/21-plane**
+local aggregate on digest
+`c64396efd1c966a69ec429bb9bf27562197a561be6403290a551353ffafa6e91`;
+this renews the overlapping public-runtime layer only. The Data candidate
+still has no semantic model verdict, authenticated pack UAT or activation.
+
 Implemented `packages/core/src/dataProfile.ts`, the bounded existing-SheetJS parser in
 `packages/vault/src/dataWorkbook.ts`, and the thin owned-file adapter in
 `packages/backend/convex/verticalData.ts`. No dependency or parser stack was added. The adapter

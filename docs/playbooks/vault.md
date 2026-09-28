@@ -1,3 +1,10 @@
+> Last verified: 2026-09-28 — `insertCreatedDoc` now accepts an optional exact
+> source check for Data operator previews. In its final mutation it rechecks
+> tenant, ready state, storage pointer, MIME, stored-byte presence and folder
+> seal before writing an artifact; other created-document callers omit it and
+> keep their existing behavior. This closes the action read/write race locally,
+> not Data-pack semantic qualification or release.
+>
 > Last verified: 2026-09-28 — dispatcher research tests that start vault ingest now
 > freeze scheduled timeout callbacks; the sole scripted retry test keeps real timers.
 > Focused dispatcher and one full backend suite pass. See the dated dispatcher residual
