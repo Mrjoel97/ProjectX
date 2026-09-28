@@ -12,13 +12,16 @@ while the action deletes its newly staged blob. The old-blob cleanup is not sile
 swallowed after a successful save.
 If the save response is lost, the UI does not infer rollback; it asks the reviewer to
 reopen the artifact and confirm its persisted state. A DOM regression pins this ambiguity.
-An authenticated disposable Chromium run on 2026-09-28 exercised the ordinary product
-artifact's long-form edit through the Output card. The PDF/status persisted across reload,
-and independent server readback found the exact edited text hash, stored PDF and one
-`review_edited` outcome. This is one synthetic local positive path, not hosted tenant UAT,
-cross-format qualification, exact-version semantic evaluation or activation.
-Focused backend and DOM tests pass. This is local runtime proof, not deployed browser UAT,
-semantic qualification, candidate approval, activation or delivery.
+Authenticated disposable Chromium runs on 2026-09-28 exercised ordinary product
+artifact edits in long, short and spreadsheet forms through the Output card. The
+PDF/status and edited spreadsheet/status persisted across reload. Server readback
+matched edited text hashes and one `review_edited` outcome per saved artifact; a
+table-free sheet edit refused without an outcome. The browser checked the XLSX
+download's ZIP/MIME shape, not its cells. A separate authenticated backend test
+reads the replacement workbook from Convex storage and parses the edited header
+and row, then confirms deletion of the prior blob. These are synthetic local
+proofs, not hosted tenant UAT, full cross-format refusal coverage, exact-version
+semantic evaluation, candidate approval, activation or delivery.
 
 Last verified: 2026-09-28 — ordinary artifact review now refuses an agent document
 rewritten in place after its original `artifact_created` event. `vaultDocuments.contentRevision`

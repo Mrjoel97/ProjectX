@@ -13650,8 +13650,8 @@
     "semantic_hash": ""
   },
   "docs/playbooks/vertical-packs.md": {
-    "mtime": 1790565916.4216545,
-    "ast_hash": "5a58e26a9b83f4ac48ee27f4ae6c6276",
+    "mtime": 1790570005.3649347,
+    "ast_hash": "ba5f42d329fe2a50c273a0f7b7c450cf",
     "semantic_hash": ""
   },
   "docs/releases/2026-09-10-audit-reliability-promotion.md": {
@@ -17110,8 +17110,8 @@
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalPacks.review.test.ts": {
-    "mtime": 1790563006.4475136,
-    "ast_hash": "32a2e6f865d31d803aed1280a1e07d53",
+    "mtime": 1790569896.6357253,
+    "ast_hash": "4112274f15c083e8c67613a1339e9bb9",
     "semantic_hash": ""
   },
   "packages/backend/convex/verticalArtifactEdit.ts": {
@@ -17125,8 +17125,8 @@
     "semantic_hash": ""
   },
   "docs/agent-work/phase30-vertical-edit-browser-2026-09-28.md": {
-    "mtime": 1790568998.7978992,
-    "ast_hash": "506a000f59851bf157c066e4f3cf41b9",
+    "mtime": 1790569930.2914047,
+    "ast_hash": "5e05b476547f3da3b0f68f6a93494daa",
     "semantic_hash": ""
   }
 }

@@ -55,3 +55,10 @@ parsing or semantic quality. The isolated audit exited 0, its exact root was rem
 and ports 3112/3410/3411 were not listening after shutdown. Synthetic screenshots
 are in `output/playwright/phase30-sheet-edited-2026-09-28.png` and
 `output/playwright/phase30-sheet-status-2026-09-28.png` (local, not committed).
+
+A subsequent backend regression strengthens the renderer/store boundary beyond
+the browser's ZIP/MIME observation: after an authenticated sheet edit, it reads
+the replacement blob through Convex storage, parses it as XLSX, and asserts the
+actual `Item, Count` header and `Revised, 2` row. The same test checks that the
+old blob is gone. This is a synthetic local workbook-content proof, not a
+cell-level parse of the particular browser-downloaded bytes or hosted UAT.

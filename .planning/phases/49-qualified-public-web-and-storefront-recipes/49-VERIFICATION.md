@@ -7,9 +7,18 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
-**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `e23ed020d37dcf9aa16ed7b9f62ee6f405fc486761abceb557d77f37caaebbcc` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
+**Scope:** The 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates, with unchanged initial/final identity. The prior digest `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd` is historical. This is repository/local technical qualification only. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd`
+Artifact-set SHA-256: `e3c80fab2c0f2e28e2c3409bd51419aec3516913a3ac8e8d72e85ec781a5897f`
+
+**2026-09-28 workbook-content requalification:** The watched vertical-packs playbook
+now distinguishes the browser's XLSX ZIP/MIME observation from a separate backend
+test that parses the stored replacement workbook's edited cells and checks old-blob
+deletion. That playbook edit retired the prior source digest. The new serialized
+aggregate passed all 21 planes with identical initial/final digest, including both
+fresh browser/audit stacks, three typechecks, production build, strict documents
+and all registered free gates. This renews repository/local evidence only; it does
+not parse the particular browser download or close Waves 7/8.
 
 **2026-09-28 interactive local-browser checkpoint:** The disposable runner now holds its
 owned loopback stack for terminal-driven Playwright CLI review, with a terminal guard,

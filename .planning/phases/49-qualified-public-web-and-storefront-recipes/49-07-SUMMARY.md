@@ -17,9 +17,14 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
-**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates. The prior digest `e23ed020d37dcf9aa16ed7b9f62ee6f405fc486761abceb557d77f37caaebbcc` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Current-tree repository/local qualified:** the 2026-09-28 serialized aggregate passed all 21 planes on the current 71-file digest below, including both fresh browser/audit stacks, production build, three typechecks, strict documents and all registered free gates. The prior digest `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd` is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `66b53e7c88a3e5227b5be199876408cc1b46a2ba23431d5a456d8fa3c2722acd`
+Artifact-set SHA-256: `e3c80fab2c0f2e28e2c3409bd51419aec3516913a3ac8e8d72e85ec781a5897f`
+
+The watched vertical-packs playbook now records the synthetic workbook-content
+readback separately from the browser's ZIP/MIME download check. That edit retired
+the prior Phase 49 digest; the serialized 21-plane aggregate passed on the current
+one with stable initial/final identity. It renews local qualification only.
 
 The new terminal-held disposable mode enabled a synthetic authenticated Wave 4
 long-form edit browser walkthrough, with persisted PDF/status and independent

@@ -1,4 +1,5 @@
 import { verticalSkillName } from "@pikar/core/verticalPacks";
+import { sheetRows } from "@pikar/vault/sheets";
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import aggregateSchema from "../node_modules/@convex-dev/aggregate/src/component/schema.js";
@@ -362,11 +363,20 @@ test("editing a spreadsheet replaces workbook bytes and refuses a table-free dra
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   );
   expect(doc?.storageId).not.toBe(oldStorageId);
-  const byteCount = await t.run(async (ctx) => {
+  const workbook = await t.run(async (ctx) => {
     const blob = doc?.storageId ? await ctx.storage.get(doc.storageId) : null;
-    return blob?.size ?? 0;
+    return blob ? sheetRows(new Uint8Array(await blob.arrayBuffer())) : null;
   });
-  expect(byteCount).toBeGreaterThan(100);
+  expect(workbook?.sheetCount).toBe(1);
+  expect(workbook?.sheets).toMatchObject([
+    {
+      name: "Sheet 1",
+      rows: [
+        ["Item", "Count"],
+        ["Revised", "2"],
+      ],
+    },
+  ]);
   expect(await t.run(async (ctx) => (await ctx.storage.get(oldStorageId)) === null)).toBe(true);
 });
 
