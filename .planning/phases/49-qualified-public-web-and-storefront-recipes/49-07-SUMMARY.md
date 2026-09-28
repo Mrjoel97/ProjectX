@@ -17,16 +17,25 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
+**2026-09-28 form-refusal replay checkpoint:** Rejected form attempts
+now replay the original refusal rather than a successful duplicate. Focused
+form/HTTP tests and backend typecheck pass. The changed watched 71-file
+source set passed a fresh serialized **21/21-plane** aggregate with identical
+initial/final digest, two independent browser/audit stacks, production build,
+three typechecks, strict documents and all 34 free gates. The
+previous `c64396efd1c966a69ec429bb9bf27562197a561be6403290a551353ffafa6e91`
+qualification belongs to older bytes. No hosted or merchant claim follows.
+
 **2026-09-28 renewal:** The Data-preview source-guard and watched playbooks
 retired the preceding `cf5aa3dbdc6972121a3142cf0d0ee93cd050bd66bcd8fff59a671b39d22c7fa0`
-digest. The exact 71-file identity below passed a new serialized **21/21-plane**
+digest. The then-current 71-file identity passed a serialized **21/21-plane**
 repository/local aggregate, including both fresh browser/audit stacks, build,
 typechecks, strict documents and all 34 free gates. No external or owner layer
 is inferred.
 
-**Current-tree repository/local requalification passed:** tenant-first indexed vertical audit provenance, watched playbooks and dependent evaluator pins changed. A fresh serialized 21-plane aggregate passed on the current identity below, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
+**Earlier repository/local requalification passed:** tenant-first indexed vertical audit provenance, watched playbooks and dependent evaluator pins changed. A serialized 21-plane aggregate passed on its then-current identity, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `c64396efd1c966a69ec429bb9bf27562197a561be6403290a551353ffafa6e91`
+Artifact-set SHA-256: `5b2186187cb23ce99fa6d69eac93193da82dad7ca257c567eb9079b3cb8acc8f`
 
 The changed skill contract and watched playbooks for a CLI-compatible named
 self-hosted golden diagnostic retired the prior Phase 49 digest. The new

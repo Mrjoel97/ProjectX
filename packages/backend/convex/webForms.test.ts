@@ -193,6 +193,64 @@ describe("Phase 48 anonymous form integration", () => {
     expect(await suppressed.t.run((ctx) => ctx.db.query("contacts").collect())).toEqual([]);
   });
 
+  test("replaying a rejected idempotency key never reports a successful duplicate", async () => {
+    const cases = [
+      { outcome: "consent_required", raw: { email: "a@example.com" } },
+      { outcome: "invalid", raw: { email: "not-an-address", consent: "on" } },
+      { outcome: "suppressed", raw: submitArgs().raw },
+    ] as const;
+    for (const { outcome, raw } of cases) {
+      const h = await harness();
+      if (outcome === "suppressed") {
+        await h.t.run((ctx) =>
+          ctx.db.insert("suppressions", {
+            tenantId: h.tenantId,
+            address: "lead@example.com",
+            suppressedAt: Date.now(),
+            source: "user-marked",
+          }),
+        );
+      }
+      const args = submitArgs({ raw });
+      await expect(h.t.mutation(internal.webForms.submit, args)).resolves.toEqual({
+        ok: false,
+        outcome,
+      });
+      await expect(h.t.mutation(internal.webForms.submit, args)).resolves.toEqual({
+        ok: false,
+        outcome,
+      });
+      const rows = await h.t.run(async (ctx) => ({
+        contacts: await ctx.db.query("contacts").collect(),
+        submissions: await ctx.db.query("webSubmissions").collect(),
+        metrics: await ctx.db.query("webMetrics").collect(),
+      }));
+      expect(rows.contacts).toEqual([]);
+      expect(rows.submissions).toHaveLength(1);
+      expect(rows.metrics).toEqual([expect.objectContaining({ kind: "form_rejected", count: 1 })]);
+    }
+  });
+
+  test("a corrected form needs a new key after a rejected attempt", async () => {
+    const h = await harness();
+    const missingConsent = submitArgs({ raw: { email: "lead@example.com" } });
+    await expect(h.t.mutation(internal.webForms.submit, missingConsent)).resolves.toEqual({
+      ok: false,
+      outcome: "consent_required",
+    });
+    await expect(h.t.mutation(internal.webForms.submit, submitArgs())).resolves.toEqual({
+      ok: false,
+      outcome: "consent_required",
+    });
+    await expect(
+      h.t.mutation(
+        internal.webForms.submit,
+        submitArgs({ idempotencyKey: "corrected-submission" }),
+      ),
+    ).resolves.toEqual({ ok: true, outcome: "accepted" });
+    expect(await h.t.run((ctx) => ctx.db.query("contacts").collect())).toHaveLength(1);
+  });
+
   test("rate-limits a hashed abuse bucket and never stores its raw key", async () => {
     const h = await harness();
     for (let index = 0; index < 5; index += 1) {

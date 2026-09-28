@@ -1,5 +1,13 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-28 — form idempotency replays now preserve an earlier
+> `invalid`, `consent_required`, or `suppressed` refusal. Only a previously
+> accepted submission returns successful `duplicate`; an ambiguous legacy
+> coordination outcome fails closed. The first refusal still counts once in
+> `form_rejected`, and a replay creates no contact, coordination row or second
+> metric. A corrected submission needs a new idempotency key. This is local
+> Convex test evidence, not a production-form or retention-SLA claim.
+>
 > Last verified: 2026-09-28 — the checkpoint-parity guard received a
 > formatter-only correction after exact-head CI lint rejected its layout.
 > The guard's Wave 3/4 digest comparison and repository/local-only boundary

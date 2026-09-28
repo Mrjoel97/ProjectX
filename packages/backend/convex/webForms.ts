@@ -151,7 +151,19 @@ export const submit = internalMutation({
           .eq("idempotencyKeyHash", idempotencyKeyHash),
       )
       .first();
-    if (prior && prior.expiresAt > now) return { ok: true, outcome: "duplicate" };
+    if (prior && prior.expiresAt > now) {
+      // A rejected attempt is idempotent too. Only a previously accepted contact may be
+      // acknowledged as a successful duplicate; otherwise preserve the recorded refusal.
+      if (prior.outcome === "accepted") return { ok: true, outcome: "duplicate" };
+      if (
+        prior.outcome === "invalid" ||
+        prior.outcome === "consent_required" ||
+        prior.outcome === "suppressed"
+      )
+        return { ok: false, outcome: prior.outcome };
+      // Older/foreign coordination outcomes must never masquerade as accepted leads.
+      return { ok: false, outcome: "invalid" };
+    }
     if (prior) await ctx.db.delete(prior._id);
 
     const abuseBucketHash = await contentHash(`web-abuse:v1:${args.abuseKey}`);
