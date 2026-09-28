@@ -1847,6 +1847,45 @@ describe("executePlan suppression + postal-address gates (19-05, PIPE-01)", () =
     "five@example.com",
   ];
 
+  test("a recipient suppressed after scheduled approval is blocked when the frozen callback fires", async () => {
+    const t = withDelivery();
+    await seedMailbox(t);
+    const recipient = "late@example.com";
+    const planId = await seedEmailPlan(t, [recipient]);
+    const approved = await t
+      .withIdentity({ subject: TENANT })
+      .mutation(api.cockpit.executePlan, { planId });
+    expect(approved).toEqual({ ok: true, scheduled: true });
+    const [request] = await countRequests(t);
+    expect(request?.recipient).toBe(recipient);
+    if (!request) throw new Error("scheduled approval did not create its request");
+    expect((await t.run((ctx) => ctx.db.get(planId)))?.status).toBe("scheduled");
+
+    // The approve-time filter has already frozen the request ID. Only the send-time backstop can
+    // see this later suppression; no transport call is permitted, even in a scheduled workflow.
+    await suppress(t, recipient);
+    const transport = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("unexpected send"));
+    try {
+      vi.advanceTimersByTime(3_600_001);
+      for (let pass = 0; pass < 20; pass += 1) {
+        await vi.advanceTimersByTimeAsync(1_000);
+        await t.finishInProgressScheduledFunctions();
+        if ((await t.run((ctx) => ctx.db.get("requests", request._id)))?.status === "blocked")
+          break;
+      }
+      expect((await t.run((ctx) => ctx.db.get("requests", request._id)))?.status).toBe("blocked");
+      expect(await t.run((ctx) => ctx.db.get(planId))).toMatchObject({
+        recipientTotal: 0,
+        queuedCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+      });
+      expect(transport).not.toHaveBeenCalled();
+    } finally {
+      transport.mockRestore();
+    }
+  });
+
   test("Marketing-captured suppressed contact is withheld before immediate fan-out", async () => {
     const t = withFanoutOnly();
     await seedMailbox(t);
