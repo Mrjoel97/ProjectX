@@ -165,6 +165,40 @@ function rails({ dailySpendCents = 0, deploymentSpendCents = 0, accept = true } 
 }
 
 describe("disabled recurrence candidate: actual convex-test transactions", () => {
+  it("refuses invalid due-sweep and direct-claim clocks without advancing state", async () => {
+    const { tx } = harness();
+    const { id, routine, key } = await approved(tx);
+    const progress = await tx((db) =>
+      db
+        .query("candidateSweepProgress")
+        .withIndex("by_tenant", (q) => q.eq("tenantId", tenant))
+        .unique(),
+    );
+    if (!progress) throw new Error("test setup: progress absent");
+    const before = await tx((db) => db.get(progress._id));
+    for (const invalid of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      await expect(syntheticDueSweep(tx, tenant, invalid, 1)).rejects.toThrow(
+        "candidate: invalid sweep time",
+      );
+      await expect(
+        tx((db) => claimTick(db, tenant, id, key, routine.version, invalid)),
+      ).rejects.toThrow("candidate: invalid sweep time");
+      expect(await tx((db) => db.get(progress._id))).toEqual(before);
+      expect((await tx((db) => db.get(id)))?.lastOccurrenceKey).toBeUndefined();
+    }
+  });
+
+  it("refuses attempt-counter exhaustion before entering running state", async () => {
+    const { tx } = harness();
+    const { runId } = await claimed(tx);
+    await tx((db) => db.patch(runId, { attempts: Number.MAX_SAFE_INTEGER }));
+    const before = await tx((db) => db.get(runId));
+    await expect(tx((db) => beginAttempt(db, tenant, runId))).rejects.toThrow(
+      "candidate: counter exhausted",
+    );
+    expect(await tx((db) => db.get(runId))).toEqual(before);
+  });
+
   it("refuses approval-version overflow before pause or material change", async () => {
     for (const transition of ["pause", "change"] as const) {
       const { tx } = harness();

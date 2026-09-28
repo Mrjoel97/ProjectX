@@ -14,9 +14,9 @@ tree. Its recorded SHA-256 values for `schema.ts`, `model.ts` and `model.test.ts
 | Candidate path under `packages/backend/candidate/recurrence/` | Current SHA-256 |
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
-| `model.ts` | `2c27910aa1129e20aa15aad19b4b581bcfd58ea603f6e0b7ce9d9dfd87fd8c03` |
-| `model.test.ts` | `02728437a65714fdd81cc5b282203762954ba00d8292f7d036cf3854dee21431` |
-| `README.md` | `9ea39712bf550f368e098c85f98fd5f59c1b5721052d4c182abd3e171b9fb5c4` |
+| `model.ts` | `7a533c5004990dfda0f891333f7ef7d1c9b3695f3241a3e9fa8781a891f65564` |
+| `model.test.ts` | `47a7cac50098f08096c01f05a0d1c7982a460f2bd66490da4e0f4d0dd3daabdf` |
+| `README.md` | `59afaabf1acdccfcec0956977ebec437403c54de65a19e76be152a145ead0669` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
@@ -99,8 +99,19 @@ The three changed candidate-file hashes above supersede their previous values;
 fresh independent review is still pending. This is neither real sweep liveness
 nor production approval fencing.
 
+**2026-09-28 clock/attempt amendment:** Two adverse controls failed on the prior
+disabled candidate: a finite negative/fractional/unsafe due-sweep clock could
+advance the sweep, and a stored attempt count at `Number.MAX_SAFE_INTEGER`
+could enter `running` with a rounded increment. Due sweeps and direct claims
+now require nonnegative safe-integer UTC milliseconds; attempt start uses the
+shared checked increment. Both refusals leave the routine/run/progress rows
+unchanged. The explicit candidate suite passes **45/45** and candidate
+TypeScript exits 0. The three changed candidate hashes in the table above
+supersede the earlier ones; independent current-source review remains pending.
+No deployed scheduler, provider, paid call or tenant activation follows.
+
 Current controls still have value but are narrower: the exact six source hashes above were
-rechecked on 2026-09-28 and explicit candidate Vitest passed **43/43** on the current tree;
+rechecked on 2026-09-28 and explicit candidate Vitest passed **45/45** on the current tree;
 candidate TypeScript passed; `routineDecision`, `routines`, `dstProbe` and `schema` passed **149/149**;
 checker self-check passed **32/32**. The actual governance modes returned matrix `0`, eligibility
 `1` with **14** findings, operational `defer` decision `0`, and disabled stage `0`. `convex.json`

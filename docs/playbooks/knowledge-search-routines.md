@@ -1,5 +1,14 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — two red-before-green disabled-candidate controls
+> found that a finite fractional/negative/unsafe due-sweep clock could pass the
+> old guard and that an exhausted attempt count could enter `running` with an
+> unsafe successor. Direct claims and due sweeps now require nonnegative safe
+> integer UTC milliseconds; attempt start uses the shared checked increment.
+> The isolated candidate passes 45/45 and its TypeScript project passes.
+> Current-source independent review and real limiter/DST/OAuth/provider evidence
+> remain open; operational recurrence stays `defer` with no app caller or send.
+>
 > Last verified: 2026-09-28 — the closed `SCHEDULER_CALL_SITES` set now names
 > `webForms.ts`. Its sole new schedule is a one-second continuation only when
 > the global form-expiry index returns more than 100 expired rows; the hourly

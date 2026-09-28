@@ -92,6 +92,11 @@ function assertScheduleAt(rule: LocalRecurrenceRule, afterUtcMs: number) {
   nextOccurrence(afterUtcMs, rule);
 }
 
+function assertSweepTime(nowUtcMs: number) {
+  if (!Number.isSafeInteger(nowUtcMs) || nowUtcMs < 0)
+    throw new Error("candidate: invalid sweep time");
+}
+
 async function progressFor(db: CandidateDb, tenantId: string): Promise<Progress> {
   const existing = await db
     .query("candidateSweepProgress")
@@ -240,6 +245,7 @@ export async function claimTick(
   expectedVersion: number,
   nowUtcMs: number,
 ) {
+  assertSweepTime(nowUtcMs);
   const routine = await db.get(routineId);
   assertTenant(routine, tenantId);
   if (routine.version !== expectedVersion) return { outcome: "stale_version" as const };
@@ -302,7 +308,7 @@ export async function beginAttempt(db: CandidateDb, tenantId: string, runId: Run
     const status = routine.status === "paused" ? "stopped_paused" : "stopped_changed";
     return { outcome: await commitTerminal(db, run, status) };
   }
-  await db.patch(runId, { status: "running", attempts: run.attempts + 1 });
+  await db.patch(runId, { status: "running", attempts: nextCounter(run.attempts) });
   return { outcome: "running" as const };
 }
 
@@ -745,7 +751,7 @@ export async function syntheticDueSweep(
   limit = SWEEP_PAGE_LIMIT,
 ) {
   assertSweep(tenantId, limit);
-  if (!Number.isFinite(nowUtcMs)) throw new Error("candidate: invalid sweep time");
+  assertSweepTime(nowUtcMs);
   const selected = await transaction(async (db) => {
     const pass = await sweepPass(db, tenantId, "due");
     const rows =
