@@ -4,10 +4,10 @@
 > `check-production-head.mjs --self-test` and
 > `check-production-vercel-project.mjs --self-test`, so CI verifies the
 > release-head comparison, its three workflow placements, and the Vercel
-> project-identity guard without querying GitHub, Vercel or touching
-> production. The live main-ref and post-`vercel pull` identity checks run
-> only inside an opted-in production workflow and fail closed on missing or
-> mismatched readback.
+> project-identity guard's synthetic local/API responses without querying
+> GitHub, Vercel or touching production. The live main-ref and post-`vercel
+> pull` authenticated project read run only inside an opted-in production
+> workflow and fail closed on missing or mismatched readback.
 
 > Last verified: 2026-09-28 — CI now runs the disabled Wave 6 recurrence candidate
 > through its own edge-runtime Vitest config and TypeScript project after checking the
