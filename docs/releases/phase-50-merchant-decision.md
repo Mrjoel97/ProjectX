@@ -1,6 +1,6 @@
 # Phase 50 merchant decision packet — pending
 
-**Reviewed:** 2026-09-27. **Status:** pending remaining provider, legal and operating evidence; this is not ADR-049, adapter authority, merchant approval, or release evidence. Public storefront and live commerce remain closed.
+**Reviewed:** 2026-09-28. **Status:** pending remaining provider, legal and operating evidence; this is not ADR-049, adapter authority, merchant approval, or release evidence. Public storefront and live commerce remain closed.
 
 ## Locked scope and decision boundary
 
@@ -51,6 +51,12 @@ Recheck provider documentation and actual account/partner capability immediately
 [Stripe's current seller-country list](https://stripe.com/global) still does not list Tanzania. [PayPal's partner-onboarding country table](https://developer.paypal.com/platforms/seller-onboarding) marks Tanzania send-only and explicitly says send-only sellers cannot receive payments through partner payment integrations; the table's flow-specific “Yes” cells are not a receive-payment override. [PayPal's partner Checkout guide](https://developer.paypal.com/platforms/checkout/standard/integrate) continues to label its sample SDK v5 while directing new integrations to [SDK v6 setup](https://developer.paypal.com/sdk/js/set-up/). The v6 setup page alone does not prove exact partner merchant-ID binding. These official-page observations were checked on 2026-09-27; they do not establish Pikar-AI partner approval, a supported seller/account matrix or a selected browser implementation.
 
 The decision checker now rejects impossible or future owner/provider evidence and capability-matrix `checkedAt` dates. A syntactically valid past date still does not prove the associated claim, account grant, or currency capability. The real decision remains pending and must be independently reviewed before ADR-049 acceptance.
+
+### 2026-09-28 PayPal seller-binding recheck
+
+The current [partner Standard Checkout guide](https://developer.paypal.com/platforms/checkout/standard/integrate) still shows a **v5** browser sample with the platform client ID and the exact seller's `merchant-id`; PayPal's [v5 SDK configuration](https://developer.paypal.com/sdk/js/configuration/) explicitly describes that parameter for partner transactions. The same partner guide directs new integrations to **v6**, but the public [v6 setup](https://developer.paypal.com/sdk/js/set-up/) lists `partnerAttributionId` in its `createInstance` options without documenting an exact seller-merchant-ID binding there. The [v6 reference](https://developer.paypal.com/sdk/js/reference/) likewise does not supply that missing partner binding in its published API text. Absence from these pages is **not** proof that v6 cannot support a partner flow; it is insufficient evidence to implement that flow safely. The v6 setup page also presents client-ID and client-token initialization examples, so the chosen authentication route must be pinned to the actual partner configuration rather than inferred from a generic example.
+
+Keep `buyerSdkMerchantBinding` unverified. Before Plan 50-08, obtain a provider-documented v6 exact-seller binding and test it with the platform's partner app, **or** record a reviewed v5 exception using the documented `merchant-id` route and its own sandbox proof. `partnerAttributionId`/BN code alone is attribution, not seller identity. Neither public page establishes Pikar-AI partner approval, delegated grant, seller eligibility, settlement currency or refund permission; the real decision remains pending.
 
 ## Evidence to resolve before accepted ADR-049
 
