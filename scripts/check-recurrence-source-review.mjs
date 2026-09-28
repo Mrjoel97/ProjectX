@@ -14,7 +14,7 @@ const auditPath =
 const historicalReviewPath =
   ".planning/phases/47-the-schedule-row-that-re-arms/47-22-TECHNICAL-REVIEW.md";
 const reviewPath =
-  ".planning/phases/47-the-schedule-row-that-re-arms/47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md";
+  ".planning/phases/47-the-schedule-row-that-re-arms/47-25-LIMITER-COMPONENT-PROBE-REVIEW.md";
 const files = [
   "schema.ts",
   "model.ts",
@@ -38,14 +38,14 @@ function recordedHash(markdown, name) {
 function checkIdentity(actual, audit, review, historicalReview) {
   const errors = [];
   if (
-    !/^\*\*Current-source review:\*\* limited candidate design review at `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW\.md`; real rails and activation unreviewed$/m.test(
+    !/^\*\*Current-source review:\*\* limited component transaction probe at `47-25-LIMITER-COMPONENT-PROBE-REVIEW\.md`; real rails and activation unreviewed$/m.test(
       audit,
     )
   )
     errors.push("current-source review status is not the limited exact-source verdict");
   if (
     !review.includes(
-      "**Verdict:** limited candidate design review accepted; operational recurrence remains `defer`.",
+      "**Verdict:** limited component transaction probe accepted; operational recurrence remains `defer`.",
     )
   )
     errors.push("current review lacks the limited defer verdict");
@@ -73,8 +73,8 @@ function checkIdentity(actual, audit, review, historicalReview) {
 function selfTest() {
   const h = (char) => char.repeat(64);
   const actual = Object.fromEntries(files.map((name) => [name, h("a")]));
-  const audit = `**Current-source review:** limited candidate design review at \`47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md\`; real rails and activation unreviewed\n${files.map((name) => `| \`${name}\` | \`${h("a")}\` |`).join("\n")}`;
-  const review = `**Verdict:** limited candidate design review accepted; operational recurrence remains \`defer\`.\n${files.map((name) => `| \`${name}\` | \`${h("a")}\` |`).join("\n")}`;
+  const audit = `**Current-source review:** limited component transaction probe at \`47-25-LIMITER-COMPONENT-PROBE-REVIEW.md\`; real rails and activation unreviewed\n${files.map((name) => `| \`${name}\` | \`${h("a")}\` |`).join("\n")}`;
+  const review = `**Verdict:** limited component transaction probe accepted; operational recurrence remains \`defer\`.\n${files.map((name) => `| \`${name}\` | \`${h("a")}\` |`).join("\n")}`;
   const historicalReview = `${files
     .slice(0, 3)
     .map((name) => `| \`${name}\` | \`${h("b")}\` |`)
@@ -116,7 +116,7 @@ function selfTest() {
       checkIdentity(
         actual,
         audit,
-        review.replace("limited candidate design review accepted", "enable-safe"),
+        review.replace("limited component transaction probe accepted", "enable-safe"),
         historicalReview,
       ).some((e) => e.includes("lacks the limited defer verdict")),
     ],
@@ -124,7 +124,7 @@ function selfTest() {
       "missing limited status",
       checkIdentity(
         actual,
-        audit.replace("limited candidate design review", "accepted"),
+        audit.replace("limited component transaction probe", "accepted"),
         review,
         historicalReview,
       ).some((e) => e.includes("limited exact-source verdict")),

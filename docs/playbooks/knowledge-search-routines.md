@@ -1,5 +1,13 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-28 — the disabled six-file recurrence candidate now has
+> a 49/49 isolated `convex-test` probe of the installed rate-limiter component:
+> tenant-keyed daily and shared deployment debits, replay without re-debit, and
+> both shared-cap and deliberate-throw transaction rollback against an app-side
+> journal. The current exact-source bounded review is 47-25. This does not add
+> keyed release, a production adapter, paid-effect authentication, activation,
+> provider calls or sends; operational recurrence remains `defer`.
+>
 > Last verified: 2026-09-28 — an exact-source independent review of the isolated
 > six-file recurrence candidate found malformed paid-response landing and
 > wrong-token duplicate replay gaps. Red-before-green tests now prove that a

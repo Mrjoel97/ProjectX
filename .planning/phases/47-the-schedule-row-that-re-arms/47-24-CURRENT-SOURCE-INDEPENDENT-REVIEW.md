@@ -1,5 +1,10 @@
 # Wave 6 recurrence candidate — current-source independent review
 
+> Historical exact-source checkpoint. The later test-only installed-limiter probe
+> changes `model.test.ts` and `README.md`; the current bounded review is
+> [47-25](47-25-LIMITER-COMPONENT-PROBE-REVIEW.md). The hashes below remain the
+> reviewed bytes at this checkpoint, not the current candidate identity.
+
 **Reviewed:** 2026-09-28  
 **Verdict:** limited candidate design review accepted; operational recurrence remains `defer`.  
 **Reviewer:** separate read-only native review agent; root implemented and verified corrections afterward.  

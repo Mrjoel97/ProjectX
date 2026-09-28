@@ -3,7 +3,7 @@
 **Disposition:** evidence correction and implementation handoff only. Operational recurrence remains
 `defer`; the six-file candidate remains isolated under the accepted `build-for-evidence` stage. This
 record does not accept D6, ROUT-02, eligibility, tenant activation, a provider call or release.
-**Current-source review:** limited candidate design review at `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md`; real rails and activation unreviewed
+**Current-source review:** limited component transaction probe at `47-25-LIMITER-COMPONENT-PROBE-REVIEW.md`; real rails and activation unreviewed
 
 ## Exact-source integrity
 
@@ -15,16 +15,18 @@ tree. Its recorded SHA-256 values for `schema.ts`, `model.ts` and `model.test.ts
 | --- | --- |
 | `schema.ts` | `628d3d67dcdefeedd32587341ef715413a537428f6fb6ec9e1c258f61504d909` |
 | `model.ts` | `164a0d6513da8ab84932fc44b9b48a1b195b27078a84334d204cb94920424f61` |
-| `model.test.ts` | `87c15f701d54e950e1be9900d438e42f59203caede0eb24fb2a3e43660cc3f0f` |
-| `README.md` | `6e7e76db5822a211750299f9a7b69fe47595fb48ac46fb169274b97f5cf01d68` |
+| `model.test.ts` | `09711bcd07f68defb83e4bad7d6e4bee46515a30764ed84d3cdeb135f330fb5a` |
+| `README.md` | `818680bd21bff2ff94933a68518ae4567c8fbcda2cffedf40bff87636841410f` |
 | `tsconfig.json` | `f4bcc6cf834dbc7601af35296e14315093ca83639e1f77dbd61c3f126e863087` |
 | `vitest.config.mts` | `023572d21ee41e72287a616272f6079a45ac43ed0bb0a85e9d9f453ef6a4a7d8` |
 
 CRLF expansion of the current three differing files does not reproduce the old hashes. The
 reviewed pre-commit bytes are not available in Git (`git log` shows the candidate first landed in
 `6e0db5b`), so the reason for the mismatch cannot be established from the retained source. Do not
-cite that prior hash-bound GO as an independent review of these current bytes. A new limited
-exact-source review is recorded separately in `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md`;
+cite that prior hash-bound GO as an independent review of these current bytes. A limited
+exact-source design review is recorded in `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md`;
+the later test-only limiter-component probe has a bounded current review in
+`47-25-LIMITER-COMPONENT-PROBE-REVIEW.md`;
 do not rewrite the historical review's hashes to hide the mismatch. The registered free gate
 `scripts/check-recurrence-source-review.mjs --self-test` checks all six current raw-file hashes
 against both this audit and the limited review. It refuses an absent historical correction or
@@ -120,8 +122,20 @@ the separate limited review is `47-24-CURRENT-SOURCE-INDEPENDENT-REVIEW.md`. Exp
 candidate Vitest passes **46/46** and candidate TypeScript exits 0. This is a
 candidate-only review, not a real paid-rail or D6 pass.
 
+**2026-09-28 installed-component transaction probe:** Three tests now register the actual
+`@convex-dev/rate-limiter@0.3.2` component in an isolated `convex-test` harness. They call
+the existing tenant-keyed daily and shared deployment window configurations from one
+top-level mutation with an app-side run journal. The tests directly observe two-tenant
+debits and replay without a second debit, shared-cap refusal rolling back the daily
+debit, and a deliberate post-admission throw rolling back both component debits and
+the journal. Candidate Vitest passes **49/49** and TypeScript exits 0. The separate
+[47-25 review](47-25-LIMITER-COMPONENT-PROBE-REVIEW.md) accepts only this bounded
+transaction probe. It does not supply keyed release/tombstones, cross-window refund,
+provider-effect authentication, a production adapter or activation. The changed test
+and README hashes above supersede the 47-24 checkpoint without rewriting it.
+
 Current controls still have value but are narrower: the exact six source hashes above were
-rechecked on 2026-09-28 and explicit candidate Vitest passed **46/46** on the current tree;
+rechecked on 2026-09-28 and explicit candidate Vitest passed **49/49** on the current tree;
 candidate TypeScript passed; `routineDecision`, `routines`, `dstProbe` and `schema` passed **149/149**;
 checker self-check passed **32/32**. The actual governance modes returned matrix `0`, eligibility
 `1` with **14** findings, operational `defer` decision `0`, and disabled stage `0`. `convex.json`
@@ -149,11 +163,14 @@ The remaining technical design must define a durable per-run operation journal/i
 reconciliation boundary **without** making a separate run bucket stand in for the shared rails;
 prove atomic admission/compensation or a conservative held/uncertain stop across crashes; and test
 both real windows, cross-window release, pause, retry, duplicate workers and an unknown physical
-paid start. The actual component and ledger integration must be tested, not inferred from stubs.
+paid start. The actual component and a candidate app journal have now been tested together for
+same-mutation admission and rollback in `convex-test`, but the full keyed ledger,
+release and recovery integration remains untested.
 One possible design route follows [Convex's documented component transaction semantics](https://docs.convex.dev/components/using): a single top-level mutation can atomically commit
 app journal rows and nested rate-limiter component writes, while an action's separate
-`runMutation` calls are **not** one transaction. This is an inference for a future
-reviewed design, not a tested recurrence adapter. It would have to pin exact run/rail
+`runMutation` calls are **not** one transaction. The limited isolated probe above now
+tests the first admission/rollback property, not a recurrence adapter. A reviewed design
+would still have to pin exact run/rail
 identities in an app journal, preserve the tenant daily and shared deployment bucket
 keys, make admission/compensation idempotent within one mutation, and refuse any
 cross-window refund that credits a new window. It still cannot authenticate an unknown

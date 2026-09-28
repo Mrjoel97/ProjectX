@@ -1,6 +1,8 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
 import { nextOccurrence, occurrenceKey } from "../../../core/src/routineSchedule";
+import { DEPLOYMENT_BUDGET_CENTS, rateLimiter } from "../../convex/guardrails";
+import rateLimiterSchema from "../../node_modules/@convex-dev/rate-limiter/src/component/schema.js";
 import {
   actionablePlan,
   admitPaidStep,
@@ -39,6 +41,9 @@ declare global {
 }
 
 const modules = import.meta.glob("../../convex/_generated/**/*.*s");
+const rateLimiterModules = import.meta.glob(
+  "../../node_modules/@convex-dev/rate-limiter/src/component/**/!(*.test).ts",
+);
 const tenant = "tenant_A";
 const other = "tenant_B";
 const base: Material = {
@@ -633,7 +638,7 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
       claimTick(db, tenant, id, key, routine.version, routine.nextDueUtcMs),
     );
     if (!claim.runId) throw new Error("run absent");
-    let heldOnThrow = 0;
+    const heldOnThrow = 0;
     const mockBeforeReserve = vi.fn();
     const throwingBudget = {
       reserve: vi.fn(async () => {
@@ -1755,5 +1760,115 @@ describe("disabled recurrence candidate: actual convex-test transactions", () =>
         )
       ).map((row) => row.outcome),
     ).toEqual(["stopped_paused"]);
+  });
+});
+
+describe("disabled recurrence candidate: installed limiter transaction probe", () => {
+  function realRailHarness() {
+    const t = convexTest(schema, modules);
+    t.registerComponent("rateLimiter", rateLimiterSchema, rateLimiterModules);
+    const tx: CandidateTransaction = (work) => t.run((ctx) => work(ctx.db));
+    const balances = (tenantId: string) =>
+      t.run(async (ctx) => ({
+        daily: (await rateLimiter.getValue(ctx, "dailySpendCents", { key: tenantId })).value,
+        deployment: (await rateLimiter.getValue(ctx, "deploymentSpendCents")).value,
+      }));
+    const admit = (tenantId: string, runId: RunId) =>
+      t.run(async (ctx) => {
+        const run = await ctx.db.get(runId);
+        if (!run || run.tenantId !== tenantId) throw new Error("probe: wrong run");
+        if (run.reservation?.state === "held") return "replay" as const;
+        const daily = await rateLimiter.limit(ctx, "dailySpendCents", {
+          key: tenantId,
+          count: ROUTINE_RUN_ENVELOPE_CENTS,
+        });
+        if (!daily.ok) throw new Error("probe: tenant cap");
+        const deployment = await rateLimiter.limit(ctx, "deploymentSpendCents", {
+          count: ROUTINE_RUN_ENVELOPE_CENTS,
+        });
+        if (!deployment.ok) throw new Error("probe: deployment cap");
+        await ctx.db.patch(runId, {
+          reservation: {
+            admissionId: `${runId}:real-rail-probe`,
+            state: "held",
+            dailyKey: tenantId,
+            deploymentKey: "shared",
+            daily: "held",
+            deployment: "held",
+          },
+        });
+        return "held" as const;
+      });
+    return { t, tx, balances, admit };
+  }
+
+  it("commits both real component windows and the run journal once across replay", async () => {
+    const { tx, balances, admit } = realRailHarness();
+    const { runId } = await claimed(tx);
+    const { runId: otherRunId } = await claimed(tx, other);
+    const before = await balances(tenant);
+    const otherBefore = await balances(other);
+    expect(await admit(tenant, runId)).toBe("held");
+    expect((await tx((db) => db.get(runId)))?.reservation).toMatchObject({
+      admissionId: `${runId}:real-rail-probe`,
+      state: "held",
+      daily: "held",
+      deployment: "held",
+    });
+    expect(await admit(tenant, runId)).toBe("replay");
+    expect(await admit(other, otherRunId)).toBe("held");
+    const after = await balances(tenant);
+    const otherAfter = await balances(other);
+    expect(after.daily).toBe(before.daily - ROUTINE_RUN_ENVELOPE_CENTS);
+    expect(otherAfter.daily).toBe(otherBefore.daily - ROUTINE_RUN_ENVELOPE_CENTS);
+    expect(after.deployment).toBe(before.deployment - 2 * ROUTINE_RUN_ENVELOPE_CENTS);
+    expect(otherAfter.deployment).toBe(after.deployment);
+  });
+
+  it("rolls the tenant window back when the shared window refuses in the same mutation", async () => {
+    const { t, tx, balances, admit } = realRailHarness();
+    const { runId } = await claimed(tx);
+    await t.run(async (ctx) => {
+      const filled = await rateLimiter.limit(ctx, "deploymentSpendCents", {
+        count: DEPLOYMENT_BUDGET_CENTS,
+      });
+      expect(filled.ok).toBe(true);
+    });
+    const before = await balances(tenant);
+    await expect(admit(tenant, runId)).rejects.toThrow("probe: deployment cap");
+    expect(await balances(tenant)).toEqual(before);
+    expect((await tx((db) => db.get(runId)))?.reservation).toBeUndefined();
+  });
+
+  it("rolls both component windows and the app journal back after a late mutation throw", async () => {
+    const { t, tx, balances } = realRailHarness();
+    const { runId } = await claimed(tx);
+    const before = await balances(tenant);
+    await expect(
+      t.run(async (ctx) => {
+        const daily = await rateLimiter.limit(ctx, "dailySpendCents", {
+          key: tenant,
+          count: ROUTINE_RUN_ENVELOPE_CENTS,
+        });
+        expect(daily.ok).toBe(true);
+        const deployment = await rateLimiter.limit(ctx, "deploymentSpendCents", {
+          count: ROUTINE_RUN_ENVELOPE_CENTS,
+        });
+        expect(deployment.ok).toBe(true);
+        await ctx.db.patch(runId, {
+          reservation: {
+            admissionId: `${runId}:late-crash-probe`,
+            state: "held",
+            dailyKey: tenant,
+            deploymentKey: "shared",
+            daily: "held",
+            deployment: "held",
+          },
+        });
+        throw new Error("probe: crash before commit");
+      }),
+    ).rejects.toThrow("probe: crash before commit");
+    expect(await balances(tenant)).toEqual(before);
+    expect((await tx((db) => db.get(runId)))?.reservation).toBeUndefined();
   });
 });
