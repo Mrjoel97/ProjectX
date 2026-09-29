@@ -21360,17 +21360,20 @@
       ],
       "historical_state": "semantic_open_summary",
       "current_disposition": "open",
-      "implemented": "partial",
-      "offline_tested": "unknown",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
         "implemented": [
-          ".planning/phases/17-calendar-actions/17-03-SUMMARY.md"
+          ".planning/phases/17-calendar-actions/17-03-SUMMARY.md",
+          ".planning/phases/17-calendar-actions/17-03-CURRENT-RECHECK-2026-09-29.md"
         ],
-        "offline_tested": [],
+        "offline_tested": [
+          ".planning/phases/17-calendar-actions/17-03-CURRENT-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -21383,7 +21386,6 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -21401,11 +21403,11 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "All five behaviors green; `dispatchGuard.test.ts` still green — the tool-key **count** rises 20 → 22; the floor stays `toBeGreaterThanOrEqual(20)`, and `dispatchGuard.test.ts` is NOT edited by this plan (17-04 owns that file)."
+        "Wave 2 entry and exact-hosted plan-card/trace observation remain open; the repository tool and guard tests pass, while the historical exact tool-key count is superseded."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "wave2_entry_gate",
+        "hosted_browser_and_trace_proof"
       ],
       "closure_wave": 3,
       "owner_phase": "Phase 17",
