@@ -14,6 +14,38 @@ The reviewer must choose one of these paths *before* a production adapter is pro
 
 No route is selected by this packet. Until reviewed, the D8 matrix row must remain non-passing.
 
+## 2026-09-29 current-source cutover inventory (route-neutral)
+
+At commit `98ed813`, a production-source search of
+`packages/backend/convex` (excluding `*.test.ts`) found these direct users of
+the **reasoning** `dailySpendCents` / `deploymentSpendCents` pair:
+
+| Source | Current access that a replacement or adapter must preserve |
+| --- | --- |
+| `guardrails.ts` | Defines tenant-keyed 500-cent and keyless deployment (default 5,000-cent) 24-hour fixed windows. `prepare` checks both against an estimate; `preCall` checks both for any remaining cent; `recordSpend` debits actual spend against both. `reserveEvalCall` checks/debits both alongside a separate eval envelope; `settleEvalCall` can add debt or credit unused cents with a timestamp guard. `remainingDailyCents` reads both. |
+| `finance.ts` | Reads each window directly for tenant and deployment spend displays; a cutover that changes only admission would leave those surfaces reporting the old rail. |
+| `proactiveReview.ts` | Checks the keyless deployment window directly before a proactive action; it does not route through `guardrails.preCall`. |
+| `smoke.ts` | Fixture-only tenant daily-budget drain/reset acts directly on `dailySpendCents`; it needs an explicit test-seam migration or documented retirement, never an unnoticed production escape. |
+
+Indirect production call sites of `internal.guardrails.preCall` /
+`recordSpend` or the eval/folder APIs were found in `blueprint.ts`,
+`intake.ts`, `knowledgeLlm.ts`, `lib/evalBudgetModel.ts`, `llm.ts`,
+`pinnedWorkflows.ts`, `pipeline.ts`, `vaultDigest.ts`, `vaultDrive.ts`,
+`vaultExtract.ts`, `vaultFolders.ts`, `vaultIngest.ts`, `vaultRag.ts`,
+`vaultTranscribe.ts`, `verticalPackBinding.ts`, `voice.ts`, `voiceDoc.ts`,
+and `workflowPackBinding.ts`. This is a source-search inventory, not a proof
+that each path was live or that every dynamic caller was reached. The
+`rail:"ingest"` selector in `preCall` / `recordSpend` instead uses the separate
+`ingestSpendCents` / `deploymentIngestSpendCents` pair; media has its own
+windows. A D8 migration must neither silently merge those separate ceilings
+nor overlook the default reasoning rail when `rail` is absent.
+
+The direct finance/proactive/smoke reads and the eval reserve/settle path are
+cutover gates, not optional UI follow-up. Before choosing a migration, re-run
+the source inventory at its exact candidate commit and prove one shared
+deployment ceiling across attended, eval and recurrence consumption. No rail,
+schema, candidate, provider or deployment was changed by this inventory.
+
 ### Executed rollover falsification for an unqualified component refund
 
 On 2026-09-28, Node 24 imported the **installed** `@convex-dev/rate-limiter@0.3.2/dist/shared.js` and called its `calculateRateLimit` with a fixed 1,000-cent/86,400,000-ms window anchored at zero. A 50-cent debit at t=1,000 yielded `value=950, ts=0`. At t=86,401,000, one new-window cent yielded `value=999, ts=86400000`. Applying the old hold's `count=-50` at that same instant yielded `value=1049, ts=86400000`: **49 cents above the new window ceiling**. The command exited 0 only after asserting all three exact values. The installed component's `rateLimit` mutation persists values returned through `checkRateLimitOrThrow` / `_checkRateLimitInternal`, which calls this helper; it does not attach the negative count to the original window. Its `getValue` returns the stored value/ts rather than a present-time rolled balance. This is a deterministic helper/source proof of the rollover hazard, not a persisted-component or production-run test. It eliminates an unconditional negative-count refund as route 2's implementation; the independent installed-component transaction probe still proves only debit atomicity.
