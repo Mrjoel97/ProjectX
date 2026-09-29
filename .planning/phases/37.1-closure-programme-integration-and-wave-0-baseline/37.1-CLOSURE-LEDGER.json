@@ -19733,31 +19733,38 @@
       ],
       "historical_state": "plan_without_canonical_summary",
       "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
+      "implemented": "partial",
+      "offline_tested": "partial",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/25-private-beta-productionization/25-PREREQUISITE-EVIDENCE.md",
+          ".planning/phases/25-private-beta-productionization/25-00-CURRENT-RECHECK-2026-09-29.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/25-private-beta-productionization/25-00-CURRENT-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/25-private-beta-productionization/25-00-PLAN.md"
+          ".planning/phases/25-private-beta-productionization/25-00-PLAN.md",
+          ".planning/phases/25-private-beta-productionization/25-PREREQUISITE-EVIDENCE.md",
+          ".planning/phases/25-private-beta-productionization/25-00-CURRENT-RECHECK-2026-09-29.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "implemented": "The narrowed prerequisite matrix and historical baseline inventory exist, but the blocking owner checkpoints and current exact-SHA freeze are not complete.",
+        "offline_tested": "All thirteen plan structures now pass the installed verifier; complete goal-backward review and current baseline test/typecheck gates remain unproved.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "owner_accepted": "25-PREREQUISITE-EVIDENCE.md explicitly records no Plan 25-00 Task 1/Task 3 owner approval before 25-01; a current explicit verdict is still required.",
         "externally_enabled": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it."
       },
       "source_membership": {
@@ -19770,11 +19777,12 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Owner types `approved` only when every included prerequisite has evidence and Phase 32 is visibly excluded with the governing rationale."
+        "The skipped historical Plan 25-00 owner gate is reconciled explicitly rather than retroactively invented; a fresh exact-SHA baseline, complete goal-backward checker verdict and owner approval of the reconciled plan set are recorded."
       ],
       "remaining_work_classes": [
         "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "current_baseline_and_gate_recheck",
+        "owner_governance_verdict"
       ],
       "closure_wave": 2,
       "owner_phase": "Phase 25",
