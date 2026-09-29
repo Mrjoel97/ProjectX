@@ -19761,7 +19761,7 @@
       },
       "missing_proof": {
         "implemented": "The narrowed prerequisite matrix and historical baseline inventory exist, but the blocking owner checkpoints and current exact-SHA freeze are not complete.",
-        "offline_tested": "All thirteen plan structures now pass the installed verifier; complete goal-backward review and current baseline test/typecheck gates remain unproved.",
+        "offline_tested": "All thirteen plan structures, current full tests (11/11 Turbo tasks), typecheck (12/12 tasks), playbook and strict planning checks pass at 3435b9f; complete goal-backward review and full baseline inventory remain unproved.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "25-PREREQUISITE-EVIDENCE.md explicitly records no Plan 25-00 Task 1/Task 3 owner approval before 25-01; a current explicit verdict is still required.",
@@ -19777,7 +19777,7 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "The skipped historical Plan 25-00 owner gate is reconciled explicitly rather than retroactively invented; a fresh exact-SHA baseline, complete goal-backward checker verdict and owner approval of the reconciled plan set are recorded."
+        "The skipped historical Plan 25-00 owner gate is reconciled explicitly rather than retroactively invented; the full exact-SHA inventory (offline gate commands now green), complete goal-backward checker verdict and owner approval of the reconciled plan set are recorded."
       ],
       "remaining_work_classes": [
         "evidence_reconciliation",
