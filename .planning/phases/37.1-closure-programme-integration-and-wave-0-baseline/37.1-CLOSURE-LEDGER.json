@@ -19760,7 +19760,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "The narrowed prerequisite matrix and historical baseline inventory exist, but the blocking owner checkpoints and current exact-SHA freeze are not complete.",
+        "implemented": "The narrowed prerequisite matrix and historical inventory exist, but current source has material schema/owner-surface drift from that baseline; the blocking owner checkpoints and current exact-SHA freeze are not complete.",
         "offline_tested": "All thirteen plan structures, current full tests (11/11 Turbo tasks), typecheck (12/12 tasks), playbook and strict planning checks pass at 3435b9f; complete goal-backward review and full baseline inventory remain unproved.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -19777,11 +19777,12 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "The skipped historical Plan 25-00 owner gate is reconciled explicitly rather than retroactively invented; the full exact-SHA inventory (offline gate commands now green), complete goal-backward checker verdict and owner approval of the reconciled plan set are recorded."
+        "The skipped historical Plan 25-00 owner gate is reconciled explicitly rather than retroactively invented; current source-scan drift (76 explicit tables, 189 indexes, 40 owner-wrapper exports) triggers a full exact-SHA inventory and planning-only correction of stale 25-03/25-13 three-owner assumptions, then a complete goal-backward checker verdict and explicit owner approval."
       ],
       "remaining_work_classes": [
         "evidence_reconciliation",
         "current_baseline_and_gate_recheck",
+        "material_plan_reconciliation",
         "owner_governance_verdict"
       ],
       "closure_wave": 2,
