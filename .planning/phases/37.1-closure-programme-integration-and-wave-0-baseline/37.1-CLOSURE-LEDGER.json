@@ -19761,7 +19761,7 @@
       },
       "missing_proof": {
         "implemented": "The narrowed prerequisite matrix and historical inventory exist, but current source has material schema/owner-surface drift from that baseline; the blocking owner checkpoints and current exact-SHA freeze are not complete.",
-        "offline_tested": "All thirteen plan structures, current full tests (11/11 Turbo tasks), typecheck (12/12 tasks), playbook and strict planning checks pass at 3435b9f; complete goal-backward review and full baseline inventory remain unproved.",
+        "offline_tested": "All 19 current plan structures and independent goal-backward review pass after two planning-only revision rounds; earlier full tests (11/11 Turbo tasks), typecheck (12/12 tasks), playbook and strict planning checks passed at 3435b9f. Full current baseline inventory and owner verdict remain open.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "25-PREREQUISITE-EVIDENCE.md explicitly records no Plan 25-00 Task 1/Task 3 owner approval before 25-01; a current explicit verdict is still required.",
@@ -19777,7 +19777,7 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "The skipped historical Plan 25-00 owner gate is reconciled explicitly rather than retroactively invented; current source-scan drift (76 explicit tables, 189 indexes, 40 owner-wrapper exports) triggers a full exact-SHA inventory and planning-only correction of stale 25-03/25-13 three-owner assumptions, then a complete goal-backward checker verdict and explicit owner approval."
+        "The skipped historical Plan 25-00 owner gate is reconciled explicitly rather than retroactively invented; the revised 19-plan set passes independent goal-backward review, but the full exact-SHA inventory, committed plan-set recheck and explicit prospective owner verdict remain open."
       ],
       "remaining_work_classes": [
         "evidence_reconciliation",
@@ -20481,6 +20481,82 @@
       "successor": null,
       "stop_conditions": [
         "Stop on a weakened tenant, owner-only, approval, audit, cost, recovery, or admission boundary."
+      ]
+    },
+    {
+      "id": "PLAN:25-private-beta-productionization/25-18",
+      "workflow": "Reconcile current runtime table/index and public, owner and HTTP authorization coverage before exact-SHA beta deployment.",
+      "source_phase": "Phase 25",
+      "source_plans": [
+        ".planning/phases/25-private-beta-productionization/25-18-PLAN.md"
+      ],
+      "requirement_ids": [
+        "BETA-02",
+        "BETA-05"
+      ],
+      "historical_state": "new_gap_closure_plan_2026-09-29",
+      "current_disposition": "open",
+      "implemented": "no",
+      "offline_tested": "no",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [],
+        "offline_tested": [],
+        "deployed": [],
+        "live_observed": [],
+        "owner_accepted": [],
+        "externally_enabled": [],
+        "source": [
+          ".planning/phases/25-private-beta-productionization/25-18-PLAN.md",
+          ".planning/phases/25-private-beta-productionization/25-00-CURRENT-RECHECK-2026-09-29.md"
+        ],
+        "objective_exit_test": [],
+        "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "Plan 18 source work is not started; Plan 00 owner release and goal-backward review precede it.",
+        "offline_tested": "No exhaustive runtime table/index, owner/public export and HTTP route A/B coverage packet exists at a current source SHA.",
+        "deployed": "No exact-SHA deployment is inferred from this repository plan.",
+        "live_observed": "Hosted two-user verification remains in Plan 25-13.",
+        "owner_accepted": "The Plan 25-00 skipped historical checkpoint has no retroactive approval; an explicit reviewed verdict is required.",
+        "externally_enabled": "Private beta opening remains gated by Plans 25-11 through 25-13."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": [
+          "25-private-beta-productionization/25-18"
+        ],
+        "semantic_partial_summary_paths": [],
+        "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [],
+        "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": [
+        "The full current runtime table/index, public/owner export and HTTP route authorization surface is reconciled to non-vacuous two-identity behavior or named, verified exceptions before deployment."
+      ],
+      "remaining_work_classes": [
+        "owner_governance_verdict",
+        "current_code_delta",
+        "repository_evidence"
+      ],
+      "closure_wave": 2,
+      "owner_phase": "Phase 25",
+      "dependencies": [
+        "25-00",
+        "25-03",
+        "25-09",
+        "25-10",
+        "25-16"
+      ],
+      "entry_gate": "Plan 25-00 release and Phase 25 current-plan checker verdict have passed.",
+      "objective_exit_test": "At one recorded source SHA, every runtime table/index and public, owner and HTTP boundary has a non-vacuous authorization probe or reviewed exception; full local gates pass without claiming hosted BETA closure.",
+      "user_claims": [],
+      "external_gate_packet": "Only create an external packet after all repository-controlled acceptance is complete; otherwise none.",
+      "successor": null,
+      "stop_conditions": [
+        "Stop on an unclassified tenant boundary, weakened owner gate, fabricated approval or unsafe public bearer route."
       ]
     },
     {

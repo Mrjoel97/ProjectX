@@ -1,5 +1,13 @@
 # Phase 25 prerequisite evidence
 
+## 2026-09-29 planning-only recheck — no owner release
+
+The current Phase 25 plan set has 19 files (`25-00` through `25-18`). At the 2026-09-29 planning recheck, all 19 passed `gsd-tools.cjs verify plan-structure` with zero warnings; strict `node scripts/check-planning.mjs --exit-code` and `git diff --check` passed. An independent goal-backward checker found three substantive blockers on its first review (live mail before durable origins, unstable `HEAD == deployed SHA`, and phase-completeness before its own summary), then passed the revised set after two planning-only revision rounds. The final verdict was `VERIFICATION PASSED` for plan logic and coverage of BETA-01/02/03/05 and DLVR-02. It did **not** execute any plan, grant an owner release, prove hosted origins or providers, or complete a requirement. Three four-task plans (09, 13, 18) remain a nonblocking scope warning.
+
+The revision preserves the historical sequencing breach recorded below: Plan 25-01 and later source work landed before Plan 25-00's blocking human checkpoints. The accepted ADR-022 settles durable-origin *policy*, not hosted DNS/TLS or redirect observations. New Plan 25-18 requires a prospective explicit owner verdict before new authorization-coverage source work, then a current parsed-runtime/table/index/export/HTTP packet before Plan 25-11 deploy. Plan 25-00 Task 2's full current source/UI inventory and its exact final-plan SHA evidence remain open; earlier offline gate commands at `3435b9f` are recorded in `25-00-CURRENT-RECHECK-2026-09-29.md`. Do not write a `25-00-SUMMARY.md` or infer retroactive approval until the stated Task 2/3 evidence and owner verdict actually exist.
+
+This section is a planning verdict on the shared working tree. Record the committed plan-set SHA after integration and re-run the mechanical checks there before presenting an owner packet.
+
 ## GATE RE-SCOPED — 2026-08-16, at owner direction
 
 **This section supersedes the Task 1 verdict below. Everything under "Gate status" and after is
