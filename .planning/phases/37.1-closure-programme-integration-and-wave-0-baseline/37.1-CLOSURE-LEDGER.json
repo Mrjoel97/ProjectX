@@ -21285,17 +21285,20 @@
       ],
       "historical_state": "semantic_open_summary",
       "current_disposition": "open",
-      "implemented": "partial",
-      "offline_tested": "unknown",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
         "implemented": [
-          ".planning/phases/17-calendar-actions/17-02-SUMMARY.md"
+          ".planning/phases/17-calendar-actions/17-02-SUMMARY.md",
+          ".planning/phases/17-calendar-actions/17-02-CURRENT-RECHECK-2026-09-29.md"
         ],
-        "offline_tested": [],
+        "offline_tested": [
+          ".planning/phases/17-calendar-actions/17-02-CURRENT-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -21308,7 +21311,6 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -21326,11 +21328,11 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "`internal.smoke.getCalendarFixture` / `seedCalendarFixture` exist and round-trip under `convex-test`. `buildAuthorizeUrl` emits all three scopes from a single URL. `/connect-gmail` copy names calendar access. The one-authorize-URL scan is green and observed RED once with a planted second builder."
+        "Wave 2 entry gate and exact-hosted Google consent/reconnect proof remain open; repository/offline Plan 17-02 exit conditions are evidenced without claiming ACTN-02 closure."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "wave2_entry_gate",
+        "hosted_provider_confirmation"
       ],
       "closure_wave": 3,
       "owner_phase": "Phase 17",
