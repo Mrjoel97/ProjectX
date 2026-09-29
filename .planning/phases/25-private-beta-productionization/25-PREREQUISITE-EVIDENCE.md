@@ -1,5 +1,11 @@
 # Phase 25 prerequisite evidence
 
+## 2026-09-29 superseding 21-plan recheck — still no owner release
+
+The earlier 19-plan verdict below is a historical planning snapshot, superseded after current-source URL-origin drift was found. Plans `25-19` and `25-20` now cover durable copied invites, effective auth callback overrides, and generated public/shareable URLs. The dependency chain requires 19 → 20 → 18 authorization coverage → 07 first live mail gate. Plan 11 repeats exact-final-source authorization and URL checks after Plan 09, then repeats hosted copied/generated invite, funnel, unsubscribe, and effective auth/redirect observations against the final deployed ID and SHA before later live sends. A `mailReady=false` refusal is a blocking outcome, not Outlook completion.
+
+All 21 plans passed structural validation and strict planning checks in the working tree. Independent goal-backward review found zero blockers after the revision; its final-deployment observation warning was resolved in `25-11-PLAN.md` before the final local verification. Plan 20 spans 11 files and retains a nonblocking execution-scope warning. This is planning evidence only: Plans 19/20 are unimplemented, hosted links and provider callbacks are unobserved, and no prospective Plan 00 owner verdict is recorded. The historical Plan 25-01 sequencing breach is not retroactively approved. Do not write `25-00-SUMMARY.md` or begin the new Phase 25 source work on the strength of this recheck.
+
 ## 2026-09-29 planning-only recheck — no owner release
 
 The current Phase 25 plan set has 19 files (`25-00` through `25-18`). At the 2026-09-29 planning recheck, all 19 passed `gsd-tools.cjs verify plan-structure` with zero warnings; strict `node scripts/check-planning.mjs --exit-code` and `git diff --check` passed. An independent goal-backward checker found three substantive blockers on its first review (live mail before durable origins, unstable `HEAD == deployed SHA`, and phase-completeness before its own summary), then passed the revised set after two planning-only revision rounds. The final verdict was `VERIFICATION PASSED` for plan logic and coverage of BETA-01/02/03/05 and DLVR-02. It did **not** execute any plan, grant an owner release, prove hosted origins or providers, or complete a requirement. Three four-task plans (09, 13, 18) remain a nonblocking scope warning.

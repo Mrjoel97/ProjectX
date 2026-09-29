@@ -20546,9 +20546,10 @@
       "dependencies": [
         "25-00",
         "25-03",
-        "25-09",
         "25-10",
-        "25-16"
+        "25-16",
+        "25-19",
+        "25-20"
       ],
       "entry_gate": "Plan 25-00 release and Phase 25 current-plan checker verdict have passed.",
       "objective_exit_test": "At one recorded source SHA, every runtime table/index and public, owner and HTTP boundary has a non-vacuous authorization probe or reviewed exception; full local gates pass without claiming hosted BETA closure.",
@@ -20558,6 +20559,106 @@
       "stop_conditions": [
         "Stop on an unclassified tenant boundary, weakened owner gate, fabricated approval or unsafe public bearer route."
       ]
+    },
+    {
+      "id": "PLAN:25-private-beta-productionization/25-19",
+      "workflow": "Make beta invite display and clipboard links resolve from the configured durable public app origin, including preview-host negative proof.",
+      "source_phase": "Phase 25",
+      "source_plans": [
+        ".planning/phases/25-private-beta-productionization/25-19-PLAN.md"
+      ],
+      "requirement_ids": ["BETA-01", "BETA-05"],
+      "historical_state": "new_gap_closure_plan_2026-09-29",
+      "current_disposition": "open",
+      "implemented": "no",
+      "offline_tested": "no",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [], "offline_tested": [], "deployed": [], "live_observed": [],
+        "owner_accepted": [], "externally_enabled": [],
+        "source": [
+          ".planning/phases/25-private-beta-productionization/25-19-PLAN.md",
+          ".planning/phases/25-private-beta-productionization/25-00-URL-ORIGIN-DRIFT-2026-09-29.md"
+        ],
+        "objective_exit_test": [], "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "Plan 19 source work waits for the prospective Plan 00 owner verdict.",
+        "offline_tested": "No clicked-clipboard preview-host negative and durable-origin positive packet exists.",
+        "deployed": "No exact-SHA deployment is inferred from this plan.",
+        "live_observed": "No final-deployment copied invite has been observed.",
+        "owner_accepted": "No prospective owner release of the revised Phase 25 plan set is recorded.",
+        "externally_enabled": "Private beta remains gated."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": ["25-private-beta-productionization/25-19"],
+        "semantic_partial_summary_paths": [], "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [], "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": ["Pending and issued invite cards display and copy the same durable configured URL from preview and production sessions."],
+      "remaining_work_classes": ["owner_governance_verdict", "current_code_delta", "repository_evidence", "hosted_observation"],
+      "closure_wave": 2,
+      "owner_phase": "Phase 25",
+      "dependencies": ["25-00", "25-10"],
+      "entry_gate": "Plan 25-00 prospective owner verdict permits source implementation.",
+      "objective_exit_test": "A source-bound owner query and UI tests plus clicked-clipboard preview proof yield the durable URL; hosted proof follows on the final deployment.",
+      "user_claims": [],
+      "external_gate_packet": "None until repository-controlled acceptance is complete.",
+      "successor": null,
+      "stop_conditions": ["Stop on a preview-derived or non-durable invite origin, or on secret exposure in a client query."]
+    },
+    {
+      "id": "PLAN:25-private-beta-productionization/25-20",
+      "workflow": "Reconcile effective auth callback and every beta shareable public URL with durable configured origins.",
+      "source_phase": "Phase 25",
+      "source_plans": [
+        ".planning/phases/25-private-beta-productionization/25-20-PLAN.md"
+      ],
+      "requirement_ids": ["BETA-01", "BETA-05", "DLVR-02"],
+      "historical_state": "new_gap_closure_plan_2026-09-29",
+      "current_disposition": "open",
+      "implemented": "no",
+      "offline_tested": "no",
+      "deployed": "unknown",
+      "live_observed": "unknown",
+      "owner_accepted": "unknown",
+      "externally_enabled": "unknown",
+      "evidence_refs": {
+        "implemented": [], "offline_tested": [], "deployed": [], "live_observed": [],
+        "owner_accepted": [], "externally_enabled": [],
+        "source": [
+          ".planning/phases/25-private-beta-productionization/25-20-PLAN.md",
+          ".planning/phases/25-private-beta-productionization/25-00-URL-ORIGIN-DRIFT-2026-09-29.md"
+        ],
+        "objective_exit_test": [], "owner_decision": []
+      },
+      "missing_proof": {
+        "implemented": "Plan 20 source work waits for Plan 19 and prospective Plan 00 owner release.",
+        "offline_tested": "Effective CUSTOM_AUTH_SITE_URL and public URL census tests are not complete.",
+        "deployed": "No exact-SHA deployment is inferred from this plan.",
+        "live_observed": "No final-deployment callback and public-link observation exists.",
+        "owner_accepted": "No prospective owner release of the revised Phase 25 plan set is recorded.",
+        "externally_enabled": "Private beta remains gated."
+      },
+      "source_membership": {
+        "canonical_open_plan_ids": ["25-private-beta-productionization/25-20"],
+        "semantic_partial_summary_paths": [], "missing_or_open_verification_phases": [],
+        "open_requirement_ids": [], "semantic_partial_requirement_ids": []
+      },
+      "unmet_acceptance": ["The effective auth base and each generated public/shareable URL have deterministic durable-origin proof before any live send."],
+      "remaining_work_classes": ["owner_governance_verdict", "current_code_delta", "repository_evidence", "hosted_observation"],
+      "closure_wave": 2,
+      "owner_phase": "Phase 25",
+      "dependencies": ["25-00", "25-19"],
+      "entry_gate": "Plan 25-00 prospective owner verdict and Plan 19 source proof have passed.",
+      "objective_exit_test": "Effective auth override and public URL census pass source tests, then are observed on the final hosted SHA before live sends.",
+      "user_claims": [],
+      "external_gate_packet": "None until repository-controlled acceptance is complete.",
+      "successor": null,
+      "stop_conditions": ["Stop on a preview-derived, fallback, or unverified provider callback origin."]
     },
     {
       "id": "REQ:BETA-01",

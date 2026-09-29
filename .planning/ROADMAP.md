@@ -1722,11 +1722,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. A new user can sign up only with a valid single-use invite (public waitlist -> owner approves on the owner-only admin page); a Google/Microsoft sign-in without a redeemed invite is blocked at the door with NO orphaned tenant persisted.
   2. Invite redemption binds the OAuth SUBJECT (not the typed email), verifies the invited email matches, records the subject immutably, and rejects cross-subject re-redemption - tested against both Google and Microsoft subject formats.
-  3. A two-user cross-tenant isolation test (BETA-05) covers every current tenant table/index and exposed boundary and asserts a non-owner cannot reach any source-derived owner-wrapper export (the original three Phase-8 functions are a subset); grounded-prose export remains on its internal bearer-token plane until the `packages/pii` names-in-prose scrub ceiling is closed. Plan 25-18 owns the current repository coverage reconciliation; Plan 25-13 owns hosted acceptance.
+  3. A two-user cross-tenant isolation test (BETA-05) covers every current tenant table/index and exposed boundary and asserts a non-owner cannot reach any source-derived owner-wrapper export (the original three Phase-8 functions are a subset); grounded-prose export remains on its internal bearer-token plane until the `packages/pii` names-in-prose scrub ceiling is closed. Plan 25-18 owns pre-first-live repository coverage; Plan 25-11 reruns it after Plan 09 on exact final source before deploy; Plan 25-13 owns hosted acceptance.
   4. A new user reaches a first real delivered result (a governed email to their own address) within minutes via the scripted first-run cockpit onboarding.
   5. An approved plan delivers through either Gmail or Microsoft Graph (Outlook), with both grants able to coexist and a per-send choice. The repository now has separate `gmailTokens` and `microsoftCalendarTokens` rows, one shared Microsoft union grant under ADR-018, and `delivery.ts`'s two arms; there is no `gmailTokens.provider` migration. Plans 07–09 and 13 still owe real, exact-deployment Gmail continuity, Outlook threading/read/send and final provider acceptance. Existing adapter code and offline tests do not satisfy this live criterion.
-  6. Every user-shareable app/API/HTTP URL and OAuth/unsubscribe origin is durable and verified before the mandatory live sends. Accepted ADR-022 permits a stable managed `*.convex.site` host; a custom host on every layer is not required. Repository origin validation is landed, but hosted DNS/TLS, configured origin, provider redirect and delivery observations remain open. An ephemeral origin or a decision not to provide durable URLs blocks beta completion.
-**Plans**: 19 plans: historical 25-00–25-13, implemented repository/local closure-programme Wave 2 deltas 25-14–25-17, and open authorization-coverage gap closure 25-18 before hosted deployment. Prerequisite, full plan-checker, owner and live acceptance gates remain open.
+  6. Every user-shareable app/API/HTTP URL and OAuth/unsubscribe origin is durable and verified before the mandatory live sends. Accepted ADR-022 permits a stable managed `*.convex.site` host; a custom host on every layer is not required. Plan 25-19 closes preview-origin invite display/copy; Plan 25-20 closes the effective Convex Auth origin and universal URL census; Plan 25-18 closes current authorization coverage. All precede Plan 07's first deployment/live sends. Plans 07/11/12 owe hosted DNS/TLS, configured origin, provider redirect, generated-link and delivery observations. An ephemeral origin or a decision not to provide durable URLs blocks beta completion.
+**Plans**: 21 plans: historical 25-00–25-13, implemented repository/local closure-programme Wave 2 deltas 25-14–25-17, and open source-origin/authorization closures 25-18–25-20 before the first live sends and hosted deployment. Prerequisite, full plan-checker, owner and live acceptance gates remain open.
 
 Plans:
 - [ ] 25-00-PLAN.md — Blocking completion/stable-baseline gate for every pre-beta prerequisite lane; Phase 32 explicitly excluded (Wave 1)
@@ -1736,18 +1736,20 @@ Plans:
 - [x] 25-04-PLAN.md — Repository/local onboarding extension toward a governed first self-send (Wave 3); live delivery remains open
 - [x] 25-05-PLAN.md — Repository/local provider contracts and Graph send dispatcher over the existing separate Microsoft token row (Wave 5); no `gmailTokens` migration exists, and hosted sends remain open
 - [x] 25-06-PLAN.md — Repository/local Outlook OAuth lifecycle/UI and remote-invalidation posture (Wave 6); live consent/reconnect remain open
-- [ ] 25-07-PLAN.md — Fresh live Gmail continuity on the deployed dispatcher and one governed Outlook send over the shared grant, only after durable-origin evidence; no provider-column migration (Wave 8)
-- [ ] 25-08-PLAN.md — Threading-first live Outlook gate on the dispatcher deployment (Wave 9)
-- [ ] 25-09-PLAN.md — Full Outlook read-plane parity and live consent-capable provider matrix (Wave 10)
+- [ ] 25-07-PLAN.md — Fresh live Gmail continuity and a completed governed Outlook send after 25-18/19/20 candidate coverage and hosted durable-origin evidence; mailReady refusal blocks completion (Wave 11)
+- [ ] 25-08-PLAN.md — Threading-first live Outlook gate on the dispatcher deployment (Wave 12)
+- [ ] 25-09-PLAN.md — Full Outlook read-plane parity and live consent-capable provider matrix (Wave 13)
 - [x] 25-10-PLAN.md — Repository/local runtime environment manifest, durable-origin guard and accepted ADR-022 (Wave 7); hosted DNS/TLS, readiness and provider redirects remain open
-- [ ] 25-11-PLAN.md — Durable-domain Vercel/Convex deployment, seed/readiness, and hosted OAuth admission after 25-18 (Wave 12)
-- [ ] 25-12-PLAN.md — Exact-SHA automated/authenticated-E2E/boot/hosted-env production qualification (Wave 13)
-- [ ] 25-13-PLAN.md — Fresh live Outlook/two-user/timed-first-result acceptance and evidence-only bookkeeping closure (Wave 14)
+- [ ] 25-11-PLAN.md — Post-25-09 exact-final-source authorization/URL rerun before durable-domain Vercel/Convex deployment, seed/readiness and hosted OAuth admission (Wave 14)
+- [ ] 25-12-PLAN.md — Exact-SHA automated/authenticated-E2E/boot/hosted-env production qualification (Wave 15)
+- [ ] 25-13-PLAN.md — Fresh live Outlook/two-user/timed-first-result acceptance and evidence-only bookkeeping closure (Wave 16)
 - [x] 25-14-PLAN.md — Controlled local first governed self-send and inline prerequisite recovery (phase-local Wave 7; closure-programme Wave 2); hosted provider and real send remain open
 - [x] 25-15-PLAN.md — Real-flow activation metrics and linked result history (phase-local Wave 8; closure-programme Wave 2); hosted observation remains open
 - [x] 25-16-PLAN.md — Controlled local admission, tenant isolation, and public capability-boundary proof (phase-local Wave 8; closure-programme Wave 2); hosted identity remains open
 - [x] 25-17-PLAN.md — Enforceable product/marketing/onboarding/legal claim control (phase-local Wave 9; closure-programme Wave 2); legal formation and production claims remain open
-- [ ] 25-18-PLAN.md — Current runtime table/index, public/owner export and HTTP route isolation coverage after 25-09; explicit Plan 25-00 owner release before new source work, then exact-SHA repository packet before 25-11 (Wave 11)
+- [ ] 25-18-PLAN.md — Current runtime table/index, public/owner export and HTTP route isolation coverage after 25-20; Plan 00 owner release and candidate-SHA packet before 25-07, exact-final-source rerun in 25-11 (Wave 10)
+- [ ] 25-19-PLAN.md — Owner-only validated invite origin and full display/copy with negative preview-origin tests after 25-10; explicit Plan 00 owner release (Wave 8)
+- [ ] 25-20-PLAN.md — Effective Convex Auth override, public URL source census, funnel/web-project/legal origin classifications and repository packet before 25-18/07 (Wave 9)
 
 ## Progress
 
@@ -1817,7 +1819,7 @@ precedent). Phases 31-32 are numbered after 30 and execute before 25.
 | 22.1. Beta Admission Readiness - legal deployment CI typechecking and identity-boundary hardening (INSERTED) | 5/5 | Complete (VERIFICATION present) | 2026-08-16 |
 | 23. Agent-Authored Skills | 5/9 | Partial — open: 23-06, 23-07, 23-08, 23-09 | - |
 | 24. ISO 9001 Conformance Map | 1/2 | Partial — open: 24-02 | - |
-| 25. Private Beta Productionization | 11/19 | Partial — open: 25-00, 25-07, 25-08, 25-09, 25-11, 25-12, 25-13, 25-18 | - |
+| 25. Private Beta Productionization | 11/21 | Partial — open: 25-00, 25-07, 25-08, 25-09, 25-11, 25-12, 25-13, 25-18, 25-19, 25-20 | - |
 | 25.1. Consistency and Reliability Hardening (INSERTED) | 6/7 | Partial — 25.1-07 carries a partial result; reel proof does not complete the five un-attested checkpoint items | - |
 | 25.2. Delete-first UX pass (INSERTED 2026-09-05) | 3/3 | Complete | 2026-09-05 |
 | 25.3. Scale constants and the armed reliability sweep (INSERTED 2026-09-05) | 1/1 | Complete | 2026-09-05 |
