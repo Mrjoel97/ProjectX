@@ -21663,17 +21663,20 @@
       ],
       "historical_state": "semantic_open_summary",
       "current_disposition": "open",
-      "implemented": "partial",
-      "offline_tested": "unknown",
+      "implemented": "yes",
+      "offline_tested": "partial",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
         "implemented": [
-          ".planning/phases/17-calendar-actions/17-09-SUMMARY.md"
+          ".planning/phases/17-calendar-actions/17-09-SUMMARY.md",
+          ".planning/phases/17-calendar-actions/17-09-10-CURRENT-RECHECK-2026-09-29.md"
         ],
-        "offline_tested": [],
+        "offline_tested": [
+          ".planning/phases/17-calendar-actions/17-09-10-CURRENT-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
@@ -21686,7 +21689,7 @@
         "owner_decision": []
       },
       "missing_proof": {
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "offline_tested": "Current bounded discovery/staging tests pass, but the exact-current authenticated management-card browser path has not been rerun.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -21704,11 +21707,11 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "Discovery is tenant-safe, bounded, content-plane-only, and has a non-vacuous foreign-row test."
+        "Exact-current authenticated list-to-stage-to-card browser proof remains; Wave 2 entry and hosted provider/owner layers are separately open."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "current_authenticated_browser_proof",
+        "wave2_entry_gate"
       ],
       "closure_wave": 3,
       "owner_phase": "Phase 17",
@@ -21736,28 +21739,33 @@
       ],
       "historical_state": "plan_without_canonical_summary",
       "current_disposition": "open",
-      "implemented": "unknown",
-      "offline_tested": "unknown",
+      "implemented": "yes",
+      "offline_tested": "partial",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
-        "implemented": [],
-        "offline_tested": [],
+        "implemented": [
+          ".planning/phases/17-calendar-actions/17-10-SUMMARY.md",
+          ".planning/phases/17-calendar-actions/17-09-10-CURRENT-RECHECK-2026-09-29.md"
+        ],
+        "offline_tested": [
+          ".planning/phases/17-calendar-actions/17-09-10-CURRENT-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
-          ".planning/phases/17-calendar-actions/17-10-PLAN.md"
+          ".planning/phases/17-calendar-actions/17-10-PLAN.md",
+          ".planning/phases/17-calendar-actions/17-10-SUMMARY.md"
         ],
         "objective_exit_test": [],
         "owner_decision": []
       },
       "missing_proof": {
-        "implemented": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
+        "offline_tested": "Current 459/459 backend and 72/72 core matrices, three typechecks and network-capable web build pass, but authenticated browser and mutation results are not bound to this source revision.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
@@ -21773,11 +21781,11 @@
         "semantic_partial_requirement_ids": []
       },
       "unmet_acceptance": [
-        "The focused matrix has exact passing counts and finishes under the declared timeout."
+        "Complete exact-current browser and mutation qualification remains, followed by Wave 2 entry and hosted provider/owner gates."
       ],
       "remaining_work_classes": [
-        "evidence_reconciliation",
-        "current_code_delta_or_named_supersession"
+        "current_browser_and_mutation_proof",
+        "wave2_entry_gate"
       ],
       "closure_wave": 3,
       "owner_phase": "Phase 17",
