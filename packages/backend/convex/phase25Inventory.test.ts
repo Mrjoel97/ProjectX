@@ -31,7 +31,9 @@ test("Phase 25 parsed schema inventory has unique table/index descriptors", () =
       ...entry.searchIndexes,
       ...entry.vectorIndexes,
     ];
-    expect(new Set(names).size, `${entry.table} has duplicate index descriptors`).toBe(names.length);
+    expect(new Set(names).size, `${entry.table} has duplicate index descriptors`).toBe(
+      names.length,
+    );
   }
 
   if (process.env.PIKAR_SCHEMA_INVENTORY === "1") {
