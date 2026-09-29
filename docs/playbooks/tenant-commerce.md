@@ -1,5 +1,18 @@
 # Playbook: Tenant commerce (Phase 50)
 
+> Last verified: 2026-09-29 — a fresh loopback-only Convex/production-web
+> browser run found that the private catalogue form omitted the now-required
+> physical/digital `goodsKind`; the real mutation refused `GOODS_KIND_REQUIRED`
+> although mocked DOM tests were green. The form now requires an explicit kind,
+> passes it to `createProduct`, displays saved kind, and offers a product-revision
+> CAS classification for legacy unclassified rows. A synthetic physical draft
+> created through the rebuilt browser and displayed four available units and a
+> 60-minute hold; mobile 61-minute input had `rangeOverflow: true`, and private
+> activation continued to say checkout was unavailable. Eight focused web tests,
+> web typecheck and the commerce boundary guard pass. This is local painted
+> desktop/mobile evidence, not founder acceptance, merchant-provider eligibility,
+> public checkout or a live payment.
+
 > Last verified: 2026-09-28 — the shared HTTP request reader was factored so
 > anonymous forms can enforce an 8,192-byte stream cap before parsing. The
 > existing read-only, dark commerce cart preflight still uses the same 8,192-
@@ -34,9 +47,11 @@ Plan 50-02 adds `packages/core/src/tenantInventory.ts` and `packages/backend/con
 Plan 50-03 mounts `TenantCatalogue` under the authenticated sites page. The UI invokes only
 `tenantCatalogue` query/mutation references, displays finite availability or explicitly approved
 untracked posture, and pins product/stock revisions on edits. A stale view names refresh/retry;
-creation and stock controls keep their values on refusal. Its responsive card layout and labelled
-keyboard controls have local DOM checks; painted desktop/mobile browser acceptance remains for
-the later integrated gate. A catalogue status of `active` is private and never implies checkout.
+creation and stock controls keep their values on refusal. The form explicitly requires physical
+or digital goods, and a legacy unclassified row exposes a revision-pinned goods-type edit rather
+than silently inferring a kind. Its responsive card layout and labelled keyboard controls have
+local DOM checks and a synthetic loopback desktop/mobile painted-browser run; founder acceptance
+remains for the integrated gate. A catalogue status of `active` is private and never implies checkout.
 For finite stock, the list projects the stored reservation TTL (or null when unconfigured), so the
 editor shows the current minutes rather than a default as if it were saved. Merchants may edit an
 active finite product's current 1–60-minute policy through stock-revision CAS; invalid
@@ -203,4 +218,4 @@ No commerce provider key, account, webhook endpoint or live merchant route is co
 
 ## Known gaps & deferred work
 
-ADR-049 policy facts and Plans 50-06 through 50-17 remain open. The owner chose both Stripe and PayPal in the first test-mode release, merchant-owned direct accounts, all seller countries as a long-term target and USD/EUR/GBP as target settlement currencies. The first release may enable only provider-verified eligible seller/account/currency combinations and must visibly refuse the rest. This does not establish provider coverage, delegated flow eligibility or tax/shipping/refund authority; public selling remains dark. Wave 7 legal/provider facts and Wave 8 exact-production founder acceptance remain open. The catalogue is authenticated-tenant-only and locally tested, not a public merchant runtime. Painted desktop/mobile browser and founder usability evidence are still open.
+ADR-049 policy facts and Plans 50-06 through 50-17 remain open. The owner chose both Stripe and PayPal in the first test-mode release, merchant-owned direct accounts, all seller countries as a long-term target and USD/EUR/GBP as target settlement currencies. The first release may enable only provider-verified eligible seller/account/currency combinations and must visibly refuse the rest. This does not establish provider coverage, delegated flow eligibility or tax/shipping/refund authority; public selling remains dark. Wave 7 legal/provider facts and Wave 8 exact-production founder acceptance remain open. The catalogue is authenticated-tenant-only and locally browser-tested, not a public merchant runtime. Founder usability evidence is still open.

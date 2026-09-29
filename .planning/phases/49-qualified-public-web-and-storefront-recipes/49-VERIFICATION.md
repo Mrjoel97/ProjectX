@@ -7,6 +7,14 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
+**2026-09-29 catalogue-UI watched-file renewal:** The private Phase 50
+goods-kind form repair changed the watched public-web playbook and retired
+`77280787…`. The new 71-file digest below passed all **21/21** serialized
+repository/local planes with identical initial/final identity, both fresh
+browser/audit stacks, production build, three typechecks, strict documents and
+all registered free gates. This does not qualify public checkout, hosted
+origins/providers, founder acceptance or Waves 7–8.
+
 **2026-09-29 native vertical evaluator renewal:** The owner-review outcome mapping,
 offline measured assessment and vertical playbook changed the watched source set and
 retired `cdccf465…`. The new pinned 71-file digest below passed all **21/21** serialized
@@ -74,7 +82,7 @@ checkout, external provider, hosted release or founder acceptance.
 
 **Earlier scope:** Requalification passed for a then-current 71-file digest after tenant-first indexed vertical audit provenance, its watched playbooks and dependent evaluator pins changed. A serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `772807877106ce6f6f8273a72f661a71308ab9c05d9753995e343b7c97ac3b56`
+Artifact-set SHA-256: `893f9a3caa90209b77b97dca386ad411676e943d1095edd46e167b9510256492`
 
 The earlier code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. It binds older source bytes; exact-head CI for the renewed digest is pending. Neither run certifies deployment or founder acceptance.
 

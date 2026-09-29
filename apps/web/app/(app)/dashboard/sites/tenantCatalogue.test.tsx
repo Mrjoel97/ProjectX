@@ -14,6 +14,7 @@ type Product = {
   currency: string;
   priceMinor: number;
   status: "draft" | "active" | "retired";
+  goodsKind: "physical" | "digital" | null;
   revision: number;
   stockRevision: number;
   available: number | "untracked";
@@ -100,6 +101,7 @@ describe("authenticated tenant catalogue controls", () => {
           currency: "USD",
           priceMinor: 1250,
           status: "active",
+          goodsKind: "physical",
           revision: 1,
           stockRevision: 2,
           available: 3,
@@ -139,6 +141,7 @@ describe("authenticated tenant catalogue controls", () => {
           currency: "USD",
           priceMinor: 1250,
           status: "active",
+          goodsKind: "physical",
           revision: 4,
           stockRevision: 7,
           available: 3,
@@ -180,6 +183,7 @@ describe("authenticated tenant catalogue controls", () => {
           currency: "USD",
           priceMinor: 1250,
           status: "active",
+          goodsKind: "digital",
           revision: 4,
           stockRevision: 7,
           available: 3,
@@ -249,6 +253,7 @@ describe("authenticated tenant catalogue controls", () => {
           currency: "USD",
           priceMinor: 500,
           status: "active",
+          goodsKind: "digital",
           revision: 1,
           stockRevision: 1,
           available: "untracked",
@@ -273,6 +278,17 @@ describe("authenticated tenant catalogue controls", () => {
     await click(button("Create product"));
     expect(calls).toHaveLength(0);
     await type("Reservation window (minutes)", "15");
+    await click(button("Create product"));
+    expect(calls).toHaveLength(0);
+    const goods = [...host.querySelectorAll("select")].find((el) =>
+      el.labels?.[0]?.textContent?.includes("Goods type"),
+    );
+    if (!goods) throw new Error("Goods type select missing");
+    expect(goods.required).toBe(true);
+    await act(async () => {
+      goods.value = "physical";
+      goods.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     failure = "STALE_REVISION";
     await click(button("Create product"));
     expect(host.getAttribute("role")).not.toBe("alert");
@@ -284,12 +300,56 @@ describe("authenticated tenant catalogue controls", () => {
         variant: "bronze",
         currency: "USD",
         priceMinor: 1250,
+        goodsKind: "physical",
         stock: { kind: "finite", onHand: 4, reservationTtlMs: 900000 },
       },
     });
     failure = null;
     await click(button("Create product"));
     expect(host.textContent).toContain("Product created");
+  });
+
+  test("legacy unclassified product exposes an explicit goods-type CAS repair", async () => {
+    page = {
+      products: [
+        {
+          _id: "legacy-a",
+          sku: "book",
+          variant: "pdf",
+          currency: "USD",
+          priceMinor: 900,
+          status: "draft",
+          goodsKind: null,
+          revision: 5,
+          stockRevision: 2,
+          available: "untracked",
+          reservationTtlMs: null,
+        },
+      ],
+      nextCursor: null,
+    };
+    await render();
+    expect(host.textContent).toContain("Goods type not set");
+    const card = host.querySelector("article");
+    if (!card) throw new Error("Legacy product card missing");
+    const save = [...card.querySelectorAll("button")].find((el) =>
+      el.textContent?.includes("Save goods type"),
+    );
+    if (!save) throw new Error("Save goods type button missing");
+    expect(save.disabled).toBe(true);
+    const goods = [...card.querySelectorAll("select")].find((el) =>
+      el.labels?.[0]?.textContent?.includes("Goods type"),
+    );
+    if (!goods) throw new Error("Legacy goods type select missing");
+    await act(async () => {
+      goods.value = "digital";
+      goods.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click(save);
+    expect(calls.at(-1)).toEqual({
+      name: "tenantCatalogue:editProduct",
+      args: { productId: "legacy-a", expectedRevision: 5, goodsKind: "digital" },
+    });
   });
 
   test("the authenticated sites route mounts the live catalogue without a public shop link", () => {

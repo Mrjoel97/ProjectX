@@ -11,6 +11,7 @@ type Product = {
   currency: string;
   priceMinor: number;
   status: "draft" | "active" | "retired";
+  goodsKind: "physical" | "digital" | null;
   revision: number;
   stockRevision: number;
   available: number | "untracked";
@@ -29,6 +30,7 @@ const createProduct = makeFunctionReference<
     currency: string;
     priceMinor: number;
     status: "draft" | "active";
+    goodsKind: "physical" | "digital";
     stock:
       | { kind: "finite"; onHand: number; reservationTtlMs?: number }
       | { kind: "untracked"; approved: boolean };
@@ -42,6 +44,7 @@ const editProduct = makeFunctionReference<
     expectedRevision: number;
     priceMinor?: number;
     status?: "draft" | "active" | "retired";
+    goodsKind?: "physical" | "digital";
   },
   unknown
 >("tenantCatalogue:editProduct");
@@ -97,6 +100,8 @@ function messageFor(error: unknown): string {
     return "That SKU and variant already exist in your catalogue.";
   if (detail.includes("INVENTORY_POLICY_REQUIRED"))
     return "Set an approved stock policy before making this product active.";
+  if (detail.includes("GOODS_KIND_REQUIRED"))
+    return "Choose physical or digital goods before saving this product.";
   if (detail.includes("PRODUCT_UNAVAILABLE") || detail.includes("UNAUTHENTICATED"))
     return "This product is unavailable to your account. Sign in or refresh.";
   return "The change was refused. Check your values and retry; nothing was published.";
@@ -121,6 +126,7 @@ function ProductCard({ product }: { product: Product }) {
   }, [product.reservationTtlMs]);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [legacyKind, setLegacyKind] = useState<"" | "physical" | "digital">("");
   const run = async (work: () => Promise<unknown>, success: string) => {
     setBusy(true);
     setNotice("");
@@ -145,6 +151,11 @@ function ProductCard({ product }: { product: Product }) {
           {product.status} · {product.currency} {product.priceMinor} minor units · product v
           {product.revision} · stock v{product.stockRevision}
         </p>
+        <p style={{ margin: "0.25rem 0", color: "var(--ink-soft)" }}>
+          {product.goodsKind === null
+            ? "Goods type not set — classify before checkout."
+            : `${product.goodsKind === "physical" ? "Physical" : "Digital"} goods`}
+        </p>
         <p style={{ margin: 0, fontWeight: 700 }}>
           {product.available === "untracked"
             ? "Stock untracked — explicitly approved"
@@ -159,6 +170,40 @@ function ProductCard({ product }: { product: Product }) {
           </p>
         )}
       </div>
+      {product.goodsKind === null && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "end" }}>
+          <label style={{ minWidth: "12rem" }}>
+            Goods type for existing product
+            <select
+              style={field}
+              value={legacyKind}
+              onChange={(event) => setLegacyKind(event.target.value as typeof legacyKind)}
+            >
+              <option value="">Choose goods type</option>
+              <option value="physical">Physical goods</option>
+              <option value="digital">Digital goods</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={busy || legacyKind === ""}
+            onClick={() =>
+              run(
+                () =>
+                  edit({
+                    productId: product._id,
+                    expectedRevision: product.revision,
+                    goodsKind: legacyKind as "physical" | "digital",
+                  }),
+                "Goods type saved for this tenant.",
+              )
+            }
+            style={action}
+          >
+            Save goods type
+          </button>
+        </div>
+      )}
       <div
         style={{
           display: "grid",
@@ -352,6 +397,7 @@ export function TenantCatalogue() {
   const [minutes, setMinutes] = useState("15");
   const [approved, setApproved] = useState(false);
   const [status, setStatus] = useState<"draft" | "active">("draft");
+  const [goodsKind, setGoodsKind] = useState<"" | "physical" | "digital">("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -363,13 +409,14 @@ export function TenantCatalogue() {
     if (
       !/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(sku) ||
       !/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(variant) ||
+      !goodsKind ||
       !/^[A-Z]{3}$/.test(currency) ||
       priceMinor === null ||
       (posture === "finite" && (onHand === null || ttl === null || ttl > 60)) ||
       (posture === "untracked" && !approved)
     ) {
       setNotice(
-        "Check the SKU, variant, three-letter currency, positive price and explicit stock policy before retrying.",
+        "Choose physical or digital goods. SKU and variant need lowercase letters, numbers, hyphens or underscores; also check currency, positive price and stock policy.",
       );
       return;
     }
@@ -381,6 +428,7 @@ export function TenantCatalogue() {
         currency,
         priceMinor,
         status,
+        goodsKind,
         stock:
           posture === "finite"
             ? { kind: "finite", onHand: onHand!, reservationTtlMs: ttl! * 60_000 }
@@ -414,6 +462,10 @@ export function TenantCatalogue() {
         style={{ ...card, display: "grid", gap: "0.75rem" }}
       >
         <h3 style={{ margin: 0 }}>Create a product</h3>
+        <p style={{ margin: 0, color: "var(--ink-soft)" }}>
+          SKU and variant use lowercase letters, numbers, hyphens or underscores. Finite-stock holds
+          must be 1–60 whole minutes.
+        </p>
         <div
           data-testid="catalogue-grid"
           style={{
@@ -451,6 +503,19 @@ export function TenantCatalogue() {
               required
               maxLength={3}
             />
+          </label>
+          <label>
+            Goods type
+            <select
+              style={field}
+              value={goodsKind}
+              onChange={(event) => setGoodsKind(event.target.value as typeof goodsKind)}
+              required
+            >
+              <option value="">Choose physical or digital</option>
+              <option value="physical">Physical goods</option>
+              <option value="digital">Digital goods</option>
+            </select>
           </label>
           <label>
             Price (minor units)

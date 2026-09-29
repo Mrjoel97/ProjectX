@@ -38,6 +38,42 @@ completed: 2026-09-24
 
 # Phase 50 Plan 03: Tenant catalogue isolation and operator controls
 
+## 2026-09-29 local painted-browser repair — supersedes the tooling refusal below
+
+The Playwright CLI became available only with an escalated package execution context. A
+fresh loopback-only `phase49-disposable-stack.mjs --interactive` run pushed local Convex
+functions, built production web and exposed only `127.0.0.1` ports 3112/3410/3411. A
+synthetic invited account and onboarding fixture lived only in that owned temporary
+database. The first real browser attempt submitted an otherwise valid finite-stock draft
+and received `GOODS_KIND_REQUIRED` from `tenantCatalogue:createProduct`: Plan 50-18 had
+made `physical`/`digital` mandatory, while this form and its mocked DOM tests still
+omitted the field. An uppercase SKU also exposed that the old generic validation notice
+did not explain the lowercase-only identifier contract.
+
+After a red 2/8 focused-test result, the form now requires explicit goods type, includes
+it in the mutation, describes SKU/variant and 1–60-minute bounds, shows the saved kind,
+and offers a revision-pinned classification edit for legacy unclassified rows. The
+rebuilt disposable production-web browser then created synthetic `browser-test-001`
+as a **physical** draft with USD 1299 minor units, four available units and a 60-minute
+hold. The card displayed those exact values; private activation advanced the product
+revision and kept the explicit “Checkout is not available” notice. At a 390×844
+viewport, entering 61 minutes yielded the browser's native `max: 60` and
+`rangeOverflow: true`. No provider, payment, public shop or external identity was used.
+
+Painted captures were inspected at 1280×900 and 390×844:
+`output/playwright/phase50-catalogue-desktop-2026-09-29.png`,
+`output/playwright/phase50-catalogue-mobile-2026-09-29.png`, and focused
+`output/playwright/phase50-catalogue-mobile-card-2026-09-29.png` (local ignored
+artifacts). Their SHA-256 values, in that order, are
+`78c9b6479c87b5b427f93a48bb62e3752d62f7b0b33585c75bf53475b4397556`,
+`b1f32e482da7701349285f8bc2037b8d66e248dbec4be90cd844b45622620f33`, and
+`3f6575b72685d57cbb2adcf121a8d1af5ef478a971534fcfbbfd1956290060b7`.
+The focused web suite passes 8/8, web TypeScript passes, and the
+commerce-boundary self-test and normal guard pass. This closes the earlier
+**browser-tooling refusal** for local synthetic pixels, not founder usability,
+deployed tenant/provider, test-mode checkout or Wave 7/8 acceptance. The second
+disposable stack was stopped and its exact owned temporary root removed after review.
+
 ## 2026-09-29 painted-browser re-entry attempt
 
 A fresh loopback-only disposable Convex/production-web stack built and started

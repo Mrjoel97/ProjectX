@@ -1,5 +1,15 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-29 — the authenticated, private tenant catalogue on
+> `/dashboard/sites` now sends an explicit physical/digital goods kind to its
+> existing tenant-scoped product mutation and can classify a legacy row through
+> product-revision CAS. A fresh synthetic loopback production-web browser run
+> exercised desktop/mobile presentation and a 60-minute finite-stock draft.
+> This fixes an observed `GOODS_KIND_REQUIRED` refusal in the operator UI;
+> Phase 49 publication bytes, anonymous HTTP, recipe activation and public
+> storefront discovery remain unchanged and dark. Local pixels are not hosted
+> or founder acceptance.
+
 > Last verified: 2026-09-28 — the anonymous `/p/.../forms/...` POST now
 > bounds the actual request stream to 8,192 bytes before `formData()` or the
 > form mutation. An oversized unannounced body and an oversized declared
