@@ -33,4 +33,9 @@ describe("protected site editor", () => {
     expect(SOURCE).toContain("Current content");
     expect(SOURCE).toContain("Manual project");
   });
+
+  test("shows private merchant policy controls only for storefront projects", () => {
+    expect(SOURCE).toContain('project.kind === "storefront"');
+    expect(SOURCE).toContain("<TenantPolicyEditor projectId={projectId} />");
+  });
 });

@@ -17,6 +17,15 @@ reviewed: 2026-09-28
 
 # Phase 49 Plan 07 summary
 
+**2026-09-29 private merchant-policy watched-file renewal:** The authenticated
+storefront editor and watched public-web playbook changed for a
+provider-independent physical/digital merchant policy form. The pinned
+71-file digest below passed **21/21** serialized repository/local planes
+with identical initial/final identity, two browser/audit stacks, build,
+typechecks, strict documents and free gates. The prior `77e73a8c…` digest
+is historical. The form's own DOM tests pass separately; no public checkout,
+provider approval, merchant live observation or Wave 7/8 claim follows.
+
 **2026-09-29 private-price watched-file renewal:** A server price change now
 refreshes the authenticated catalogue's editable price rather than leaving
 an older value ready to save against a newer product revision. Its regression
@@ -90,7 +99,7 @@ is inferred.
 
 **Earlier repository/local requalification passed:** tenant-first indexed vertical audit provenance, watched playbooks and dependent evaluator pins changed. A serialized 21-plane aggregate passed on its then-current identity, including two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. Wave 7 external prerequisites, Wave 8 exact-production founder acceptance and Phase 50 tenant commerce remain open. This plan grants no legal-entity, domain, hosting, provider or merchant readiness.
 
-Artifact-set SHA-256: `77e73a8cb5bd386845a1b7684b5f1901f4562972173f6f811a8431a0941f1873`
+Artifact-set SHA-256: `ae6d0ecf64c3d5d2d4aca7c0d6c54e8b9e329cf2fe7535b343914dbf7e1cc7c1`
 
 The changed skill contract and watched playbooks for a CLI-compatible named
 self-hosted golden diagnostic retired the prior Phase 49 digest. The new

@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { TenantPolicyEditor } from "./TenantPolicyEditor";
 
 const card = {
   background: "var(--card)",
@@ -361,6 +362,7 @@ export function SiteEditor({ projectId }: { projectId: string }) {
             ))}
         </section>
       )}
+      {project.kind === "storefront" && <TenantPolicyEditor projectId={projectId} />}
       <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "0.9rem" }}>
         Hosting: Pikar platform path · source: tenant structured content · custom domains remain
         pending.

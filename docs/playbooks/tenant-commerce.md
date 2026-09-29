@@ -1,5 +1,15 @@
 # Playbook: Tenant commerce (Phase 50)
 
+> Last verified: 2026-09-29 — authenticated storefront projects now mount a
+> private merchant policy form in the site editor. It reads the latest
+> revision, requires explicit seller/country/currency plus enabled physical
+> shipping/return/tax/refund/retention and digital delivery/revocation/zero-
+> shipping/tax/refund/retention facts, and saves through the existing
+> tenant-scoped policy CAS mutation. Local DOM tests cover empty/loading,
+> both goods branches, missing facts, duplicate geography, numeric limits and
+> stale-version refusal. This is local policy authoring only: no provider
+> eligibility, legal validation, public checkout or buyer-flow readiness.
+
 > Last verified: 2026-09-29 — the authenticated, storefront-only
 > `tenantOrders.getLatestPolicy` query returns the latest merchant-authored
 > policy version for its own project, or `null` before configuration. A local
@@ -77,6 +87,15 @@ minute input never calls the mutation and a stale refusal preserves the entered 
 holds retain their recorded expiry. This is the owner-selected first-test-mode range, not
 permission to open checkout or a provider capability claim. Legacy wider finite policies must
 be reconfigured before checkout.
+
+The later private policy prework mounts `TenantPolicyEditor` only when the
+authenticated `SiteEditor` project kind is `storefront`. It reads
+`tenantOrders.getLatestPolicy` and writes `tenantOrders.configurePolicy` with
+the read revision. Physical and digital branches stay separate and require
+merchant-entered source references; disabling a branch omits it from the next
+policy revision. A saved policy is not a provider entitlement or a sellable
+public storefront. Plan 14 still owns exact mapping, provider/account
+capability/readiness and private-preview integration after its dependencies.
 
 Plan 50-04 adds `tenantOrder.ts` and `tenantOrders.ts`. Authenticated tenant operators supply a
 versioned local policy with explicit seller, tax, shipping and refund source refs, exact country

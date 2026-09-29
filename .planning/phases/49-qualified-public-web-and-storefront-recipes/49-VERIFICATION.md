@@ -7,6 +7,17 @@ requirements: [SITE-03, LAND-03, SHOP-01]
 
 # Phase 49 repository/local verification
 
+**2026-09-29 private merchant-policy watched-file renewal:** The protected
+storefront editor now mounts a provider-independent physical/digital policy
+form, and its watched public-web playbook changed. The prior `77e73a8c…`
+identity is historical. The new 71-file digest below passed a fresh
+serialized **21/21** repository/local aggregate with stable initial/final
+identity, two independent browser/audit stacks, production build, three
+typechecks, strict documents, claims and all registered free gates. Separate
+policy-form DOM tests pass 3/3; the aggregate browsers did not themselves
+prove merchant use of that form. This does not open checkout or supply
+provider, legal, hosted or founder acceptance.
+
 **2026-09-29 private-price watched-file renewal:** A same-product server
 price refresh now updates the authenticated catalogue's editable price before
 another revision-pinned save. The DOM regression failed before the fix and
@@ -92,7 +103,7 @@ checkout, external provider, hosted release or founder acceptance.
 
 **Earlier scope:** Requalification passed for a then-current 71-file digest after tenant-first indexed vertical audit provenance, its watched playbooks and dependent evaluator pins changed. A serialized aggregate passed all 21 planes with identical initial/final source identity, two independent disposable browser/audit stacks, production build, three typechecks, strict documents and all 34 registered free gates. The preceding `073dd93daf270fbdce08fad3acbbfdaa8d39c650070cabcb0596be5d225a9a61` result is historical. This proves only repository/local technical qualification. Wave 7 external prerequisites and Wave 8 exact-production founder acceptance remain open. Storefront public commerce remains unavailable until Phase 50 and its external prerequisites. This report is not production acceptance.
 
-Artifact-set SHA-256: `77e73a8cb5bd386845a1b7684b5f1901f4562972173f6f811a8431a0941f1873`
+Artifact-set SHA-256: `ae6d0ecf64c3d5d2d4aca7c0d6c54e8b9e329cf2fe7535b343914dbf7e1cc7c1`
 
 The earlier code-bearing `ee901e3` [CI run 36440650366](https://github.com/Mrjoel97/ProjectX/actions/runs/36440650366) passed typecheck, lint, free gates, tests, disabled recurrence, operator controls, planning and build on 2026-09-28. It binds older source bytes; exact-head CI for the renewed digest is pending. Neither run certifies deployment or founder acceptance.
 

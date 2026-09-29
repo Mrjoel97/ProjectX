@@ -1,5 +1,13 @@
 # Playbook: Public web runtime
 
+> Last verified: 2026-09-29 — the authenticated sites editor now mounts a
+> private merchant policy form only for `storefront` projects. It accepts
+> explicit physical/digital merchant declarations through the existing
+> tenant-scoped revisioned mutation, but changes no public resolver, buy card,
+> host binding, publication gate or anonymous checkout. Local component
+> tests and web typecheck pass; browser, provider and founder proof are
+> separate later gates.
+
 > Last verified: 2026-09-29 — the authenticated private catalogue price field
 > now follows a same-product server price refresh instead of retaining an older
 > editable value under a newer revision. The regression failed before the UI
