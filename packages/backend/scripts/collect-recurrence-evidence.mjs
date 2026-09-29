@@ -51,14 +51,28 @@
  */
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmdirSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..", "..", "..");
+
+function writeArtifactOnce(file, body) {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, body, { encoding: "utf8", flag: "wx" });
+}
 
 /** The three rows `--eligibility` requires a LIVE trace for. Same ids as the gate's REQUIRED_LIVE_ROWS. */
 export const PROBES = ["oauth-expiry-reauth", "dst-boundary", "provider-read"];
@@ -567,6 +581,38 @@ function selfCheck() {
   assert.match(art, /^probe: dst-boundary$/m);
   assert.match(art, /^observed: true$/m);
 
+  // An earlier collector output is evidence, not a scratch file. A later observation
+  // must never replace its bytes, including when the output already exists at write time.
+  const temporaryOutput = mkdtempSync(join(tmpdir(), "pikar-recurrence-once-"));
+  const existingArtifact = join(temporaryOutput, "dst-boundary.md");
+  try {
+    writeArtifactOnce(existingArtifact, art);
+    assert.throws(
+      () => writeArtifactOnce(existingArtifact, "replacement"),
+      (error) => error?.code === "EEXIST",
+      "a second collection must not overwrite the first artifact",
+    );
+    assert.equal(readFileSync(existingArtifact, "utf8"), art);
+    const repeat = spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(import.meta.url),
+        "dst-boundary",
+        "--deployment",
+        "test",
+        "--out",
+        temporaryOutput,
+      ],
+      { encoding: "utf8", timeout: 5_000 },
+    );
+    assert.equal(repeat.status, 1, "an existing output must refuse before any deployment query");
+    assert.match(repeat.stderr, /existing artifact must not be overwritten/);
+    assert.equal(readFileSync(existingArtifact, "utf8"), art);
+  } finally {
+    if (existsSync(existingArtifact)) unlinkSync(existingArtifact);
+    rmdirSync(temporaryOutput);
+  }
+
   // 3. THE DST PROBE IS REAL, and both directions are proven — a positive witness first, so the
   //    refusal below cannot be passing because the function always says no.
   const NY = "America/New_York";
@@ -881,6 +927,13 @@ function main(argv) {
   }
   const outIx = argv.indexOf("--out");
   const outDir = resolve(REPO_ROOT, outIx >= 0 ? argv[outIx + 1] : "docs/evidence/recurrence");
+  const file = join(outDir, `${probe}.md`);
+  if (existsSync(file)) {
+    console.error(
+      `[recurrence-evidence] ${probe} REFUSED — existing artifact must not be overwritten.`,
+    );
+    process.exit(1);
+  }
 
   const tenIx = argv.indexOf("--tenant");
   const tenant = tenIx >= 0 ? argv[tenIx + 1] : undefined;
@@ -904,19 +957,24 @@ function main(argv) {
     process.exit(1);
   }
 
-  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
-  const file = join(outDir, `${probe}.md`);
-  writeFileSync(
-    file,
-    renderArtifact({
-      probe,
-      observed: true,
-      collectedAt: new Date(now).toISOString(),
-      deployment,
-      detail: res.detail,
-    }),
-    "utf8",
-  );
+  try {
+    writeArtifactOnce(
+      file,
+      renderArtifact({
+        probe,
+        observed: true,
+        collectedAt: new Date(now).toISOString(),
+        deployment,
+        detail: res.detail,
+      }),
+    );
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    console.error(
+      `[recurrence-evidence] ${probe} REFUSED — existing artifact must not be overwritten.`,
+    );
+    process.exit(1);
+  }
   console.log(`[recurrence-evidence] ${probe} OBSERVED — wrote ${file}`);
 }
 

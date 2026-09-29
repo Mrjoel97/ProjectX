@@ -1,5 +1,13 @@
 # Playbook: Unified knowledge search, workflow customization and pinned routines
 
+> Last verified: 2026-09-29 — recurrence evidence collection now refuses an
+> existing probe artifact before any deployment query and writes new artifacts
+> exclusively, so a concurrent or repeated collection cannot overwrite a
+> prior live trace. The collector self-check exercises both the CLI refusal
+> and unchanged bytes; focused backend tests pass 99/99. This is an offline
+> artifact-integrity guard, not a new DST/OAuth/provider observation or a
+> change from operational `defer`.
+
 > Last verified: 2026-09-28 — the D8 real-rail follow-up in Phase 47-26 pins an
 > unresolved production design mismatch: ADR-046 requires every terminal run's
 > whole-envelope reservation to be released, while the installed rate limiter

@@ -34,3 +34,16 @@ The subsequent real governance read returned **matrix/eligibility/defer-decision
 The existing Auckland `dst-boundary.md` was present, so **no collector was invoked and nothing was overwritten**. Its SHA-256 remains `5e877f0978db756bcc563eed9d4bb00ad7b84b783fa4d18b4062bed8baf8cb13`. The production deployment name extracted from the root `.env` key again hashed to Plan 47-10's `9067eabf7231a8e473de213cd304fa2fe52ec444e752e5ee9947cb0d29cbd055`; no secret was printed or stored. An initial sandboxed read-only inline query returned `EACCES` on TCP/443, exit 1, not an absent-row result. The identical bounded read through the permitted network context exited 0. Its exact-correlation audit lookup found one `armed` and one `fired` Auckland `clock.dst_probe` row under sentinel tenant `dst-probe:unattributed`, with the artifact's `2026-09-09T20:10:23.009Z` arm, `2026-09-26T15:00:16.712Z` target and `2026-09-26T15:00:16.758Z` fire. Independent local ICU again resolved `GMT+12` to `GMT+13`; the 46 ms drift and deployed wall time `2026-09-27T04:00:16` agree with the already-collected artifact. This verifies the existing technical trace, not its pending human acceptance.
 
 The same read found exactly one `armed` row and **no `fired` row** for each remaining exact correlation. A separate production system-table read exited 0, scanning eight `_scheduled_functions` rows below its cap of 800, and found all three corresponding `dstProbe.js:observe` jobs still `pending` at their original UTC instants: Lord Howe `2026-10-03T16:30:16.712Z`, Berlin `2026-10-25T02:00:30.774Z`, New York `2026-11-01T07:00:02.649Z`. None of those output files exists. They remain future checkpoints, not refusals or live evidence; no arm, collector, provider call, send or other write occurred. `collect-recurrence-evidence.mjs --self-check` exited 0 and the backend-scoped `dstProbe.test.ts` suite exited 0 (7/7), both offline only. The probe source still hashes to `c265841a87574166cb5957f6e7ac68ddf54c9c96299146a4e00177829311d0c0`; keep its `arm`/`observe` exports until the final fire. Human review, both fall-back traces, ROUT-02 and Wave 6 remain open under `defer`.
+
+## 2026-09-29 collector no-overwrite guard
+
+The collector now refuses an already-present `<probe>.md` **before** constructing a
+deployment query, and its final artifact write uses exclusive-create semantics
+to refuse a race at write time. The self-check creates one disposable artifact,
+proves a second direct write fails with `EEXIST` without changing bytes, and
+spawns the CLI against that same existing path to prove its early refusal.
+Collector self-check, routine-gate self-check, 99 focused backend tests, and
+Biome pass locally. This protects the existing Auckland artifact and future
+zone-specific evidence; it does not add a DST trace, human acceptance, or
+recurrence activation. The Plan 47-11 operator must still inspect any existing
+artifact independently and use separate output directories for later zones.
