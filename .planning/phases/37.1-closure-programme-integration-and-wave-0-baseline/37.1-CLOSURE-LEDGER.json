@@ -21106,30 +21106,35 @@
       ],
       "historical_state": "semantic_open_summary",
       "current_disposition": "open",
-      "implemented": "partial",
-      "offline_tested": "unknown",
+      "implemented": "yes",
+      "offline_tested": "yes",
       "deployed": "unknown",
       "live_observed": "unknown",
       "owner_accepted": "unknown",
       "externally_enabled": "unknown",
       "evidence_refs": {
         "implemented": [
-          ".planning/phases/17-calendar-actions/17-01-SUMMARY.md"
+          ".planning/phases/17-calendar-actions/17-01-SUMMARY.md",
+          ".planning/phases/17-calendar-actions/17-01-CURRENT-SOURCE-RECHECK-2026-09-29.md"
         ],
-        "offline_tested": [],
+        "offline_tested": [
+          ".planning/phases/17-calendar-actions/17-01-CURRENT-SOURCE-RECHECK-2026-09-29.md"
+        ],
         "deployed": [],
         "live_observed": [],
         "owner_accepted": [],
         "externally_enabled": [],
         "source": [
           ".planning/phases/17-calendar-actions/17-01-PLAN.md",
-          ".planning/phases/17-calendar-actions/17-01-SUMMARY.md"
+          ".planning/phases/17-calendar-actions/17-01-SUMMARY.md",
+          ".planning/phases/17-calendar-actions/17-01-CURRENT-SOURCE-RECHECK-2026-09-29.md"
         ],
-        "objective_exit_test": [],
+        "objective_exit_test": [
+          ".planning/phases/17-calendar-actions/17-01-CURRENT-SOURCE-RECHECK-2026-09-29.md"
+        ],
         "owner_decision": []
       },
       "missing_proof": {
-        "offline_tested": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "deployed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "live_observed": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
         "owner_accepted": "No layer-specific current evidence is certified by this source row; the owning delta must collect or cite it.",
