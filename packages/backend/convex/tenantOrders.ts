@@ -219,6 +219,24 @@ export const configurePolicy = tenantMutation({
   },
 });
 
+/** Private policy readback; a browser return or product status never implies checkout readiness. */
+export const getLatestPolicy = tenantQuery({
+  args: { projectId: v.id("webProjects") },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.tenantId !== ctx.tenantId || project.kind !== "storefront")
+      throw new Error("PROJECT_UNAVAILABLE");
+    const latest = await ctx.db
+      .query("tenantCommercePolicies")
+      .withIndex("by_tenant_project_revision", (q) =>
+        q.eq("tenantId", ctx.tenantId).eq("projectId", args.projectId),
+      )
+      .order("desc")
+      .first();
+    return latest ? policyFrom(latest) : null;
+  },
+});
+
 export const mapProduct = tenantMutation({
   args: {
     projectId: v.id("webProjects"),

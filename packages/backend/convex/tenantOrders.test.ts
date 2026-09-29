@@ -58,6 +58,17 @@ type PolicyArgs = {
 const configurePolicy = fn<"mutation", PolicyArgs, { policyId: string; revision: number }>(
   "configurePolicy",
 );
+const getLatestPolicy = fn<
+  "query",
+  { projectId: string },
+  {
+    tenantId: string;
+    projectId: string;
+    revision: number;
+    physical?: PolicyArgs["physical"];
+    digital?: PolicyArgs["digital"];
+  } | null
+>("getLatestPolicy");
 const mapProduct = fn<
   "mutation",
   { projectId: string; presentationItemId: string; productId: string; expectedRevision: number }
@@ -226,6 +237,55 @@ async function setup(t: ReturnType<typeof harness>, email: string) {
 }
 
 describe("local tenant order adapter", () => {
+  test("latest policy readback is revisioned and refuses a foreign storefront", async () => {
+    const t = harness();
+    const a = await setup(t, "policy-read-a@example.test");
+    const b = await setup(t, "policy-read-b@example.test");
+    const first = await a.actor.query(getLatestPolicy, { projectId: String(a.projectId) });
+    expect(first).toMatchObject({
+      tenantId: String(a.userId),
+      projectId: a.projectId,
+      revision: 1,
+      physical: a.policy.physical,
+      digital: a.policy.digital,
+    });
+    await a.actor.mutation(configurePolicy, {
+      ...a.policy,
+      expectedRevision: 1,
+      physical: { ...a.policy.physical, shippingMinor: 450 },
+    });
+    const latest = await a.actor.query(getLatestPolicy, { projectId: String(a.projectId) });
+    expect(latest).toMatchObject({ revision: 2, physical: { shippingMinor: 450 } });
+    expect(
+      (await b.actor.query(getLatestPolicy, { projectId: String(b.projectId) }))?.revision,
+    ).toBe(1);
+    const { emptyStorefrontId, siteId } = await t.run(async (ctx) => {
+      const original = await ctx.db.get(a.projectId);
+      if (!original) throw new Error("TEST_PROJECT_MISSING");
+      const { _id: _id, _creationTime: _creationTime, ...fields } = original;
+      return {
+        emptyStorefrontId: await ctx.db.insert("webProjects", {
+          ...fields,
+          slug: "policy-empty",
+        }),
+        siteId: await ctx.db.insert("webProjects", {
+          ...fields,
+          slug: "policy-site",
+          kind: "site",
+        }),
+      };
+    });
+    expect(
+      await a.actor.query(getLatestPolicy, { projectId: String(emptyStorefrontId) }),
+    ).toBeNull();
+    await expect(a.actor.query(getLatestPolicy, { projectId: String(siteId) })).rejects.toThrow(
+      "PROJECT_UNAVAILABLE",
+    );
+    await expect(
+      b.actor.query(getLatestPolicy, { projectId: String(a.projectId) }),
+    ).rejects.toThrow("PROJECT_UNAVAILABLE");
+  });
+
   test("catalogue release and expiry cannot bypass the linked order hold", async () => {
     const t = harness();
     const a = await setup(t, "linked-hold@example.test");

@@ -1,5 +1,14 @@
 # Playbook: Tenant commerce (Phase 50)
 
+> Last verified: 2026-09-29 — the authenticated, storefront-only
+> `tenantOrders.getLatestPolicy` query returns the latest merchant-authored
+> policy version for its own project, or `null` before configuration. A local
+> test failed before the query existed, then passed for version advancement,
+> empty policy, non-storefront refusal and two-tenant isolation. The full
+> `tenantOrders` suite passes 31/31 and backend typecheck passes. This is
+> private policy readback for future operator authoring, not provider
+> eligibility, a public policy page or checkout readiness.
+
 > Last verified: 2026-09-29 — a same-product server price refresh previously
 > left the private catalogue's editable price at its older value while the
 > revision advanced. A failing DOM regression reproduced an unintended stale

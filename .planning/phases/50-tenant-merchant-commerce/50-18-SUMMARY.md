@@ -94,3 +94,16 @@ All eleven plan-owned files and this summary exist. Focused tests, typechecks, b
 The pure quote and authenticated policy-write guards previously accepted whitespace-only seller and branch references, allowing a policy that looked filled to be revisioned and quoted. New seller, physical-retention/refund and digital-delivery controls failed first on the old validators. Both guards now require at least one non-whitespace character while preserving accepted reference bytes unchanged; old blank-looking rows refuse at quote time. Focused core inventory/order tests pass **14/14** and the five-file backend catalogue/order/closed-HTTP/export/erasure selection passes **80/80**. Core/backend TypeScript and tenant-commerce boundary checks exit 0. Full Graphify refresh and Convex-edge fixup exited 0. These are local validation facts, not a legal/provider determination, public checkout or accepted ADR-049.
 
 SHA-256: `tenantOrder.ts` `0e267f8834f7e9cf80744e6b326cdbf26cac25b0b42b0bdf451f3fe7660ba1a9`; `tenantOrder.test.ts` `608579423dd1eacf456b660546a9b1d2b795c60d6a4d74b6bde5c982842976da`; `tenantOrders.ts` `fb2e4d6b4c95c3cf87af86964bda940de40f63c05bbf69cb0f6ce6dbf5fd4952`; `tenantOrders.test.ts` `d5c863e93755edfb247a0478fd85f7438c3f1d545e2183fd3fafedb35108ed99`.
+
+## 2026-09-29 private policy-readback continuation
+
+The existing authenticated `configurePolicy` mutation could write a versioned
+physical/digital shop policy, but no merchant-facing query could read its
+latest revision back. A fail-first Convex test now covers the new
+`getLatestPolicy` query: it returns the newest version after CAS, `null` for
+an unconfigured storefront, and refuses both non-storefront and foreign
+projects while keeping another tenant's revision separate. The full local
+order-adapter suite passes **31/31** and backend typecheck exits 0. This is
+only an authenticated data seam for later private policy controls. It does
+not complete Plan 14's editor/readiness UI, accept ADR-049, contact Stripe or
+PayPal, enable checkout, or satisfy Wave 7/8 evidence.
