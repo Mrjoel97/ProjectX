@@ -25,15 +25,18 @@ closure-programme integration wave, not Phase 25's execution wave. The old refer
 historical Phase-8 subset, not the present owner surface. Plan 00's owner and checker gates remain
 open; no approval, deployment, or BETA-02/BETA-05 completion is inferred from this amendment.
 
-**2026-09-29 source-origin addendum:** Plan 19 (invite UI/query, Wave 8) and Plan 20
-(effective auth/public URL census, Wave 9) follow Plan 10. Plan 18 (authorization, Wave 10)
-follows 20 and precedes Plan 07's first deployment/live sends; Plans 07/08/09/11/12/13 are
-Waves 11/12/13/14/15/16.
+**2026-09-29 source-origin addendum:** Plan 19 (invite UI/query, Wave 8), Plan 20
+(effective auth/public URL census, Wave 9), and Plan 21 (billing/callback runtime origins, Wave 10)
+follow Plan 10. Plan 18 (authorization, Wave 11)
+follows 21 and precedes Plan 07's first deployment/live sends; Plans 07/08/09/11/12/13 are
+Waves 12/13/14/15/16/17.
 The invite admin currently copies `window.location.origin`; a preview session can therefore copy
 an ephemeral signup link while the hosted env manifest is green. Installed Convex Auth also reads
 optional `CUSTOM_AUTH_SITE_URL` for sign-in/callback URLs outside the current manifest. Plan 19
-fixes and tests invite display/copy; Plan 20 classifies every source/UI URL
-mint/display/copy/send/response, tests effective auth override behavior, and freezes a
+fixes and tests invite display/copy against the ADR-022 approved app origin, including a
+durable-but-unapproved negative case. Plan 20 classifies every source/UI URL
+mint/display/copy/send/response and tests effective auth override behavior; its census is
+provisional until Plan 21 tests Pikar billing and callback runtime refusals and finalizes the
 repository-only origin packet. Plan 07 must then
 observe hosted DNS/TLS and redirect/public-link equality before live sends; Plans 11/12 refresh
 that proof at the durable deployed SHA. Neither local tests nor green `ops:envCheck` prove hosted
@@ -100,33 +103,36 @@ or an explicit checkpoint enumerated under Manual-Only below.*
 | 06-01 | 25-06 | 6 | DLVR-02 | unit | GmailAuth/Graph lifecycle tests + backend typecheck | ⚠️ extend | ⬜ pending |
 | 06-02 | 25-06 | 6 | DLVR-02 | owner decision | honest Microsoft local-disconnect/remote-invalidation posture | n/a | ⬜ pending |
 | 06-03 | 25-06 | 6 | DLVR-02 | e2e | `pnpm test:e2e -- e2e/mail-provider.spec.ts` | ❌ | ⬜ pending |
-| 19-01 | 25-19 | 8 | BETA-01 | owner checkpoint | Plan 00 prospective owner release includes 25-19/20 and full current-plan checker | n/a | ⬜ pending |
-| 19-02 | 25-19 | 8 | BETA-01 | unit/e2e | owner-only `ops.inviteOrigin` in `convex/env.test.ts`; synthetic preview origin in `adminPresentation.test.ts`; local Playwright clicks/clipboard, not button visibility | ✅ extend | ⬜ pending |
+| 19-01 | 25-19 | 8 | BETA-01 | owner checkpoint | Plan 00 prospective owner release includes 25-19/20/21 and full current-plan checker | n/a | ⬜ pending |
+| 19-02 | 25-19 | 8 | BETA-01 | unit/e2e | owner-only `ops.inviteOrigin` in `convex/env.test.ts` including durable-but-unapproved SITE_URL refusal; synthetic preview origin in `adminPresentation.test.ts`; local Playwright clicks/clipboard, not button visibility | ✅ extend | ⬜ pending |
 | 19-03 | 25-19 | 8 | BETA-01 | local packet | web build and strict planning; Plan 20 owns universal census | ✅ | ⬜ pending |
 | 20-01 | 25-20 | 9 | BETA-01/DLVR-02 | unit | `convex/env.test.ts` absent/approved/malformed/preview/unapproved auth override | ✅ extend | ⬜ pending |
-| 20-02 | 25-20 | 9 | BETA-01/DLVR-02 | unit/inventory | `convex/funnels.test.ts convex/webProjects.test.ts`; complete URL census and classifications | ✅ extend | ⬜ pending |
-| 20-03 | 25-20 | 9 | BETA-01/DLVR-02 | repository packet | `pnpm test`, `pnpm typecheck`, strict planning/playbook checks; no hosted proof | ✅ | ⬜ pending |
-| 18-01 | 25-18 | 10 | BETA-02/BETA-05 | owner checkpoint | 25-00 discrepancy, full plan-set checker, and explicit release verdict | n/a | ⬜ pending |
-| 18-02 | 25-18 | 10 | BETA-02/BETA-05 | runtime schema + A/B | `pnpm --filter @pikar/backend exec vitest run convex/isolation.test.ts` and core tests | ✅ | ⬜ pending |
-| 18-03 | 25-18 | 10 | BETA-02/BETA-05 | exports + HTTP | `pnpm --filter @pikar/backend exec vitest run convex/isolation.test.ts convex/httpBoundary.test.ts` | ✅ | ⬜ pending |
-| 18-04 | 25-18 | 10 | BETA-02/BETA-05 | pre-first-live candidate packet | `pnpm test`, `pnpm typecheck`, strict planning checker; 25-11 rerun after 09 | ✅ | ⬜ pending |
-| 07-01 | 25-07 | 11 | DLVR-02 | live | 25-18/19/20 packets plus accepted ADR-022, hosted DNS/TLS/effective origins, public links and redirects first; fresh Gmail read/send | n/a | ⬜ pending |
-| 07-02 | 25-07 | 11 | DLVR-02 | live | governed Outlook send succeeds on same SHA; mailReady-false refusal blocks completion pending re-consent/retry | n/a | ⬜ pending |
-| 08-01 | 25-08 | 12 | DLVR-02 | live | Outlook MIME threading after completed Plan 07 | n/a | ⬜ pending |
-| 09-01 | 25-09 | 13 | DLVR-02 | unit | fixture-first Graph read plane | ❌ | ⬜ pending |
-| 09-02 | 25-09 | 13 | DLVR-02 | unit/static | Graph/Gmail/delivery/llm/briefings + zero direct callers | ❌/⚠️ | ⬜ pending |
-| 09-03 | 25-09 | 13 | DLVR-02 | live | dual-audience config, consent-capable parity, honest admin-consent outcome | n/a | ⬜ pending |
-| 09-04 | 25-09 | 13 | DLVR-02 | structural | playbook checker | ✅ | ⬜ pending |
+| 20-02 | 25-20 | 9 | BETA-01/DLVR-02 | unit/inventory | `convex/funnels.test.ts convex/webProjects.test.ts`; URL census with billing/callback guards explicitly pending Plan 21 | ✅ extend | ⬜ pending |
+| 20-03 | 25-20 | 9 | BETA-01/DLVR-02 | provisional repository packet | `pnpm test`, `pnpm typecheck`, strict planning/playbook checks; no hosted proof or complete origin verdict | ✅ | ⬜ pending |
+| 21-01 | 25-21 | 10 | BETA-01/DLVR-02 | TDD/unit | `convex/env.test.ts convex/billing.test.ts`; invalid and unapproved SITE_URL refuses before Checkout or Portal Stripe POST | ✅ extend | ⬜ pending |
+| 21-02 | 25-21 | 10 | BETA-01/DLVR-02 | TDD/HTTP | `convex/httpAuth.test.ts convex/connectorCallbacks.test.ts`; Gmail/Microsoft/three connector callbacks refuse before Location, token exchange, or handler | ✅ extend | ⬜ pending |
+| 21-03 | 25-21 | 10 | BETA-01/DLVR-02 | final repository packet | `pnpm test`, `pnpm typecheck`, strict planning/playbook checks; exact-SHA census, no hosted proof | ✅ | ⬜ pending |
+| 18-01 | 25-18 | 11 | BETA-02/BETA-05 | owner checkpoint | 25-00 discrepancy, full plan-set checker, and explicit release verdict | n/a | ⬜ pending |
+| 18-02 | 25-18 | 11 | BETA-02/BETA-05 | runtime schema + A/B | `pnpm --filter @pikar/backend exec vitest run convex/isolation.test.ts` and core tests | ✅ | ⬜ pending |
+| 18-03 | 25-18 | 11 | BETA-02/BETA-05 | exports + HTTP | `pnpm --filter @pikar/backend exec vitest run convex/isolation.test.ts convex/httpBoundary.test.ts` | ✅ | ⬜ pending |
+| 18-04 | 25-18 | 11 | BETA-02/BETA-05 | pre-first-live candidate packet | `pnpm test`, `pnpm typecheck`, strict planning checker; 25-11 rerun after 09 | ✅ | ⬜ pending |
+| 07-01 | 25-07 | 12 | DLVR-02 | live | 25-18/19/20/21 packets plus accepted ADR-022, hosted DNS/TLS/effective origins, public links and redirects first; fresh Gmail read/send | n/a | ⬜ pending |
+| 07-02 | 25-07 | 12 | DLVR-02 | live | governed Outlook send succeeds on same SHA; mailReady-false refusal blocks completion pending re-consent/retry | n/a | ⬜ pending |
+| 08-01 | 25-08 | 13 | DLVR-02 | live | Outlook MIME threading after completed Plan 07 | n/a | ⬜ pending |
+| 09-01 | 25-09 | 14 | DLVR-02 | unit | fixture-first Graph read plane | ❌ | ⬜ pending |
+| 09-02 | 25-09 | 14 | DLVR-02 | unit/static | Graph/Gmail/delivery/llm/briefings + zero direct callers | ❌/⚠️ | ⬜ pending |
+| 09-03 | 25-09 | 14 | DLVR-02 | live | dual-audience config, consent-capable parity, honest admin-consent outcome | n/a | ⬜ pending |
+| 09-04 | 25-09 | 14 | DLVR-02 | structural | playbook checker | ✅ | ⬜ pending |
 | 10-01 | 25-10 | 7 | go-live | unit/build | env/readiness test + backend typecheck + web build | ❌/✅ | historical |
 | 10-02 | 25-10 | 7 | go-live | decision | accepted ADR-022; hosted DNS/TLS unproved | n/a | historical |
 | 10-03 | 25-10 | 7 | go-live | source gate | durable configured-origin validation; hosted proof remains open | ✅ | historical |
-| 11-01 | 25-11 | 14 | go-live | final-source predeploy/live | after 09, rerun 18 schema/index/export/HTTP inventory and A/B probes plus 19/20 URL tests on exact final candidate SHA; stop on gaps, then DNS/TLS + deploy/env/seed | n/a | ⬜ pending |
-| 11-02 | 25-11 | 14 | BETA-01 | live | real Google/Microsoft uninvited/invited + password asymmetry | n/a | ⬜ pending |
-| 12-01 | 25-12 | 15 | all | exact-SHA qualification | isolated deployed-SHA checkout or byte-identical tree; refresh 18/19/20 inventories, focused/full + authenticated Chromium + boot + hosted `{ missing: [] }` | planned | ⬜ pending |
-| 13-01 | 25-13 | 16 | DLVR-02 | live final-SHA | fresh Outlook connect/search-read/send/reply/disconnect | n/a | ⬜ pending |
-| 13-02 | 25-13 | 16 | BETA-02/BETA-05 | live | hosted two-user gate over refreshed 25-18 manifest | n/a | ⬜ pending |
-| 13-03 | 25-13 | 16 | BETA-03 | live | timed thin-profile governed self-send | n/a | ⬜ pending |
-| 13-04 | 25-13 | 16 | all | metadata | playbook checker after live gates; phase-completeness only after 25-13-SUMMARY | ✅ | ⬜ pending |
+| 11-01 | 25-11 | 15 | go-live | final-source predeploy/live | after 09, rerun 18 schema/index/export/HTTP inventory and A/B probes plus 19/20/21 URL and runtime-origin tests on exact final candidate SHA; stop on gaps, then DNS/TLS + deploy/env/seed | n/a | ⬜ pending |
+| 11-02 | 25-11 | 15 | BETA-01 | live | real Google/Microsoft uninvited/invited + password asymmetry | n/a | ⬜ pending |
+| 12-01 | 25-12 | 16 | all | exact-SHA qualification | isolated deployed-SHA checkout or byte-identical tree; refresh 18/19/20/21 inventories, focused/full + authenticated Chromium + boot + hosted `{ missing: [] }` | planned | ⬜ pending |
+| 13-01 | 25-13 | 17 | DLVR-02 | live final-SHA | fresh Outlook connect/search-read/send/reply/disconnect | n/a | ⬜ pending |
+| 13-02 | 25-13 | 17 | BETA-02/BETA-05 | live | hosted two-user gate over refreshed 25-18 manifest | n/a | ⬜ pending |
+| 13-03 | 25-13 | 17 | BETA-03 | live | timed thin-profile governed self-send | n/a | ⬜ pending |
+| 13-04 | 25-13 | 17 | all | metadata | playbook checker after live gates; phase-completeness only after 25-13-SUMMARY | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -166,10 +172,10 @@ offline tests or reused across a later production deploy.
 | Real Outlook send lands | DLVR-02 | Requires a real Azure app, real consent, real mailbox | Approve a plan routed `provider: "microsoft"`; confirm arrival in a real inbox with correct headers and CAN-SPAM footer |
 | First delivered result in minutes | BETA-03 | The requirement is about a real human's wall-clock experience | A brand-new invited human completes the first-send offer and receives a real email at their own address |
 | Vercel deploy + secret manifest green | Go-live | Hosted-environment state | Deploy; `npx convex run ops:envCheck` returns `missing: []`; seed the skill registry and confirm `executive-router` is active |
-| **Durable-origin proof after accepted ADR-022** | Go-live | ADR-022 settles the policy, while source validation cannot prove hosted DNS/TLS or provider configuration | Consume Plan 19's invite result and Plan 20's URL census. Before Plan 07's deployment/live sends and again at Plan 11, record durable app/API/HTTP origins, optional effective CUSTOM_AUTH_SITE_URL, DNS/TLS, exact OAuth redirect equality, a preview-session copied invite, and generated funnel/unsubscribe URLs without secrets or invite codes. A stable managed Convex HTTPS host may qualify. Missing proof stops live sends. |
+| **Durable-origin proof after accepted ADR-022** | Go-live | ADR-022 settles the policy, while source validation cannot prove hosted DNS/TLS or provider configuration | Consume Plan 19's approved-origin invite result, Plan 20's URL census, and Plan 21's final runtime-origin packet. Before Plan 07's deployment/live sends and again at Plan 11, record durable app/API/HTTP origins, optional effective CUSTOM_AUTH_SITE_URL, DNS/TLS, exact OAuth redirect equality, a preview-session copied invite, billing/callback returns, and generated funnel/unsubscribe URLs without secrets or invite codes. A stable managed Convex HTTPS host may qualify. Missing proof stops live sends. |
 | **Live dispatcher continuity** | DLVR-02 | Offline tests cannot prove Gmail still reads/sends or Graph delivers from the deployed dispatcher | Plan 07: on one recorded durable deployment SHA, perform a bounded Gmail read and governed Gmail send, then a successful governed Outlook send; a `mailReady`-false refusal blocks Plan 07 until re-consent and retry. Record both grants intact. |
 | Hosted two-user isolation | BETA-02/BETA-05 | Offline coverage cannot prove deployed identity/configuration boundaries | On the qualified deployed SHA, use owner A and invited non-owner B across Plan 18's refreshed table/index/export/route manifest; invoke every current owner-wrapper export with validator-valid arguments, including the three historical Phase-8 functions. Keep SkillOpt prose export on its internal bearer boundary and exercise public bearer routes according to their capability contracts. |
-| Reconciled Plan 00 release | all | Plan 25-01 and later repository work historically landed before Plan 00's blocking approval | Record the skipped sequence, current inventory/full current-plan checker verdict, and an explicit prospective owner release or stop decision before new Plans 19/20/18 source work; Phase 32 remains excluded. Do not infer retroactive approval. |
+| Reconciled Plan 00 release | all | Plan 25-01 and later repository work historically landed before Plan 00's blocking approval | Record the skipped sequence, current inventory/full current-plan checker verdict, and an explicit prospective owner release or stop decision before new Plans 19/20/21/18 source work; Phase 32 remains excluded. Do not infer retroactive approval. |
 
 ---
 
